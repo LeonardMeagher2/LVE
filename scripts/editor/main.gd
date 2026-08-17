@@ -58,8 +58,8 @@ func _on_container_input(event: InputEvent) -> void:
 	_vp.handle_input(event, _container.get_local_mouse_position())
 
 
-func _on_viewport_resized(size: Vector2i) -> void:
-	_viewport.size = size
+func _on_viewport_resized() -> void:
+	pass
 
 
 func _process(delta: float) -> void:

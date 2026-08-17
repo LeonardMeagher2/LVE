@@ -19,6 +19,7 @@ build so we never re-learn it the hard way.
 | `SubViewport.input_event` | "Invalid access to property or key" — signal gone; capture input on the `SubViewportContainer` (`gui_input`) instead |
 | `add_theme_stylebox_override("normal", null)` | Errors "Required object rp_style is null". Use `remove_theme_stylebox_override("normal")` to clear |
 | `Object.get_constant_list()` | Not available in this build |
+| `Camera3D.right` / `.up`, `Basis.right` / `.up` | None of these exist. Camera axes are basis columns: right = `camera.basis.x`, up = `camera.basis.y`, forward = `-camera.basis.z` |
 
 Still fine (no change): `Mesh.PRIMITIVE_LINES` (=1),
 `BaseMaterial3D.TRANSPARENCY_ALPHA`, `SubViewport.size_changed`.
@@ -53,7 +54,11 @@ Still fine (no change): `Mesh.PRIMITIVE_LINES` (=1),
 
 ## Acceptance criteria
 
-- `godot --headless --path "C:\Users\Leona\Desktop\Gamedev\Voxi" -s res://tests/smoke.gd`
-  prints `VOXI SMOKE OK` with zero script errors.
+- `godot --path "C:\Users\Leona\Desktop\Gamedev\Voxi" -s res://tests/smoke.gd`
+  prints `VOXI SMOKE OK` with zero script errors. Run without `--headless` so a
+  failing test can write full-window screenshots; on failure the `Test` base
+  class (`tests/test.gd`) collects all failing `expect`s into a markdown report
+  `tests/artifacts/smoke/report.md` plus `fail_*.png` screenshots and exits
+  non-zero. `--headless` still works but produces trace-only output (no PNG).
 - Grid lines + base quad render in the viewport.
 - File / Edit / View menus open and their items work.

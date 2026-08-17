@@ -182,8 +182,8 @@ func _orbit(rel: Vector2) -> void:
 
 func _pan(rel: Vector2) -> void:
 	var s := _dist * 0.0016
-	_target -= _camera.right * rel.x * s
-	_target += _camera.up * rel.y * s
+	_target -= _camera.basis.x * rel.x * s
+	_target += _camera.basis.y * rel.y * s
 	_update_camera()
 
 
@@ -212,7 +212,6 @@ func _pick(pos: Vector2) -> Dictionary:
 
 
 func _ddq(o: Vector3, d: Vector3) -> Dictionary:
-	var gs := doc.grid_size
 	var g := o - world_origin
 	var no_hit := {"target": NONE, "hit": NONE}
 
@@ -240,7 +239,7 @@ func _ddq(o: Vector3, d: Vector3) -> Dictionary:
 
 	var t := 0.0
 	var entry := Vector3i.ZERO
-	for i in 512:
+	for i in 1024:
 		if _in_bounds(cell) and displayed_frame.cells.has(cell):
 			if t_ground < t:
 				return _ground_hit(g, d, t_ground)
@@ -265,9 +264,6 @@ func _ddq(o: Vector3, d: Vector3) -> Dictionary:
 			t_max.z += t_delta.z
 		if t > t_ground:
 			return _ground_hit(g, d, t_ground)
-		if cell.x < -2 or cell.y < -2 or cell.z < -2 \
-				or cell.x > gs.x + 1 or cell.y > gs.y + 1 or cell.z > gs.z + 1:
-			break
 	return no_hit
 
 
