@@ -74,9 +74,9 @@ func _write_report() -> void:
 	for ch in _checks:
 		var label: String = ch.msg
 		if ch.ok:
-			lines.append("- `%s` — %s → PASS" % [ch.loc, label])
+			lines.append("- ✅ %s: %s" % [label, _loc_link(ch.loc)])
 		else:
-			lines.append("- `%s` — %s → **FAIL**" % [ch.loc, label])
+			lines.append("- ❌ %s: %s" % [label, _loc_link(ch.loc)])
 			if ch.src != "":
 				lines.append("  ```gdscript")
 				lines.append("  %s" % ch.src)
@@ -84,6 +84,17 @@ func _write_report() -> void:
 			if ch.img != "":
 				lines.append("  ![screenshot](%s)" % ch.img)
 	_write_file(_dir() + "/report.md", "\n".join(lines) + "\n")
+
+
+func _loc_link(loc: String) -> String:
+	var idx := loc.rfind(":")
+	if idx == -1:
+		return loc
+	var src := loc.substr(0, idx).trim_prefix("res://")
+	var up := ""
+	for i in _dir().trim_prefix("res://").split("/").size():
+		up += "../"
+	return "[%s](%s%s)" % [loc, up, src]
 
 
 func _caller_frame(stack: Array) -> Dictionary:
