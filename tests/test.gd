@@ -122,9 +122,10 @@ func _loc_link(loc: String) -> String:
 
 
 func _caller_frame(stack: Array) -> Dictionary:
+	var harness: String = get_script().get_base_script().resource_path.get_file()
 	for sf in stack:
 		var f := sf as Dictionary
-		if not str(f["source"]).ends_with(get_script().resource_path.get_file()):
+		if not str(f["source"]).ends_with(harness):
 			return f
 	return {}
 

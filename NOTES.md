@@ -18,6 +18,7 @@ This file records confirmed, non-obvious facts learned while working on Voxi. Re
 - 2026-08-16: No change: `Mesh.PRIMITIVE_LINES` (=1), `BaseMaterial3D.TRANSPARENCY_ALPHA`, `SubViewport.size_changed`.
 - 2026-08-16: `OS.create_process` does not inherit the child's output in this build. Use `OS.execute` with an output array to capture it.
 - 2026-08-16: `OS.execute` returns the child output as one array element. That element holds the whole text with `\r\n` line endings.
+- 2026-08-16: `get_script()` returns the most-derived script, even inside a base-script method. Use `get_script().get_base_script()` to reach the base script. Type the result explicitly; `:=` cannot infer through that chain.
 
 ## UI scene migration
 
