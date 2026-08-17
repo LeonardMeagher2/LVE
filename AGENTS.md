@@ -1,6 +1,15 @@
 # AGENTS.md
 
-Voxi is a Godot 4.7.1 voxel-animation editor. Godot is the only toolchain. There is no build system, CI, or linter. `TASKS.md` tracks the roadmap. Work on one active task at a time.
+Voxi is a Godot voxel-animation editor. Godot is the only toolchain. There is no build system, CI, or linter. [TASKS.md](TASKS.md) tracks the roadmap. Work on one active task at a time.
+
+## Learnings
+
+[NOTES.md](NOTES.md) records confirmed learnings about the engine, APIs, and workflow.
+
+- Record a learning during the task that found it. Do not wait for a request.
+- Verify the fact before you record it.
+- Use one bullet per learning. Start the bullet with the date. Keep the sentence short and in STE.
+- Do not record opinions, speculation, or obvious facts.
 
 ## Doc writing standard
 
@@ -18,34 +27,41 @@ Write all docs and commit messages in ASD-STE100 (Simplified Technical English).
 
 ## Run tests
 
-Tests are Godot `SceneTree` scripts. Run them with `-s`. Run windowed, not `--headless`, so failures save screenshots.
+Each `tests/*.gd` file is one user-behavior test (paint, undo, camera, ...). Run the whole suite with `res://tests/run_all.gd`. Run the runner headless. It launches each test windowed so failures save screenshots.
 
 ```
-godot --path "C:\Users\Leona\Desktop\Gamedev\Voxi" -s res://tests/smoke.gd
+godot --headless --path "C:\Users\Leona\Desktop\Gamedev\Voxi" -s res://tests/run_all.gd
 ```
 
-- Pass: `VOXI TEST OK`, exit 0.
-- Failure: `VOXI TEST FAILED: N/M ... report.md`, exit 1.
-- `--headless` works but skips screenshot capture.
-- This run is the only verification step.
+Run one test with:
+
+```
+godot --path "C:\Users\Leona\Desktop\Gamedev\Voxi" -s res://tests/paint.gd
+```
+
+- The runner exits 0 when all tests pass. It exits non-zero when any test fails.
+- Failures write a report and screenshots under `tests/artifacts/`.
+- A windowed run is required for screenshots. `--headless` skips screenshot capture.
+- The suite is the only verification step.
 
 ## Test harness
 
-- `tests/test.gd` defines the `Test` base class. It extends `SceneTree`. It exposes `test(description, callable)` and `expect(cond, msg)`.
-- New tests extend `"res://tests/test.gd"` by path. The global class cache is unreliable under `-s`.
-- In `_initialize()`, instantiate the scene, add it to `root`, then call `test("...", _func)`.
+- `tests/test.gd` defines the `Test` base class. It extends `SceneTree`. It exposes `test(description, callable)`, `step(description, callable)`, and `expect(cond, msg)`. `step` returns the callable result. The harness prints each test, step, and check result to the console as it runs. `tests/run_all.gd` runs every other test file as a subprocess.
+- New tests extend `"res://tests/test.gd"` by path. `.gdignore` hides the tests folder, so its `class_name`s are not in the global cache.
+- In `_initialize()`, instantiate the scene. Add it to `root`. Call `test("...", _func)`.
 - Await frames before touching node state. Use `for i in 2: await process_frame`. `_ready()` has not run during `_initialize`.
-- `expect` records all failures. It does not stop at the first failure. Failures write `tests/artifacts/<testname>/report.md` and `fail_*.png`. The artifacts directory is gitignored.
+- `expect` records all failures. It does not stop at the first failure. Failures write a report and screenshots under `tests/artifacts/`. The artifacts directory is gitignored.
 
 ## BDD style
 
 Write tests as behavior specs. Do not write code dumps.
 
 - State the behavior in `test("...")`. Do not state the mechanism. Example: "can undo a brush stroke".
-- State the expectation in `expect(cond, "msg")`. Example: "stroke voxel missing". Both args are required.
-- Use Given (setup) / When (act) / Then (assert) when the test has real setup.
+- When the test has real setup, structure the body with `step("Given ...", func)`, `step("When ...", func)`, and `step("Then ...", func)`.
+- State the expectation in `expect(cond, "msg")`. Write the message in the affirmative. Describe the state that must hold, not the failure. Example: "stroke voxel present". Both args are required. `expect` calls inside a step appear under that step in the report.
+- Steps capture local variables by value. Share state between steps with member variables.
 - The description and messages appear verbatim in the report. Write them for a human reader.
 
-## Godot 4.7.1 quirks
+## Godot quirks
 
-The Steam `4.7.1.stable` build diverges from the Godot docs. Use the `godot-docs` skill to verify APIs. Read `docs/godot47-api-notes.md` for confirmed divergences. Do this before you use rendering or UI APIs.
+Do not assume an API exists from memory. Validate API assumptions against the current stable docs. Use the `godot-docs` skill for validation.

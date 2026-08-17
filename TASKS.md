@@ -5,7 +5,7 @@ max_active: 1
 # M1 — Core loop
 
 ## Godot 4.7 API fixes
-- [x] [Fix 4 remaining Godot 4.7.1 API issues](docs/godot47-api-notes.md)
+- [x] [Fix 4 remaining Godot 4.7.1 API issues](NOTES.md)
   - [x] MenuButton popup: replace `set_popup()` with `get_popup()`
   - [x] SubViewport input: replace broken `input_event` connection
   - [x] `_vertex_arrays`: return Array sized to `Mesh.ARRAY_MAX`
@@ -14,7 +14,7 @@ max_active: 1
 - [x] Delete tests/probe.gd
 
 ## Scene-ify the UI
-- [x] [Migrate static UI structure + signal wiring into main.tscn](docs/ui-scene-migration.md)
+- [x] [Migrate static UI structure + signal wiring into main.tscn](NOTES.md)
   - [x] Rebuild main.tscn with the full static UI tree (~30 nodes)
   - [x] Declare all static signal connections in the scene ([connection] entries)
   - [x] Move MenuButton items into the scene (item_count + popup item text); only id_pressed wiring stays in code

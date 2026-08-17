@@ -4,6 +4,8 @@ extends SceneTree
 var _name := ""
 var _desc := ""
 var _checks: Array = []
+var _steps: Array = []
+var _current_step := -1
 var _snap_seq := 0
 var _snap_by_frame := {}
 
@@ -11,17 +13,25 @@ var _snap_by_frame := {}
 func test(description: String, c: Callable) -> void:
 	_name = get_script().resource_path.get_file().get_basename()
 	_desc = description
+	print(description)
 	await c.call()
 	var failed := _count_failed()
 	if failed > 0:
 		_write_report()
-		print("VOXI TEST FAILED: %d/%d checks failed -> res://tests/artifacts/%s/report.md" % [
-			failed, _checks.size(), _name
+		print("TEST FAILED: %d/%d checks failed -> %s/report.md" % [
+			failed, _checks.size(), _dir()
 		])
 		quit(1)
 	else:
-		print("VOXI TEST OK")
+		print("TEST OK")
 		quit(0)
+
+
+func step(description: String, c: Callable) -> Variant:
+	_steps.append({"desc": description})
+	_current_step = _steps.size() - 1
+	print("  %s" % description)
+	return await c.call()
 
 
 func expect(cond: bool, msg: String) -> void:
@@ -31,8 +41,12 @@ func expect(cond: bool, msg: String) -> void:
 		"loc": "%s:%d" % [caller["source"], caller["line"]],
 		"msg": msg,
 		"ok": cond,
+		"step": _current_step,
 	}
-	if not cond:
+	if cond:
+		print("    + %s" % msg)
+	else:
+		print("    x %s" % msg)
 		entry["src"] = _line_text(str(caller["source"]), caller["line"])
 		entry["img"] = _screenshot_for(Engine.get_process_frames())
 	_checks.append(entry)
@@ -71,7 +85,17 @@ func _write_report() -> void:
 		Time.get_datetime_string_from_system(), _checks.size(), _count_failed()
 	])
 	lines.append("")
+	var last_step := -2
 	for ch in _checks:
+		var step_id: int = ch.step
+		if step_id != last_step:
+			last_step = step_id
+			lines.append("")
+			if step_id >= 0:
+				lines.append("### %s" % _steps[step_id].desc)
+			else:
+				lines.append("### Intro")
+			lines.append("")
 		var label: String = ch.msg
 		if ch.ok:
 			lines.append("- ✅ %s: %s" % [label, _loc_link(ch.loc)])
@@ -100,7 +124,7 @@ func _loc_link(loc: String) -> String:
 func _caller_frame(stack: Array) -> Dictionary:
 	for sf in stack:
 		var f := sf as Dictionary
-		if not str(f["source"]).ends_with("test.gd"):
+		if not str(f["source"]).ends_with(get_script().resource_path.get_file()):
 			return f
 	return {}
 
@@ -118,7 +142,7 @@ func _line_text(source: String, line: int) -> String:
 
 
 func _dir() -> String:
-	var dir := "res://tests/artifacts/%s" % _name
+	var dir := "%s/artifacts/%s" % [get_script().resource_path.get_base_dir(), _name]
 	DirAccess.make_dir_recursive_absolute(dir)
 	return dir
 

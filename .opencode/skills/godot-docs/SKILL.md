@@ -1,15 +1,11 @@
 ---
 name: godot-docs
-description: Look up and verify Godot 4.7 APIs in the official docs. Use when writing or fixing GDScript, checking whether an API exists, or confirming exact member, enum, or signal names and values.
+description: Look up and verify Godot APIs in the official docs. Use when writing or fixing GDScript, checking whether an API exists, or confirming exact member, enum, or signal names and values.
 ---
 
 # Godot docs lookup
 
-The Steam `4.7.1.stable` build can diverge from the docs. Verify each API against the docs. Check the running build when anything looks wrong.
-
-## Read the known-divergence file first
-
-Read `docs/godot47-api-notes.md` before you look anything up. It records confirmed divergences. Add new divergences there.
+Use the current stable docs. Do not assume an API exists from memory. Validate API assumptions against the current stable docs.
 
 ## Fetch the raw RST source
 
@@ -22,12 +18,12 @@ https://raw.githubusercontent.com/godotengine/godot-docs/master/classes/class_<s
 Use the rendered HTML as a fallback.
 
 ```
-https://docs.godotengine.org/en/4.7/classes/class_<snake_case>.html
+https://docs.godotengine.org/en/stable/classes/class_<snake_case>.html
 ```
 
 For an unknown class name, fetch the class index or websearch.
 
-- Index: `https://docs.godotengine.org/en/4.7/classes/index.html`
+- Index: `https://docs.godotengine.org/en/stable/classes/index.html`
 - Search: `websearch` for `site:docs.godotengine.org <api>`
 
 ## Build the class URL
@@ -57,10 +53,10 @@ Member names are snake_case. Examples: `shading_mode`, `render_target_update_mod
 
 Class pages are large. When a fetch is truncated, opencode saves it to a local tool-output file. Grep that file for the member. Do not fetch again.
 
-## Confirm a divergence
+## Validate an assumption
 
-When the docs and the build disagree:
+To confirm an API in the running build:
 
 1. Run `godot --version`. Confirm the build.
 2. Write a throwaway `extends SceneTree` probe. Run it headless. Confirm the API.
-3. Record the divergence in `docs/godot47-api-notes.md`. Delete the probe.
+3. Delete the probe.
