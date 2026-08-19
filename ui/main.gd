@@ -1,8 +1,7 @@
 extends Control
 
 @onready var _menu_bar: EditorMenuBar = $Root/MenuBar
-@onready var _tool_bar: EditorToolBar = $Root/ToolBar
-@onready var _viewport_panel: EditorViewportPanel = $Root/ViewportContainer
+@onready var _viewport_panel: EditorViewportPanel = $Root/Body/CenterPane/ViewportContainer
 @onready var _frame_bar: EditorFrameBar = $Root/FrameBar
 @onready var _status_bar: EditorStatusBar = $Root/StatusBar
 

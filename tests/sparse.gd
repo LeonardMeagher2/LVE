@@ -14,7 +14,7 @@ func _ready() -> void:
 
 func _run() -> void:
 	step("Given an empty editor", func():
-		_vp = _inst.get_node("Root/ViewportContainer/Viewport/Editor")
+		_vp = _inst.get_node("Root/Body/CenterPane/ViewportContainer/Viewport/Editor")
 	)
 
 	step("When the user paints a cell beyond the original 16x16 extent", func():

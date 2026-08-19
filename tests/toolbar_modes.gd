@@ -1,7 +1,7 @@
 extends "res://tests/test.gd"
 
 var _inst: Node = null
-var _toolbar: EditorToolBar
+var _toolbar: EditorToolStrip
 var _brush_button: Button
 
 
@@ -14,7 +14,7 @@ func _ready() -> void:
 
 func _run() -> void:
 	step("Given the toolbar with a brush button", func():
-		_toolbar = _inst.get_node("Root/ToolBar")
+		_toolbar = _inst.get_node("Root/Body/RightStrip")
 		_brush_button = _toolbar._tool_buttons[0]
 		expect(_toolbar._tool_buttons.size() == 6, "the toolbar shows one button per tool")
 	)

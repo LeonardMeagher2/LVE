@@ -15,7 +15,7 @@ func _ready() -> void:
 
 func _run() -> void:
 	step("Given an editor with a fresh document", func():
-		_vp = _inst.get_node("Root/ViewportContainer/Viewport/Editor")
+		_vp = _inst.get_node("Root/Body/CenterPane/ViewportContainer/Viewport/Editor")
 		var svp := _vp.get_viewport()
 		var container := svp.get_parent()
 		container.stretch = false

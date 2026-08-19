@@ -1,5 +1,5 @@
-class_name EditorToolBar
-extends HBoxContainer
+class_name EditorToolStrip
+extends VBoxContainer
 
 var _tool_buttons: Array[Button] = []
 var _button_members := {}
@@ -9,18 +9,11 @@ var _pressed_button: Button = null
 var _long_pressed := false
 var _menu_members: Array[ToolInfo] = []
 
-@onready var _tool_buttons_box: HBoxContainer = $ToolButtons
-@onready var _color_picker: ColorPickerButton = $ColorPicker
-@onready var _recent_box: HBoxContainer = $RecentColors
-@onready var _pixel_perfect: CheckButton = $PixelPerfect
+@onready var _tool_buttons_box: VBoxContainer = $ToolButtons
 
 
 func _ready() -> void:
 	State.tool_changed.connect(_on_tool_changed)
-	State.color_changed.connect(_on_color_changed)
-	State.pixel_perfect_changed.connect(_on_pixel_perfect_changed)
-	_pixel_perfect.button_pressed = State.pixel_perfect
-	_color_picker.color = State.current_color
 	_press_timer = Timer.new()
 	_press_timer.wait_time = 0.5
 	_press_timer.one_shot = true
@@ -30,7 +23,6 @@ func _ready() -> void:
 	add_child(_menu)
 	_build_tool_buttons()
 	_update_tool_buttons()
-	_update_recent()
 
 
 func _build_tool_buttons() -> void:
@@ -44,12 +36,12 @@ func _build_tool_buttons() -> void:
 		var members := _members_of(info)
 		var b := Button.new()
 		b.text = info.display_name
-		b.custom_minimum_size = Vector2(56, 28)
+		b.icon = info.icon
+		b.expand_icon = true
+		b.custom_minimum_size = Vector2(44, 32)
 		b.focus_mode = Control.FOCUS_NONE
 		b.toggle_mode = true
 		b.tooltip_text = info.tooltip
-		if info.icon != null:
-			b.icon = info.icon
 		_button_members[b] = members
 		b.button_down.connect(_on_button_down.bind(b))
 		b.button_up.connect(_on_button_up.bind(b))
@@ -132,42 +124,4 @@ func _update_tool_buttons() -> void:
 		b.button_pressed = (active == State.tool)
 		if members.size() > 1:
 			b.text = active.display_name
-			if active.icon != null:
-				b.icon = active.icon
-
-
-func _on_color_picked(c: Color) -> void:
-	State.set_color(c)
-
-
-func _on_color_changed(_c: Color) -> void:
-	_color_picker.color = State.current_color
-	_update_recent()
-
-
-func _on_pixel_perfect_toggled(v: bool) -> void:
-	State.set_pixel_perfect(v)
-
-
-func _on_pixel_perfect_changed(v: bool) -> void:
-	_pixel_perfect.button_pressed = v
-
-
-func _update_recent() -> void:
-	for child in _recent_box.get_children():
-		child.queue_free()
-	for c in State.recents.colors:
-		var b := Button.new()
-		b.custom_minimum_size = Vector2(22, 22)
-		b.focus_mode = Control.FOCUS_NONE
-		var sb := StyleBoxFlat.new()
-		sb.bg_color = c
-		sb.set_corner_radius_all(3)
-		b.add_theme_stylebox_override("normal", sb)
-		b.add_theme_stylebox_override("pressed", sb)
-		b.pressed.connect(_pick_recent.bind(c))
-		_recent_box.add_child(b)
-
-
-func _pick_recent(c: Color) -> void:
-	State.set_color(c)
+			b.icon = active.icon

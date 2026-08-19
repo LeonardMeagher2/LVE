@@ -1,0 +1,16 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://ui/option_bar.gd" id="1_option"]
+
+[node name="OptionBar" type="HBoxContainer"]
+custom_minimum_size = Vector2(0, 28)
+layout_mode = 2
+theme_override_constants/separation = 6
+script = ExtResource("1_option")
+
+[node name="PixelPerfect" type="CheckButton" parent="."]
+layout_mode = 2
+focus_mode = 0
+text = "Pixel Perfect"
+
+[connection signal="toggled" from="PixelPerfect" to="." method="_on_pixel_perfect_toggled"]

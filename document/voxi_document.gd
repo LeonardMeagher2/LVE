@@ -60,6 +60,21 @@ func color_of(palette_index: int) -> Color:
 	return Color.MAGENTA
 
 
+func remove_color(index: int) -> bool:
+	if index < 0 or index >= palette.size():
+		return false
+	for f in frames:
+		for c in f.cells.values():
+			if c == index:
+				return false
+	palette.remove_at(index)
+	for f in frames:
+		for key in f.cells.keys():
+			if f.cells[key] > index:
+				f.cells[key] -= 1
+	return true
+
+
 func bounds() -> AABB:
 	var b := AABB()
 	for f in frames:

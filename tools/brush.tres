@@ -1,6 +1,7 @@
-[gd_resource type="Resource" script_class="ToolInfo" load_steps=2 format=3]
+[gd_resource type="Resource" script_class="ToolInfo" load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://tools/tool_info.gd" id="1_script"]
+[ext_resource type="Texture2D" path="res://icons/brush.svg" id="2_icon"]
 
 [resource]
 script = ExtResource("1_script")
@@ -9,3 +10,4 @@ display_name = "Brush"
 group = "brush"
 tooltip = "Paint voxels"
 scene = "res://tools/brush/brush.tscn"
+icon = ExtResource("2_icon")

@@ -13,7 +13,7 @@ func _ready() -> void:
 
 func _run() -> void:
 	step("Given a document with two distinct frames", func():
-		_vp = _inst.get_node("Root/ViewportContainer/Viewport/Editor")
+		_vp = _inst.get_node("Root/Body/CenterPane/ViewportContainer/Viewport/Editor")
 		State.document.add_frame()
 		State.document.frames[1].cells[Vector3i(9, 0, 9)] = State.document.ensure_color(State.current_color)
 		State.document.frames[0].delay_ms = 250
