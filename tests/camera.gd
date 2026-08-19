@@ -1,7 +1,6 @@
 extends "res://tests/test.gd"
 
 var _inst: Node = null
-var _st: EditorState
 var _vp: EditorViewport
 var _center := Vector2.ZERO
 var _yaw_before := 0.0
@@ -9,20 +8,15 @@ var _pitch_before := 0.0
 var _target_before := Vector3.ZERO
 
 
-func _initialize() -> void:
-	var scene: PackedScene = load("res://scenes/main.tscn")
+func _ready() -> void:
+	var scene: PackedScene = load("res://ui/main.tscn")
 	_inst = scene.instantiate()
-	root.add_child(_inst)
+	get_tree().root.add_child.call_deferred(_inst)
 	test("can orbit and pan the camera", _run)
 
 
 func _run() -> void:
-	for i in 2:
-		await process_frame
-
 	step("Given an editor with a voxel viewport", func():
-		_st = _inst.state
-		expect(_st != null, "editor state exists")
 		_vp = _inst.get_node("Root/ViewportContainer/Viewport/Editor")
 		var svp := _vp.get_viewport()
 		var vsize: Vector2i = svp.size
@@ -38,15 +32,15 @@ func _run() -> void:
 		var press := InputEventMouseButton.new()
 		press.button_index = MOUSE_BUTTON_RIGHT
 		press.pressed = true
-		_vp.handle_input(press, _center)
+		_vp.get_viewport().push_input(press)
 		var move := InputEventMouseMotion.new()
 		move.relative = Vector2(30, 20)
 		move.button_mask = MOUSE_BUTTON_MASK_RIGHT
-		_vp.handle_input(move, _center)
+		_vp.get_viewport().push_input(move)
 		var release := InputEventMouseButton.new()
 		release.button_index = MOUSE_BUTTON_RIGHT
 		release.pressed = false
-		_vp.handle_input(release, _center)
+		_vp.get_viewport().push_input(release)
 	)
 
 	step("Then the camera yaw and pitch change", func():
@@ -59,15 +53,15 @@ func _run() -> void:
 		var press := InputEventMouseButton.new()
 		press.button_index = MOUSE_BUTTON_MIDDLE
 		press.pressed = true
-		_vp.handle_input(press, _center)
+		_vp.get_viewport().push_input(press)
 		var move := InputEventMouseMotion.new()
 		move.relative = Vector2(40, -20)
 		move.button_mask = MOUSE_BUTTON_MASK_MIDDLE
-		_vp.handle_input(move, _center)
+		_vp.get_viewport().push_input(move)
 		var release := InputEventMouseButton.new()
 		release.button_index = MOUSE_BUTTON_MIDDLE
 		release.pressed = false
-		_vp.handle_input(release, _center)
+		_vp.get_viewport().push_input(release)
 	)
 
 	step("Then the camera target moves", func():

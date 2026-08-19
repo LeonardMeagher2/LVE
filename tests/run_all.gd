@@ -27,9 +27,8 @@ func _test_paths() -> Array[String]:
 	var dir := DirAccess.open(base)
 	if dir == null:
 		return out
-	var me: String = get_script().resource_path.get_file()
 	for f in dir.get_files():
-		if f.ends_with(".gd") and f != me and f != "test.gd":
+		if f.ends_with(".tscn"):
 			out.append("%s/%s" % [base, f])
 	out.sort()
 	return out
@@ -39,7 +38,7 @@ func _run_one(path: String) -> int:
 	var output: Array = []
 	var code := OS.execute(
 		OS.get_executable_path(),
-		PackedStringArray(["--path", ProjectSettings.globalize_path("res://"), "-s", path]),
+		PackedStringArray(["--path", ProjectSettings.globalize_path("res://"), path]),
 		output,
 		true
 	)

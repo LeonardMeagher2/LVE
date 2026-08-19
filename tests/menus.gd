@@ -4,17 +4,14 @@ var _inst: Node = null
 var _file_menu: MenuButton
 
 
-func _initialize() -> void:
-	var scene: PackedScene = load("res://scenes/main.tscn")
+func _ready() -> void:
+	var scene: PackedScene = load("res://ui/main.tscn")
 	_inst = scene.instantiate()
-	root.add_child(_inst)
+	get_tree().root.add_child.call_deferred(_inst)
 	test("file menu lists the editing actions", _run)
 
 
 func _run() -> void:
-	for i in 2:
-		await process_frame
-
 	step("Given the editor is open", func():
 		_file_menu = _inst.get_node("Root/MenuBar/File")
 	)

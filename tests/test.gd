@@ -1,5 +1,5 @@
 class_name Test
-extends SceneTree
+extends Node
 
 var _name := ""
 var _desc := ""
@@ -14,6 +14,8 @@ func test(description: String, c: Callable) -> void:
 	_name = get_script().resource_path.get_file().get_basename()
 	_desc = description
 	print(description)
+	for i in 2:
+		await get_tree().process_frame
 	await c.call()
 	var failed := _count_failed()
 	if failed > 0:
@@ -21,10 +23,10 @@ func test(description: String, c: Callable) -> void:
 		print("TEST FAILED: %d/%d checks failed -> %s/report.md" % [
 			failed, _checks.size(), _dir()
 		])
-		quit(1)
+		get_tree().quit(1)
 	else:
 		print("TEST OK")
-		quit(0)
+		get_tree().quit(0)
 
 
 func step(description: String, c: Callable) -> Variant:
@@ -66,7 +68,7 @@ func _screenshot_for(frame: int) -> String:
 	var file := ""
 	if DisplayServer.get_name() != "headless":
 		RenderingServer.force_draw()
-		var img := root.get_texture().get_image()
+		var img := get_tree().root.get_texture().get_image()
 		if img.get_width() > 0 and img.get_height() > 0:
 			_snap_seq += 1
 			file = "fail_%02d.png" % _snap_seq

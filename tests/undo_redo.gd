@@ -1,47 +1,56 @@
 extends "res://tests/test.gd"
 
 var _inst: Node = null
-var _st: EditorState
+var _vp: EditorViewport
+var _center := Vector2.ZERO
+var _painted := State.NONE
 
 
-func _initialize() -> void:
-	var scene: PackedScene = load("res://scenes/main.tscn")
+func _ready() -> void:
+	var scene: PackedScene = load("res://ui/main.tscn")
 	_inst = scene.instantiate()
-	root.add_child(_inst)
+	get_tree().root.add_child.call_deferred(_inst)
 	test("can undo and redo a stroke", _run)
 
 
 func _run() -> void:
-	for i in 2:
-		await process_frame
-
 	step("Given an editor with a fresh document", func():
-		_st = _inst.state
-		expect(_st != null, "editor state exists")
+		_vp = _inst.get_node("Root/ViewportContainer/Viewport/Editor")
+		var svp := _vp.get_viewport()
+		var container := svp.get_parent()
+		container.stretch = false
+		svp.size = Vector2i(800, 500)
+		_center = Vector2(400.0, 250.0)
 	)
 
-	step("When the user paints a stroke voxel at (9, 0, 8)", func():
-		_st.begin_stroke()
-		_st.apply_tool(Vector3i(9, 0, 8), EditorViewport.NONE)
-		_st.end_stroke()
+	step("When the user paints a voxel at the cursor", func():
+		var req := _vp.pick_request(_center)
+		_painted = VoxelPicking.start_pick(req.origin, req.dir, req.cells).target
+		var click := InputEventMouseButton.new()
+		click.button_index = MOUSE_BUTTON_LEFT
+		click.pressed = true
+		click.position = _center
+		_vp.get_viewport().push_input(click)
+		click.pressed = false
+		_vp.get_viewport().push_input(click)
 	)
 
 	step("Then the stroke voxel is in the frame", func():
-		expect(_st.doc.frames[0].cells.has(Vector3i(9, 0, 8)), "stroke voxel present")
+		expect(State.document.frames[0].cells.has(_painted), "stroke voxel present")
 	)
 
 	step("When the user undoes the stroke", func():
-		_st.undo()
+		State.undo_redo.undo()
 	)
 
 	step("Then the stroke voxel is removed", func():
-		expect(not _st.doc.frames[0].cells.has(Vector3i(9, 0, 8)), "stroke voxel removed after undo")
+		expect(not State.document.frames[0].cells.has(_painted), "stroke voxel removed after undo")
 	)
 
 	step("When the user redoes the stroke", func():
-		_st.redo()
+		State.undo_redo.redo()
 	)
 
 	step("Then the stroke voxel returns", func():
-		expect(_st.doc.frames[0].cells.has(Vector3i(9, 0, 8)), "stroke voxel present after redo")
+		expect(State.document.frames[0].cells.has(_painted), "stroke voxel present after redo")
 	)

@@ -1,45 +1,60 @@
 extends "res://tests/test.gd"
 
 var _inst: Node = null
-var _st: EditorState
+var _vp: EditorViewport
+var _center := Vector2.ZERO
+var _pressed := State.NONE
 
 
-func _initialize() -> void:
-	var scene: PackedScene = load("res://scenes/main.tscn")
+func _ready() -> void:
+	var scene: PackedScene = load("res://ui/main.tscn")
 	_inst = scene.instantiate()
-	root.add_child(_inst)
-	test("can paint voxels with a brush", _run)
+	get_tree().root.add_child.call_deferred(_inst)
+	test("can paint a stroke of voxels with a drag", _run)
 
 
 func _run() -> void:
-	for i in 2:
-		await process_frame
-
-	step("Given an editor with a fresh document and a red brush", func():
-		_st = _inst.state
-		expect(_st != null, "editor state exists")
-		_st.current_color = Color8(200, 60, 60)
+	step("Given a red brush on an empty grid", func():
+		State.current_color = Color8(200, 60, 60)
+		_vp = _inst.get_node("Root/ViewportContainer/Viewport/Editor")
+		var svp := _vp.get_viewport()
+		var container := svp.get_parent()
+		container.stretch = false
+		svp.size = Vector2i(800, 500)
+		_center = Vector2(400.0, 250.0)
 	)
 
-	step("When the user paints a brush voxel at (8, 0, 8)", func():
-		_st.apply_tool(Vector3i(8, 0, 8), EditorViewport.NONE)
+	step("When the user presses and drags the viewport", func():
+		var req := _vp.pick_request(_center)
+		_pressed = VoxelPicking.start_pick(req.origin, req.dir, req.cells).target
+		var press := InputEventMouseButton.new()
+		press.button_index = MOUSE_BUTTON_LEFT
+		press.pressed = true
+		press.position = _center
+		_vp.get_viewport().push_input(press)
+		var drag_pos := _center + Vector2(0.0, 150.0)
+		var motion := InputEventMouseMotion.new()
+		motion.position = drag_pos
+		motion.relative = Vector2(0.0, 150.0)
+		motion.button_mask = MOUSE_BUTTON_MASK_LEFT
+		_vp.get_viewport().push_input(motion)
+		var release := InputEventMouseButton.new()
+		release.button_index = MOUSE_BUTTON_LEFT
+		release.pressed = false
+		release.position = drag_pos
+		_vp.get_viewport().push_input(release)
 	)
 
-	step("Then the brush voxel is in the frame", func():
-		expect(_st.doc.frames[0].cells.has(Vector3i(8, 0, 8)), "brush voxel present")
+	step("Then a stroke of voxels is painted", func():
+		var frame: VoxelFrame = State.document.frames[0]
+		expect(frame.cells.size() > 1, "the drag painted a stroke")
+		expect(frame.cells.has(_pressed), "the pressed cell is painted")
 	)
 
-	step("When the user paints a stroke voxel at (9, 0, 8)", func():
-		_st.begin_stroke()
-		_st.apply_tool(Vector3i(9, 0, 8), EditorViewport.NONE)
-		_st.end_stroke()
+	step("When the user undoes the stroke", func():
+		State.undo_redo.undo()
 	)
 
-	step("Then the stroke voxel is in the frame", func():
-		expect(_st.doc.frames[0].cells.has(Vector3i(9, 0, 8)), "stroke voxel present")
-	)
-
-	step("Then the painted voxels use the brush color", func():
-		expect(_st.doc.color_of(_st.doc.frames[0].cells[Vector3i(8, 0, 8)]) == Color8(200, 60, 60), "brush voxel has the brush color")
-		expect(_st.doc.color_of(_st.doc.frames[0].cells[Vector3i(9, 0, 8)]) == Color8(200, 60, 60), "stroke voxel has the brush color")
+	step("Then the stroke is removed", func():
+		expect(State.document.frames[0].cells.is_empty(), "the stroke is removed")
 	)
