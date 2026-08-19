@@ -19,6 +19,18 @@ This file records confirmed, non-obvious facts learned while working on Voxi. Re
 - 2026-08-16: `OS.create_process` does not inherit the child's output in this build. Use `OS.execute` with an output array to capture it.
 - 2026-08-16: `OS.execute` returns the child output as one array element. That element holds the whole text with `\r\n` line endings.
 - 2026-08-16: `get_script()` returns the most-derived script, even inside a base-script method. Use `get_script().get_base_script()` to reach the base script. Type the result explicitly; `:=` cannot infer through that chain.
+- 2026-08-16: `Vector3.from_axis()` does not exist. Build an axis vector by setting one component of `Vector3.ZERO` to `1.0`.
+- 2026-08-19: `UndoRedo.commit_action(false)` registers the action without running the do methods. Use it when the do state already exists.
+- 2026-08-19: `MultiMesh.transform_format` defaults to `TRANSFORM_2D` (=0). Use `TRANSFORM_3D` (=1) for 3D instances. The scene saver drops properties equal to the default, so write the non-default value in `.tscn`.
+- 2026-08-19: `AABB` has `has_volume()` and `has_surface()`, not `has_area()`. An empty `AABB` has a zero `size`.
+- 2026-08-19: The document canvas is unbounded. `VoxiDocument.bounds()` returns an `AABB` over all frames. `grid_size` and `in_bounds` are removed.
+
+## Picking
+
+- 2026-08-18: DDA picking in grid space must shift the ray origin by +0.5. Mesh cell `c` occupies `[c-0.5, c+0.5]`, but `floori()` cell `i` occupies `[i, i+1]`.
+- 2026-08-19: Aseprite source is proprietary (source-available, non-free). Do not copy it. The smooth-stroke technique is implemented from public descriptions.
+- 2026-08-19: The base tool interpolates the line between consecutive drag picks. `StrokeLine.cells` returns the connected 8-neighbor path, which always ends at the mouse cell. The stroke always paints the cell under the mouse; no filter may skip it.
+- 2026-08-19: Pixel-perfect drawing uses the public "waiting pixel" scheme. `PixelPerfectStroke` holds a `waiting` cell that neighbors the last drawn cell. When the cursor pulls more than one cell away, it draws the connected path from the waiting cell to the cursor, so the stroke never gaps. `State.pixel_perfect` toggles it; the tool flushes the waiting cell on mouse-up.
 
 ## UI scene migration
 
@@ -30,3 +42,11 @@ This file records confirmed, non-obvious facts learned while working on Voxi. Re
 - Dynamic elements stay in code: frame strip buttons, recent color swatches.
 - The Aseprite-style layout (left palette panel, right tool strip) lands in M4.
 - `main.gd` must construct no UI nodes except dynamic frame and recent buttons, and the FileDialog.
+
+## Workflow
+
+- New `class_name` scripts do not resolve until the project reimports. Run `godot --headless --import` to refresh the global class cache.
+- `godot -s script.gd` cannot resolve autoload singleton identifiers at compile time. Run tests as scenes so autoloads resolve.
+- Adding a child to the root during a main-scene node's `_ready()` fails with "Parent node is busy setting up children". Call the work with `call_deferred()`.
+- The test harness `step` does not wait for `await` inside its step lambda. Put `await` calls in the test's `_run` function between steps.
+- 2026-08-19: The harness waits two frames before each test body. Tests do not wait in `_run`.

@@ -27,7 +27,7 @@ Write all docs and commit messages in ASD-STE100 (Simplified Technical English).
 
 ## Run tests
 
-Each `tests/*.gd` file is one user-behavior test (paint, undo, camera, ...). Run the whole suite with `res://tests/run_all.gd`. Run the runner headless. It launches each test windowed so failures save screenshots.
+Each `tests/*.tscn` and `tests/*.gd` pair is one user-behavior test (paint, undo, camera, ...). Run the whole suite with `res://tests/run_all.gd`. Run the runner headless. It launches each test windowed so failures save screenshots.
 
 ```
 godot --headless --path "C:\Users\Leona\Desktop\Gamedev\Voxi" -s res://tests/run_all.gd
@@ -36,7 +36,7 @@ godot --headless --path "C:\Users\Leona\Desktop\Gamedev\Voxi" -s res://tests/run
 Run one test with:
 
 ```
-godot --path "C:\Users\Leona\Desktop\Gamedev\Voxi" -s res://tests/paint.gd
+godot --path "C:\Users\Leona\Desktop\Gamedev\Voxi" res://tests/paint.tscn
 ```
 
 - The runner exits 0 when all tests pass. It exits non-zero when any test fails.
@@ -46,10 +46,10 @@ godot --path "C:\Users\Leona\Desktop\Gamedev\Voxi" -s res://tests/paint.gd
 
 ## Test harness
 
-- `tests/test.gd` defines the `Test` base class. It extends `SceneTree`. It exposes `test(description, callable)`, `step(description, callable)`, and `expect(cond, msg)`. `step` returns the callable result. The harness prints each test, step, and check result to the console as it runs. `tests/run_all.gd` runs every other test file as a subprocess.
-- New tests extend `"res://tests/test.gd"` by path. `.gdignore` hides the tests folder, so its `class_name`s are not in the global cache.
-- In `_initialize()`, instantiate the scene. Add it to `root`. Call `test("...", _func)`.
-- Await frames before touching node state. Use `for i in 2: await process_frame`. `_ready()` has not run during `_initialize`.
+- `tests/test.gd` defines the `Test` base class. It extends `Node`. It exposes `test(description, callable)`, `step(description, callable)`, and `expect(cond, msg)`. `step` returns the callable result. The harness prints each test, step, and check result to the console as it runs. `tests/run_all.gd` runs each test scene as a subprocess.
+- New tests extend `"res://tests/test.gd"` by path. Each test needs a matching `tests/<name>.tscn` scene with the script on the root node. `.gdignore` hides the tests folder, so its `class_name`s are not in the global cache.
+- In `_ready()`, instantiate the scene. Add it with `get_tree().root.add_child.call_deferred(...)`. Call `test("...", _func)`. Defer the add because the root is busy setting up children during `_ready()`.
+- The harness waits two frames before each test body. Put `await` calls in the test's `_run` function, not in step lambdas. The autoload singletons resolve because tests run as scenes.
 - `expect` records all failures. It does not stop at the first failure. Failures write a report and screenshots under `tests/artifacts/`. The artifacts directory is gitignored.
 
 ## BDD style
