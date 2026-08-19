@@ -3,7 +3,7 @@
 [ext_resource type="Script" uid="uid://b0gaxrb8bjobo" path="res://ui/main.gd" id="1_main"]
 [ext_resource type="PackedScene" path="res://ui/menu_bar.tscn" id="2_menu"]
 [ext_resource type="PackedScene" path="res://viewport/viewport.tscn" id="3_viewport"]
-[ext_resource type="PackedScene" path="res://ui/frame_bar.tscn" id="4_frame"]
+[ext_resource type="PackedScene" path="res://ui/bottom_dock.tscn" id="4_frame"]
 [ext_resource type="PackedScene" path="res://ui/status_bar.tscn" id="5_status"]
 [ext_resource type="Theme" path="res://ui/theme.tres" id="6_theme"]
 [ext_resource type="PackedScene" path="res://ui/palette_panel.tscn" id="7_palette"]
@@ -50,6 +50,6 @@ theme_override_constants/separation = 4
 
 [node name="RightStrip" parent="Root/Body" instance=ExtResource("8_tool")]
 
-[node name="FrameBar" parent="Root" unique_id=622643938 instance=ExtResource("4_frame")]
+[node name="BottomDock" parent="Root" instance=ExtResource("4_frame")]
 
 [node name="StatusBar" parent="Root" unique_id=597734069 instance=ExtResource("5_status")]

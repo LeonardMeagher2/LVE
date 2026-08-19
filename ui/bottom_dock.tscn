@@ -1,0 +1,91 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://ui/bottom_dock.gd" id="1_dock"]
+[ext_resource type="Script" path="res://ui/frame_strip.gd" id="2_strip"]
+
+[node name="BottomDock" type="VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 4
+script = ExtResource("1_dock")
+
+[node name="PlaybackRow" type="HBoxContainer" parent="."]
+custom_minimum_size = Vector2(0, 30)
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="ToStart" type="Button" parent="PlaybackRow"]
+custom_minimum_size = Vector2(40, 28)
+layout_mode = 2
+focus_mode = 0
+text = "|<"
+
+[node name="Prev" type="Button" parent="PlaybackRow"]
+custom_minimum_size = Vector2(40, 28)
+layout_mode = 2
+focus_mode = 0
+text = "<"
+
+[node name="Play" type="Button" parent="PlaybackRow"]
+custom_minimum_size = Vector2(52, 28)
+layout_mode = 2
+focus_mode = 0
+text = "Play"
+
+[node name="Next" type="Button" parent="PlaybackRow"]
+custom_minimum_size = Vector2(40, 28)
+layout_mode = 2
+focus_mode = 0
+text = ">"
+
+[node name="ToEnd" type="Button" parent="PlaybackRow"]
+custom_minimum_size = Vector2(40, 28)
+layout_mode = 2
+focus_mode = 0
+text = ">|"
+
+[node name="PlaybackSpacer" type="Control" parent="PlaybackRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="FrameRow" type="HBoxContainer" parent="."]
+custom_minimum_size = Vector2(0, 34)
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="FrameScroll" type="ScrollContainer" parent="FrameRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_stretch_ratio = 2.0
+
+[node name="FrameStrip" type="HBoxContainer" parent="FrameRow/FrameScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+script = ExtResource("2_strip")
+
+[node name="Add" type="Button" parent="FrameRow"]
+custom_minimum_size = Vector2(40, 30)
+layout_mode = 2
+focus_mode = 0
+text = "Add"
+
+[node name="Dup" type="Button" parent="FrameRow"]
+custom_minimum_size = Vector2(40, 30)
+layout_mode = 2
+focus_mode = 0
+text = "Dup"
+
+[node name="Del" type="Button" parent="FrameRow"]
+custom_minimum_size = Vector2(40, 30)
+layout_mode = 2
+focus_mode = 0
+text = "Del"
+
+[connection signal="pressed" from="PlaybackRow/ToStart" to="." method="_on_to_start_pressed"]
+[connection signal="pressed" from="PlaybackRow/Prev" to="." method="_on_prev_pressed"]
+[connection signal="pressed" from="PlaybackRow/Play" to="." method="_on_play_pressed"]
+[connection signal="pressed" from="PlaybackRow/Next" to="." method="_on_next_pressed"]
+[connection signal="pressed" from="PlaybackRow/ToEnd" to="." method="_on_to_end_pressed"]
+[connection signal="pressed" from="FrameRow/Add" to="." method="_on_frame_add"]
+[connection signal="pressed" from="FrameRow/Dup" to="." method="_on_frame_dup"]
+[connection signal="pressed" from="FrameRow/Del" to="." method="_on_frame_del"]

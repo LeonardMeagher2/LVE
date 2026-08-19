@@ -1,16 +1,18 @@
-class_name EditorFrameBar
-extends HBoxContainer
+class_name EditorBottomDock
+extends VBoxContainer
 
 signal play_toggled
 signal prev
 signal next
+signal to_start
+signal to_end
 signal frame_add
 signal frame_dup
 signal frame_del
 signal frame_selected(index: int)
 
-@onready var _play_button: Button = $Play
-@onready var _frame_strip: EditorFrameStrip = $FrameScroll/FrameStrip
+@onready var _play_button: Button = $PlaybackRow/Play
+@onready var _frame_strip: EditorFrameStrip = $FrameRow/FrameScroll/FrameStrip
 
 
 func _ready() -> void:
@@ -35,6 +37,14 @@ func _on_prev_pressed() -> void:
 
 func _on_next_pressed() -> void:
 	next.emit()
+
+
+func _on_to_start_pressed() -> void:
+	to_start.emit()
+
+
+func _on_to_end_pressed() -> void:
+	to_end.emit()
 
 
 func _on_frame_add() -> void:

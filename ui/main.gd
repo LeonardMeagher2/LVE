@@ -2,7 +2,7 @@ extends Control
 
 @onready var _menu_bar: EditorMenuBar = $Root/MenuBar
 @onready var _viewport_panel: EditorViewportPanel = $Root/Body/CenterPane/ViewportContainer
-@onready var _frame_bar: EditorFrameBar = $Root/FrameBar
+@onready var _bottom_dock: EditorBottomDock = $Root/BottomDock
 @onready var _status_bar: EditorStatusBar = $Root/StatusBar
 
 var _zoom_percent := 100.0
@@ -27,13 +27,15 @@ func _ready() -> void:
 	_menu_bar.redo.connect(State.undo_redo.redo)
 	_menu_bar.reset_view.connect(_viewport_panel.reset_view)
 	_menu_bar.toggle_grid.connect(_viewport_panel.toggle_grid)
-	_frame_bar.play_toggled.connect(_toggle_play)
-	_frame_bar.prev.connect(_step_frame.bind(-1))
-	_frame_bar.next.connect(_step_frame.bind(1))
-	_frame_bar.frame_add.connect(State.playback.add_frame)
-	_frame_bar.frame_dup.connect(State.playback.duplicate_frame)
-	_frame_bar.frame_del.connect(State.playback.delete_frame)
-	_frame_bar.frame_selected.connect(State.playback.select_frame)
+	_bottom_dock.play_toggled.connect(_toggle_play)
+	_bottom_dock.prev.connect(_step_frame.bind(-1))
+	_bottom_dock.next.connect(_step_frame.bind(1))
+	_bottom_dock.to_start.connect(_to_start)
+	_bottom_dock.to_end.connect(_to_end)
+	_bottom_dock.frame_add.connect(State.playback.add_frame)
+	_bottom_dock.frame_dup.connect(State.playback.duplicate_frame)
+	_bottom_dock.frame_del.connect(State.playback.delete_frame)
+	_bottom_dock.frame_selected.connect(State.playback.select_frame)
 	_viewport_panel.frame_displayed.connect(_on_frame_displayed)
 	_viewport_panel.zoom_changed.connect(_on_zoom_changed)
 	_viewport_panel.set_tool(State.tool)
@@ -91,11 +93,11 @@ func _on_playback_changed() -> void:
 		_viewport_panel.play_preview()
 	else:
 		_viewport_panel.stop_preview()
-	_frame_bar.set_playing(State.playback.playing)
+	_bottom_dock.set_playing(State.playback.playing)
 
 
 func _on_frame_displayed(i: int) -> void:
-	_frame_bar.highlight_frame(i)
+	_bottom_dock.highlight_frame(i)
 	_update_status()
 
 
@@ -116,6 +118,16 @@ func _step_frame(dir: int) -> void:
 	_stop_play()
 	var n := State.document.frames.size()
 	State.playback.select_frame((State.current_frame + dir) % n)
+
+
+func _to_start() -> void:
+	_stop_play()
+	State.playback.select_frame(0)
+
+
+func _to_end() -> void:
+	_stop_play()
+	State.playback.select_frame(State.document.frames.size() - 1)
 
 
 func _update_status() -> void:
