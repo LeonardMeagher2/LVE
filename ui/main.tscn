@@ -6,6 +6,7 @@
 [ext_resource type="PackedScene" path="res://viewport/viewport.tscn" id="4_viewport"]
 [ext_resource type="PackedScene" path="res://ui/frame_bar.tscn" id="5_frame"]
 [ext_resource type="PackedScene" path="res://ui/status_bar.tscn" id="6_status"]
+[ext_resource type="Theme" path="res://ui/theme.tres" id="7_theme"]
 
 [node name="Main" type="Control" unique_id=692378193]
 layout_mode = 3
@@ -14,6 +15,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+theme = ExtResource("7_theme")
 script = ExtResource("1_main")
 
 [node name="Root" type="VBoxContainer" parent="." unique_id=1369002049]

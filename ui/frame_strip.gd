@@ -16,7 +16,7 @@ func highlight(i: int) -> void:
 		_frame_buttons[j].button_pressed = (j == i)
 		if j == i:
 			var sb := StyleBoxFlat.new()
-			sb.bg_color = Color(0.28, 0.42, 0.62)
+			sb.bg_color = Color(0.192, 0.318, 0.478)
 			sb.set_corner_radius_all(3)
 			_frame_buttons[j].add_theme_stylebox_override("normal", sb)
 		else:

@@ -5,15 +5,15 @@
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_grid"]
 shading_mode = 0
-albedo_color = Color(0.32, 0.35, 0.42, 0.9)
+albedo_color = Color(0.227, 0.235, 0.259, 0.9)
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_base"]
 shading_mode = 0
-albedo_color = Color(0.17, 0.185, 0.21, 1)
+albedo_color = Color(0.149, 0.153, 0.169, 1)
 
 [sub_resource type="Environment" id="Environment_env"]
 background_mode = 1
-background_color = Color(0.13, 0.14, 0.16, 1)
+background_color = Color(0.118, 0.122, 0.133, 1)
 ambient_light_source = 2
 ambient_light_color = Color(0.55, 0.57, 0.62, 1)
 ambient_light_energy = 1.2
