@@ -1,0 +1,64 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://ui/frame_bar.gd" id="1_frame"]
+[ext_resource type="Script" path="res://ui/frame_strip.gd" id="2_strip"]
+
+[node name="FrameBar" type="HBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 4
+script = ExtResource("1_frame")
+
+[node name="Play" type="Button" parent="."]
+custom_minimum_size = Vector2(52, 30)
+layout_mode = 2
+focus_mode = 0
+text = "Play"
+
+[node name="Prev" type="Button" parent="."]
+custom_minimum_size = Vector2(44, 30)
+layout_mode = 2
+focus_mode = 0
+text = "Prev"
+
+[node name="Next" type="Button" parent="."]
+custom_minimum_size = Vector2(44, 30)
+layout_mode = 2
+focus_mode = 0
+text = "Next"
+
+[node name="FrameScroll" type="ScrollContainer" parent="."]
+custom_minimum_size = Vector2(0, 34)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_stretch_ratio = 2.0
+
+[node name="FrameStrip" type="HBoxContainer" parent="FrameScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+script = ExtResource("2_strip")
+
+[node name="Add" type="Button" parent="."]
+custom_minimum_size = Vector2(40, 30)
+layout_mode = 2
+focus_mode = 0
+text = "Add"
+
+[node name="Dup" type="Button" parent="."]
+custom_minimum_size = Vector2(40, 30)
+layout_mode = 2
+focus_mode = 0
+text = "Dup"
+
+[node name="Del" type="Button" parent="."]
+custom_minimum_size = Vector2(40, 30)
+layout_mode = 2
+focus_mode = 0
+text = "Del"
+
+[connection signal="pressed" from="Play" to="." method="_on_play_pressed"]
+[connection signal="pressed" from="Prev" to="." method="_on_prev_pressed"]
+[connection signal="pressed" from="Next" to="." method="_on_next_pressed"]
+[connection signal="pressed" from="Add" to="." method="_on_frame_add"]
+[connection signal="pressed" from="Dup" to="." method="_on_frame_dup"]
+[connection signal="pressed" from="Del" to="." method="_on_frame_del"]

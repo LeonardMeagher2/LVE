@@ -1,0 +1,17 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://ui/status_bar.gd" id="1_status"]
+
+[node name="StatusBar" type="HBoxContainer"]
+layout_mode = 2
+script = ExtResource("1_status")
+
+[node name="StatusLeft" type="Label" parent="."]
+layout_mode = 2
+
+[node name="StatusSpacer" type="Control" parent="."]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="StatusRight" type="Label" parent="."]
+layout_mode = 2

@@ -1,0 +1,28 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://ui/tool_bar.gd" id="1_tool"]
+
+[node name="ToolBar" type="HBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 4
+script = ExtResource("1_tool")
+
+[node name="ToolButtons" type="HBoxContainer" parent="."]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="ColorPicker" type="ColorPickerButton" parent="."]
+custom_minimum_size = Vector2(34, 28)
+layout_mode = 2
+color = Color(0.694118, 0.694118, 0.694118, 1)
+
+[node name="RecentColors" type="HBoxContainer" parent="."]
+layout_mode = 2
+theme_override_constants/separation = 3
+
+[node name="PixelPerfect" type="CheckButton" parent="."]
+layout_mode = 2
+text = "Pixel Perfect"
+
+[connection signal="color_changed" from="ColorPicker" to="." method="_on_color_picked"]
+[connection signal="toggled" from="PixelPerfect" to="." method="_on_pixel_perfect_toggled"]

@@ -1,0 +1,81 @@
+[gd_scene format=3 uid="uid://cym1t8k348a6p"]
+
+[ext_resource type="Script" uid="uid://du77xivee1ktw" path="res://viewport/editor_viewport.gd" id="1_viewport"]
+[ext_resource type="Script" uid="uid://ckr0dxpaq0xrc" path="res://viewport/viewport_container.gd" id="2_panel"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_grid"]
+shading_mode = 0
+albedo_color = Color(0.32, 0.35, 0.42, 0.9)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_base"]
+shading_mode = 0
+albedo_color = Color(0.17, 0.185, 0.21, 1)
+
+[sub_resource type="Environment" id="Environment_env"]
+background_mode = 1
+background_color = Color(0.13, 0.14, 0.16, 1)
+ambient_light_source = 2
+ambient_light_color = Color(0.55, 0.57, 0.62, 1)
+ambient_light_energy = 1.2
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_outline"]
+depth_draw_mode = 2
+shading_mode = 0
+albedo_color = Color(0.4, 0.7, 1, 1)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_voxels"]
+vertex_color_use_as_albedo = true
+
+[sub_resource type="BoxMesh" id="BoxMesh_voxels"]
+material = SubResource("StandardMaterial3D_voxels")
+
+[sub_resource type="MultiMesh" id="MultiMesh_voxels"]
+transform_format = 1
+use_colors = true
+mesh = SubResource("BoxMesh_voxels")
+
+[node name="ViewportContainer" type="SubViewportContainer" unique_id=1008543789]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+mouse_filter = 0
+stretch = true
+script = ExtResource("2_panel")
+
+[node name="Viewport" type="SubViewport" parent="." unique_id=1299710563]
+handle_input_locally = false
+size = Vector2i(1280, 800)
+render_target_update_mode = 4
+
+[node name="Editor" type="Node3D" parent="Viewport" unique_id=1277093566]
+script = ExtResource("1_viewport")
+grid_mat = SubResource("StandardMaterial3D_grid")
+base_mat = SubResource("StandardMaterial3D_base")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="Viewport/Editor" unique_id=2001831858]
+environment = SubResource("Environment_env")
+
+[node name="Light" type="DirectionalLight3D" parent="Viewport/Editor" unique_id=766933468]
+shadow_enabled = true
+
+[node name="Camera3D" type="Camera3D" parent="Viewport/Editor" unique_id=1978355787]
+fov = 45.0
+
+[node name="GridRoot" type="Node3D" parent="Viewport/Editor" unique_id=267151757]
+
+[node name="ToolLayer" type="Node3D" parent="Viewport/Editor" unique_id=1331444033]
+
+[node name="SelectionLayer" type="Node3D" parent="Viewport/Editor" unique_id=1768997059]
+
+[node name="SelectionOutline" type="MeshInstance3D" parent="Viewport/Editor/SelectionLayer" unique_id=826650748]
+visible = false
+material_override = SubResource("StandardMaterial3D_outline")
+
+[node name="AnimationPlayer" type="AnimationPlayer" parent="Viewport/Editor" unique_id=1219488223]
+
+[node name="Voxels" type="MultiMeshInstance3D" parent="Viewport/Editor" unique_id=1816863498]
+multimesh = SubResource("MultiMesh_voxels")
