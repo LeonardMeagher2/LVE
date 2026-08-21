@@ -45,8 +45,8 @@ max_active: 1
 - [ ] Copy/paste
 
 # M4 — Aseprite-style chrome (ref: Aseprite screenshot)
-- [ ] Left panel: palette color grid + color area / hue / alpha / hex picker
-- [ ] Vertical tool icon strip (right side)
-- [ ] Bottom dock: animation playback toolbar + frame strip (no layers in MVP)
+- [x] Left panel: palette color grid + color area / hue / alpha / hex picker
+- [x] Vertical tool icon strip (right side)
+- [x] Bottom dock: animation playback toolbar + frame strip (no layers in MVP)
 - [ ] Onion skinning
-- [ ] Palette management (add/remove/reorder colors)
+- [ ] Palette management: color reorder (add/remove are done)

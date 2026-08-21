@@ -1,7 +1,8 @@
 # UI Plan — Aseprite-style chrome
 
 This document plans the look and behavior of the Voxi editor.
-The target look is `UI_REFERENCE.png`. That file shows the Aseprite editor.
+The target look is `docs/UI_REFERENCE.png` and `docs/UI_REFERENCE2.png`.
+Those files show the Aseprite editor with an empty and an animated document.
 Build Voxi to match that structure.
 
 ## Current layout
@@ -21,6 +22,7 @@ Voxi stacks them above and below it.
 
 Keep the menu bar on top. Below it, a three-pane body.
 A playback dock at the bottom. A status bar at the very bottom.
+The body sits inside an 8 px margin. No control touches a window edge.
 
 ```
 +--------------------------------------------------------------+
@@ -57,7 +59,6 @@ Width: fixed, 260–320 px.
 2. Color picker, below the grid.
    - A compact picker with a color area, a hue strip, an alpha strip, and a hex field.
    - Moving the picker changes the current color at once.
-3. Recent colors, below the picker.
 
 The tool bar color button goes away. The left pane replaces it.
 
@@ -79,11 +80,27 @@ The tool bar color button goes away. The left pane replaces it.
 
 Width: fixed, 40 px.
 
-- One square button per tool, 32 x 32 px, stacked from the top.
-- Tool order: Brush, Eraser, Fill, Pick, Select, Move.
-- Each button shows a flat icon and a hover tooltip.
+- One square button per tool group, 32 x 32 px, stacked from the top.
+- Button order: Brush, Eraser, Fill, Pick, Select, Move.
+- Each button shows a flat icon only. The button has no text label.
+- A hover tooltip shows the name of the active tool.
+- Hold a button for 0.5 s to open its menu.
+- The menu lists every tool in the group. Each item shows the icon and the name.
 - The active tool stays visibly pressed.
+- The button shows the icon of the active tool in its group.
 - Keep the keyboard shortcuts (B, E, F, P).
+
+The Brush group holds two tools.
+
+1. Brush. It paints new voxels with the current color.
+2. Paint. It recolors existing voxels with the current color.
+
+Brush is the default member of the group.
+
+The drag behavior differs by mode.
+
+- A Brush drag stays on the plane through the pressed cell.
+- A Paint drag follows the cursor ray. It does not stay on the press plane.
 
 The top tool bar goes away. The tool strip replaces it.
 
@@ -92,7 +109,7 @@ The top tool bar goes away. The tool strip replaces it.
 One flat outline glyph per icon. Single stroke color. No gradients.
 Tint the glyphs with the theme.
 
-- Tools: brush, eraser, fill, pick, select, move.
+- Tools: brush, paint, eraser, fill, pick, select, move.
 - Playback: step to start, step back, play, pause, step forward, step to end.
 - Frame actions: add, duplicate, delete.
 - View: zoom to fit, grid, pixel perfect.
@@ -126,6 +143,8 @@ Each frame button in the frame strip shows a small preview of that frame.
 - The preview is 48 x 48 px.
 - It shows the voxels from a fixed isometric angle.
 - The angle does not follow the viewport camera.
+- The preview fits the frame's voxel bounding box.
+- It centers the content in the 48 x 48 box.
 - Each voxel shows its true color. Side and bottom faces are darker.
 - An empty frame shows a transparency checkerboard.
 - A preview refreshes when the frame's contents change.
@@ -143,8 +162,8 @@ The dock has two rows.
    - The play button swaps to a pause icon while playing.
    - Step to start selects the first frame. Step to end selects the last frame.
    - Stepping is manual. Playback runs on the per-frame delays.
-2. Frame row, 76 px high.
-   - The frame strip scrolls horizontally when the frames overflow.
+2. Frame row, 92 px high.
+    - The frame strip scrolls horizontally when the frames overflow.
    - Each frame button is a column: the 48 x 48 preview on top,
      the frame number below it, the delay below that.
    - The delay of the selected frame is the editable field.
@@ -175,22 +194,51 @@ One dark theme for the whole editor.
 
 Apply the theme at the top level. Do not style controls one by one.
 
+## Known defects in the current build
+
+All eight defects are fixed. The new captures in `tests/capture/shots/` confirm the fixes.
+
+1. Status bar text overlap. Fixed.
+2. Frame bar overflow. Fixed.
+3. Ground grid disappears. Fixed.
+    - The grid now spans the full 16 x 16 document grid on every frame.
+    - The grid size lives on the document.
+4. Tool strip icons clip. Fixed.
+    - The buttons are icon-only squares in a 40 px strip.
+    - The hold menu lists grouped tools.
+5. Color picker is not compact. Fixed.
+    - The compact picker holds a color area, a hue strip, an alpha strip, and a hex field.
+    - It lives at `res://ui/color_picker.gd`.
+6. Add Color is a wide button. Fixed.
+    - The button is gone. A click on the empty grid area adds the current color.
+7. Status bar text deviates from the plan. Fixed.
+    - The color hex is 6 digits.
+    - The right side shows the grid size.
+    - The delay and total length land in step 10.
+8. Palette swatches are too small. Fixed.
+    - The swatches are 36 x 36 px. The grid has 8 columns.
+    - Inactive swatches keep their color. Only the current swatch gets the border.
+
 ## Work order
 
 Do the steps in this order. Run the test suite after each step.
 
-1. Apply the dark theme.
-2. Add the icons.
-3. Move the tools to the right strip. Remove the top tool bar.
-4. Build the left pane: palette grid, color picker, recent colors.
-5. Split the bottom dock into the playback row and the frame row.
-6. Add the viewport option bar and the zoom bar.
-7. Add the frame previews to the frame strip.
-8. Add the per-frame delay labels and in-place delay editing.
-9. Reformat the status bar text.
+Status: steps 1-10 are done.
+
+1. Fix the known defects. Recapture with `res://tests/capture/capture_ui.tscn`.
+2. Apply the dark theme.
+3. Add the icons.
+4. Move the tools to the right strip. Remove the top tool bar.
+   The buttons are icon-only squares. The hold menu lists grouped tools.
+5. Build the left pane: palette grid and color picker.
+6. Split the bottom dock into the playback row and the frame row.
+7. Add the viewport option bar and the zoom bar.
+8. Add the frame previews to the frame strip.
+9. Add the per-frame delay labels and in-place delay editing.
+10. Reformat the status bar text.
 
 The existing tests reference node paths. Update them when a node moves.
-Keep the viewport reachable at `Root/ViewportContainer/Viewport/Editor`.
+Keep the viewport reachable at `Content/Root/ViewportContainer/Viewport/Editor`.
 
 ## Out of scope
 

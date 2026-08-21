@@ -24,6 +24,9 @@ This file records confirmed, non-obvious facts learned while working on Voxi. Re
 - 2026-08-19: `MultiMesh.transform_format` defaults to `TRANSFORM_2D` (=0). Use `TRANSFORM_3D` (=1) for 3D instances. The scene saver drops properties equal to the default, so write the non-default value in `.tscn`.
 - 2026-08-19: `AABB` has `has_volume()` and `has_surface()`, not `has_area()`. An empty `AABB` has a zero `size`.
 - 2026-08-19: The document canvas is unbounded. `VoxiDocument.bounds()` returns an `AABB` over all frames. `grid_size` and `in_bounds` are removed.
+- 2026-08-20: `ResourceSaver` persists only `@export` properties. A plain `var` is dropped from the saved `.tres`. `VoxelFrame.cells` is now `@export`.
+- 2026-08-20: This Steam build writes `unique_id` on every node and resolves `parent=` as the full path from the scene root. Hand-editing a node with a short relative parent path breaks instantiation. The node and its subtree are skipped. Re-save the scene in the editor to regenerate the full path and `unique_id`.
+- 2026-08-21: An `AnimationPlayer` property track resolves its node path relative to `root_node`. A player nested under the node that owns the animated property needs `root_node = NodePath("../..")` to target it.
 
 ## Picking
 
@@ -34,14 +37,14 @@ This file records confirmed, non-obvious facts learned while working on Voxi. Re
 
 ## UI scene migration
 
-- Static UI structure and static signal wiring live in `scenes/main.tscn`.
+- Static UI structure and static signal wiring live in `ui/main.tscn` and its child scenes.
 - Scripts hold state and logic only. They construct no static UI nodes.
 - MenuButton items live in the scene via `item_count` and `popup/item_N/text`.
 - The MenuButton popup is internal. Connect `id_pressed` in `_ready()`.
 - Use one small `_on_*` handler per connected control. The scene then needs no `.bind()`.
-- Dynamic elements stay in code: frame strip buttons, recent color swatches.
+- Dynamic elements stay in code: frame strip buttons, palette swatches, tool strip buttons.
 - The Aseprite-style layout (left palette panel, right tool strip) lands in M4.
-- `main.gd` must construct no UI nodes except dynamic frame and recent buttons, and the FileDialog.
+- `main.gd` must construct no UI nodes except dynamic frame buttons and the FileDialog.
 
 ## Workflow
 
@@ -50,3 +53,6 @@ This file records confirmed, non-obvious facts learned while working on Voxi. Re
 - Adding a child to the root during a main-scene node's `_ready()` fails with "Parent node is busy setting up children". Call the work with `call_deferred()`.
 - The test harness `step` does not wait for `await` inside its step lambda. Put `await` calls in the test's `_run` function between steps.
 - 2026-08-19: The harness waits two frames before each test body. Tests do not wait in `_run`.
+- 2026-08-19: Every behavior test loads `res://ui/main.tscn`, the full editor. Scene wiring errors surface in the suite.
+- 2026-08-21: GDScript lambdas capture local variables by value. A flag written inside a lambda is invisible outside. Share state through an array or a member variable.
+- 2026-08-21: A `Timer` node keeps running while a script is suspended on `await`. Connect its `timeout` signal to a fail handler to time out a test body with no polling.
