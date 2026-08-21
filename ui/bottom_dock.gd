@@ -1,6 +1,9 @@
 class_name EditorBottomDock
 extends VBoxContainer
 
+const PLAY_ICON := preload("res://icons/play.svg")
+const PAUSE_ICON := preload("res://icons/pause.svg")
+
 signal play_toggled
 signal prev
 signal next
@@ -10,6 +13,7 @@ signal frame_add
 signal frame_dup
 signal frame_del
 signal frame_selected(index: int)
+signal delay_changed
 
 @onready var _play_button: Button = $PlaybackRow/Play
 @onready var _frame_strip: EditorFrameStrip = $FrameRow/FrameScroll/FrameStrip
@@ -17,10 +21,12 @@ signal frame_selected(index: int)
 
 func _ready() -> void:
 	_frame_strip.frame_selected.connect(frame_selected.emit)
+	_frame_strip.delay_changed.connect(delay_changed.emit)
 
 
 func set_playing(playing: bool) -> void:
-	_play_button.text = "Pause" if playing else "Play"
+	_play_button.icon = PAUSE_ICON if playing else PLAY_ICON
+	_play_button.tooltip_text = "Pause" if playing else "Play"
 
 
 func highlight_frame(i: int) -> void:

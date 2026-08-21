@@ -2,6 +2,14 @@
 
 [ext_resource type="Script" path="res://ui/bottom_dock.gd" id="1_dock"]
 [ext_resource type="Script" path="res://ui/frame_strip.gd" id="2_strip"]
+[ext_resource type="Texture2D" path="res://icons/to_start.svg" id="3_to_start"]
+[ext_resource type="Texture2D" path="res://icons/step_back.svg" id="4_back"]
+[ext_resource type="Texture2D" path="res://icons/play.svg" id="5_play"]
+[ext_resource type="Texture2D" path="res://icons/step_forward.svg" id="6_fwd"]
+[ext_resource type="Texture2D" path="res://icons/to_end.svg" id="7_end"]
+[ext_resource type="Texture2D" path="res://icons/frame_add.svg" id="8_add"]
+[ext_resource type="Texture2D" path="res://icons/frame_dup.svg" id="9_dup"]
+[ext_resource type="Texture2D" path="res://icons/frame_del.svg" id="10_del"]
 
 [node name="BottomDock" type="VBoxContainer"]
 layout_mode = 2
@@ -17,38 +25,43 @@ theme_override_constants/separation = 4
 custom_minimum_size = Vector2(40, 28)
 layout_mode = 2
 focus_mode = 0
-text = "|<"
+icon = ExtResource("3_to_start")
+tooltip_text = "Step to start"
 
 [node name="Prev" type="Button" parent="PlaybackRow"]
 custom_minimum_size = Vector2(40, 28)
 layout_mode = 2
 focus_mode = 0
-text = "<"
+icon = ExtResource("4_back")
+tooltip_text = "Step back"
 
 [node name="Play" type="Button" parent="PlaybackRow"]
-custom_minimum_size = Vector2(52, 28)
+custom_minimum_size = Vector2(40, 28)
 layout_mode = 2
 focus_mode = 0
-text = "Play"
+icon = ExtResource("5_play")
+tooltip_text = "Play"
 
 [node name="Next" type="Button" parent="PlaybackRow"]
 custom_minimum_size = Vector2(40, 28)
 layout_mode = 2
 focus_mode = 0
-text = ">"
+icon = ExtResource("6_fwd")
+tooltip_text = "Step forward"
 
 [node name="ToEnd" type="Button" parent="PlaybackRow"]
 custom_minimum_size = Vector2(40, 28)
 layout_mode = 2
 focus_mode = 0
-text = ">|"
+icon = ExtResource("7_end")
+tooltip_text = "Step to end"
 
 [node name="PlaybackSpacer" type="Control" parent="PlaybackRow"]
 layout_mode = 2
 size_flags_horizontal = 3
 
 [node name="FrameRow" type="HBoxContainer" parent="."]
-custom_minimum_size = Vector2(0, 34)
+custom_minimum_size = Vector2(0, 92)
 layout_mode = 2
 theme_override_constants/separation = 4
 
@@ -66,20 +79,26 @@ script = ExtResource("2_strip")
 [node name="Add" type="Button" parent="FrameRow"]
 custom_minimum_size = Vector2(40, 30)
 layout_mode = 2
+size_flags_vertical = 4
 focus_mode = 0
-text = "Add"
+icon = ExtResource("8_add")
+tooltip_text = "Add frame"
 
 [node name="Dup" type="Button" parent="FrameRow"]
 custom_minimum_size = Vector2(40, 30)
 layout_mode = 2
+size_flags_vertical = 4
 focus_mode = 0
-text = "Dup"
+icon = ExtResource("9_dup")
+tooltip_text = "Duplicate frame"
 
 [node name="Del" type="Button" parent="FrameRow"]
 custom_minimum_size = Vector2(40, 30)
 layout_mode = 2
+size_flags_vertical = 4
 focus_mode = 0
-text = "Del"
+icon = ExtResource("10_del")
+tooltip_text = "Delete frame"
 
 [connection signal="pressed" from="PlaybackRow/ToStart" to="." method="_on_to_start_pressed"]
 [connection signal="pressed" from="PlaybackRow/Prev" to="." method="_on_prev_pressed"]
