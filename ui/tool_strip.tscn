@@ -3,7 +3,7 @@
 [ext_resource type="Script" path="res://ui/tool_strip.gd" id="1_tool"]
 
 [node name="ToolStrip" type="VBoxContainer"]
-custom_minimum_size = Vector2(48, 0)
+custom_minimum_size = Vector2(40, 0)
 layout_mode = 2
 theme_override_constants/separation = 4
 script = ExtResource("1_tool")

@@ -35,10 +35,8 @@ func _build_tool_buttons() -> void:
 			grouped[info.group] = true
 		var members := _members_of(info)
 		var b := Button.new()
-		b.text = info.display_name
 		b.icon = info.icon
-		b.expand_icon = true
-		b.custom_minimum_size = Vector2(44, 32)
+		b.custom_minimum_size = Vector2(32, 32)
 		b.focus_mode = Control.FOCUS_NONE
 		b.toggle_mode = true
 		b.tooltip_text = info.tooltip
@@ -123,5 +121,4 @@ func _update_tool_buttons() -> void:
 		var active := _active_member(members)
 		b.button_pressed = (active == State.tool)
 		if members.size() > 1:
-			b.text = active.display_name
 			b.icon = active.icon
