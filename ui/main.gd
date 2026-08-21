@@ -1,9 +1,11 @@
 extends Control
 
-@onready var _menu_bar: EditorMenuBar = $Root/MenuBar
-@onready var _viewport_panel: EditorViewportPanel = $Root/Body/CenterPane/ViewportContainer
-@onready var _bottom_dock: EditorBottomDock = $Root/BottomDock
-@onready var _status_bar: EditorStatusBar = $Root/StatusBar
+@onready var _menu_bar: EditorMenuBar = $Content/Root/MenuBar
+@onready var _option_bar: OptionBar = $Content/Root/Body/CenterPane/OptionBar
+@onready var _viewport_panel: EditorViewportPanel = $Content/Root/Body/CenterPane/ViewportContainer
+@onready var _control_bar: ControlBar = $Content/Root/Body/CenterPane/ControlBar
+@onready var _bottom_dock: EditorBottomDock = $Content/Root/BottomDock
+@onready var _status_bar: EditorStatusBar = $Content/Root/StatusBar
 
 var _zoom_percent := 100.0
 
@@ -36,8 +38,13 @@ func _ready() -> void:
 	_bottom_dock.frame_dup.connect(State.playback.duplicate_frame)
 	_bottom_dock.frame_del.connect(State.playback.delete_frame)
 	_bottom_dock.frame_selected.connect(State.playback.select_frame)
+	_bottom_dock.delay_changed.connect(_update_status)
 	_viewport_panel.frame_displayed.connect(_on_frame_displayed)
 	_viewport_panel.zoom_changed.connect(_on_zoom_changed)
+	_viewport_panel.grid_changed.connect(_control_bar.set_grid_visible)
+	_option_bar.view_requested.connect(_viewport_panel.set_view)
+	_control_bar.zoom_requested.connect(_viewport_panel.set_zoom_percent)
+	_control_bar.grid_toggled.connect(_viewport_panel.set_grid_visible)
 	_viewport_panel.set_tool(State.tool)
 	_viewport_panel.configure()
 	_viewport_panel.sync_to(State.current_frame)
@@ -103,6 +110,7 @@ func _on_frame_displayed(i: int) -> void:
 
 func _on_zoom_changed(p: float) -> void:
 	_zoom_percent = p
+	_control_bar.set_zoom(p)
 	_update_status()
 
 
@@ -131,14 +139,14 @@ func _to_end() -> void:
 
 
 func _update_status() -> void:
-	var b := State.document.bounds()
-	var size := Vector3i.ZERO
-	if b.has_volume():
-		size = Vector3i(int(b.size.x), int(b.size.y), int(b.size.z))
+	var total := 0
+	for f in State.document.frames:
+		total += f.delay_ms
 	_status_bar.set_status(
-		State.tool.display_name, State.current_color.to_html(true),
+		State.tool.display_name, State.current_color.to_html(false),
+		State.document.frames[State.current_frame].delay_ms, total,
 		State.current_frame, State.document.frames.size(),
-		int(_zoom_percent), size)
+		int(_zoom_percent), State.document.grid_size)
 
 
 func _new_document() -> void:

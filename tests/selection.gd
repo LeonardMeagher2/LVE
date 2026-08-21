@@ -14,7 +14,7 @@ func _ready() -> void:
 
 func _run() -> void:
 	step("Given the select tool on an empty grid", func():
-		_vp = _inst.get_node("Root/Body/CenterPane/ViewportContainer/Viewport/Editor")
+		_vp = _inst.get_node("Content/Root/Body/CenterPane/ViewportContainer/Viewport/Editor")
 		State.set_tool(State.tools.select)
 		var svp := _vp.get_viewport()
 		var vsize: Vector2i = svp.size

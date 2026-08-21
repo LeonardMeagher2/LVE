@@ -2,6 +2,7 @@ class_name EditorViewportPanel
 extends SubViewportContainer
 
 signal zoom_changed(percent: float)
+signal grid_changed(visible: bool)
 signal frame_displayed(index: int)
 
 @onready var _vp: EditorViewport = $Viewport/Editor
@@ -9,6 +10,7 @@ signal frame_displayed(index: int)
 
 func _ready() -> void:
 	_vp.zoom_changed.connect(zoom_changed.emit)
+	_vp.grid_changed.connect(grid_changed.emit)
 	_vp.frame_displayed.connect(frame_displayed.emit)
 
 
@@ -46,3 +48,15 @@ func reset_view() -> void:
 
 func toggle_grid() -> void:
 	_vp.toggle_grid()
+
+
+func set_view(name: String) -> void:
+	_vp.set_view(name)
+
+
+func set_zoom_percent(percent: float) -> void:
+	_vp.set_zoom_percent(percent)
+
+
+func set_grid_visible(v: bool) -> void:
+	_vp.set_grid_visible(v)

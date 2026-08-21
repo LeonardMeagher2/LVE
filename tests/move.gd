@@ -14,7 +14,7 @@ func _ready() -> void:
 
 func _run() -> void:
 	step("Given a selected voxel on layer 4", func():
-		_vp = _inst.get_node("Root/Body/CenterPane/ViewportContainer/Viewport/Editor")
+		_vp = _inst.get_node("Content/Root/Body/CenterPane/ViewportContainer/Viewport/Editor")
 		var svp := _vp.get_viewport()
 		var container := svp.get_parent()
 		container.stretch = false

@@ -16,7 +16,7 @@ func _ready() -> void:
 
 func _run() -> void:
 	step("Given the editor viewport at its default view", func():
-		_vp = _inst.get_node("Root/Body/CenterPane/ViewportContainer/Viewport/Editor")
+		_vp = _inst.get_node("Content/Root/Body/CenterPane/ViewportContainer/Viewport/Editor")
 		var svp := _vp.get_viewport()
 		var vsize: Vector2i = svp.size
 		if vsize.x <= 0 or vsize.y <= 0:

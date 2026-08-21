@@ -14,7 +14,7 @@ func _ready() -> void:
 
 func _run() -> void:
 	step("Given the toolbar with a brush button", func():
-		_toolbar = _inst.get_node("Root/Body/RightStrip")
+		_toolbar = _inst.get_node("Content/Root/Body/RightStrip")
 		_brush_button = _toolbar._tool_buttons[0]
 		expect(_toolbar._tool_buttons.size() == 6, "the toolbar shows one button per tool")
 	)
@@ -35,5 +35,5 @@ func _run() -> void:
 
 	step("Then the paint mode is active and the button shows it", func():
 		expect(State.tool == State.tools.brush_paint, "the paint mode tool is active")
-		expect(_brush_button.text == "Paint", "the button shows the active mode")
+		expect(_brush_button.icon == State.tools.brush_paint.icon, "the button shows the active mode icon")
 	)
