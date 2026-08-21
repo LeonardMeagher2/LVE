@@ -51,6 +51,7 @@ godot --path "C:\Users\Leona\Desktop\Gamedev\Voxi" res://tests/paint.tscn
 - In `_ready()`, instantiate the scene. Add it with `get_tree().root.add_child.call_deferred(...)`. Call `test("...", _func)`. Defer the add because the root is busy setting up children during `_ready()`.
 - The harness waits two frames before each test body. Put `await` calls in the test's `_run` function, not in step lambdas. The autoload singletons resolve because tests run as scenes.
 - `expect` records all failures. It does not stop at the first failure. Failures write a report and screenshots under `tests/artifacts/`. The artifacts directory is gitignored.
+- Each test has a default timeout of 10 seconds. Set `timeout` in `_ready()` to override it. A timed-out test fails and writes a report.
 
 ## BDD style
 

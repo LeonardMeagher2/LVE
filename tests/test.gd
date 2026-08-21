@@ -1,8 +1,10 @@
 class_name Test
 extends Node
 
+var timeout := 10.0
 var _name := ""
 var _desc := ""
+var _test_loc := ""
 var _checks: Array = []
 var _steps: Array = []
 var _current_step := -1
@@ -13,10 +15,41 @@ var _snap_by_frame := {}
 func test(description: String, c: Callable) -> void:
 	_name = get_script().resource_path.get_file().get_basename()
 	_desc = description
+	_test_loc = _caller_loc(_caller_frame(get_stack()))
 	print(description)
 	for i in 2:
 		await get_tree().process_frame
+	var watchdog := _start_watchdog()
 	await c.call()
+	watchdog.stop()
+	_finish()
+
+
+func _start_watchdog() -> Timer:
+	var t := Timer.new()
+	t.one_shot = true
+	t.wait_time = timeout
+	t.timeout.connect(_fail_timeout)
+	add_child(t)
+	t.start()
+	return t
+
+
+func _fail_timeout() -> void:
+	_checks.append({
+		"loc": _test_loc,
+		"msg": "test timed out after %.1f s" % timeout,
+		"ok": false,
+		"step": _current_step,
+		"src": "",
+		"img": _screenshot_for(Engine.get_process_frames()),
+	})
+	_write_report()
+	print("TEST FAILED: timed out after %.1f s -> %s/report.md" % [timeout, _dir()])
+	get_tree().quit(1)
+
+
+func _finish() -> void:
 	var failed := _count_failed()
 	if failed > 0:
 		_write_report()
@@ -37,10 +70,9 @@ func step(description: String, c: Callable) -> Variant:
 
 
 func expect(cond: bool, msg: String) -> void:
-	var stack := get_stack()
-	var caller := _caller_frame(stack)
+	var caller := _caller_frame(get_stack())
 	var entry := {
-		"loc": "%s:%d" % [caller["source"], caller["line"]],
+		"loc": _caller_loc(caller),
 		"msg": msg,
 		"ok": cond,
 		"step": _current_step,
@@ -121,6 +153,12 @@ func _loc_link(loc: String) -> String:
 	for i in _dir().trim_prefix("res://").split("/").size():
 		up += "../"
 	return "[%s](%s%s)" % [loc, up, src]
+
+
+func _caller_loc(caller: Dictionary) -> String:
+	if caller.is_empty():
+		return ""
+	return "%s:%d" % [caller["source"], caller["line"]]
 
 
 func _caller_frame(stack: Array) -> Dictionary:
