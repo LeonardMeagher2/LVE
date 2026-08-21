@@ -17,7 +17,7 @@ func _ready() -> void:
 
 func _run() -> void:
 	step("Given an editor with a voxel viewport", func():
-		_vp = _inst.get_node("Root/Body/CenterPane/ViewportContainer/Viewport/Editor")
+		_vp = _inst.get_node("Content/Root/Body/CenterPane/ViewportContainer/Viewport/Editor")
 		var svp := _vp.get_viewport()
 		var vsize: Vector2i = svp.size
 		if vsize.x <= 0 or vsize.y <= 0:
@@ -27,8 +27,8 @@ func _run() -> void:
 	)
 
 	step("When the user right-drags the viewport", func():
-		_yaw_before = _vp._yaw
-		_pitch_before = _vp._pitch
+		_yaw_before = _vp.camera_rig._yaw
+		_pitch_before = _vp.camera_rig._pitch
 		var press := InputEventMouseButton.new()
 		press.button_index = MOUSE_BUTTON_RIGHT
 		press.pressed = true
@@ -44,12 +44,12 @@ func _run() -> void:
 	)
 
 	step("Then the camera yaw and pitch change", func():
-		expect(_vp._yaw != _yaw_before, "right-drag changes yaw")
-		expect(_vp._pitch != _pitch_before, "right-drag changes pitch")
+		expect(_vp.camera_rig._yaw != _yaw_before, "right-drag changes yaw")
+		expect(_vp.camera_rig._pitch != _pitch_before, "right-drag changes pitch")
 	)
 
 	step("When the user middle-drags the viewport", func():
-		_target_before = _vp._target
+		_target_before = _vp.camera_rig._target
 		var press := InputEventMouseButton.new()
 		press.button_index = MOUSE_BUTTON_MIDDLE
 		press.pressed = true
@@ -65,5 +65,5 @@ func _run() -> void:
 	)
 
 	step("Then the camera target moves", func():
-		expect(_vp._target != _target_before, "middle-drag changes the camera target")
+		expect(_vp.camera_rig._target != _target_before, "middle-drag changes the camera target")
 	)
