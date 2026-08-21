@@ -17,7 +17,6 @@ var current_color := Color8(177, 177, 177)
 var pixel_perfect := false
 var selection := VoxelSelection.new()
 var undo_redo := UndoRedo.new()
-var recents := RecentColors.new()
 var playback := Playback.new()
 
 
@@ -46,7 +45,6 @@ func reset() -> void:
 	document = VoxiDocument.new()
 	current_frame = 0
 	undo_redo.clear_history()
-	recents.clear()
 	current_color = Color8(177, 177, 177)
 	selection.clear()
 	color_changed.emit(current_color)

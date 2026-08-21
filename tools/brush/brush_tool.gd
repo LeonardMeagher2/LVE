@@ -11,17 +11,21 @@ func _pick_start(origin: Vector3, dir: Vector3) -> PickResult:
 	return pick
 
 
+func pick_drag(request: PickRequest) -> PickResult:
+	if _add_mode():
+		return super.pick_drag(request)
+	return VoxelPicking.start_pick(request.origin, request.dir, request.cells)
+
+
 func apply(target: Vector3i, hit: Vector3i) -> bool:
 	if _add_mode():
 		if State.document.has_cell(State.current_frame, target):
 			return false
 		State.document.paint(State.current_frame, target, State.current_color)
-		State.recents.add(State.current_color)
 		return true
 	if hit == State.NONE:
 		return false
 	State.document.paint(State.current_frame, hit, State.current_color)
-	State.recents.add(State.current_color)
 	return true
 
 
