@@ -4,21 +4,21 @@ extends VBoxContainer
 var _swatches: Array[Button] = []
 
 @onready var _swatch_grid: GridContainer = $Scroll/SwatchGrid
-@onready var _color_picker: ColorPicker = $ColorPicker
-@onready var _recent_box: HBoxContainer = $RecentColors
+@onready var _color_picker: CompactColorPicker = $ColorPicker
 
 
 func _ready() -> void:
 	State.color_changed.connect(_on_color_changed)
 	State.cells_changed.connect(_rebuild_swatches)
 	State.frame_changed.connect(_rebuild_swatches)
+	$Scroll.gui_input.connect(_on_grid_area_input)
+	_color_picker.color = State.current_color
 	_rebuild_swatches()
-	_update_recent()
 
 
-func _on_color_changed(_c: Color) -> void:
+func _on_color_changed(c: Color) -> void:
+	_color_picker.color = c
 	_mark_current()
-	_update_recent()
 
 
 func _rebuild_swatches() -> void:
@@ -59,6 +59,14 @@ func _on_swatch_input(event: InputEvent, b: Button, i: int) -> void:
 			_rebuild_swatches()
 
 
+func _on_grid_area_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.pressed \
+			and event.button_index == MOUSE_BUTTON_LEFT:
+		var mb := event as InputEventMouseButton
+		if mb.position.y > _swatch_grid.size.y:
+			_add_current_color()
+
+
 func _add_current_color() -> void:
 	State.document.ensure_color(State.current_color)
 	_rebuild_swatches()
@@ -66,37 +74,12 @@ func _add_current_color() -> void:
 
 func _mark_current() -> void:
 	for i in _swatches.size():
-		var active: bool = State.document.color_of(i) == State.current_color
-		if active:
-			var sb := StyleBoxFlat.new()
-			sb.bg_color = State.document.color_of(i)
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = State.document.color_of(i)
+		sb.set_corner_radius_all(3)
+		if State.document.color_of(i) == State.current_color:
 			sb.set_border_width_all(2)
 			sb.border_color = Color.WHITE
-			sb.set_corner_radius_all(3)
-			_swatches[i].add_theme_stylebox_override("normal", sb)
-		else:
-			_swatches[i].remove_theme_stylebox_override("normal")
+		_swatches[i].add_theme_stylebox_override("normal", sb)
 
 
-func _update_recent() -> void:
-	for child in _recent_box.get_children():
-		child.queue_free()
-	for c in State.recents.colors:
-		var b := Button.new()
-		b.custom_minimum_size = Vector2(24, 24)
-		b.focus_mode = Control.FOCUS_NONE
-		var sb := StyleBoxFlat.new()
-		sb.bg_color = c
-		sb.set_corner_radius_all(3)
-		b.add_theme_stylebox_override("normal", sb)
-		b.add_theme_stylebox_override("pressed", sb)
-		b.pressed.connect(_pick_recent.bind(c))
-		_recent_box.add_child(b)
-
-
-func _pick_recent(c: Color) -> void:
-	State.set_color(c)
-
-
-func _on_add_color_pressed() -> void:
-	_add_current_color()

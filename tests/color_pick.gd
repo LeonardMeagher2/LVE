@@ -14,7 +14,7 @@ func _ready() -> void:
 
 func _run() -> void:
 	step("Given a brush and an empty grid", func():
-		_vp = _inst.get_node("Root/Body/CenterPane/ViewportContainer/Viewport/Editor")
+		_vp = _inst.get_node("Content/Root/Body/CenterPane/ViewportContainer/Viewport/Editor")
 		var svp := _vp.get_viewport()
 		var container := svp.get_parent()
 		container.stretch = false
@@ -24,7 +24,7 @@ func _run() -> void:
 	)
 
 	step("When the user picks a color in the toolbar", func():
-		var picker: ColorPicker = _inst.get_node("Root/Body/LeftPane/ColorPicker")
+		var picker: CompactColorPicker = _inst.get_node("Content/Root/Body/LeftPane/ColorPicker")
 		picker.color = Color8(200, 60, 60)
 		picker.color_changed.emit(picker.color)
 	)

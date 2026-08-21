@@ -1,6 +1,7 @@
 [gd_scene format=3]
 
 [ext_resource type="Script" path="res://ui/palette_panel.gd" id="1_palette"]
+[ext_resource type="Script" path="res://ui/color_picker.gd" id="2_picker"]
 
 [node name="PalettePanel" type="VBoxContainer"]
 custom_minimum_size = Vector2(280, 0)
@@ -20,19 +21,10 @@ columns = 8
 theme_override_constants/h_separation = 3
 theme_override_constants/v_separation = 3
 
-[node name="AddColor" type="Button" parent="."]
-custom_minimum_size = Vector2(0, 26)
-layout_mode = 2
-focus_mode = 0
-text = "Add Color"
-
-[node name="ColorPicker" type="ColorPicker" parent="."]
+[node name="ColorPicker" type="Control" parent="."]
 layout_mode = 2
 size_flags_vertical = 3
+mouse_filter = 2
+script = ExtResource("2_picker")
 
-[node name="RecentColors" type="HBoxContainer" parent="."]
-layout_mode = 2
-theme_override_constants/separation = 3
-
-[connection signal="pressed" from="AddColor" to="." method="_on_add_color_pressed"]
 [connection signal="color_changed" from="ColorPicker" to="." method="_on_picker_color_changed"]
