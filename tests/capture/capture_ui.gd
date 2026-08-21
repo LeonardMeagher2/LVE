@@ -56,17 +56,16 @@ func _ready() -> void:
 	await _settle(6)
 	_shot("04_eraser")
 
-	print("CAPTURE: 4 shot(s) saved to res://capture/shots/")
+	print("CAPTURE: 4 shot(s) saved to res://tests/capture/shots/")
 	get_tree().quit(0)
 
 
 func _remember(c: Color) -> void:
-	State.recents.add(c)
 	State.set_color(c)
 
 
 func _shot(name: String) -> void:
-	var dir := "res://capture/shots"
+	var dir := "res://tests/capture/shots"
 	DirAccess.make_dir_recursive_absolute(dir)
 	RenderingServer.force_draw()
 	var img := get_tree().root.get_texture().get_image()
