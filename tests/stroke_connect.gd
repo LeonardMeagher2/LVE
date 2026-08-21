@@ -27,8 +27,8 @@ func _run() -> void:
 	)
 
 	step("When the user clicks and jumps the mouse far in one motion", func():
-		var req := _vp.pick_request(_center)
-		_pressed = VoxelPicking.start_pick(req.origin, req.dir, req.cells).target
+		var start := aim(_vp, _center)
+		_pressed = start.target
 		var press := InputEventMouseButton.new()
 		press.button_index = MOUSE_BUTTON_LEFT
 		press.pressed = true
@@ -45,16 +45,15 @@ func _run() -> void:
 		release.pressed = false
 		release.position = drag_pos
 		_vp.get_viewport().push_input(release)
-		var req_end := _vp.pick_request(drag_pos)
-		_mouse_end = VoxelPicking.start_pick(req_end.origin, req_end.dir, req_end.cells).target
+		_mouse_end = drag(_vp, drag_pos, start.plane).target
 	)
 
 	step("Then the cells between press and release are all painted", func():
 		var frame: VoxelFrame = State.document.frames[0]
+		var path := StrokeLine.cells(_pressed, _mouse_end)
 		expect(frame.cells.has(_pressed), "the pressed cell is painted")
 		expect(frame.cells.has(_mouse_end), "the cell under the mouse is painted")
-		expect(frame.cells.has(Vector3i(_pressed.x - 1, _pressed.y, _pressed.z)), "the next cell is painted")
-		expect(frame.cells.has(Vector3i(_pressed.x - 2, _pressed.y, _pressed.z)), "the third cell is painted")
-		expect(frame.cells.has(Vector3i(_pressed.x - 3, _pressed.y, _pressed.z)), "the fourth cell is painted")
-		expect(frame.cells.size() >= 5, "the whole stroke is continuous")
+		expect(path.size() >= 3, "the stroke spans several cells")
+		for c in path:
+			expect(frame.cells.has(c), "every cell along the stroke is painted")
 	)

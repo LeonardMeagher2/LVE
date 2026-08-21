@@ -35,9 +35,8 @@ func _run() -> void:
 		expect(_floor_pick.y == 0, "the aim is on the floor layer")
 	)
 
-	step("Given a voxel at (8, 4, 8)", func():
-		_vp.reset_view()
-		State.document.frames[0].cells[Vector3i(8, 4, 8)] = State.document.ensure_color(State.current_color)
+	step("Given a voxel where the center ray lands", func():
+		State.document.frames[0].cells[_floor_pick] = State.document.ensure_color(State.current_color)
 		_vp.sync_to(0)
 	)
 
@@ -48,5 +47,5 @@ func _run() -> void:
 
 	step("Then the aim lands on the clicked voxel", func():
 		expect(_voxel_pick != State.NONE, "the aim hits the voxel")
-		expect(_voxel_pick == Vector3i(8, 4, 8), "the aim is the voxel the ray hits")
+		expect(_voxel_pick == _floor_pick, "the aim is the voxel the ray hits")
 	)

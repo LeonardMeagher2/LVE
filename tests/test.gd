@@ -86,6 +86,16 @@ func expect(cond: bool, msg: String) -> void:
 	_checks.append(entry)
 
 
+func aim(vp: EditorViewport, pos: Vector2) -> PickResult:
+	var req := vp.pick_request(pos)
+	return VoxelPicking.start_pick(req.origin, req.dir, req.cells)
+
+
+func drag(vp: EditorViewport, pos: Vector2, plane: StrokePlane) -> PickResult:
+	var req := vp.pick_request(pos)
+	return VoxelPicking.drag_pick(req.origin, req.dir, req.cells, plane)
+
+
 func _count_failed() -> int:
 	var n := 0
 	for ch in _checks:

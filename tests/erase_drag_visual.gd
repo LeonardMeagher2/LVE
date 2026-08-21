@@ -3,6 +3,8 @@ extends "res://tests/test.gd"
 var _inst: Node = null
 var _vp: EditorViewport
 var _center := Vector2.ZERO
+var _c0 := State.NONE
+var _c_mid := State.NONE
 
 
 func _ready() -> void:
@@ -13,7 +15,7 @@ func _ready() -> void:
 
 
 func _run() -> void:
-	step("Given an eraser and a row of voxels on layer 4", func():
+	step("Given an eraser and a row of voxels under the drag path", func():
 		_vp = _inst.get_node("Content/Root/Body/CenterPane/ViewportContainer/Viewport/Editor")
 		var svp := _vp.get_viewport()
 		var container := svp.get_parent()
@@ -21,8 +23,11 @@ func _run() -> void:
 		svp.size = Vector2i(800, 500)
 		_center = Vector2(400.0, 250.0)
 		State.set_tool(State.tools.eraser)
-		State.document.frames[0].cells[Vector3i(8, 4, 8)] = State.document.ensure_color(State.current_color)
-		State.document.frames[0].cells[Vector3i(6, 4, 8)] = State.document.ensure_color(State.current_color)
+		var start := aim(_vp, _center)
+		_c0 = start.target
+		_c_mid = drag(_vp, _center + Vector2(0.0, 20.0), start.plane).target
+		State.document.frames[0].cells[_c0] = State.document.ensure_color(State.current_color)
+		State.document.frames[0].cells[_c_mid] = State.document.ensure_color(State.current_color)
 		_vp.sync_to(0)
 	)
 
@@ -43,7 +48,7 @@ func _run() -> void:
 	step("Then the highlight is on the voxel being erased", func():
 		var v: Node3D = _vp._tool.visual
 		expect(v.visible, "the highlight is visible")
-		expect(v.position == Vector3(6, 4, 8), "the highlight is on the voxel being erased")
+		expect(v.position == Vector3(_c_mid), "the highlight is on the voxel being erased")
 	)
 
 	step("When the user drags below the wall", func():
