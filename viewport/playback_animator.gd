@@ -33,7 +33,7 @@ func _rebuild_animation() -> void:
 	var anim := Animation.new()
 	anim.loop_mode = Animation.LOOP_LINEAR
 	anim.add_track(Animation.TYPE_VALUE)
-	anim.track_set_path(0, NodePath(".:frame_index"))
+	anim.track_set_path(0, NodePath(".:frame"))
 	anim.track_set_interpolation_type(0, Animation.INTERPOLATION_NEAREST)
 	var t := 0.0
 	for i in d.frames.size():
@@ -45,8 +45,8 @@ func _rebuild_animation() -> void:
 	_anim_library.add_animation("preview", anim)
 
 
-func _frame_time(frame_index: int) -> float:
+func _frame_time(frame: int) -> float:
 	var t := 0.0
-	for i in frame_index:
+	for i in frame:
 		t += float(State.document.frames[i].delay_ms) / 1000.0
 	return t

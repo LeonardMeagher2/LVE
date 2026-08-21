@@ -13,6 +13,9 @@ var _init_dist := 24.0
 var _orbiting := false
 var _panning := false
 
+func _ready() -> void:
+	configure()
+	State.document_changed.connect(configure)
 
 func configure() -> void:
 	_init_dist = _frame_distance(State.document)
@@ -22,7 +25,7 @@ func configure() -> void:
 
 
 func reset_view() -> void:
-	_yaw = deg_to_rad(-90.0)
+	_yaw = deg_to_rad(0.0)
 	_pitch = deg_to_rad(45.0)
 	_init_dist = _frame_distance(State.document)
 	_dist = _init_dist
@@ -31,12 +34,11 @@ func reset_view() -> void:
 
 
 func _frame_distance(d: VoxiDocument) -> float:
-	return float(d.grid_size) * 1.5
+	return max(d.bounds().size.length(), 16.0) * 1.5
 
 
 func _frame_target(d: VoxiDocument) -> Vector3:
-	var g := float(d.grid_size)
-	return Vector3(g * 0.5, 4.0, g * 0.5)
+	return d.bounds().get_center()
 
 
 func set_view(name: String) -> void:

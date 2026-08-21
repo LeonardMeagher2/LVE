@@ -13,18 +13,8 @@ func _ready() -> void:
 	_vp.grid_changed.connect(grid_changed.emit)
 	_vp.frame_displayed.connect(frame_displayed.emit)
 
-
-func configure() -> void:
-	_vp.configure()
-
-
-func sync_to(frame_index: int) -> void:
-	_vp.sync_to(frame_index)
-
-
-func sync_selection(selection: VoxelSelection) -> void:
-	_vp.sync_selection(selection)
-
+func sync_to(frame: int) -> void:
+	_vp.sync_to(frame)
 
 func set_tool(t: ToolInfo) -> void:
 	_vp.set_tool(t)

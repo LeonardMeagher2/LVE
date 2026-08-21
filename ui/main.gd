@@ -18,7 +18,6 @@ func _ready() -> void:
 	State.color_changed.connect(_on_color_changed)
 	State.frame_changed.connect(_on_frame_changed)
 	State.cells_changed.connect(_on_cells_changed)
-	State.selection_changed.connect(_on_selection_changed)
 	State.playback.playback_changed.connect(_on_playback_changed)
 	_menu_bar.new_document.connect(_new_document)
 	_menu_bar.open_file.connect(_open_file)
@@ -46,9 +45,7 @@ func _ready() -> void:
 	_control_bar.zoom_requested.connect(_viewport_panel.set_zoom_percent)
 	_control_bar.grid_toggled.connect(_viewport_panel.set_grid_visible)
 	_viewport_panel.set_tool(State.tool)
-	_viewport_panel.configure()
 	_viewport_panel.sync_to(State.current_frame)
-	_viewport_panel.sync_selection(State.selection)
 	_update_status()
 
 
@@ -89,10 +86,6 @@ func _on_cells_changed() -> void:
 	if not State.playback.playing:
 		_viewport_panel.sync_to(State.current_frame)
 	_update_status()
-
-
-func _on_selection_changed() -> void:
-	_viewport_panel.sync_selection(State.selection)
 
 
 func _on_playback_changed() -> void:
@@ -146,13 +139,12 @@ func _update_status() -> void:
 		State.tool.display_name, State.current_color.to_html(false),
 		State.document.frames[State.current_frame].delay_ms, total,
 		State.current_frame, State.document.frames.size(),
-		int(_zoom_percent), State.document.grid_size)
+		int(_zoom_percent))
 
 
 func _new_document() -> void:
 	State.reset()
 	_save_path = ""
-	_viewport_panel.configure()
 	_viewport_panel.sync_to(0)
 
 
@@ -181,7 +173,6 @@ func _on_file_opened(path: String) -> void:
 	if res is VoxiDocument:
 		State.load_document(res)
 		_save_path = path
-		_viewport_panel.configure()
 		_viewport_panel.sync_to(State.current_frame)
 		_update_status()
 	else:

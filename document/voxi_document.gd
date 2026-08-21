@@ -2,7 +2,6 @@ class_name VoxiDocument
 extends Resource
 
 @export var title: String = "Untitled"
-@export var grid_size: int = 16
 @export var palette: PackedColorArray = []
 @export var frames: Array[VoxelFrame] = []
 @export var tags: Array[AnimationTag] = []
@@ -85,30 +84,30 @@ func bounds() -> AABB:
 			if not b.has_volume():
 				b = AABB(Vector3(c), Vector3.ONE)
 			else:
-				b = b.expand(Vector3(c + Vector3i.ONE))
+				b = b.merge(AABB(Vector3(c), Vector3.ONE))
 	return b
 
 
-func paint(frame_index: int, cell: Vector3i, color: Color) -> void:
-	frames[frame_index].cells[cell] = ensure_color(color)
+func paint(frame: int, cell: Vector3i, color: Color) -> void:
+	frames[frame].cells[cell] = ensure_color(color)
 
 
-func set_cell(frame_index: int, cell: Vector3i, palette_index: int) -> void:
-	frames[frame_index].cells[cell] = palette_index
+func set_cell(frame: int, cell: Vector3i, palette_index: int) -> void:
+	frames[frame].cells[cell] = palette_index
 
 
-func erase(frame_index: int, cell: Vector3i) -> void:
-	frames[frame_index].cells.erase(cell)
+func erase(frame: int, cell: Vector3i) -> void:
+	frames[frame].cells.erase(cell)
 
 
-func color_at(frame_index: int, cell: Vector3i) -> Color:
-	if frames[frame_index].cells.has(cell):
-		return color_of(frames[frame_index].cells[cell])
+func color_at(frame: int, cell: Vector3i) -> Color:
+	if frames[frame].cells.has(cell):
+		return color_of(frames[frame].cells[cell])
 	return Color.TRANSPARENT
 
 
-func has_cell(frame_index: int, cell: Vector3i) -> bool:
-	return frames[frame_index].cells.has(cell)
+func has_cell(frame: int, cell: Vector3i) -> bool:
+	return frames[frame].cells.has(cell)
 
 
 func ensure_color(c: Color) -> int:

@@ -2,11 +2,12 @@ extends Node
 
 const NONE := Vector3i(-1000000, -1000000, -1000000)
 
-signal frame_changed
+signal document_changed()
+signal frame_changed()
 signal color_changed(color: Color)
 signal tool_changed(tool: ToolInfo)
-signal cells_changed
-signal selection_changed
+signal cells_changed()
+signal selection_changed()
 signal pixel_perfect_changed(enabled: bool)
 
 var document: VoxiDocument

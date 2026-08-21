@@ -9,15 +9,14 @@ var _tool: VoxelTool
 var _tools := {}
 
 @onready var camera_rig: EditorCameraRig = $CameraRig
-@onready var _grid: GridRenderer = $GridRoot
+@onready var _grid: GridRenderer = $Grid
 @onready var _voxels: VoxelRenderer = $Voxels
-@onready var _selection: SelectionOverlay = $SelectionLayer
 @onready var _playback: PlaybackAnimator = $Playback
 @onready var _tool_layer: Node3D = $ToolLayer
 
-var frame_index := 0:
+var frame := 0:
 	set(value):
-		frame_index = value
+		frame = value
 		if State.document != null and value >= 0 and value < State.document.frames.size():
 			sync_to(value)
 			frame_displayed.emit(value)
@@ -48,12 +47,6 @@ func set_tool(t: ToolInfo) -> void:
 	_tool.visible = true
 	_tool.on_activated()
 
-
-func configure() -> void:
-	camera_rig.configure()
-	_grid.rebuild()
-
-
 func reset_view() -> void:
 	camera_rig.reset_view()
 
@@ -75,8 +68,8 @@ func toggle_grid() -> void:
 	set_grid_visible(not _grid.visible)
 
 
-func sync_to(frame_index: int) -> void:
-	_voxels.sync_to(frame_index)
+func sync_to(frame: int) -> void:
+	_voxels.sync_to(frame)
 
 
 func play_preview() -> void:
@@ -85,7 +78,7 @@ func play_preview() -> void:
 
 func stop_preview() -> void:
 	_playback.stop_preview()
-	frame_index = State.current_frame
+	frame = State.current_frame
 
 
 func is_playing() -> bool:
@@ -98,12 +91,8 @@ func pick_request(pos: Vector2) -> PickRequest:
 	var cam := camera_rig.camera()
 	if cam == null or d == null:
 		return req
-	var fi := clampi(frame_index, 0, d.frames.size() - 1)
+	var fi := clampi(frame, 0, d.frames.size() - 1)
 	req.origin = cam.project_ray_origin(pos)
 	req.dir = cam.project_ray_normal(pos)
 	req.cells = d.frames[fi].cells
 	return req
-
-
-func sync_selection(selection: VoxelSelection) -> void:
-	_selection.sync_selection(selection)

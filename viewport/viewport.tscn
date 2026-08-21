@@ -2,19 +2,11 @@
 
 [ext_resource type="Script" uid="uid://du77xivee1ktw" path="res://viewport/editor_viewport.gd" id="1_viewport"]
 [ext_resource type="Script" uid="uid://ckr0dxpaq0xrc" path="res://viewport/viewport_container.gd" id="2_panel"]
-[ext_resource type="Script" path="res://viewport/camera_rig.gd" id="3_camera"]
-[ext_resource type="Script" path="res://viewport/voxel_renderer.gd" id="4_voxels"]
-[ext_resource type="Script" path="res://viewport/grid_renderer.gd" id="5_grid"]
-[ext_resource type="Script" path="res://viewport/selection_overlay.gd" id="6_selection"]
-[ext_resource type="Script" path="res://viewport/playback_animator.gd" id="7_playback"]
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_grid"]
-shading_mode = 0
-albedo_color = Color(0.227, 0.235, 0.259, 0.9)
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_base"]
-shading_mode = 0
-albedo_color = Color(0.149, 0.153, 0.169, 1)
+[ext_resource type="Script" uid="uid://gwfmh64wiyx0" path="res://viewport/camera_rig.gd" id="3_camera"]
+[ext_resource type="Script" uid="uid://d3i6vt2reee27" path="res://viewport/voxel_renderer.gd" id="4_voxels"]
+[ext_resource type="Script" uid="uid://c0xmjig8s4i0q" path="res://viewport/grid_renderer.gd" id="5_grid"]
+[ext_resource type="Script" uid="uid://ba28f277f4w0n" path="res://viewport/selection_overlay.gd" id="6_selection"]
+[ext_resource type="Script" uid="uid://baghrya6g6rga" path="res://viewport/playback_animator.gd" id="7_playback"]
 
 [sub_resource type="Environment" id="Environment_env"]
 background_mode = 1
@@ -23,21 +15,26 @@ ambient_light_source = 2
 ambient_light_color = Color(0.55, 0.57, 0.62, 1)
 ambient_light_energy = 1.2
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_outline"]
-depth_draw_mode = 2
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_grid"]
 shading_mode = 0
-albedo_color = Color(0.4, 0.7, 1, 1)
+albedo_color = Color(0.22745098, 0.23529412, 0.25882354, 1)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_j71j0"]
+shading_mode = 0
+albedo_color = Color(0, 0.8784314, 1, 1)
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_voxels"]
+diffuse_mode = 1
+specular_mode = 2
 vertex_color_use_as_albedo = true
 
-[sub_resource type="BoxMesh" id="BoxMesh_voxels"]
+[sub_resource type="BoxMesh" id="BoxMesh_j71j0"]
 material = SubResource("StandardMaterial3D_voxels")
 
 [sub_resource type="MultiMesh" id="MultiMesh_voxels"]
 transform_format = 1
 use_colors = true
-mesh = SubResource("BoxMesh_voxels")
+mesh = SubResource("BoxMesh_j71j0")
 
 [node name="ViewportContainer" type="SubViewportContainer" unique_id=1008543789]
 anchors_preset = 15
@@ -65,32 +62,28 @@ environment = SubResource("Environment_env")
 [node name="Light" type="DirectionalLight3D" parent="Viewport/Editor" unique_id=766933468]
 shadow_enabled = true
 
-[node name="CameraRig" type="Node3D" parent="Viewport/Editor"]
+[node name="CameraRig" type="Node3D" parent="Viewport/Editor" unique_id=106959201]
 script = ExtResource("3_camera")
 
 [node name="Camera3D" type="Camera3D" parent="Viewport/Editor/CameraRig" unique_id=1978355787]
 fov = 45.0
 
-[node name="GridRoot" type="Node3D" parent="Viewport/Editor" unique_id=267151757]
+[node name="Grid" type="MeshInstance3D" parent="Viewport/Editor" unique_id=1052101138]
+material_override = SubResource("StandardMaterial3D_grid")
 script = ExtResource("5_grid")
-grid_mat = SubResource("StandardMaterial3D_grid")
-base_mat = SubResource("StandardMaterial3D_base")
 
 [node name="ToolLayer" type="Node3D" parent="Viewport/Editor" unique_id=1331444033]
 
-[node name="SelectionLayer" type="Node3D" parent="Viewport/Editor" unique_id=1768997059]
+[node name="Selection" type="MeshInstance3D" parent="Viewport/Editor" unique_id=205454810]
+material_override = SubResource("StandardMaterial3D_j71j0")
 script = ExtResource("6_selection")
 
-[node name="SelectionOutline" type="MeshInstance3D" parent="Viewport/Editor/SelectionLayer" unique_id=826650748]
-visible = false
-material_override = SubResource("StandardMaterial3D_outline")
-
-[node name="Playback" type="Node3D" parent="Viewport/Editor"]
+[node name="Playback" type="Node3D" parent="Viewport/Editor" unique_id=1964093937]
 script = ExtResource("7_playback")
 
 [node name="AnimationPlayer" type="AnimationPlayer" parent="Viewport/Editor/Playback" unique_id=1219488223]
 root_node = NodePath("../..")
 
 [node name="Voxels" type="MultiMeshInstance3D" parent="Viewport/Editor" unique_id=1816863498]
-script = ExtResource("4_voxels")
 multimesh = SubResource("MultiMesh_voxels")
+script = ExtResource("4_voxels")

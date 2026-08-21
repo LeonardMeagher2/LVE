@@ -1,17 +1,17 @@
 class_name SelectionOverlay
-extends Node3D
+extends MeshInstance3D
 
-@onready var _outline: MeshInstance3D = $SelectionOutline
+func _ready() -> void:
+	State.selection_changed.connect(sync_selection)
 
-
-func sync_selection(selection: VoxelSelection) -> void:
-	if selection == null or selection.is_empty():
-		_outline.visible = false
+func sync_selection() -> void:
+	if State.selection == null or State.selection.is_empty():
+		visible = false
 		return
 	var lo := Vector3i(0, 0, 0)
 	var hi := Vector3i(0, 0, 0)
 	var first := true
-	for c in selection.cells:
+	for c in State.selection.cells:
 		if first:
 			lo = c
 			hi = c
@@ -37,7 +37,6 @@ func sync_selection(selection: VoxelSelection) -> void:
 		lines.append(corners[4 + (i + 1) % 4])
 		lines.append(corners[i])
 		lines.append(corners[i + 4])
-	var mesh := ArrayMesh.new()
+	mesh = ArrayMesh.new()
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_LINES, MeshUtil.vertex_arrays(lines))
-	_outline.mesh = mesh
-	_outline.visible = true
+	visible = true
