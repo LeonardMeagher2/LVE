@@ -2,6 +2,7 @@ class_name VoxiDocument
 extends Resource
 
 @export var title: String = "Untitled"
+@export var grid_size: int = 16
 @export var palette: PackedColorArray = []
 @export var frames: Array[VoxelFrame] = []
 @export var tags: Array[AnimationTag] = []
@@ -17,6 +18,8 @@ func add_frame(from_frame: int = -1) -> VoxelFrame:
 	if from_frame >= 0 and from_frame < frames.size():
 		f.cells = frames[from_frame].cells.duplicate(true)
 		f.delay_ms = frames[from_frame].delay_ms
+	elif not frames.is_empty():
+		f.delay_ms = frames.back().delay_ms
 	frames.append(f)
 	return f
 
