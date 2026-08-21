@@ -5,6 +5,7 @@ var info: ToolInfo
 
 var visual: Node3D = null
 var _hover_mat: StandardMaterial3D
+var _outline_mat: StandardMaterial3D
 
 var _plane: StrokePlane = null
 var _last_target := State.NONE
@@ -215,6 +216,8 @@ func pick_drag(request: PickRequest) -> PickResult:
 func _on_color_changed(c: Color) -> void:
 	if _hover_mat:
 		_hover_mat.albedo_color = Color(c, 0.4)
+	if _outline_mat:
+		_outline_mat.albedo_color = c
 
 
 func update_visual(pick: PickResult) -> void:
@@ -238,4 +241,33 @@ func _build_visual() -> Node3D:
 	var mi := MeshInstance3D.new()
 	mi.mesh = mesh
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	return mi
+	_outline_mat = StandardMaterial3D.new()
+	_outline_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_outline_mat.albedo_color = State.current_color
+	var out := MeshInstance3D.new()
+	out.mesh = _outline_mesh()
+	out.material_override = _outline_mat
+	out.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var root := Node3D.new()
+	root.add_child(mi)
+	root.add_child(out)
+	return root
+
+
+func _outline_mesh() -> ArrayMesh:
+	var s := 0.54
+	var corners := PackedVector3Array([
+		Vector3(-s, -s, -s), Vector3(s, -s, -s), Vector3(s, s, -s), Vector3(-s, s, -s),
+		Vector3(-s, -s, s), Vector3(s, -s, s), Vector3(s, s, s), Vector3(-s, s, s),
+	])
+	var lines := PackedVector3Array()
+	for i in 4:
+		lines.append(corners[i])
+		lines.append(corners[(i + 1) % 4])
+		lines.append(corners[i + 4])
+		lines.append(corners[4 + (i + 1) % 4])
+		lines.append(corners[i])
+		lines.append(corners[i + 4])
+	var m := ArrayMesh.new()
+	m.add_surface_from_arrays(Mesh.PRIMITIVE_LINES, MeshUtil.vertex_arrays(lines))
+	return m
