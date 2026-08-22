@@ -29,7 +29,14 @@ func handle_input(event: InputEvent, pos: Vector2) -> bool:
 		else:
 			if _stroke_active:
 				_stroke_active = false
-				_commit_box()
+				if _box_end == _corner:
+					if not State.selection.is_empty():
+						State.selection.clear()
+						State.selection_changed.emit()
+					else:
+						_commit_box()
+				else:
+					_commit_box()
 				hide_visual()
 				_end()
 			return true
@@ -47,7 +54,7 @@ func handle_input(event: InputEvent, pos: Vector2) -> bool:
 		return false
 	if event is InputEventKey:
 		var k := event as InputEventKey
-		if k.keycode == KEY_ESCAPE:
+		if k.is_action_pressed("ui_cancel"):
 			if _stroke_active:
 				_stroke_active = false
 				hide_visual()

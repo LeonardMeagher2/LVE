@@ -87,6 +87,10 @@ func set_pixel_perfect(v: bool) -> void:
 	pixel_perfect_changed.emit(v)
 
 
+func can_edit(cell: Vector3i) -> bool:
+	return selection.is_empty() or selection.contains(cell)
+
+
 func _stop_playback() -> void:
 	playback.set_playing(false)
 

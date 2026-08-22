@@ -3,7 +3,9 @@ extends VoxelTool
 
 
 func apply(_target: Vector3i, hit: Vector3i) -> bool:
-	if hit == State.NONE or not State.document.has_cell(State.current_frame, hit):
+	if hit == State.NONE or not State.can_edit(hit):
+		return false
+	if not State.document.has_cell(State.current_frame, hit):
 		return false
 	return _flood_fill(hit)
 
@@ -19,6 +21,8 @@ func _flood_fill(seed: Vector3i) -> bool:
 	while not stack.is_empty():
 		var c: Vector3i = stack.pop_back()
 		for n in _neighbors(c):
+			if not State.can_edit(n):
+				continue
 			if frame.cells.get(n, -1) == old_index:
 				frame.cells[n] = new_index
 				stack.append(n)

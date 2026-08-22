@@ -3,10 +3,14 @@ max_active: 1
 ---
 
 # Tools
-- [ ] Fix the move tool
-  - [ ] After a move, the selection must keep the moved cells. It now keeps the old coordinates, so a second grab misses.
-  - [ ] Show a gizmo so the destination is visible before release
-  - [ ] Show a gizmo for rotation with snapping
+- [x] Fix the move tool
+  - [x] Voxels move live during the drag, so the moved cells stay grabbable
+  - [x] Displaced voxels are stored and restored on the next drag, so sweeping destroys nothing
+  - [x] A click on the selection commits. A click outside cancels and restores.
+- [x] A selection is an edit mask. All tools edit only inside it.
+  - [x] With no selection, the move tool moves all cells.
+  - [x] The select tool click cancels an existing selection or makes a one-cell selection.
+  - [ ] Extend the mask to more tools as they are added
 - [ ] Brushing drawing plane should not depend on the starting location of the brush, but only on the view direction. This is to avoid having different voxel starting locations paint on different planes, it's confusing and not intuitive.
 
 

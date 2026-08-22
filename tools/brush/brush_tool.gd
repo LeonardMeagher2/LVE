@@ -19,11 +19,13 @@ func pick_drag(request: PickRequest) -> PickResult:
 
 func apply(target: Vector3i, hit: Vector3i) -> bool:
 	if _add_mode():
+		if not State.can_edit(target):
+			return false
 		if State.document.has_cell(State.current_frame, target):
 			return false
 		State.document.paint(State.current_frame, target, State.current_color)
 		return true
-	if hit == State.NONE:
+	if hit == State.NONE or not State.can_edit(hit):
 		return false
 	State.document.paint(State.current_frame, hit, State.current_color)
 	return true

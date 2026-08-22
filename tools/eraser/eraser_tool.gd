@@ -3,7 +3,7 @@ extends VoxelTool
 
 
 func apply(_target: Vector3i, hit: Vector3i) -> bool:
-	if hit == State.NONE:
+	if hit == State.NONE or not State.can_edit(hit):
 		return false
 	State.document.erase(State.current_frame, hit)
 	return true
