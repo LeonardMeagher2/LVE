@@ -1,0 +1,33 @@
+[gd_scene format=3 uid="uid://c2301xo3rbrka"]
+
+[ext_resource type="Script" uid="uid://diaylp7imw342" path="res://ui/frame_button.gd" id="1_btn"]
+[ext_resource type="Script" uid="uid://bs40ovq8dbd7n" path="res://ui/frame_preview.gd" id="2_preview"]
+
+[node name="Content" type="VBoxContainer" unique_id=1491507976]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 1
+alignment = 1
+script = ExtResource("1_btn")
+
+[node name="Preview" type="TextureButton" parent="." unique_id=1670438407]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 4
+script = ExtResource("2_preview")
+
+[node name="Number" type="Label" parent="." unique_id=653081230]
+unique_name_in_owner = true
+layout_mode = 2
+horizontal_alignment = 1
+
+[node name="Delay" type="LineEdit" parent="." unique_id=1976705646]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(44, 0)
+layout_mode = 2
+size_flags_horizontal = 4
+placeholder_text = "ms"
+alignment = 1

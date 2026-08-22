@@ -1,15 +1,12 @@
 class_name FramePreview
-extends TextureRect
+extends TextureButton
 
 const SIZE := 48
 const PAD := 2.0
 
-var _tex: ImageTexture
-
 
 func set_frame(frame: VoxelFrame, document: VoxiDocument) -> void:
-	_tex = _render(frame, document)
-	texture = _tex
+	texture_normal = _render(frame, document)
 
 
 func _render(frame: VoxelFrame, document: VoxiDocument) -> ImageTexture:
