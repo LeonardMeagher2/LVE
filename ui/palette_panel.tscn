@@ -1,7 +1,7 @@
 [gd_scene format=3]
 
 [ext_resource type="Script" path="res://ui/palette_panel.gd" id="1_palette"]
-[ext_resource type="Script" path="res://ui/color_picker.gd" id="2_picker"]
+[ext_resource type="PackedScene" path="res://ui/color_picker.tscn" id="2_picker"]
 
 [node name="PalettePanel" type="VBoxContainer"]
 custom_minimum_size = Vector2(280, 0)
@@ -21,10 +21,9 @@ columns = 8
 theme_override_constants/h_separation = 3
 theme_override_constants/v_separation = 3
 
-[node name="ColorPicker" type="Control" parent="."]
+[node name="ColorPicker" parent="." instance=ExtResource("2_picker")]
 layout_mode = 2
 size_flags_vertical = 3
 mouse_filter = 2
-script = ExtResource("2_picker")
 
 [connection signal="color_changed" from="ColorPicker" to="." method="_on_picker_color_changed"]
