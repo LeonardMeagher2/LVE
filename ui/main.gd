@@ -1,11 +1,11 @@
 extends Control
 
-@onready var _menu_bar: EditorMenuBar = $Content/Root/MenuBar
-@onready var _option_bar: OptionBar = $Content/Root/Body/CenterPane/OptionBar
-@onready var _viewport_panel: EditorViewportPanel = $Content/Root/Body/CenterPane/ViewportContainer
-@onready var _control_bar: ControlBar = $Content/Root/Body/CenterPane/ControlBar
-@onready var _bottom_dock: EditorBottomDock = $Content/Root/BottomDock
-@onready var _status_bar: EditorStatusBar = $Content/Root/StatusBar
+@onready var _menu_bar: EditorMenuBar = %MenuBar
+@onready var _option_bar: OptionBar = %OptionBar
+@onready var _viewport_panel: EditorViewportPanel = %ViewportContainer
+@onready var _control_bar: ControlBar = %ControlBar
+@onready var _bottom_dock: EditorBottomDock = %BottomDock
+@onready var _status_bar: EditorStatusBar = %StatusBar
 
 var _zoom_percent := 100.0
 

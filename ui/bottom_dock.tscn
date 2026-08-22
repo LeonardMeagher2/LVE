@@ -1,110 +1,133 @@
-[gd_scene format=3]
+[gd_scene format=3 uid="uid://8g827rqodt23"]
 
-[ext_resource type="Script" path="res://ui/bottom_dock.gd" id="1_dock"]
-[ext_resource type="Script" path="res://ui/frame_strip.gd" id="2_strip"]
-[ext_resource type="Texture2D" path="res://icons/to_start.svg" id="3_to_start"]
-[ext_resource type="Texture2D" path="res://icons/step_back.svg" id="4_back"]
-[ext_resource type="Texture2D" path="res://icons/play.svg" id="5_play"]
-[ext_resource type="Texture2D" path="res://icons/step_forward.svg" id="6_fwd"]
-[ext_resource type="Texture2D" path="res://icons/to_end.svg" id="7_end"]
-[ext_resource type="Texture2D" path="res://icons/frame_add.svg" id="8_add"]
-[ext_resource type="Texture2D" path="res://icons/frame_dup.svg" id="9_dup"]
-[ext_resource type="Texture2D" path="res://icons/frame_del.svg" id="10_del"]
+[ext_resource type="Script" uid="uid://h3qnfjoqxy0f" path="res://ui/bottom_dock.gd" id="1_dock"]
+[ext_resource type="Script" uid="uid://ch5l247rhporb" path="res://ui/frame_strip.gd" id="2_strip"]
+[ext_resource type="Texture2D" uid="uid://wx5jy0fisyiy" path="res://icons/to_start.svg" id="3_to_start"]
+[ext_resource type="Texture2D" uid="uid://dqdve5t4ixwpy" path="res://icons/step_back.svg" id="4_back"]
+[ext_resource type="Texture2D" uid="uid://bshoasjpvru2h" path="res://icons/play.svg" id="5_play"]
+[ext_resource type="Texture2D" uid="uid://djqb5uqnxxmhe" path="res://icons/step_forward.svg" id="6_fwd"]
+[ext_resource type="Texture2D" uid="uid://c4401j16xtgri" path="res://icons/to_end.svg" id="7_end"]
+[ext_resource type="Texture2D" uid="uid://cjpr0oyhe51e" path="res://icons/frame_add.svg" id="8_add"]
+[ext_resource type="PackedScene" uid="uid://c2301xo3rbrka" path="res://ui/frame_button.tscn" id="8_iw04i"]
+[ext_resource type="Texture2D" uid="uid://do7ho0llc2tpu" path="res://icons/frame_dup.svg" id="9_dup"]
+[ext_resource type="Texture2D" uid="uid://xjl044jlksik" path="res://icons/frame_del.svg" id="10_del"]
 
-[node name="BottomDock" type="VBoxContainer"]
-layout_mode = 2
+[node name="BottomDock" type="VBoxContainer" unique_id=106212846]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
 theme_override_constants/separation = 4
 script = ExtResource("1_dock")
 
-[node name="PlaybackRow" type="HBoxContainer" parent="."]
+[node name="HBoxContainer2" type="HBoxContainer" parent="." unique_id=1744826518]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="PlaybackRow" type="HBoxContainer" parent="HBoxContainer2" unique_id=1867073933]
 custom_minimum_size = Vector2(0, 30)
 layout_mode = 2
 theme_override_constants/separation = 4
 
-[node name="ToStart" type="Button" parent="PlaybackRow"]
+[node name="ToStart" type="Button" parent="HBoxContainer2/PlaybackRow" unique_id=1508834326]
 custom_minimum_size = Vector2(40, 28)
 layout_mode = 2
+tooltip_text = "Step to start"
 focus_mode = 0
 icon = ExtResource("3_to_start")
-tooltip_text = "Step to start"
+icon_alignment = 1
 
-[node name="Prev" type="Button" parent="PlaybackRow"]
+[node name="Prev" type="Button" parent="HBoxContainer2/PlaybackRow" unique_id=1849203195]
 custom_minimum_size = Vector2(40, 28)
 layout_mode = 2
+tooltip_text = "Step back"
 focus_mode = 0
 icon = ExtResource("4_back")
-tooltip_text = "Step back"
+icon_alignment = 1
 
-[node name="Play" type="Button" parent="PlaybackRow"]
+[node name="Play" type="Button" parent="HBoxContainer2/PlaybackRow" unique_id=1338261472]
+unique_name_in_owner = true
 custom_minimum_size = Vector2(40, 28)
 layout_mode = 2
+tooltip_text = "Play"
 focus_mode = 0
 icon = ExtResource("5_play")
-tooltip_text = "Play"
+icon_alignment = 1
 
-[node name="Next" type="Button" parent="PlaybackRow"]
+[node name="Next" type="Button" parent="HBoxContainer2/PlaybackRow" unique_id=1342544756]
 custom_minimum_size = Vector2(40, 28)
 layout_mode = 2
+tooltip_text = "Step forward"
 focus_mode = 0
 icon = ExtResource("6_fwd")
-tooltip_text = "Step forward"
+icon_alignment = 1
 
-[node name="ToEnd" type="Button" parent="PlaybackRow"]
+[node name="ToEnd" type="Button" parent="HBoxContainer2/PlaybackRow" unique_id=1180906050]
 custom_minimum_size = Vector2(40, 28)
 layout_mode = 2
+tooltip_text = "Step to end"
 focus_mode = 0
 icon = ExtResource("7_end")
-tooltip_text = "Step to end"
+icon_alignment = 1
 
-[node name="PlaybackSpacer" type="Control" parent="PlaybackRow"]
+[node name="FrameRow" type="HBoxContainer" parent="HBoxContainer2" unique_id=1181380925]
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="FrameRow" type="HBoxContainer" parent="."]
-custom_minimum_size = Vector2(0, 92)
+[node name="Add" type="Button" parent="HBoxContainer2/FrameRow" unique_id=290217125]
+custom_minimum_size = Vector2(40, 30)
 layout_mode = 2
+size_flags_vertical = 4
+tooltip_text = "Add frame"
+focus_mode = 0
+icon = ExtResource("8_add")
+icon_alignment = 1
+
+[node name="Dup" type="Button" parent="HBoxContainer2/FrameRow" unique_id=825756284]
+custom_minimum_size = Vector2(40, 30)
+layout_mode = 2
+size_flags_vertical = 4
+tooltip_text = "Duplicate frame"
+focus_mode = 0
+icon = ExtResource("9_dup")
+icon_alignment = 1
+
+[node name="Del" type="Button" parent="HBoxContainer2/FrameRow" unique_id=2010203312]
+custom_minimum_size = Vector2(40, 30)
+layout_mode = 2
+size_flags_vertical = 4
+tooltip_text = "Delete frame"
+focus_mode = 0
+icon = ExtResource("10_del")
+icon_alignment = 1
+
+[node name="FrameRow" type="HBoxContainer" parent="." unique_id=1879118177]
+layout_mode = 2
+size_flags_vertical = 3
 theme_override_constants/separation = 4
 
-[node name="FrameScroll" type="ScrollContainer" parent="FrameRow"]
+[node name="FrameScroll" type="ScrollContainer" parent="FrameRow" unique_id=1670401868]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_stretch_ratio = 2.0
+vertical_scroll_mode = 0
 
-[node name="FrameStrip" type="HBoxContainer" parent="FrameRow/FrameScroll"]
+[node name="FrameStrip" type="HBoxContainer" parent="FrameRow/FrameScroll" unique_id=471556670]
+unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
-size_flags_vertical = 4
+size_flags_vertical = 3
 script = ExtResource("2_strip")
 
-[node name="Add" type="Button" parent="FrameRow"]
-custom_minimum_size = Vector2(40, 30)
+[node name="Frame" parent="FrameRow/FrameScroll/FrameStrip" unique_id=1469478484 instance=ExtResource("8_iw04i")]
 layout_mode = 2
-size_flags_vertical = 4
-focus_mode = 0
-icon = ExtResource("8_add")
-tooltip_text = "Add frame"
 
-[node name="Dup" type="Button" parent="FrameRow"]
-custom_minimum_size = Vector2(40, 30)
-layout_mode = 2
-size_flags_vertical = 4
-focus_mode = 0
-icon = ExtResource("9_dup")
-tooltip_text = "Duplicate frame"
-
-[node name="Del" type="Button" parent="FrameRow"]
-custom_minimum_size = Vector2(40, 30)
-layout_mode = 2
-size_flags_vertical = 4
-focus_mode = 0
-icon = ExtResource("10_del")
-tooltip_text = "Delete frame"
-
-[connection signal="pressed" from="PlaybackRow/ToStart" to="." method="_on_to_start_pressed"]
-[connection signal="pressed" from="PlaybackRow/Prev" to="." method="_on_prev_pressed"]
-[connection signal="pressed" from="PlaybackRow/Play" to="." method="_on_play_pressed"]
-[connection signal="pressed" from="PlaybackRow/Next" to="." method="_on_next_pressed"]
-[connection signal="pressed" from="PlaybackRow/ToEnd" to="." method="_on_to_end_pressed"]
-[connection signal="pressed" from="FrameRow/Add" to="." method="_on_frame_add"]
-[connection signal="pressed" from="FrameRow/Dup" to="." method="_on_frame_dup"]
-[connection signal="pressed" from="FrameRow/Del" to="." method="_on_frame_del"]
+[connection signal="pressed" from="HBoxContainer2/PlaybackRow/ToStart" to="." method="_on_to_start_pressed"]
+[connection signal="pressed" from="HBoxContainer2/PlaybackRow/Prev" to="." method="_on_prev_pressed"]
+[connection signal="pressed" from="HBoxContainer2/PlaybackRow/Play" to="." method="_on_play_pressed"]
+[connection signal="pressed" from="HBoxContainer2/PlaybackRow/Next" to="." method="_on_next_pressed"]
+[connection signal="pressed" from="HBoxContainer2/PlaybackRow/ToEnd" to="." method="_on_to_end_pressed"]
+[connection signal="pressed" from="HBoxContainer2/FrameRow/Add" to="." method="_on_frame_add"]
+[connection signal="pressed" from="HBoxContainer2/FrameRow/Dup" to="." method="_on_frame_dup"]
+[connection signal="pressed" from="HBoxContainer2/FrameRow/Del" to="." method="_on_frame_del"]

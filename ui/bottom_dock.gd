@@ -15,8 +15,8 @@ signal frame_del
 signal frame_selected(index: int)
 signal delay_changed
 
-@onready var _play_button: Button = $PlaybackRow/Play
-@onready var _frame_strip: EditorFrameStrip = $FrameRow/FrameScroll/FrameStrip
+@onready var _play_button: Button = %Play
+@onready var _frame_strip: EditorFrameStrip = %FrameStrip
 
 
 func _ready() -> void:
