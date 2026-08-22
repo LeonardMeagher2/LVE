@@ -23,7 +23,7 @@ background_canvas_max_layer = -1
 sky = SubResource("Sky_lgly7")
 ambient_light_source = 2
 ambient_light_color = Color(0.54901963, 0.5686275, 0.61960787, 1)
-ambient_light_energy = 1.2
+reflected_light_source = 1
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_grid"]
 depth_draw_mode = 2
@@ -64,6 +64,9 @@ script = ExtResource("2_panel")
 
 [node name="Viewport" type="SubViewport" parent="." unique_id=1299710563]
 handle_input_locally = false
+use_taa = true
+use_debanding = true
+use_hdr_2d = true
 size = Vector2i(1280, 800)
 render_target_update_mode = 4
 
