@@ -2,51 +2,44 @@
 max_active: 1
 ---
 
-# M1 — Core loop
+# Palette
+- [ ] Drag to reorder palette swatches (add/remove are done)
+- [ ] Preset palettes (load/save)
+- [ ] Default palette for new documents
+- [ ] Adding a color should be manual not automatic
 
-## Godot 4.7 API fixes
-- [x] [Fix 4 remaining Godot 4.7.1 API issues](NOTES.md)
-  - [x] MenuButton popup: replace `set_popup()` with `get_popup()`
-  - [x] SubViewport input: replace broken `input_event` connection
-  - [x] `_vertex_arrays`: return Array sized to `Mesh.ARRAY_MAX`
-  - [x] `_highlight_frame`: use `remove_theme_stylebox_override("normal")`
-- [x] Re-run `godot --headless -s res://tests/smoke.gd` until clean
-- [x] Delete tests/probe.gd
+# Selection
+- [ ] Copy selection to clipboard
+- [ ] Paste selection at an offset
+- [ ] First mode: select a flat section on the press plane
+- [ ] After the section is set, expand the volume along the 3rd axis by dragging the mouse. Might be good to even auto rotate the view if the 3rd axis isn't easily visible. The 3rd axis is the one perpendicular to the press plane.
+- [ ] Visual feedback for both phases
 
-## Scene-ify the UI
-- [x] [Migrate static UI structure + signal wiring into main.tscn](NOTES.md)
-  - [x] Rebuild main.tscn with the full static UI tree (~30 nodes)
-  - [x] Declare all static signal connections in the scene ([connection] entries)
-  - [x] Move MenuButton items into the scene (item_count + popup item text); only id_pressed wiring stays in code
-  - [x] Slim main.gd down to state + handlers + dynamic builders (frame strip, recent swatches)
-- [x] Re-run `godot --headless -s res://tests/smoke.gd` until clean
+# Symmetry
+- [ ] Symmetry axis + plane toggle
+- [ ] Mirror brush/paint strokes across the plane
+- [ ] Mirror a selection across an axis
+- [ ] Mirror in place and to a copy
 
-## Work-plane brush picking
-- [x] [Anchor the brush stroke to the plane through the clicked point](NOTES.md)
-  - [x] Start pick: ray DDA to a voxel, target is the cell beside the hit face
-  - [x] Drag pick: ray to the stroke plane captured at stroke start
-  - [x] Empty grid: ray to the floor plane, target on grid layer 0
-  - [x] Orbit: trackball style, yaw inverted from the drag direction
-  - [x] Default view: yaw 0°, pitch 45°
-  - [x] Shift the DDA grid-space origin by +0.5 to match the mesh lattice
-- [x] Add `tests/work_plane.gd` for floor and wall aim
-- [x] Re-run `godot --headless -s res://tests/run_all.gd` until clean
+# Primitives
+- [ ] Sphere, box, cylinder fill primitives in a tool menu
+- [ ] Place a saved voxel file as a stamp
 
-## M1 verification
-- [ ] Manual: paint 2-frame anim, undo/redo, playback, orbit/pan/zoom
+# Tools
+- [ ] Fix the move tool
+  - [ ] After a move, the selection must keep the moved cells. It now keeps the old coordinates, so a second grab misses.
+  - [ ] Show a gizmo so the destination is visible before release
+  - [ ] Show a gizmo for rotation with snapping
+- [ ] Brushing drawing plane should not depend on the starting location of the brush, but only on the view direction. This is to avoid having different voxel starting locations paint on different planes, it's confusing and not intuitive.
 
-# M2 — Save/load + in-game playback
-- [ ] `scripts/game/voxel_animation_player.gd` (Node3D + MultiMesh playback)
-- [ ] Test 3D scene loading + playing a `.tres`
-- [ ] Verify save/load round-trip (ResourceSaver/ResourceLoader)
+# Onion skinning
+- [ ] Ghost previous/next frames behind the current frame
+- [ ] toggle and strength control
 
-# M3 — Selection & editing
-- [ ] Box select + move
-- [ ] Copy/paste
+# Animation Tags
+- [ ] UI for the existing tag data (create, edit, delete named frame groups)
+- [ ] Loop-mode and repeat controls per tag
 
-# M4 — Aseprite-style chrome (ref: Aseprite screenshot)
-- [x] Left panel: palette color grid + color area / hue / alpha / hex picker
-- [x] Vertical tool icon strip (right side)
-- [x] Bottom dock: animation playback toolbar + frame strip (no layers in MVP)
-- [ ] Onion skinning
-- [ ] Palette management: color reorder (add/remove are done)
+# Responsive UI
+- [ ] Make the panels adjustable in size (resizable splitters between the left, center, and right panes)
+- [ ] Detect narrow layouts and adapt the layout, so the editor can run on a phone

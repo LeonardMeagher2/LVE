@@ -94,7 +94,7 @@ func _update_rubber() -> void:
 	var lo := Vector3i(mini(_corner.x, _box_end.x), mini(_corner.y, _box_end.y), mini(_corner.z, _box_end.z))
 	var hi := Vector3i(maxi(_corner.x, _box_end.x), maxi(_corner.y, _box_end.y), maxi(_corner.z, _box_end.z))
 	var size := Vector3(hi.x - lo.x + 1, hi.y - lo.y + 1, hi.z - lo.z + 1)
-	var center := Vector3(lo) + size * 0.5
+	var center := Vector3(lo) + Vector3(hi - lo) * 0.5
 	(visual as MeshInstance3D).mesh.size = size + Vector3(0.04, 0.04, 0.04)
 	visual.position = center
 	visual.visible = true

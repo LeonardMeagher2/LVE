@@ -23,8 +23,8 @@ func sync_selection() -> void:
 		hi.x = maxi(hi.x, c.x)
 		hi.y = maxi(hi.y, c.y)
 		hi.z = maxi(hi.z, c.z)
-	var a := Vector3(lo.x, lo.y, lo.z)
-	var b := Vector3(hi.x + 1, hi.y + 1, hi.z + 1)
+	var a := Vector3(lo) - Vector3(0.5, 0.5, 0.5)
+	var b := Vector3(hi) + Vector3(0.5, 0.5, 0.5)
 	var corners := PackedVector3Array([
 		a, Vector3(b.x, a.y, a.z), Vector3(b.x, b.y, a.z), Vector3(a.x, b.y, a.z),
 		Vector3(a.x, a.y, b.z), Vector3(b.x, a.y, b.z), b, Vector3(a.x, b.y, b.z),
