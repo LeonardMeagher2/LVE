@@ -1,6 +1,7 @@
 [gd_scene format=3 uid="uid://cym1t8k348a6p"]
 
 [ext_resource type="Script" uid="uid://du77xivee1ktw" path="res://viewport/editor_viewport.gd" id="1_viewport"]
+[ext_resource type="Texture2D" uid="uid://cmfirdobdfgqh" path="res://ui/Checker.png" id="2_m8cgj"]
 [ext_resource type="Script" uid="uid://ckr0dxpaq0xrc" path="res://viewport/viewport_container.gd" id="2_panel"]
 [ext_resource type="Script" uid="uid://gwfmh64wiyx0" path="res://viewport/camera_rig.gd" id="3_camera"]
 [ext_resource type="Script" uid="uid://d3i6vt2reee27" path="res://viewport/voxel_renderer.gd" id="4_voxels"]
@@ -8,16 +9,26 @@
 [ext_resource type="Script" uid="uid://ba28f277f4w0n" path="res://viewport/selection_overlay.gd" id="6_selection"]
 [ext_resource type="Script" uid="uid://baghrya6g6rga" path="res://viewport/playback_animator.gd" id="7_playback"]
 
+[sub_resource type="PanoramaSkyMaterial" id="PanoramaSkyMaterial_ksrty"]
+panorama = ExtResource("2_m8cgj")
+filter = false
+
+[sub_resource type="Sky" id="Sky_lgly7"]
+sky_material = SubResource("PanoramaSkyMaterial_ksrty")
+
 [sub_resource type="Environment" id="Environment_env"]
-background_mode = 1
+background_mode = 2
 background_color = Color(0.118, 0.122, 0.133, 1)
+background_canvas_max_layer = -1
+sky = SubResource("Sky_lgly7")
 ambient_light_source = 2
-ambient_light_color = Color(0.55, 0.57, 0.62, 1)
+ambient_light_color = Color(0.54901963, 0.5686275, 0.61960787, 1)
 ambient_light_energy = 1.2
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_grid"]
+depth_draw_mode = 2
 shading_mode = 0
-albedo_color = Color(0.22745098, 0.23529412, 0.25882354, 1)
+albedo_color = Color(0.07284262, 0.072842635, 0.072842605, 1)
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_j71j0"]
 shading_mode = 0
@@ -27,6 +38,9 @@ albedo_color = Color(0, 0.8784314, 1, 1)
 diffuse_mode = 1
 specular_mode = 2
 vertex_color_use_as_albedo = true
+stencil_flags = 2
+stencil_color = Color(1, 1, 1, 1)
+stencil_outline_thickness = 0.025
 
 [sub_resource type="BoxMesh" id="BoxMesh_j71j0"]
 material = SubResource("StandardMaterial3D_voxels")
@@ -82,7 +96,6 @@ script = ExtResource("6_selection")
 script = ExtResource("7_playback")
 
 [node name="AnimationPlayer" type="AnimationPlayer" parent="Viewport/Editor/Playback" unique_id=1219488223]
-root_node = NodePath("../..")
 
 [node name="Voxels" type="MultiMeshInstance3D" parent="Viewport/Editor" unique_id=1816863498]
 multimesh = SubResource("MultiMesh_voxels")
