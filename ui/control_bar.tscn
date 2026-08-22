@@ -1,42 +1,40 @@
-[gd_scene format=3]
+[gd_scene format=3 uid="uid://dud067lsqpagv"]
 
-[ext_resource type="Script" path="res://ui/control_bar.gd" id="1_control"]
-[ext_resource type="Texture2D" path="res://icons/grid.svg" id="2_grid"]
+[ext_resource type="Script" uid="uid://doi7ndmweb0el" path="res://ui/control_bar.gd" id="1_control"]
+[ext_resource type="Texture2D" uid="uid://bhg85sqfio31d" path="res://icons/grid.svg" id="2_grid"]
 
-[node name="ControlBar" type="HBoxContainer"]
+[node name="ControlBar" type="HBoxContainer" unique_id=53784703]
 custom_minimum_size = Vector2(0, 28)
-layout_mode = 2
 theme_override_constants/separation = 6
 script = ExtResource("1_control")
 
-[node name="ZoomLabel" type="Label" parent="."]
+[node name="ZoomLabel" type="Label" parent="." unique_id=2116463353]
 layout_mode = 2
 text = "Zoom"
 
-[node name="ZoomSlider" type="HSlider" parent="."]
+[node name="ZoomSlider" type="HSlider" parent="." unique_id=1393546872]
 layout_mode = 2
 size_flags_horizontal = 3
-min_value = 25.0
-max_value = 400.0
-step = 1.0
-value = 100.0
 tooltip_text = "Zoom"
+min_value = 1.0
+max_value = 400.0
+value = 100.0
 
-[node name="ZoomOne" type="Button" parent="."]
+[node name="ZoomOne" type="Button" parent="." unique_id=954156555]
 custom_minimum_size = Vector2(36, 0)
 layout_mode = 2
+tooltip_text = "Return the zoom to 100 percent"
 focus_mode = 0
 text = "1:1"
-tooltip_text = "Return the zoom to 100 percent"
 
-[node name="GridToggle" type="Button" parent="."]
+[node name="GridToggle" type="Button" parent="." unique_id=1396369045]
 custom_minimum_size = Vector2(28, 28)
 layout_mode = 2
+tooltip_text = "Toggle the grid"
 focus_mode = 0
 toggle_mode = true
 button_pressed = true
 icon = ExtResource("2_grid")
-tooltip_text = "Toggle the grid"
 
 [connection signal="value_changed" from="ZoomSlider" to="." method="_on_zoom_slider_changed"]
 [connection signal="pressed" from="ZoomOne" to="." method="_on_zoom_one_pressed"]
