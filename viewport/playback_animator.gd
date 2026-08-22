@@ -5,6 +5,11 @@ extends Node3D
 
 var _anim_library: AnimationLibrary
 
+var display_frame := 0:
+	set(value):
+		if value >= 0 and value < State.document.frames.size():
+			State.current_frame = value
+
 
 func _ready() -> void:
 	_anim_library = AnimationLibrary.new()
@@ -33,7 +38,7 @@ func _rebuild_animation() -> void:
 	var anim := Animation.new()
 	anim.loop_mode = Animation.LOOP_LINEAR
 	anim.add_track(Animation.TYPE_VALUE)
-	anim.track_set_path(0, NodePath(".:frame"))
+	anim.track_set_path(0, NodePath(".:display_frame"))
 	anim.track_set_interpolation_type(0, Animation.INTERPOLATION_NEAREST)
 	var t := 0.0
 	for i in d.frames.size():

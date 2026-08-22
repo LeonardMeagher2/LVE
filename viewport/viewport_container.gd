@@ -3,7 +3,6 @@ extends SubViewportContainer
 
 signal zoom_changed(percent: float)
 signal grid_changed(visible: bool)
-signal frame_displayed(index: int)
 
 @onready var _vp: EditorViewport = $Viewport/Editor
 
@@ -11,10 +10,6 @@ signal frame_displayed(index: int)
 func _ready() -> void:
 	_vp.zoom_changed.connect(zoom_changed.emit)
 	_vp.grid_changed.connect(grid_changed.emit)
-	_vp.frame_displayed.connect(frame_displayed.emit)
-
-func sync_to(frame: int) -> void:
-	_vp.sync_to(frame)
 
 func set_tool(t: ToolInfo) -> void:
 	_vp.set_tool(t)

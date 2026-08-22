@@ -27,7 +27,7 @@ max_active: 1
   - [x] Drag pick: ray to the stroke plane captured at stroke start
   - [x] Empty grid: ray to the floor plane, target on grid layer 0
   - [x] Orbit: trackball style, yaw inverted from the drag direction
-  - [x] Default view: yaw -90°, pitch 45°
+  - [x] Default view: yaw 0°, pitch 45°
   - [x] Shift the DDA grid-space origin by +0.5 to match the mesh lattice
 - [x] Add `tests/work_plane.gd` for floor and wall aim
 - [x] Re-run `godot --headless -s res://tests/run_all.gd` until clean

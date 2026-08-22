@@ -16,6 +16,8 @@ var _file_dialog: FileDialog
 func _ready() -> void:
 	State.tool_changed.connect(_on_tool_changed)
 	State.color_changed.connect(_on_color_changed)
+	State.document_changed.connect(_update_status)
+	State.frames_changed.connect(_update_status)
 	State.frame_changed.connect(_on_frame_changed)
 	State.cells_changed.connect(_on_cells_changed)
 	State.playback.playback_changed.connect(_on_playback_changed)
@@ -38,14 +40,12 @@ func _ready() -> void:
 	_bottom_dock.frame_del.connect(State.playback.delete_frame)
 	_bottom_dock.frame_selected.connect(State.playback.select_frame)
 	_bottom_dock.delay_changed.connect(_update_status)
-	_viewport_panel.frame_displayed.connect(_on_frame_displayed)
 	_viewport_panel.zoom_changed.connect(_on_zoom_changed)
 	_viewport_panel.grid_changed.connect(_control_bar.set_grid_visible)
 	_option_bar.view_requested.connect(_viewport_panel.set_view)
 	_control_bar.zoom_requested.connect(_viewport_panel.set_zoom_percent)
 	_control_bar.grid_toggled.connect(_viewport_panel.set_grid_visible)
 	_viewport_panel.set_tool(State.tool)
-	_viewport_panel.sync_to(State.current_frame)
 	_update_status()
 
 
@@ -78,13 +78,11 @@ func _on_color_changed(_c: Color) -> void:
 
 
 func _on_frame_changed() -> void:
-	_viewport_panel.sync_to(State.current_frame)
+	_bottom_dock.highlight_frame(State.current_frame)
 	_update_status()
 
 
 func _on_cells_changed() -> void:
-	if not State.playback.playing:
-		_viewport_panel.sync_to(State.current_frame)
 	_update_status()
 
 
@@ -94,11 +92,6 @@ func _on_playback_changed() -> void:
 	else:
 		_viewport_panel.stop_preview()
 	_bottom_dock.set_playing(State.playback.playing)
-
-
-func _on_frame_displayed(i: int) -> void:
-	_bottom_dock.highlight_frame(i)
-	_update_status()
 
 
 func _on_zoom_changed(p: float) -> void:
@@ -145,7 +138,6 @@ func _update_status() -> void:
 func _new_document() -> void:
 	State.reset()
 	_save_path = ""
-	_viewport_panel.sync_to(0)
 
 
 func _make_file_dialog() -> FileDialog:
@@ -173,7 +165,6 @@ func _on_file_opened(path: String) -> void:
 	if res is VoxiDocument:
 		State.load_document(res)
 		_save_path = path
-		_viewport_panel.sync_to(State.current_frame)
 		_update_status()
 	else:
 		push_warning("Voxi: not a VoxiDocument resource: " + path)

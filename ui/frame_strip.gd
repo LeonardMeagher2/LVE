@@ -10,7 +10,8 @@ var _delay_fields: Array[LineEdit] = []
 
 
 func _ready() -> void:
-	State.frame_changed.connect(_rebuild)
+	State.frames_changed.connect(_rebuild)
+	State.document_changed.connect(_rebuild)
 	State.cells_changed.connect(_refresh_previews)
 	_rebuild()
 

@@ -31,7 +31,8 @@ The code already does these things well.
 - Data uses Resources. Save and load work with `ResourceSaver`.
 - Tools are Node3D scenes. The editor instances them into a tool layer.
   The `ToolInfo` Resource makes the tools data-driven.
-- Playback uses `AnimationPlayer` with a property track on `frame_index`.
+- Playback uses `AnimationPlayer` with a property track on `display_frame`.
+  The track drives `State.current_frame`.
 - Tests run whole scenes. They do not use mocks.
 
 ## Complexity drivers
@@ -101,10 +102,9 @@ Editor (Node3D, editor_viewport.gd)
 ├── Light
 ├── CameraRig (camera_rig.gd)
 │   └── Camera3D
-├── GridRoot (grid_renderer.gd)
+├── Grid (grid_renderer.gd)
 ├── ToolLayer
-├── SelectionLayer (selection_overlay.gd)
-│   └── SelectionOutline
+├── Selection (selection_overlay.gd)
 ├── Playback (playback_animator.gd)
 │   └── AnimationPlayer
 └── Voxels (voxel_renderer.gd)
@@ -117,7 +117,7 @@ The new files and their jobs:
 - `viewport/voxel_renderer.gd` (`VoxelRenderer`).
   It handles `sync_to`.
 - `viewport/grid_renderer.gd` (`GridRenderer`).
-  It builds the grid and the floor.
+  It builds the grid around the content bounds.
 - `viewport/selection_overlay.gd` (`SelectionOverlay`).
   It builds the selection outline.
 - `viewport/playback_animator.gd` (`PlaybackAnimator`).
@@ -125,17 +125,24 @@ The new files and their jobs:
 - `viewport/mesh_util.gd` (`MeshUtil`).
   It builds the vertex arrays for the grid and the outline.
 
-The `Editor` node keeps tool management, picking, and the `frame_index` property.
+The `Editor` node keeps tool management and picking.
 It forwards the child methods to its public contract.
-The `EditorViewportPanel` facade stays unchanged.
+The `EditorViewportPanel` facade stays a pass-through.
+
+The viewport children react to `State` signals.
+`CameraRig`, `Grid`, `Selection`, and `Voxels` subscribe in `_ready()`.
+The UI layer does not push state down to them.
+`VoxiDocument` is the source of truth.
 
 Three details needed care.
 
 1. The `AnimationPlayer` property track resolves its node path
    relative to `root_node`.
-   The player now sits under `Playback`.
-   Its `root_node` must be `NodePath("../..")` to target
-   the `frame_index` property on the `Editor` node.
+   The player sits under `Playback`.
+   Its `root_node` is `NodePath("..")` to target
+   the `display_frame` property on the `Playback` node.
+   The setter writes `State.current_frame`, so playback drives
+   the same signal as frame selection.
 2. The test `tests/camera.gd` reads the camera state directly.
    It uses `_vp.camera_rig` for yaw, pitch, and target.
 3. Input order needs no change.

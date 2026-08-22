@@ -1,8 +1,9 @@
 extends Node
 
-const NONE := Vector3i(-1000000, -1000000, -1000000)
+const NONE := Vector3i(Vector3.INF)
 
 signal document_changed()
+signal frames_changed()
 signal frame_changed()
 signal color_changed(color: Color)
 signal tool_changed(tool: ToolInfo)
@@ -11,10 +12,15 @@ signal selection_changed()
 signal pixel_perfect_changed(enabled: bool)
 
 var document: VoxiDocument
-var current_frame := 0
+var current_frame := 0:
+	set(value):
+		if value == current_frame:
+			return
+		current_frame = value
+		frame_changed.emit()
 var tools := {}
 var tool: ToolInfo = null
-var current_color := Color8(177, 177, 177)
+var current_color := Color8(20, 20, 20)
 var pixel_perfect := false
 var selection := VoxelSelection.new()
 var undo_redo := UndoRedo.new()
@@ -27,7 +33,6 @@ func _init() -> void:
 
 func _ready() -> void:
 	cells_changed.connect(_stop_playback)
-	frame_changed.connect(_stop_playback)
 	add_tool(load("res://tools/brush.tres"))
 	add_tool(load("res://tools/brush_paint.tres"))
 	add_tool(load("res://tools/eraser.tres"))
@@ -46,11 +51,12 @@ func reset() -> void:
 	document = VoxiDocument.new()
 	current_frame = 0
 	undo_redo.clear_history()
-	current_color = Color8(177, 177, 177)
+	current_color = Color8(20, 20, 20)
 	selection.clear()
 	color_changed.emit(current_color)
 	tool_changed.emit(tool)
-	frame_changed.emit()
+	document_changed.emit()
+	frames_changed.emit()
 	selection_changed.emit()
 
 
@@ -59,7 +65,8 @@ func load_document(d: VoxiDocument) -> void:
 	current_frame = 0
 	undo_redo.clear_history()
 	selection.clear()
-	frame_changed.emit()
+	document_changed.emit()
+	frames_changed.emit()
 	selection_changed.emit()
 
 

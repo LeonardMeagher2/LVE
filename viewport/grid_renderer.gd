@@ -1,18 +1,24 @@
 class_name GridRenderer
 extends MeshInstance3D
 
+var _last_bounds: AABB
+var _built := false
+
 func _ready() -> void:
 	rebuild()
 	State.cells_changed.connect(rebuild)
-	State.frame_changed.connect(rebuild)
 	State.document_changed.connect(rebuild)
 
 func rebuild() -> void:
+	var bounds := State.document.bounds()
+	if _built and bounds == _last_bounds:
+		return
+	_built = true
+	_last_bounds = bounds
 	for child in get_children():
 		remove_child(child)
 		child.queue_free()
 	
-	var bounds := State.document.bounds()
 	var cx := int(bounds.size.x) + 2
 	var cz := int(bounds.size.z) + 2
 	

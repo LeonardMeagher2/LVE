@@ -29,7 +29,7 @@ func _run() -> void:
 		var seen := {}
 		for i in 30:
 			await get_tree().process_frame
-			seen[_vp.frame_index] = true
+			seen[State.current_frame] = true
 		expect(seen.size() > 1, "the displayed frame changes while playing")
 		State.playback.set_playing(false)
 	)

@@ -3,7 +3,6 @@ extends Node3D
 
 signal zoom_changed(percent: float)
 signal grid_changed(visible: bool)
-signal frame_displayed(index: int)
 
 var _tool: VoxelTool
 var _tools := {}
@@ -13,13 +12,6 @@ var _tools := {}
 @onready var _voxels: VoxelRenderer = $Voxels
 @onready var _playback: PlaybackAnimator = $Playback
 @onready var _tool_layer: Node3D = $ToolLayer
-
-var frame := 0:
-	set(value):
-		frame = value
-		if State.document != null and value >= 0 and value < State.document.frames.size():
-			sync_to(value)
-			frame_displayed.emit(value)
 
 
 func _ready() -> void:
@@ -78,7 +70,6 @@ func play_preview() -> void:
 
 func stop_preview() -> void:
 	_playback.stop_preview()
-	frame = State.current_frame
 
 
 func is_playing() -> bool:
@@ -91,7 +82,7 @@ func pick_request(pos: Vector2) -> PickRequest:
 	var cam := camera_rig.camera()
 	if cam == null or d == null:
 		return req
-	var fi := clampi(frame, 0, d.frames.size() - 1)
+	var fi := clampi(State.current_frame, 0, d.frames.size() - 1)
 	req.origin = cam.project_ray_origin(pos)
 	req.dir = cam.project_ray_normal(pos)
 	req.cells = d.frames[fi].cells
