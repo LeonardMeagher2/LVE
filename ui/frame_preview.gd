@@ -17,21 +17,21 @@ func _render(frame: VoxelFrame, document: VoxiDocument) -> ImageTexture:
 	_fill_checkerboard(img)
 	if frame == null or frame.cells.is_empty():
 		return ImageTexture.create_from_image(img)
-	var lo := Vector3i.MAX
-	var hi := Vector3i.MIN
-	for c in frame.cells.keys():
-		lo = Vector3i(mini(lo.x, c.x), mini(lo.y, c.y), mini(lo.z, c.z))
-		hi = Vector3i(maxi(hi.x, c.x), maxi(hi.y, c.y), maxi(hi.z, c.z))
+	var bounds := document.bounds()
+	if not bounds.has_volume():
+		return ImageTexture.create_from_image(img)
+	var lo := Vector3i(bounds.position)
+	var hi := Vector3i(bounds.position + bounds.size) - Vector3i.ONE
 	var sx_min := float(lo.x - hi.z)
 	var sx_max := float(hi.x - lo.z)
 	var sy_min := (float(lo.x) + float(lo.z)) / 2.0 - float(hi.y)
 	var sy_max := (float(hi.x) + float(hi.z)) / 2.0 - float(lo.y)
-	var s := (float(SIZE) - 2.0 * PAD) / maxf(sx_max - sx_min, sy_max - sy_min)
+	var s := (float(SIZE) - 2.0 * PAD) / maxf(sx_max - sx_min + 2.0, sy_max - sy_min + 2.0)
 	var mid_x := (sx_min + sx_max) / 2.0
 	var mid_y := (sy_min + sy_max) / 2.0
 	var cells: Array = []
 	for c in frame.cells.keys():
-		var depth: float = c.x - c.y
+		var depth: float = c.x + c.y + c.z
 		cells.append([depth, c, document.color_of(int(frame.cells[c]))])
 	cells.sort_custom(func(a: Array, b: Array) -> bool: return a[0] < b[0])
 	var hw := s
@@ -46,9 +46,24 @@ func _render(frame: VoxelFrame, document: VoxiDocument) -> ImageTexture:
 
 
 func _draw_cube(img: Image, cx: float, cy: float, hw: float, hv: float, col: Color) -> void:
-	_fill_diamond(img, cx, cy, hw, hv, col)
-	_fill_diamond(img, cx, cy + hv, hw, hv, col.darkened(0.45))
-	_fill_diamond(img, cx + hw, cy + hv / 2.0, hw, hv, col.darkened(0.3))
+	_fill_poly(img, PackedVector2Array([
+		Vector2(cx, cy - hw),
+		Vector2(cx + hw, cy - hv),
+		Vector2(cx, cy),
+		Vector2(cx - hw, cy - hv),
+	]), col)
+	_fill_poly(img, PackedVector2Array([
+		Vector2(cx + hw, cy - hv),
+		Vector2(cx + hw, cy + hv),
+		Vector2(cx, cy + hw),
+		Vector2(cx, cy),
+	]), col.darkened(0.3))
+	_fill_poly(img, PackedVector2Array([
+		Vector2(cx - hw, cy - hv),
+		Vector2(cx - hw, cy + hv),
+		Vector2(cx, cy + hw),
+		Vector2(cx, cy),
+	]), col.darkened(0.45))
 
 
 func _fill_checkerboard(img: Image) -> void:
@@ -66,22 +81,27 @@ func _fill_checkerboard(img: Image) -> void:
 		y += step
 
 
-func _fill_diamond(img: Image, cx: float, cy: float, w: float, v: float, col: Color) -> void:
-	var i := int(floor(cy - v / 2.0))
-	while i <= int(ceil(cy + v / 2.0)) and i < SIZE:
-		if i < 0:
-			i += 1
+func _fill_poly(img: Image, pts: PackedVector2Array, col: Color) -> void:
+	var y_min := pts[0].y
+	var y_max := pts[0].y
+	for p in pts:
+		y_min = minf(y_min, p.y)
+		y_max = maxf(y_max, p.y)
+	for y in range(maxi(int(ceil(y_min)), 0), mini(int(floor(y_max)), SIZE - 1) + 1):
+		var x_l := INF
+		var x_r := -INF
+		for e in pts.size():
+			var a := pts[e]
+			var b := pts[(e + 1) % pts.size()]
+			if a.y == b.y:
+				continue
+			var t := (float(y) - a.y) / (b.y - a.y)
+			if t < 0.0 or t > 1.0:
+				continue
+			var x := a.x + t * (b.x - a.x)
+			x_l = minf(x_l, x)
+			x_r = maxf(x_r, x)
+		if x_r < x_l:
 			continue
-		var yy: float = float(i)
-		var half := w * (1.0 - absf(yy - cy) / v)
-		if half <= 0.0:
-			i += 1
-			continue
-		var x0 := int(ceil(cx - half))
-		var x1 := int(floor(cx + half))
-		if x1 < 0 or x0 >= SIZE:
-			i += 1
-			continue
-		for x in range(maxi(x0, 0), mini(x1, SIZE - 1) + 1):
-			img.set_pixel(x, i, col)
-		i += 1
+		for x in range(maxi(int(ceil(x_l)), 0), mini(int(floor(x_r)), SIZE - 1) + 1):
+			img.set_pixel(x, y, col)
