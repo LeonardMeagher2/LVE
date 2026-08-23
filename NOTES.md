@@ -27,6 +27,7 @@ This file records confirmed, non-obvious facts learned while working on Voxi. Re
 - 2026-08-20: `ResourceSaver` persists only `@export` properties. A plain `var` is dropped from the saved `.tres`. `VoxelFrame.cells` is now `@export`.
 - 2026-08-20: This Steam build writes `unique_id` on every node and resolves `parent=` as the full path from the scene root. Hand-editing a node with a short relative parent path breaks instantiation. The node and its subtree are skipped. Re-save the scene in the editor to regenerate the full path and `unique_id`.
 - 2026-08-21: An `AnimationPlayer` property track resolves its node path relative to `root_node`. A player nested under the node that owns the animated property needs `root_node = NodePath("../..")` to target it.
+- 2026-08-23: `OS.execute_with_pipe(path, arguments, false)` returns `{stdio, stderr, pid}`. A non-blocking `get_buffer` never stalls. It returns empty bytes when no data is ready. Unlike `create_process`, it captures output. Unlike `execute`, it returns a pid for `kill()`.
 
 ## Picking
 
@@ -57,3 +58,4 @@ This file records confirmed, non-obvious facts learned while working on Voxi. Re
 - 2026-08-19: Every behavior test loads `res://ui/main.tscn`, the full editor. Scene wiring errors surface in the suite.
 - 2026-08-21: GDScript lambdas capture local variables by value. A flag written inside a lambda is invisible outside. Share state through an array or a member variable.
 - 2026-08-21: A `Timer` node keeps running while a script is suspended on `await`. Connect its `timeout` signal to a fail handler to time out a test body with no polling.
+- 2026-08-23: A test scene whose script fails to parse loads no test logic. Nothing calls `quit()`, so the child hangs forever. The runner's outer 30 s timeout kills it.
