@@ -10,14 +10,18 @@ max_active: 1
 - [x] A selection is an edit mask. All tools edit only inside it.
   - [x] With no selection, the move tool moves all cells.
   - [x] The select tool click cancels an existing selection or makes a one-cell selection.
-  - [ ] Extend the mask to more tools as they are added
-- [ ] Brushing drawing plane should not depend on the starting location of the brush, but only on the view direction. This is to avoid having different voxel starting locations paint on different planes, it's confusing and not intuitive.
+- [x] Brushing drawing plane should not depend on the starting location of the brush, but only on the view direction. This is to avoid having different voxel starting locations paint on different planes, it's confusing and not intuitive.
+  - [x] The plane axis comes from the camera forward, not the per-pixel ray normal
+  - [x] The painted layer stays anchored to the clicked voxel
 
+# Export/Import
+- [ ] Save/load the current document to a json file, including all frames, tags, and palette
+- [ ] Export to GLB and OBJ formats
 
 # Palette
-- [ ] Drag to reorder palette swatches (add/remove are done)
+- [ ] Drag/Drop to reorder palette swatches (add/remove are done)
 - [ ] Preset palettes (load/save)
-- [ ] Default palette for new documents
+- [ ] Default palette for new documents (can set palette as the default any time)
 - [ ] Adding a color should be manual not automatic
 
 

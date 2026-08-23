@@ -45,6 +45,7 @@ This file records confirmed, non-obvious facts learned while working on Voxi. Re
 - Dynamic elements stay in code: frame strip buttons, palette swatches, tool strip buttons.
 - The Aseprite-style layout (left palette panel, right tool strip) lands in M4.
 - `main.gd` must construct no UI nodes except dynamic frame buttons and the FileDialog.
+- 2026-08-22: A unique name is scoped to the owner scene. A node with `unique_name_in_owner` in a subscene does not resolve from the parent scene root. Get the subscene instance root, then call `get_node("%Name")` on it.
 
 ## Workflow
 
