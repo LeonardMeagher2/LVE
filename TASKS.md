@@ -10,6 +10,7 @@ max_active: 1
 - [x] A selection is an edit mask. All tools edit only inside it.
   - [x] With no selection, the move tool moves all cells.
   - [x] The select tool click cancels an existing selection or makes a one-cell selection.
+  - [x] Pressing Delete erases the voxels inside the selection from any tool.
 - [x] Brushing drawing plane should not depend on the starting location of the brush, but only on the view direction. This is to avoid having different voxel starting locations paint on different planes, it's confusing and not intuitive.
   - [x] The plane axis comes from the camera forward, not the per-pixel ray normal
   - [x] The painted layer stays anchored to the clicked voxel
@@ -27,6 +28,16 @@ max_active: 1
 
 
 # Selection
+- [x] Box and lasso select every cell in the region, including empty space
+- [x] With a selection active, edits stay inside the selected cells
+- [x] Wand select selects all connected voxels of one color
+  - [x] Shift click adds a region to the selection
+  - [x] A click on empty space clears the selection
+- [x] Lasso select selects a freeform area on the press plane
+  - [x] The loop selects the cells inside it, including empty cells
+  - [x] Shift drag unions with the current selection
+  - [x] A click without a drag selects one cell or cancels the selection
+- [x] Selections render as continuous outline lines; edges buried or inside flat surfaces render none
 - [ ] Copy selection to clipboard
 - [ ] Paste selection at an offset
 - [ ] First mode: select a flat section on the press plane
