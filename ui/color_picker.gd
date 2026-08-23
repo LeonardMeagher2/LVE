@@ -18,9 +18,9 @@ var color: Color:
 var _color := Color.WHITE
 var _hue := 0.0
 
-@onready var _area: ColorArea = $Root/Row/Area
-@onready var _hue_strip: HueStrip = $Root/Row/HueStrip
-@onready var _hex: LineEdit = $Root/HexRow/Hex
+@onready var _area: ColorArea = %Area
+@onready var _hue_strip: HueStrip = %HueStrip
+@onready var _hex: LineEdit = %Hex
 
 
 func _ready() -> void:

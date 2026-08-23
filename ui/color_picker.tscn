@@ -4,52 +4,46 @@
 [ext_resource type="Script" uid="uid://ggiurxio1crv" path="res://ui/color_area.gd" id="2_area"]
 [ext_resource type="Script" uid="uid://671nura75ol6" path="res://ui/hue_strip.gd" id="3_hue"]
 
-[node name="ColorPicker" type="Control" unique_id=63286831]
-custom_minimum_size = Vector2(0, 172)
-layout_mode = 3
+[node name="ColorPicker" type="VBoxContainer" unique_id=493784648]
+custom_minimum_size = Vector2(0, 64)
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
+offset_left = -1.0
+offset_right = -1.0
 grow_horizontal = 2
 grow_vertical = 2
+alignment = 2
 script = ExtResource("1_picker")
 
-[node name="Root" type="VBoxContainer" parent="." unique_id=493784648]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-theme_override_constants/separation = 4
-
-[node name="Row" type="HBoxContainer" parent="Root" unique_id=422720869]
+[node name="Row" type="HBoxContainer" parent="." unique_id=422720869]
 layout_mode = 2
 size_flags_vertical = 3
-theme_override_constants/separation = 4
 
-[node name="Area" type="Control" parent="Root/Row" unique_id=739497547]
-custom_minimum_size = Vector2(120, 140)
+[node name="Area" type="Control" parent="Row" unique_id=1832267365]
+unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 script = ExtResource("2_area")
 
-[node name="HueStrip" type="Control" parent="Root/Row" unique_id=402245134]
-custom_minimum_size = Vector2(14, 140)
+[node name="HueStrip" type="Control" parent="Row" unique_id=402245134]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(16, 0)
 layout_mode = 2
 size_flags_vertical = 3
 script = ExtResource("3_hue")
 
-[node name="HexRow" type="HBoxContainer" parent="Root" unique_id=1444236832]
+[node name="HexRow" type="HBoxContainer" parent="." unique_id=1444236832]
 layout_mode = 2
-theme_override_constants/separation = 6
 
-[node name="HexLabel" type="Label" parent="Root/HexRow" unique_id=1776501970]
+[node name="HexLabel" type="Label" parent="HexRow" unique_id=1776501970]
 layout_mode = 2
 text = "Hex"
 
-[node name="Hex" type="LineEdit" parent="Root/HexRow" unique_id=1424438192]
+[node name="Hex" type="LineEdit" parent="HexRow" unique_id=1424438192]
+unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 placeholder_text = "#rrggbb"
+expand_to_text_length = true
