@@ -28,7 +28,7 @@ reflected_light_source = 1
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_grid"]
 depth_draw_mode = 2
 shading_mode = 0
-albedo_color = Color(0.07284262, 0.072842635, 0.072842605, 1)
+albedo_color = Color(0.65, 0.65, 0.65, 1)
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_j71j0"]
 shading_mode = 0
@@ -71,6 +71,7 @@ size = Vector2i(1280, 800)
 render_target_update_mode = 4
 
 [node name="Editor" type="Node3D" parent="Viewport" unique_id=1277093566]
+unique_name_in_owner = true
 script = ExtResource("1_viewport")
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="Viewport/Editor" unique_id=2001831858]
@@ -80,26 +81,32 @@ environment = SubResource("Environment_env")
 shadow_enabled = true
 
 [node name="CameraRig" type="Node3D" parent="Viewport/Editor" unique_id=106959201]
+unique_name_in_owner = true
 script = ExtResource("3_camera")
 
 [node name="Camera3D" type="Camera3D" parent="Viewport/Editor/CameraRig" unique_id=1978355787]
 fov = 45.0
 
 [node name="Grid" type="MeshInstance3D" parent="Viewport/Editor" unique_id=1052101138]
+unique_name_in_owner = true
 material_override = SubResource("StandardMaterial3D_grid")
 script = ExtResource("5_grid")
 
 [node name="ToolLayer" type="Node3D" parent="Viewport/Editor" unique_id=1331444033]
+unique_name_in_owner = true
 
 [node name="Selection" type="MeshInstance3D" parent="Viewport/Editor" unique_id=205454810]
+unique_name_in_owner = true
 material_override = SubResource("StandardMaterial3D_j71j0")
 script = ExtResource("6_selection")
 
 [node name="Playback" type="Node3D" parent="Viewport/Editor" unique_id=1964093937]
+unique_name_in_owner = true
 script = ExtResource("7_playback")
 
 [node name="AnimationPlayer" type="AnimationPlayer" parent="Viewport/Editor/Playback" unique_id=1219488223]
 
 [node name="Voxels" type="MultiMeshInstance3D" parent="Viewport/Editor" unique_id=1816863498]
+unique_name_in_owner = true
 multimesh = SubResource("MultiMesh_voxels")
 script = ExtResource("4_voxels")

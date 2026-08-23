@@ -4,7 +4,7 @@ extends SubViewportContainer
 signal zoom_changed(percent: float)
 signal grid_changed(visible: bool)
 
-@onready var _vp: EditorViewport = $Viewport/Editor
+@onready var _vp: EditorViewport = %Editor
 
 
 func _ready() -> void:
