@@ -4,6 +4,8 @@ extends PanelContainer
 signal frame_selected(index: int)
 signal delay_changed
 
+const HIGHLIGHT := preload("res://ui/frame_highlight.tres")
+
 var index := 0
 
 @onready var _preview: FramePreview = %Preview
@@ -32,10 +34,7 @@ func refresh(frame: VoxelFrame, document: VoxiDocument) -> void:
 func set_highlighted(selected: bool) -> void:
 	_preview.button_pressed = selected
 	if selected:
-		var sb := StyleBoxFlat.new()
-		sb.bg_color = Color(0.192, 0.318, 0.478)
-		sb.set_corner_radius_all(3)
-		add_theme_stylebox_override("normal", sb)
+		add_theme_stylebox_override("normal", HIGHLIGHT as StyleBoxFlat)
 	else:
 		remove_theme_stylebox_override("normal")
 	_delay.editable = selected

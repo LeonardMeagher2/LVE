@@ -239,19 +239,14 @@ func update_visual(pick: PickResult) -> void:
 
 
 func _build_visual() -> Node3D:
-	_hover_mat = StandardMaterial3D.new()
-	_hover_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	_hover_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	_hover_mat.albedo_color = Color(0.7, 0.7, 0.7, 0.4)
+	_hover_mat = load("res://viewport/hover_fill.tres") as StandardMaterial3D
 	var mesh := BoxMesh.new()
 	mesh.size = Vector3.ONE * 1.04
 	mesh.material = _hover_mat
 	var mi := MeshInstance3D.new()
 	mi.mesh = mesh
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	_outline_mat = StandardMaterial3D.new()
-	_outline_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	_outline_mat.albedo_color = State.current_color
+	_outline_mat = load("res://viewport/hover_line.tres") as StandardMaterial3D
 	var out := MeshInstance3D.new()
 	out.mesh = _outline_mesh()
 	out.material_override = _outline_mat

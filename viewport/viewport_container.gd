@@ -13,6 +13,7 @@ func _ready() -> void:
 
 func set_tool(t: ToolInfo) -> void:
 	_vp.set_tool(t)
+	mouse_default_cursor_shape = Control.CURSOR_CROSS if t.group == "select" else Control.CURSOR_ARROW
 
 
 func play_preview() -> void:

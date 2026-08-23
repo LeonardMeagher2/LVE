@@ -1,10 +1,9 @@
 class_name LassoSelectTool
-extends VoxelTool
+extends SelectionTool
 
 var _points: Array[Vector3i] = []
 var _press_target := State.NONE
 var _shift := false
-var _line_mat: StandardMaterial3D
 
 
 func handle_input(event: InputEvent, pos: Vector2) -> bool:
@@ -44,24 +43,39 @@ func handle_input(event: InputEvent, pos: Vector2) -> bool:
 				_last_target = pick.target
 				_update_line()
 			return true
+		if mm.button_mask == 0:
+			update_visual(_pick_start(origin, dir))
+			return true
 		return false
 	return false
 
 
 func _commit() -> void:
-	if _points.size() >= 3:
-		var region := VoxelSelection.new()
-		_fill_polygon(region)
-		if _shift:
-			State.selection.union(region)
-		else:
-			State.selection.cells = region.cells
+	if _points.size() >= 2:
+		State.selection.cells = _build_region().cells
 	elif not State.selection.is_empty():
 		State.selection.clear()
 	elif _press_target != State.NONE \
 			and State.document.has_cell(State.current_frame, _press_target):
 		State.selection.add(_press_target)
 	State.selection_changed.emit()
+
+
+func _build_region() -> VoxelSelection:
+	var region := VoxelSelection.new()
+	if _shift:
+		region.cells = State.selection.cells.duplicate()
+	for p in _points:
+		region.add(p)
+	if _points.size() >= 3:
+		_fill_polygon(region)
+	return region
+
+
+func _update_line() -> void:
+	if visual == null:
+		return
+	(visual as SelectionPreview).show_selection(_build_region())
 
 
 func _fill_polygon(sel: VoxelSelection) -> void:
@@ -111,46 +125,3 @@ func _unproject(q: Vector2i) -> Vector3i:
 		1:
 			return Vector3i(q.x, _plane.idx, q.y)
 	return Vector3i(q.x, q.y, _plane.idx)
-
-
-func _update_line() -> void:
-	if visual == null:
-		return
-	if _points.is_empty():
-		visual.visible = false
-		return
-	var off := _normal() * 0.55
-	var pts := PackedVector3Array()
-	for i in range(1, _points.size()):
-		pts.append(Vector3(_points[i - 1]) + off)
-		pts.append(Vector3(_points[i]) + off)
-	if _points.size() >= 3:
-		pts.append(Vector3(_points[_points.size() - 1]) + off)
-		pts.append(Vector3(_points[0]) + off)
-	if pts.is_empty():
-		visual.visible = false
-		return
-	var mesh := ArrayMesh.new()
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_LINES, MeshUtil.vertex_arrays(pts))
-	(visual as MeshInstance3D).mesh = mesh
-	visual.position = Vector3.ZERO
-	visual.visible = true
-
-
-func _normal() -> Vector3:
-	var n := Vector3.ZERO
-	n[_plane.axis] = 1.0
-	return n
-
-
-func _build_visual() -> Node3D:
-	_line_mat = StandardMaterial3D.new()
-	_line_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	_line_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	_line_mat.no_depth_test = true
-	_line_mat.albedo_color = Color(0.4, 0.7, 1.0, 0.9)
-	var mi := MeshInstance3D.new()
-	mi.mesh = ArrayMesh.new()
-	mi.material_override = _line_mat
-	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	return mi

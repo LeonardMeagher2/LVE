@@ -7,13 +7,18 @@ var _plane: StrokePlane
 var _seed := State.NONE
 var _near := State.NONE
 var _far := State.NONE
+var _du := Vector3i(1, 0, 0)
+var _dv := Vector3i(0, 0, 1)
+var _sweep_cells := {}
+var _sweep_last := State.NONE
+var _probe := State.NONE
 
 
 func _ready() -> void:
 	var scene: PackedScene = load("res://ui/main.tscn")
 	_inst = scene.instantiate()
 	get_tree().root.add_child.call_deferred(_inst)
-	test("the lasso selects the cells inside a freeform loop", _run)
+	test("the lasso selects swept tiles and fills the enclosed area", _run)
 
 
 func _run() -> void:
@@ -29,11 +34,17 @@ func _run() -> void:
 		var start := aim(_vp, _center)
 		_seed = start.target
 		_plane = start.plane
-		var along := Vector3i(1, 0, 0)
 		if _plane.axis == 0:
-			along = Vector3i(0, 1, 0)
-		_near = _seed + along
-		_far = _seed + along * 12
+			_du = Vector3i(0, 1, 0)
+			_dv = Vector3i(0, 0, 1)
+		elif _plane.axis == 2:
+			_du = Vector3i(1, 0, 0)
+			_dv = Vector3i(0, 1, 0)
+		else:
+			_du = Vector3i(1, 0, 0)
+			_dv = Vector3i(0, 0, 1)
+		_near = _seed + _du
+		_far = _seed + _du * 12
 		var gray := State.document.ensure_color(Color8(150, 150, 150))
 		var f: VoxelFrame = State.document.frames[State.current_frame]
 		f.cells[_seed] = gray
@@ -41,54 +52,97 @@ func _run() -> void:
 		f.cells[_far] = gray
 	)
 
-	step("When the user drags a square loop around the seeded voxel", func():
-		_loop([
-			_center + Vector2(-60.0, -60.0),
-			_center + Vector2(60.0, -60.0),
-			_center + Vector2(60.0, 60.0),
-			_center + Vector2(-60.0, 60.0),
-		])
+	step("When the user drags across five tiles from the seeded voxel", func():
+		var pts: Array[Vector2] = []
+		for i in 5:
+			pts.append(_screen_pos_of(_seed + _du * i))
+		var pr := aim(_vp, pts[0])
+		expect(pr.plane != null and pr.target != State.NONE, "the first tile resolves under the cursor")
+		_sweep_cells.clear()
+		_sweep_last = State.NONE
+		_expect_sweep(pr.target)
+		for i in range(1, pts.size()):
+			_expect_sweep(drag(_vp, pts[i], pr.plane).target)
+		_drag_through(pts)
 	)
 
-	step("Then the looped area is selected and the far voxel is not", func():
-		expect(not State.selection.is_empty(), "selection is not empty after a loop")
-		expect(State.selection.contains(_seed), "the seeded voxel is selected")
+	step("Then exactly the crossed tiles are selected", func():
+		var sel := State.selection
+		expect(sel.cells.size() == _sweep_cells.size(), "the selection holds the swept cells")
+		for c in _sweep_cells:
+			expect(sel.contains(c), "a swept tile is selected")
 		var has_air := false
-		for c in State.selection.to_array():
+		for c in sel.to_array():
 			if not State.document.frames[State.current_frame].cells.has(c):
 				has_air = true
 				break
-		expect(has_air, "the looped area includes empty cells")
-		expect(_on_layer(), "every selected cell lies on the pressed layer")
-		expect(not State.selection.contains(_far), "the far voxel is not selected")
+		expect(has_air, "a swept empty tile is selected")
+		expect(not sel.contains(_far), "the far voxel is not selected")
 	)
 
-	step("Given a shift drag around the far voxel", func():
-		var pos := _screen_pos_of(_far)
-		expect(pos != Vector2.INF, "the far voxel is visible on screen")
-		_loop([
-			pos + Vector2(-40.0, -40.0),
-			pos + Vector2(40.0, -40.0),
-			pos + Vector2(40.0, 40.0),
-			pos + Vector2(-40.0, 40.0),
-		], true)
+	step("When the user draws a square loop around an empty patch", func():
+		var hubc := _seed + _du * 6
+		_probe = hubc
+		var cs: Array[Vector3i] = [
+			hubc - _du * 3 - _dv * 3,
+			hubc + _du * 3 - _dv * 3,
+			hubc + _du * 3 + _dv * 3,
+			hubc - _du * 3 + _dv * 3,
+		]
+		var pts: Array[Vector2] = []
+		for c in cs:
+			pts.append(_screen_pos_of(c))
+		var pr := aim(_vp, pts[0])
+		_sweep_cells.clear()
+		_sweep_last = State.NONE
+		_expect_sweep(pr.target)
+		for i in range(1, pts.size()):
+			_expect_sweep(drag(_vp, pts[i], pr.plane).target)
+		_drag_through(pts)
 	)
 
-	step("Then the far voxel joins the selection", func():
-		expect(State.selection.contains(_far), "the far voxel is selected after the shift loop")
+	step("Then the loop fills its interior and replaces the old selection", func():
+		var sel := State.selection
+		expect(not _sweep_cells.has(_probe), "the enclosed tile was not swept by the loop")
+		expect(sel.contains(_probe), "the enclosed tile is selected without being swept")
+		for c in _sweep_cells:
+			expect(sel.contains(c), "a swept loop corner is selected")
+		expect(sel.cells.size() > _sweep_cells.size(), "the fill adds interior cells beyond the sweep")
+		expect(not sel.contains(_seed), "a plain drag replaces the previous selection")
+	)
+
+	step("Given a shift drag over the far voxel and beyond", func():
+		var pts: Array[Vector2] = [
+			_screen_pos_of(_far),
+			_screen_pos_of(_far + _du * 3),
+		]
+		var pr := aim(_vp, pts[0])
+		_sweep_cells.clear()
+		_sweep_last = State.NONE
+		_expect_sweep(pr.target)
+		for i in range(1, pts.size()):
+			_expect_sweep(drag(_vp, pts[i], pr.plane).target)
+		_drag_through(pts, true)
+	)
+
+	step("Then the far side joins the selection", func():
+		for c in _sweep_cells:
+			expect(State.selection.contains(c), "a shifted drag tile joins the selection")
+		expect(State.selection.contains(_probe), "the filled loop survives the shift drag")
 	)
 
 	step("When the user undoes", func():
 		State.undo_redo.undo()
 	)
 
-	step("Then the selection holds only the first loop again", func():
-		expect(not State.selection.contains(_far), "the far voxel left the selection after undo")
-		expect(State.selection.contains(_seed), "the first loop survives undo")
+	step("Then the selection holds only the filled loop again", func():
+		for c in _sweep_cells:
+			expect(not State.selection.contains(c), "the shifted tiles left the selection after undo")
+		expect(State.selection.contains(_probe), "the filled loop survives undo")
 	)
 
 	step("When the user clicks without dragging", func():
-		_click(_center)
+		_click(_screen_pos_of(_seed))
 	)
 
 	step("Then the click cancels the selection", func():
@@ -96,24 +150,35 @@ func _run() -> void:
 	)
 
 
-func _loop(corners: Array, with_shift := false) -> void:
+func _expect_sweep(c: Vector3i) -> void:
+	if c == State.NONE or c == _sweep_last:
+		return
+	_sweep_cells[c] = true
+	_sweep_last = c
+
+
+func _screen_pos_of(cell: Vector3i) -> Vector2:
+	var cam := _vp.camera_rig.camera()
+	return cam.unproject_position(Vector3(cell))
+
+
+func _drag_through(points: Array, with_shift := false) -> void:
 	var press := InputEventMouseButton.new()
 	press.button_index = MOUSE_BUTTON_LEFT
 	press.pressed = true
-	press.position = corners[0]
+	press.position = points[0]
 	press.shift_pressed = with_shift
 	_vp.get_viewport().push_input(press)
-	for i in range(1, corners.size()):
+	for i in range(1, points.size()):
 		var motion := InputEventMouseMotion.new()
-		motion.position = corners[i]
-		motion.relative = corners[i] - corners[i - 1]
+		motion.position = points[i]
+		motion.relative = points[i] - points[i - 1]
 		motion.button_mask = MOUSE_BUTTON_MASK_LEFT
 		motion.shift_pressed = with_shift
 		_vp.get_viewport().push_input(motion)
 	var release := InputEventMouseButton.new()
 	release.button_index = MOUSE_BUTTON_LEFT
-	release.pressed = false
-	release.position = corners[corners.size() - 1]
+	release.position = points[points.size() - 1]
 	_vp.get_viewport().push_input(release)
 
 
@@ -125,20 +190,3 @@ func _click(pos: Vector2) -> void:
 	_vp.get_viewport().push_input(press)
 	press.pressed = false
 	_vp.get_viewport().push_input(press)
-
-
-func _on_layer() -> bool:
-	for c in State.selection.to_array():
-		if c[_plane.axis] != _seed[_plane.axis]:
-			return false
-	return true
-
-
-func _screen_pos_of(cell: Vector3i) -> Vector2:
-	var svp := _vp.get_viewport()
-	for dy in range(0, int(svp.size.y), 10):
-		for dx in range(0, int(svp.size.x), 10):
-			var pos := Vector2(dx, dy)
-			if aim(_vp, pos).target == cell:
-				return pos
-	return Vector2.INF

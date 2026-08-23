@@ -3,6 +3,7 @@ max_active: 1
 ---
 
 # Tools
+- [ ] Add undo and redo buttons to the toolbar
 - [x] Fix the move tool
   - [x] Voxels move live during the drag, so the moved cells stay grabbable
   - [x] Displaced voxels are stored and restored on the next drag, so sweeping destroys nothing
@@ -33,11 +34,17 @@ max_active: 1
 - [x] Wand select selects all connected voxels of one color
   - [x] Shift click adds a region to the selection
   - [x] A click on empty space clears the selection
-- [x] Lasso select selects a freeform area on the press plane
-  - [x] The loop selects the cells inside it, including empty cells
+- [x] Lasso select takes the swept tiles plus the area the point loop encloses
+  - [x] The drag selects the crossed tiles, including empty cells
+  - [x] The loop also fills the cells inside it on the press plane
   - [x] Shift drag unions with the current selection
   - [x] A click without a drag selects one cell or cancels the selection
+  - [x] The whole growing selection stays visible during the drag
 - [x] Selections render as continuous outline lines; edges buried or inside flat surfaces render none
+- [ ] Selection modes in the tool option bar
+  - [ ] Replace mode makes each drag start a fresh selection
+  - [ ] Additive mode adds the drag result to the selection
+  - [ ] Subtractive mode takes the dragged cells out of the selection
 - [ ] Copy selection to clipboard
 - [ ] Paste selection at an offset
 - [ ] First mode: select a flat section on the press plane

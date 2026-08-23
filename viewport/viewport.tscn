@@ -7,6 +7,7 @@
 [ext_resource type="Script" uid="uid://d3i6vt2reee27" path="res://viewport/voxel_renderer.gd" id="4_voxels"]
 [ext_resource type="Script" uid="uid://c0xmjig8s4i0q" path="res://viewport/grid_renderer.gd" id="5_grid"]
 [ext_resource type="Script" uid="uid://ba28f277f4w0n" path="res://viewport/selection_overlay.gd" id="6_selection"]
+[ext_resource type="Material" path="res://viewport/selection_outline.tres" id="8_selmat"]
 [ext_resource type="Script" uid="uid://baghrya6g6rga" path="res://viewport/playback_animator.gd" id="7_playback"]
 
 [sub_resource type="PanoramaSkyMaterial" id="PanoramaSkyMaterial_ksrty"]
@@ -29,11 +30,6 @@ reflected_light_source = 1
 depth_draw_mode = 2
 shading_mode = 0
 albedo_color = Color(0.65, 0.65, 0.65, 1)
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_7nk2m"]
-depth_draw_mode = 2
-shading_mode = 0
-albedo_color = Color(0.4509804, 0.72156864, 1, 1)
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_voxels"]
 diffuse_mode = 1
@@ -98,7 +94,7 @@ unique_name_in_owner = true
 
 [node name="Selection" type="MeshInstance3D" parent="Viewport/Editor" unique_id=205454810]
 unique_name_in_owner = true
-material_override = SubResource("StandardMaterial3D_7nk2m")
+material_override = ExtResource("8_selmat")
 script = ExtResource("6_selection")
 
 [node name="Playback" type="Node3D" parent="Viewport/Editor" unique_id=1964093937]

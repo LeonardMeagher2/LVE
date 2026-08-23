@@ -1,10 +1,9 @@
 class_name SelectTool
-extends VoxelTool
+extends SelectionTool
 
 var _corner := State.NONE
 var _box_end := State.NONE
 var _shift := false
-var _rubber_mat: StandardMaterial3D
 
 
 func handle_input(event: InputEvent, pos: Vector2) -> bool:
@@ -66,17 +65,6 @@ func handle_input(event: InputEvent, pos: Vector2) -> bool:
 	return false
 
 
-func update_visual(pick: PickResult) -> void:
-	if visual == null:
-		return
-	if pick.target == State.NONE:
-		visual.visible = false
-		return
-	(visual as MeshInstance3D).mesh.size = Vector3.ONE * 1.04
-	visual.position = Vector3(pick.target)
-	visual.visible = true
-
-
 func _commit_box() -> void:
 	if _corner == State.NONE or _box_end == State.NONE:
 		return
@@ -95,24 +83,12 @@ func _update_rubber() -> void:
 	if _corner == State.NONE or _box_end == State.NONE:
 		visual.visible = false
 		return
-	var lo := Vector3i(mini(_corner.x, _box_end.x), mini(_corner.y, _box_end.y), mini(_corner.z, _box_end.z))
-	var hi := Vector3i(maxi(_corner.x, _box_end.x), maxi(_corner.y, _box_end.y), maxi(_corner.z, _box_end.z))
-	var size := Vector3(hi.x - lo.x + 1, hi.y - lo.y + 1, hi.z - lo.z + 1)
-	var center := Vector3(lo) + Vector3(hi - lo) * 0.5
-	(visual as MeshInstance3D).mesh.size = size + Vector3(0.04, 0.04, 0.04)
-	visual.position = center
-	visual.visible = true
-
-
-func _build_visual() -> Node3D:
-	_rubber_mat = StandardMaterial3D.new()
-	_rubber_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	_rubber_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	_rubber_mat.albedo_color = Color(0.4, 0.7, 1.0, 0.25)
-	var mesh := BoxMesh.new()
-	mesh.size = Vector3.ONE * 1.04
-	mesh.material = _rubber_mat
-	var mi := MeshInstance3D.new()
-	mi.mesh = mesh
-	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	return mi
+	var region := VoxelSelection.new()
+	if _shift:
+		region.cells = State.selection.cells.duplicate()
+		var drag := VoxelSelection.new()
+		drag.from_box(_corner, _box_end)
+		region.union(drag)
+	else:
+		region.from_box(_corner, _box_end)
+	(visual as SelectionPreview).show_selection(region)

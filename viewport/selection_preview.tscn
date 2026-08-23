@@ -1,0 +1,9 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://viewport/selection_preview.gd" id="1_script"]
+[ext_resource type="Material" path="res://viewport/selection_outline.tres" id="2_material"]
+
+[node name="SelectionPreview" type="MeshInstance3D"]
+material_override = ExtResource("2_material")
+cast_shadow = 0
+script = ExtResource("1_script")

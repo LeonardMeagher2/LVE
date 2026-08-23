@@ -12,10 +12,6 @@ func add(c: Vector3i) -> void:
 	cells[c] = true
 
 
-func remove(c: Vector3i) -> void:
-	cells.erase(c)
-
-
 func contains(c: Vector3i) -> bool:
 	return cells.has(c)
 

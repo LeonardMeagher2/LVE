@@ -1,6 +1,8 @@
 class_name PalettePanel
 extends VBoxContainer
 
+const SWATCH := preload("res://ui/swatch.tres")
+
 var _swatches: Array[Button] = []
 
 @onready var _swatch_grid: HFlowContainer = %SwatchGrid
@@ -34,9 +36,8 @@ func _rebuild_swatches() -> void:
 		b.custom_minimum_size = Vector2(36, 36)
 		b.focus_mode = Control.FOCUS_NONE
 		b.tooltip_text = State.document.color_of(i).to_html(true)
-		var sb := StyleBoxFlat.new()
+		var sb := (SWATCH as StyleBoxFlat).duplicate() as StyleBoxFlat
 		sb.bg_color = palette[i]
-		sb.set_corner_radius_all(3)
 		b.add_theme_stylebox_override("normal", sb)
 		b.add_theme_stylebox_override("hover", sb)
 		b.add_theme_stylebox_override("pressed", sb)
@@ -75,9 +76,8 @@ func _add_current_color() -> void:
 
 func _mark_current() -> void:
 	for i in _swatches.size():
-		var sb := StyleBoxFlat.new()
+		var sb := (SWATCH as StyleBoxFlat).duplicate() as StyleBoxFlat
 		sb.bg_color = State.document.color_of(i)
-		sb.set_corner_radius_all(3)
 		if State.document.color_of(i) == State.current_color:
 			sb.set_border_width_all(2)
 			sb.border_color = Color.WHITE

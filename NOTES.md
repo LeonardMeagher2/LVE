@@ -35,6 +35,7 @@ This file records confirmed, non-obvious facts learned while working on Voxi. Re
 - 2026-08-19: Aseprite source is proprietary (source-available, non-free). Do not copy it. The smooth-stroke technique is implemented from public descriptions.
 - 2026-08-19: The base tool interpolates the line between consecutive drag picks. `StrokeLine.cells` returns the connected 8-neighbor path, which always ends at the mouse cell. The stroke always paints the cell under the mouse; no filter may skip it.
 - 2026-08-19: Pixel-perfect drawing uses the public "waiting pixel" scheme. `PixelPerfectStroke` holds a `waiting` cell that neighbors the last drawn cell. When the cursor pulls more than one cell away, it draws the connected path from the waiting cell to the cursor, so the stroke never gaps. `State.pixel_perfect` toggles it; the tool flushes the waiting cell on mouse-up.
+- 2026-08-23: An unprojected cell center does not round back to that cell in `drag_pick`. Under an oblique view, the ray crosses the face plane up to half a cell away from the center. Tests must derive expected picks through the same pick functions.
 
 ## UI scene migration
 
@@ -59,3 +60,5 @@ This file records confirmed, non-obvious facts learned while working on Voxi. Re
 - 2026-08-21: GDScript lambdas capture local variables by value. A flag written inside a lambda is invisible outside. Share state through an array or a member variable.
 - 2026-08-21: A `Timer` node keeps running while a script is suspended on `await`. Connect its `timeout` signal to a fail handler to time out a test body with no polling.
 - 2026-08-23: A test scene whose script fails to parse loads no test logic. Nothing calls `quit()`, so the child hangs forever. The runner's outer 30 s timeout kills it.
+- 2026-08-23: To author a `.tres` by hand without enum mistakes, build the resource in a throwaway `-s` script and `ResourceSaver.save()` it. This build serializes `SHADING_MODE_UNSHADED` as `0`.
+- 2026-08-23: Input pushed into the editor SubViewport does not reach `_unhandled_key_input` on `main.gd`. Tests push action keys at `get_tree().root` instead.

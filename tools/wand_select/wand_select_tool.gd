@@ -1,5 +1,5 @@
 class_name WandSelectTool
-extends VoxelTool
+extends SelectionTool
 
 var _shift := false
 

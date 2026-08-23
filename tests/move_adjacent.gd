@@ -49,7 +49,7 @@ func _run() -> void:
 		expect(not frame.cells.has(_a), "first original cell is cleared")
 		expect(not frame.cells.has(_b), "second original cell is cleared")
 		expect(frame.cells.size() == 2, "two voxels remain")
-		expect(State.selection.size() == 2, "selection keeps two cells")
+		expect(State.selection.cells.size() == 2, "selection keeps two cells")
 	)
 
 	step("When the user clicks the selection without moving", func():
