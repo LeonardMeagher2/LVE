@@ -86,9 +86,14 @@ func expect(cond: bool, msg: String) -> void:
 	_checks.append(entry)
 
 
+func editor_viewport(inst: Node) -> EditorViewport:
+	var panel := inst.get_node("%ViewportContainer") as EditorViewportPanel
+	return panel.get_node("%Editor") as EditorViewport
+
+
 func aim(vp: EditorViewport, pos: Vector2) -> PickResult:
 	var req := vp.pick_request(pos)
-	return VoxelPicking.start_pick(req.origin, req.dir, req.cells)
+	return VoxelPicking.start_pick(req.origin, req.dir, req.cells, req.forward)
 
 
 func drag(vp: EditorViewport, pos: Vector2, plane: StrokePlane) -> PickResult:
