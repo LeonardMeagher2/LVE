@@ -33,14 +33,16 @@ func _init() -> void:
 
 func _ready() -> void:
 	cells_changed.connect(_stop_playback)
-	add_tool(load("res://tools/brush.tres"))
-	add_tool(load("res://tools/brush_paint.tres"))
+	add_tool(load("res://tools/pencil.tres"))
+	add_tool(load("res://tools/paint_brush.tres"))
+	add_tool(load("res://tools/eyedropper.tres"))
 	add_tool(load("res://tools/eraser.tres"))
 	add_tool(load("res://tools/fill.tres"))
-	add_tool(load("res://tools/pick.tres"))
 	add_tool(load("res://tools/select.tres"))
+	add_tool(load("res://tools/wand_select.tres"))
+	add_tool(load("res://tools/lasso.tres"))
 	add_tool(load("res://tools/move.tres"))
-	tool = tools["brush"]
+	tool = tools["pencil"]
 
 
 func add_tool(info: ToolInfo) -> void:
@@ -88,7 +90,44 @@ func set_pixel_perfect(v: bool) -> void:
 
 
 func can_edit(cell: Vector3i) -> bool:
-	return selection.is_empty() or selection.contains(cell)
+	if selection.is_empty():
+		return true
+	return selection.contains(cell)
+
+
+func erase_selection() -> void:
+	if selection.is_empty():
+		return
+	var i := current_frame
+	var removed := {}
+	var cells: Dictionary = document.frames[i].cells
+	for c in selection.cells:
+		if cells.has(c):
+			removed[c] = cells[c]
+			cells.erase(c)
+	if removed.is_empty():
+		return
+	cells_changed.emit()
+	undo_redo.create_action("Erase Selection")
+	undo_redo.add_undo_method(_restore_cells.bind(i, removed))
+	undo_redo.add_do_method(_erase_cells.bind(i, removed.keys()))
+	undo_redo.commit_action(false)
+
+
+func _restore_cells(i: int, cells: Dictionary) -> void:
+	if i < 0 or i >= document.frames.size():
+		return
+	for c in cells:
+		document.frames[i].cells[c] = cells[c]
+	cells_changed.emit()
+
+
+func _erase_cells(i: int, keys: Array) -> void:
+	if i < 0 or i >= document.frames.size():
+		return
+	for c in keys:
+		document.frames[i].cells.erase(c)
+	cells_changed.emit()
 
 
 func _stop_playback() -> void:

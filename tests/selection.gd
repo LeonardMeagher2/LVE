@@ -3,17 +3,18 @@ extends "res://tests/test.gd"
 var _inst: Node = null
 var _vp: EditorViewport
 var _center := Vector2.ZERO
+var _seed := State.NONE
 
 
 func _ready() -> void:
 	var scene: PackedScene = load("res://ui/main.tscn")
 	_inst = scene.instantiate()
 	get_tree().root.add_child.call_deferred(_inst)
-	test("can select a volume of voxels with a drag", _run)
+	test("a drag selects every cell inside the dragged box", _run)
 
 
 func _run() -> void:
-	step("Given the select tool on an empty grid", func():
+	step("Given the select tool and two voxels near the center", func():
 		_vp = editor_viewport(_inst)
 		State.set_tool(State.tools.select)
 		var svp := _vp.get_viewport()
@@ -22,6 +23,11 @@ func _run() -> void:
 			svp.size = Vector2i(800, 500)
 			vsize = svp.size
 		_center = Vector2(vsize.x * 0.5, vsize.y * 0.5)
+		_seed = aim(_vp, _center).target
+		var gray := State.document.ensure_color(Color8(150, 150, 150))
+		var f: VoxelFrame = State.document.frames[State.current_frame]
+		f.cells[_seed] = gray
+		f.cells[_seed + Vector3i(12, 0, 0)] = gray
 	)
 
 	step("When the user drags a box across the grid", func():
@@ -43,11 +49,16 @@ func _run() -> void:
 		_vp.get_viewport().push_input(release)
 	)
 
-	step("Then the dragged volume is selected", func():
+	step("Then every cell inside the box is selected", func():
 		expect(not State.selection.is_empty(), "selection is not empty")
-		var req := _vp.pick_request(_center)
-		var pressed := VoxelPicking.start_pick(req.origin, req.dir, req.cells, req.forward).target
-		expect(State.selection.contains(pressed), "the pressed cell is selected")
+		expect(State.selection.contains(_seed), "the pressed cell is selected")
+		expect(not State.selection.contains(_seed + Vector3i(12, 0, 0)), "the far voxel is not selected")
+		var has_air := false
+		for c in State.selection.to_array():
+			if not State.document.frames[State.current_frame].cells.has(c):
+				has_air = true
+				break
+		expect(has_air, "the selection includes empty cells")
 	)
 
 	step("When the user undoes the selection", func():

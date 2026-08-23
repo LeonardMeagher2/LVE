@@ -1,4 +1,4 @@
-class_name BrushTool
+class_name PencilTool
 extends VoxelTool
 
 
@@ -32,4 +32,4 @@ func apply(target: Vector3i, hit: Vector3i) -> bool:
 
 
 func _add_mode() -> bool:
-	return info.id == "brush"
+	return info.id == "pencil"

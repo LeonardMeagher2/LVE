@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bbysat5lrjhcc"
-path="res://.godot/imported/brush.svg-e1f8d049567c0794b330fc95267d7496.ctex"
+uid="uid://dnpfta4guqhvd"
+path="res://.godot/imported/wand.svg-ba2e0bd7e689f236eb4b084d6e0352b4.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://icons/brush.svg"
-dest_files=["res://.godot/imported/brush.svg-e1f8d049567c0794b330fc95267d7496.ctex"]
+source_file="res://icons/wand.svg"
+dest_files=["res://.godot/imported/wand.svg-ba2e0bd7e689f236eb4b084d6e0352b4.ctex"]
 
 [params]
 

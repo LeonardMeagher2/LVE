@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="ToolInfo" format=3 uid="uid://ch051213taweq"]
+
+[ext_resource type="Script" uid="uid://cjerda0p540dt" path="res://tools/tool_info.gd" id="1_script"]
+[ext_resource type="Texture2D" uid="uid://ca51e3tfobhyh" path="res://icons/lasso.svg" id="2_icon"]
+
+[resource]
+script = ExtResource("1_script")
+id = "lasso"
+display_name = "Lasso"
+icon = ExtResource("2_icon")
+tooltip = "Select a freeform area of voxels"
+group = "select"
+scene = "res://tools/lasso/lasso.tscn"

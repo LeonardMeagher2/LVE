@@ -1,5 +1,53 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#c8cacc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-  <path d="M16 3H5a2 2 0 0 0-2 2v2a2 2 0 0 0 2 2h11a2 2 0 0 1 2 2v1"/>
-  <path d="M21 9v2"/>
-  <rect x="16" y="14" width="4" height="7" rx="1"/>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   width="24"
+   height="24"
+   viewBox="0 0 24 24"
+   fill="none"
+   stroke="#c8cacc"
+   stroke-width="2"
+   stroke-linecap="round"
+   stroke-linejoin="round"
+   version="1.1"
+   id="svg5"
+   sodipodi:docname="paint.svg"
+   inkscape:version="1.4.3 (0d15f75, 2025-12-25)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs5" />
+  <sodipodi:namedview
+     id="namedview5"
+     pagecolor="#505050"
+     bordercolor="#eeeeee"
+     borderopacity="1"
+     inkscape:showpageshadow="0"
+     inkscape:pageopacity="0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#505050"
+     inkscape:zoom="48.625"
+     inkscape:cx="11.979434"
+     inkscape:cy="12"
+     inkscape:window-width="2544"
+     inkscape:window-height="1353"
+     inkscape:window-x="2648"
+     inkscape:window-y="71"
+     inkscape:window-maximized="0"
+     inkscape:current-layer="g5" />
+  <g
+     transform="rotate(45 12 12)"
+     id="g5">
+    <path
+       d="M12 1.5V8"
+       id="path1" />
+    <path
+       d="M9.75 8h4.5v2.5h-4.5Z"
+       id="path2" />
+    <path
+       d="m 9.75,10.5 -0.8036344,4.709821 c -0.1071451,0.42858 0.080359,0.64287 0.5625116,0.64287 l 4.9822458,0 c 0.482153,0 0.669656,-0.21429 0.562511,-0.64287 L 14.25,10.5 Z"
+       id="path3"
+       sodipodi:nodetypes="ccssccc" />
+  </g>
 </svg>

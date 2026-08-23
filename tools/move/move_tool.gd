@@ -68,9 +68,6 @@ func _on_key(event: InputEventKey) -> bool:
 		return true
 	if _stroke_active or _pending:
 		return true
-	if event.is_action_pressed("delete"):
-		_delete_selection()
-		return true
 	if event.is_action_pressed("ui_left"):
 		_nudge(Vector3i(-1, 0, 0))
 		return true
@@ -197,20 +194,6 @@ func _sync_selection() -> void:
 	for c in _cells:
 		State.selection.add(c + _offset)
 	State.selection_changed.emit()
-
-
-func _delete_selection() -> void:
-	if State.selection.is_empty():
-		return
-	begin_stroke()
-	var erased := false
-	for c in State.selection.cells:
-		if State.document.has_cell(State.current_frame, c):
-			State.document.erase(State.current_frame, c)
-			erased = true
-	if erased:
-		State.cells_changed.emit()
-	_end()
 
 
 func _clear_selection() -> void:

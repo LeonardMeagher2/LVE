@@ -30,9 +30,10 @@ depth_draw_mode = 2
 shading_mode = 0
 albedo_color = Color(0.65, 0.65, 0.65, 1)
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_j71j0"]
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_7nk2m"]
+depth_draw_mode = 2
 shading_mode = 0
-albedo_color = Color(0, 0.8784314, 1, 1)
+albedo_color = Color(0.4509804, 0.72156864, 1, 1)
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_voxels"]
 diffuse_mode = 1
@@ -97,7 +98,7 @@ unique_name_in_owner = true
 
 [node name="Selection" type="MeshInstance3D" parent="Viewport/Editor" unique_id=205454810]
 unique_name_in_owner = true
-material_override = SubResource("StandardMaterial3D_j71j0")
+material_override = SubResource("StandardMaterial3D_7nk2m")
 script = ExtResource("6_selection")
 
 [node name="Playback" type="Node3D" parent="Viewport/Editor" unique_id=1964093937]

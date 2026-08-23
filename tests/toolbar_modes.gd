@@ -14,7 +14,7 @@ func _ready() -> void:
 
 func _run() -> void:
 	step("Given the toolbar with a brush menu button", func():
-		_toolbar = _inst.get_node("%RightStrip")
+		_toolbar = _inst.get_node("%ToolStrip")
 		_brush_button = _toolbar.get_child(0)
 		expect(_brush_button is MenuButton, "the brush tool is a menu button")
 	)
@@ -22,7 +22,7 @@ func _run() -> void:
 	step("Then its popup lists the brush modes", func():
 		var popup := _brush_button.get_popup()
 		expect(popup.item_count == 2, "the menu lists both brush modes")
-		expect(popup.get_item_text(0) == "Brush", "first mode is Brush")
+		expect(popup.get_item_text(0) == "Pencil", "first mode is Pencil")
 		expect(popup.get_item_text(1) == "Paint", "second mode is Paint")
 	)
 
@@ -31,6 +31,6 @@ func _run() -> void:
 	)
 
 	step("Then the paint mode is active and the button shows it", func():
-		expect(State.tool == State.tools.brush_paint, "the paint mode tool is active")
-		expect(_brush_button.icon == State.tools.brush_paint.icon, "the button shows the active mode icon")
+		expect(State.tool == State.tools.paint_brush, "the paint mode tool is active")
+		expect(_brush_button.icon == State.tools.paint_brush.icon, "the button shows the active mode icon")
 	)

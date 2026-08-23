@@ -22,7 +22,7 @@ func _run() -> void:
 		container.stretch = false
 		svp.size = Vector2i(800, 500)
 		_center = Vector2(400.0, 250.0)
-		State.set_tool(State.tools.brush)
+		State.set_tool(State.tools.pencil)
 		State.current_color = Color8(200, 60, 60)
 		_anchor = aim(_vp, _center).target
 		State.document.frames[0].cells[_anchor] = State.document.ensure_color(Color8(150, 150, 150))
@@ -46,7 +46,7 @@ func _run() -> void:
 	)
 
 	step("When the user switches to paint mode and clicks the front voxel", func():
-		State.set_tool(State.tools.brush_paint)
+		State.set_tool(State.tools.paint_brush)
 		var click := InputEventMouseButton.new()
 		click.button_index = MOUSE_BUTTON_LEFT
 		click.pressed = true

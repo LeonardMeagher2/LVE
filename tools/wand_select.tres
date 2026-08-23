@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="ToolInfo" format=3 uid="uid://cguh2je3df5uk"]
+
+[ext_resource type="Script" uid="uid://cjerda0p540dt" path="res://tools/tool_info.gd" id="1_script"]
+[ext_resource type="Texture2D" uid="uid://dnpfta4guqhvd" path="res://icons/wand.svg" id="2_icon"]
+
+[resource]
+script = ExtResource("1_script")
+id = "wand"
+display_name = "Wand"
+icon = ExtResource("2_icon")
+tooltip = "Select connected voxels of a color"
+group = "select"
+scene = "res://tools/wand_select/wand_select.tscn"

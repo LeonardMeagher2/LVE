@@ -3,17 +3,18 @@ extends "res://tests/test.gd"
 var _inst: Node = null
 var _vp: EditorViewport
 var _center := Vector2.ZERO
+var _cell := State.NONE
 
 
 func _ready() -> void:
 	var scene: PackedScene = load("res://ui/main.tscn")
 	_inst = scene.instantiate()
 	get_tree().root.add_child.call_deferred(_inst)
-	test("a click selects one cell or cancels an existing selection", _run)
+	test("a click on a voxel selects it and a click on empty space cancels", _run)
 
 
 func _run() -> void:
-	step("Given the select tool on an empty grid", func():
+	step("Given the select tool and one voxel at the center", func():
 		_vp = editor_viewport(_inst)
 		State.set_tool(State.tools.select)
 		var svp := _vp.get_viewport()
@@ -22,42 +23,53 @@ func _run() -> void:
 			svp.size = Vector2i(800, 500)
 			vsize = svp.size
 		_center = Vector2(vsize.x * 0.5, vsize.y * 0.5)
+		_cell = aim(_vp, _center).target
+		var f: VoxelFrame = State.document.frames[State.current_frame]
+		f.cells[_cell] = State.document.ensure_color(Color8(150, 150, 150))
 	)
 
-	step("When the user clicks without dragging", func():
-		_click()
+	step("When the user clicks the voxel", func():
+		_click(_center)
 	)
 
-	step("Then a one-cell selection exists", func():
-		expect(not State.selection.is_empty(), "selection is not empty")
-		var req := _vp.pick_request(_center)
-		var cell := VoxelPicking.start_pick(req.origin, req.dir, req.cells, req.forward).target
+	step("Then the clicked voxel is selected", func():
 		expect(State.selection.cells.size() == 1, "selection holds one cell")
-		expect(State.selection.contains(cell), "the clicked cell is selected")
+		expect(State.selection.contains(_cell), "the clicked cell is selected")
 	)
 
-	step("When the user clicks again without dragging", func():
-		_click()
+	step("When the user clicks the voxel again", func():
+		_click(_center)
+	)
+
+	step("Then the selection stays on that voxel", func():
+		expect(State.selection.contains(_cell), "the clicked cell stays selected")
+	)
+
+	step("When the user clicks empty space", func():
+		var empty := _empty_screen_pos()
+		expect(empty != Vector2.INF, "an empty screen position exists")
+		_click(empty)
 	)
 
 	step("Then the selection is canceled", func():
 		expect(State.selection.is_empty(), "selection is empty")
 	)
 
-	step("When the user clicks yet again", func():
-		_click()
-	)
 
-	step("Then a one-cell selection exists again", func():
-		expect(State.selection.cells.size() == 1, "selection holds one cell")
-	)
-
-
-func _click() -> void:
+func _click(pos: Vector2) -> void:
 	var press := InputEventMouseButton.new()
 	press.button_index = MOUSE_BUTTON_LEFT
 	press.pressed = true
-	press.position = _center
+	press.position = pos
 	_vp.get_viewport().push_input(press)
 	press.pressed = false
 	_vp.get_viewport().push_input(press)
+
+
+func _empty_screen_pos() -> Vector2:
+	var svp := _vp.get_viewport()
+	for dy in range(int(svp.size.y) - 20, 0, -40):
+		for dx in range(20, int(svp.size.x), 40):
+			if aim(_vp, Vector2(dx, dy)).hit == State.NONE:
+				return Vector2(dx, dy)
+	return Vector2.INF

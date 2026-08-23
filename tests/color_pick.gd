@@ -9,22 +9,22 @@ func _ready() -> void:
 	var scene: PackedScene = load("res://ui/main.tscn")
 	_inst = scene.instantiate()
 	get_tree().root.add_child.call_deferred(_inst)
-	test("the brush paints with the color picked in the toolbar", _run)
+	test("the pencil paints with the color picked in the toolbar", _run)
 
 
 func _run() -> void:
-	step("Given a brush and an empty grid", func():
+	step("Given a pencil and an empty grid", func():
 		_vp = editor_viewport(_inst)
 		var svp := _vp.get_viewport()
 		var container := svp.get_parent()
 		container.stretch = false
 		svp.size = Vector2i(800, 500)
 		_center = Vector2(400.0, 250.0)
-		State.set_tool(State.tools.brush)
+		State.set_tool(State.tools.pencil)
 	)
 
 	step("When the user picks a color in the toolbar", func():
-		var picker := _inst.get_node("%LeftPane").get_node("%ColorPicker") as CompactColorPicker
+		var picker := _inst.get_node("%PalettePanel").get_node("%ColorPicker") as ColorPicker
 		picker.color = Color8(200, 60, 60)
 		picker.color_changed.emit(picker.color)
 	)

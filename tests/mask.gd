@@ -29,7 +29,7 @@ func _run() -> void:
 		_outside = drag(_vp, _center + Vector2(0.0, 60.0), _plane).target
 		State.selection.from_box(_inside - Vector3i(2, 2, 2), _inside + Vector3i(2, 2, 2))
 		State.selection_changed.emit()
-		State.set_tool(State.tools.brush)
+		State.set_tool(State.tools.pencil)
 		State.current_color = Color8(200, 60, 60)
 	)
 
@@ -48,7 +48,7 @@ func _run() -> void:
 		State.document.frames[0].cells.clear()
 		State.document.frames[0].cells[_inside] = State.document.ensure_color(Color8(150, 150, 150))
 		State.document.frames[0].cells[_outside] = State.document.ensure_color(Color8(150, 150, 150))
-		State.set_tool(State.tools.brush_paint)
+		State.set_tool(State.tools.paint_brush)
 		State.current_color = Color8(200, 60, 60)
 	)
 
@@ -104,7 +104,7 @@ func _run() -> void:
 		State.selection.clear()
 		State.selection_changed.emit()
 		State.document.frames[0].cells.clear()
-		State.set_tool(State.tools.brush)
+		State.set_tool(State.tools.pencil)
 		_click(_center + Vector2(0.0, 60.0))
 	)
 

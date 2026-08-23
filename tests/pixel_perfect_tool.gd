@@ -23,7 +23,7 @@ func _run() -> void:
 		container.stretch = false
 		svp.size = Vector2i(800, 500)
 		_center = Vector2(400.0, 250.0)
-		State.set_tool(State.tools.brush)
+		State.set_tool(State.tools.pencil)
 	)
 
 	step("When the user draws a slow stroke", func():

@@ -28,14 +28,14 @@
      inkscape:pagecheckerboard="0"
      inkscape:deskcolor="#505050"
      inkscape:zoom="48.625"
-     inkscape:cx="11.989717"
-     inkscape:cy="12"
+     inkscape:cx="11.979434"
+     inkscape:cy="16.915167"
      inkscape:window-width="2560"
      inkscape:window-height="1369"
      inkscape:window-x="2552"
      inkscape:window-y="33"
      inkscape:window-maximized="1"
-     inkscape:current-layer="g4" />
+     inkscape:current-layer="g5" />
   <g
      transform="rotate(45 12 12)"
      id="g4">
@@ -45,11 +45,13 @@
       <circle
          cx="12"
          cy="8.3227625"
-         r="3"
-         id="circle1" />
+         r="2.490202"
+         id="circle1"
+         style="stroke-width:1.66013" />
       <path
-         d="m 9.8,11.622763 h 4.4"
-         id="path1" />
+         d="M 9.2865925,11.622763 H 14.713408"
+         id="path1"
+         style="stroke-width:2.46673" />
       <path
          d="m 10.5,12.522763 v 6.2 l 1.5,2.6 1.5,-2.6 v -6.2"
          id="path2" />

@@ -52,8 +52,8 @@ func _ready() -> void:
 func _unhandled_key_input(event: InputEvent) -> void:
 	if not event is InputEventKey or not event.pressed or event.echo:
 		return
-	if event.is_action_pressed("tool_brush"):
-		State.set_tool(State.tools.brush)
+	if event.is_action_pressed("tool_pencil"):
+		State.set_tool(State.tools.pencil)
 	elif event.is_action_pressed("tool_eraser"):
 		State.set_tool(State.tools.eraser)
 	elif event.is_action_pressed("tool_fill"):
@@ -66,6 +66,9 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		State.undo_redo.redo()
 	elif event.is_action_pressed("play_pause"):
 		_toggle_play()
+	elif event.is_action_pressed("delete"):
+		if not Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
+			State.erase_selection()
 
 
 func _on_tool_changed(_t: ToolInfo) -> void:

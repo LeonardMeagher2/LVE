@@ -86,6 +86,7 @@ unique_name_in_owner = true
 layout_mode = 2
 
 [node name="ToolStrip" parent="Content/Root/Body/Panel/MarginContainer/VBoxContainer/HBoxContainer" unique_id=1524503512 instance=ExtResource("8_tool")]
+unique_name_in_owner = true
 layout_mode = 2
 
 [node name="Panel" type="PanelContainer" parent="Content/Root" unique_id=2057888906]

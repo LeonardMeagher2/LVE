@@ -57,4 +57,7 @@ func _press_action(action: String) -> void:
 		"delete":
 			key.physical_keycode = KEY_DELETE
 	key.pressed = true
-	_vp.get_viewport().push_input(key)
+	if action == "delete":
+		get_tree().root.push_input(key)
+	else:
+		_vp.get_viewport().push_input(key)

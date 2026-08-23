@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="ToolInfo" format=3 uid="uid://dugt36130n71m"]
+
+[ext_resource type="Texture2D" uid="uid://ejqpo0v0d1op" path="res://icons/pencil.svg" id="1_qceig"]
+[ext_resource type="Script" uid="uid://cjerda0p540dt" path="res://tools/tool_info.gd" id="2_qb7oy"]
+
+[resource]
+script = ExtResource("2_qb7oy")
+id = "pencil"
+display_name = "Pencil"
+icon = ExtResource("1_qceig")
+tooltip = "Add voxels"
+group = "brush"
+scene = "res://tools/brush/brush.tscn"

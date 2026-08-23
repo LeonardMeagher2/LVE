@@ -29,12 +29,9 @@ func handle_input(event: InputEvent, pos: Vector2) -> bool:
 		else:
 			if _stroke_active:
 				_stroke_active = false
-				if _box_end == _corner:
-					if not State.selection.is_empty():
-						State.selection.clear()
-						State.selection_changed.emit()
-					else:
-						_commit_box()
+				if _box_end == _corner and not State.document.has_cell(State.current_frame, _corner):
+					State.selection.clear()
+					State.selection_changed.emit()
 				else:
 					_commit_box()
 				hide_visual()
@@ -83,12 +80,12 @@ func update_visual(pick: PickResult) -> void:
 func _commit_box() -> void:
 	if _corner == State.NONE or _box_end == State.NONE:
 		return
+	var box := VoxelSelection.new()
+	box.from_box(_corner, _box_end)
 	if _shift:
-		var box := VoxelSelection.new()
-		box.from_box(_corner, _box_end)
 		State.selection.union(box)
 	else:
-		State.selection.from_box(_corner, _box_end)
+		State.selection.cells = box.cells
 	State.selection_changed.emit()
 
 
