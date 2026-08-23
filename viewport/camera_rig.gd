@@ -70,8 +70,8 @@ func zoom_percent() -> float:
 
 
 func set_zoom_percent(percent: float) -> void:
-	var p := clampf(percent, 25.0, 400.0)
-	_dist = clampf(_init_dist / (p / 100.0), 4.0, 240.0)
+	var p := percent
+	_dist = clampf(_init_dist / (p / 100.0), 4.0, 1280.0)
 	_update_camera()
 	zoom_changed.emit(zoom_percent())
 
@@ -117,7 +117,7 @@ func _pan(rel: Vector2) -> void:
 
 
 func _zoom(factor: float) -> void:
-	_dist = clampf(_dist * factor, 4.0, 240.0)
+	_dist = clamp(_dist * factor, 6.0, 1280.0)
 	_update_camera()
 	zoom_changed.emit(_init_dist / _dist * 100.0)
 
