@@ -17,6 +17,7 @@ max_active: 1
 # Export/Import
 - [ ] Save/load the current document to a json file, including all frames, tags, and palette
 - [ ] Export to GLB and OBJ formats
+- [ ] Import image files as a voxel grid (png, jpg, bmp, aseprite)
 
 # Palette
 - [ ] Drag/Drop to reorder palette swatches (add/remove are done)
