@@ -1,12 +1,12 @@
 [gd_scene format=3 uid="uid://nxatttjs7q35"]
 
 [ext_resource type="Script" uid="uid://b0gaxrb8bjobo" path="res://ui/main.gd" id="1_main"]
-[ext_resource type="PackedScene" path="res://ui/menu_bar.tscn" id="2_menu"]
+[ext_resource type="PackedScene" uid="uid://cxl7nkbr4j8gv" path="res://ui/menu_bar.tscn" id="2_menu"]
 [ext_resource type="PackedScene" uid="uid://cym1t8k348a6p" path="res://viewport/viewport.tscn" id="3_viewport"]
 [ext_resource type="PackedScene" uid="uid://8g827rqodt23" path="res://ui/bottom_dock.tscn" id="4_frame"]
-[ext_resource type="PackedScene" path="res://ui/status_bar.tscn" id="5_status"]
+[ext_resource type="PackedScene" uid="uid://dnkuglr7qodru" path="res://ui/status_bar.tscn" id="5_status"]
 [ext_resource type="Theme" uid="uid://cfbvk6vpaexfm" path="res://ui/theme.tres" id="6_theme"]
-[ext_resource type="PackedScene" path="res://ui/palette_panel.tscn" id="7_palette"]
+[ext_resource type="PackedScene" uid="uid://ma4yjkaq0642" path="res://ui/palette_panel.tscn" id="7_palette"]
 [ext_resource type="PackedScene" uid="uid://bc1dlgo13vjjv" path="res://ui/tool_strip.tscn" id="8_tool"]
 [ext_resource type="PackedScene" path="res://ui/option_bar.tscn" id="9_option"]
 [ext_resource type="PackedScene" uid="uid://dud067lsqpagv" path="res://ui/control_bar.tscn" id="10_control"]
@@ -18,6 +18,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+theme = ExtResource("6_theme")
 script = ExtResource("1_main")
 
 [node name="Content" type="MarginContainer" parent="." unique_id=1928070199]
@@ -27,58 +28,76 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-theme = ExtResource("6_theme")
-theme_override_constants/margin_left = 8
-theme_override_constants/margin_top = 8
-theme_override_constants/margin_right = 8
-theme_override_constants/margin_bottom = 8
 
 [node name="Root" type="VBoxContainer" parent="Content" unique_id=1369002049]
 layout_mode = 2
-theme_override_constants/separation = 4
 
 [node name="MenuBar" parent="Content/Root" unique_id=873351853 instance=ExtResource("2_menu")]
 unique_name_in_owner = true
+layout_mode = 2
 
-[node name="Body" type="HBoxContainer" parent="Content/Root" unique_id=209754651]
+[node name="Body" type="HBoxContainer" parent="Content/Root" unique_id=251716774]
 layout_mode = 2
 size_flags_vertical = 3
-theme_override_constants/separation = 4
 
-[node name="LeftPane" parent="Content/Root/Body" unique_id=1147462058 instance=ExtResource("7_palette")]
+[node name="PalettePanel" parent="Content/Root/Body" unique_id=1147462058 instance=ExtResource("7_palette")]
+unique_name_in_owner = true
+layout_mode = 2
 
-[node name="VBoxContainer" type="VBoxContainer" parent="Content/Root/Body" unique_id=2015353210]
+[node name="Panel" type="PanelContainer" parent="Content/Root/Body" unique_id=904995900]
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="OptionBar" parent="Content/Root/Body/VBoxContainer" unique_id=1775805641 instance=ExtResource("9_option")]
+[node name="MarginContainer" type="MarginContainer" parent="Content/Root/Body/Panel" unique_id=950009543]
+layout_mode = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="Content/Root/Body/Panel/MarginContainer" unique_id=2015353210]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="OptionBar" parent="Content/Root/Body/Panel/MarginContainer/VBoxContainer" unique_id=1775805641 instance=ExtResource("9_option")]
 unique_name_in_owner = true
 
-[node name="HBoxContainer" type="HBoxContainer" parent="Content/Root/Body/VBoxContainer" unique_id=716075585]
+[node name="HBoxContainer" type="HBoxContainer" parent="Content/Root/Body/Panel/MarginContainer/VBoxContainer" unique_id=716075585]
 layout_mode = 2
 size_flags_vertical = 3
 
-[node name="CenterPane" type="VBoxContainer" parent="Content/Root/Body/VBoxContainer/HBoxContainer" unique_id=825903145]
+[node name="CenterPane" type="VBoxContainer" parent="Content/Root/Body/Panel/MarginContainer/VBoxContainer/HBoxContainer" unique_id=825903145]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
-theme_override_constants/separation = 4
 
-[node name="ViewportContainer" parent="Content/Root/Body/VBoxContainer/HBoxContainer/CenterPane" unique_id=236441930 instance=ExtResource("3_viewport")]
+[node name="PanelContainer" type="PanelContainer" parent="Content/Root/Body/Panel/MarginContainer/VBoxContainer/HBoxContainer/CenterPane" unique_id=1946917598]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="ViewportContainer" parent="Content/Root/Body/Panel/MarginContainer/VBoxContainer/HBoxContainer/CenterPane/PanelContainer" unique_id=236441930 instance=ExtResource("3_viewport")]
 unique_name_in_owner = true
 layout_mode = 2
 
-[node name="ControlBar" parent="Content/Root/Body/VBoxContainer/HBoxContainer/CenterPane" unique_id=1397268665 instance=ExtResource("10_control")]
+[node name="PanelContainer2" type="PanelContainer" parent="Content/Root/Body/Panel/MarginContainer/VBoxContainer/HBoxContainer/CenterPane" unique_id=918189440]
+layout_mode = 2
+
+[node name="MarginContainer" type="MarginContainer" parent="Content/Root/Body/Panel/MarginContainer/VBoxContainer/HBoxContainer/CenterPane/PanelContainer2" unique_id=192467937]
+layout_mode = 2
+
+[node name="ControlBar" parent="Content/Root/Body/Panel/MarginContainer/VBoxContainer/HBoxContainer/CenterPane/PanelContainer2/MarginContainer" unique_id=1397268665 instance=ExtResource("10_control")]
 unique_name_in_owner = true
 layout_mode = 2
 
-[node name="RightStrip" parent="Content/Root/Body/VBoxContainer/HBoxContainer" unique_id=1524503512 instance=ExtResource("8_tool")]
-unique_name_in_owner = true
+[node name="ToolStrip" parent="Content/Root/Body/Panel/MarginContainer/VBoxContainer/HBoxContainer" unique_id=1524503512 instance=ExtResource("8_tool")]
 layout_mode = 2
 
-[node name="BottomDock" parent="Content/Root" unique_id=1466148729 instance=ExtResource("4_frame")]
+[node name="Panel" type="PanelContainer" parent="Content/Root" unique_id=2057888906]
+layout_mode = 2
+
+[node name="MarginContainer" type="MarginContainer" parent="Content/Root/Panel" unique_id=911138036]
+layout_mode = 2
+
+[node name="BottomDock" parent="Content/Root/Panel/MarginContainer" unique_id=1466148729 instance=ExtResource("4_frame")]
 unique_name_in_owner = true
 layout_mode = 2
 
 [node name="StatusBar" parent="Content/Root" unique_id=597734069 instance=ExtResource("5_status")]
 unique_name_in_owner = true
+layout_mode = 2

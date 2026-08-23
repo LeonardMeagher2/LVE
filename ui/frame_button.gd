@@ -1,5 +1,5 @@
 class_name EditorFrameButton
-extends VBoxContainer
+extends PanelContainer
 
 signal frame_selected(index: int)
 signal delay_changed
@@ -8,21 +8,20 @@ var index := 0
 
 @onready var _preview: FramePreview = %Preview
 @onready var _number: Label = %Number
-@onready var _delay: LineEdit = %Delay
+@onready var _delay: SpinBox = %Delay
 
 
 func _ready() -> void:
 	_preview.toggle_mode = true
 	_preview.pressed.connect(_emit_selected)
-	_delay.text_submitted.connect(_on_delay_submitted)
+	_delay.value_changed.connect(_on_delay_submitted)
 
 
 func setup(i: int, frame: VoxelFrame, document: VoxiDocument, group: ButtonGroup) -> void:
 	index = i
 	_preview.button_group = group
 	_number.text = str(i + 1)
-	_delay.placeholder_text = "ms"
-	_delay.text = str(frame.delay_ms)
+	_delay.value = frame.delay_ms
 	refresh(frame, document)
 
 
@@ -46,11 +45,7 @@ func _emit_selected() -> void:
 	frame_selected.emit(index)
 
 
-func _on_delay_submitted(text: String) -> void:
-	var v := text.strip_edges().to_int()
-	if v < 1:
-		_delay.text = str(State.document.frames[index].delay_ms)
-		return
-	State.document.frames[index].delay_ms = clampi(v, 1, 10000)
-	_delay.text = str(State.document.frames[index].delay_ms)
+func _on_delay_submitted(value: float) -> void:
+	var v := int(value)
+	State.document.frames[index].delay_ms = v
 	delay_changed.emit()

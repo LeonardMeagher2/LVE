@@ -12,7 +12,7 @@ var _syncing := false
 
 func set_zoom(percent: float) -> void:
 	_syncing = true
-	_slider.value = clampf(percent, _slider.min_value, _slider.max_value)
+	_slider.value = percent
 	_syncing = false
 
 

@@ -1,29 +1,66 @@
-[gd_scene format=3]
+[gd_scene format=3 uid="uid://ma4yjkaq0642"]
 
-[ext_resource type="Script" path="res://ui/palette_panel.gd" id="1_palette"]
-[ext_resource type="PackedScene" path="res://ui/color_picker.tscn" id="2_picker"]
+[ext_resource type="Script" uid="uid://ctcol2rq44oi1" path="res://ui/palette_panel.gd" id="1_palette"]
+[ext_resource type="Script" uid="uid://cs8h0occl2amh" path="res://ui/color_picker_button.gd" id="2_8seap"]
 
-[node name="PalettePanel" type="VBoxContainer"]
-custom_minimum_size = Vector2(280, 0)
-layout_mode = 2
-theme_override_constants/separation = 4
+[node name="PalettePanel" type="VBoxContainer" unique_id=920144879]
+custom_maximum_size = Vector2(512, -1)
+offset_right = 298.0
+offset_bottom = 416.0
 script = ExtResource("1_palette")
 
-[node name="Scroll" type="ScrollContainer" parent="."]
+[node name="PanelContainer" type="PanelContainer" parent="." unique_id=1050465130]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="MarginContainer" type="MarginContainer" parent="PanelContainer" unique_id=1799631802]
+layout_mode = 2
+
+[node name="Scroll" type="ScrollContainer" parent="PanelContainer/MarginContainer" unique_id=1639396238]
+unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
+horizontal_scroll_mode = 0
 
-[node name="SwatchGrid" type="GridContainer" parent="Scroll"]
+[node name="SwatchGrid" type="HFlowContainer" parent="PanelContainer/MarginContainer/Scroll" unique_id=401515849]
+unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
-columns = 8
+size_flags_vertical = 3
 theme_override_constants/h_separation = 3
 theme_override_constants/v_separation = 3
 
-[node name="ColorPicker" parent="." instance=ExtResource("2_picker")]
+[node name="PanelContainer2" type="PanelContainer" parent="." unique_id=2057680092]
+layout_mode = 2
+
+[node name="MarginContainer" type="MarginContainer" parent="PanelContainer2" unique_id=2091320002]
+layout_mode = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="PanelContainer2/MarginContainer" unique_id=546437550]
+layout_mode = 2
+
+[node name="ColorPicker" type="ColorPicker" parent="PanelContainer2/MarginContainer/VBoxContainer" unique_id=1113828305]
+unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 3
-mouse_filter = 2
+alignment = 1
+edit_alpha = false
+edit_intensity = false
+can_add_swatches = false
+sampler_visible = false
+color_modes_visible = false
+sliders_visible = false
+hex_visible = false
+presets_visible = false
 
-[connection signal="color_changed" from="ColorPicker" to="." method="_on_picker_color_changed"]
+[node name="ColorPickerButton" type="ColorPickerButton" parent="PanelContainer2/MarginContainer/VBoxContainer" unique_id=1988355421]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 24)
+layout_mode = 2
+edit_alpha = false
+edit_intensity = false
+script = ExtResource("2_8seap")
+
+[connection signal="color_changed" from="PanelContainer2/MarginContainer/VBoxContainer/ColorPicker" to="." method="_on_picker_color_changed"]
+[connection signal="color_changed" from="PanelContainer2/MarginContainer/VBoxContainer/ColorPickerButton" to="." method="_on_picker_color_changed"]

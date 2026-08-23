@@ -21,16 +21,15 @@ grow_vertical = 2
 theme_override_constants/separation = 4
 script = ExtResource("1_dock")
 
-[node name="HBoxContainer2" type="HBoxContainer" parent="." unique_id=1744826518]
+[node name="HBoxContainer" type="HBoxContainer" parent="." unique_id=1744826518]
 layout_mode = 2
 theme_override_constants/separation = 16
 
-[node name="PlaybackRow" type="HBoxContainer" parent="HBoxContainer2" unique_id=1867073933]
+[node name="PlaybackRow" type="HBoxContainer" parent="HBoxContainer" unique_id=1867073933]
 custom_minimum_size = Vector2(0, 30)
 layout_mode = 2
-theme_override_constants/separation = 4
 
-[node name="ToStart" type="Button" parent="HBoxContainer2/PlaybackRow" unique_id=1508834326]
+[node name="ToStart" type="Button" parent="HBoxContainer/PlaybackRow" unique_id=1508834326]
 custom_minimum_size = Vector2(40, 28)
 layout_mode = 2
 tooltip_text = "Step to start"
@@ -38,7 +37,7 @@ focus_mode = 0
 icon = ExtResource("3_to_start")
 icon_alignment = 1
 
-[node name="Prev" type="Button" parent="HBoxContainer2/PlaybackRow" unique_id=1849203195]
+[node name="Prev" type="Button" parent="HBoxContainer/PlaybackRow" unique_id=1849203195]
 custom_minimum_size = Vector2(40, 28)
 layout_mode = 2
 tooltip_text = "Step back"
@@ -46,16 +45,17 @@ focus_mode = 0
 icon = ExtResource("4_back")
 icon_alignment = 1
 
-[node name="Play" type="Button" parent="HBoxContainer2/PlaybackRow" unique_id=1338261472]
+[node name="Play" type="Button" parent="HBoxContainer/PlaybackRow" unique_id=1338261472]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(40, 28)
 layout_mode = 2
 tooltip_text = "Play"
 focus_mode = 0
+toggle_mode = true
 icon = ExtResource("5_play")
 icon_alignment = 1
 
-[node name="Next" type="Button" parent="HBoxContainer2/PlaybackRow" unique_id=1342544756]
+[node name="Next" type="Button" parent="HBoxContainer/PlaybackRow" unique_id=1342544756]
 custom_minimum_size = Vector2(40, 28)
 layout_mode = 2
 tooltip_text = "Step forward"
@@ -63,7 +63,7 @@ focus_mode = 0
 icon = ExtResource("6_fwd")
 icon_alignment = 1
 
-[node name="ToEnd" type="Button" parent="HBoxContainer2/PlaybackRow" unique_id=1180906050]
+[node name="ToEnd" type="Button" parent="HBoxContainer/PlaybackRow" unique_id=1180906050]
 custom_minimum_size = Vector2(40, 28)
 layout_mode = 2
 tooltip_text = "Step to end"
@@ -71,11 +71,11 @@ focus_mode = 0
 icon = ExtResource("7_end")
 icon_alignment = 1
 
-[node name="FrameRow" type="HBoxContainer" parent="HBoxContainer2" unique_id=1181380925]
+[node name="FrameRow" type="HBoxContainer" parent="HBoxContainer" unique_id=1181380925]
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="Add" type="Button" parent="HBoxContainer2/FrameRow" unique_id=290217125]
+[node name="Add" type="Button" parent="HBoxContainer/FrameRow" unique_id=290217125]
 custom_minimum_size = Vector2(40, 30)
 layout_mode = 2
 size_flags_vertical = 4
@@ -84,7 +84,7 @@ focus_mode = 0
 icon = ExtResource("8_add")
 icon_alignment = 1
 
-[node name="Dup" type="Button" parent="HBoxContainer2/FrameRow" unique_id=825756284]
+[node name="Dup" type="Button" parent="HBoxContainer/FrameRow" unique_id=825756284]
 custom_minimum_size = Vector2(40, 30)
 layout_mode = 2
 size_flags_vertical = 4
@@ -93,7 +93,7 @@ focus_mode = 0
 icon = ExtResource("9_dup")
 icon_alignment = 1
 
-[node name="Del" type="Button" parent="HBoxContainer2/FrameRow" unique_id=2010203312]
+[node name="Del" type="Button" parent="HBoxContainer/FrameRow" unique_id=2010203312]
 custom_minimum_size = Vector2(40, 30)
 layout_mode = 2
 size_flags_vertical = 4
@@ -102,32 +102,31 @@ focus_mode = 0
 icon = ExtResource("10_del")
 icon_alignment = 1
 
-[node name="FrameRow" type="HBoxContainer" parent="." unique_id=1879118177]
-layout_mode = 2
-size_flags_vertical = 3
-theme_override_constants/separation = 4
-
-[node name="FrameScroll" type="ScrollContainer" parent="FrameRow" unique_id=1670401868]
+[node name="ScrollContainer" type="ScrollContainer" parent="." unique_id=1670401868]
 layout_mode = 2
 size_flags_horizontal = 3
-size_flags_stretch_ratio = 2.0
+size_flags_vertical = 3
+follow_focus = true
 vertical_scroll_mode = 0
 
-[node name="FrameStrip" type="HBoxContainer" parent="FrameRow/FrameScroll" unique_id=471556670]
+[node name="MarginContainer" type="MarginContainer" parent="ScrollContainer" unique_id=992536577]
+layout_mode = 2
+
+[node name="FrameStrip" type="HBoxContainer" parent="ScrollContainer/MarginContainer" unique_id=471556670]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 script = ExtResource("2_strip")
 
-[node name="Frame" parent="FrameRow/FrameScroll/FrameStrip" unique_id=1469478484 instance=ExtResource("8_iw04i")]
+[node name="Frame" parent="ScrollContainer/MarginContainer/FrameStrip" unique_id=1469478484 instance=ExtResource("8_iw04i")]
 layout_mode = 2
 
-[connection signal="pressed" from="HBoxContainer2/PlaybackRow/ToStart" to="." method="_on_to_start_pressed"]
-[connection signal="pressed" from="HBoxContainer2/PlaybackRow/Prev" to="." method="_on_prev_pressed"]
-[connection signal="pressed" from="HBoxContainer2/PlaybackRow/Play" to="." method="_on_play_pressed"]
-[connection signal="pressed" from="HBoxContainer2/PlaybackRow/Next" to="." method="_on_next_pressed"]
-[connection signal="pressed" from="HBoxContainer2/PlaybackRow/ToEnd" to="." method="_on_to_end_pressed"]
-[connection signal="pressed" from="HBoxContainer2/FrameRow/Add" to="." method="_on_frame_add"]
-[connection signal="pressed" from="HBoxContainer2/FrameRow/Dup" to="." method="_on_frame_dup"]
-[connection signal="pressed" from="HBoxContainer2/FrameRow/Del" to="." method="_on_frame_del"]
+[connection signal="pressed" from="HBoxContainer/PlaybackRow/ToStart" to="." method="_on_to_start_pressed"]
+[connection signal="pressed" from="HBoxContainer/PlaybackRow/Prev" to="." method="_on_prev_pressed"]
+[connection signal="pressed" from="HBoxContainer/PlaybackRow/Play" to="." method="_on_play_pressed"]
+[connection signal="pressed" from="HBoxContainer/PlaybackRow/Next" to="." method="_on_next_pressed"]
+[connection signal="pressed" from="HBoxContainer/PlaybackRow/ToEnd" to="." method="_on_to_end_pressed"]
+[connection signal="pressed" from="HBoxContainer/FrameRow/Add" to="." method="_on_frame_add"]
+[connection signal="pressed" from="HBoxContainer/FrameRow/Dup" to="." method="_on_frame_dup"]
+[connection signal="pressed" from="HBoxContainer/FrameRow/Del" to="." method="_on_frame_del"]

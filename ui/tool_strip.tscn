@@ -7,7 +7,6 @@
 
 [node name="ToolStrip" type="VBoxContainer" unique_id=979547223]
 custom_minimum_size = Vector2(40, 0)
-theme_override_constants/separation = 4
 script = ExtResource("1_tool")
 
 [node name="Button" type="Button" parent="." unique_id=1413762539]
