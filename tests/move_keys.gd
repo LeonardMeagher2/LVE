@@ -15,7 +15,7 @@ func _ready() -> void:
 
 func _run() -> void:
 	step("Given a selected voxel and the move tool", func():
-		_vp = _inst.get_node("Content/Root/Body/CenterPane/ViewportContainer/Viewport/Editor")
+		_vp = editor_viewport(_inst)
 		var svp := _vp.get_viewport()
 		var container := svp.get_parent()
 		container.stretch = false

@@ -7,14 +7,14 @@ func _pick_start(origin: Vector3, dir: Vector3) -> PickResult:
 	if not _add_mode() or pick.add_target == State.NONE:
 		return pick
 	pick.target = pick.add_target
-	pick.plane = VoxelPicking.view_plane(pick.target, origin, dir)
+	pick.plane = VoxelPicking.view_plane(pick.target, origin, _forward())
 	return pick
 
 
 func pick_drag(request: PickRequest) -> PickResult:
 	if _add_mode():
 		return super.pick_drag(request)
-	return VoxelPicking.start_pick(request.origin, request.dir, request.cells)
+	return VoxelPicking.start_pick(request.origin, request.dir, request.cells, request.forward)
 
 
 func apply(target: Vector3i, hit: Vector3i) -> bool:

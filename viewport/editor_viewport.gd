@@ -7,11 +7,11 @@ signal grid_changed(visible: bool)
 var _tool: VoxelTool
 var _tools := {}
 
-@onready var camera_rig: EditorCameraRig = $CameraRig
-@onready var _grid: GridRenderer = $Grid
-@onready var _voxels: VoxelRenderer = $Voxels
-@onready var _playback: PlaybackAnimator = $Playback
-@onready var _tool_layer: Node3D = $ToolLayer
+@onready var camera_rig: EditorCameraRig = %CameraRig
+@onready var _grid: GridRenderer = %Grid
+@onready var _voxels: VoxelRenderer = %Voxels
+@onready var _playback: PlaybackAnimator = %Playback
+@onready var _tool_layer: Node3D = %ToolLayer
 
 
 func _ready() -> void:
@@ -86,4 +86,5 @@ func pick_request(pos: Vector2) -> PickRequest:
 	req.origin = cam.project_ray_origin(pos)
 	req.dir = cam.project_ray_normal(pos)
 	req.cells = d.frames[fi].cells
+	req.forward = -cam.basis.z
 	return req

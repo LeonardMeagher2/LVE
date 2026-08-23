@@ -2,35 +2,32 @@ extends "res://tests/test.gd"
 
 var _inst: Node = null
 var _toolbar: EditorToolStrip
-var _brush_button: Button
+var _brush_button: MenuButton
 
 
 func _ready() -> void:
 	var scene: PackedScene = load("res://ui/main.tscn")
 	_inst = scene.instantiate()
 	get_tree().root.add_child.call_deferred(_inst)
-	test("a long press on a tool button opens its mode menu", _run)
+	test("the brush button lists its modes and switches tools", _run)
 
 
 func _run() -> void:
-	step("Given the toolbar with a brush button", func():
-		_toolbar = _inst.get_node("Content/Root/Body/RightStrip")
-		_brush_button = _toolbar._tool_buttons[0]
-		expect(_toolbar._tool_buttons.size() == 6, "the toolbar shows one button per tool")
+	step("Given the toolbar with a brush menu button", func():
+		_toolbar = _inst.get_node("%RightStrip")
+		_brush_button = _toolbar.get_child(0)
+		expect(_brush_button is MenuButton, "the brush tool is a menu button")
 	)
 
-	step("When the user holds the brush button for half a second", func():
-		_brush_button.button_down.emit()
-	)
-	await get_tree().create_timer(0.7).timeout
-
-	step("Then a menu lists the brush modes", func():
-		expect(_toolbar._menu.visible, "the mode menu opens")
-		expect(_toolbar._menu.item_count == 2, "the menu lists both brush modes")
+	step("Then its popup lists the brush modes", func():
+		var popup := _brush_button.get_popup()
+		expect(popup.item_count == 2, "the menu lists both brush modes")
+		expect(popup.get_item_text(0) == "Brush", "first mode is Brush")
+		expect(popup.get_item_text(1) == "Paint", "second mode is Paint")
 	)
 
 	step("When the user selects the paint mode", func():
-		_toolbar._menu.id_pressed.emit(1)
+		_brush_button.get_popup().index_pressed.emit(1)
 	)
 
 	step("Then the paint mode is active and the button shows it", func():

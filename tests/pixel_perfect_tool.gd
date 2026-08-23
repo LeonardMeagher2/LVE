@@ -17,7 +17,7 @@ func _run() -> void:
 	step("Given a brush with pixel perfect enabled", func():
 		State.current_color = Color8(200, 60, 60)
 		State.pixel_perfect = true
-		_vp = _inst.get_node("Content/Root/Body/CenterPane/ViewportContainer/Viewport/Editor")
+		_vp = editor_viewport(_inst)
 		var svp := _vp.get_viewport()
 		var container := svp.get_parent()
 		container.stretch = false
@@ -46,7 +46,7 @@ func _run() -> void:
 		release.position = pos
 		_vp.get_viewport().push_input(release)
 		var req_end := _vp.pick_request(pos)
-		_mouse_end = VoxelPicking.start_pick(req_end.origin, req_end.dir, req_end.cells).target
+		_mouse_end = VoxelPicking.start_pick(req_end.origin, req_end.dir, req_end.cells, req_end.forward).target
 	)
 
 	step("Then the stroke is connected and the cursor cell is painted", func():

@@ -16,7 +16,7 @@ func _ready() -> void:
 func _run() -> void:
 	step("Given an editor with a red brush and a voxel viewport", func():
 		State.current_color = Color8(200, 60, 60)
-		_vp = _inst.get_node("Content/Root/Body/CenterPane/ViewportContainer/Viewport/Editor")
+		_vp = editor_viewport(_inst)
 		var svp := _vp.get_viewport()
 		var vsize: Vector2i = svp.size
 		if vsize.x <= 0 or vsize.y <= 0:
@@ -27,7 +27,7 @@ func _run() -> void:
 
 	step("When the user clicks the center of the viewport", func():
 		var req := _vp.pick_request(_center)
-		_pick_target = VoxelPicking.start_pick(req.origin, req.dir, req.cells).target
+		_pick_target = VoxelPicking.start_pick(req.origin, req.dir, req.cells, req.forward).target
 		var click := InputEventMouseButton.new()
 		click.button_index = MOUSE_BUTTON_LEFT
 		click.pressed = true

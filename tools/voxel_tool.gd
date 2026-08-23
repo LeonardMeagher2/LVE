@@ -41,6 +41,13 @@ func _ray(pos: Vector2) -> Array:
 	return [cam.project_ray_origin(pos), cam.project_ray_normal(pos)]
 
 
+func _forward() -> Vector3:
+	var cam := get_viewport().get_camera_3d()
+	if cam == null:
+		return Vector3.BACK
+	return -cam.basis.z
+
+
 func _accepts(event: InputEvent) -> bool:
 	return event is InputEventMouseButton or event is InputEventMouseMotion or event is InputEventKey
 
@@ -202,11 +209,12 @@ func _request(origin: Vector3, dir: Vector3, plane: StrokePlane) -> PickRequest:
 	req.dir = dir
 	req.cells = State.document.frames[State.current_frame].cells
 	req.plane = plane
+	req.forward = _forward()
 	return req
 
 
 func pick_start(request: PickRequest) -> PickResult:
-	return VoxelPicking.start_pick(request.origin, request.dir, request.cells)
+	return VoxelPicking.start_pick(request.origin, request.dir, request.cells, request.forward)
 
 
 func pick_drag(request: PickRequest) -> PickResult:

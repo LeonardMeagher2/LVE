@@ -14,7 +14,7 @@ func _ready() -> void:
 
 func _run() -> void:
 	step("Given the select tool on an empty grid", func():
-		_vp = _inst.get_node("Content/Root/Body/CenterPane/ViewportContainer/Viewport/Editor")
+		_vp = editor_viewport(_inst)
 		State.set_tool(State.tools.select)
 		var svp := _vp.get_viewport()
 		var vsize: Vector2i = svp.size
@@ -46,7 +46,7 @@ func _run() -> void:
 	step("Then the dragged volume is selected", func():
 		expect(not State.selection.is_empty(), "selection is not empty")
 		var req := _vp.pick_request(_center)
-		var pressed := VoxelPicking.start_pick(req.origin, req.dir, req.cells).target
+		var pressed := VoxelPicking.start_pick(req.origin, req.dir, req.cells, req.forward).target
 		expect(State.selection.contains(pressed), "the pressed cell is selected")
 	)
 

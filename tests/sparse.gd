@@ -14,7 +14,7 @@ func _ready() -> void:
 
 func _run() -> void:
 	step("Given an empty editor", func():
-		_vp = _inst.get_node("Content/Root/Body/CenterPane/ViewportContainer/Viewport/Editor")
+		_vp = editor_viewport(_inst)
 	)
 
 	step("When the user paints a cell beyond the original 16x16 extent", func():
@@ -40,7 +40,7 @@ func _run() -> void:
 	)
 
 	step("When the user aims at the floor past the original grid", func():
-		_far_pick = VoxelPicking.ground_pick(Vector3(30, 10, 30), Vector3(0, -1, 0)).target
+		_far_pick = VoxelPicking.ground_pick(Vector3(30, 10, 30), Vector3(0, -1, 0), Vector3(0, -1, 0)).target
 	)
 
 	step("Then the pick lands on the far floor cell", func():

@@ -13,7 +13,7 @@ func _ready() -> void:
 
 func _run() -> void:
 	step("Given the editor is open", func():
-		_file_menu = _inst.get_node("Content/Root/MenuBar/File")
+		_file_menu = _inst.get_node("%MenuBar").get_node("%File")
 	)
 
 	step("Then the File menu lists New, Open, Save, Save As, and Quit", func():

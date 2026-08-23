@@ -2,14 +2,14 @@ class_name VoxelPicking
 extends RefCounted
 
 
-static func start_pick(origin: Vector3, dir: Vector3, cells: Dictionary) -> PickResult:
+static func start_pick(origin: Vector3, dir: Vector3, cells: Dictionary, forward: Vector3) -> PickResult:
 	var res := ray_voxel(origin, dir, cells)
 	if res.hit != State.NONE:
 		res.target = res.hit
 		res.add_target = res.hit + res.entry
-		res.plane = view_plane(res.target, origin, dir)
+		res.plane = view_plane(res.target, origin, forward)
 		return res
-	return ground_pick(origin, dir)
+	return ground_pick(origin, dir, forward)
 
 
 static func drag_pick(origin: Vector3, dir: Vector3, cells: Dictionary, plane: StrokePlane) -> PickResult:
@@ -28,8 +28,8 @@ static func drag_pick(origin: Vector3, dir: Vector3, cells: Dictionary, plane: S
 	return res
 
 
-static func view_plane(target: Vector3i, origin: Vector3, dir: Vector3) -> StrokePlane:
-	var f: Vector3 = -dir
+static func view_plane(target: Vector3i, origin: Vector3, forward: Vector3) -> StrokePlane:
+	var f: Vector3 = -forward
 	var axis := 0
 	if absf(f.y) >= absf(f.x) and absf(f.y) >= absf(f.z):
 		axis = 1
@@ -93,7 +93,7 @@ static func ray_voxel(origin: Vector3, dir: Vector3, cells: Dictionary) -> PickR
 	return res
 
 
-static func ground_pick(origin: Vector3, dir: Vector3) -> PickResult:
+static func ground_pick(origin: Vector3, dir: Vector3, forward: Vector3) -> PickResult:
 	if dir.y >= -1e-8:
 		return PickResult.new()
 	var t: float = (-0.5 - origin.y) / dir.y
@@ -104,5 +104,5 @@ static func ground_pick(origin: Vector3, dir: Vector3) -> PickResult:
 	var res := PickResult.new()
 	res.target = c
 	res.add_target = c
-	res.plane = view_plane(c, origin, dir)
+	res.plane = view_plane(c, origin, forward)
 	return res

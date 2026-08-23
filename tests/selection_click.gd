@@ -14,7 +14,7 @@ func _ready() -> void:
 
 func _run() -> void:
 	step("Given the select tool on an empty grid", func():
-		_vp = _inst.get_node("Content/Root/Body/CenterPane/ViewportContainer/Viewport/Editor")
+		_vp = editor_viewport(_inst)
 		State.set_tool(State.tools.select)
 		var svp := _vp.get_viewport()
 		var vsize: Vector2i = svp.size
@@ -31,7 +31,7 @@ func _run() -> void:
 	step("Then a one-cell selection exists", func():
 		expect(not State.selection.is_empty(), "selection is not empty")
 		var req := _vp.pick_request(_center)
-		var cell := VoxelPicking.start_pick(req.origin, req.dir, req.cells).target
+		var cell := VoxelPicking.start_pick(req.origin, req.dir, req.cells, req.forward).target
 		expect(State.selection.cells.size() == 1, "selection holds one cell")
 		expect(State.selection.contains(cell), "the clicked cell is selected")
 	)

@@ -17,7 +17,7 @@ func _ready() -> void:
 
 func _run() -> void:
 	step("Given an editor with a voxel viewport", func():
-		_vp = _inst.get_node("Content/Root/Body/CenterPane/ViewportContainer/Viewport/Editor")
+		_vp = editor_viewport(_inst)
 		var svp := _vp.get_viewport()
 		var vsize: Vector2i = svp.size
 		if vsize.x <= 0 or vsize.y <= 0:

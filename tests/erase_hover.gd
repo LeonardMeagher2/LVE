@@ -14,7 +14,7 @@ func _ready() -> void:
 
 func _run() -> void:
 	step("Given an eraser on an empty grid", func():
-		_vp = _inst.get_node("Content/Root/Body/CenterPane/ViewportContainer/Viewport/Editor")
+		_vp = editor_viewport(_inst)
 		var svp := _vp.get_viewport()
 		var container := svp.get_parent()
 		container.stretch = false
@@ -33,7 +33,7 @@ func _run() -> void:
 	step("Then the highlight is visible at the cursor cell", func():
 		var v: Node3D = _vp._tool.visual
 		var req := _vp.pick_request(_center)
-		var target := VoxelPicking.start_pick(req.origin, req.dir, req.cells).target
+		var target := VoxelPicking.start_pick(req.origin, req.dir, req.cells, req.forward).target
 		expect(v.visible, "the highlight is visible")
 		expect(v.position == Vector3(target), "the highlight is at the cursor cell")
 	)

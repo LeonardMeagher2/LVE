@@ -16,7 +16,7 @@ func _ready() -> void:
 func _run() -> void:
 	step("Given a red brush on an empty grid", func():
 		State.current_color = Color8(200, 60, 60)
-		_vp = _inst.get_node("Content/Root/Body/CenterPane/ViewportContainer/Viewport/Editor")
+		_vp = editor_viewport(_inst)
 		var svp := _vp.get_viewport()
 		var container := svp.get_parent()
 		container.stretch = false
@@ -26,7 +26,7 @@ func _run() -> void:
 
 	step("When the user presses and drags the viewport", func():
 		var req := _vp.pick_request(_center)
-		_pressed = VoxelPicking.start_pick(req.origin, req.dir, req.cells).target
+		_pressed = VoxelPicking.start_pick(req.origin, req.dir, req.cells, req.forward).target
 		var press := InputEventMouseButton.new()
 		press.button_index = MOUSE_BUTTON_LEFT
 		press.pressed = true

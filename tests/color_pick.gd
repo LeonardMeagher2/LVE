@@ -14,7 +14,7 @@ func _ready() -> void:
 
 func _run() -> void:
 	step("Given a brush and an empty grid", func():
-		_vp = _inst.get_node("Content/Root/Body/CenterPane/ViewportContainer/Viewport/Editor")
+		_vp = editor_viewport(_inst)
 		var svp := _vp.get_viewport()
 		var container := svp.get_parent()
 		container.stretch = false
@@ -24,14 +24,14 @@ func _run() -> void:
 	)
 
 	step("When the user picks a color in the toolbar", func():
-		var picker: CompactColorPicker = _inst.get_node("Content/Root/Body/LeftPane/ColorPicker")
+		var picker := _inst.get_node("%LeftPane").get_node("%ColorPicker") as CompactColorPicker
 		picker.color = Color8(200, 60, 60)
 		picker.color_changed.emit(picker.color)
 	)
 
 	step("Then the brush paints with the picked color", func():
 		var req := _vp.pick_request(_center)
-		var target := VoxelPicking.start_pick(req.origin, req.dir, req.cells).target
+		var target := VoxelPicking.start_pick(req.origin, req.dir, req.cells, req.forward).target
 		var click := InputEventMouseButton.new()
 		click.button_index = MOUSE_BUTTON_LEFT
 		click.pressed = true

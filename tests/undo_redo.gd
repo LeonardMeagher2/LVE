@@ -15,7 +15,7 @@ func _ready() -> void:
 
 func _run() -> void:
 	step("Given an editor with a fresh document", func():
-		_vp = _inst.get_node("Content/Root/Body/CenterPane/ViewportContainer/Viewport/Editor")
+		_vp = editor_viewport(_inst)
 		var svp := _vp.get_viewport()
 		var container := svp.get_parent()
 		container.stretch = false
@@ -25,7 +25,7 @@ func _run() -> void:
 
 	step("When the user paints a voxel at the cursor", func():
 		var req := _vp.pick_request(_center)
-		_painted = VoxelPicking.start_pick(req.origin, req.dir, req.cells).target
+		_painted = VoxelPicking.start_pick(req.origin, req.dir, req.cells, req.forward).target
 		var click := InputEventMouseButton.new()
 		click.button_index = MOUSE_BUTTON_LEFT
 		click.pressed = true
