@@ -11,3 +11,5 @@ func _ready() -> void:
 	color_picker.sliders_visible = true
 	color_picker.hex_visible = true
 	color_picker.presets_visible = false
+	await get_tree().process_frame
+	color_picker.custom_minimum_size = size
