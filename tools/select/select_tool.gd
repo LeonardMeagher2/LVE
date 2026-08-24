@@ -3,7 +3,6 @@ extends SelectionTool
 
 var _corner := State.NONE
 var _box_end := State.NONE
-var _shift := false
 
 
 func handle_input(event: InputEvent, pos: Vector2) -> bool:
@@ -28,9 +27,10 @@ func handle_input(event: InputEvent, pos: Vector2) -> bool:
 		else:
 			if _stroke_active:
 				_stroke_active = false
-				if _box_end == _corner and not State.document.has_cell(State.current_frame, _corner):
-					State.selection.clear()
-					State.selection_changed.emit()
+				if _box_end == _corner and _corner == State.NONE:
+					if _mode() == "replace":
+						State.selection.clear()
+						State.selection_changed.emit()
 				else:
 					_commit_box()
 				hide_visual()
@@ -70,10 +70,7 @@ func _commit_box() -> void:
 		return
 	var box := VoxelSelection.new()
 	box.from_box(_corner, _box_end)
-	if _shift:
-		State.selection.union(box)
-	else:
-		State.selection.cells = box.cells
+	State.selection.cells = _apply_mode(box).cells
 	State.selection_changed.emit()
 
 
@@ -83,12 +80,6 @@ func _update_rubber() -> void:
 	if _corner == State.NONE or _box_end == State.NONE:
 		visual.visible = false
 		return
-	var region := VoxelSelection.new()
-	if _shift:
-		region.cells = State.selection.cells.duplicate()
-		var drag := VoxelSelection.new()
-		drag.from_box(_corner, _box_end)
-		region.union(drag)
-	else:
-		region.from_box(_corner, _box_end)
-	(visual as SelectionPreview).show_selection(region)
+	var drag := VoxelSelection.new()
+	drag.from_box(_corner, _box_end)
+	(visual as SelectionPreview).show_selection(_apply_mode(drag))

@@ -65,22 +65,23 @@ func _run() -> void:
 			expect(State.selection.contains(c), "distant blob voxel is selected")
 	)
 
-	step("When the user clicks empty space", func():
+	step("When the user clicks an empty cell", func():
 		var empty := _empty_screen_pos()
-		expect(empty != Vector2.INF, "an empty screen position exists")
+		expect(empty != Vector2.INF, "an empty cell screen position exists")
 		_click(empty, false)
 	)
 
-	step("Then the selection is cleared", func():
-		expect(State.selection.is_empty(), "selection is empty after an empty-space click")
+	step("Then the selection is unchanged", func():
+		expect(State.selection.cells.size() == _blob_a.size() + _blob_b.size(), "the empty cell click changed nothing")
 	)
 
 	step("When the user undoes", func():
 		State.undo_redo.undo()
 	)
 
-	step("Then the selection holds both blobs again", func():
-		expect(State.selection.cells.size() == _blob_a.size() + _blob_b.size(), "undo restores the two-blob selection")
+	step("Then the selection reverts to the first blob", func():
+		expect(State.selection.cells.size() == _blob_a.size(), "undo removes the added blob")
+		expect(not State.selection.contains(_blob_b[0]), "the added blob is gone")
 	)
 
 
@@ -110,6 +111,7 @@ func _empty_screen_pos() -> Vector2:
 	var svp := _vp.get_viewport()
 	for dy in range(int(svp.size.y) - 20, 0, -40):
 		for dx in range(20, int(svp.size.x), 40):
-			if aim(_vp, Vector2(dx, dy)).hit == State.NONE:
+			var res := aim(_vp, Vector2(dx, dy))
+			if res.target != State.NONE and res.hit == State.NONE:
 				return Vector2(dx, dy)
 	return Vector2.INF

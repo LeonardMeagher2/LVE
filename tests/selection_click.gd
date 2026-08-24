@@ -4,13 +4,14 @@ var _inst: Node = null
 var _vp: EditorViewport
 var _center := Vector2.ZERO
 var _cell := State.NONE
+var _empty_cell := State.NONE
 
 
 func _ready() -> void:
 	var scene: PackedScene = load("res://ui/main.tscn")
 	_inst = scene.instantiate()
 	get_tree().root.add_child.call_deferred(_inst)
-	test("a click on a voxel selects it and a click on empty space cancels", _run)
+	test("a click on a voxel or an empty cell selects that cell", _run)
 
 
 func _run() -> void:
@@ -45,14 +46,16 @@ func _run() -> void:
 		expect(State.selection.contains(_cell), "the clicked cell stays selected")
 	)
 
-	step("When the user clicks empty space", func():
+	step("When the user clicks an empty cell", func():
 		var empty := _empty_screen_pos()
-		expect(empty != Vector2.INF, "an empty screen position exists")
+		expect(empty != Vector2.INF, "an empty cell screen position exists")
+		_empty_cell = aim(_vp, empty).target
 		_click(empty)
 	)
 
-	step("Then the selection is canceled", func():
-		expect(State.selection.is_empty(), "selection is empty")
+	step("Then that empty cell is selected", func():
+		expect(State.selection.cells.size() == 1, "selection holds one cell")
+		expect(State.selection.contains(_empty_cell), "the empty cell is selected")
 	)
 
 
@@ -70,6 +73,7 @@ func _empty_screen_pos() -> Vector2:
 	var svp := _vp.get_viewport()
 	for dy in range(int(svp.size.y) - 20, 0, -40):
 		for dx in range(20, int(svp.size.x), 40):
-			if aim(_vp, Vector2(dx, dy)).hit == State.NONE:
+			var res := aim(_vp, Vector2(dx, dy))
+			if res.target != State.NONE and res.hit == State.NONE:
 				return Vector2(dx, dy)
 	return Vector2.INF

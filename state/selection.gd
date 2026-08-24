@@ -40,3 +40,8 @@ func from_box(a: Vector3i, b: Vector3i) -> void:
 func union(other: VoxelSelection) -> void:
 	for c in other.cells:
 		cells[c] = true
+
+
+func subtract(other: VoxelSelection) -> void:
+	for c in other.cells:
+		cells.erase(c)

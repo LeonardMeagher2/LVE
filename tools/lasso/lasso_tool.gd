@@ -3,7 +3,6 @@ extends SelectionTool
 
 var _points: Array[Vector3i] = []
 var _press_target := State.NONE
-var _shift := false
 
 
 func handle_input(event: InputEvent, pos: Vector2) -> bool:
@@ -52,30 +51,39 @@ func handle_input(event: InputEvent, pos: Vector2) -> bool:
 
 func _commit() -> void:
 	if _points.size() >= 2:
-		State.selection.cells = _build_region().cells
-	elif not State.selection.is_empty():
-		State.selection.clear()
-	elif _press_target != State.NONE \
-			and State.document.has_cell(State.current_frame, _press_target):
-		State.selection.add(_press_target)
+		State.selection.cells = _apply_mode(_build_sweep()).cells
+	elif _press_target == State.NONE:
+		if _mode() == "replace" and not State.selection.is_empty():
+			State.selection.clear()
+	else:
+		var single := VoxelSelection.new()
+		single.add(_press_target)
+		State.selection.cells = _apply_mode(single).cells
 	State.selection_changed.emit()
 
 
-func _build_region() -> VoxelSelection:
-	var region := VoxelSelection.new()
-	if _shift:
-		region.cells = State.selection.cells.duplicate()
+func _build_sweep() -> VoxelSelection:
+	var sweep := VoxelSelection.new()
 	for p in _points:
-		region.add(p)
+		sweep.add(p)
 	if _points.size() >= 3:
-		_fill_polygon(region)
-	return region
+		_fill_polygon(sweep)
+	return sweep
 
 
 func _update_line() -> void:
 	if visual == null:
 		return
-	(visual as SelectionPreview).show_selection(_build_region())
+	(visual as SelectionPreview).show_selection(_preview_region())
+
+
+func _preview_region() -> VoxelSelection:
+	if _points.size() < 2:
+		var single := VoxelSelection.new()
+		for p in _points:
+			single.add(p)
+		return single
+	return _apply_mode(_build_sweep())
 
 
 func _fill_polygon(sel: VoxelSelection) -> void:

@@ -145,8 +145,9 @@ func _run() -> void:
 		_click(_screen_pos_of(_seed))
 	)
 
-	step("Then the click cancels the selection", func():
-		expect(State.selection.is_empty(), "selection is empty after a plain click")
+	step("Then the click selects only the clicked voxel", func():
+		expect(State.selection.cells.size() == 1, "the click selected one voxel")
+		expect(State.selection.contains(_seed), "the clicked voxel is selected")
 	)
 
 
