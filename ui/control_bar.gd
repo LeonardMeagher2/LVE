@@ -3,11 +3,17 @@ extends HBoxContainer
 
 signal zoom_requested(percent: float)
 signal grid_toggled(visible: bool)
+signal reset_view_requested
 
 @onready var _slider: HSlider = $ZoomSlider
 @onready var _grid: Button = $GridToggle
+@onready var _reset: Button = $ResetViewBtn
 
 var _syncing := false
+
+
+func _ready() -> void:
+	_reset.pressed.connect(reset_view_requested.emit)
 
 
 func set_zoom(percent: float) -> void:
