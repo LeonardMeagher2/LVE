@@ -46,8 +46,8 @@ func _run() -> void:
 
 	step("Given paint mode with voxels inside and outside the selection", func():
 		State.document.frames[0].cells.clear()
-		State.document.frames[0].cells[_inside] = State.document.ensure_color(Color8(150, 150, 150))
-		State.document.frames[0].cells[_outside] = State.document.ensure_color(Color8(150, 150, 150))
+		State.document.frames[0].cells[_inside] = State.document.add_color(Color8(150, 150, 150))
+		State.document.frames[0].cells[_outside] = State.document.add_color(Color8(150, 150, 150))
 		State.set_tool(State.tools.paint_brush)
 		State.current_color = Color8(200, 60, 60)
 	)
@@ -82,9 +82,9 @@ func _run() -> void:
 		State.document.frames[0].cells.clear()
 		State.selection.from_box(_inside, _inside + Vector3i(0, 0, 1))
 		State.selection_changed.emit()
-		State.document.frames[0].cells[_inside] = State.document.ensure_color(Color8(150, 150, 150))
-		State.document.frames[0].cells[_inside + Vector3i(0, 0, 1)] = State.document.ensure_color(Color8(150, 150, 150))
-		State.document.frames[0].cells[_inside + Vector3i(0, 0, 2)] = State.document.ensure_color(Color8(150, 150, 150))
+		State.document.frames[0].cells[_inside] = State.document.add_color(Color8(150, 150, 150))
+		State.document.frames[0].cells[_inside + Vector3i(0, 0, 1)] = State.document.add_color(Color8(150, 150, 150))
+		State.document.frames[0].cells[_inside + Vector3i(0, 0, 2)] = State.document.add_color(Color8(150, 150, 150))
 		State.set_tool(State.tools.fill)
 		State.current_color = Color8(200, 60, 60)
 	)

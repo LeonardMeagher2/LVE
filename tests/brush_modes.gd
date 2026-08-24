@@ -25,7 +25,7 @@ func _run() -> void:
 		State.set_tool(State.tools.pencil)
 		State.current_color = Color8(200, 60, 60)
 		_anchor = aim(_vp, _center).target
-		State.document.frames[0].cells[_anchor] = State.document.ensure_color(Color8(150, 150, 150))
+		State.document.frames[0].cells[_anchor] = State.document.add_color(Color8(150, 150, 150))
 		_vp.sync_to(0)
 		_front = aim(_vp, _center).add_target
 	)

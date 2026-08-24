@@ -29,7 +29,7 @@ func _run() -> void:
 		_seed = start.target
 		_pair_a = [_seed, _seed + Vector3i(1, 0, 0)]
 		_pair_b = [_seed + Vector3i(3, 0, 0), _seed + Vector3i(4, 0, 0)]
-		var gray := State.document.ensure_color(Color8(150, 150, 150))
+		var gray := State.document.add_color(Color8(150, 150, 150))
 		var f: VoxelFrame = State.document.frames[State.current_frame]
 		for c in _pair_a + _pair_b:
 			f.cells[c] = gray

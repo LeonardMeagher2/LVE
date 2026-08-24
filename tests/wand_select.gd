@@ -31,8 +31,8 @@ func _run() -> void:
 		_blob_a = [_seed, _seed + Vector3i(1, 0, 0), _seed + Vector3i(0, 0, 1)]
 		_blob_b = [_seed + Vector3i(8, 0, 0), _seed + Vector3i(9, 0, 0)]
 		_red = _seed + Vector3i(0, 1, 0)
-		var gray := State.document.ensure_color(Color8(150, 150, 150))
-		var red := State.document.ensure_color(Color8(200, 60, 60))
+		var gray := State.document.add_color(Color8(150, 150, 150))
+		var red := State.document.add_color(Color8(200, 60, 60))
 		var f: VoxelFrame = State.document.frames[State.current_frame]
 		for c in _blob_a:
 			f.cells[c] = gray

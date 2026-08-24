@@ -26,8 +26,8 @@ func _run() -> void:
 		var start := aim(_vp, _center)
 		_c0 = start.target
 		_c1 = drag(_vp, _center + Vector2(0.0, 20.0), start.plane).target
-		State.document.frames[0].cells[_c0] = State.document.ensure_color(State.current_color)
-		State.document.frames[0].cells[_c1] = State.document.ensure_color(State.current_color)
+		State.document.frames[0].cells[_c0] = State.document.add_color(State.current_color)
+		State.document.frames[0].cells[_c1] = State.document.add_color(State.current_color)
 		_vp.sync_to(0)
 	)
 

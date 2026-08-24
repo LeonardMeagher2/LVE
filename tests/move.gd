@@ -33,8 +33,8 @@ func _run() -> void:
 		_c3 = drag(_vp, _center + Vector2(0.0, 80.0), start.plane).target
 		var obstacle := drag(_vp, _center + Vector2(0.0, 20.0), start.plane)
 		_obstacle = obstacle.target
-		State.document.frames[0].cells[_c0] = State.document.ensure_color(State.current_color)
-		State.document.frames[0].cells[_obstacle] = State.document.ensure_color(Color8(40, 120, 40))
+		State.document.frames[0].cells[_c0] = State.document.add_color(State.current_color)
+		State.document.frames[0].cells[_obstacle] = State.document.add_color(Color8(40, 120, 40))
 		State.selection.add(_c0)
 		_vp.sync_to(0)
 		State.set_tool(State.tools.move)
