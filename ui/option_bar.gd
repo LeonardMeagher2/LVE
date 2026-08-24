@@ -37,7 +37,6 @@ func _rebuild() -> void:
 func _add_toggle(opt: ToolOption, group: String) -> void:
 	var cb := CheckButton.new()
 	cb.text = opt.label.capitalize()
-	cb.focus_mode = Control.FOCUS_NONE
 	var on: bool = State.get_tool_option(State.tool, opt.id)
 	cb.button_pressed = on
 	cb.toggled.connect(func(v: bool): State.set_tool_option(group, opt.id, v))
