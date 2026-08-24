@@ -10,11 +10,14 @@ var _swatches: Array[Button] = []
 @onready var _color_picker_button: ColorPickerButton = %ColorPickerButton
 
 
+@onready var _add_color_btn: Button = %AddColorBtn
+
+
 func _ready() -> void:
 	State.color_changed.connect(_on_color_changed)
 	State.cells_changed.connect(_rebuild_swatches)
 	State.frame_changed.connect(_rebuild_swatches)
-	%Scroll.gui_input.connect(_on_grid_area_input)
+	_add_color_btn.pressed.connect(_add_current_color)
 	_color_picker.color = State.current_color
 	_color_picker_button.color = State.current_color
 	_rebuild_swatches()
@@ -34,7 +37,6 @@ func _rebuild_swatches() -> void:
 	for i in palette.size():
 		var b := Button.new()
 		b.custom_minimum_size = Vector2(36, 36)
-		b.focus_mode = Control.FOCUS_NONE
 		b.tooltip_text = State.document.color_of(i).to_html(true)
 		var sb := (SWATCH as StyleBoxFlat).duplicate() as StyleBoxFlat
 		sb.bg_color = palette[i]
@@ -59,14 +61,6 @@ func _on_swatch_input(event: InputEvent, i: int) -> void:
 			and event.button_index == MOUSE_BUTTON_RIGHT:
 		if State.document.remove_color(i):
 			_rebuild_swatches()
-
-
-func _on_grid_area_input(event: InputEvent) -> void:
-	if event is InputEventMouseButton and event.pressed \
-			and event.button_index == MOUSE_BUTTON_LEFT:
-		var mb := event as InputEventMouseButton
-		if mb.position.y > _swatch_grid.size.y:
-			_add_current_color()
 
 
 func _add_current_color() -> void:
