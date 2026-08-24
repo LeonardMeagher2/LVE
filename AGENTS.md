@@ -66,3 +66,9 @@ Write tests as behavior specs. Do not write code dumps.
 ## Godot quirks
 
 Do not assume an API exists from memory. Validate API assumptions against the current stable docs. Use the `godot-docs` skill for validation.
+
+## UI conventions
+
+- Never set `focus_mode = 0` (FOCUS_NONE) on any control. Let Godot handle focus naturally.
+- Never set `custom_minimum_size` on icon-only toolbar buttons. Let the layout container size them.
+- Always set `icon_alignment = 1` (CENTER) on icon-only buttons.
