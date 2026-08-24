@@ -7,10 +7,10 @@
 [ext_resource type="Texture2D" uid="uid://bshoasjpvru2h" path="res://icons/play.svg" id="5_play"]
 [ext_resource type="Texture2D" uid="uid://djqb5uqnxxmhe" path="res://icons/step_forward.svg" id="6_fwd"]
 [ext_resource type="Texture2D" uid="uid://c4401j16xtgri" path="res://icons/to_end.svg" id="7_end"]
-[ext_resource type="Texture2D" uid="uid://cjpr0oyhe51e" path="res://icons/frame_add.svg" id="8_add"]
+[ext_resource type="Texture2D" uid="uid://cjpr0oyhe51e" path="res://icons/add.svg" id="8_add"]
 [ext_resource type="PackedScene" uid="uid://c2301xo3rbrka" path="res://ui/frame_button.tscn" id="8_iw04i"]
-[ext_resource type="Texture2D" uid="uid://do7ho0llc2tpu" path="res://icons/frame_dup.svg" id="9_dup"]
-[ext_resource type="Texture2D" uid="uid://xjl044jlksik" path="res://icons/frame_del.svg" id="10_del"]
+[ext_resource type="Texture2D" uid="uid://do7ho0llc2tpu" path="res://icons/duplicate.svg" id="9_dup"]
+[ext_resource type="Texture2D" uid="uid://xjl044jlksik" path="res://icons/remove.svg" id="10_del"]
 
 [node name="BottomDock" type="VBoxContainer" unique_id=106212846]
 anchors_preset = 15
@@ -33,6 +33,7 @@ layout_mode = 2
 custom_minimum_size = Vector2(40, 28)
 layout_mode = 2
 tooltip_text = "Step to start"
+focus_mode = 0
 icon = ExtResource("3_to_start")
 icon_alignment = 1
 
@@ -40,6 +41,7 @@ icon_alignment = 1
 custom_minimum_size = Vector2(40, 28)
 layout_mode = 2
 tooltip_text = "Step back"
+focus_mode = 0
 icon = ExtResource("4_back")
 icon_alignment = 1
 
@@ -48,6 +50,7 @@ unique_name_in_owner = true
 custom_minimum_size = Vector2(40, 28)
 layout_mode = 2
 tooltip_text = "Play"
+focus_mode = 0
 toggle_mode = true
 icon = ExtResource("5_play")
 icon_alignment = 1
@@ -56,6 +59,7 @@ icon_alignment = 1
 custom_minimum_size = Vector2(40, 28)
 layout_mode = 2
 tooltip_text = "Step forward"
+focus_mode = 0
 icon = ExtResource("6_fwd")
 icon_alignment = 1
 
@@ -63,6 +67,7 @@ icon_alignment = 1
 custom_minimum_size = Vector2(40, 28)
 layout_mode = 2
 tooltip_text = "Step to end"
+focus_mode = 0
 icon = ExtResource("7_end")
 icon_alignment = 1
 
@@ -75,6 +80,7 @@ custom_minimum_size = Vector2(40, 30)
 layout_mode = 2
 size_flags_vertical = 4
 tooltip_text = "Add frame"
+focus_mode = 0
 icon = ExtResource("8_add")
 icon_alignment = 1
 
@@ -83,6 +89,7 @@ custom_minimum_size = Vector2(40, 30)
 layout_mode = 2
 size_flags_vertical = 4
 tooltip_text = "Duplicate frame"
+focus_mode = 0
 icon = ExtResource("9_dup")
 icon_alignment = 1
 
@@ -91,6 +98,7 @@ custom_minimum_size = Vector2(40, 30)
 layout_mode = 2
 size_flags_vertical = 4
 tooltip_text = "Delete frame"
+focus_mode = 0
 icon = ExtResource("10_del")
 icon_alignment = 1
 
