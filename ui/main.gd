@@ -1,6 +1,6 @@
 extends Control
 
-@onready var _menu_bar: EditorMenuBar = %MenuBar
+@onready var _toolbar = %MenuBar
 @onready var _option_bar: OptionBar = %OptionBar
 @onready var _viewport_panel: EditorViewportPanel = %ViewportContainer
 @onready var _control_bar: ControlBar = %ControlBar
@@ -21,15 +21,12 @@ func _ready() -> void:
 	State.frame_changed.connect(_on_frame_changed)
 	State.cells_changed.connect(_on_cells_changed)
 	State.playback.playback_changed.connect(_on_playback_changed)
-	_menu_bar.new_document.connect(_new_document)
-	_menu_bar.open_file.connect(_open_file)
-	_menu_bar.save_file.connect(_save_file)
-	_menu_bar.save_file_as.connect(_save_file_as)
-	_menu_bar.quit.connect(func() -> void: get_tree().quit())
-	_menu_bar.undo.connect(State.undo_redo.undo)
-	_menu_bar.redo.connect(State.undo_redo.redo)
-	_menu_bar.reset_view.connect(_viewport_panel.reset_view)
-	_menu_bar.toggle_grid.connect(_viewport_panel.toggle_grid)
+	_toolbar.new_document.connect(_new_document)
+	_toolbar.open_file.connect(_open_file)
+	_toolbar.save_file.connect(_save_file)
+	_toolbar.save_file_as.connect(_save_file_as)
+	_toolbar.undo.connect(State.undo_redo.undo)
+	_toolbar.redo.connect(State.undo_redo.redo)
 	_bottom_dock.play_toggled.connect(_toggle_play)
 	_bottom_dock.prev.connect(_step_frame.bind(-1))
 	_bottom_dock.next.connect(_step_frame.bind(1))
@@ -45,6 +42,7 @@ func _ready() -> void:
 	_option_bar.view_requested.connect(_viewport_panel.set_view)
 	_control_bar.zoom_requested.connect(_viewport_panel.set_zoom_percent)
 	_control_bar.grid_toggled.connect(_viewport_panel.set_grid_visible)
+	_control_bar.reset_view_requested.connect(_viewport_panel.reset_view)
 	_viewport_panel.set_tool(State.tool)
 	_update_status()
 

@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://nxatttjs7q35"]
 
 [ext_resource type="Script" uid="uid://b0gaxrb8bjobo" path="res://ui/main.gd" id="1_main"]
-[ext_resource type="PackedScene" uid="uid://cxl7nkbr4j8gv" path="res://ui/menu_bar.tscn" id="2_menu"]
+[ext_resource type="PackedScene" path="res://ui/icon_toolbar.tscn" id="2_toolbar"]
 [ext_resource type="PackedScene" uid="uid://cym1t8k348a6p" path="res://viewport/viewport.tscn" id="3_viewport"]
 [ext_resource type="PackedScene" uid="uid://8g827rqodt23" path="res://ui/bottom_dock.tscn" id="4_frame"]
 [ext_resource type="PackedScene" uid="uid://dnkuglr7qodru" path="res://ui/status_bar.tscn" id="5_status"]
@@ -32,7 +32,7 @@ grow_vertical = 2
 [node name="Root" type="VBoxContainer" parent="Content" unique_id=1369002049]
 layout_mode = 2
 
-[node name="MenuBar" parent="Content/Root" unique_id=873351853 instance=ExtResource("2_menu")]
+[node name="MenuBar" parent="Content/Root" unique_id=873351853 instance=ExtResource("2_toolbar")]
 unique_name_in_owner = true
 layout_mode = 2
 
