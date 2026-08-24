@@ -2,6 +2,7 @@ extends SceneTree
 
 const TEST_TIMEOUT_S := 30.0
 const POLL_INTERVAL_S := 0.1
+const MAX_FAILURES := 3
 
 var _failed := 0
 var _pending := {}
@@ -17,6 +18,9 @@ func _initialize() -> void:
 func _run_all() -> void:
 	var paths := _test_paths()
 	for path in paths:
+		if _failed >= MAX_FAILURES:
+			print("STOPPED after %d failures" % _failed)
+			break
 		var result := await _run_one(path)
 		if result["code"] == 0:
 			print("PASS %s" % path)

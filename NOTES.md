@@ -36,6 +36,8 @@ This file records confirmed, non-obvious facts learned while working on Voxi. Re
 - 2026-08-19: The base tool interpolates the line between consecutive drag picks. `StrokeLine.cells` returns the connected 8-neighbor path, which always ends at the mouse cell. The stroke always paints the cell under the mouse; no filter may skip it.
 - 2026-08-19: Pixel-perfect drawing uses the public "waiting pixel" scheme. `PixelPerfectStroke` holds a `waiting` cell that neighbors the last drawn cell. When the cursor pulls more than one cell away, it draws the connected path from the waiting cell to the cursor, so the stroke never gaps. `State.pixel_perfect` toggles it; the tool flushes the waiting cell on mouse-up.
 - 2026-08-23: An unprojected cell center does not round back to that cell in `drag_pick`. Under an oblique view, the ray crosses the face plane up to half a cell away from the center. Tests must derive expected picks through the same pick functions.
+- 2026-08-24: `start_pick` sets `target` to the hit voxel. With no voxel, it sets a ground plane (y=0) cell if the ray points down, else `NONE`. `hit` and `target` differ: an empty grid cell click has `hit = NONE` but a valid ground cell `target`.
+- 2026-08-24: A single click on an empty grid cell selects that cell with the box and lasso tools. The wand does nothing on an empty cell. An empty cell click does not clear the selection. Deselect with the Clear button, Escape, or a no-target sky click in replace mode.
 
 ## UI scene migration
 
@@ -48,6 +50,9 @@ This file records confirmed, non-obvious facts learned while working on Voxi. Re
 - The Aseprite-style layout (left palette panel, right tool strip) lands in M4.
 - `main.gd` must construct no UI nodes except dynamic frame buttons and the FileDialog.
 - 2026-08-22: A unique name is scoped to the owner scene. A node with `unique_name_in_owner` in a subscene does not resolve from the parent scene root. Get the subscene instance root, then call `get_node("%Name")` on it.
+- 2026-08-23: `ToolInfo.tool_scene` holds the tool node scene that the viewport adds. `ToolOption.option_scene` points to an option widget scene. `OptionBar` instantiates it and sets `option` and `group`.
+- 2026-08-23: An option widget scene is declarative. Buttons and icons live in the `.tscn`. The script wires state only.
+- 2026-08-24: Option widget scenes live in the tools directory. `mode_picker.tscn` is shared by the select, lasso, and wand tools. It lives in `tools/select/` and the other tools reference it cross-directory.
 
 ## Workflow
 
@@ -62,3 +67,8 @@ This file records confirmed, non-obvious facts learned while working on Voxi. Re
 - 2026-08-23: A test scene whose script fails to parse loads no test logic. Nothing calls `quit()`, so the child hangs forever. The runner's outer 30 s timeout kills it.
 - 2026-08-23: To author a `.tres` by hand without enum mistakes, build the resource in a throwaway `-s` script and `ResourceSaver.save()` it. This build serializes `SHADING_MODE_UNSHADED` as `0`.
 - 2026-08-23: Input pushed into the editor SubViewport does not reach `_unhandled_key_input` on `main.gd`. Tests push action keys at `get_tree().root` instead.
+- 2026-08-23: `Variant` works as an explicit type annotation on signal params, export vars, function params, returns, and lambda params. Probe-verified on 4.7.2.
+- 2026-08-23: GDScript coerces a Variant return into a typed return at runtime. Returning `null` into a typed function errors every call. Guard consumers or compare against the expected type.
+- 2026-08-23: Godot reserializes hand-authored `.tres` files on editor use. It reorders sub-resource properties and adds `uid` attributes to script references. Re-read before exact-string edits.
+- 2026-08-23: Godot drops a signal connection when the callable's target object is freed. A lambda has no target object, so its connection survives and touches freed nodes. Wire state sync to node methods, not lambdas, when the node can be freed.
+- 2026-08-23: A slice subscription like `arr[0:1]` fails to parse when passed as a function call argument in this build. Pass a plain array literal instead.
