@@ -8,5 +8,5 @@ script = ExtResource("1_script")
 id = "eraser"
 display_name = "Eraser"
 tooltip = "Erase voxels"
-scene = "res://tools/eraser/eraser.tscn"
+tool_scene = "res://tools/eraser/eraser.tscn"
 icon = ExtResource("2_icon")

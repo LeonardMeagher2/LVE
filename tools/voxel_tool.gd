@@ -129,7 +129,7 @@ func _hit_at(c: Vector3i) -> Vector3i:
 
 
 func _use_pixel_perfect() -> bool:
-	return State.pixel_perfect
+	return State.get_tool_option(info, "pixel_perfect") == true
 
 
 func apply(_target: Vector3i, _hit: Vector3i) -> bool:

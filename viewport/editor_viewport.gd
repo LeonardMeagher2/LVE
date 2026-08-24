@@ -23,12 +23,12 @@ func set_tool(t: ToolInfo) -> void:
 	if _tool != null:
 		_tool.visible = false
 		_tool.on_deactivated()
-	if t == null or t.scene.is_empty():
+	if t == null or t.tool_scene.is_empty():
 		_tool = null
 		return
 	_tool = _tools.get(t.id)
 	if _tool == null:
-		var scene := load(t.scene)
+		var scene := load(t.tool_scene)
 		if scene == null:
 			_tool = null
 			return

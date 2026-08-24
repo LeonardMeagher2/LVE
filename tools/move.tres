@@ -8,5 +8,5 @@ script = ExtResource("1_script")
 id = "move"
 display_name = "Move"
 tooltip = "Move the selection"
-scene = "res://tools/move/move.tscn"
+tool_scene = "res://tools/move/move.tscn"
 icon = ExtResource("2_icon")

@@ -10,4 +10,4 @@ display_name = "Paint"
 icon = ExtResource("2_icon")
 tooltip = "Recolor existing voxels"
 group = "brush"
-scene = "res://tools/brush/brush.tscn"
+tool_scene = "res://tools/brush/brush.tscn"

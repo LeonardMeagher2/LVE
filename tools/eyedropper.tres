@@ -9,4 +9,4 @@ id = "eyedropper"
 display_name = "Eyedropper"
 icon = ExtResource("1_4uc0x")
 tooltip = "Pick a color from a voxel"
-scene = "res://tools/pick/pick.tscn"
+tool_scene = "res://tools/pick/pick.tscn"

@@ -1,22 +1,13 @@
-[gd_scene format=3]
+[gd_scene format=3 uid="uid://dnqw73i7dthg5"]
 
-[ext_resource type="Script" path="res://ui/option_bar.gd" id="1_option"]
-[ext_resource type="Texture2D" path="res://icons/pixel_perfect.svg" id="2_pp"]
+[ext_resource type="Script" uid="uid://cpmnvthh7gjxy" path="res://ui/option_bar.gd" id="1_option"]
 
-[node name="OptionBar" type="HBoxContainer"]
+[node name="OptionBar" type="HBoxContainer" unique_id=65535186]
 custom_minimum_size = Vector2(0, 28)
-layout_mode = 2
 theme_override_constants/separation = 6
 script = ExtResource("1_option")
 
-[node name="PixelPerfect" type="CheckButton" parent="."]
-layout_mode = 2
-focus_mode = 0
-icon = ExtResource("2_pp")
-text = "Pixel Perfect"
-tooltip_text = "Toggle voxel snapping of the ghost preview"
-
-[node name="View" type="MenuButton" parent="."]
+[node name="View" type="MenuButton" parent="." unique_id=438351120]
 layout_mode = 2
 focus_mode = 0
 text = "View"
@@ -32,8 +23,7 @@ popup/item_3/id = 3
 popup/item_4/text = "Reset"
 popup/item_4/id = 4
 
-[node name="OptionSpacer" type="Control" parent="."]
+[node name="OptionsBox" type="HBoxContainer" parent="." unique_id=567840298]
+unique_name_in_owner = true
 layout_mode = 2
-size_flags_horizontal = 3
-
-[connection signal="toggled" from="PixelPerfect" to="." method="_on_pixel_perfect_toggled"]
+theme_override_constants/separation = 10

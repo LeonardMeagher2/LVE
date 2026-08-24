@@ -7,9 +7,9 @@ signal frames_changed()
 signal frame_changed()
 signal color_changed(color: Color)
 signal tool_changed(tool: ToolInfo)
+signal tool_option_changed(group: String, id: String, value: Variant)
 signal cells_changed()
 signal selection_changed()
-signal pixel_perfect_changed(enabled: bool)
 
 var document: VoxiDocument
 var current_frame := 0:
@@ -21,10 +21,10 @@ var current_frame := 0:
 var tools := {}
 var tool: ToolInfo = null
 var current_color := Color8(20, 20, 20)
-var pixel_perfect := false
 var selection := VoxelSelection.new()
 var undo_redo := UndoRedo.new()
 var playback := Playback.new()
+var _option_values := {}
 
 
 func _init() -> void:
@@ -82,17 +82,34 @@ func set_color(c: Color) -> void:
 	color_changed.emit(c)
 
 
-func set_pixel_perfect(v: bool) -> void:
-	if pixel_perfect == v:
+func set_tool_option(group: String, id: String, value: Variant) -> void:
+	if not _option_values.has(group):
+		_option_values[group] = {}
+	if _option_values[group].get(id) == value:
 		return
-	pixel_perfect = v
-	pixel_perfect_changed.emit(v)
+	_option_values[group][id] = value
+	tool_option_changed.emit(group, id, value)
+
+
+func get_tool_option(info: ToolInfo, id: String) -> Variant:
+	for opt in info.options:
+		if opt.id == id:
+			var vals: Dictionary = _option_values.get(info.group, {})
+			return vals.get(id, opt.default)
+	return null
 
 
 func can_edit(cell: Vector3i) -> bool:
 	if selection.is_empty():
 		return true
 	return selection.contains(cell)
+
+
+func clear_selection() -> void:
+	if selection.is_empty():
+		return
+	selection.clear()
+	selection_changed.emit()
 
 
 func erase_selection() -> void:

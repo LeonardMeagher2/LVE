@@ -9,4 +9,4 @@ id = "fill"
 display_name = "Fill"
 icon = ExtResource("2_icon")
 tooltip = "Fill connected voxels with a color"
-scene = "res://tools/fill/fill.tscn"
+tool_scene = "res://tools/fill/fill.tscn"

@@ -16,7 +16,7 @@ func _ready() -> void:
 func _run() -> void:
 	step("Given a brush with pixel perfect enabled", func():
 		State.current_color = Color8(200, 60, 60)
-		State.pixel_perfect = true
+		State.set_tool_option("brush", "pixel_perfect", true)
 		_vp = editor_viewport(_inst)
 		var svp := _vp.get_viewport()
 		var container := svp.get_parent()
