@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" uid="uid://doi7ndmweb0el" path="res://ui/control_bar.gd" id="1_control"]
 [ext_resource type="Texture2D" uid="uid://bhg85sqfio31d" path="res://icons/grid.svg" id="2_grid"]
-[ext_resource type="Texture2D" uid="uid://dw2yugcwa1shf" path="res://icons/mode_replace.svg" id="3_reset"]
+[ext_resource type="Texture2D" uid="uid://dw2yugcwa1shf" path="res://icons/to_start.svg" id="3_reset"]
 
 [node name="ControlBar" type="HBoxContainer" unique_id=53784703]
 custom_minimum_size = Vector2(0, 28)
@@ -26,12 +26,14 @@ value = 100.0
 custom_minimum_size = Vector2(36, 0)
 layout_mode = 2
 tooltip_text = "Return the zoom to 100 percent"
+focus_mode = 0
 text = "1:1"
 
 [node name="GridToggle" type="Button" parent="." unique_id=1396369045]
 custom_minimum_size = Vector2(28, 28)
 layout_mode = 2
 tooltip_text = "Toggle the grid"
+focus_mode = 0
 toggle_mode = true
 button_pressed = true
 icon = ExtResource("2_grid")
@@ -42,9 +44,11 @@ unique_name_in_owner = true
 custom_minimum_size = Vector2(28, 28)
 layout_mode = 2
 tooltip_text = "Reset View (Home)"
+focus_mode = 0
 icon = ExtResource("3_reset")
 icon_alignment = 1
 
 [connection signal="value_changed" from="ZoomSlider" to="." method="_on_zoom_slider_changed"]
 [connection signal="pressed" from="ZoomOne" to="." method="_on_zoom_one_pressed"]
 [connection signal="toggled" from="GridToggle" to="." method="_on_grid_toggled"]
+

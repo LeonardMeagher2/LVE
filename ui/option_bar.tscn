@@ -9,6 +9,7 @@ script = ExtResource("1_option")
 
 [node name="View" type="MenuButton" parent="." unique_id=438351120]
 layout_mode = 2
+focus_mode = 0
 text = "View"
 item_count = 5
 popup/item_0/text = "Top"

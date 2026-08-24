@@ -1,58 +1,70 @@
-[gd_scene format=3 uid="uid://bbtsqq68ja3q1"]
+[gd_scene format=3]
 
-[ext_resource type="Script" uid="uid://we7x052o1pcg" path="res://ui/icon_toolbar.gd" id="1_toolbar"]
-[ext_resource type="Texture2D" uid="uid://b36rhwlxt6wcw" path="res://icons/new.svg" id="2_new"]
-[ext_resource type="Texture2D" uid="uid://k4mp2te5yq4y" path="res://icons/open.svg" id="3_open"]
-[ext_resource type="Texture2D" uid="uid://rhn2vyehbq1f" path="res://icons/save.svg" id="4_save"]
-[ext_resource type="Texture2D" uid="uid://bsdc6hsaxlttw" path="res://icons/save_as.svg" id="5_save_as"]
-[ext_resource type="Texture2D" uid="uid://by28nxj3x7ily" path="res://icons/undo.svg" id="6_undo"]
-[ext_resource type="Texture2D" uid="uid://b4jrotar1sqwf" path="res://icons/redo.svg" id="7_redo"]
+[ext_resource type="Script" path="res://ui/icon_toolbar.gd" id="1_toolbar"]
+[ext_resource type="Texture2D" path="res://icons/new.svg" id="2_new"]
+[ext_resource type="Texture2D" path="res://icons/open.svg" id="3_open"]
+[ext_resource type="Texture2D" path="res://icons/save.svg" id="4_save"]
+[ext_resource type="Texture2D" path="res://icons/save_as.svg" id="5_save_as"]
+[ext_resource type="Texture2D" path="res://icons/undo.svg" id="6_undo"]
+[ext_resource type="Texture2D" path="res://icons/redo.svg" id="7_redo"]
 
 [node name="IconToolbar" type="HBoxContainer" unique_id=1142549001]
-theme_override_constants/separation = 4
 script = ExtResource("1_toolbar")
+theme_override_constants/separation = 4
 
 [node name="NewBtn" type="Button" parent="." unique_id=584283784]
 unique_name_in_owner = true
 layout_mode = 2
-tooltip_text = "New (Ctrl+N)"
+focus_mode = 0
+toggle_mode = false
+custom_minimum_size = Vector2(32, 32)
 icon = ExtResource("2_new")
-icon_alignment = 1
+tooltip_text = "New (Ctrl+N)"
 
 [node name="OpenBtn" type="Button" parent="." unique_id=1673490502]
 unique_name_in_owner = true
 layout_mode = 2
-tooltip_text = "Open (Ctrl+O)"
+focus_mode = 0
+toggle_mode = false
+custom_minimum_size = Vector2(32, 32)
 icon = ExtResource("3_open")
-icon_alignment = 1
+tooltip_text = "Open (Ctrl+O)"
 
 [node name="SaveBtn" type="Button" parent="." unique_id=404607315]
 unique_name_in_owner = true
 layout_mode = 2
-tooltip_text = "Save (Ctrl+S)"
+focus_mode = 0
+toggle_mode = false
+custom_minimum_size = Vector2(32, 32)
 icon = ExtResource("4_save")
-icon_alignment = 1
+tooltip_text = "Save (Ctrl+S)"
 
 [node name="SaveAsBtn" type="Button" parent="." unique_id=789123456]
 unique_name_in_owner = true
 layout_mode = 2
-tooltip_text = "Save As (Ctrl+Shift+S)"
+focus_mode = 0
+toggle_mode = false
+custom_minimum_size = Vector2(32, 32)
 icon = ExtResource("5_save_as")
-icon_alignment = 1
+tooltip_text = "Save As (Ctrl+Shift+S)"
 
-[node name="Sep1" type="VSeparator" parent="." unique_id=1342914560]
+[node name="Sep1" type="VSeparator" parent="."]
 layout_mode = 2
 
 [node name="UndoBtn" type="Button" parent="." unique_id=234567890]
 unique_name_in_owner = true
 layout_mode = 2
-tooltip_text = "Undo (Ctrl+Z)"
+focus_mode = 0
+toggle_mode = false
+custom_minimum_size = Vector2(32, 32)
 icon = ExtResource("6_undo")
-icon_alignment = 1
+tooltip_text = "Undo (Ctrl+Z)"
 
 [node name="RedoBtn" type="Button" parent="." unique_id=345678901]
 unique_name_in_owner = true
 layout_mode = 2
-tooltip_text = "Redo (Ctrl+Y)"
+focus_mode = 0
+toggle_mode = false
+custom_minimum_size = Vector2(32, 32)
 icon = ExtResource("7_redo")
-icon_alignment = 1
+tooltip_text = "Redo (Ctrl+Y)"
