@@ -4,20 +4,17 @@ extends VBoxContainer
 const SWATCH := preload("res://ui/swatch.tres")
 
 var _swatches: Array[Button] = []
+var _selected_swatch_index: int = -1
 
 @onready var _swatch_grid: HFlowContainer = %SwatchGrid
 @onready var _color_picker: ColorPicker = %ColorPicker
 @onready var _color_picker_button: ColorPickerButton = %ColorPickerButton
 
 
-@onready var _add_color_btn: Button = %AddColorBtn
-
-
 func _ready() -> void:
 	State.color_changed.connect(_on_color_changed)
 	State.cells_changed.connect(_rebuild_swatches)
 	State.frame_changed.connect(_rebuild_swatches)
-	_add_color_btn.pressed.connect(_add_current_color)
 	_color_picker.color = State.current_color
 	_color_picker_button.color = State.current_color
 	_rebuild_swatches()
@@ -37,6 +34,7 @@ func _rebuild_swatches() -> void:
 	for i in palette.size():
 		var b := Button.new()
 		b.custom_minimum_size = Vector2(36, 36)
+		b.focus_mode = Control.FOCUS_NONE
 		b.tooltip_text = State.document.color_of(i).to_html(true)
 		var sb := (SWATCH as StyleBoxFlat).duplicate() as StyleBoxFlat
 		sb.bg_color = palette[i]
@@ -52,9 +50,13 @@ func _rebuild_swatches() -> void:
 
 func _pick_swatch(i: int) -> void:
 	State.set_color(State.document.color_of(i))
+	_selected_swatch_index = i
+	_mark_current()
+
 
 func _on_picker_color_changed(c: Color) -> void:
 	State.set_color(c)
+
 
 func _on_swatch_input(event: InputEvent, i: int) -> void:
 	if event is InputEventMouseButton and event.pressed \
@@ -64,17 +66,29 @@ func _on_swatch_input(event: InputEvent, i: int) -> void:
 
 
 func _add_current_color() -> void:
-	State.document.ensure_color(State.current_color)
+	State.document.add_color(State.current_color)
 	_rebuild_swatches()
+
+
+func _duplicate_selected_color() -> void:
+	if _selected_swatch_index >= 0:
+		var color := State.document.color_of(_selected_swatch_index)
+		State.document.add_color(color)
+		_rebuild_swatches()
+
+
+func _remove_selected_color() -> void:
+	if _selected_swatch_index >= 0:
+		if State.document.remove_color(_selected_swatch_index):
+			_selected_swatch_index = -1
+			_rebuild_swatches()
 
 
 func _mark_current() -> void:
 	for i in _swatches.size():
 		var sb := (SWATCH as StyleBoxFlat).duplicate() as StyleBoxFlat
 		sb.bg_color = State.document.color_of(i)
-		if State.document.color_of(i) == State.current_color:
+		if i == _selected_swatch_index:
 			sb.set_border_width_all(2)
 			sb.border_color = Color.WHITE
 		_swatches[i].add_theme_stylebox_override("normal", sb)
-
-

@@ -89,7 +89,7 @@ func bounds() -> AABB:
 
 
 func paint(frame: int, cell: Vector3i, color: Color) -> void:
-	frames[frame].cells[cell] = ensure_color(color)
+	frames[frame].cells[cell] = add_color(color)
 
 
 func set_cell(frame: int, cell: Vector3i, palette_index: int) -> void:
@@ -111,6 +111,13 @@ func has_cell(frame: int, cell: Vector3i) -> bool:
 
 
 func ensure_color(c: Color) -> int:
+	for i in palette.size():
+		if palette[i] == c:
+			return i
+	return -1
+
+
+func add_color(c: Color) -> int:
 	for i in palette.size():
 		if palette[i] == c:
 			return i

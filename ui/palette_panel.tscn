@@ -2,11 +2,12 @@
 
 [ext_resource type="Script" uid="uid://ctcol2rq44oi1" path="res://ui/palette_panel.gd" id="1_palette"]
 [ext_resource type="Script" uid="uid://cs8h0occl2amh" path="res://ui/color_picker_button.gd" id="2_8seap"]
+[ext_resource type="Texture2D" uid="uid://di606d0g4f27a" path="res://icons/add.svg" id="3_add"]
+[ext_resource type="Texture2D" uid="uid://b4sy3cgu4fauw" path="res://icons/duplicate.svg" id="4_duplicate"]
+[ext_resource type="Texture2D" uid="uid://cv15qg24amrlt" path="res://icons/remove.svg" id="5_remove"]
 
 [node name="PalettePanel" type="VBoxContainer" unique_id=920144879]
 custom_maximum_size = Vector2(512, -1)
-offset_right = 298.0
-offset_bottom = 416.0
 script = ExtResource("1_palette")
 
 [node name="PanelContainer" type="PanelContainer" parent="." unique_id=1050465130]
@@ -16,14 +17,52 @@ size_flags_vertical = 3
 [node name="MarginContainer" type="MarginContainer" parent="PanelContainer" unique_id=1799631802]
 layout_mode = 2
 
-[node name="Scroll" type="ScrollContainer" parent="PanelContainer/MarginContainer" unique_id=1639396238]
+[node name="VBoxContainer" type="VBoxContainer" parent="PanelContainer/MarginContainer" unique_id=1639396238]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="Toolbar" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBoxContainer" unique_id=401515849]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 4
+
+[node name="AddBtn" type="Button" parent="PanelContainer/MarginContainer/VBoxContainer/Toolbar" unique_id=345678901]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(28, 28)
+layout_mode = 2
+tooltip_text = "Add current color to palette"
+focus_mode = 0
+icon = ExtResource("3_add")
+icon_alignment = 1
+
+[node name="DuplicateBtn" type="Button" parent="PanelContainer/MarginContainer/VBoxContainer/Toolbar" unique_id=345678902]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(28, 28)
+layout_mode = 2
+tooltip_text = "Duplicate selected color"
+focus_mode = 0
+icon = ExtResource("4_duplicate")
+icon_alignment = 1
+
+[node name="RemoveBtn" type="Button" parent="PanelContainer/MarginContainer/VBoxContainer/Toolbar" unique_id=345678903]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(28, 28)
+layout_mode = 2
+tooltip_text = "Remove selected color"
+focus_mode = 0
+icon = ExtResource("5_remove")
+icon_alignment = 1
+
+[node name="Scroll" type="ScrollContainer" parent="PanelContainer/MarginContainer/VBoxContainer" unique_id=1639396239]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 horizontal_scroll_mode = 0
 
-[node name="SwatchGrid" type="HFlowContainer" parent="PanelContainer/MarginContainer/Scroll" unique_id=401515849]
+[node name="SwatchGrid" type="HFlowContainer" parent="PanelContainer/MarginContainer/VBoxContainer/Scroll" unique_id=401515850]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
@@ -62,13 +101,8 @@ edit_alpha = false
 edit_intensity = false
 script = ExtResource("2_8seap")
 
-[node name="AddColorBtn" type="Button" parent="PanelContainer2/MarginContainer/VBoxContainer" unique_id=345678901]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 24)
-layout_mode = 2
-tooltip_text = "Add current color to palette"
-text = "Add Color"
-
+[connection signal="pressed" from="PanelContainer/MarginContainer/VBoxContainer/Toolbar/AddBtn" to="." method="_add_current_color"]
+[connection signal="pressed" from="PanelContainer/MarginContainer/VBoxContainer/Toolbar/DuplicateBtn" to="." method="_duplicate_selected_color"]
+[connection signal="pressed" from="PanelContainer/MarginContainer/VBoxContainer/Toolbar/RemoveBtn" to="." method="_remove_selected_color"]
 [connection signal="color_changed" from="PanelContainer2/MarginContainer/VBoxContainer/ColorPicker" to="." method="_on_picker_color_changed"]
 [connection signal="color_changed" from="PanelContainer2/MarginContainer/VBoxContainer/ColorPickerButton" to="." method="_on_picker_color_changed"]
-[connection signal="pressed" from="PanelContainer2/MarginContainer/VBoxContainer/AddColorBtn" to="." method="_on_add_color_pressed"]

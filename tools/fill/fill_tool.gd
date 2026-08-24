@@ -14,6 +14,8 @@ func _flood_fill(seed: Vector3i) -> bool:
 	var frame: VoxelFrame = State.document.frames[State.current_frame]
 	var old_index: int = frame.cells[seed]
 	var new_index: int = State.document.ensure_color(State.current_color)
+	if new_index == -1:
+		new_index = State.document.add_color(State.current_color)
 	if new_index == old_index:
 		return false
 	var stack: Array[Vector3i] = [seed]
