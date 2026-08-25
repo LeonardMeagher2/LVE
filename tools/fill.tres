@@ -2,11 +2,27 @@
 
 [ext_resource type="Script" uid="uid://cjerda0p540dt" path="res://tools/tool_info.gd" id="1_script"]
 [ext_resource type="Texture2D" uid="uid://vfhvhh7m0svp" path="res://icons/fill.svg" id="2_icon"]
+[ext_resource type="Script" uid="uid://psmrld84nlu7" path="res://tools/tool_option.gd" id="3_option"]
+
+[sub_resource type="Resource" id="Resource_con"]
+script = ExtResource("3_option")
+id = "connected"
+label = "connected"
+default = true
+option_scene = "res://tools/connected.tscn"
+
+[sub_resource type="Resource" id="Resource_eps"]
+script = ExtResource("3_option")
+id = "color_epsilon"
+label = "Color tolerance"
+default = 0.0
+option_scene = "res://tools/tolerance.tscn"
 
 [resource]
 script = ExtResource("1_script")
 id = "fill"
 display_name = "Fill"
 icon = ExtResource("2_icon")
-tooltip = "Fill connected voxels with a color"
+tooltip = "Fill matching voxels with a color"
 tool_scene = "res://tools/fill/fill.tscn"
+options = [SubResource("Resource_con"), SubResource("Resource_eps")]

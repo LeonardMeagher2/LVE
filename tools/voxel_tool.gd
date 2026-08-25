@@ -132,6 +132,18 @@ func _use_pixel_perfect() -> bool:
 	return State.get_tool_option(info, "pixel_perfect") == true
 
 
+func colors_equal(a: Color, b: Color) -> bool:
+	var eps: float = State.get_tool_option(info, "color_epsilon")
+	if eps <= 0.0:
+		return a == b
+	return absf(a.r - b.r) <= eps and absf(a.g - b.g) <= eps \
+		and absf(a.b - b.b) <= eps and absf(a.a - b.a) <= eps
+
+
+func _connected() -> bool:
+	return State.get_tool_option(info, "connected") != false
+
+
 func apply(_target: Vector3i, _hit: Vector3i) -> bool:
 	return false
 
@@ -165,14 +177,12 @@ func _capture() -> Dictionary:
 	return {
 		"frame": State.current_frame,
 		"cells": State.document.frames[State.current_frame].cells.duplicate(true),
-		"palette": State.document.palette.duplicate(),
 		"selection": State.selection.cells.duplicate(true),
 	}
 
 
 func _stroke_differs(before: Dictionary, after: Dictionary) -> bool:
 	return _dicts_equal(before["cells"], after["cells"]) == false \
-		or before["palette"] != after["palette"] \
 		or _dicts_equal(before["selection"], after["selection"]) == false
 
 
@@ -190,7 +200,6 @@ func _restore_snapshot(s: Dictionary) -> void:
 	if i < 0 or i >= State.document.frames.size():
 		i = State.current_frame
 	State.document.frames[i].cells = (s["cells"] as Dictionary).duplicate(true)
-	State.document.palette = (s["palette"] as PackedColorArray).duplicate()
 	State.selection.cells = (s["selection"] as Dictionary).duplicate(true)
 	State.notify_restored()
 

@@ -35,15 +35,20 @@ func _commit(seed: Vector3i) -> void:
 
 func _flood(seed: Vector3i) -> VoxelSelection:
 	var frame: VoxelFrame = State.document.frames[State.current_frame]
-	var idx: int = frame.cells[seed]
+	var target: Color = frame.cells[seed]
 	var sel := VoxelSelection.new()
 	sel.add(seed)
+	if not _connected():
+		for c in frame.cells:
+			if colors_equal(frame.cells[c], target):
+				sel.add(c)
+		return sel
 	var stack: Array[Vector3i] = [seed]
 	while not stack.is_empty():
 		for n in _neighbors(stack.pop_back()):
 			if sel.contains(n):
 				continue
-			if frame.cells.get(n, -1) != idx:
+			if not frame.cells.has(n) or not colors_equal(frame.cells[n], target):
 				continue
 			sel.add(n)
 			stack.append(n)

@@ -9,6 +9,7 @@ script = ExtResource("3_opt")
 id = "pixel_perfect"
 label = "pixel perfect"
 default = false
+option_scene = "res://tools/pixel_perfect.tscn"
 
 [resource]
 script = ExtResource("2_qb7oy")

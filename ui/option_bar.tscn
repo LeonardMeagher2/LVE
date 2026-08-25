@@ -7,21 +7,6 @@ custom_minimum_size = Vector2(0, 28)
 theme_override_constants/separation = 6
 script = ExtResource("1_option")
 
-[node name="View" type="MenuButton" parent="." unique_id=438351120]
-layout_mode = 2
-text = "View"
-item_count = 5
-popup/item_0/text = "Top"
-popup/item_0/id = 0
-popup/item_1/text = "Front"
-popup/item_1/id = 1
-popup/item_2/text = "Side"
-popup/item_2/id = 2
-popup/item_3/text = "Isometric"
-popup/item_3/id = 3
-popup/item_4/text = "Reset"
-popup/item_4/id = 4
-
 [node name="OptionsBox" type="HBoxContainer" parent="." unique_id=567840298]
 unique_name_in_owner = true
 layout_mode = 2

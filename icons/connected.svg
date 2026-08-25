@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#c8cacc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" version="1.1" xmlns="http://www.w3.org/2000/svg">
+  <path d="M4 4h16v8h-8v8H4z" id="outline"/>
+  <path d="M12 4v8" id="edge_v"/>
+  <path d="M4 12h8" id="edge_h"/>
+</svg>
