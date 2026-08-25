@@ -8,6 +8,11 @@
 
 [node name="PalettePanel" type="VBoxContainer" unique_id=920144879]
 custom_maximum_size = Vector2(512, -1)
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
 script = ExtResource("1_palette")
 
 [node name="PanelContainer" type="PanelContainer" parent="." unique_id=1050465130]
@@ -49,14 +54,23 @@ tooltip_text = "Remove selected color"
 icon = ExtResource("5_remove")
 icon_alignment = 1
 
-[node name="Scroll" type="ScrollContainer" parent="PanelContainer/MarginContainer/VBoxContainer" unique_id=1639396239]
+[node name="PanelContainer" type="PanelContainer" parent="PanelContainer/MarginContainer/VBoxContainer" unique_id=653745350]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="Scroll" type="ScrollContainer" parent="PanelContainer/MarginContainer/VBoxContainer/PanelContainer" unique_id=1639396239]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 horizontal_scroll_mode = 0
 
-[node name="SwatchGrid" type="HFlowContainer" parent="PanelContainer/MarginContainer/VBoxContainer/Scroll" unique_id=401515850]
+[node name="MarginContainer" type="MarginContainer" parent="PanelContainer/MarginContainer/VBoxContainer/PanelContainer/Scroll" unique_id=606731003]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="SwatchGrid" type="HFlowContainer" parent="PanelContainer/MarginContainer/VBoxContainer/PanelContainer/Scroll/MarginContainer" unique_id=401515850]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3

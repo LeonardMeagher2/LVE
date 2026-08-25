@@ -23,9 +23,9 @@ func _run() -> void:
 		svp.size = Vector2i(800, 500)
 		_center = Vector2(400.0, 250.0)
 		State.set_tool(State.tools.pencil)
-		State.current_color = Color8(200, 60, 60)
+		State.current_color = Color.from_rgba8(200, 60, 60)
 		_anchor = aim(_vp, _center).target
-		State.document.frames[0].cells[_anchor] = State.document.add_color(Color8(150, 150, 150))
+		State.document.frames[0].cells[_anchor] = Color.from_rgba8(150, 150, 150)
 		_vp.sync_to(0)
 		_front = aim(_vp, _center).add_target
 	)
@@ -59,7 +59,7 @@ func _run() -> void:
 	step("Then the front voxel is recolored and no voxel is added", func():
 		var frame: VoxelFrame = State.document.frames[0]
 		expect(frame.cells.size() == 2, "paint mode adds no new voxels")
-		expect(State.document.color_of(frame.cells[_front]) == Color8(200, 60, 60), "the front voxel has the brush color")
+		expect(frame.cells[_front] == Color.from_rgba8(200, 60, 60), "the front voxel has the brush color")
 	)
 
 	step("When the user clears the grid and clicks the empty grid in paint mode", func():

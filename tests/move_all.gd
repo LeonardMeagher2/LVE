@@ -27,8 +27,8 @@ func _run() -> void:
 		var plane := start.plane
 		_a = start.target
 		_b = drag(_vp, _center + Vector2(0.0, 20.0), plane).target
-		State.document.frames[0].cells[_a] = State.document.add_color(State.current_color)
-		State.document.frames[0].cells[_b] = State.document.add_color(Color8(200, 60, 200))
+		State.document.frames[0].cells[_a] = State.current_color
+		State.document.frames[0].cells[_b] = Color.from_rgba8(200, 60, 200)
 		State.selection.clear()
 		_vp.sync_to(0)
 		State.set_tool(State.tools.move)

@@ -25,7 +25,7 @@ func _run() -> void:
 
 	step("When the user picks a color in the toolbar", func():
 		var picker := _inst.get_node("%PalettePanel").get_node("%ColorPicker") as ColorPicker
-		picker.color = Color8(200, 60, 60)
+		picker.color = Color.from_rgba8(200, 60, 60)
 		picker.color_changed.emit(picker.color)
 	)
 
@@ -41,5 +41,5 @@ func _run() -> void:
 		_vp.get_viewport().push_input(click)
 		var frame: VoxelFrame = State.document.frames[0]
 		expect(frame.cells.has(target), "the clicked cell is painted")
-		expect(State.document.color_of(frame.cells[target]) == Color8(200, 60, 60), "the painted cell has the picked color")
+		expect(frame.cells[target] == Color.from_rgba8(200, 60, 60), "the painted cell has the picked color")
 	)

@@ -40,7 +40,7 @@ func _run() -> void:
 	)
 
 	step("Given a voxel above the floor at the center aim", func():
-		State.document.frames[0].cells[Vector3i(-3, 3, 0)] = State.document.add_color(State.current_color)
+		State.document.frames[0].cells[Vector3i(-3, 3, 0)] = State.current_color
 		_vp.sync_to(0)
 	)
 

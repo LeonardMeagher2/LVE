@@ -15,7 +15,7 @@ func _ready() -> void:
 
 func _run() -> void:
 	step("Given an editor with a red brush and a voxel viewport", func():
-		State.current_color = Color8(200, 60, 60)
+		State.current_color = Color.from_rgba8(200, 60, 60)
 		_vp = editor_viewport(_inst)
 		var svp := _vp.get_viewport()
 		var vsize: Vector2i = svp.size
@@ -39,5 +39,5 @@ func _run() -> void:
 
 	step("Then the clicked cell is painted with the brush color", func():
 		expect(State.document.frames[0].cells.has(_pick_target), "clicked cell is painted")
-		expect(State.document.color_of(State.document.frames[0].cells[_pick_target]) == Color8(200, 60, 60), "painted cell has the brush color")
+		expect(State.document.frames[0].cells[_pick_target] == Color.from_rgba8(200, 60, 60), "painted cell has the brush color")
 	)

@@ -13,6 +13,7 @@ var _selected_swatch_index: int = -1
 
 func _ready() -> void:
 	State.color_changed.connect(_on_color_changed)
+	State.document_changed.connect(_rebuild_swatches)
 	State.cells_changed.connect(_rebuild_swatches)
 	State.frame_changed.connect(_rebuild_swatches)
 	_color_picker.color = State.current_color
@@ -33,8 +34,6 @@ func _rebuild_swatches() -> void:
 	var palette := State.document.palette
 	for i in palette.size():
 		var b := Button.new()
-		b.custom_minimum_size = Vector2(36, 36)
-		b.focus_mode = Control.FOCUS_NONE
 		b.tooltip_text = State.document.color_of(i).to_html(true)
 		var sb := (SWATCH as StyleBoxFlat).duplicate() as StyleBoxFlat
 		sb.bg_color = palette[i]
@@ -50,8 +49,6 @@ func _rebuild_swatches() -> void:
 
 func _pick_swatch(i: int) -> void:
 	State.set_color(State.document.color_of(i))
-	_selected_swatch_index = i
-	_mark_current()
 
 
 func _on_picker_color_changed(c: Color) -> void:
@@ -85,6 +82,11 @@ func _remove_selected_color() -> void:
 
 
 func _mark_current() -> void:
+	_selected_swatch_index = -1
+	for i in State.document.palette.size():
+		if State.document.palette[i] == State.current_color:
+			_selected_swatch_index = i
+			break
 	for i in _swatches.size():
 		var sb := (SWATCH as StyleBoxFlat).duplicate() as StyleBoxFlat
 		sb.bg_color = State.document.color_of(i)

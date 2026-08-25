@@ -45,7 +45,7 @@ func _run() -> void:
 			_dv = Vector3i(0, 0, 1)
 		_near = _seed + _du
 		_far = _seed + _du * 12
-		var gray := State.document.add_color(Color8(150, 150, 150))
+		var gray := Color.from_rgba8(150, 150, 150)
 		var f: VoxelFrame = State.document.frames[State.current_frame]
 		f.cells[_seed] = gray
 		f.cells[_near] = gray

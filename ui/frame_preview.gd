@@ -29,7 +29,7 @@ func _render(frame: VoxelFrame, document: VoxiDocument) -> ImageTexture:
 	var cells: Array = []
 	for c in frame.cells.keys():
 		var depth: float = c.x + c.y + c.z
-		cells.append([depth, c, document.color_of(int(frame.cells[c]))])
+		cells.append([depth, c, frame.cells[c]])
 	cells.sort_custom(func(a: Array, b: Array) -> bool: return a[0] < b[0])
 	var hw := s
 	var hv := s / 2.0
@@ -70,7 +70,7 @@ func _fill_checkerboard(img: Image) -> void:
 		var x := 0
 		while x < SIZE:
 			var even := ((x / step) + (y / step)) % 2 == 0
-			var c := Color8(42, 42, 46) if even else Color8(54, 54, 60)
+			var c := Color.from_rgba8(42, 42, 46) if even else Color.from_rgba8(54, 54, 60)
 			for j in mini(step, SIZE - y):
 				for i in mini(step, SIZE - x):
 					img.set_pixel(x + i, y + j, c)

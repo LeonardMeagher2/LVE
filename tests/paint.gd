@@ -15,7 +15,7 @@ func _ready() -> void:
 
 func _run() -> void:
 	step("Given a red brush on an empty grid", func():
-		State.current_color = Color8(200, 60, 60)
+		State.current_color = Color.from_rgba8(200, 60, 60)
 		_vp = editor_viewport(_inst)
 		var svp := _vp.get_viewport()
 		var container := svp.get_parent()

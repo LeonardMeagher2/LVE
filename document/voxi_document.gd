@@ -65,15 +65,7 @@ func color_of(palette_index: int) -> Color:
 func remove_color(index: int) -> bool:
 	if index < 0 or index >= palette.size():
 		return false
-	for f in frames:
-		for c in f.cells.values():
-			if c == index:
-				return false
 	palette.remove_at(index)
-	for f in frames:
-		for key in f.cells.keys():
-			if f.cells[key] > index:
-				f.cells[key] -= 1
 	return true
 
 
@@ -89,11 +81,11 @@ func bounds() -> AABB:
 
 
 func paint(frame: int, cell: Vector3i, color: Color) -> void:
-	frames[frame].cells[cell] = add_color(color)
+	frames[frame].cells[cell] = color
 
 
-func set_cell(frame: int, cell: Vector3i, palette_index: int) -> void:
-	frames[frame].cells[cell] = palette_index
+func set_cell(frame: int, cell: Vector3i, color: Color) -> void:
+	frames[frame].cells[cell] = color
 
 
 func erase(frame: int, cell: Vector3i) -> void:
@@ -102,7 +94,7 @@ func erase(frame: int, cell: Vector3i) -> void:
 
 func color_at(frame: int, cell: Vector3i) -> Color:
 	if frames[frame].cells.has(cell):
-		return color_of(frames[frame].cells[cell])
+		return frames[frame].cells[cell]
 	return Color.TRANSPARENT
 
 

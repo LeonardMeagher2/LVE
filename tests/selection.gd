@@ -24,7 +24,7 @@ func _run() -> void:
 			vsize = svp.size
 		_center = Vector2(vsize.x * 0.5, vsize.y * 0.5)
 		_seed = aim(_vp, _center).target
-		var gray := State.document.add_color(Color8(150, 150, 150))
+		var gray := Color.from_rgba8(150, 150, 150)
 		var f: VoxelFrame = State.document.frames[State.current_frame]
 		f.cells[_seed] = gray
 		f.cells[_seed + Vector3i(12, 0, 0)] = gray

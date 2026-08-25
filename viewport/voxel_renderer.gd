@@ -24,4 +24,4 @@ func sync_to(frame: int) -> void:
 	for i in keys.size():
 		var c: Vector3i = keys[i]
 		multimesh.set_instance_transform(i, Transform3D(Basis.IDENTITY, Vector3(c)))
-		multimesh.set_instance_color(i, d.color_of(int(voxel_frame.cells[c])))
+		multimesh.set_instance_color(i, voxel_frame.cells[c])

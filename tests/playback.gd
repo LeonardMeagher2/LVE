@@ -15,7 +15,7 @@ func _run() -> void:
 	step("Given a document with two distinct frames", func():
 		_vp = editor_viewport(_inst)
 		State.document.add_frame()
-		State.document.frames[1].cells[Vector3i(9, 0, 9)] = State.document.add_color(State.current_color)
+		State.document.frames[1].cells[Vector3i(9, 0, 9)] = State.current_color
 		State.document.frames[0].delay_ms = 250
 		State.document.frames[1].delay_ms = 250
 		_vp.sync_to(0)
