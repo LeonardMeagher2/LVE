@@ -108,5 +108,5 @@ delay_ms = 250
 
 [resource]
 script = ExtResource("2_1nepm")
-palette = PackedColorArray(0.9795082, 0.36638093, 0.96945685, 1, 0.14754099, 0.13458891, 0.14732867, 1, 0.52868855, 0.31277376, 0.5251491, 1, 0.9672131, 0.7873206, 0.21042423, 1)
+palette = PackedColorArray(0.9795082, 0.36638093, 0.96945685, 1, 0.9672131, 0.7873206, 0.21042423, 1, 0.14754099, 0.13458891, 0.14732867, 1, 0.52868855, 0.31277376, 0.5251491, 1)
 frames = Array[ExtResource("1_p7nc4")]([SubResource("Resource_bpi0g"), SubResource("Resource_p7nc4")])
