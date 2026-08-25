@@ -2,8 +2,19 @@
 max_active: 1
 ---
 
+# Viewport
+- [x] Move the view controls into the control bar as a camera menu
+  - [x] Axis views: top, bottom, front, back, left, right, isometric
+  - [x] Perspective/Ortho toggle that keeps the framing
+  - [x] Unshaded toggle via the viewport debug draw mode
+  - [x] Pan mode toggle: left-drag pans instead of painting
+
+
 # Tools
-- [ ] Add undo and redo buttons to the toolbar
+- [ ] floor plane
+  - [ ] Allow picking on any side of the "floor" plane, not just the top
+  - [ ] Add option to change the floor plane to a different axis (X, Y, Z)
+  - [ ] Add option to move the floor plane up and down along the axis
 - [ ] Line tool
   - [ ] Click to start, click to end, or click and drag to draw a line
 - [ ] Extrude tool
@@ -21,6 +32,7 @@ max_active: 1
   - [ ] Add a "commit" button to the scale tool, so that the user can scale voxels and then commit or cancel the scale
   - [ ] Switching to another tool while scaling voxels should commit the scale
   - [ ] Add a "uniform scale" option to the scale tool, so that the user can scale voxels uniformly in all directions
+- [x] Add undo and redo buttons to the toolbar
 - [x] Fix the move tool
   - [x] Voxels move live during the drag, so the moved cells stay grabbable
   - [x] Displaced voxels are stored and restored on the next drag, so sweeping destroys nothing
@@ -40,6 +52,8 @@ max_active: 1
 
 # Palette
 - [ ] Adding a color should be manual not automatic
+- [ ] Palette should allow duplicate colors
+- [ ] Modifying the palette should add undo/redo support
 - [ ] Drag to select multiple swatches
 - [ ] Dragging a selection of swatches moves them to a new location in the palette
 - [ ] Palette toolbar
@@ -53,7 +67,7 @@ max_active: 1
 
 
 # Selection
-- [ ] Fix UI bug where disabled "clear seletion" button changes size
+- [x] Fix UI bug where disabled "clear seletion" button changes size
 - [x] Box and lasso select every cell in the region, including empty space
 - [x] With a selection active, edits stay inside the selected cells
 - [x] Wand select selects all connected voxels of one color
@@ -75,7 +89,7 @@ max_active: 1
 - [ ] Copy selection to clipboard
 - [ ] Paste selection at an offset
 - [ ] First mode: select a flat section on the press plane
-- [ ] After the section is set, expand the volume along the 3rd axis by dragging the mouse. Might be good to even auto rotate the view if the 3rd axis isn't easily visible. The 3rd axis is the one perpendicular to the press plane.
+- [ ] After the section is set, expand the volume along the 3rd axis by dragging the mouse. The 3rd axis is along the normal of the press plane. The drag distance sets the depth of the volume.
 - [ ] Visual feedback for both phases
 
 

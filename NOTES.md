@@ -28,6 +28,11 @@ This file records confirmed, non-obvious facts learned while working on Voxi. Re
 - 2026-08-20: This Steam build writes `unique_id` on every node and resolves `parent=` as the full path from the scene root. Hand-editing a node with a short relative parent path breaks instantiation. The node and its subtree are skipped. Re-save the scene in the editor to regenerate the full path and `unique_id`.
 - 2026-08-21: An `AnimationPlayer` property track resolves its node path relative to `root_node`. A player nested under the node that owns the animated property needs `root_node = NodePath("../..")` to target it.
 - 2026-08-23: `OS.execute_with_pipe(path, arguments, false)` returns `{stdio, stderr, pid}`. A non-blocking `get_buffer` never stalls. It returns empty bytes when no data is ready. Unlike `create_process`, it captures output. Unlike `execute`, it returns a pid for `kill()`.
+- 2026-08-24: `Viewport.debug_draw = DEBUG_DRAW_UNSHADED` (=1) renders the whole SubViewport without shading. It needs no material swap.
+- 2026-08-24: An orthographic camera keeps perspective framing when `size = 2 * dist * tan(fov / 2)`. `keep_aspect` stays at the default KEEP_HEIGHT.
+- 2026-08-24: The `BaseButton.button_pressed` setter emits `toggled`. Use `set_pressed_no_signal()` to sync a button without a signal round-trip.
+- 2026-08-24: A `ButtonGroup` unpresses siblings during a press. The order of the two `toggled` emissions is not fixed. Derive shared state in guarded per-button handlers, not from `get_pressed_button()`.
+- 2026-08-24: A sync handler that writes `set_pressed_no_signal` during a sibling `toggled` cascade corrupts the engine press in flight. The next `toggled` then reports the corrupted value. Defer such sync with `call_deferred` to the end of the frame.
 
 ## Picking
 
@@ -53,6 +58,8 @@ This file records confirmed, non-obvious facts learned while working on Voxi. Re
 - 2026-08-23: `ToolInfo.tool_scene` holds the tool node scene that the viewport adds. `ToolOption.option_scene` points to an option widget scene. `OptionBar` instantiates it and sets `option` and `group`.
 - 2026-08-23: An option widget scene is declarative. Buttons and icons live in the `.tscn`. The script wires state only.
 - 2026-08-24: Option widget scenes live in the tools directory. `mode_picker.tscn` is shared by the select, lasso, and wand tools. It lives in `tools/select/` and the other tools reference it cross-directory.
+- 2026-08-24: Option widgets that differ by one asset inherit a base scene. The child scene overrides only the icon. `ToolOption` stays free of presentation data.
+- 2026-08-24: `SpinBox.suffix` is display-only. It does not scale the value. Scale in the widget script when the shown range differs from the stored range.
 
 ## Workflow
 
@@ -72,3 +79,9 @@ This file records confirmed, non-obvious facts learned while working on Voxi. Re
 - 2026-08-23: Godot reserializes hand-authored `.tres` files on editor use. It reorders sub-resource properties and adds `uid` attributes to script references. Re-read before exact-string edits.
 - 2026-08-23: Godot drops a signal connection when the callable's target object is freed. A lambda has no target object, so its connection survives and touches freed nodes. Wire state sync to node methods, not lambdas, when the node can be freed.
 - 2026-08-23: A slice subscription like `arr[0:1]` fails to parse when passed as a function call argument in this build. Pass a plain array literal instead.
+- 2026-08-24: `expect(cond, msg)` evaluates `cond` before `expect` runs. A script error in the condition aborts the step lambda. No check is recorded. The test then reports OK.
+- 2026-08-24: A `const` value must be a constant expression. A call like `Color.from_rgba8(...)` fails to parse there. Use the named colors or a plain `var`.
+- 2026-08-24: A base-class `_ready()` does not run when a subclass overrides `_ready()` without `super()`. Connect to the `ready` signal in `_init()` instead. The signal fires either way.
+- 2026-08-24: `DirAccess.remove_absolute()` deletes a file or an empty directory only. Empty the directory with `get_files()`, `get_directories()`, and `remove()` first.
+- 2026-08-24: Unhandled input reaches later siblings first. A node placed after the tool layer consumes events before tools see them. The camera rig uses this to intercept left-drag in pan mode.
+- 2026-08-24: Every headless test run prints a stray GDScript backtrace at `_ready` plus RID-leak errors at exit. They appear on untouched tests too. They are noise, not failures.
