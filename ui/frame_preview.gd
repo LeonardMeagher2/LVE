@@ -69,6 +69,7 @@ func _fill_checkerboard(img: Image) -> void:
 	while y < SIZE:
 		var x := 0
 		while x < SIZE:
+			@warning_ignore("integer_division")
 			var even := ((x / step) + (y / step)) % 2 == 0
 			var c := Color.from_rgba8(42, 42, 46) if even else Color.from_rgba8(54, 54, 60)
 			for j in mini(step, SIZE - y):

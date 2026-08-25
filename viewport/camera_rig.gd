@@ -39,6 +39,7 @@ func _frame_target(d: VoxiDocument) -> Vector3:
 	return d.bounds().get_center()
 
 
+@warning_ignore("shadowed_variable_base_class")
 func set_view(name: String) -> void:
 	match name:
 		"top":

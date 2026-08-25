@@ -53,6 +53,7 @@ func _focus_box() -> AABB:
 	return State.document.bounds()
 
 
+@warning_ignore("shadowed_variable_base_class")
 func set_view(name: String) -> void:
 	camera_rig.set_view(name)
 

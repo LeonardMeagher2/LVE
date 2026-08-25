@@ -17,6 +17,7 @@ func _ready() -> void:
 func set_tool(t: ToolInfo) -> void:
 	_vp.set_tool(t)
 	_tool_group = t.group
+	@warning_ignore("int_as_enum_without_cast")
 	mouse_default_cursor_shape = _cursor()
 
 
@@ -40,6 +41,7 @@ func toggle_grid() -> void:
 	_vp.toggle_grid()
 
 
+@warning_ignore("shadowed_variable_base_class")
 func set_view(name: String) -> void:
 	_vp.set_view(name)
 
@@ -53,6 +55,7 @@ func set_unshaded(on: bool) -> void:
 
 
 func _on_view_mode_changed(_mode) -> void:
+	@warning_ignore("int_as_enum_without_cast")
 	mouse_default_cursor_shape = _cursor()
 
 
