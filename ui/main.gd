@@ -127,12 +127,8 @@ func _to_end() -> void:
 
 
 func _update_status() -> void:
-	var total := 0
-	for f in State.document.frames:
-		total += f.delay_ms
 	_status_bar.set_status(
 		State.tool.display_name, State.current_color.to_html(false),
-		State.document.frames[State.current_frame].delay_ms, total,
 		State.current_frame, State.document.frames.size(),
 		int(_zoom_percent))
 
