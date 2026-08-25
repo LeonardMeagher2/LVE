@@ -44,9 +44,7 @@ func _build_tool_buttons() -> void:
 
 func _tool_selected(toggled_on:bool, button:Button, tool_name:String) -> void:
 	if toggled_on:
-		button.release_focus()
 		button.button_pressed = true
-		
 		var info: ToolInfo = State.tools[tool_name]
 		State.set_tool(info)
 

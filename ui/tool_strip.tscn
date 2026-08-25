@@ -17,6 +17,7 @@ icon_alignment = 1
 
 [node name="MenuButton" type="MenuButton" parent="." unique_id=1391354676]
 layout_mode = 2
+focus_mode = 2
 button_group = SubResource("ButtonGroup_cf8o7")
 icon = ExtResource("2_cf8o7")
 flat = false
