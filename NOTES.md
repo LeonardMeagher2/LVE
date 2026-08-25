@@ -5,6 +5,7 @@ This file records confirmed, non-obvious facts learned while working on Voxi. Re
 ## Godot API changes
 
 - 2026-08-16: `Mesh.PRIMITIVE_TRIANGLE_FAN` does not exist. Use `PRIMITIVE_TRIANGLE_STRIP` for a 4-vertex quad.
+- 2026-08-24: `SurfaceTool.add_triangle_fan(vertices)` builds a fan in one call. It errors with "!begun" unless `begin(Mesh.PRIMITIVE_TRIANGLES)` runs first.
 - 2026-08-16: `BaseMaterial3D.SHADE_UNSHADED` is now `SHADING_MODE_UNSHADED`.
 - 2026-08-16: `add_surface_from_arrays` takes a plain `Array` sized to `Mesh.ARRAY_MAX`, indexed by array type.
 - 2026-08-16: `Point2` does not exist. Use `Vector2`.

@@ -3,10 +3,10 @@ max_active: 1
 ---
 
 # Tools
-- [ ] floor plane
-  - [ ] Allow picking on any side of the "floor" plane, not just the top
-  - [ ] Add option to change the floor plane to a different axis (X, Y, Z)
-  - [ ] Add option to move the floor plane up and down along the axis
+- [x] floor plane
+  - [x] Allow picking on any side of the "floor" plane, not just the top
+  - [x] Add option to change the floor plane to a different axis (X, Y, Z)
+  - [x] Add option to move the floor plane up and down along the axis
 - [ ] Line tool
   - [ ] Click to start, click to end, or click and drag to draw a line
 - [ ] Extrude tool

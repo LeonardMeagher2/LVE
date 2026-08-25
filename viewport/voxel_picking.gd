@@ -94,13 +94,23 @@ static func ray_voxel(origin: Vector3, dir: Vector3, cells: Dictionary) -> PickR
 
 
 static func ground_pick(origin: Vector3, dir: Vector3, forward: Vector3) -> PickResult:
-	if dir.y >= -1e-8:
+	var axis := State.floor_axis
+	var denom := dir[axis]
+	if absf(denom) < 1e-8:
 		return PickResult.new()
-	var t: float = (-0.5 - origin.y) / dir.y
+	var level := float(State.floor_index) - 0.5
+	var t: float = (level - origin[axis]) / denom
 	if t <= 0.0:
 		return PickResult.new()
 	var p: Vector3 = origin + dir * t
-	var c := Vector3i(int(floori(p.x + 0.5)), 0, int(floori(p.z + 0.5)))
+	var c := Vector3i.ZERO
+	for i in 3:
+		if i != axis:
+			c[i] = int(floori(p[i] + 0.5))
+	if origin[axis] >= level:
+		c[axis] = State.floor_index
+	else:
+		c[axis] = State.floor_index - 1
 	var res := PickResult.new()
 	res.target = c
 	res.add_target = c

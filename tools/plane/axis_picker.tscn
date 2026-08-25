@@ -1,0 +1,32 @@
+[gd_scene format=3 uid="uid://ddpkm0ynpookr"]
+
+[ext_resource type="Script" uid="uid://oys7lq7bf3te" path="res://tools/plane/axis_picker.gd" id="1"]
+
+[sub_resource type="ButtonGroup" id="bg"]
+
+[node name="AxisPicker" type="HBoxContainer" unique_id=1045287805]
+script = ExtResource("1")
+
+[node name="x" type="Button" parent="." unique_id=87429794]
+custom_minimum_size = Vector2(24, 0)
+layout_mode = 2
+tooltip_text = "Floor plane faces the X axis"
+toggle_mode = true
+button_group = SubResource("bg")
+text = "X"
+
+[node name="y" type="Button" parent="." unique_id=432623458]
+custom_minimum_size = Vector2(24, 0)
+layout_mode = 2
+tooltip_text = "Floor plane faces the Y axis"
+toggle_mode = true
+button_group = SubResource("bg")
+text = "Y"
+
+[node name="z" type="Button" parent="." unique_id=1054591168]
+custom_minimum_size = Vector2(24, 0)
+layout_mode = 2
+tooltip_text = "Floor plane faces the Z axis"
+toggle_mode = true
+button_group = SubResource("bg")
+text = "Z"

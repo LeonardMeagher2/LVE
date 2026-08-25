@@ -11,6 +11,7 @@ signal tool_option_changed(group: String, id: String, value: Variant)
 signal cells_changed()
 signal selection_changed()
 signal view_mode_changed(mode: ViewMode)
+signal floor_plane_changed()
 
 enum ViewMode {
 	NONE,
@@ -31,6 +32,18 @@ var view_mode: ViewMode = ViewMode.NONE:
 			return
 		view_mode = value
 		view_mode_changed.emit(value)
+var floor_axis := Vector3.Axis.AXIS_Y:
+	set(value):
+		if value == floor_axis or value < Vector3.Axis.AXIS_X or value > Vector3.Axis.AXIS_Z:
+			return
+		floor_axis = value
+		floor_plane_changed.emit()
+var floor_index := 0:
+	set(value):
+		if value == floor_index:
+			return
+		floor_index = value
+		floor_plane_changed.emit()
 var tools := {}
 var tool: ToolInfo = null
 var current_color := Color.from_rgba8(20, 20, 20)
@@ -55,6 +68,7 @@ func _ready() -> void:
 	add_tool(load("res://tools/wand_select.tres"))
 	add_tool(load("res://tools/lasso.tres"))
 	add_tool(load("res://tools/move.tres"))
+	add_tool(load("res://tools/plane.tres"))
 	tool = tools["pencil"]
 
 
