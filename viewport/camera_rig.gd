@@ -2,6 +2,7 @@ class_name EditorCameraRig
 extends Node3D
 
 signal zoom_changed(percent: float)
+signal view_changed
 
 @onready var _camera: Camera3D = $Camera3D
 
@@ -10,8 +11,7 @@ var _pitch := deg_to_rad(45.0)
 var _dist := 24.0
 var _target := Vector3.ZERO
 var _init_dist := 24.0
-var _orbiting := false
-var _panning := false
+var _ortho := false
 
 func _ready() -> void:
 	configure()
@@ -24,13 +24,11 @@ func configure() -> void:
 	_update_camera()
 
 
-func reset_view() -> void:
-	_yaw = deg_to_rad(0.0)
-	_pitch = deg_to_rad(45.0)
-	_init_dist = _frame_distance(State.document)
-	_dist = _init_dist
-	_target = _frame_target(State.document)
+func center_on(box: AABB) -> void:
+	_target = box.get_center()
+	_dist = maxf(box.size.length(), 16.0) * 1.5
 	_update_camera()
+	zoom_changed.emit(zoom_percent())
 
 
 func _frame_distance(d: VoxiDocument) -> float:
@@ -45,14 +43,18 @@ func set_view(name: String) -> void:
 	match name:
 		"top":
 			_set_angles(0.0, deg_to_rad(89.0))
+		"bottom":
+			_set_angles(0.0, deg_to_rad(-89.0))
 		"front":
 			_set_angles(0.0, 0.0)
-		"side":
+		"back":
+			_set_angles(deg_to_rad(180.0), 0.0)
+		"right", "side":
 			_set_angles(deg_to_rad(90.0), 0.0)
+		"left":
+			_set_angles(deg_to_rad(-90.0), 0.0)
 		"isometric":
-			_set_angles(deg_to_rad(-90.0), deg_to_rad(45.0))
-		"reset":
-			reset_view()
+			_set_angles(deg_to_rad(-45.0), deg_to_rad(45.0))
 
 
 func _set_angles(yaw: float, pitch: float) -> void:
@@ -63,6 +65,15 @@ func _set_angles(yaw: float, pitch: float) -> void:
 
 func camera() -> Camera3D:
 	return _camera
+
+
+func is_orthogonal() -> bool:
+	return _ortho
+
+
+func set_projection(orthogonal: bool) -> void:
+	_ortho = orthogonal
+	_update_camera()
 
 
 func zoom_percent() -> float:
@@ -77,14 +88,16 @@ func set_zoom_percent(percent: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	var mode := State.view_mode
 	if event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
+		if mode != State.ViewMode.NONE and mb.button_index == MOUSE_BUTTON_LEFT:
+			get_viewport().set_input_as_handled()
+			return
 		match mb.button_index:
 			MOUSE_BUTTON_RIGHT:
-				_orbiting = mb.pressed
 				get_viewport().set_input_as_handled()
 			MOUSE_BUTTON_MIDDLE:
-				_panning = mb.pressed
 				get_viewport().set_input_as_handled()
 			MOUSE_BUTTON_WHEEL_UP:
 				_zoom(0.85)
@@ -95,7 +108,13 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event is InputEventMouseMotion:
 		var mm := event as InputEventMouseMotion
 		var mask := mm.button_mask
-		if mask & MOUSE_BUTTON_MASK_MIDDLE or (mask & MOUSE_BUTTON_MASK_RIGHT and mm.shift_pressed):
+		if mask & MOUSE_BUTTON_MASK_LEFT and mode != State.ViewMode.NONE:
+			if mode == State.ViewMode.PAN:
+				_pan(mm.relative)
+			else:
+				_orbit(mm.relative)
+			get_viewport().set_input_as_handled()
+		elif mask & MOUSE_BUTTON_MASK_MIDDLE or (mask & MOUSE_BUTTON_MASK_RIGHT and mm.shift_pressed):
 			_pan(mm.relative)
 			get_viewport().set_input_as_handled()
 		elif mask & MOUSE_BUTTON_MASK_RIGHT:
@@ -130,3 +149,9 @@ func _update_camera() -> void:
 	) * _dist
 	_camera.position = _target + off
 	_camera.look_at(_target, Vector3.UP)
+	if _ortho:
+		_camera.projection = Camera3D.PROJECTION_ORTHOGONAL
+		_camera.size = 2.0 * _dist * tan(deg_to_rad(_camera.fov) / 2.0)
+	else:
+		_camera.projection = Camera3D.PROJECTION_PERSPECTIVE
+	view_changed.emit()

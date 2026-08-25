@@ -28,12 +28,12 @@
      inkscape:pagecheckerboard="0"
      inkscape:deskcolor="#505050"
      inkscape:zoom="48.625"
-     inkscape:cx="12"
+     inkscape:cx="12.010283"
      inkscape:cy="12"
      inkscape:window-width="2560"
      inkscape:window-height="1369"
-     inkscape:window-x="2552"
-     inkscape:window-y="33"
+     inkscape:window-x="-8"
+     inkscape:window-y="-8"
      inkscape:window-maximized="1"
      inkscape:current-layer="g3" />
   <g
@@ -43,10 +43,7 @@
        d="M10 3h4v12l-2 5-2-5Z"
        id="path1" />
     <path
-       d="M10 6h4"
+       d="m 9.985458,6.5671396 h 4"
        id="path2" />
-    <path
-       d="m 10.941832,14.633048 h 2"
-       id="path3" />
   </g>
 </svg>

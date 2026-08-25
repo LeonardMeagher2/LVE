@@ -1,7 +1,6 @@
 extends Control
 
 @onready var _toolbar = %MenuBar
-@onready var _option_bar: OptionBar = %OptionBar
 @onready var _viewport_panel: EditorViewportPanel = %ViewportContainer
 @onready var _control_bar: ControlBar = %ControlBar
 @onready var _bottom_dock: EditorBottomDock = %BottomDock
@@ -39,10 +38,12 @@ func _ready() -> void:
 	_bottom_dock.delay_changed.connect(_update_status)
 	_viewport_panel.zoom_changed.connect(_on_zoom_changed)
 	_viewport_panel.grid_changed.connect(_control_bar.set_grid_visible)
-	_option_bar.view_requested.connect(_viewport_panel.set_view)
 	_control_bar.zoom_requested.connect(_viewport_panel.set_zoom_percent)
 	_control_bar.grid_toggled.connect(_viewport_panel.set_grid_visible)
-	_control_bar.reset_view_requested.connect(_viewport_panel.reset_view)
+	_control_bar.center_requested.connect(_viewport_panel.center_content)
+	_control_bar.view_requested.connect(_viewport_panel.set_view)
+	_control_bar.projection_requested.connect(_viewport_panel.set_projection)
+	_control_bar.unshaded_requested.connect(_viewport_panel.set_unshaded)
 	_viewport_panel.set_tool(State.tool)
 	_update_status()
 

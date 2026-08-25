@@ -10,6 +10,13 @@ signal tool_changed(tool: ToolInfo)
 signal tool_option_changed(group: String, id: String, value: Variant)
 signal cells_changed()
 signal selection_changed()
+signal view_mode_changed(mode: ViewMode)
+
+enum ViewMode {
+	NONE,
+	PAN,
+	ROTATE,
+}
 
 var document: VoxiDocument
 var current_frame := 0:
@@ -18,9 +25,15 @@ var current_frame := 0:
 			return
 		current_frame = value
 		frame_changed.emit()
+var view_mode: ViewMode = ViewMode.NONE:
+	set(value):
+		if value == view_mode:
+			return
+		view_mode = value
+		view_mode_changed.emit(value)
 var tools := {}
 var tool: ToolInfo = null
-var current_color := Color8(20, 20, 20)
+var current_color := Color.from_rgba8(20, 20, 20)
 var selection := VoxelSelection.new()
 var undo_redo := UndoRedo.new()
 var playback := Playback.new()
@@ -53,7 +66,7 @@ func reset() -> void:
 	document = VoxiDocument.new()
 	current_frame = 0
 	undo_redo.clear_history()
-	current_color = Color8(20, 20, 20)
+	current_color = Color.from_rgba8(20, 20, 20)
 	selection.clear()
 	color_changed.emit(current_color)
 	tool_changed.emit(tool)

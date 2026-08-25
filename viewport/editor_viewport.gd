@@ -39,12 +39,40 @@ func set_tool(t: ToolInfo) -> void:
 	_tool.visible = true
 	_tool.on_activated()
 
-func reset_view() -> void:
-	camera_rig.reset_view()
+func center_content() -> void:
+	camera_rig.center_on(_focus_box())
+
+
+func _focus_box() -> AABB:
+	if not State.selection.is_empty():
+		var b := AABB()
+		for c in State.selection.cells:
+			var cb := AABB(Vector3(c), Vector3.ONE)
+			b = cb if not b.has_volume() else b.merge(cb)
+		return b
+	return State.document.bounds()
 
 
 func set_view(name: String) -> void:
 	camera_rig.set_view(name)
+
+
+func set_projection(orthogonal: bool) -> void:
+	camera_rig.set_projection(orthogonal)
+
+
+func is_orthogonal() -> bool:
+	return camera_rig.is_orthogonal()
+
+
+func set_unshaded(on: bool) -> void:
+	var vp: SubViewport = %Viewport
+	vp.debug_draw = Viewport.DEBUG_DRAW_UNSHADED if on else Viewport.DEBUG_DRAW_DISABLED
+
+
+func is_unshaded() -> bool:
+	var vp: SubViewport = %Viewport
+	return vp.debug_draw == Viewport.DEBUG_DRAW_UNSHADED
 
 
 func set_zoom_percent(percent: float) -> void:

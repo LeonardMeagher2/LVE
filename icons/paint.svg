@@ -28,12 +28,12 @@
      inkscape:pagecheckerboard="0"
      inkscape:deskcolor="#505050"
      inkscape:zoom="48.625"
-     inkscape:cx="11.979434"
+     inkscape:cx="11.989717"
      inkscape:cy="12"
      inkscape:window-width="2544"
      inkscape:window-height="1353"
-     inkscape:window-x="2648"
-     inkscape:window-y="71"
+     inkscape:window-x="2560"
+     inkscape:window-y="41"
      inkscape:window-maximized="0"
      inkscape:current-layer="g5" />
   <g
@@ -43,10 +43,11 @@
        d="M12 1.5V8"
        id="path1" />
     <path
-       d="M9.75 8h4.5v2.5h-4.5Z"
-       id="path2" />
+       d="m 9.75,8 h 4.5 l 0.04363,3.154392 -4.4999999,0 z"
+       id="path2"
+       sodipodi:nodetypes="ccccc" />
     <path
-       d="m 9.75,10.5 -0.8036344,4.709821 c -0.1071451,0.42858 0.080359,0.64287 0.5625116,0.64287 l 4.9822458,0 c 0.482153,0 0.669656,-0.21429 0.562511,-0.64287 L 14.25,10.5 Z"
+       d="m 9.7936261,11.154392 -0.8472605,4.055429 c -0.1071451,0.42858 0.080359,0.64287 0.5625116,0.64287 h 4.9822458 c 0.482153,0 0.669656,-0.21429 0.562511,-0.64287 l -0.760008,-4.055429 z"
        id="path3"
        sodipodi:nodetypes="ccssccc" />
   </g>

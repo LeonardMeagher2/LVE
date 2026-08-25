@@ -25,6 +25,10 @@ window/size/viewport_width=1280
 window/size/viewport_height=800
 window/stretch/aspect="expand"
 
+[gui]
+
+theme/custom="uid://cfbvk6vpaexfm"
+
 [input]
 
 tool_pencil={

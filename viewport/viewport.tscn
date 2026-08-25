@@ -7,21 +7,13 @@
 [ext_resource type="Script" uid="uid://d3i6vt2reee27" path="res://viewport/voxel_renderer.gd" id="4_voxels"]
 [ext_resource type="Script" uid="uid://c0xmjig8s4i0q" path="res://viewport/grid_renderer.gd" id="5_grid"]
 [ext_resource type="Script" uid="uid://ba28f277f4w0n" path="res://viewport/selection_overlay.gd" id="6_selection"]
-[ext_resource type="Material" path="res://viewport/selection_outline.tres" id="8_selmat"]
 [ext_resource type="Script" uid="uid://baghrya6g6rga" path="res://viewport/playback_animator.gd" id="7_playback"]
-
-[sub_resource type="PanoramaSkyMaterial" id="PanoramaSkyMaterial_ksrty"]
-panorama = ExtResource("2_m8cgj")
-filter = false
-
-[sub_resource type="Sky" id="Sky_lgly7"]
-sky_material = SubResource("PanoramaSkyMaterial_ksrty")
+[ext_resource type="Material" path="res://viewport/selection_outline.tres" id="8_selmat"]
 
 [sub_resource type="Environment" id="Environment_env"]
-background_mode = 2
+background_mode = 3
 background_color = Color(0.118, 0.122, 0.133, 1)
 background_canvas_max_layer = -1
-sky = SubResource("Sky_lgly7")
 ambient_light_source = 2
 ambient_light_color = Color(0.54901963, 0.5686275, 0.61960787, 1)
 reflected_light_source = 1
@@ -60,12 +52,25 @@ stretch = true
 script = ExtResource("2_panel")
 
 [node name="Viewport" type="SubViewport" parent="." unique_id=1299710563]
+unique_name_in_owner = true
 handle_input_locally = false
 use_taa = true
 use_debanding = true
 use_hdr_2d = true
 size = Vector2i(1280, 800)
 render_target_update_mode = 4
+
+[node name="CanvasLayer" type="CanvasLayer" parent="Viewport" unique_id=26035556]
+layer = -1
+
+[node name="TextureRect" type="TextureRect" parent="Viewport/CanvasLayer" unique_id=1466246853]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("2_m8cgj")
+stretch_mode = 1
 
 [node name="Editor" type="Node3D" parent="Viewport" unique_id=1277093566]
 unique_name_in_owner = true
@@ -77,13 +82,6 @@ environment = SubResource("Environment_env")
 [node name="Light" type="DirectionalLight3D" parent="Viewport/Editor" unique_id=766933468]
 shadow_enabled = true
 
-[node name="CameraRig" type="Node3D" parent="Viewport/Editor" unique_id=106959201]
-unique_name_in_owner = true
-script = ExtResource("3_camera")
-
-[node name="Camera3D" type="Camera3D" parent="Viewport/Editor/CameraRig" unique_id=1978355787]
-fov = 45.0
-
 [node name="Grid" type="MeshInstance3D" parent="Viewport/Editor" unique_id=1052101138]
 unique_name_in_owner = true
 material_override = SubResource("StandardMaterial3D_grid")
@@ -91,6 +89,13 @@ script = ExtResource("5_grid")
 
 [node name="ToolLayer" type="Node3D" parent="Viewport/Editor" unique_id=1331444033]
 unique_name_in_owner = true
+
+[node name="CameraRig" type="Node3D" parent="Viewport/Editor" unique_id=106959201]
+unique_name_in_owner = true
+script = ExtResource("3_camera")
+
+[node name="Camera3D" type="Camera3D" parent="Viewport/Editor/CameraRig" unique_id=1978355787]
+fov = 45.0
 
 [node name="Selection" type="MeshInstance3D" parent="Viewport/Editor" unique_id=205454810]
 unique_name_in_owner = true
