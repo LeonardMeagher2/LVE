@@ -9,7 +9,6 @@
 [ext_resource type="Texture2D" uid="uid://b4jrotar1sqwf" path="res://icons/redo.svg" id="7_redo"]
 
 [node name="IconToolbar" type="HBoxContainer" unique_id=1142549001]
-theme_override_constants/separation = 4
 script = ExtResource("1_toolbar")
 
 [node name="NewBtn" type="Button" parent="." unique_id=584283784]

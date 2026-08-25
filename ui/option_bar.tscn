@@ -4,10 +4,8 @@
 
 [node name="OptionBar" type="HBoxContainer" unique_id=65535186]
 custom_minimum_size = Vector2(0, 28)
-theme_override_constants/separation = 6
 script = ExtResource("1_option")
 
 [node name="OptionsBox" type="HBoxContainer" parent="." unique_id=567840298]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_constants/separation = 10

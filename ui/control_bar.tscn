@@ -6,14 +6,17 @@
 [ext_resource type="Texture2D" uid="uid://dif3h4ri2n0me" path="res://icons/camera.svg" id="4_camera"]
 [ext_resource type="Texture2D" uid="uid://cubut3i22m2q4" path="res://icons/hand.svg" id="5_pan"]
 [ext_resource type="Texture2D" uid="uid://dy2x8ri5jrac1" path="res://icons/rotate.svg" id="6_rotate"]
-[ext_resource type="Texture2D" path="res://icons/zoom.svg" id="7_zoom"]
+[ext_resource type="Texture2D" uid="uid://djnb7oucoqdu8" path="res://icons/zoom.svg" id="7_zoom"]
 
 [sub_resource type="ButtonGroup" id="ButtonGroup_left_mode"]
 allow_unpress = true
 
 [node name="ControlBar" type="HBoxContainer" unique_id=53784703]
 custom_minimum_size = Vector2(0, 28)
-theme_override_constants/separation = 6
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 26.0
+grow_horizontal = 2
 script = ExtResource("1_control")
 
 [node name="CameraMenu" type="MenuButton" parent="." unique_id=1053028430]

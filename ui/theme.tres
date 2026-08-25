@@ -68,6 +68,15 @@ corner_radius_top_right = 2
 corner_radius_bottom_right = 2
 corner_radius_bottom_left = 2
 
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_ogbh3"]
+bg_color = Color(0.78431374, 0.7921569, 0.8, 1)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
+expand_margin_left = 1.0
+expand_margin_right = 1.0
+
 [resource]
 Button/styles/disabled = SubResource("StyleBoxFlat_btn_disabled")
 Button/styles/focus = SubResource("StyleBoxFlat_focus")
@@ -94,5 +103,6 @@ PopupMenu/styles/hover = SubResource("StyleBoxFlat_hover")
 PopupMenu/styles/panel = SubResource("StyleBoxFlat_panel")
 PopupPanel/styles/panel = SubResource("StyleBoxFlat_panel")
 VBoxContainer/constants/separation = 4
+VSeparator/styles/separator = SubResource("StyleBoxFlat_ogbh3")
 VSplitContainer/constants/autohide = 0
 VSplitContainer/constants/separation = 8
