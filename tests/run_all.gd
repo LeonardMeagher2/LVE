@@ -6,6 +6,7 @@ const MAX_FAILURES := 3
 
 var _failed := 0
 var _pending := {}
+var _saw_ok := false
 
 
 func _initialize() -> void:
@@ -46,6 +47,8 @@ func _test_paths() -> Array[String]:
 
 
 func _run_one(path: String) -> Dictionary:
+	_saw_ok = false
+	_wipe_dir(_artifact_dir(path))
 	var args := PackedStringArray(["--path", ProjectSettings.globalize_path("res://"), path])
 	var proc := OS.execute_with_pipe(OS.get_executable_path(), args, false)
 	if proc.is_empty():
@@ -70,7 +73,28 @@ func _run_one(path: String) -> Dictionary:
 	_flush(err_out)
 	if timed_out:
 		return {"code": 1, "note": "timed out after %.0f s" % TEST_TIMEOUT_S}
-	return {"code": OS.get_process_exit_code(pid), "note": ""}
+	var code := OS.get_process_exit_code(pid)
+	if code == 0 and not _saw_ok:
+		return {"code": 1, "note": "exit 0 but no pass marker"}
+	return {"code": code, "note": ""}
+
+
+func _artifact_dir(path: String) -> String:
+	var name := path.get_file().get_basename()
+	return "%s/artifacts/%s" % [get_script().resource_path.get_base_dir(), name]
+
+
+func _wipe_dir(path: String) -> void:
+	if not DirAccess.dir_exists_absolute(path):
+		return
+	var dir := DirAccess.open(path)
+	if dir == null:
+		return
+	for f in dir.get_files():
+		dir.remove(f)
+	for d in dir.get_directories():
+		_wipe_dir(path + "/" + d)
+	DirAccess.remove_absolute(path)
 
 
 func _await_exit(pid: int) -> void:
@@ -110,6 +134,8 @@ func _print_line(raw: PackedByteArray) -> void:
 	var line := raw.get_string_from_utf8().trim_suffix("\r")
 	if line.strip_edges() == "" or _is_engine_banner(line):
 		return
+	if line.strip_edges() == "TEST OK":
+		_saw_ok = true
 	print(line)
 
 

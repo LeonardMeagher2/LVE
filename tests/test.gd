@@ -10,6 +10,39 @@ var _steps: Array = []
 var _current_step := -1
 var _snap_seq := 0
 var _snap_by_frame := {}
+var _finished := false
+
+
+func _init() -> void:
+	ready.connect(_arm_deadman)
+
+
+func _arm_deadman() -> void:
+	var t := get_tree().create_timer(timeout + 5.0)
+	t.timeout.connect(_deadman_fire)
+
+
+func _deadman_fire() -> void:
+	if _finished:
+		return
+	_fail_hard("harness did not finish")
+
+
+func _fail_hard(msg: String) -> void:
+	_finished = true
+	if _name == "":
+		_name = get_script().resource_path.get_file().get_basename()
+	_checks.append({
+		"loc": _test_loc,
+		"msg": msg,
+		"ok": false,
+		"step": _current_step,
+		"src": "",
+		"img": _screenshot_for(Engine.get_process_frames()),
+	})
+	_write_report()
+	print("TEST FAILED: %s -> %s/report.md" % [msg, _dir()])
+	get_tree().quit(1)
 
 
 func test(description: String, c: Callable) -> void:
@@ -36,20 +69,11 @@ func _start_watchdog() -> Timer:
 
 
 func _fail_timeout() -> void:
-	_checks.append({
-		"loc": _test_loc,
-		"msg": "test timed out after %.1f s" % timeout,
-		"ok": false,
-		"step": _current_step,
-		"src": "",
-		"img": _screenshot_for(Engine.get_process_frames()),
-	})
-	_write_report()
-	print("TEST FAILED: timed out after %.1f s -> %s/report.md" % [timeout, _dir()])
-	get_tree().quit(1)
+	_fail_hard("timed out after %.1f s" % timeout)
 
 
 func _finish() -> void:
+	_finished = true
 	var failed := _count_failed()
 	if failed > 0:
 		_write_report()

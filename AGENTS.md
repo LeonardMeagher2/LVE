@@ -27,22 +27,28 @@ Write all docs and commit messages in ASD-STE100 (Simplified Technical English).
 
 ## Run tests
 
-Each `tests/*.tscn` and `tests/*.gd` pair is one user-behavior test (paint, undo, camera, ...). Run the whole suite with `res://tests/run_all.gd`. Run the runner headless. It launches each test windowed so failures save screenshots.
+Each `tests/*.tscn` and `tests/*.gd` pair is one user-behavior test (paint, undo, camera, ...).
+
+Run only the tests that your change can affect. Pick them by feature area. A fill change runs `fill_all`, not the full suite.
+
+Run one test headless for a fast check:
+
+```
+godot --headless --path "C:\Users\Leona\Desktop\Gamedev\Voxi" res://tests/paint.tscn
+```
+
+Remove `--headless` from that command when you need a failure screenshot.
+
+Run the full suite when your change touches shared code. Shared code includes state, document, tool base classes, and UI containers. Run it again before you close a task:
 
 ```
 godot --headless --path "C:\Users\Leona\Desktop\Gamedev\Voxi" -s res://tests/run_all.gd
 ```
 
-Run one test with:
-
-```
-godot --path "C:\Users\Leona\Desktop\Gamedev\Voxi" res://tests/paint.tscn
-```
-
 - The runner exits 0 when all tests pass. It exits non-zero when any test fails.
 - Failures write a report and screenshots under `tests/artifacts/`.
 - A windowed run is required for screenshots. `--headless` skips screenshot capture.
-- The suite is the only verification step.
+- Tests are the only verification step.
 
 ## Test harness
 
