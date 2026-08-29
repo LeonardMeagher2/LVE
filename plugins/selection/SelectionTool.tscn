@@ -1,0 +1,10 @@
+[gd_scene format=3 uid="uid://b1lkdaijckvw6"]
+
+[ext_resource type="Material" uid="uid://b8kfc7ofi3m41" path="res://plugins/Selection/ants_material.tres" id="1_5wmcv"]
+[ext_resource type="ArrayMesh" uid="uid://cqj6xncf14cm" path="res://plugins/OutlineCube.tres" id="2_xqw3k"]
+
+[node name="SelectionTool" type="Node3D" unique_id=1152130835]
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="." unique_id=1781053984]
+material_override = ExtResource("1_5wmcv")
+mesh = ExtResource("2_xqw3k")

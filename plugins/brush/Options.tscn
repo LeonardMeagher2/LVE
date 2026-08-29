@@ -1,0 +1,16 @@
+[gd_scene format=3 uid="uid://dpv13kvtyea77"]
+
+[ext_resource type="Texture2D" uid="uid://cl0exu5ldguw" path="res://plugins/Brush/icons/pixel_perfect.svg" id="1_icon"]
+[ext_resource type="Script" uid="uid://c20cgmyn06xbj" path="res://plugins/Brush/Options.gd" id="1_iwsrx"]
+
+[node name="Options" type="HBoxContainer" unique_id=2043976841]
+script = ExtResource("1_iwsrx")
+
+[node name="PixelPerfect" type="Button" parent="." unique_id=1727200567]
+layout_mode = 2
+tooltip_text = "Pixel perfect strokes"
+toggle_mode = true
+icon = ExtResource("1_icon")
+icon_alignment = 1
+
+[connection signal="toggled" from="PixelPerfect" to="." method="_on_pixel_perfect_toggled"]

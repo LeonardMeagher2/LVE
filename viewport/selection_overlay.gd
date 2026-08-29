@@ -1,4 +1,3 @@
-class_name SelectionOverlay
 extends MeshInstance3D
 
 
@@ -10,5 +9,5 @@ func sync_selection() -> void:
 	if State.selection == null or State.selection.is_empty():
 		visible = false
 		return
-	mesh = SelectionPreview.outline_mesh(State.selection)
+	#mesh = SelectionPreview.outline_mesh(State.selection)
 	visible = true

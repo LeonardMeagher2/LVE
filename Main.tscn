@@ -1,0 +1,81 @@
+[gd_scene format=3 uid="uid://nxatttjs7q35"]
+
+[ext_resource type="PackedScene" uid="uid://bbtsqq68ja3q1" path="res://ui/MenuBar/MenuBar.tscn" id="1_fos0i"]
+[ext_resource type="PackedScene" uid="uid://ma4yjkaq0642" path="res://ui/PalettePanel/PalettePanel.tscn" id="2_3dxm6"]
+[ext_resource type="PackedScene" uid="uid://be1jmiunnaoho" path="res://ui/Viewport/Viewport.tscn" id="3_lgr22"]
+[ext_resource type="PackedScene" uid="uid://8g827rqodt23" path="res://ui/AnimationTimeline/AnimationTimeline.tscn" id="4_trn2v"]
+[ext_resource type="PackedScene" uid="uid://dnkuglr7qodru" path="res://ui/StatusBar/status_bar.tscn" id="5_03owx"]
+
+[node name="Main" type="Control" unique_id=692378193]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Content" type="MarginContainer" parent="." unique_id=1928070199]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="Content" unique_id=2032315337]
+layout_mode = 2
+
+[node name="MenuBar" parent="Content/VBoxContainer" unique_id=873351853 instance=ExtResource("1_fos0i")]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="Editor" type="VBoxContainer" parent="Content/VBoxContainer" unique_id=1369002049]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="Body" type="HBoxContainer" parent="Content/VBoxContainer/Editor" unique_id=251716774]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="PalettePanel" parent="Content/VBoxContainer/Editor/Body" unique_id=1147462058 instance=ExtResource("2_3dxm6")]
+layout_mode = 2
+
+[node name="Panel" type="PanelContainer" parent="Content/VBoxContainer/Editor/Body" unique_id=904995900]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="MarginContainer" type="MarginContainer" parent="Content/VBoxContainer/Editor/Body/Panel" unique_id=950009543]
+layout_mode = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="Content/VBoxContainer/Editor/Body/Panel/MarginContainer" unique_id=2015353210]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="OptionBar" type="HBoxContainer" parent="Content/VBoxContainer/Editor/Body/Panel/MarginContainer/VBoxContainer" unique_id=1775805641]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 28)
+layout_mode = 2
+
+[node name="HBoxContainer" type="HBoxContainer" parent="Content/VBoxContainer/Editor/Body/Panel/MarginContainer/VBoxContainer" unique_id=716075585]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="Viewport" parent="Content/VBoxContainer/Editor/Body/Panel/MarginContainer/VBoxContainer/HBoxContainer" unique_id=159467693 instance=ExtResource("3_lgr22")]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="ToolBar" type="VBoxContainer" parent="Content/VBoxContainer/Editor/Body/Panel/MarginContainer/VBoxContainer/HBoxContainer" unique_id=1524503512]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="Panel" type="PanelContainer" parent="Content/VBoxContainer/Editor" unique_id=2057888906]
+layout_mode = 2
+
+[node name="MarginContainer" type="MarginContainer" parent="Content/VBoxContainer/Editor/Panel" unique_id=911138036]
+layout_mode = 2
+
+[node name="BottomDock" parent="Content/VBoxContainer/Editor/Panel/MarginContainer" unique_id=1466148729 instance=ExtResource("4_trn2v")]
+layout_mode = 2
+
+[node name="StatusBar" parent="Content/VBoxContainer/Editor" unique_id=597734069 instance=ExtResource("5_03owx")]
+layout_mode = 2

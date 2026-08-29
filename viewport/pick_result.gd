@@ -1,8 +1,8 @@
 class_name PickResult
 extends RefCounted
 
-var target := State.NONE
-var hit := State.NONE
+var target := VoxelPicking.NONE
+var hit := VoxelPicking.NONE
 var entry := Vector3i.ZERO
-var add_target := State.NONE
+var add_target := VoxelPicking.NONE
 var plane: StrokePlane = null

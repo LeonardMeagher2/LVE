@@ -15,8 +15,8 @@ func _ready() -> void:
 	State.tool_option_changed.connect(_on_option_changed)
 
 
-func _on_toggled(v: bool) -> void:
-	State.set_tool_option(group, option.id, v)
+#func _on_toggled(v: bool) -> void:
+	#State.set_tool_option(group, option.id, v)
 
 
 func _on_option_changed(changed_group: String, id: String, value: Variant) -> void:

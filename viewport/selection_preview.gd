@@ -1,4 +1,3 @@
-class_name SelectionPreview
 extends MeshInstance3D
 
 var _cell_cache: ArrayMesh
@@ -14,7 +13,7 @@ func show_selection(sel: VoxelSelection) -> void:
 
 
 func show_cell(c: Vector3i) -> void:
-	if c == State.NONE:
+	if c == VoxelPicking.NONE:
 		visible = false
 		return
 	if _cell_cache == null:

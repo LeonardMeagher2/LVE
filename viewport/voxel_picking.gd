@@ -1,10 +1,11 @@
 class_name VoxelPicking
 extends RefCounted
 
+const NONE:Vector3i = Vector3i(Vector3.INF)
 
 static func start_pick(origin: Vector3, dir: Vector3, cells: Dictionary, forward: Vector3) -> PickResult:
 	var res := ray_voxel(origin, dir, cells)
-	if res.hit != State.NONE:
+	if res.hit != VoxelPicking.NONE:
 		res.target = res.hit
 		res.add_target = res.hit + res.entry
 		res.plane = view_plane(res.target, origin, forward)
@@ -24,7 +25,7 @@ static func drag_pick(origin: Vector3, dir: Vector3, cells: Dictionary, plane: S
 	c[plane.axis] = plane.idx
 	var res := PickResult.new()
 	res.target = c
-	res.hit = c if cells.has(c) else State.NONE
+	res.hit = c if cells.has(c) else VoxelPicking.NONE
 	return res
 
 

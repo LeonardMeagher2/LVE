@@ -12,15 +12,11 @@ func _ready() -> void:
 	super._ready()
 	State.floor_plane_changed.connect(_sync_visual)
 	State.document_changed.connect(_sync_visual)
-
-
-func on_activated() -> void:
-	super.on_activated()
+	
+func _enter_tree() -> void:
 	_sync_visual()
 
-
-func on_deactivated() -> void:
-	super.on_deactivated()
+func _exit_tree() -> void:
 	_dragging = false
 
 

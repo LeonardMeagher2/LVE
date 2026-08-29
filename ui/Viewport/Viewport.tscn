@@ -1,0 +1,219 @@
+[gd_scene format=3 uid="uid://be1jmiunnaoho"]
+
+[ext_resource type="Script" uid="uid://cckfhnnnmlrn1" path="res://ui/Viewport/Viewport.gd" id="1_eunk3"]
+[ext_resource type="Texture2D" uid="uid://cmfirdobdfgqh" path="res://ui/Checker.png" id="2_gu70n"]
+[ext_resource type="Script" uid="uid://c0xmjig8s4i0q" path="res://ui/Viewport/GridRenderer.gd" id="4_bqm4n"]
+[ext_resource type="Script" uid="uid://gwfmh64wiyx0" path="res://ui/Viewport/CameraRig.gd" id="5_b27s2"]
+[ext_resource type="Material" uid="uid://bw2napws2u8vx" path="res://viewport/selection_outline.tres" id="6_vffti"]
+[ext_resource type="Script" uid="uid://ba28f277f4w0n" path="res://viewport/selection_overlay.gd" id="7_gr8gi"]
+[ext_resource type="Script" uid="uid://d3i6vt2reee27" path="res://ui/Viewport/VoxelRenderer.gd" id="9_g1eee"]
+[ext_resource type="Texture2D" uid="uid://dif3h4ri2n0me" path="res://icons/camera.svg" id="11_jtuva"]
+[ext_resource type="ButtonGroup" uid="uid://mrct6v0d4s6u" path="res://ui/Viewport/ViewTransformButtonGroup.tres" id="12_gu70n"]
+[ext_resource type="Texture2D" uid="uid://cubut3i22m2q4" path="res://icons/hand.svg" id="12_qkpnp"]
+[ext_resource type="Texture2D" uid="uid://dy2x8ri5jrac1" path="res://icons/rotate.svg" id="13_r5sgf"]
+[ext_resource type="Texture2D" uid="uid://djnb7oucoqdu8" path="res://icons/zoom.svg" id="14_jua01"]
+[ext_resource type="Texture2D" uid="uid://mglj26s40ce4" path="res://icons/center.svg" id="15_0hwp6"]
+[ext_resource type="Texture2D" uid="uid://bhg85sqfio31d" path="res://icons/grid.svg" id="16_x0727"]
+
+[sub_resource type="Environment" id="Environment_env"]
+background_mode = 3
+background_color = Color(0.118, 0.122, 0.133, 1)
+background_canvas_max_layer = -1
+ambient_light_source = 2
+ambient_light_color = Color(0.54901963, 0.5686275, 0.61960787, 1)
+reflected_light_source = 1
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_grid"]
+render_priority = -1
+shading_mode = 0
+albedo_color = Color(0.65, 0.65, 0.65, 1)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_voxels"]
+vertex_color_use_as_albedo = true
+vertex_color_is_srgb = true
+stencil_flags = 2
+stencil_color = Color(1, 1, 1, 1)
+stencil_outline_thickness = 0.025
+
+[sub_resource type="BoxMesh" id="BoxMesh_j71j0"]
+material = SubResource("StandardMaterial3D_voxels")
+
+[sub_resource type="MultiMesh" id="MultiMesh_voxels"]
+transform_format = 1
+use_colors = true
+mesh = SubResource("BoxMesh_j71j0")
+
+[node name="Viewport" type="VBoxContainer" unique_id=159467693]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+script = ExtResource("1_eunk3")
+
+[node name="PanelContainer" type="PanelContainer" parent="." unique_id=1533498953]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="ViewportContainer" type="SubViewportContainer" parent="PanelContainer" unique_id=1008543789]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+mouse_filter = 0
+stretch = true
+
+[node name="Viewport" type="SubViewport" parent="PanelContainer/ViewportContainer" unique_id=1299710563]
+unique_name_in_owner = true
+handle_input_locally = false
+size = Vector2i(1278, 766)
+render_target_update_mode = 4
+
+[node name="CanvasLayer" type="CanvasLayer" parent="PanelContainer/ViewportContainer/Viewport" unique_id=26035556]
+layer = -1
+
+[node name="TextureRect" type="TextureRect" parent="PanelContainer/ViewportContainer/Viewport/CanvasLayer" unique_id=1466246853]
+texture_filter = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("2_gu70n")
+stretch_mode = 1
+
+[node name="ViewportScene" type="Node3D" parent="PanelContainer/ViewportContainer/Viewport" unique_id=1277093566]
+unique_name_in_owner = true
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="PanelContainer/ViewportContainer/Viewport/ViewportScene" unique_id=2001831858]
+environment = SubResource("Environment_env")
+
+[node name="Light" type="DirectionalLight3D" parent="PanelContainer/ViewportContainer/Viewport/ViewportScene" unique_id=766933468]
+transform = Transform3D(0.9426414, -0.23603694, 0.23603693, 0, 0.7071067, 0.7071067, -0.3338066, -0.6665482, 0.6665482, 0, 0, 0)
+light_bake_mode = 0
+shadow_enabled = true
+
+[node name="Grid" type="MeshInstance3D" parent="PanelContainer/ViewportContainer/Viewport/ViewportScene" unique_id=1052101138]
+unique_name_in_owner = true
+sorting_offset = -0.1
+material_override = SubResource("StandardMaterial3D_grid")
+cast_shadow = 0
+script = ExtResource("4_bqm4n")
+
+[node name="ToolLayer" type="Node3D" parent="PanelContainer/ViewportContainer/Viewport/ViewportScene" unique_id=1331444033]
+unique_name_in_owner = true
+
+[node name="CameraRig" type="Node3D" parent="PanelContainer/ViewportContainer/Viewport/ViewportScene" unique_id=106959201]
+unique_name_in_owner = true
+script = ExtResource("5_b27s2")
+
+[node name="Camera3D" type="Camera3D" parent="PanelContainer/ViewportContainer/Viewport/ViewportScene/CameraRig" unique_id=1978355787]
+fov = 45.0
+
+[node name="Selection" type="MeshInstance3D" parent="PanelContainer/ViewportContainer/Viewport/ViewportScene" unique_id=205454810]
+unique_name_in_owner = true
+material_override = ExtResource("6_vffti")
+script = ExtResource("7_gr8gi")
+
+[node name="Voxels" type="MultiMeshInstance3D" parent="PanelContainer/ViewportContainer/Viewport/ViewportScene" unique_id=1816863498]
+unique_name_in_owner = true
+sorting_use_aabb_center = false
+multimesh = SubResource("MultiMesh_voxels")
+script = ExtResource("9_g1eee")
+
+[node name="ControlBar" type="HBoxContainer" parent="." unique_id=53784703]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 28)
+layout_mode = 2
+
+[node name="CameraMenu" type="MenuButton" parent="ControlBar" unique_id=1053028430]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "View"
+focus_mode = 2
+icon = ExtResource("11_jtuva")
+flat = false
+icon_alignment = 1
+item_count = 10
+popup/item_0/text = "Top"
+popup/item_0/id = 0
+popup/item_1/text = "Bottom"
+popup/item_1/id = 1
+popup/item_2/text = "Front"
+popup/item_2/id = 2
+popup/item_3/text = "Back"
+popup/item_3/id = 3
+popup/item_4/text = "Left"
+popup/item_4/id = 4
+popup/item_5/text = "Right"
+popup/item_5/id = 5
+popup/item_6/text = "Isometric"
+popup/item_6/id = 6
+popup/item_7/id = 7
+popup/item_7/separator = true
+popup/item_8/text = "Orthographic"
+popup/item_8/checkable = 1
+popup/item_8/id = 8
+popup/item_9/text = "Unshaded"
+popup/item_9/checkable = 1
+popup/item_9/id = 9
+
+[node name="PanToggle" type="Button" parent="ControlBar" unique_id=1802399301]
+layout_mode = 2
+tooltip_text = "Pan mode: left-drag pans the view"
+toggle_mode = true
+button_group = ExtResource("12_gu70n")
+icon = ExtResource("12_qkpnp")
+icon_alignment = 1
+
+[node name="RotateToggle" type="Button" parent="ControlBar" unique_id=422170048]
+layout_mode = 2
+tooltip_text = "Rotate mode: left-drag orbits the view"
+toggle_mode = true
+button_group = ExtResource("12_gu70n")
+icon = ExtResource("13_r5sgf")
+icon_alignment = 1
+
+[node name="ZoomIcon" type="TextureRect" parent="ControlBar" unique_id=2116463353]
+layout_mode = 2
+size_flags_vertical = 4
+tooltip_text = "Zoom"
+texture = ExtResource("14_jua01")
+
+[node name="ZoomSlider" type="HSlider" parent="ControlBar" unique_id=1393546872]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+tooltip_text = "Zoom"
+min_value = 1.0
+max_value = 400.0
+value = 100.0
+
+[node name="ZoomOne" type="Button" parent="ControlBar" unique_id=954156555]
+layout_mode = 2
+tooltip_text = "Return the zoom to 100 percent"
+text = "1:1"
+icon_alignment = 1
+
+[node name="CenterBtn" type="Button" parent="ControlBar" unique_id=567890123]
+layout_mode = 2
+tooltip_text = "Center the selection, or the whole model, in the view"
+icon = ExtResource("15_0hwp6")
+icon_alignment = 1
+
+[node name="GridToggle" type="Button" parent="ControlBar" unique_id=1396369045]
+layout_mode = 2
+tooltip_text = "Toggle the grid"
+toggle_mode = true
+button_pressed = true
+icon = ExtResource("16_x0727")
+icon_alignment = 1
+
+[connection signal="zoom_changed" from="PanelContainer/ViewportContainer/Viewport/ViewportScene/CameraRig" to="ControlBar/ZoomSlider" method="set_value"]
+[connection signal="toggled" from="ControlBar/PanToggle" to="." method="_on_pan_toggle_toggled"]
+[connection signal="toggled" from="ControlBar/RotateToggle" to="." method="_on_rotate_toggle_toggled"]
+[connection signal="value_changed" from="ControlBar/ZoomSlider" to="PanelContainer/ViewportContainer/Viewport/ViewportScene/CameraRig" method="set_zoom_percent"]
+[connection signal="pressed" from="ControlBar/ZoomOne" to="PanelContainer/ViewportContainer/Viewport/ViewportScene/CameraRig" method="set_zoom_percent" binds= [100.0]]
+[connection signal="pressed" from="ControlBar/CenterBtn" to="PanelContainer/ViewportContainer/Viewport/ViewportScene/CameraRig" method="center_active"]
+[connection signal="toggled" from="ControlBar/GridToggle" to="PanelContainer/ViewportContainer/Viewport/ViewportScene/Grid" method="set_visible"]

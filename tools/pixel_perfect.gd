@@ -7,18 +7,18 @@ extends RefCounted
 # cell to the cursor. This keeps the stroke connected, paints the current
 # cursor cell, and skips the transient cells the cursor passes over.
 
-var _last_drawn := State.NONE
-var _waiting := State.NONE
+var _last_drawn := VoxelPicking.NONE
+var _waiting := VoxelPicking.NONE
 
 
 func reset() -> void:
-	_last_drawn = State.NONE
-	_waiting = State.NONE
+	_last_drawn = VoxelPicking.NONE
+	_waiting = VoxelPicking.NONE
 
 
 func feed(p: Vector3i) -> Array[Vector3i]:
 	var out: Array[Vector3i] = []
-	if _last_drawn == State.NONE:
+	if _last_drawn == VoxelPicking.NONE:
 		_last_drawn = p
 		_waiting = p
 		return out
@@ -35,11 +35,11 @@ func feed(p: Vector3i) -> Array[Vector3i]:
 
 
 func flush() -> Array[Vector3i]:
-	if _waiting == State.NONE or _waiting == _last_drawn:
+	if _waiting == VoxelPicking.NONE or _waiting == _last_drawn:
 		return []
 	var out: Array[Vector3i] = [_waiting]
 	_last_drawn = _waiting
-	_waiting = State.NONE
+	_waiting = VoxelPicking.NONE
 	return out
 
 

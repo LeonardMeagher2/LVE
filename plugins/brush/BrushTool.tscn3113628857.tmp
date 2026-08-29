@@ -1,0 +1,15 @@
+[gd_scene format=3 uid="uid://cfh7uu135xto5"]
+
+[ext_resource type="Script" uid="uid://dt6jni4oe4jda" path="res://plugins/brush/BrushTool.gd" id="1_vbqos"]
+[ext_resource type="Material" uid="uid://cspr6d8uervv1" path="res://plugins/brush/cursor_material.tres" id="2_y4iw6"]
+
+[sub_resource type="BoxMesh" id="BoxMesh_nh74m"]
+
+[node name="BrushTool" type="Node3D" unique_id=965280581]
+script = ExtResource("1_vbqos")
+
+[node name="Cursor" type="MeshInstance3D" parent="." unique_id=1880237828]
+sorting_offset = 0.1
+material_override = ExtResource("2_y4iw6")
+cast_shadow = 0
+mesh = SubResource("BoxMesh_nh74m")

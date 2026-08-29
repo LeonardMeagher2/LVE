@@ -1,0 +1,21 @@
+[gd_scene format=3 uid="uid://c6gsug38kip5w"]
+
+[ext_resource type="Script" uid="uid://duc3l4vh3tlrm" path="res://plugins/eraser/EraserTool.gd" id="1"]
+[ext_resource type="Material" uid="uid://cwt8p141ammy7" path="res://plugins/eraser/FillMaterial.tres" id="2_1cu1s"]
+[ext_resource type="ArrayMesh" uid="uid://cqj6xncf14cm" path="res://plugins/eraser/OutlineCube.tres" id="3_1cu1s"]
+[ext_resource type="Material" path="res://plugins/eraser/LineMaterial.tres" id="3_r6n2k"]
+
+[sub_resource type="BoxMesh" id="BoxMesh_3gngh"]
+
+[node name="EraserTool" type="Node3D" unique_id=218103605]
+script = ExtResource("1")
+
+[node name="Fill" type="MeshInstance3D" parent="." unique_id=69627811]
+material_override = ExtResource("2_1cu1s")
+cast_shadow = 0
+mesh = SubResource("BoxMesh_3gngh")
+
+[node name="Outline" type="MeshInstance3D" parent="." unique_id=468923622]
+transform = Transform3D(1.01, 0, 0, 0, 1.01, 0, 0, 0, 1.01, 0, 0, 0)
+material_override = ExtResource("3_r6n2k")
+mesh = ExtResource("3_1cu1s")

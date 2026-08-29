@@ -11,19 +11,24 @@ config_version=5
 [application]
 
 config/name="Voxi"
-run/main_scene="res://ui/main.tscn"
+run/main_scene="res://Main.tscn"
 config/features=PackedStringArray("4.7")
 config/icon="res://icon.svg"
 
 [autoload]
 
-State="*res://state/voxi.gd"
+State="*res://State/State.gd"
 
 [display]
 
 window/size/viewport_width=1280
 window/size/viewport_height=800
 window/stretch/aspect="expand"
+
+[editor]
+
+naming/scene_name_casing=1
+naming/script_name_casing=1
 
 [gui]
 

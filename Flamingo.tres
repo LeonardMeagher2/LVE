@@ -1,8 +1,8 @@
-[gd_resource type="Resource" script_class="VoxiDocument" format=3]
+[gd_resource type="Resource" script_class="VoxiDocument" format=3 uid="uid://dw2ff24wcmegi"]
 
-[ext_resource type="Script" path="res://document/voxel_frame.gd" id="1_p7nc4"]
-[ext_resource type="Script" path="res://document/voxi_document.gd" id="2_1nepm"]
-[ext_resource type="Script" path="res://document/animation_tag.gd" id="3_xdfdh"]
+[ext_resource type="Script" uid="uid://bxavh6cerl5ws" path="res://State/Document/VoxelFrame.gd" id="1_p7nc4"]
+[ext_resource type="Script" uid="uid://d00lo6ufp8xsk" path="res://State/Document/VoxiDocument.gd" id="2_1nepm"]
+[ext_resource type="Script" uid="uid://c025nubvwfbit" path="res://State/Document/AnimationTag.gd" id="3_xdfdh"]
 
 [sub_resource type="Resource" id="Resource_bpi0g"]
 script = ExtResource("1_p7nc4")
@@ -108,5 +108,6 @@ delay_ms = 250
 
 [resource]
 script = ExtResource("2_1nepm")
-palette = PackedColorArray(0.9795082, 0.36638093, 0.96945685, 1, 0.9672131, 0.7873206, 0.21042423, 1, 0.14754099, 0.13458891, 0.14732867, 1, 0.52868855, 0.31277376, 0.5251491, 1)
+title = "Flamingo"
+palette = [Color(0.98039216, 0.3647059, 0.96862745, 1), Color(0.96862745, 0.7882353, 0.21176471, 1), Color(0.14901961, 0.13333334, 0.14901961, 1), Color(0.5294118, 0.3137255, 0.5254902, 1)]
 frames = Array[ExtResource("1_p7nc4")]([SubResource("Resource_bpi0g"), SubResource("Resource_p7nc4")])

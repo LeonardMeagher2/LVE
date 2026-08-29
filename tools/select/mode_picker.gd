@@ -16,22 +16,22 @@ func _ready() -> void:
 			continue
 		btn.button_group = btn_group
 		btn.button_pressed = State.get_tool_option(State.tool, option.id) == btn.name
-		btn.pressed.connect(_on_pressed.bind(btn.name))
-	State.tool_option_changed.connect(_on_option_changed)
+		#btn.pressed.connect(_on_pressed.bind(btn.name))
+	#State.tool_option_changed.connect(_on_option_changed)
 	State.selection_changed.connect(_sync_clear)
 	_sync_clear()
 
 
-func _on_option_changed(changed_group: String, id: String, value: Variant) -> void:
-	if changed_group != group or id != option.id:
-		return
-	for btn in get_children():
-		if btn is Button and btn.name != "clear":
-			(btn as Button).button_pressed = btn.name == value
-
-
-func _on_pressed(value: String) -> void:
-	State.set_tool_option(group, option.id, value)
+#func _on_option_changed(changed_group: String, id: String, value: Variant) -> void:
+	#if changed_group != group or id != option.id:
+		#return
+	#for btn in get_children():
+		#if btn is Button and btn.name != "clear":
+			#(btn as Button).button_pressed = btn.name == value
+#
+#
+#func _on_pressed(value: String) -> void:
+	#State.set_tool_option(group, option.id, value)
 
 
 func _on_clear() -> void:

@@ -1,8 +1,8 @@
 class_name SelectTool
 extends SelectionTool
 
-var _corner := State.NONE
-var _box_end := State.NONE
+var _corner := VoxelPicking.NONE
+var _box_end := VoxelPicking.NONE
 
 
 func handle_input(event: InputEvent, pos: Vector2) -> bool:
@@ -27,7 +27,7 @@ func handle_input(event: InputEvent, pos: Vector2) -> bool:
 		else:
 			if _stroke_active:
 				_stroke_active = false
-				if _box_end == _corner and _corner == State.NONE:
+				if _box_end == _corner and _corner == VoxelPicking.NONE:
 					if _mode() == "replace":
 						State.selection.clear()
 						State.selection_changed.emit()
@@ -40,7 +40,7 @@ func handle_input(event: InputEvent, pos: Vector2) -> bool:
 		var mm := event as InputEventMouseMotion
 		if _stroke_active and _plane != null and mm.button_mask & MOUSE_BUTTON_MASK_LEFT:
 			var pick := _pick_drag(origin, dir)
-			if pick.target != State.NONE:
+			if pick.target != VoxelPicking.NONE:
 				_box_end = pick.target
 				_update_rubber()
 			return true
@@ -66,7 +66,7 @@ func handle_input(event: InputEvent, pos: Vector2) -> bool:
 
 
 func _commit_box() -> void:
-	if _corner == State.NONE or _box_end == State.NONE:
+	if _corner == VoxelPicking.NONE or _box_end == VoxelPicking.NONE:
 		return
 	var box := VoxelSelection.new()
 	box.from_box(_corner, _box_end)
@@ -77,7 +77,7 @@ func _commit_box() -> void:
 func _update_rubber() -> void:
 	if visual == null:
 		return
-	if _corner == State.NONE or _box_end == State.NONE:
+	if _corner == VoxelPicking.NONE or _box_end == VoxelPicking.NONE:
 		visual.visible = false
 		return
 	var drag := VoxelSelection.new()

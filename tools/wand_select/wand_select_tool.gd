@@ -27,7 +27,7 @@ func handle_input(event: InputEvent, pos: Vector2) -> bool:
 
 
 func _commit(seed: Vector3i) -> void:
-	if seed == State.NONE or not State.document.has_cell(State.current_frame, seed):
+	if seed == VoxelPicking.NONE or not State.document.has_cell(State.current_frame, seed):
 		return
 	State.selection.cells = _apply_mode(_flood(seed)).cells
 	State.selection_changed.emit()

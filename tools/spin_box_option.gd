@@ -18,8 +18,8 @@ func _ready() -> void:
 	State.tool_option_changed.connect(_on_option_changed)
 
 
-func _on_value_changed(v: float) -> void:
-	State.set_tool_option(group, option.id, v / _spin.max_value)
+#func _on_value_changed(v: float) -> void:
+	#State.set_tool_option(group, option.id, v / _spin.max_value)
 
 
 func _on_option_changed(changed_group: String, id: String, value: Variant) -> void:

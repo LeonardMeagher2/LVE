@@ -2,7 +2,7 @@ class_name LassoSelectTool
 extends SelectionTool
 
 var _points: Array[Vector3i] = []
-var _press_target := State.NONE
+var _press_target := VoxelPicking.NONE
 
 
 func handle_input(event: InputEvent, pos: Vector2) -> bool:
@@ -21,7 +21,7 @@ func handle_input(event: InputEvent, pos: Vector2) -> bool:
 			_press_target = pick.target
 			_last_target = pick.target
 			_points.clear()
-			if pick.target != State.NONE:
+			if pick.target != VoxelPicking.NONE:
 				_points.append(pick.target)
 			_stroke_active = true
 			_update_line()
@@ -37,7 +37,7 @@ func handle_input(event: InputEvent, pos: Vector2) -> bool:
 		var mm := event as InputEventMouseMotion
 		if _stroke_active and _plane != null and mm.button_mask & MOUSE_BUTTON_MASK_LEFT:
 			var pick := _pick_drag(origin, dir)
-			if pick.target != State.NONE and pick.target != _last_target:
+			if pick.target != VoxelPicking.NONE and pick.target != _last_target:
 				_points.append(pick.target)
 				_last_target = pick.target
 				_update_line()
@@ -52,7 +52,7 @@ func handle_input(event: InputEvent, pos: Vector2) -> bool:
 func _commit() -> void:
 	if _points.size() >= 2:
 		State.selection.cells = _apply_mode(_build_sweep()).cells
-	elif _press_target == State.NONE:
+	elif _press_target == VoxelPicking.NONE:
 		if _mode() == "replace" and not State.selection.is_empty():
 			State.selection.clear()
 	else:

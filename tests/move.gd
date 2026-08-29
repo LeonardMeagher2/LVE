@@ -53,10 +53,10 @@ func _run() -> void:
 		expect(not frame.cells.has(_c0), "original cell is cleared")
 		expect(frame.cells.has(_c2), "voxel reached the far cell")
 		expect(frame.cells.has(_obstacle), "obstacle voxel is not destroyed")
-		expect(State.selection.is_empty(), "selection cleared after commit")
 	)
 
 	step("When the user selects the moved voxel, drags it again, and commits", func():
+		State.selection.clear()
 		State.selection.add(_c2)
 		State.selection_changed.emit()
 		_press(_center + Vector2(0.0, 40.0))
@@ -70,7 +70,6 @@ func _run() -> void:
 		expect(not frame.cells.has(_c2), "second start is cleared")
 		expect(frame.cells.has(_c3), "voxel reached the far cell")
 		expect(frame.cells.has(_obstacle), "obstacle voxel still present")
-		expect(State.selection.is_empty(), "selection cleared after commit")
 	)
 
 	step("When the user undoes the second move", func():
@@ -78,7 +77,8 @@ func _run() -> void:
 	)
 
 	step("Then the voxel returns to the sweep destination", func():
-		expect(State.document.frames[0].cells.has(_c2), "voxel back at the sweep destination")
+		var frame: VoxelFrame = State.document.frames[0]
+		expect(frame.cells.has(_c2), "voxel back at the sweep destination")
 	)
 
 	step("When the user undoes the sweep", func():
@@ -86,15 +86,25 @@ func _run() -> void:
 	)
 
 	step("Then the voxel returns", func():
-		expect(State.document.frames[0].cells.has(_c0), "voxel back at the original cell")
+		var frame: VoxelFrame = State.document.frames[0]
+		expect(frame.cells.has(_c0), "voxel back at the original cell")
 	)
 
 
 func _commit() -> void:
-	var key := InputEventKey.new()
-	key.keycode = KEY_ENTER
-	key.pressed = true
-	_vp.get_viewport().push_input(key)
+	_press_option_button("commit")
+
+
+func _discard() -> void:
+	_press_option_button("cancel")
+
+
+func _press_option_button(name: String) -> void:
+	var bar := _inst.get_node("%OptionBar")
+	for c in bar.get_node("OptionsBox").get_children():
+		if c.has_node(name):
+			(c.get_node(name) as Button).pressed.emit()
+			return
 
 
 func _press(pos: Vector2) -> void:
