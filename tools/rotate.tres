@@ -1,7 +1,7 @@
-[gd_resource type="Resource" script_class="ToolInfo" load_steps=7 format=3]
+[gd_resource type="Resource" script_class="ToolInfo" format=3]
 
 [ext_resource type="Script" path="res://tools/tool_info.gd" id="1_script"]
-[ext_resource type="Texture2D" path="res://icons/rotate.svg" id="2_icon"]
+[ext_resource type="Texture2D" uid="uid://dy2x8ri5jrac1" path="res://ui/Viewport/rotate.svg" id="2_icon"]
 [ext_resource type="Script" path="res://tools/tool_option.gd" id="3_opt"]
 [ext_resource type="PackedScene" path="res://tools/rotate/snap.tscn" id="4_snap"]
 [ext_resource type="PackedScene" path="res://tools/commit_cancel.tscn" id="5_commit"]
