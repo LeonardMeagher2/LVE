@@ -1,0 +1,60 @@
+[gd_scene format=3 uid="uid://ccrnxbf18igxp"]
+
+[ext_resource type="Script" uid="uid://bpo26b1fb26k2" path="res://plugins/Selection/Options.gd" id="1_script"]
+[ext_resource type="Texture2D" uid="uid://dw2yugcwa1shf" path="res://plugins/Selection/icons/mode_replace.svg" id="2_replace"]
+[ext_resource type="Texture2D" uid="uid://dwpl1gi0akara" path="res://plugins/Selection/icons/mode_add.svg" id="3_add"]
+[ext_resource type="Texture2D" uid="uid://bybkl6ufhl76i" path="res://plugins/Selection/icons/mode_subtract.svg" id="4_sub"]
+[ext_resource type="Texture2D" uid="uid://ck36gifdqlmx7" path="res://plugins/Selection/icons/clear.svg" id="5_clear"]
+[ext_resource type="Texture2D" uid="uid://dkpjood1t6s8x" path="res://icons/connected.svg" id="6_connected"]
+
+[sub_resource type="ButtonGroup" id="ButtonGroup_j1b3m"]
+
+[node name="Options" type="HBoxContainer" unique_id=518967344]
+script = ExtResource("1_script")
+
+[node name="replace" type="Button" parent="." unique_id=958123343]
+layout_mode = 2
+tooltip_text = "Replace"
+toggle_mode = true
+button_group = SubResource("ButtonGroup_j1b3m")
+icon = ExtResource("2_replace")
+icon_alignment = 1
+
+[node name="add" type="Button" parent="." unique_id=174658111]
+layout_mode = 2
+tooltip_text = "Add"
+toggle_mode = true
+button_group = SubResource("ButtonGroup_j1b3m")
+icon = ExtResource("3_add")
+icon_alignment = 1
+
+[node name="subtract" type="Button" parent="." unique_id=368032824]
+layout_mode = 2
+tooltip_text = "Subtract"
+toggle_mode = true
+button_group = SubResource("ButtonGroup_j1b3m")
+icon = ExtResource("4_sub")
+icon_alignment = 1
+
+[node name="Sep" type="VSeparator" parent="." unique_id=662669810]
+layout_mode = 2
+
+[node name="clear" type="Button" parent="." unique_id=2120122340]
+layout_mode = 2
+tooltip_text = "Clear Selection"
+icon = ExtResource("5_clear")
+icon_alignment = 1
+
+[node name="Connected" type="Button" parent="." unique_id=178691740]
+visible = false
+layout_mode = 2
+tooltip_text = "Connected"
+toggle_mode = true
+icon = ExtResource("6_connected")
+icon_alignment = 1
+
+[connection signal="toggled" from="replace" to="." method="_on_replace_toggled"]
+[connection signal="toggled" from="add" to="." method="_on_add_toggled"]
+[connection signal="toggled" from="subtract" to="." method="_on_subtract_toggled"]
+[connection signal="pressed" from="clear" to="." method="_on_clear_pressed"]
+[connection signal="toggled" from="Connected" to="." method="_on_connected_toggled"]

@@ -1,10 +1,10 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene format=3]
 
-[ext_resource type="Script" path="res://tools/select/mode_picker.gd" id="1"]
-[ext_resource type="Texture2D" path="res://icons/mode_add.svg" id="2"]
-[ext_resource type="Texture2D" path="res://icons/mode_replace.svg" id="3"]
-[ext_resource type="Texture2D" path="res://icons/mode_subtract.svg" id="4"]
-[ext_resource type="Texture2D" path="res://icons/clear.svg" id="5"]
+[ext_resource type="Script" uid="uid://dqrqc3g6frjl7" path="res://tools/select/mode_picker.gd" id="1"]
+[ext_resource type="Texture2D" uid="uid://dwpl1gi0akara" path="res://plugins/Selection/icons/mode_add.svg" id="2"]
+[ext_resource type="Texture2D" uid="uid://dw2yugcwa1shf" path="res://plugins/Selection/icons/mode_replace.svg" id="3"]
+[ext_resource type="Texture2D" uid="uid://bybkl6ufhl76i" path="res://plugins/Selection/icons/mode_subtract.svg" id="4"]
+[ext_resource type="Texture2D" uid="uid://ck36gifdqlmx7" path="res://plugins/Selection/icons/clear.svg" id="5"]
 
 [node name="ModePicker" type="HBoxContainer"]
 script = ExtResource("1")
