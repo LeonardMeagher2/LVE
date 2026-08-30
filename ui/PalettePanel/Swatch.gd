@@ -10,9 +10,3 @@ extends Button
 		var sb_pressed:StyleBoxFlat = get_theme_stylebox("pressed")
 		sb_normal.bg_color = color
 		sb_pressed.bg_color = color
-
-func _ready() -> void:
-	toggled.connect(_on_toggled)
-	
-func _on_toggled(toggled_on:bool):
-	disabled = toggled_on

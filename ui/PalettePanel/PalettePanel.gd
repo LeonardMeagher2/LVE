@@ -48,9 +48,7 @@ func _on_picker_color_changed(color: Color) -> void:
 
 func _select_current() -> void:
 	for swatch in _swatch_grid.get_children():
-		if swatch.color == State.current_color:
-			(swatch as Button).set_pressed_no_signal(true)
-			return
+		(swatch as Button).set_pressed_no_signal(swatch.color == State.current_color)
 
 
 func _on_add_btn_pressed() -> void:

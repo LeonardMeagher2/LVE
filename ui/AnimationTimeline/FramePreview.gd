@@ -1,6 +1,6 @@
 extends TextureRect
 
-const SIZE := 48
+const SIZE := 64
 const PAD := 2.0
 
 
