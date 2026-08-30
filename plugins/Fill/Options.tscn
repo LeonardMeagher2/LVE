@@ -1,0 +1,17 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://plugins/Fill/Options.gd" id="1_script"]
+[ext_resource type="Texture2D" uid="uid://dkpjood1t6s8x" path="res://icons/connected.svg" id="2_icon"]
+
+[node name="Options" type="HBoxContainer"]
+script = ExtResource("1_script")
+
+[node name="Connected" type="Button" parent="."]
+layout_mode = 2
+tooltip_text = "Connected"
+toggle_mode = true
+button_pressed = true
+icon = ExtResource("2_icon")
+icon_alignment = 1
+
+[connection signal="toggled" from="Connected" to="." method="_on_connected_toggled"]
