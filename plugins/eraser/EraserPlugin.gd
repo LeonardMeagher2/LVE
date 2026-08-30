@@ -1,10 +1,7 @@
 extends VoxiPlugin
 
-const ToolBar = preload("./Toolbar.tscn")
-const Tool = preload("./EraserTool.tscn")
-
-@onready var _toolbar = ToolBar.instantiate()
-@onready var _tool = Tool.instantiate()
+@onready var _toolbar := preload("./Toolbar.tscn").instantiate()
+@onready var _tool := preload("./EraserTool.tscn").instantiate()
 
 func _ready() -> void:
 	name = "EraserPlugin"

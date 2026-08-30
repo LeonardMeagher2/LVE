@@ -50,6 +50,8 @@ func _ready() -> void:
 	add_plugin(load("res://plugins/Brush/BrushPlugin.gd").new())
 	add_plugin(load("res://plugins/Eyedropper/EyedropperPlugin.gd").new())
 	add_plugin(load("res://plugins/Eraser/EraserPlugin.gd").new())
+	add_plugin(load("res://plugins/Fill/FillPlugin.gd").new())
+	add_plugin(load("res://plugins/Selection/SelectionPlugin.gd").new())
 	
 
 

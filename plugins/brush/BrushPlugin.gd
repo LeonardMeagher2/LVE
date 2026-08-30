@@ -1,12 +1,8 @@
 extends VoxiPlugin
 
-const ToolBar = preload("./Toolbar.tscn")
-const Options = preload("./Options.tscn")
-const BrushTool = preload("./BrushTool.tscn")
-
-@onready var _toolbar := ToolBar.instantiate()
-@onready var _options := Options.instantiate()
-@onready var _tool := BrushTool.instantiate()
+@onready var _toolbar := preload("./Toolbar.tscn").instantiate()
+@onready var _options := preload("./Options.tscn").instantiate()
+@onready var _tool := preload("./BrushTool.tscn").instantiate()
 
 
 func _ready() -> void:
