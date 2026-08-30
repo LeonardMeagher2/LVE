@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://dnpfta4guqhvd"
-path="res://.godot/imported/wand.svg-ba2e0bd7e689f236eb4b084d6e0352b4.ctex"
+uid="uid://bsdc6hsaxlttw"
+path="res://.godot/imported/save_as.svg-e08a3ed2668ae4bbeaaa4291b31fa848.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://icons/wand.svg"
-dest_files=["res://.godot/imported/wand.svg-ba2e0bd7e689f236eb4b084d6e0352b4.ctex"]
+source_file="res://ui/MenuBar/save_as.svg"
+dest_files=["res://.godot/imported/save_as.svg-e08a3ed2668ae4bbeaaa4291b31fa848.ctex"]
 
 [params]
 

@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://djnb7oucoqdu8"
-path="res://.godot/imported/zoom.svg-ebd567925fc8ea405bc50e3acdb38550.ctex"
+uid="uid://b4jrotar1sqwf"
+path="res://.godot/imported/redo.svg-4089bd5bc87da8e8d7953e7a6cbd14fb.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://icons/zoom.svg"
-dest_files=["res://.godot/imported/zoom.svg-ebd567925fc8ea405bc50e3acdb38550.ctex"]
+source_file="res://ui/MenuBar/redo.svg"
+dest_files=["res://.godot/imported/redo.svg-4089bd5bc87da8e8d7953e7a6cbd14fb.ctex"]
 
 [params]
 

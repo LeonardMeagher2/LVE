@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://ca51e3tfobhyh"
-path="res://.godot/imported/lasso.svg-6ecd4463023db2573acb5896e3f6cc96.ctex"
+uid="uid://b36rhwlxt6wcw"
+path="res://.godot/imported/new.svg-1447a35cd2c5854c584c4159976d6716.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://icons/lasso.svg"
-dest_files=["res://.godot/imported/lasso.svg-6ecd4463023db2573acb5896e3f6cc96.ctex"]
+source_file="res://ui/MenuBar/new.svg"
+dest_files=["res://.godot/imported/new.svg-1447a35cd2c5854c584c4159976d6716.ctex"]
 
 [params]
 

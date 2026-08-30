@@ -1,12 +1,12 @@
 [gd_scene format=3 uid="uid://bbtsqq68ja3q1"]
 
 [ext_resource type="Script" uid="uid://we7x052o1pcg" path="res://ui/MenuBar/MenuBar.gd" id="1_toolbar"]
-[ext_resource type="Texture2D" uid="uid://b36rhwlxt6wcw" path="res://icons/new.svg" id="2_new"]
-[ext_resource type="Texture2D" uid="uid://k4mp2te5yq4y" path="res://icons/open.svg" id="3_open"]
-[ext_resource type="Texture2D" uid="uid://rhn2vyehbq1f" path="res://icons/save.svg" id="4_save"]
-[ext_resource type="Texture2D" uid="uid://bsdc6hsaxlttw" path="res://icons/save_as.svg" id="5_save_as"]
-[ext_resource type="Texture2D" uid="uid://by28nxj3x7ily" path="res://icons/undo.svg" id="6_undo"]
-[ext_resource type="Texture2D" uid="uid://b4jrotar1sqwf" path="res://icons/redo.svg" id="7_redo"]
+[ext_resource type="Texture2D" uid="uid://b36rhwlxt6wcw" path="res://ui/MenuBar/new.svg" id="2_new"]
+[ext_resource type="Texture2D" uid="uid://k4mp2te5yq4y" path="res://ui/MenuBar/open.svg" id="3_open"]
+[ext_resource type="Texture2D" uid="uid://rhn2vyehbq1f" path="res://ui/MenuBar/save.svg" id="4_save"]
+[ext_resource type="Texture2D" uid="uid://bsdc6hsaxlttw" path="res://ui/MenuBar/save_as.svg" id="5_save_as"]
+[ext_resource type="Texture2D" uid="uid://by28nxj3x7ily" path="res://ui/MenuBar/undo.svg" id="6_undo"]
+[ext_resource type="Texture2D" uid="uid://b4jrotar1sqwf" path="res://ui/MenuBar/redo.svg" id="7_redo"]
 
 [node name="MenuBar" type="HBoxContainer" unique_id=1142549001]
 script = ExtResource("1_toolbar")

@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://dwpl1gi0akara"
-path="res://.godot/imported/mode_add.svg-d4801133b6e5a418ae85007a56a59fe0.ctex"
+uid="uid://by28nxj3x7ily"
+path="res://.godot/imported/undo.svg-1ed727669f14c37e3f57e6d8eab72e5d.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://icons/mode_add.svg"
-dest_files=["res://.godot/imported/mode_add.svg-d4801133b6e5a418ae85007a56a59fe0.ctex"]
+source_file="res://ui/MenuBar/undo.svg"
+dest_files=["res://.godot/imported/undo.svg-1ed727669f14c37e3f57e6d8eab72e5d.ctex"]
 
 [params]
 

@@ -1,9 +1,14 @@
-[gd_scene format=3]
+[gd_scene format=3 uid="uid://c6vvfxm68uska"]
 
-[ext_resource type="Script" path="res://viewport/selection_preview.gd" id="1_script"]
-[ext_resource type="Material" path="res://viewport/selection_outline.tres" id="2_material"]
+[ext_resource type="Material" uid="uid://b8kfc7ofi3m41" path="res://plugins/Selection/ants_material.tres" id="2_material"]
 
-[node name="SelectionPreview" type="MeshInstance3D"]
+[sub_resource type="GDScript" id="GDScript_5pipt"]
+script/source = "extends MeshInstance3D
+
+
+"
+
+[node name="SelectionPreview" type="MeshInstance3D" unique_id=893741529]
 material_override = ExtResource("2_material")
 cast_shadow = 0
-script = ExtResource("1_script")
+script = SubResource("GDScript_5pipt")
