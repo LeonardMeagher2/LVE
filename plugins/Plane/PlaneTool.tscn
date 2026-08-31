@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://bmnrpaima333f"]
 
-[ext_resource type="Script" uid="uid://64p1vaynqeba" path="res://plugins/Plane/PlaneTool.gd" id="1_script"]
+[ext_resource type="Script" uid="uid://64p1vaynqeba" path="res://Plugins/Plane/PlaneTool.gd" id="1_script"]
 [ext_resource type="Material" uid="uid://dv7wwwbfihlej" path="res://Plugins/cursor_material.tres" id="2_jodqs"]
 [ext_resource type="ArrayMesh" uid="uid://87ly7cneh3j7" path="res://Plugins/Plane/cursor_plane.tres" id="3_jodqs"]
 
