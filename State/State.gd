@@ -47,12 +47,12 @@ func _init() -> void:
 func _ready() -> void:
 	cells_changed.connect(stop)
 	
-	add_plugin(load("res://plugins/Brush/BrushPlugin.gd").new())
-	add_plugin(load("res://plugins/Eyedropper/EyedropperPlugin.gd").new())
-	add_plugin(load("res://plugins/Eraser/EraserPlugin.gd").new())
-	add_plugin(load("res://plugins/Fill/FillPlugin.gd").new())
-	add_plugin(load("res://plugins/Selection/SelectionPlugin.gd").new())
-	add_plugin(load("res://plugins/Plane/PlanePlugin.gd").new())
+	add_plugin(load("res://Plugins/Brush/BrushPlugin.gd").new())
+	add_plugin(load("res://Plugins/Eyedropper/EyedropperPlugin.gd").new())
+	add_plugin(load("res://Plugins/Eraser/EraserPlugin.gd").new())
+	add_plugin(load("res://Plugins/Fill/FillPlugin.gd").new())
+	add_plugin(load("res://Plugins/Selection/SelectionPlugin.gd").new())
+	add_plugin(load("res://Plugins/Plane/PlanePlugin.gd").new())
 	
 
 
