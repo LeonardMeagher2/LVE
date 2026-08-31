@@ -11,7 +11,7 @@ max_active: 1
   - [x] Add the Fill plugin (button, connected option)
   - [x] Add the Selection plugin (MenuButton: box, lasso, wand; mode picker, clear, connected)
   - [ ] Add the Transform plugin (MenuButton: move, rotate; snap, commit, cancel)
-  - [ ] Add the Plane plugin (button, axis picker)
+  - [x] Add the Plane plugin (button, axis picker)
   - [ ] Register the plugins in the toolbar in order
   - [ ] Fix the eyedropper shortcut and tooltip
   - [ ] Delete the dead tool scripts, scenes, option widgets, and ToolInfo resources
