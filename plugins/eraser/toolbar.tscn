@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://bhe87ooding0c"]
 
-[ext_resource type="ButtonGroup" uid="uid://tm4elm05vye0" path="res://plugins/ToolBarButtonGroup.tres" id="1_t7liv"]
-[ext_resource type="Texture2D" uid="uid://c8ov62eka432v" path="res://plugins/Eraser/eraser.svg" id="2_icon"]
+[ext_resource type="ButtonGroup" uid="uid://tm4elm05vye0" path="res://Plugins/ToolBarButtonGroup.tres" id="1_t7liv"]
+[ext_resource type="Texture2D" uid="uid://c8ov62eka432v" path="res://icons/eraser.svg" id="2_icon"]
 
 [sub_resource type="InputEventAction" id="InputEventAction_qwrxr"]
 action = &"tool_eraser"

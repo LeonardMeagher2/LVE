@@ -1,8 +1,8 @@
 [gd_scene format=3 uid="uid://c6gsug38kip5w"]
 
-[ext_resource type="Script" uid="uid://duc3l4vh3tlrm" path="res://plugins/Eraser/EraserTool.gd" id="1_5pvxg"]
-[ext_resource type="Material" uid="uid://dv7wwwbfihlej" path="res://plugins/cursor_material.tres" id="2_1j8uq"]
-[ext_resource type="ArrayMesh" uid="uid://cqj6xncf14cm" path="res://plugins/OutlineCube.tres" id="3_5pvxg"]
+[ext_resource type="Script" uid="uid://duc3l4vh3tlrm" path="res://Plugins/Eraser/EraserTool.gd" id="1_5pvxg"]
+[ext_resource type="Material" uid="uid://dv7wwwbfihlej" path="res://Plugins/cursor_material.tres" id="2_1j8uq"]
+[ext_resource type="ArrayMesh" uid="uid://cqj6xncf14cm" path="res://Plugins/OutlineCube.tres" id="3_5pvxg"]
 
 [node name="EraserTool" type="Node3D" unique_id=218103605]
 script = ExtResource("1_5pvxg")

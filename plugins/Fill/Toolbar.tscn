@@ -1,7 +1,7 @@
 [gd_scene format=3]
 
-[ext_resource type="ButtonGroup" uid="uid://tm4elm05vye0" path="res://plugins/ToolBarButtonGroup.tres" id="1_bg"]
-[ext_resource type="Texture2D" uid="uid://vfhvhh7m0svp" path="res://plugins/Fill/fill.svg" id="2_icon"]
+[ext_resource type="ButtonGroup" uid="uid://tm4elm05vye0" path="res://Plugins/ToolBarButtonGroup.tres" id="1_bg"]
+[ext_resource type="Texture2D" uid="uid://vfhvhh7m0svp" path="res://icons/fill.svg" id="2_icon"]
 
 [node name="fill" type="Button"]
 tooltip_text = "Fill matching voxels with a color"

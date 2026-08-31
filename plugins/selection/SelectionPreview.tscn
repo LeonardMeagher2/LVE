@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://cw3tcgea2f3x4"]
 
-[ext_resource type="Material" uid="uid://b8kfc7ofi3m41" path="res://plugins/Selection/ants_material.tres" id="1_5v0ba"]
-[ext_resource type="Script" uid="uid://b252cu4ruceea" path="res://plugins/Selection/SelectionPreview.gd" id="2_65suw"]
+[ext_resource type="Material" uid="uid://b8kfc7ofi3m41" path="res://Plugins/Selection/ants_material.tres" id="1_5v0ba"]
+[ext_resource type="Script" uid="uid://b252cu4ruceea" path="res://Plugins/Selection/SelectionPreview.gd" id="2_65suw"]
 
 [node name="SelectionPreview" type="MeshInstance3D" unique_id=685590344]
 top_level = true

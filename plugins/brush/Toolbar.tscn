@@ -1,9 +1,9 @@
-[gd_scene format=3 uid="uid://cdwrxespbia3s"]
+[gd_scene format=3 uid="uid://bp314wlvrddma"]
 
-[ext_resource type="ButtonGroup" uid="uid://tm4elm05vye0" path="res://plugins/ToolBarButtonGroup.tres" id="1_o5fq1"]
-[ext_resource type="Texture2D" uid="uid://ejqpo0v0d1op" path="res://plugins/Brush/icons/pencil.svg" id="2_ccmv0"]
-[ext_resource type="Texture2D" uid="uid://os815iumesvl" path="res://plugins/Brush/icons/paint.svg" id="3_21n6l"]
-[ext_resource type="Script" uid="uid://co50uowx18hkb" path="res://plugins/Brush/Toolbar.gd" id="4_ccmv0"]
+[ext_resource type="ButtonGroup" uid="uid://tm4elm05vye0" path="res://Plugins/ToolBarButtonGroup.tres" id="1_o5fq1"]
+[ext_resource type="Texture2D" uid="uid://ejqpo0v0d1op" path="res://icons/pencil.svg" id="2_ccmv0"]
+[ext_resource type="Texture2D" uid="uid://os815iumesvl" path="res://icons/paint.svg" id="3_21n6l"]
+[ext_resource type="Script" uid="uid://co50uowx18hkb" path="res://Plugins/Brush/Toolbar.gd" id="4_ccmv0"]
 
 [sub_resource type="InputEventAction" id="InputEventAction_pencil"]
 action = &"tool_pencil"

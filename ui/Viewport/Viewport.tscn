@@ -5,12 +5,12 @@
 [ext_resource type="Script" uid="uid://c0xmjig8s4i0q" path="res://ui/Viewport/GridRenderer.gd" id="4_bqm4n"]
 [ext_resource type="Script" uid="uid://gwfmh64wiyx0" path="res://ui/Viewport/CameraRig.gd" id="5_b27s2"]
 [ext_resource type="Script" uid="uid://d3i6vt2reee27" path="res://ui/Viewport/VoxelRenderer.gd" id="9_g1eee"]
-[ext_resource type="Texture2D" uid="uid://dif3h4ri2n0me" path="res://ui/Viewport/camera.svg" id="11_jtuva"]
+[ext_resource type="Texture2D" uid="uid://dif3h4ri2n0me" path="res://icons/camera.svg" id="11_jtuva"]
 [ext_resource type="ButtonGroup" uid="uid://mrct6v0d4s6u" path="res://ui/Viewport/ViewTransformButtonGroup.tres" id="12_gu70n"]
-[ext_resource type="Texture2D" uid="uid://cubut3i22m2q4" path="res://ui/Viewport/hand.svg" id="12_qkpnp"]
-[ext_resource type="Texture2D" uid="uid://dy2x8ri5jrac1" path="res://ui/Viewport/rotate.svg" id="13_r5sgf"]
-[ext_resource type="Texture2D" uid="uid://djnb7oucoqdu8" path="res://ui/Viewport/zoom.svg" id="14_jua01"]
-[ext_resource type="Texture2D" uid="uid://mglj26s40ce4" path="res://ui/Viewport/center.svg" id="15_0hwp6"]
+[ext_resource type="Texture2D" uid="uid://cubut3i22m2q4" path="res://icons/hand.svg" id="12_qkpnp"]
+[ext_resource type="Texture2D" uid="uid://dy2x8ri5jrac1" path="res://icons/rotate.svg" id="13_r5sgf"]
+[ext_resource type="Texture2D" uid="uid://djnb7oucoqdu8" path="res://icons/zoom.svg" id="14_jua01"]
+[ext_resource type="Texture2D" uid="uid://mglj26s40ce4" path="res://icons/center.svg" id="15_0hwp6"]
 [ext_resource type="Texture2D" uid="uid://bhg85sqfio31d" path="res://icons/grid.svg" id="16_x0727"]
 
 [sub_resource type="Environment" id="Environment_env"]
@@ -41,7 +41,6 @@ use_colors = true
 mesh = SubResource("BoxMesh_j71j0")
 
 [node name="Viewport" type="VBoxContainer" unique_id=159467693]
-anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2

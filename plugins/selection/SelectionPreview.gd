@@ -29,7 +29,10 @@ static func outline_mesh(sel: VoxelSelection) -> ArrayMesh:
 	for c in sel.cells:
 		edges.append_array(_boundary_edges(c, sel))
 	var m := ArrayMesh.new()
-	m.add_surface_from_arrays(Mesh.PRIMITIVE_LINES, MeshUtil.vertex_arrays(_merged_outline(edges)))
+	var a := Array()
+	a.resize(Mesh.ARRAY_MAX)
+	a[Mesh.ARRAY_VERTEX] = _merged_outline(edges)
+	m.add_surface_from_arrays(Mesh.PRIMITIVE_LINES, a)
 	return m
 
 

@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://cfh7uu135xto5"]
 
-[ext_resource type="Script" uid="uid://dt6jni4oe4jda" path="res://plugins/Brush/BrushTool.gd" id="1_vbqos"]
-[ext_resource type="Material" uid="uid://cspr6d8uervv1" path="res://plugins/Brush/cursor_material.tres" id="2_y4iw6"]
+[ext_resource type="Script" uid="uid://dt6jni4oe4jda" path="res://Plugins/Brush/BrushTool.gd" id="1_vbqos"]
+[ext_resource type="Material" uid="uid://cspr6d8uervv1" path="res://Plugins/Brush/cursor_material.tres" id="2_y4iw6"]
 
 [sub_resource type="BoxMesh" id="BoxMesh_nh74m"]
 

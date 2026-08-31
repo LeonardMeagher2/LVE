@@ -177,6 +177,9 @@ func prev_frame() -> void:
 
 func get_frame_count() -> int:
 	return document.frames.size()
+	
+func get_current_voxel_frame() -> VoxelFrame:
+	return document.frames[current_frame]
 
 
 func add_frame() -> void:

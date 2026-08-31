@@ -1,7 +1,7 @@
-[gd_scene format=3 uid="uid://dpv13kvtyea77"]
+[gd_scene format=3 uid="uid://de7rwt1nnpu1k"]
 
-[ext_resource type="Texture2D" uid="uid://cl0exu5ldguw" path="res://plugins/Brush/icons/pixel_perfect.svg" id="1_icon"]
-[ext_resource type="Script" uid="uid://c20cgmyn06xbj" path="res://plugins/Brush/Options.gd" id="1_iwsrx"]
+[ext_resource type="Texture2D" uid="uid://cl0exu5ldguw" path="res://icons/pixel_perfect.svg" id="1_icon"]
+[ext_resource type="Script" uid="uid://c20cgmyn06xbj" path="res://Plugins/Brush/Options.gd" id="1_iwsrx"]
 
 [node name="Options" type="HBoxContainer" unique_id=2043976841]
 script = ExtResource("1_iwsrx")

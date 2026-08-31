@@ -40,7 +40,10 @@ func rebuild() -> void:
 		lines.append(_vec(u, v, 0.0, float(j)))
 		lines.append(_vec(u, v, float(nu), float(j)))
 	var line_mesh := ArrayMesh.new()
-	line_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_LINES, MeshUtil.vertex_arrays(lines))
+	var a := Array()
+	a.resize(Mesh.ARRAY_MAX)
+	a[Mesh.ARRAY_VERTEX] = lines
+	line_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_LINES, a)
 
 	mesh = line_mesh
 	var p := Vector3.ZERO

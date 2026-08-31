@@ -2,7 +2,6 @@ extends PanelContainer
 
 func _ready() -> void:
 	State.cells_changed.connect(_update)
-	State.frame_changed.connect(_update)
 	_update()
 
 

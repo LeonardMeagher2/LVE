@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://domx11gs1nihw"]
 
-[ext_resource type="Script" uid="uid://b4xq50vruxcot" path="res://plugins/Selection/tools/WandSelectTool.gd" id="1_script"]
-[ext_resource type="PackedScene" uid="uid://b1lkdaijckvw6" path="res://plugins/Selection/tools/SelectTool.tscn" id="1_x363y"]
+[ext_resource type="Script" uid="uid://b4xq50vruxcot" path="res://Plugins/Selection/tools/WandSelectTool.gd" id="1_script"]
+[ext_resource type="PackedScene" uid="uid://b1lkdaijckvw6" path="res://Plugins/Selection/tools/SelectTool.tscn" id="1_x363y"]
 
 [node name="SelectionTool" unique_id=1152130835 instance=ExtResource("1_x363y")]
 script = ExtResource("1_script")

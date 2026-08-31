@@ -1,10 +1,10 @@
 [gd_scene format=3 uid="uid://c1nkf2khswvpm"]
 
-[ext_resource type="ButtonGroup" uid="uid://tm4elm05vye0" path="res://plugins/ToolBarButtonGroup.tres" id="1_bg"]
-[ext_resource type="Texture2D" uid="uid://cwgfstwbiogcd" path="res://plugins/Selection/icons/select.svg" id="2_17i4x"]
-[ext_resource type="Texture2D" uid="uid://dnpfta4guqhvd" path="res://plugins/Selection/icons/wand.svg" id="3_l2yoj"]
-[ext_resource type="Texture2D" uid="uid://ca51e3tfobhyh" path="res://plugins/Selection/icons/lasso.svg" id="4_c7ehh"]
-[ext_resource type="Script" uid="uid://b06sqaowt5oy3" path="res://plugins/Selection/Toolbar.gd" id="5_c7ehh"]
+[ext_resource type="ButtonGroup" uid="uid://tm4elm05vye0" path="res://Plugins/ToolBarButtonGroup.tres" id="1_bg"]
+[ext_resource type="Texture2D" uid="uid://cwgfstwbiogcd" path="res://icons/select.svg" id="2_17i4x"]
+[ext_resource type="Texture2D" uid="uid://dnpfta4guqhvd" path="res://icons/wand.svg" id="3_l2yoj"]
+[ext_resource type="Texture2D" uid="uid://ca51e3tfobhyh" path="res://icons/lasso.svg" id="4_c7ehh"]
+[ext_resource type="Script" uid="uid://b06sqaowt5oy3" path="res://Plugins/Selection/Toolbar.gd" id="5_c7ehh"]
 
 [node name="selection" type="MenuButton" unique_id=241970507]
 tooltip_text = "Select voxels"

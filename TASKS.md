@@ -7,6 +7,15 @@ max_active: 1
   - [x] Allow picking on any side of the "floor" plane, not just the top
   - [x] Add option to change the floor plane to a different axis (X, Y, Z)
   - [x] Add option to move the floor plane up and down along the axis
+- [ ] Migrate the Transform and Plane tools to plugins
+  - [x] Add the Fill plugin (button, connected option)
+  - [x] Add the Selection plugin (MenuButton: box, lasso, wand; mode picker, clear, connected)
+  - [ ] Add the Transform plugin (MenuButton: move, rotate; snap, commit, cancel)
+  - [ ] Add the Plane plugin (button, axis picker)
+  - [ ] Register the plugins in the toolbar in order
+  - [ ] Fix the eyedropper shortcut and tooltip
+  - [ ] Delete the dead tool scripts, scenes, option widgets, and ToolInfo resources
+  - [ ] Ask the user to test the Transform and Plane tools manually
 - [ ] Line tool
   - [ ] Click to start, click to end, or click and drag to draw a line
 - [ ] Extrude tool
@@ -39,9 +48,9 @@ max_active: 1
   - [ ] Add/Remove
   - [ ] Load/Save/Set default palette
   - [ ] Sort
-    - [ ] reverse
-    - [ ] By hue, saturation, and brightness
-    - [ ] By Red, Green, Blue
+	- [ ] reverse
+	- [ ] By hue, saturation, and brightness
+	- [ ] By Red, Green, Blue
   - [ ] Create gradient between first and last selected swatches replacing the selected swatches between them
 
 
