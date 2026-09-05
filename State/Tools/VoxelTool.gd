@@ -5,6 +5,8 @@ var _plane: StrokePlane = null
 var _last_target := VoxelPicking.NONE
 var _stroke_active := false
 var _stroke_before: Dictionary = {}
+var _cells_dirty := false
+var _affected: Array[Vector3i] = []
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -56,7 +58,6 @@ func handle_input(event: InputEvent, pos: Vector2) -> bool:
 			update_visual(pick)
 		else:
 			if _stroke_active:
-				_stroke_active = false
 				_end()
 		return true
 	if event is InputEventMouseMotion:
@@ -76,8 +77,10 @@ func handle_input(event: InputEvent, pos: Vector2) -> bool:
 
 
 func _apply_pick(target: Vector3i, hit: Vector3i) -> void:
-	if apply(target, hit):
-		State.cells_changed.emit()
+	apply(target, hit)
+	for c in applied_cells(target, hit):
+		_affected.append(c)
+	_flush_cells()
 
 
 func _apply_stroke_to(to: Vector3i) -> void:
@@ -105,11 +108,36 @@ func apply(_target: Vector3i, _hit: Vector3i) -> bool:
 	return false
 
 
+func applied_cells(target: Vector3i, hit: Vector3i) -> Array[Vector3i]:
+	var out: Array[Vector3i] = []
+	if target != VoxelPicking.NONE:
+		out.append(target)
+	if hit != VoxelPicking.NONE and hit != target:
+		out.append(hit)
+	return out
+
+
 func _end() -> void:
+	_flush_cells()
 	end_stroke()
 	_plane = null
 	_last_target = VoxelPicking.NONE
 	_stroke_active = false
+
+
+func _flush_cells() -> void:
+	if _cells_dirty:
+		return
+	_cells_dirty = true
+	call_deferred("_do_flush")
+
+
+func _do_flush() -> void:
+	_cells_dirty = false
+	if _affected.is_empty():
+		return
+	State.cells_changed.emit(State.current_frame, _affected)
+	_affected.clear()
 
 
 func begin_stroke() -> void:
@@ -153,7 +181,7 @@ func _restore_snapshot(s: Dictionary) -> void:
 	var i: int = s["frame"]
 	if i < 0 or i >= State.document.frames.size():
 		i = State.current_frame
-	State.document.frames[i].cells = (s["cells"] as Dictionary).duplicate(true)
+	State.document.replace_cells(i, (s["cells"] as Dictionary).duplicate(true))
 	State.selection.cells = (s["selection"] as Dictionary).duplicate(true)
 	State.notify_restored()
 
@@ -190,6 +218,5 @@ func update_visual(pick: PickResult) -> void:
 		return
 	position = Vector3(pick.target)
 	visible = true
-
 
 

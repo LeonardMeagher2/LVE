@@ -4,7 +4,7 @@
 [ext_resource type="Texture2D" uid="uid://cmfirdobdfgqh" path="res://ui/Checker.png" id="2_gu70n"]
 [ext_resource type="Script" uid="uid://c0xmjig8s4i0q" path="res://ui/Viewport/GridRenderer.gd" id="4_bqm4n"]
 [ext_resource type="Script" uid="uid://gwfmh64wiyx0" path="res://ui/Viewport/CameraRig.gd" id="5_b27s2"]
-[ext_resource type="Script" uid="uid://d3i6vt2reee27" path="res://ui/Viewport/VoxelRenderer.gd" id="9_g1eee"]
+[ext_resource type="PackedScene" uid="uid://cj402ulggqswh" path="res://ui/Viewport/VoxelRenderer.tscn" id="5_ic46q"]
 [ext_resource type="Texture2D" uid="uid://dif3h4ri2n0me" path="res://icons/camera.svg" id="11_jtuva"]
 [ext_resource type="ButtonGroup" uid="uid://mrct6v0d4s6u" path="res://ui/Viewport/ViewTransformButtonGroup.tres" id="12_gu70n"]
 [ext_resource type="Texture2D" uid="uid://cubut3i22m2q4" path="res://icons/hand.svg" id="12_qkpnp"]
@@ -26,21 +26,8 @@ render_priority = -1
 shading_mode = 0
 albedo_color = Color(0.65, 0.65, 0.65, 1)
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_voxels"]
-vertex_color_use_as_albedo = true
-vertex_color_is_srgb = true
-stencil_flags = 2
-stencil_color = Color(1, 1, 1, 1)
-stencil_outline_thickness = 0.025
-
-[sub_resource type="BoxMesh" id="BoxMesh_j71j0"]
-
-[sub_resource type="MultiMesh" id="MultiMesh_voxels"]
-transform_format = 1
-use_colors = true
-mesh = SubResource("BoxMesh_j71j0")
-
 [node name="Viewport" type="VBoxContainer" unique_id=159467693]
+anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
@@ -104,12 +91,7 @@ script = ExtResource("5_b27s2")
 [node name="Camera3D" type="Camera3D" parent="PanelContainer/ViewportContainer/Viewport/ViewportScene/CameraRig" unique_id=1978355787]
 fov = 45.0
 
-[node name="Voxels" type="MultiMeshInstance3D" parent="PanelContainer/ViewportContainer/Viewport/ViewportScene" unique_id=1816863498]
-unique_name_in_owner = true
-sorting_use_aabb_center = false
-material_override = SubResource("StandardMaterial3D_voxels")
-multimesh = SubResource("MultiMesh_voxels")
-script = ExtResource("9_g1eee")
+[node name="VoxelRenderer" parent="PanelContainer/ViewportContainer/Viewport/ViewportScene" unique_id=1825220893 instance=ExtResource("5_ic46q")]
 
 [node name="ControlBar" type="HBoxContainer" parent="." unique_id=53784703]
 unique_name_in_owner = true

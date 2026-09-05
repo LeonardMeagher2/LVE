@@ -64,5 +64,13 @@ func _nudge(offset: Vector3i) -> void:
 	for c in moved:
 		State.document.set_cell(State.current_frame, c + offset, moved[c])
 	if not moved.is_empty():
-		State.cells_changed.emit()
+		State.cells_changed.emit(State.current_frame, _nudged_cells(moved, offset))
 	_end()
+
+
+func _nudged_cells(moved: Dictionary, offset: Vector3i) -> Array[Vector3i]:
+	var out: Array[Vector3i] = []
+	for c in moved:
+		out.append(c)
+		out.append(c + offset)
+	return out

@@ -3,7 +3,6 @@
 [ext_resource type="Script" uid="uid://diaylp7imw342" path="res://ui/AnimationTimeline/Frame.gd" id="1_rtc8n"]
 [ext_resource type="ButtonGroup" uid="uid://bct0x4oxfq5kd" path="res://ui/AnimationTimeline/FrameButtonGroup.tres" id="2_8odrg"]
 [ext_resource type="Texture2D" uid="uid://cmfirdobdfgqh" path="res://ui/Checker.png" id="3_5lgwl"]
-[ext_resource type="Script" uid="uid://bs40ovq8dbd7n" path="res://ui/AnimationTimeline/FramePreview.gd" id="4_rtc8n"]
 
 [node name="Frame" type="PanelContainer" unique_id=276647722]
 offset_right = 80.0
@@ -51,15 +50,14 @@ mouse_filter = 2
 texture = ExtResource("3_5lgwl")
 stretch_mode = 5
 
-[node name="Preview" type="TextureRect" parent="MarginContainer/VBoxContainer/PanelContainer2" unique_id=920543017]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(64, 64)
-propagate_maximum_size = true
+[node name="SubViewportContainer" type="SubViewportContainer" parent="MarginContainer/VBoxContainer/PanelContainer2" unique_id=1033360889]
 layout_mode = 2
-mouse_filter = 2
-texture = ExtResource("3_5lgwl")
-stretch_mode = 5
-script = ExtResource("4_rtc8n")
+
+[node name="SubViewport" type="SubViewport" parent="MarginContainer/VBoxContainer/PanelContainer2/SubViewportContainer" unique_id=1851542283]
+handle_input_locally = false
+size = Vector2i(64, 64)
+
+[node name="Camera3D" type="Camera3D" parent="MarginContainer/VBoxContainer/PanelContainer2/SubViewportContainer/SubViewport" unique_id=682666896]
 
 [node name="Delay" type="SpinBox" parent="MarginContainer/VBoxContainer" unique_id=755136778]
 unique_name_in_owner = true

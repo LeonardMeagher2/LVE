@@ -106,9 +106,9 @@ func _release() -> void:
 
 func _apply_preview() -> void:
 	_dragged = true
-	var preview: Dictionary = _base_cells.duplicate()
+	var doc := State.document
 	for c in _colors:
-		preview.erase(c)
+		doc.erase(State.current_frame, c)
 	_dest_cells = []
 	var box := _dest_bbox()
 	var lo := box.position.floor() - Vector3.ONE
@@ -119,10 +119,19 @@ func _apply_preview() -> void:
 				var d := Vector3i(x, y, z)
 				var s := _map_source(d)
 				if _colors.has(s):
-					preview[d] = _colors[s]
+					doc.set_cell(State.current_frame, d, _colors[s])
 					_dest_cells.append(d)
-	State.document.frames[State.current_frame].cells = preview
-	State.cells_changed.emit()
+	State.cells_changed.emit(State.current_frame, _moved_cells())
+
+
+func _moved_cells() -> Array[Vector3i]:
+	var out: Array[Vector3i] = []
+	for c in _base_cells:
+		out.append(c)
+	for d in _dest_cells:
+		if not _base_cells.has(d):
+			out.append(d)
+	return out
 
 
 func _commit() -> void:

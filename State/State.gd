@@ -1,7 +1,7 @@
 extends Node
 
 signal document_changed()
-signal cells_changed()
+signal cells_changed(frame: int, affected: Array[Vector3i])
 signal frames_changed()
 signal frame_changed()
 signal is_playing_toggled(toggled_on:bool)
@@ -45,7 +45,7 @@ func _init() -> void:
 	document = VoxiDocument.new()
 
 func _ready() -> void:
-	cells_changed.connect(stop)
+	cells_changed.connect(func(_frame, _affected): stop())
 	
 	add_plugin(load("res://Plugins/Brush/BrushPlugin.gd").new())
 	add_plugin(load("res://Plugins/Eyedropper/EyedropperPlugin.gd").new())
@@ -141,10 +141,10 @@ func erase_selection() -> void:
 	for c in selection.cells:
 		if cells.has(c):
 			removed[c] = cells[c]
-			cells.erase(c)
+			document.erase(i, c)
 	if removed.is_empty():
 		return
-	cells_changed.emit()
+	cells_changed.emit(i, _vec3i_array(removed.keys()))
 	undo_redo.create_action("Erase Selection")
 	undo_redo.add_undo_method(_restore_cells.bind(i, removed))
 	undo_redo.add_do_method(_erase_cells.bind(i, removed.keys()))
@@ -155,16 +155,16 @@ func _restore_cells(i: int, cells: Dictionary) -> void:
 	if i < 0 or i >= document.frames.size():
 		return
 	for c in cells:
-		document.frames[i].cells[c] = cells[c]
-	cells_changed.emit()
+		document.set_cell(i, c, cells[c])
+	cells_changed.emit(i, _vec3i_array(cells.keys()))
 
 
 func _erase_cells(i: int, keys: Array) -> void:
 	if i < 0 or i >= document.frames.size():
 		return
 	for c in keys:
-		document.frames[i].cells.erase(c)
-	cells_changed.emit()
+		document.erase(i, c)
+	cells_changed.emit(i, _vec3i_array(keys))
 
 
 func next_frame() -> void:
@@ -178,7 +178,10 @@ func prev_frame() -> void:
 
 func get_frame_count() -> int:
 	return document.frames.size()
-	
+
+func get_voxel_frame(frame:int) -> VoxelFrame:
+	return document.frames[frame]
+
 func get_current_voxel_frame() -> VoxelFrame:
 	return document.frames[current_frame]
 
@@ -213,5 +216,12 @@ func to_end() -> void:
 
 func notify_restored() -> void:
 	frame_changed.emit()
-	cells_changed.emit()
+	cells_changed.emit(current_frame, _vec3i_array([]))
 	selection_changed.emit()
+
+
+func _vec3i_array(keys: Array) -> Array[Vector3i]:
+	var out: Array[Vector3i] = []
+	for k in keys:
+		out.append(k)
+	return out

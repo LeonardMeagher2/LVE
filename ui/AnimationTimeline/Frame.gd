@@ -1,16 +1,17 @@
 extends PanelContainer
 
 func _ready() -> void:
-	State.cells_changed.connect(_update)
+	#State.cells_changed.connect(_update)
 	_update()
 
 
-func _update() -> void:
+func _update(frame: int = 0, affected: Array[Vector3i] = []) -> void:
 	var index = get_index()
 	%Number.text = str(index + 1)
 	%Delay.value = State.document.frames[index].delay_ms
-	%Preview.set_frame(State.document.frames[index], State.document)
 	%Button.set_pressed_no_signal(State.current_frame == index)
+	if not affected.is_empty() and frame != index:
+		return
 
 
 func _on_delay_value_changed(value: float) -> void:

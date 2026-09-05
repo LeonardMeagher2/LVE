@@ -1,0 +1,11 @@
+[gd_resource type="BoxMesh" format=3 uid="uid://cmsqlf7r1p284"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_voxels"]
+vertex_color_use_as_albedo = true
+vertex_color_is_srgb = true
+stencil_flags = 2
+stencil_color = Color(1, 1, 1, 1)
+stencil_outline_thickness = 0.025
+
+[resource]
+material = SubResource("StandardMaterial3D_voxels")

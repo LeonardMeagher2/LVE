@@ -7,7 +7,7 @@ var _built := false
 
 func _ready() -> void:
 	rebuild()
-	State.cells_changed.connect(rebuild)
+	State.cells_changed.connect(func(_frame, _affected): rebuild())
 	State.document_changed.connect(rebuild)
 	State.floor_plane_changed.connect(rebuild)
 

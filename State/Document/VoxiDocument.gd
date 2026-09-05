@@ -6,6 +6,9 @@ extends Resource
 @export var frames: Array[VoxelFrame] = []
 @export var tags: Array[AnimationTag] = []
 
+var _bounds: AABB
+var _bounds_dirty := true
+
 
 func _init() -> void:
 	if frames.is_empty():
@@ -38,6 +41,7 @@ func remove_frame(i: int) -> void:
 	if i < 0 or i >= frames.size():
 		return
 	frames.remove_at(i)
+	_bounds_dirty = true
 
 
 func add_tag(name: String, from: int, to: int, loop_mode := AnimationTag.LoopMode.FORWARD, repeats := 0) -> AnimationTag:
@@ -57,6 +61,12 @@ func remove_tag(i: int) -> void:
 
 
 func bounds() -> AABB:
+	if _bounds_dirty:
+		_rescan_bounds()
+	return _bounds
+
+
+func _rescan_bounds() -> void:
 	var b := AABB()
 	for f in frames:
 		for c in f.cells:
@@ -64,19 +74,66 @@ func bounds() -> AABB:
 				b = AABB(Vector3(c), Vector3.ONE)
 			else:
 				b = b.merge(AABB(Vector3(c), Vector3.ONE))
-	return b
+	_bounds = b
+	_bounds_dirty = false
+
+
+func _grow_bounds(cell: Vector3i) -> void:
+	if not _bounds.has_volume():
+		_bounds = AABB(Vector3(cell), Vector3.ONE)
+	else:
+		_bounds = _bounds.merge(AABB(Vector3(cell), Vector3.ONE))
+
+
+func _may_shrink_bounds(frame: int, cell: Vector3i) -> void:
+	if _bounds_dirty or not _bounds.has_volume():
+		_bounds_dirty = true
+		return
+	var lo := Vector3i(_bounds.position)
+	var hi := Vector3i(_bounds.position + _bounds.size) - Vector3i.ONE
+	var cells: Dictionary = frames[frame].cells
+	if (cell.x == lo.x and not _face_has_cells(cells, 0, lo.x, lo, hi)) or \
+			(cell.x == hi.x and not _face_has_cells(cells, 0, hi.x, lo, hi)) or \
+			(cell.y == lo.y and not _face_has_cells(cells, 1, lo.y, lo, hi)) or \
+			(cell.y == hi.y and not _face_has_cells(cells, 1, hi.y, lo, hi)) or \
+			(cell.z == lo.z and not _face_has_cells(cells, 2, lo.z, lo, hi)) or \
+			(cell.z == hi.z and not _face_has_cells(cells, 2, hi.z, lo, hi)):
+		_bounds_dirty = true
+
+
+func _face_has_cells(cells: Dictionary, axis: int, value: int, lo: Vector3i, hi: Vector3i) -> bool:
+	var a := (axis + 1) % 3
+	var b := (axis + 2) % 3
+	for i in range(lo[a], hi[a] + 1):
+		for j in range(lo[b], hi[b] + 1):
+			var p := Vector3i.ZERO
+			p[axis] = value
+			p[a] = i
+			p[b] = j
+			if cells.has(p):
+				return true
+	return false
 
 
 func paint(frame: int, cell: Vector3i, color: Color) -> void:
-	frames[frame].cells[cell] = color
+	set_cell(frame, cell, color)
 
 
 func set_cell(frame: int, cell: Vector3i, color: Color) -> void:
 	frames[frame].cells[cell] = color
+	_grow_bounds(cell)
 
 
 func erase(frame: int, cell: Vector3i) -> void:
+	if not frames[frame].cells.has(cell):
+		return
 	frames[frame].cells.erase(cell)
+	_may_shrink_bounds(frame, cell)
+
+
+func replace_cells(frame: int, cells: Dictionary) -> void:
+	frames[frame].cells = cells
+	_bounds_dirty = true
 
 
 func get_color_at(frame: int, cell: Vector3i) -> Color:

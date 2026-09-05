@@ -34,6 +34,8 @@ This file records confirmed, non-obvious facts learned while working on Voxi. Re
 - 2026-08-24: The `BaseButton.button_pressed` setter emits `toggled`. Use `set_pressed_no_signal()` to sync a button without a signal round-trip.
 - 2026-08-24: A `ButtonGroup` unpresses siblings during a press. The order of the two `toggled` emissions is not fixed. Derive shared state in guarded per-button handlers, not from `get_pressed_button()`.
 - 2026-08-24: A sync handler that writes `set_pressed_no_signal` during a sibling `toggled` cascade corrupts the engine press in flight. The next `toggled` then reports the corrupted value. Defer such sync with `call_deferred` to the end of the frame.
+- 2026-08-31: Signal arguments are not converted to typed array parameters. Emitting an untyped `Array` (empty or not) into an `Array[Vector3i]` parameter drops the call. The handler never runs. Always emit a typed `Array[Vector3i]`.
+- 2026-09-03: Setting `MultiMesh.instance_count` resizes the buffer and clears all instance data. Set it once at creation. Use `visible_instance_count` for the live count. It limits drawn instances without touching the buffers.
 
 ## Picking
 
