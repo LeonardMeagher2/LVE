@@ -71,17 +71,16 @@ class Chunk extends RefCounted:
 				grow(capacity + 1)
 			size += 1
 		elif color == Color.TRANSPARENT:
+			cells.erase(cell)
 			if index != size - 1:
 				cell = indexes[size - 1]
 				color = cells[cell]
 				indexes[index] = cell
-			cells.erase(cell)
 			indexes.erase(size - 1)
 			size -= 1
 				
 			if size * 4 < capacity and capacity > chunk_size * 2:
 				shrink(size)
-			return
 		else:
 			cells[cell] = color
 		
