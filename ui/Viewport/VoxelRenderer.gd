@@ -82,7 +82,9 @@ class Chunk extends RefCounted:
 			if size * 4 < capacity and capacity > chunk_size * 2:
 				shrink(size)
 			return
-			
+		else:
+			cells[cell] = color
+		
 		multimesh.set_instance_transform(index, Transform3D(Basis.IDENTITY, Vector3(cell)))
 		multimesh.set_instance_color(index, color)
 		multimesh.visible_instance_count = size
