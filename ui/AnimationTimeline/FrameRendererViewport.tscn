@@ -1,0 +1,49 @@
+[gd_scene format=3 uid="uid://bvpbeb01ppoys"]
+
+[ext_resource type="Texture2D" uid="uid://cmfirdobdfgqh" path="res://ui/Checker.png" id="1_nq82o"]
+[ext_resource type="PackedScene" uid="uid://cj402ulggqswh" path="res://ui/Viewport/VoxelRenderer.tscn" id="2_l588j"]
+
+[sub_resource type="Environment" id="Environment_kqkb2"]
+background_mode = 3
+background_color = Color(0.118, 0.122, 0.133, 1)
+background_canvas_max_layer = -1
+ambient_light_source = 2
+ambient_light_color = Color(0.54901963, 0.5686275, 0.61960787, 1)
+reflected_light_source = 1
+
+[sub_resource type="World3D" id="World3D_50uxx"]
+environment = SubResource("Environment_kqkb2")
+
+[node name="FrameRendererViewport" type="SubViewport" unique_id=1309484533]
+world_3d = SubResource("World3D_50uxx")
+size = Vector2i(64, 64)
+render_target_update_mode = 0
+
+[node name="CanvasLayer" type="CanvasLayer" parent="." unique_id=1533671786]
+layer = -1
+
+[node name="TextureRect" type="TextureRect" parent="CanvasLayer" unique_id=330317643]
+texture_filter = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("1_nq82o")
+stretch_mode = 1
+
+[node name="Node3D" type="Node3D" parent="." unique_id=1956716218]
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="Node3D" unique_id=695140213]
+environment = SubResource("Environment_kqkb2")
+
+[node name="Light" type="DirectionalLight3D" parent="Node3D" unique_id=90003121]
+transform = Transform3D(0.9426416, -0.23603697, 0.23603696, 0, 0.70710677, 0.7071068, -0.3338067, -0.66654825, 0.6665482, 0, 0, 0)
+light_bake_mode = 0
+shadow_enabled = true
+
+[node name="Camera3D" type="Camera3D" parent="Node3D" unique_id=1321169665]
+transform = Transform3D(1, 0, 0, 0, 0.96148705, 0.27485016, 0, -0.27485016, 0.96148705, 0, 2.3206882, 4.8124723)
+
+[node name="VoxelRenderer" parent="Node3D" unique_id=1911856473 instance=ExtResource("2_l588j")]
+unique_name_in_owner = true

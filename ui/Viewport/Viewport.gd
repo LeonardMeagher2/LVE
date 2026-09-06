@@ -27,3 +27,7 @@ func _on_pan_toggle_toggled(toggled_on: bool) -> void:
 
 func _on_rotate_toggle_toggled(toggled_on: bool) -> void:
 	%CameraRig.view_mode = %CameraRig.ViewMode.ROTATE if toggled_on else %CameraRig.ViewMode.NONE
+
+
+func _on_grid_toggle_toggled(toggled_on: bool) -> void:
+	%Grid.visible = toggled_on

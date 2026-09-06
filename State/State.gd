@@ -180,6 +180,8 @@ func get_frame_count() -> int:
 	return document.frames.size()
 
 func get_voxel_frame(frame:int) -> VoxelFrame:
+	if frame < 0 or frame >= document.frames.size():
+		return null
 	return document.frames[frame]
 
 func get_current_voxel_frame() -> VoxelFrame:

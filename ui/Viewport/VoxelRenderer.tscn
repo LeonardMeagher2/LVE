@@ -5,5 +5,4 @@
 
 [node name="VoxelRenderer" type="Node3D" unique_id=1911856473]
 script = ExtResource("1_oaadu")
-chunk_size = 64
 mesh = ExtResource("2_flvrc")

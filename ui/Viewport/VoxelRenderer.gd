@@ -1,3 +1,4 @@
+class_name VoxelRenderer
 extends Node3D
 
 class Chunk extends RefCounted:
@@ -83,14 +84,20 @@ class Chunk extends RefCounted:
 				shrink(size)
 		else:
 			cells[cell] = color
-		
+			
 		multimesh.set_instance_transform(index, Transform3D(Basis.IDENTITY, Vector3(cell)))
 		multimesh.set_instance_color(index, color)
 		multimesh.visible_instance_count = size
 
 
-@export_range(-1, 100, 1, "or_greater") var frame:int = -1
-@export_range(1, 256, 1, "or_greater") var chunk_size:int = 32
+@export_range(-1, 100, 1, "or_greater") var frame:int = -1 :
+	set(value):
+		if value == frame:
+			return
+		frame = value
+		_rebuild()
+
+@export_range(1, 256, 1, "or_greater") var chunk_size:int = 64
 @export var mesh:Mesh
 
 var _chunks: Dictionary = {}
@@ -107,25 +114,31 @@ func _get_max_capacity() -> int:
 
 func _get_min_capacity() -> int:
 	return chunk_size * 2
+	
+func _get_frame_cells() -> Dictionary:
+	if frame >= 0:
+		var voxel_frame := State.get_voxel_frame(frame)
+		if voxel_frame:
+			return voxel_frame.cells
+		return {}
+	return State.get_current_voxel_frame().cells
 
 func _rebuild() -> void:
-	_chunks.clear()
-	var cells: Dictionary = {}
-	if frame >= 0:
-		cells = State.get_voxel_frame(frame).cells
-	else:
-		cells = State.get_current_voxel_frame().cells
+	for chunk_position in _chunks.keys():
+		_chunks.erase(chunk_position)
+	
+	var cells := _get_frame_cells()
 	for cell in cells:
 		set_cell(cell, cells[cell])
 
 
 func _update(updated_frame: int, affected: Array[Vector3i] = []) -> void:
-	if frame >= 0 and updated_frame != frame:
+	if frame >= 0 and updated_frame != frame or frame == -1 and updated_frame != State.current_frame:
 		return
 	if affected.is_empty():
 		_rebuild()
 		return
-	var cells: Dictionary = State.get_current_voxel_frame().cells
+	var cells := _get_frame_cells()
 	for cell in affected:
 		set_cell(cell, cells.get(cell, Color.TRANSPARENT))
 

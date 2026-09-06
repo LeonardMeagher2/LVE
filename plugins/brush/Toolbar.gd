@@ -12,3 +12,4 @@ func _on_index_pressed(index: int) -> void:
 	_settings.mode = _settings.BrushMode[item_text]
 	icon = item_icon
 	button_pressed = true
+

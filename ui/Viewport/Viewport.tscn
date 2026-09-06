@@ -17,9 +17,6 @@
 background_mode = 3
 background_color = Color(0.118, 0.122, 0.133, 1)
 background_canvas_max_layer = -1
-ambient_light_source = 2
-ambient_light_color = Color(0.54901963, 0.5686275, 0.61960787, 1)
-reflected_light_source = 1
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_grid"]
 render_priority = -1
@@ -47,16 +44,16 @@ size_flags_vertical = 3
 mouse_filter = 0
 stretch = true
 
-[node name="Viewport" type="SubViewport" parent="PanelContainer/ViewportContainer" unique_id=1299710563]
+[node name="Viewport" type="SubViewport" parent="PanelContainer/ViewportContainer" unique_id=542066251]
 unique_name_in_owner = true
 handle_input_locally = false
 size = Vector2i(1278, 766)
 render_target_update_mode = 4
 
-[node name="CanvasLayer" type="CanvasLayer" parent="PanelContainer/ViewportContainer/Viewport" unique_id=26035556]
+[node name="CanvasLayer" type="CanvasLayer" parent="PanelContainer/ViewportContainer/Viewport" unique_id=1632289809]
 layer = -1
 
-[node name="TextureRect" type="TextureRect" parent="PanelContainer/ViewportContainer/Viewport/CanvasLayer" unique_id=1466246853]
+[node name="TextureRect" type="TextureRect" parent="PanelContainer/ViewportContainer/Viewport/CanvasLayer" unique_id=1901250835]
 texture_filter = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -66,32 +63,32 @@ grow_vertical = 2
 texture = ExtResource("2_gu70n")
 stretch_mode = 1
 
-[node name="ViewportScene" type="Node3D" parent="PanelContainer/ViewportContainer/Viewport" unique_id=1277093566]
+[node name="ViewportScene" type="Node3D" parent="PanelContainer/ViewportContainer/Viewport" unique_id=1818999807]
 unique_name_in_owner = true
 
-[node name="WorldEnvironment" type="WorldEnvironment" parent="PanelContainer/ViewportContainer/Viewport/ViewportScene" unique_id=2001831858]
+[node name="WorldEnvironment" type="WorldEnvironment" parent="PanelContainer/ViewportContainer/Viewport/ViewportScene" unique_id=495211216]
 environment = SubResource("Environment_env")
 
-[node name="Light" type="DirectionalLight3D" parent="PanelContainer/ViewportContainer/Viewport/ViewportScene" unique_id=766933468]
+[node name="Light" type="DirectionalLight3D" parent="PanelContainer/ViewportContainer/Viewport/ViewportScene" unique_id=1165876697]
 transform = Transform3D(0.9426414, -0.23603694, 0.23603693, 0, 0.7071067, 0.7071067, -0.3338066, -0.6665482, 0.6665482, 0, 0, 0)
 light_bake_mode = 0
 shadow_enabled = true
 
-[node name="Grid" type="MeshInstance3D" parent="PanelContainer/ViewportContainer/Viewport/ViewportScene" unique_id=1052101138]
+[node name="Grid" type="MeshInstance3D" parent="PanelContainer/ViewportContainer/Viewport/ViewportScene" unique_id=1484635508]
 unique_name_in_owner = true
 sorting_offset = -0.1
 material_override = SubResource("StandardMaterial3D_grid")
 cast_shadow = 0
 script = ExtResource("4_bqm4n")
 
-[node name="CameraRig" type="Node3D" parent="PanelContainer/ViewportContainer/Viewport/ViewportScene" unique_id=106959201]
+[node name="CameraRig" type="Node3D" parent="PanelContainer/ViewportContainer/Viewport/ViewportScene" unique_id=1824073823]
 unique_name_in_owner = true
 script = ExtResource("5_b27s2")
 
-[node name="Camera3D" type="Camera3D" parent="PanelContainer/ViewportContainer/Viewport/ViewportScene/CameraRig" unique_id=1978355787]
+[node name="Camera3D" type="Camera3D" parent="PanelContainer/ViewportContainer/Viewport/ViewportScene/CameraRig" unique_id=213848948]
 fov = 45.0
 
-[node name="VoxelRenderer" parent="PanelContainer/ViewportContainer/Viewport/ViewportScene" unique_id=1825220893 instance=ExtResource("5_ic46q")]
+[node name="VoxelRenderer" parent="PanelContainer/ViewportContainer/Viewport/ViewportScene" unique_id=1911856473 instance=ExtResource("5_ic46q")]
 
 [node name="ControlBar" type="HBoxContainer" parent="." unique_id=53784703]
 unique_name_in_owner = true
@@ -181,10 +178,6 @@ button_pressed = true
 icon = ExtResource("16_x0727")
 icon_alignment = 1
 
-[connection signal="zoom_changed" from="PanelContainer/ViewportContainer/Viewport/ViewportScene/CameraRig" to="ControlBar/ZoomSlider" method="set_value"]
 [connection signal="toggled" from="ControlBar/PanToggle" to="." method="_on_pan_toggle_toggled"]
 [connection signal="toggled" from="ControlBar/RotateToggle" to="." method="_on_rotate_toggle_toggled"]
-[connection signal="value_changed" from="ControlBar/ZoomSlider" to="PanelContainer/ViewportContainer/Viewport/ViewportScene/CameraRig" method="set_zoom_percent"]
-[connection signal="pressed" from="ControlBar/ZoomOne" to="PanelContainer/ViewportContainer/Viewport/ViewportScene/CameraRig" method="set_zoom_percent" binds= [100.0]]
-[connection signal="pressed" from="ControlBar/CenterBtn" to="PanelContainer/ViewportContainer/Viewport/ViewportScene/CameraRig" method="center_active"]
-[connection signal="toggled" from="ControlBar/GridToggle" to="PanelContainer/ViewportContainer/Viewport/ViewportScene/Grid" method="set_visible"]
+[connection signal="toggled" from="ControlBar/GridToggle" to="." method="_on_grid_toggle_toggled"]

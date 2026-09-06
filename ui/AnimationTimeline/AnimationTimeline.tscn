@@ -2,6 +2,7 @@
 
 [ext_resource type="Script" uid="uid://h3qnfjoqxy0f" path="res://ui/AnimationTimeline/AnimationTimeline.gd" id="1_3bvsl"]
 [ext_resource type="Texture2D" uid="uid://wx5jy0fisyiy" path="res://icons/to_start.svg" id="2_3c7d8"]
+[ext_resource type="PackedScene" uid="uid://bvpbeb01ppoys" path="res://ui/AnimationTimeline/FrameRendererViewport.tscn" id="2_kqkb2"]
 [ext_resource type="Texture2D" uid="uid://dqdve5t4ixwpy" path="res://icons/step_back.svg" id="3_ad7bi"]
 [ext_resource type="Texture2D" uid="uid://bshoasjpvru2h" path="res://icons/play.svg" id="4_vr210"]
 [ext_resource type="Texture2D" uid="uid://djqb5uqnxxmhe" path="res://icons/step_forward.svg" id="5_sm24x"]
@@ -9,7 +10,6 @@
 [ext_resource type="Texture2D" uid="uid://di606d0g4f27a" path="res://icons/add.svg" id="7_j1idt"]
 [ext_resource type="Texture2D" uid="uid://b4sy3cgu4fauw" path="res://icons/duplicate.svg" id="8_whytp"]
 [ext_resource type="Texture2D" uid="uid://cv15qg24amrlt" path="res://icons/remove.svg" id="9_tjres"]
-[ext_resource type="PackedScene" uid="uid://c2301xo3rbrka" path="res://ui/AnimationTimeline/Frame.tscn" id="11_3bvsl"]
 
 [sub_resource type="Animation" id="Animation_kqkb2"]
 resource_name = "Preview"
@@ -37,6 +37,9 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_3bvsl")
+
+[node name="FrameRendererViewport" parent="." unique_id=1309484533 instance=ExtResource("2_kqkb2")]
+unique_name_in_owner = true
 
 [node name="AnimationPlayer" type="AnimationPlayer" parent="." unique_id=45026943]
 libraries/ = SubResource("AnimationLibrary_3bvsl")
@@ -117,9 +120,6 @@ unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
-
-[node name="FrameButton" parent="ScrollContainer/MarginContainer/FrameStrip" unique_id=672221709 instance=ExtResource("11_3bvsl")]
-layout_mode = 2
 
 [connection signal="pressed" from="HBoxContainer/ToStart" to="." method="_on_to_start_pressed"]
 [connection signal="pressed" from="HBoxContainer/Prev" to="." method="_on_prev_pressed"]
