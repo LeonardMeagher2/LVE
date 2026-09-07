@@ -1,25 +1,15 @@
 extends "res://tests/test.gd"
 
-var _inst: Node = null
-var _vp: EditorViewport
-var _far_pick := State.NONE
+var far_pick := VoxelPicking.NONE
 
 
 func _ready() -> void:
-	var scene: PackedScene = load("res://ui/main.tscn")
-	_inst = scene.instantiate()
-	get_tree().root.add_child.call_deferred(_inst)
 	test("the canvas is unbounded", _run)
 
 
 func _run() -> void:
-	step("Given an empty editor", func():
-		_vp = editor_viewport(_inst)
-	)
-
 	step("When the user paints a cell beyond the original 16x16 extent", func():
 		State.document.paint(0, Vector3i(20, 0, 20), State.current_color)
-		State.cells_changed.emit()
 	)
 
 	step("Then the cell persists and the bounds expand", func():
@@ -40,9 +30,9 @@ func _run() -> void:
 	)
 
 	step("When the user aims at the floor past the original grid", func():
-		_far_pick = VoxelPicking.ground_pick(Vector3(30, 10, 30), Vector3(0, -1, 0), Vector3(0, -1, 0)).target
+		far_pick = VoxelPicking.ground_pick(Vector3(30, 10, 30), Vector3(0, -1, 0), Vector3(0, -1, 0)).target
 	)
 
 	step("Then the pick lands on the far floor cell", func():
-		expect(_far_pick == Vector3i(30, 0, 30), "the pick reaches beyond the old grid")
+		expect(far_pick == Vector3i(30, 0, 30), "the pick reaches beyond the old grid")
 	)

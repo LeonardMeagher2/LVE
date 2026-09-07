@@ -1,38 +1,33 @@
 extends "res://tests/test.gd"
 
-var _inst: Node = null
-var _vp: EditorViewport
-var _center := Vector2.ZERO
+var viewport: SubViewport
+var center := Vector2.ZERO
 
 
 func _ready() -> void:
-	var scene: PackedScene = load("res://ui/main.tscn")
-	_inst = scene.instantiate()
-	get_tree().root.add_child.call_deferred(_inst)
 	test("the eraser highlight is always visible", _run)
 
 
 func _run() -> void:
 	step("Given an eraser on an empty grid", func():
-		_vp = editor_viewport(_inst)
-		var svp := _vp.get_viewport()
-		var container := svp.get_parent()
+		viewport = editor_viewport()
+		var container := viewport.get_parent()
 		container.stretch = false
-		svp.size = Vector2i(800, 500)
-		_center = Vector2(400.0, 250.0)
-		State.set_tool(State.tools.eraser)
+		viewport.size = Vector2i(800, 500)
+		center = Vector2(400.0, 250.0)
+		activate_tool("eraser")
 	)
 
 	step("When the user hovers the empty grid", func():
 		var motion := InputEventMouseMotion.new()
-		motion.position = _center
+		motion.position = center
 		motion.button_mask = 0
-		_vp.get_viewport().push_input(motion)
+		viewport.push_input(motion)
 	)
 
 	step("Then the highlight is visible at the cursor cell", func():
-		var v: Node3D = _vp._tool.visual
-		var req := _vp.pick_request(_center)
+		var v: Node3D = active_tool_node("EraserPlugin")
+		var req := pick_request(center)
 		var target := VoxelPicking.start_pick(req.origin, req.dir, req.cells, req.forward).target
 		expect(v.visible, "the highlight is visible")
 		expect(v.position == Vector3(target), "the highlight is at the cursor cell")

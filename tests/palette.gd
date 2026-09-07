@@ -1,28 +1,24 @@
 extends "res://tests/test.gd"
 
-var _inst: Node = null
-var _panel: Node = null
-var _grid: Node = null
+var panel: Node = null
+var grid: Node = null
 
 
 func _ready() -> void:
-	var scene: PackedScene = load("res://ui/main.tscn")
-	_inst = scene.instantiate()
-	get_tree().root.add_child.call_deferred(_inst)
 	test("the palette marks the swatch that matches the current color", _run)
 
 
 func _marked(i: int) -> bool:
-	var b := _grid.get_child(i) as Button
+	var b := grid.get_child(i) as Button
 	return b.button_pressed
 
 
 func _run() -> void:
 	step("Given a palette with one red swatch", func():
-		_panel = _inst.get_node("%PalettePanel")
-		_grid = _panel.get_node("%SwatchGrid")
+		panel = main.find_child("PalettePanel", true, false)
+		grid = panel.get_node("%SwatchGrid")
 		State.document.add_color(Color.RED)
-		_panel._rebuild_swatches()
+		panel._rebuild_swatches()
 	)
 
 	step("When the working color becomes red", func():
@@ -30,7 +26,7 @@ func _run() -> void:
 	)
 
 	step("Then the red swatch is marked", func():
-		expect(_grid.get_child_count() == 1, "one swatch exists")
+		expect(grid.get_child_count() == 1, "one swatch exists")
 		expect(_marked(0), "matching swatch is marked")
 	)
 
@@ -43,7 +39,7 @@ func _run() -> void:
 	)
 
 	step("When the user clicks the red swatch", func():
-		var b := _grid.get_child(0) as Button
+		var b := grid.get_child(0) as Button
 		b.button_pressed = true
 	)
 

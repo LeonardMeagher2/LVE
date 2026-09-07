@@ -66,6 +66,11 @@ This file records confirmed, non-obvious facts learned while working on Voxi. Re
 
 ## Workflow
 
+- 2026-09-07: The tool selection API is gone. `State.tools`, `set_tool`, `set_tool_option`, `get_tool_option`, and `State.tool` are removed. Tools are plugins under `/root`. A test activates a tool by setting the plugin toolbar button's `button_pressed`. It sets options by pressing the option-bar button (`press_option(tooltip)`).
+- 2026-09-07: `State.NONE` is gone. Use `VoxelPicking.NONE`.
+- 2026-09-07: The test harness adds Main in `_enter_tree`. Tests override only `_ready`. A base-class `_ready` would not run unless the subclass calls `super()`, so `_enter_tree` is the safe hook. Main is added with `call_deferred`.
+- 2026-09-07: Every headless test run prints a stray GDScript backtrace at `_ready` plus RID-leak errors at exit. They appear on untouched tests too. They are noise, not failures.
+- 2026-09-07: `run_all.gd` runs with `-s`, so no Main scene exists in that process. The State autoload still adds plugins to `/root`, and each plugin `_ready` targets `/root/Main`. That prints `/root/Main` not-found errors in the run_all output. They are noise from the runner, not from a test.
 - New `class_name` scripts do not resolve until the project reimports. Run `godot --headless --import` to refresh the global class cache.
 - `godot -s script.gd` cannot resolve autoload singleton identifiers at compile time. Run tests as scenes so autoloads resolve.
 - Adding a child to the root during a main-scene node's `_ready()` fails with "Parent node is busy setting up children". Call the work with `call_deferred()`.
@@ -88,3 +93,10 @@ This file records confirmed, non-obvious facts learned while working on Voxi. Re
 - 2026-08-24: `DirAccess.remove_absolute()` deletes a file or an empty directory only. Empty the directory with `get_files()`, `get_directories()`, and `remove()` first.
 - 2026-08-24: Unhandled input reaches later siblings first. A node placed after the tool layer consumes events before tools see them. The camera rig uses this to intercept left-drag in pan mode.
 - 2026-08-24: Every headless test run prints a stray GDScript backtrace at `_ready` plus RID-leak errors at exit. They appear on untouched tests too. They are noise, not failures.
+
+## Regressions found in the plugin migration
+
+- 2026-09-07: The Delete key no longer erases the selection. `State.erase_selection()` exists but nothing calls it. The `delete` input action is defined but has no handler.
+- 2026-09-07: The center button in the viewport control bar does nothing. `%CenterBtn` exists in `Viewport.tscn` but no signal connects it. `CameraRig.center_active()` exists but is never called.
+- 2026-09-07: The Selection plugin stores `_shift` on press but `_apply_mode()` never reads it. Shift-to-add does not work. The plugin also does not disable the Clear button when the selection is empty.
+- 2026-09-07: The plane axis buttons used `set_pressed_no_signal`, which does not unpress the ButtonGroup siblings. Switching axis left several buttons pressed. Fixed in `Plugins/Plane/Options.gd` by using `button_pressed`.

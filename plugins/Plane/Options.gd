@@ -2,16 +2,17 @@ extends HBoxContainer
 
 func _ready() -> void:
 	State.floor_plane_changed.connect(_sync)
+	_sync()
 
 
 func _sync() -> void:
 	match State.floor_axis:
 		Vector3.Axis.AXIS_X:
-			$x.set_pressed_no_signal(true)
+			$x.button_pressed = true
 		Vector3.Axis.AXIS_Y:
-			$y.set_pressed_no_signal(true)
+			$y.button_pressed = true
 		Vector3.Axis.AXIS_Z:
-			$z.set_pressed_no_signal(true)
+			$z.button_pressed = true
 
 
 func _on_x_toggled(toggled_on: bool) -> void:

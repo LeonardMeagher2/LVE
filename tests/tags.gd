@@ -1,12 +1,7 @@
 extends "res://tests/test.gd"
 
-var _inst: Node = null
-
 
 func _ready() -> void:
-	var scene: PackedScene = load("res://ui/main.tscn")
-	_inst = scene.instantiate()
-	get_tree().root.add_child.call_deferred(_inst)
 	test("can group frames into animation tags", _run)
 
 
