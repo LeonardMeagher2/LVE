@@ -9,6 +9,7 @@ var parked_transform := Transform3D.IDENTITY
 var resolution := 64
 var yaw_degrees := -45.0
 var pitch_degrees := 45.0
+var orthographic := true
 
 var _viewport: SubViewport
 var _renderer: VoxelRenderer
@@ -67,6 +68,7 @@ func _render_frame(index: int) -> ImageTexture:
 
 
 func _frame_camera(bounds: AABB) -> void:
+	_camera.projection = Camera3D.PROJECTION_ORTHOGONAL if orthographic else Camera3D.PROJECTION_PERSPECTIVE
 	if not bounds.has_volume():
 		_camera.transform = parked_transform
 		return
@@ -79,3 +81,5 @@ func _frame_camera(bounds: AABB) -> void:
 	) * dist
 	_camera.position = target + off
 	_camera.look_at(target, Vector3.UP)
+	if orthographic:
+		_camera.size = 2.0 * dist * tan(deg_to_rad(_camera.fov) / 2.0)

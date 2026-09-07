@@ -46,6 +46,7 @@ This file records confirmed, non-obvious facts learned while working on Voxi. Re
 - 2026-08-23: An unprojected cell center does not round back to that cell in `drag_pick`. Under an oblique view, the ray crosses the face plane up to half a cell away from the center. Tests must derive expected picks through the same pick functions.
 - 2026-08-24: `start_pick` sets `target` to the hit voxel. With no voxel, it sets a ground plane (y=0) cell if the ray points down, else `NONE`. `hit` and `target` differ: an empty grid cell click has `hit = NONE` but a valid ground cell `target`.
 - 2026-08-24: A single click on an empty grid cell selects that cell with the box and lasso tools. The wand does nothing on an empty cell. An empty cell click does not clear the selection. Deselect with the Clear button, Escape, or a no-target sky click in replace mode.
+- 2026-09-07: Bounds use `AABB(cell - Vector3.ONE * 0.5, Vector3.ONE)` to match the mesh cell convention `[c-0.5, c+0.5]`. Selection, transform, and grid bounds share it. This keeps the camera centered on the rendered geometry.
 
 ## UI scene migration
 
