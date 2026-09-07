@@ -73,7 +73,7 @@ func _frame_camera(bounds: AABB) -> void:
 		_camera.transform = parked_transform
 		return
 	var target: Vector3 = bounds.get_center()
-	var dist: float = bounds.size.length() * 1.5
+	var dist: float = bounds.size.length() * 1.25
 	var off: Vector3 = Vector3(
 		sin(deg_to_rad(yaw_degrees)) * cos(deg_to_rad(pitch_degrees)),
 		sin(deg_to_rad(pitch_degrees)),

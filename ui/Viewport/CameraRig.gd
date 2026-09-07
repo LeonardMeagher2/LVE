@@ -38,7 +38,7 @@ func configure() -> void:
 
 func center_on(box: AABB) -> void:
 	_target = box.get_center()
-	_dist = maxf(box.size.length(), 16.0) * 1.5
+	_dist = maxf(box.size.length(), 16.0) * 1.25
 	_update_camera()
 	zoom_changed.emit(zoom_percent())
 
@@ -53,7 +53,7 @@ func center_active() -> void:
 	center_on(bounds)
 
 func _frame_distance(d: VoxiDocument) -> float:
-	return max(d.bounds().size.length(), 16.0) * 1.5
+	return max(d.bounds().size.length(), 16.0) * 1.25
 
 
 func _frame_target(d: VoxiDocument) -> Vector3:
