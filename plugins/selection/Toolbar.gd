@@ -1,4 +1,4 @@
-extends MenuButton
+extends ToolMenuButton
 
 var _settings := preload("./settings.tres")
 
