@@ -2,6 +2,7 @@
 
 [ext_resource type="Script" uid="uid://cckfhnnnmlrn1" path="res://ui/Viewport/Viewport.gd" id="1_eunk3"]
 [ext_resource type="Texture2D" uid="uid://cmfirdobdfgqh" path="res://ui/Checker.png" id="2_gu70n"]
+[ext_resource type="Environment" uid="uid://3eoaxgk85stv" path="res://Environment.tres" id="3_4xjvs"]
 [ext_resource type="Script" uid="uid://c0xmjig8s4i0q" path="res://ui/Viewport/GridRenderer.gd" id="4_bqm4n"]
 [ext_resource type="Script" uid="uid://gwfmh64wiyx0" path="res://ui/Viewport/CameraRig.gd" id="5_b27s2"]
 [ext_resource type="PackedScene" uid="uid://cj402ulggqswh" path="res://ui/Viewport/VoxelRenderer.tscn" id="5_ic46q"]
@@ -12,11 +13,6 @@
 [ext_resource type="Texture2D" uid="uid://djnb7oucoqdu8" path="res://icons/zoom.svg" id="14_jua01"]
 [ext_resource type="Texture2D" uid="uid://mglj26s40ce4" path="res://icons/center.svg" id="15_0hwp6"]
 [ext_resource type="Texture2D" uid="uid://bhg85sqfio31d" path="res://icons/grid.svg" id="16_x0727"]
-
-[sub_resource type="Environment" id="Environment_env"]
-background_mode = 3
-background_color = Color(0.118, 0.122, 0.133, 1)
-background_canvas_max_layer = -1
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_grid"]
 render_priority = -1
@@ -31,29 +27,28 @@ grow_horizontal = 2
 grow_vertical = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
-script = ExtResource("1_eunk3")
 
 [node name="PanelContainer" type="PanelContainer" parent="." unique_id=1533498953]
 layout_mode = 2
 size_flags_vertical = 3
 
-[node name="ViewportContainer" type="SubViewportContainer" parent="PanelContainer" unique_id=1008543789]
+[node name="SubViewportContainer" type="SubViewportContainer" parent="PanelContainer" unique_id=1008543789]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 mouse_filter = 0
 stretch = true
 
-[node name="Viewport" type="SubViewport" parent="PanelContainer/ViewportContainer" unique_id=542066251]
+[node name="Viewport" type="SubViewport" parent="PanelContainer/SubViewportContainer" unique_id=542066251]
 unique_name_in_owner = true
 handle_input_locally = false
 size = Vector2i(1278, 766)
 render_target_update_mode = 4
 
-[node name="CanvasLayer" type="CanvasLayer" parent="PanelContainer/ViewportContainer/Viewport" unique_id=1632289809]
+[node name="CanvasLayer" type="CanvasLayer" parent="PanelContainer/SubViewportContainer/Viewport" unique_id=1632289809]
 layer = -1
 
-[node name="TextureRect" type="TextureRect" parent="PanelContainer/ViewportContainer/Viewport/CanvasLayer" unique_id=1901250835]
+[node name="TextureRect" type="TextureRect" parent="PanelContainer/SubViewportContainer/Viewport/CanvasLayer" unique_id=1901250835]
 texture_filter = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -63,32 +58,31 @@ grow_vertical = 2
 texture = ExtResource("2_gu70n")
 stretch_mode = 1
 
-[node name="ViewportScene" type="Node3D" parent="PanelContainer/ViewportContainer/Viewport" unique_id=1818999807]
+[node name="ViewportScene" type="Node3D" parent="PanelContainer/SubViewportContainer/Viewport" unique_id=1818999807]
 unique_name_in_owner = true
+script = ExtResource("1_eunk3")
 
-[node name="WorldEnvironment" type="WorldEnvironment" parent="PanelContainer/ViewportContainer/Viewport/ViewportScene" unique_id=495211216]
-environment = SubResource("Environment_env")
+[node name="WorldEnvironment" type="WorldEnvironment" parent="PanelContainer/SubViewportContainer/Viewport/ViewportScene" unique_id=495211216]
+environment = ExtResource("3_4xjvs")
 
-[node name="Light" type="DirectionalLight3D" parent="PanelContainer/ViewportContainer/Viewport/ViewportScene" unique_id=1165876697]
+[node name="Light" type="DirectionalLight3D" parent="PanelContainer/SubViewportContainer/Viewport/ViewportScene" unique_id=1165876697]
 transform = Transform3D(0.9426414, -0.23603694, 0.23603693, 0, 0.7071067, 0.7071067, -0.3338066, -0.6665482, 0.6665482, 0, 0, 0)
 light_bake_mode = 0
 shadow_enabled = true
 
-[node name="Grid" type="MeshInstance3D" parent="PanelContainer/ViewportContainer/Viewport/ViewportScene" unique_id=1484635508]
+[node name="Grid" type="MeshInstance3D" parent="PanelContainer/SubViewportContainer/Viewport/ViewportScene" unique_id=1484635508]
 unique_name_in_owner = true
 sorting_offset = -0.1
 material_override = SubResource("StandardMaterial3D_grid")
 cast_shadow = 0
 script = ExtResource("4_bqm4n")
 
-[node name="CameraRig" type="Node3D" parent="PanelContainer/ViewportContainer/Viewport/ViewportScene" unique_id=1824073823]
+[node name="CameraRig" type="Camera3D" parent="PanelContainer/SubViewportContainer/Viewport/ViewportScene" unique_id=213848948]
 unique_name_in_owner = true
+fov = 45.0
 script = ExtResource("5_b27s2")
 
-[node name="Camera3D" type="Camera3D" parent="PanelContainer/ViewportContainer/Viewport/ViewportScene/CameraRig" unique_id=213848948]
-fov = 45.0
-
-[node name="VoxelRenderer" parent="PanelContainer/ViewportContainer/Viewport/ViewportScene" unique_id=1911856473 instance=ExtResource("5_ic46q")]
+[node name="VoxelRenderer" parent="PanelContainer/SubViewportContainer/Viewport/ViewportScene" unique_id=1911856473 instance=ExtResource("5_ic46q")]
 
 [node name="ControlBar" type="HBoxContainer" parent="." unique_id=53784703]
 unique_name_in_owner = true
@@ -150,11 +144,12 @@ tooltip_text = "Zoom"
 texture = ExtResource("14_jua01")
 
 [node name="ZoomSlider" type="HSlider" parent="ControlBar" unique_id=1393546872]
+unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 4
 tooltip_text = "Zoom"
-min_value = 1.0
+min_value = 4.0
 max_value = 400.0
 value = 100.0
 
@@ -178,7 +173,9 @@ button_pressed = true
 icon = ExtResource("16_x0727")
 icon_alignment = 1
 
-[connection signal="toggled" from="ControlBar/PanToggle" to="." method="_on_pan_toggle_toggled"]
-[connection signal="toggled" from="ControlBar/RotateToggle" to="." method="_on_rotate_toggle_toggled"]
-[connection signal="pressed" from="ControlBar/CenterBtn" to="." method="_on_center_btn_pressed"]
-[connection signal="toggled" from="ControlBar/GridToggle" to="." method="_on_grid_toggle_toggled"]
+[connection signal="toggled" from="ControlBar/PanToggle" to="PanelContainer/SubViewportContainer/Viewport/ViewportScene" method="_on_pan_toggle_toggled"]
+[connection signal="toggled" from="ControlBar/RotateToggle" to="PanelContainer/SubViewportContainer/Viewport/ViewportScene" method="_on_rotate_toggle_toggled"]
+[connection signal="value_changed" from="ControlBar/ZoomSlider" to="PanelContainer/SubViewportContainer/Viewport/ViewportScene" method="_on_zoom_slider_value_changed"]
+[connection signal="pressed" from="ControlBar/ZoomOne" to="PanelContainer/SubViewportContainer/Viewport/ViewportScene" method="_on_zoom_one_pressed"]
+[connection signal="pressed" from="ControlBar/CenterBtn" to="PanelContainer/SubViewportContainer/Viewport/ViewportScene" method="_on_center_btn_pressed"]
+[connection signal="toggled" from="ControlBar/GridToggle" to="PanelContainer/SubViewportContainer/Viewport/ViewportScene" method="_on_grid_toggle_toggled"]
