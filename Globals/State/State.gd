@@ -22,6 +22,16 @@ var current_frame := 0:
 		
 var is_playing:bool = false: set=set_is_playing
 
+var active_tag := -1
+
+var _play_lo := 0
+var _play_hi := 0
+var _play_mode := AnimationTag.LoopMode.FORWARD
+var _play_repeats := 0
+var _play_dir := 1
+var _play_passes := 0
+var _play_elapsed := 0.0
+
 var floor_axis:Vector3.Axis = Vector3.Axis.AXIS_Y:
 	set(value):
 		if value == floor_axis:
@@ -90,13 +100,102 @@ func set_is_playing(value:bool) -> void:
 	if value == is_playing:
 		return
 	is_playing = value
+	if is_playing:
+		_init_playback()
 	is_playing_toggled.emit(is_playing)
 
 func play():
 	is_playing = true
 
+func play_tag(i: int) -> void:
+	active_tag = i
+	is_playing = true
+
 func stop():
 	is_playing = false
+
+
+func _process(delta: float) -> void:
+	if not is_playing:
+		return
+	_play_elapsed += delta
+	if _play_elapsed >= _current_delay():
+		_play_elapsed = 0.0
+		_advance_playback()
+
+
+func _init_playback() -> void:
+	_play_elapsed = 0.0
+	_play_passes = 0
+	_play_dir = 1
+	var tag := _active_tag()
+	if tag:
+		_play_lo = mini(tag.from, tag.to)
+		_play_hi = maxi(tag.from, tag.to)
+		_play_mode = tag.loop_mode
+		_play_repeats = tag.repeats
+		current_frame = clampi(current_frame, _play_lo, _play_hi)
+	else:
+		_play_lo = 0
+		_play_hi = document.frames.size() - 1
+		_play_mode = AnimationTag.LoopMode.FORWARD
+		_play_repeats = 0
+		current_frame = clampi(current_frame, _play_lo, _play_hi)
+
+
+func _advance_playback() -> void:
+	if _play_lo == _play_hi:
+		return
+	match _play_mode:
+		AnimationTag.LoopMode.FORWARD:
+			if current_frame == _play_hi:
+				_play_passes += 1
+				if _finished():
+					stop()
+					return
+				current_frame = _play_lo
+			else:
+				current_frame += 1
+		AnimationTag.LoopMode.REVERSE:
+			if current_frame == _play_lo:
+				_play_passes += 1
+				if _finished():
+					stop()
+					return
+				current_frame = _play_hi
+			else:
+				current_frame -= 1
+		_:
+			if _play_dir == 1:
+				if current_frame == _play_hi:
+					current_frame = _play_hi - 1
+					_play_dir = -1
+				else:
+					current_frame += 1
+			else:
+				if current_frame == _play_lo:
+					_play_passes += 1
+					if _finished():
+						stop()
+						return
+					current_frame = _play_lo + 1
+					_play_dir = 1
+				else:
+					current_frame -= 1
+
+
+func _finished() -> bool:
+	return _play_repeats > 0 and _play_passes >= _play_repeats
+
+
+func _current_delay() -> float:
+	return maxf(document.frames[current_frame].delay_ms, 1.0) / 1000.0
+
+
+func _active_tag() -> AnimationTag:
+	if active_tag < 0 or active_tag >= document.tags.size():
+		return null
+	return document.tags[active_tag]
 
 func set_color(color: Color) -> void:
 	current_color = color

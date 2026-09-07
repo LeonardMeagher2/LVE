@@ -94,6 +94,7 @@ This file records confirmed, non-obvious facts learned while working on Voxi. Re
 - 2026-08-24: `DirAccess.remove_absolute()` deletes a file or an empty directory only. Empty the directory with `get_files()`, `get_directories()`, and `remove()` first.
 - 2026-08-24: Unhandled input reaches later siblings first. A node placed after the tool layer consumes events before tools see them. The camera rig uses this to intercept left-drag in pan mode.
 - 2026-08-24: Every headless test run prints a stray GDScript backtrace at `_ready` plus RID-leak errors at exit. They appear on untouched tests too. They are noise, not failures.
+- 2026-09-07: A test `_run` that ends directly with a step-lambda can fail to parse with 'Expected end of file'. The failure depends on the lambda body and the prior statements. Keep a trailing statement after the final step to parse reliably.
 
 ## Regressions found in the plugin migration
 

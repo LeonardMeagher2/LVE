@@ -19,7 +19,8 @@ func _run() -> void:
 
 	step("Then the displayed frame advances over time", func():
 		var seen := {}
-		for i in 30:
+		var start := Time.get_ticks_msec()
+		while Time.get_ticks_msec() - start < 800:
 			await get_tree().process_frame
 			seen[State.current_frame] = true
 		expect(seen.size() > 1, "the displayed frame changes while playing")

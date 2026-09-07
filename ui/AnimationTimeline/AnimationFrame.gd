@@ -20,9 +20,13 @@ func set_texture(value:Texture) -> void:
 func _ready() -> void:
 	set_frame(get_index())
 	set_texture(texture)
+	State.frame_changed.connect(_on_frame_changed)
 	State.cells_changed.connect(_on_cells_changed)
 	VoxelImageRenderer.frame_rendered.connect(_on_frame_rendered)
 	VoxelImageRenderer.request_frame_render(get_index())
+
+func _on_frame_changed() -> void:
+	set_frame(get_index())
 
 func _on_cells_changed(frame: int, _affected: Array[Vector3i]) -> void:
 	if frame == get_index():
