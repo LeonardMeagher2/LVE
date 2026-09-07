@@ -2,7 +2,7 @@ class_name VoxiDocument
 extends Resource
 
 @export var title: String = "Untitled"
-@export var palette: PackedColorArray = []
+@export var palette: Array[Color] = []
 @export var frames: Array[VoxelFrame] = []
 @export var tags: Array[AnimationTag] = []
 
