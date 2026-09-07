@@ -47,7 +47,7 @@ func _run() -> void:
 		container.stretch = false
 		viewport.size = Vector2i(800, 500)
 		center = Vector2(400.0, 250.0)
-		expect(camera_rig().view_mode == camera_rig().ViewMode.NONE, "the editor starts with no view mode")
+		expect(viewport_scene().view_mode == viewport_scene().ViewMode.NONE, "the editor starts with no view mode")
 	)
 
 	step("When the user left-drags the viewport", func():
@@ -59,7 +59,7 @@ func _run() -> void:
 
 	step("When the user presses the pan toggle", func():
 		_pan_toggle().button_pressed = true
-		expect(camera_rig().view_mode == camera_rig().ViewMode.PAN, "the rig holds the pan mode")
+		expect(viewport_scene().view_mode == viewport_scene().ViewMode.PAN, "the rig holds the pan mode")
 		expect(not _rotate_toggle().button_pressed, "the rotate toggle stays off")
 		target_before = camera_rig()._target
 		cells_before = _cells().duplicate(true)
@@ -73,7 +73,7 @@ func _run() -> void:
 
 	step("When the user presses the pan toggle again", func():
 		_pan_toggle().button_pressed = false
-		expect(camera_rig().view_mode == camera_rig().ViewMode.NONE, "the rig holds no view mode")
+		expect(viewport_scene().view_mode == viewport_scene().ViewMode.NONE, "the rig holds no view mode")
 		target_before = camera_rig()._target
 		cells_before = _cells().duplicate(true)
 		_left_drag(center + Vector2(200.0, 0.0), Vector2(0.0, 100.0))

@@ -56,7 +56,7 @@ func _run() -> void:
 		rig.is_orthogonal = true
 	)
 	step("Then the camera is orthographic and keeps its framing", func():
-		var cam := rig.camera()
+		var cam := rig
 		expect(cam.projection == Camera3D.PROJECTION_ORTHOGONAL, "the camera uses orthogonal projection")
 		var expected := 2.0 * rig._dist * tan(deg_to_rad(cam.fov) / 2.0)
 		expect(is_equal_approx(cam.size, expected), "orthographic height matches the perspective framing")
@@ -66,7 +66,7 @@ func _run() -> void:
 		rig.set_zoom_percent(200.0)
 	)
 	step("Then the view gets closer", func():
-		var cam := rig.camera()
+		var cam := rig
 		var half := rig._init_dist / 2.0
 		var expected := 2.0 * half * tan(deg_to_rad(cam.fov) / 2.0)
 		expect(is_equal_approx(cam.size, expected), "zoom scales the orthographic height")
@@ -76,7 +76,7 @@ func _run() -> void:
 		rig.is_orthogonal = false
 	)
 	step("Then the camera uses perspective again", func():
-		var cam := rig.camera()
+		var cam := rig
 		expect(cam.projection == Camera3D.PROJECTION_PERSPECTIVE, "the camera uses perspective projection")
 		expect(is_equal_approx(rig.zoom_percent(), 200.0), "zoom level survives the projection switch")
 	)

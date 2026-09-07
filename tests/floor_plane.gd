@@ -113,7 +113,7 @@ func _run() -> void:
 
 
 func _drag_plane(delta_y: float, offset_x := 0.0) -> void:
-	var cam := camera_rig().camera()
+	var cam := camera_rig()
 	var center := Vector3.ZERO
 	center[State.floor_axis] = float(State.floor_index) - 0.5
 	var pos := cam.unproject_position(center) + Vector2(offset_x, 0.0)

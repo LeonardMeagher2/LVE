@@ -4,7 +4,6 @@ var viewport: SubViewport
 var center := Vector2.ZERO
 var inside := VoxelPicking.NONE
 var outside := VoxelPicking.NONE
-var plane: StrokePlane
 
 
 func _ready() -> void:
@@ -19,10 +18,9 @@ func _run() -> void:
 		viewport.size = Vector2i(800, 500)
 		center = Vector2(400.0, 250.0)
 		var start := aim(center)
-		plane = start.plane
 		inside = start.target
-		outside = drag(center + Vector2(0.0, 60.0), plane).target
-		State.selection.from_box(inside - Vector3i(2, 2, 2), inside + Vector3i(2, 2, 2))
+		outside = aim(center + Vector2(0.0, 60.0)).target
+		State.selection.from_box(inside - Vector3i(1, 1, 1), inside + Vector3i(1, 1, 1))
 		State.selection_changed.emit()
 		activate_tool("Toolbar")
 		select_toolbar_item("Toolbar", "Pencil")

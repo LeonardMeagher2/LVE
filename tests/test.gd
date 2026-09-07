@@ -125,16 +125,19 @@ func expect(cond: bool, msg: String) -> void:
 
 
 func editor_viewport() -> SubViewport:
-	return main.get_node("%Viewport").get_node("PanelContainer/ViewportContainer/Viewport")
+	return main.get_node("%Viewport").get_node("PanelContainer/SubViewportContainer/Viewport")
 
 func camera_rig() -> EditorCameraRig:
 	return editor_viewport().get_node("ViewportScene/CameraRig")
+
+func viewport_scene() -> Node:
+	return editor_viewport().get_node("ViewportScene")
 
 func camera_menu() -> MenuButton:
 	return main.get_node("%Viewport").get_node("ControlBar/CameraMenu")
 
 func pick_request(pos: Vector2) -> PickRequest:
-	var cam := camera_rig().camera()
+	var cam := camera_rig()
 	var req := PickRequest.new()
 	req.origin = cam.project_ray_origin(pos)
 	req.dir = cam.project_ray_normal(pos)

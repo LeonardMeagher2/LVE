@@ -163,7 +163,7 @@ func _expect_sweep(c: Vector3i) -> void:
 
 
 func _screen_pos_of(cell: Vector3i) -> Vector2:
-	var cam := camera_rig().camera()
+	var cam := camera_rig()
 	return cam.unproject_position(Vector3(cell))
 
 
