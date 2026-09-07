@@ -180,4 +180,5 @@ icon_alignment = 1
 
 [connection signal="toggled" from="ControlBar/PanToggle" to="." method="_on_pan_toggle_toggled"]
 [connection signal="toggled" from="ControlBar/RotateToggle" to="." method="_on_rotate_toggle_toggled"]
+[connection signal="pressed" from="ControlBar/CenterBtn" to="." method="_on_center_btn_pressed"]
 [connection signal="toggled" from="ControlBar/GridToggle" to="." method="_on_grid_toggle_toggled"]

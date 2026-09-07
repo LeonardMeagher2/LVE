@@ -68,29 +68,32 @@ func bounds() -> AABB:
 
 func _rescan_bounds() -> void:
 	var b := AABB()
+	var half = Vector3.ONE * 0.5
 	for f in frames:
 		for c in f.cells:
 			if not b.has_volume():
-				b = AABB(Vector3(c), Vector3.ONE)
+				b = AABB(Vector3(c) - half, Vector3.ONE)
 			else:
-				b = b.merge(AABB(Vector3(c), Vector3.ONE))
+				b = b.merge(AABB(Vector3(c) - half, Vector3.ONE))
+	
 	_bounds = b
 	_bounds_dirty = false
 
 
 func _grow_bounds(cell: Vector3i) -> void:
+	var half = Vector3.ONE * 0.5
 	if not _bounds.has_volume():
-		_bounds = AABB(Vector3(cell), Vector3.ONE)
+		_bounds = AABB(Vector3(cell) - half, Vector3.ONE)
 	else:
-		_bounds = _bounds.merge(AABB(Vector3(cell), Vector3.ONE))
+		_bounds = _bounds.merge(AABB(Vector3(cell) - half, Vector3.ONE))
 
 
 func _may_shrink_bounds(frame: int, cell: Vector3i) -> void:
 	if _bounds_dirty or not _bounds.has_volume():
 		_bounds_dirty = true
 		return
-	var lo := Vector3i(_bounds.position)
-	var hi := Vector3i(_bounds.position + _bounds.size) - Vector3i.ONE
+	var lo := Vector3i(_bounds.position + Vector3.ONE * 0.5)
+	var hi := Vector3i(_bounds.position + _bounds.size - Vector3.ONE * 0.5)
 	var cells: Dictionary = frames[frame].cells
 	if (cell.x == lo.x and not _face_has_cells(cells, 0, lo.x, lo, hi)) or \
 			(cell.x == hi.x and not _face_has_cells(cells, 0, hi.x, lo, hi)) or \

@@ -17,7 +17,7 @@ func _run() -> void:
 		expect(frame.cells.has(Vector3i(20, 0, 20)), "the far cell is stored")
 		var b := State.document.bounds()
 		expect(b.has_volume(), "the bounds cover the content")
-		expect(int(b.end.x) - 1 == 20, "the bounds reach the painted column")
+		expect(int(b.end.x) == 20, "the bounds reach the painted column")
 	)
 
 	step("When the user box-selects a region with negative coordinates", func():

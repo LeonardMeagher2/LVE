@@ -2,7 +2,6 @@
 
 [ext_resource type="Script" uid="uid://h3qnfjoqxy0f" path="res://ui/AnimationTimeline/AnimationTimeline.gd" id="1_3bvsl"]
 [ext_resource type="Texture2D" uid="uid://wx5jy0fisyiy" path="res://icons/to_start.svg" id="2_3c7d8"]
-[ext_resource type="PackedScene" uid="uid://bvpbeb01ppoys" path="res://ui/AnimationTimeline/FrameRendererViewport.tscn" id="2_kqkb2"]
 [ext_resource type="Texture2D" uid="uid://dqdve5t4ixwpy" path="res://icons/step_back.svg" id="3_ad7bi"]
 [ext_resource type="Texture2D" uid="uid://bshoasjpvru2h" path="res://icons/play.svg" id="4_vr210"]
 [ext_resource type="Texture2D" uid="uid://djqb5uqnxxmhe" path="res://icons/step_forward.svg" id="5_sm24x"]
@@ -37,9 +36,6 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_3bvsl")
-
-[node name="FrameRendererViewport" parent="." unique_id=1309484533 instance=ExtResource("2_kqkb2")]
-unique_name_in_owner = true
 
 [node name="AnimationPlayer" type="AnimationPlayer" parent="." unique_id=45026943]
 libraries/ = SubResource("AnimationLibrary_3bvsl")

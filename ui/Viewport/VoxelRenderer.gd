@@ -105,6 +105,7 @@ var _chunks: Dictionary = {}
 
 func _ready() -> void:
 	State.frame_changed.connect(_rebuild)
+	State.frames_changed.connect(_rebuild)
 	State.cells_changed.connect(_update)
 	State.document_changed.connect(_rebuild)
 	_rebuild()

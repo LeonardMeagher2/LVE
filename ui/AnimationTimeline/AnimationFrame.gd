@@ -20,6 +20,17 @@ func set_texture(value:Texture) -> void:
 func _ready() -> void:
 	set_frame(get_index())
 	set_texture(texture)
+	State.cells_changed.connect(_on_cells_changed)
+	VoxelImageRenderer.frame_rendered.connect(_on_frame_rendered)
+	VoxelImageRenderer.request_frame_render(get_index())
+
+func _on_cells_changed(frame: int, _affected: Array[Vector3i]) -> void:
+	if frame == get_index():
+		VoxelImageRenderer.request_frame_render(get_index())
+
+func _on_frame_rendered(frame_index: int, rendered: ImageTexture) -> void:
+	if frame_index == get_index():
+		set_texture(rendered)
 
 func _on_delay_value_changed(value: float) -> void:
 	var voxel_frame = State.get_voxel_frame(get_index())

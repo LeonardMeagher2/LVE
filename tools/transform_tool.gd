@@ -185,7 +185,7 @@ func _source_bbox() -> AABB:
 	var b := AABB()
 	var first := true
 	for c in _cells:
-		var cb := AABB(Vector3(c), Vector3.ONE)
+		var cb := AABB(Vector3(c) - Vector3(0.5, 0.5, 0.5), Vector3.ONE)
 		b = cb if first else b.merge(cb)
 		first = false
 	return b

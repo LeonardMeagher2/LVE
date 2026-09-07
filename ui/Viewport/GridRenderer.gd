@@ -55,7 +55,7 @@ func rebuild() -> void:
 
 static func span_lo(bounds: AABB) -> Vector3:
 	if bounds.has_volume():
-		return bounds.position - Vector3.ONE * 1.5
+		return bounds.position - Vector3.ONE * 1.0
 	return Vector3.ONE * -4.5
 
 

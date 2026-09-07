@@ -31,3 +31,7 @@ func _on_rotate_toggle_toggled(toggled_on: bool) -> void:
 
 func _on_grid_toggle_toggled(toggled_on: bool) -> void:
 	%Grid.visible = toggled_on
+
+
+func _on_center_btn_pressed() -> void:
+	%CameraRig.center_active()

@@ -38,6 +38,9 @@ max_active: 1
 - [ ] Save/load the current document to a json file, including all frames, tags, and palette
 - [ ] Export to GLB and OBJ formats
 - [ ] Import image files as a voxel grid (png, jpg, bmp, aseprite)
+- [ ] Export a sprite sheet of the animation frames
+  - [ ] Build the export UI
+  - [ ] Render each frame with a transparent background
 
 # Palette
 - [ ] Palette should allow duplicate colors

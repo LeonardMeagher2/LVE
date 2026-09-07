@@ -14,7 +14,7 @@ reflected_light_source = 1
 [sub_resource type="World3D" id="World3D_50uxx"]
 environment = SubResource("Environment_kqkb2")
 
-[node name="FrameRendererViewport" type="SubViewport" unique_id=1309484533]
+[node name="RendererViewport" type="SubViewport" unique_id=1309484533]
 world_3d = SubResource("World3D_50uxx")
 size = Vector2i(64, 64)
 render_target_update_mode = 0
@@ -44,6 +44,7 @@ shadow_enabled = true
 
 [node name="Camera3D" type="Camera3D" parent="Node3D" unique_id=1321169665]
 transform = Transform3D(1, 0, 0, 0, 0.96148705, 0.27485016, 0, -0.27485016, 0.96148705, 0, 2.3206882, 4.8124723)
+fov = 45.0
 
 [node name="VoxelRenderer" parent="Node3D" unique_id=1911856473 instance=ExtResource("2_l588j")]
 unique_name_in_owner = true
