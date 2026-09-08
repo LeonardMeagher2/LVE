@@ -9,6 +9,8 @@ signal color_changed(color: Color)
 signal palette_changed()
 signal selection_changed()
 signal floor_plane_changed()
+signal tag_changed()
+signal edit_mode_changed()
 
 
 var document: VoxiDocument : set=set_document
@@ -22,12 +24,21 @@ var current_frame := 0:
 		
 var is_playing:bool = false: set=set_is_playing
 
-var active_tag := -1
+var edit_mode := false:
+	set(value):
+		if value == edit_mode:
+			return
+		edit_mode = value
+		edit_mode_changed.emit()
 
-var _play_lo := 0
-var _play_hi := 0
-var _play_mode := AnimationTag.LoopMode.FORWARD
-var _play_repeats := 0
+var active_tag := -1:
+	set(value):
+		var new_value := clampi(value, -1, document.tags.size() - 1)
+		if new_value == active_tag:
+			return
+		active_tag = new_value
+		tag_changed.emit()
+
 var _play_dir := 1
 var _play_passes := 0
 var _play_elapsed := 0.0
@@ -76,6 +87,7 @@ func set_document(value:VoxiDocument) -> void:
 		document = value
 	else:
 		document = VoxiDocument.new()
+	active_tag = -1
 		
 	document_changed.emit()
 	palette_changed.emit()
@@ -114,6 +126,12 @@ func play_tag(i: int) -> void:
 func stop():
 	is_playing = false
 
+func select_tag(i: int) -> void:
+	active_tag = i
+
+func deselect_tag() -> void:
+	active_tag = -1
+
 
 func _process(delta: float) -> void:
 	if not is_playing:
@@ -128,74 +146,92 @@ func _init_playback() -> void:
 	_play_elapsed = 0.0
 	_play_passes = 0
 	_play_dir = 1
-	var tag := _active_tag()
+	current_frame = clampi(current_frame, _play_lo(), _play_hi())
+
+
+func _play_lo() -> int:
+	var tag := get_active_tag()
 	if tag:
-		_play_lo = mini(tag.from, tag.to)
-		_play_hi = maxi(tag.from, tag.to)
-		_play_mode = tag.loop_mode
-		_play_repeats = tag.repeats
-		current_frame = clampi(current_frame, _play_lo, _play_hi)
-	else:
-		_play_lo = 0
-		_play_hi = document.frames.size() - 1
-		_play_mode = AnimationTag.LoopMode.FORWARD
-		_play_repeats = 0
-		current_frame = clampi(current_frame, _play_lo, _play_hi)
+		return mini(tag.from, tag.to)
+	return 0
+
+
+func _play_hi() -> int:
+	var tag := get_active_tag()
+	if tag:
+		return maxi(tag.from, tag.to)
+	return document.frames.size() - 1
+
+
+func _play_mode() -> AnimationTag.LoopMode:
+	var tag := get_active_tag()
+	if tag:
+		return tag.loop_mode
+	return AnimationTag.LoopMode.FORWARD
+
+
+func _play_repeats() -> int:
+	var tag := get_active_tag()
+	if tag:
+		return tag.repeats
+	return 0
 
 
 func _advance_playback() -> void:
-	if _play_lo == _play_hi:
+	if _play_lo() == _play_hi():
 		return
-	match _play_mode:
+	match _play_mode():
 		AnimationTag.LoopMode.FORWARD:
-			if current_frame == _play_hi:
+			if current_frame == _play_hi():
 				_play_passes += 1
 				if _finished():
 					stop()
 					return
-				current_frame = _play_lo
+				current_frame = _play_lo()
 			else:
 				current_frame += 1
 		AnimationTag.LoopMode.REVERSE:
-			if current_frame == _play_lo:
+			if current_frame == _play_lo():
 				_play_passes += 1
 				if _finished():
 					stop()
 					return
-				current_frame = _play_hi
+				current_frame = _play_hi()
 			else:
 				current_frame -= 1
 		_:
 			if _play_dir == 1:
-				if current_frame == _play_hi:
-					current_frame = _play_hi - 1
+				if current_frame == _play_hi():
+					current_frame = _play_hi() - 1
 					_play_dir = -1
 				else:
 					current_frame += 1
 			else:
-				if current_frame == _play_lo:
+				if current_frame == _play_lo():
 					_play_passes += 1
 					if _finished():
 						stop()
 						return
-					current_frame = _play_lo + 1
+					current_frame = _play_lo() + 1
 					_play_dir = 1
 				else:
 					current_frame -= 1
+					
+	if current_frame >= document.frames.size():
+		current_frame = 0
+	elif current_frame < 0:
+		current_frame = document.frames.size() - 1
 
 
 func _finished() -> bool:
-	return _play_repeats > 0 and _play_passes >= _play_repeats
+	return _play_repeats() > 0 and _play_passes >= _play_repeats()
 
 
 func _current_delay() -> float:
-	return maxf(document.frames[current_frame].delay_ms, 1.0) / 1000.0
-
-
-func _active_tag() -> AnimationTag:
-	if active_tag < 0 or active_tag >= document.tags.size():
-		return null
-	return document.tags[active_tag]
+	var current_voxel_frame := get_current_voxel_frame()
+	if not current_voxel_frame:
+		return 1.0
+	return maxf(current_voxel_frame.delay_ms, 1.0) / 1000.0
 
 func set_color(color: Color) -> void:
 	current_color = color
@@ -284,6 +320,8 @@ func get_voxel_frame(frame:int) -> VoxelFrame:
 	return document.frames[frame]
 
 func get_current_voxel_frame() -> VoxelFrame:
+	if current_frame < 0 or current_frame >= document.frames.size():
+		return null
 	return document.frames[current_frame]
 
 
@@ -308,12 +346,68 @@ func delete_frame() -> void:
 	if current_frame >= document.frames.size():
 		current_frame = document.frames.size() - 1
 	frames_changed.emit()
+
+func move_frame(from: int, to: int) -> void:
+	var f := clampi(from, 0, document.frames.size() - 1)
+	var t := clampi(to, 0, document.frames.size() - 1)
+	if f == t:
+		return
+	document.move_frame(f, t)
+	if current_frame == f:
+		current_frame = t
+	elif f < current_frame and current_frame <= t:
+		current_frame -= 1
+	elif t <= current_frame and current_frame < f:
+		current_frame += 1
+	frames_changed.emit()
+
+func add_tag(name: String, from: int = 0, to: int = -1) -> void:
+	var end := to
+	if to < 0:
+		end = document.frames.size() - 1
+	active_tag = document.add_tag(name, from, end)
+	frames_changed.emit()
+
+func get_active_tag() -> AnimationTag:
+	return document.get_tag(active_tag)
+	
+func get_tag(i: int) -> AnimationTag:
+	return document.get_tag(i)
+
+func remove_tag() -> void:
+	document.remove_tag(active_tag)
+	active_tag = clampi(active_tag, -1, document.tags.size() -1)
+	tag_changed.emit()
+	frames_changed.emit()
+
+func set_tag_range(from: int, to: int) -> void:
+	var tag := get_active_tag()
+	if tag == null:
+		return
+	var last := document.frames.size() - 1
+	var new_from := clampi(from, 0, last)
+	var new_to := clampi(to, new_from, last)
+	if tag.from == new_from and tag.to == new_to:
+		return
+	tag.from = new_from
+	tag.to = new_to
+	if is_playing:
+		current_frame = clampi(current_frame, _play_lo(), _play_hi())
+	tag_changed.emit()
 	
 func to_start() -> void:
-	current_frame = 0
+	var tag := get_active_tag()
+	if tag:
+		current_frame = maxi(tag.from, 0)
+	else:
+		current_frame = 0
 
 func to_end() -> void:
-	current_frame = document.frames.size() - 1
+	var tag = get_active_tag()
+	if tag:
+		current_frame = mini(tag.to, document.frames.size() - 1)
+	else:
+		current_frame = document.frames.size() - 1
 
 func notify_restored() -> void:
 	frame_changed.emit()

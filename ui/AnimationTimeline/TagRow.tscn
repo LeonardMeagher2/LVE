@@ -1,0 +1,25 @@
+[gd_scene format=3 uid="uid://cf3ybcr7rxq8h"]
+
+[ext_resource type="Script" uid="uid://cjpsjwaa75csu" path="res://ui/AnimationTimeline/TagRow.gd" id="1_kp8dp"]
+
+[node name="TagRow" type="HBoxContainer" unique_id=519130529]
+theme_override_constants/separation = 4
+script = ExtResource("1_kp8dp")
+
+[node name="TagDropdown" type="OptionButton" parent="." unique_id=2010203315]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(96, 0)
+layout_mode = 2
+tooltip_text = "Select a tag"
+alignment = 1
+search_bar_enabled = true
+search_bar_min_item_count = 3
+
+[node name="TagNameEdit" type="LineEdit" parent="." unique_id=2010203316]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+placeholder_text = "No tag"
+
+[connection signal="item_selected" from="TagDropdown" to="." method="_on_tag_selected"]
+[connection signal="text_changed" from="TagNameEdit" to="." method="_on_name_text_changed"]

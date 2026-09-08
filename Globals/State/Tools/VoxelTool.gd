@@ -195,10 +195,11 @@ func _pick_drag(origin: Vector3, dir: Vector3) -> PickResult:
 
 
 func _request(origin: Vector3, dir: Vector3, plane: StrokePlane) -> PickRequest:
+	var voxel_frame := State.get_current_voxel_frame()
 	var req := PickRequest.new()
 	req.origin = origin
 	req.dir = dir
-	req.cells = State.document.frames[State.current_frame].cells
+	req.cells = voxel_frame.cells if voxel_frame else {}
 	req.plane = plane
 	req.forward = _forward()
 	return req

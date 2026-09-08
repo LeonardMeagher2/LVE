@@ -44,7 +44,18 @@ func remove_frame(i: int) -> void:
 	_bounds_dirty = true
 
 
-func add_tag(name: String, from: int, to: int, loop_mode := AnimationTag.LoopMode.FORWARD, repeats := 0) -> AnimationTag:
+func move_frame(from: int, to: int) -> void:
+	if from < 0 or from >= frames.size() or to < 0 or to >= frames.size():
+		return
+	if from == to:
+		return
+	var frame := frames[from]
+	frames.remove_at(from)
+	frames.insert(to, frame)
+	_bounds_dirty = true
+
+
+func add_tag(name: String, from: int, to: int, loop_mode := AnimationTag.LoopMode.FORWARD, repeats := 0) -> int:
 	var tag := AnimationTag.new()
 	tag.name = name
 	tag.from = clampi(from, 0, frames.size() - 1)
@@ -52,8 +63,12 @@ func add_tag(name: String, from: int, to: int, loop_mode := AnimationTag.LoopMod
 	tag.loop_mode = loop_mode
 	tag.repeats = repeats
 	tags.append(tag)
-	return tag
+	return tags.size() - 1
 
+func get_tag(i:int) -> AnimationTag:
+	if i >= 0 and i < tags.size():
+		return tags[i]
+	return null
 
 func remove_tag(i: int) -> void:
 	if i >= 0 and i < tags.size():

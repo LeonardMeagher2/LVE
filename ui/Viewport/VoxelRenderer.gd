@@ -117,12 +117,15 @@ func _get_min_capacity() -> int:
 	return chunk_size * 2
 	
 func _get_frame_cells() -> Dictionary:
+	var voxel_frame: VoxelFrame
 	if frame >= 0:
-		var voxel_frame := State.get_voxel_frame(frame)
-		if voxel_frame:
-			return voxel_frame.cells
-		return {}
-	return State.get_current_voxel_frame().cells
+		voxel_frame = State.get_voxel_frame(frame)
+	else:
+		voxel_frame = State.get_current_voxel_frame()
+	
+	if voxel_frame:
+		return voxel_frame.cells
+	return {}
 
 func _rebuild() -> void:
 	for chunk_position in _chunks.keys():

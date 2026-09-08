@@ -9,9 +9,10 @@ func _ready() -> void:
 
 func _refresh_buttons() -> void:
 	_buttons = []
-	var strip := main.find_child("FrameStrip", true, false)
-	for child in strip.get_children():
-		_buttons.append(child.get_node("%Button"))
+	var grid := main.find_child("FrameGrid", true, false)
+	for child in grid.get_children():
+		if child is AnimationFrame:
+			_buttons.append(child.get_node("%Button"))
 
 
 func _run() -> void:

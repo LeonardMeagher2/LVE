@@ -36,6 +36,15 @@ This file records confirmed, non-obvious facts learned while working on Voxi. Re
 - 2026-08-24: A sync handler that writes `set_pressed_no_signal` during a sibling `toggled` cascade corrupts the engine press in flight. The next `toggled` then reports the corrupted value. Defer such sync with `call_deferred` to the end of the frame.
 - 2026-08-31: Signal arguments are not converted to typed array parameters. Emitting an untyped `Array` (empty or not) into an `Array[Vector3i]` parameter drops the call. The handler never runs. Always emit a typed `Array[Vector3i]`.
 - 2026-09-03: Setting `MultiMesh.instance_count` resizes the buffer and clears all instance data. Set it once at creation. Use `visible_instance_count` for the live count. It limits drawn instances without touching the buffers.
+- 2026-09-07: A `.gd` file without a final newline fails to parse when it contains `func():` lambdas. The parser reports "Expected end of file". Always end GDScript files with a newline.
+- 2026-09-07: `SpinBox.editable = false` disables the arrow buttons, the wheel, and the drag. `gui_input` returns early when the spinbox is not editable. Setting the value in code still works.
+- 2026-09-07: `LineEdit.text` set in code does not emit `text_changed`. Only user typing emits it. Drive the rename handler directly in tests.
+- 2026-09-07: A `GridContainer` child's `get_index()` counts cells in earlier rows. When a row is prepended, child indices shift. Pass an explicit index member to cells instead of deriving it from `get_index()`.
+- 2026-09-07: A control receives `gui_input` motion only while the pointer stays over it. For a drag that crosses sibling cells, track motion in `_input` after `set_process_input(true)`.
+- 2026-09-07: A container rebuilds its cells in the same frame. Tests must await a frame before they read cell rects. Otherwise the cells have zero size.
+- 2026-09-07: `OptionButton.item_selected` fires only when the user picks from the popup. `select()` and the `selected` property do not emit it. Drive the handler directly in tests.
+- 2026-09-07: `Control` drag-and-drop starts in `_get_drag_data`. The engine marks the viewport as dragging before it calls the method. `set_drag_preview` fails outside a drag. Guard it with `get_viewport().gui_is_dragging()`.
+- 2026-09-07: A `Button` consumes its press, so a draggable button needs a `Button` subclass. A parent control cannot start the drag through it.
 
 ## Picking
 

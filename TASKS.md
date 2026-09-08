@@ -83,8 +83,14 @@ max_active: 1
 
 
 # Animation Tags
-- [ ] UI for the existing tag data (create, edit, delete named frame groups)
+- [x] UI for the existing tag data (create, select via dropdown, and delete named frame groups)
+- [x] Rename a tag in edit mode (dropdown becomes a name field)
+- [x] Change a tag's frame range with the timeline grab handles
 - [ ] Loop-mode and repeat controls per tag
+
+
+# Timeline
+- [x] Drag frames on the timeline to reorder them
 
 
 # Responsive UI
