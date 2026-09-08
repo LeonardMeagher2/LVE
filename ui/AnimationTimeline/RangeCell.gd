@@ -1,5 +1,5 @@
 class_name RangeCell
-extends Control
+extends HBoxContainer
 
 var column_index := 0
 var _is_from := false
@@ -35,10 +35,8 @@ func _sync() -> void:
 	%StartGrip.visible = _is_from
 	%EndGrip.visible = _is_to
 	if _is_from:
-		%StartGrip.text = str(tag.from + 1)
 		%StartGrip.tooltip_text = "Start frame %d" % (tag.from + 1)
 	if _is_to:
-		%EndGrip.text = str(tag.to + 1)
 		%EndGrip.tooltip_text = "End frame %d" % (tag.to + 1)
 
 

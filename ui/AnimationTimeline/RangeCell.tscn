@@ -1,55 +1,36 @@
 [gd_scene format=3 uid="uid://4kp78x0yj2lq"]
 
 [ext_resource type="Script" uid="uid://dcp0x0w5mb55o" path="res://ui/AnimationTimeline/RangeCell.gd" id="1_xy12a"]
+[ext_resource type="Texture2D" uid="uid://cpc5igbfm6q4n" path="res://icons/grip.svg" id="2_beh61"]
 
-[node name="RangeCell" type="Control" unique_id=1750861991]
-custom_minimum_size = Vector2(0, 30)
-layout_mode = 3
-anchors_preset = 0
-mouse_filter = 1
+[node name="HBoxContainer" type="HBoxContainer" unique_id=1353721404]
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 30.0
+grow_horizontal = 2
 script = ExtResource("1_xy12a")
+
+[node name="StartGrip" type="TextureRect" parent="." unique_id=1762168870]
+unique_name_in_owner = true
+layout_mode = 2
+mouse_filter = 2
+texture = ExtResource("2_beh61")
+stretch_mode = 5
 
 [node name="Bar" type="ColorRect" parent="." unique_id=643942926]
 unique_name_in_owner = true
-visible = false
-layout_mode = 1
-anchors_preset = 10
-anchor_right = 1.0
-offset_bottom = 5.0
-grow_horizontal = 2
+custom_minimum_size = Vector2(0, 3)
+propagate_maximum_size = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
 mouse_filter = 2
 color = Color(0.42, 0.68, 1, 1)
 
-[node name="StartGrip" type="Button" parent="." unique_id=656785752]
+[node name="EndGrip" type="TextureRect" parent="." unique_id=72493657]
 unique_name_in_owner = true
-visible = false
-layout_mode = 1
-anchors_preset = 4
-anchor_top = 0.5
-anchor_bottom = 0.5
-offset_left = 2.0
-offset_top = -12.0
-offset_right = 34.0
-offset_bottom = 12.0
-grow_horizontal = 1
-grow_vertical = 2
+layout_mode = 2
 mouse_filter = 2
-text = "0"
-
-[node name="EndGrip" type="Button" parent="." unique_id=656785753]
-unique_name_in_owner = true
-visible = false
-layout_mode = 1
-anchors_preset = 6
-anchor_left = 1.0
-anchor_top = 0.5
-anchor_right = 1.0
-anchor_bottom = 0.5
-offset_left = -34.0
-offset_top = -12.0
-offset_right = -2.0
-offset_bottom = 12.0
-grow_horizontal = 0
-grow_vertical = 2
-mouse_filter = 2
-text = "0"
+texture = ExtResource("2_beh61")
+stretch_mode = 5
+flip_h = true

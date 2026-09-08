@@ -28,7 +28,7 @@ func _sync() -> void:
 func _sync_edit() -> void:
 	var has_any_tags := not State.document.tags.is_empty()
 	var editing := State.edit_mode and State.get_active_tag() != null
-	visible = has_any_tags
+	%TagDropdown.disabled = not has_any_tags
 	%TagDropdown.visible = not editing
 	%TagNameEdit.visible = editing
 	if editing:

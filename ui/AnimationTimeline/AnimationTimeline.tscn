@@ -47,6 +47,58 @@ libraries/ = SubResource("AnimationLibrary_3bvsl")
 [node name="HBoxContainer" type="HBoxContainer" parent="." unique_id=1744826518]
 layout_mode = 2
 
+[node name="Add" type="Button" parent="HBoxContainer" unique_id=290217125]
+layout_mode = 2
+size_flags_vertical = 4
+tooltip_text = "Add frame"
+icon = ExtResource("7_j1idt")
+icon_alignment = 1
+
+[node name="Dup" type="Button" parent="HBoxContainer" unique_id=825756284]
+layout_mode = 2
+size_flags_vertical = 4
+tooltip_text = "Duplicate frame"
+icon = ExtResource("8_whytp")
+icon_alignment = 1
+
+[node name="Del" type="Button" parent="HBoxContainer" unique_id=2010203312]
+layout_mode = 2
+size_flags_vertical = 4
+tooltip_text = "Delete frame"
+icon = ExtResource("9_tjres")
+icon_alignment = 1
+
+[node name="VSeparator" type="VSeparator" parent="HBoxContainer" unique_id=888945776]
+layout_mode = 2
+
+[node name="TagAdd" type="Button" parent="HBoxContainer" unique_id=2010203313]
+layout_mode = 2
+tooltip_text = "Add tag"
+icon = ExtResource("11_k8x3p")
+icon_alignment = 1
+
+[node name="TagDel" type="Button" parent="HBoxContainer" unique_id=2010203314]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Remove tag"
+icon = ExtResource("12_m9y4q")
+icon_alignment = 1
+
+[node name="TagRow" parent="HBoxContainer" unique_id=1499213220 instance=ExtResource("10_k7z2a")]
+layout_mode = 2
+
+[node name="EditToggle" type="Button" parent="HBoxContainer" unique_id=2010203318]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Edit tag"
+toggle_mode = true
+icon = ExtResource("14_edit3")
+icon_alignment = 1
+
+[node name="Gap" type="Control" parent="HBoxContainer" unique_id=2043720394]
+layout_mode = 2
+size_flags_horizontal = 3
+
 [node name="ToStart" type="Button" parent="HBoxContainer" unique_id=1508834326]
 layout_mode = 2
 tooltip_text = "Step to start"
@@ -79,69 +131,13 @@ tooltip_text = "Step to end"
 icon = ExtResource("6_5wbnp")
 icon_alignment = 1
 
-[node name="VSeparator2" type="VSeparator" parent="HBoxContainer" unique_id=888945777]
-layout_mode = 2
-
-[node name="TagAdd" type="Button" parent="HBoxContainer" unique_id=2010203313]
-layout_mode = 2
-tooltip_text = "Add tag"
-icon = ExtResource("11_k8x3p")
-icon_alignment = 1
-
-[node name="TagRow" parent="HBoxContainer" unique_id=1499213220 instance=ExtResource("10_k7z2a")]
-layout_mode = 2
-
-[node name="TagDel" type="Button" parent="HBoxContainer" unique_id=2010203314]
-unique_name_in_owner = true
-layout_mode = 2
-tooltip_text = "Remove tag"
-icon = ExtResource("12_m9y4q")
-icon_alignment = 1
-
-[node name="EditToggle" type="Button" parent="HBoxContainer" unique_id=2010203318]
-unique_name_in_owner = true
-layout_mode = 2
-tooltip_text = "Edit tag"
-toggle_mode = true
-icon = ExtResource("14_edit3")
-icon_alignment = 1
-
-[node name="VSeparator" type="VSeparator" parent="HBoxContainer" unique_id=888945776]
-layout_mode = 2
-
-[node name="Add" type="Button" parent="HBoxContainer" unique_id=290217125]
-layout_mode = 2
-size_flags_vertical = 4
-tooltip_text = "Add frame"
-icon = ExtResource("7_j1idt")
-icon_alignment = 1
-
-[node name="Dup" type="Button" parent="HBoxContainer" unique_id=825756284]
-layout_mode = 2
-size_flags_vertical = 4
-tooltip_text = "Duplicate frame"
-icon = ExtResource("8_whytp")
-icon_alignment = 1
-
-[node name="Del" type="Button" parent="HBoxContainer" unique_id=2010203312]
-layout_mode = 2
-size_flags_vertical = 4
-tooltip_text = "Delete frame"
-icon = ExtResource("9_tjres")
-icon_alignment = 1
-
 [node name="ScrollContainer2" type="ScrollContainer" parent="." unique_id=1882226197]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 vertical_scroll_mode = 0
 
-[node name="MarginContainer" type="MarginContainer" parent="ScrollContainer2" unique_id=861194959]
-layout_mode = 2
-size_flags_horizontal = 3
-size_flags_vertical = 3
-
-[node name="FrameGrid" type="GridContainer" parent="ScrollContainer2/MarginContainer" unique_id=1826857356]
+[node name="FrameGrid" type="GridContainer" parent="ScrollContainer2" unique_id=1826857356]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
@@ -149,14 +145,14 @@ size_flags_vertical = 3
 theme_override_constants/h_separation = 4
 theme_override_constants/v_separation = 2
 
+[connection signal="pressed" from="HBoxContainer/Add" to="." method="_on_frame_add"]
+[connection signal="pressed" from="HBoxContainer/Dup" to="." method="_on_frame_dup"]
+[connection signal="pressed" from="HBoxContainer/Del" to="." method="_on_frame_del"]
+[connection signal="pressed" from="HBoxContainer/TagAdd" to="HBoxContainer/TagRow" method="_on_add_pressed"]
+[connection signal="pressed" from="HBoxContainer/TagDel" to="HBoxContainer/TagRow" method="_on_remove_pressed"]
+[connection signal="toggled" from="HBoxContainer/EditToggle" to="." method="_on_edit_toggled"]
 [connection signal="pressed" from="HBoxContainer/ToStart" to="." method="_on_to_start_pressed"]
 [connection signal="pressed" from="HBoxContainer/Prev" to="." method="_on_prev_pressed"]
 [connection signal="toggled" from="HBoxContainer/Play" to="." method="_on_play_toggled"]
 [connection signal="pressed" from="HBoxContainer/Next" to="." method="_on_next_pressed"]
 [connection signal="pressed" from="HBoxContainer/ToEnd" to="." method="_on_to_end_pressed"]
-[connection signal="pressed" from="HBoxContainer/TagAdd" to="HBoxContainer/TagRow" method="_on_add_pressed"]
-[connection signal="pressed" from="HBoxContainer/TagDel" to="HBoxContainer/TagRow" method="_on_remove_pressed"]
-[connection signal="toggled" from="HBoxContainer/EditToggle" to="." method="_on_edit_toggled"]
-[connection signal="pressed" from="HBoxContainer/Add" to="." method="_on_frame_add"]
-[connection signal="pressed" from="HBoxContainer/Dup" to="." method="_on_frame_dup"]
-[connection signal="pressed" from="HBoxContainer/Del" to="." method="_on_frame_del"]
