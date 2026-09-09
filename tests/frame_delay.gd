@@ -34,3 +34,19 @@ func _run() -> void:
 		expect(State.document.frames[1].delay_ms == 250, "the current frame delay is 250 ms")
 		expect(State.document.frames[0].delay_ms == 100, "the other frame delay stays 100 ms")
 	)
+
+	step("When the user undoes the delay change", func():
+		State.undo_redo.undo()
+	)
+
+	step("Then the delay returns to 100 ms", func():
+		expect(State.document.frames[1].delay_ms == 100, "the delay returns to 100 ms")
+	)
+
+	step("When the user redoes the delay change", func():
+		State.undo_redo.redo()
+	)
+
+	step("Then the delay is 250 ms again", func():
+		expect(State.document.frames[1].delay_ms == 250, "the delay is 250 ms again")
+	)

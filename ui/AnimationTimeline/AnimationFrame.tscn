@@ -68,7 +68,6 @@ value = 100.0
 rounded = true
 allow_greater = true
 alignment = 1
-update_on_text_changed = true
 suffix = "ms"
 select_all_on_focus = true
 

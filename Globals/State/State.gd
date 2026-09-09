@@ -321,31 +321,37 @@ func get_current_voxel_frame() -> VoxelFrame:
 
 func add_frame() -> void:
 	is_playing = false
+	var before := _frame_snapshot()
 	document.add_frame()
 	current_frame = document.frames.size() - 1
-	frames_changed.emit()
+	_record_frame_action("Add Frame", before, _frame_snapshot())
 
 
 func duplicate_frame() -> void:
 	is_playing = false
+	var before := _frame_snapshot()
 	document.duplicate_frame(current_frame)
 	current_frame += 1
-	frames_changed.emit()
-	
+	_record_frame_action("Duplicate Frame", before, _frame_snapshot())
+
+
 func delete_frame() -> void:
 	if document.frames.size() <= 1:
 		return
 	is_playing = false
+	var before := _frame_snapshot()
 	document.remove_frame(current_frame)
 	if current_frame >= document.frames.size():
 		current_frame = document.frames.size() - 1
-	frames_changed.emit()
+	_record_frame_action("Delete Frame", before, _frame_snapshot())
+
 
 func move_frame(from: int, to: int) -> void:
 	var f := clampi(from, 0, document.frames.size() - 1)
 	var t := clampi(to, 0, document.frames.size() - 1)
 	if f == t:
 		return
+	var before := _frame_snapshot()
 	document.move_frame(f, t)
 	if current_frame == f:
 		current_frame = t
@@ -353,14 +359,95 @@ func move_frame(from: int, to: int) -> void:
 		current_frame -= 1
 	elif t <= current_frame and current_frame < f:
 		current_frame += 1
+	_record_frame_action("Move Frame", before, _frame_snapshot())
+
+
+func _frame_snapshot() -> Dictionary:
+	return {
+		"frames": document.frames.duplicate(),
+		"ranges": _tag_ranges(),
+		"current": current_frame,
+	}
+
+
+func _record_frame_action(name: String, before: Dictionary, after: Dictionary) -> void:
+	undo_redo.create_action(name)
+	undo_redo.add_undo_method(_restore_frame_layout.bind(before["frames"], before["ranges"], before["current"]))
+	undo_redo.add_do_method(_restore_frame_layout.bind(after["frames"], after["ranges"], after["current"]))
+	undo_redo.commit_action(false)
+	_restore_frame_layout(after["frames"], after["ranges"], after["current"])
+
+
+func _restore_frame_layout(frames: Array[VoxelFrame], ranges: Array[Vector2i], current: int) -> void:
+	document.frames = frames
+	_set_tag_ranges(ranges)
+	document._bounds_dirty = true
+	current_frame = clampi(current, 0, frames.size() - 1)
 	frames_changed.emit()
+
+
+func _tag_ranges() -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	for tag in document.tags:
+		out.append(Vector2i(tag.from, tag.to))
+	return out
+
+
+func _set_tag_ranges(ranges: Array[Vector2i]) -> void:
+	for i in mini(ranges.size(), document.tags.size()):
+		var tag := document.tags[i]
+		tag.from = ranges[i].x
+		tag.to = ranges[i].y
+
+
+func set_frame_delay(index: int, ms: int) -> void:
+	if index < 0 or index >= document.frames.size():
+		return
+	var frame := document.frames[index]
+	if frame.delay_ms == ms:
+		return
+	undo_redo.create_action("Set Frame Delay")
+	undo_redo.add_undo_method(_apply_frame_delay.bind(index, frame.delay_ms))
+	undo_redo.add_do_method(_apply_frame_delay.bind(index, ms))
+	undo_redo.commit_action(false)
+	_apply_frame_delay(index, ms)
+
+
+func _apply_frame_delay(index: int, ms: int) -> void:
+	if index < 0 or index >= document.frames.size():
+		return
+	document.frames[index].delay_ms = ms
+	frame_changed.emit()
+
 
 func add_tag(name: String, from: int = 0, to: int = -1) -> void:
 	var end := to
 	if to < 0:
 		end = document.frames.size() - 1
-	active_tag = document.add_tag(name, from, end)
+	var index := document.tags.size()
+	var tag := AnimationTag.new()
+	tag.name = name
+	tag.from = clampi(from, 0, document.frames.size() - 1)
+	tag.to = clampi(end, tag.from, document.frames.size() - 1)
+	var prev_active := active_tag
+	undo_redo.create_action("Add Tag")
+	undo_redo.add_undo_method(_apply_tag_removed.bind(index, prev_active))
+	undo_redo.add_do_method(_apply_tag_inserted.bind(index, tag, index))
+	undo_redo.commit_action(false)
+	_apply_tag_inserted(index, tag, index)
+
+
+func _apply_tag_inserted(index: int, tag: AnimationTag, active: int) -> void:
+	document.tags.insert(index, tag)
+	active_tag = active
 	frames_changed.emit()
+
+
+func _apply_tag_removed(index: int, active: int) -> void:
+	document.tags.remove_at(index)
+	active_tag = active
+	frames_changed.emit()
+
 
 func get_active_tag() -> AnimationTag:
 	return document.get_tag(active_tag)
@@ -371,10 +458,14 @@ func get_tag(i: int) -> AnimationTag:
 func remove_tag() -> void:
 	if document.tags.size() <= 1:
 		return
-	document.remove_tag(active_tag)
-	active_tag = clampi(active_tag, -1, document.tags.size() -1)
-	tag_changed.emit()
-	frames_changed.emit()
+	var index := active_tag
+	var tag := document.get_tag(index)
+	var new_active := clampi(index, -1, document.tags.size() - 2)
+	undo_redo.create_action("Remove Tag")
+	undo_redo.add_undo_method(_apply_tag_inserted.bind(index, tag, index))
+	undo_redo.add_do_method(_apply_tag_removed.bind(index, new_active))
+	undo_redo.commit_action(false)
+	_apply_tag_removed(index, new_active)
 
 func set_tag_range(from: int, to: int) -> void:
 	var tag := get_active_tag()
@@ -385,12 +476,84 @@ func set_tag_range(from: int, to: int) -> void:
 	var new_to := clampi(to, new_from, last)
 	if tag.from == new_from and tag.to == new_to:
 		return
-	tag.from = new_from
-	tag.to = new_to
+	var index := active_tag
+	var old_from := tag.from
+	var old_to := tag.to
+	undo_redo.create_action("Set Tag Range", UndoRedo.MERGE_ENDS)
+	undo_redo.add_undo_method(_apply_tag_range.bind(index, old_from, old_to))
+	undo_redo.add_do_method(_apply_tag_range.bind(index, new_from, new_to))
+	undo_redo.commit_action(false)
+	_apply_tag_range(index, new_from, new_to)
+
+
+func _apply_tag_range(index: int, from: int, to: int) -> void:
+	var tag := document.get_tag(index)
+	if tag == null:
+		return
+	tag.from = from
+	tag.to = to
 	if is_playing:
 		current_frame = clampi(current_frame, _play_lo(), _play_hi())
 	tag_changed.emit()
-	
+
+
+func set_tag_loop_mode(index: int, mode: int) -> void:
+	var tag := document.get_tag(index)
+	if tag == null or tag.loop_mode == mode:
+		return
+	undo_redo.create_action("Set Loop Mode")
+	undo_redo.add_undo_method(_apply_tag_loop_mode.bind(index, tag.loop_mode))
+	undo_redo.add_do_method(_apply_tag_loop_mode.bind(index, mode))
+	undo_redo.commit_action(false)
+	_apply_tag_loop_mode(index, mode)
+
+
+func _apply_tag_loop_mode(index: int, mode: int) -> void:
+	var tag := document.get_tag(index)
+	if tag == null:
+		return
+	tag.loop_mode = mode
+	tag_changed.emit()
+
+
+func set_tag_repeats(index: int, value: int) -> void:
+	var tag := document.get_tag(index)
+	if tag == null or tag.repeats == value:
+		return
+	undo_redo.create_action("Set Repeats")
+	undo_redo.add_undo_method(_apply_tag_repeats.bind(index, tag.repeats))
+	undo_redo.add_do_method(_apply_tag_repeats.bind(index, value))
+	undo_redo.commit_action(false)
+	_apply_tag_repeats(index, value)
+
+
+func _apply_tag_repeats(index: int, value: int) -> void:
+	var tag := document.get_tag(index)
+	if tag == null:
+		return
+	tag.repeats = value
+	tag_changed.emit()
+
+
+func set_tag_name(index: int, name: String) -> void:
+	var tag := document.get_tag(index)
+	if tag == null or tag.name == name:
+		return
+	undo_redo.create_action("Set Tag Name")
+	undo_redo.add_undo_method(_apply_tag_name.bind(index, tag.name))
+	undo_redo.add_do_method(_apply_tag_name.bind(index, name))
+	undo_redo.commit_action(false)
+	_apply_tag_name(index, name)
+
+
+func _apply_tag_name(index: int, name: String) -> void:
+	var tag := document.get_tag(index)
+	if tag == null:
+		return
+	tag.name = name
+	tag_changed.emit()
+
+
 func to_start() -> void:
 	var tag := get_active_tag()
 	if tag:

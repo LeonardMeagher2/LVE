@@ -38,6 +38,26 @@ func _run() -> void:
 		expect(State.document.frames[2].cells.has(Vector3i(1, 0, 0)), "frame two is now third")
 	)
 
+	step("When the user undoes the reorder", func():
+		State.undo_redo.undo()
+	)
+
+	step("Then the frames return to their original order", func():
+		expect(State.document.frames[0].cells.has(Vector3i(0, 0, 0)), "frame one is first again")
+		expect(State.document.frames[1].cells.has(Vector3i(1, 0, 0)), "frame two is second again")
+		expect(State.document.frames[2].cells.has(Vector3i(2, 0, 0)), "frame three is third again")
+	)
+
+	step("When the user redoes the reorder", func():
+		State.undo_redo.redo()
+	)
+
+	step("Then the frames are reordered again", func():
+		expect(State.document.frames[0].cells.has(Vector3i(2, 0, 0)), "frame three is first again")
+		expect(State.document.frames[1].cells.has(Vector3i(0, 0, 0)), "frame one is second again")
+		expect(State.document.frames[2].cells.has(Vector3i(1, 0, 0)), "frame two is third again")
+	)
+
 	step("When the user drops a frame onto itself", func():
 		_refresh_buttons()
 		var data: Variant = _buttons[1]._get_drag_data(Vector2.ZERO)

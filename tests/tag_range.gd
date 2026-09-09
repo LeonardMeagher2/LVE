@@ -77,6 +77,24 @@ func _run() -> void:
 		expect(_range_cells()[1].get_node("%StartGrip").text == "2", "the start grip shows frame two")
 	)
 
+	step("When the user undoes the range drags", func():
+		State.undo_redo.undo()
+	)
+
+	step("Then the tag range returns to all frames", func():
+		expect(State.document.tags[0].from == 0, "the tag starts on the first frame")
+		expect(State.document.tags[0].to == 3, "the tag ends on the last frame")
+	)
+
+	step("When the user redoes the range drags", func():
+		State.undo_redo.redo()
+	)
+
+	step("Then the tag range is trimmed again", func():
+		expect(State.document.tags[0].from == 1, "the tag starts on the second frame")
+		expect(State.document.tags[0].to == 2, "the tag ends on the third frame")
+	)
+
 	step("When the user plays the tag and drags the end grip to frame four", func():
 		State.current_frame = 1
 		State.is_playing = true

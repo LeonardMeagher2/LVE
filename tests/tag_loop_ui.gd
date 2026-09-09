@@ -61,12 +61,47 @@ func _run() -> void:
 		expect(_loop_menu().icon.resource_path.ends_with("loop_ping_pong.svg"), "the loop menu shows the ping-pong icon")
 	)
 
+	step("When the user undoes the loop mode change", func():
+		State.undo_redo.undo()
+	)
+
+	step("Then the tag loops forward again", func():
+		expect(State.get_active_tag().loop_mode == AnimationTag.LoopMode.FORWARD, "the tag loops forward")
+		expect(_loop_menu().icon.resource_path.ends_with("loop_forward.svg"), "the loop menu shows the forward icon")
+	)
+
+	step("When the user redoes the loop mode change", func():
+		State.undo_redo.redo()
+	)
+
+	step("Then the tag loops ping-pong again", func():
+		expect(State.get_active_tag().loop_mode == AnimationTag.LoopMode.PING_PONG, "the tag loops ping-pong")
+	)
+
 	step("When the user sets repeats to three", func():
 		_repeats_spin().value = 3
 	)
 
 	step("Then the active tag repeats three times", func():
 		expect(State.get_active_tag().repeats == 3, "the tag repeats three times")
+	)
+
+	step("When the user undoes the repeats change", func():
+		State.undo_redo.undo()
+	)
+
+	step("Then the tag repeats once again", func():
+		expect(State.get_active_tag().repeats == 1, "the tag repeats once")
+		expect(_repeats_spin().value == 1.0, "the spinbox shows one")
+	)
+
+	step("When the user redoes the repeats change", func():
+		State.undo_redo.redo()
+	)
+
+	step("Then the tag repeats three times again", func():
+		expect(State.get_active_tag().repeats == 3, "the tag repeats three times")
+		expect(_repeats_spin().value == 3.0, "the spinbox shows three")
 	)
 
 	step("When the user plays the tag", func():

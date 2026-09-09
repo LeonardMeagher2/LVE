@@ -63,6 +63,26 @@ func _run() -> void:
 		expect(not _actions_popup().is_item_disabled(2), "the delete action is enabled")
 	)
 
+	step("When the user undoes the added tag", func():
+		State.undo_redo.undo()
+	)
+
+	step("Then the added tag is gone and the first is selected", func():
+		expect(State.document.tags.size() == 1, "the document holds one tag")
+		expect(_dropdown().item_count == 1, "the dropdown shows one item")
+		expect(State.active_tag == 0, "the first tag is selected again")
+	)
+
+	step("When the user redoes the added tag", func():
+		State.undo_redo.redo()
+	)
+
+	step("Then the added tag returns and is selected", func():
+		expect(State.document.tags.size() == 2, "the document holds two tags")
+		expect(_dropdown().item_count == 2, "the dropdown shows two items")
+		expect(State.active_tag == 1, "the new tag is selected again")
+	)
+
 	step("When the user picks the first tag from the dropdown", func():
 		_dropdown().item_selected.emit(0)
 	)
@@ -91,6 +111,24 @@ func _run() -> void:
 		expect(_dropdown().get_item_text(0) == "Spin", "the dropdown item updates")
 	)
 
+	step("When the user undoes the rename", func():
+		State.undo_redo.undo()
+	)
+
+	step("Then the tag name returns to Default", func():
+		expect(State.document.tags[0].name == "Default", "the tag is named Default again")
+		expect(_dropdown().get_item_text(0) == "Default", "the dropdown item returns to Default")
+	)
+
+	step("When the user redoes the rename", func():
+		State.undo_redo.redo()
+	)
+
+	step("Then the tag is renamed again", func():
+		expect(State.document.tags[0].name == "Spin", "the tag is named Spin again")
+		expect(_dropdown().get_item_text(0) == "Spin", "the dropdown item returns to Spin")
+	)
+
 	step("When the user opens the rename dialog and cancels", func():
 		_actions_popup().id_pressed.emit(1)
 		_name_edit().text = "Cancelled"
@@ -110,6 +148,26 @@ func _run() -> void:
 		expect(State.document.tags.size() == 1, "one tag remains")
 		expect(_dropdown().item_count == 1, "the dropdown shows one item")
 		expect(_actions_popup().is_item_disabled(2), "the delete action is disabled again")
+	)
+
+	step("When the user undoes the removal", func():
+		State.undo_redo.undo()
+	)
+
+	step("Then the removed tag returns and is selected", func():
+		expect(State.document.tags.size() == 2, "the document holds two tags")
+		expect(_dropdown().item_count == 2, "the dropdown shows two items")
+		expect(State.document.tags[0].name == "Spin", "the removed tag returns to the front")
+		expect(State.active_tag == 0, "the removed tag is selected again")
+	)
+
+	step("When the user redoes the removal", func():
+		State.undo_redo.redo()
+	)
+
+	step("Then the tag is removed again", func():
+		expect(State.document.tags.size() == 1, "the document holds one tag")
+		expect(_dropdown().item_count == 1, "the dropdown shows one item")
 	)
 
 	step("When the user tries to remove the last tag", func():

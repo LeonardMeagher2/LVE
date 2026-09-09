@@ -26,6 +26,26 @@ func _run() -> void:
 		expect(tag.frame_count() == 2, "the tag holds two frames")
 	)
 
+	step("When the user undoes the frame removal", func():
+		State.undo_redo.undo()
+	)
+
+	step("Then the frame returns and the tag range is restored", func():
+		var tag: AnimationTag = State.document.tags[1]
+		expect(State.document.frames.size() == 5, "five frames return")
+		expect(tag.from == 1 and tag.to == 3, "the tag covers frames 2-4 again")
+	)
+
+	step("When the user redoes the frame removal", func():
+		State.undo_redo.redo()
+	)
+
+	step("Then the frame is removed and the tag is trimmed again", func():
+		var tag: AnimationTag = State.document.tags[1]
+		expect(State.document.frames.size() == 4, "four frames remain")
+		expect(tag.from == 1 and tag.to == 2, "the tag covers frames 2-3 again")
+	)
+
 	step("When the user plays the adjusted tag", func():
 		State.current_frame = 1
 		State.play_tag(1)

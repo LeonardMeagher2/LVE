@@ -35,6 +35,7 @@ func _sync() -> void:
 	var repeats_on := false
 	if has_tag:
 		var tag := State.get_active_tag()
+		%TagDropdown.set_item_text(State.active_tag, tag.name)
 		%LoopMenu.icon = _loop_icon(tag.loop_mode)
 		%LoopMenu.tooltip_text = _loop_tooltip(tag.loop_mode)
 		repeats_on = tag.repeats > 0
@@ -78,10 +79,8 @@ func _on_action_selected(id: int) -> void:
 		ACTIONS_REPEATS:
 			var checked: bool = not %TagActions.get_popup().is_item_checked(REPEATS_ITEM_INDEX)
 			%TagActions.get_popup().set_item_checked(REPEATS_ITEM_INDEX, checked)
-			var tag := State.get_active_tag()
-			if tag:
-				tag.repeats = 1 if checked else 0
-			_sync()
+			if State.get_active_tag():
+				State.set_tag_repeats(State.active_tag, 1 if checked else 0)
 
 
 func _open_rename_dialog() -> void:
@@ -95,26 +94,17 @@ func _on_rename_dialog_about_to_popup() -> void:
 
 
 func _on_rename_confirmed() -> void:
-	var tag := State.get_active_tag()
-	if tag == null:
+	if State.get_active_tag() == null:
 		return
 	var new_name: String = %TagRenameInput.text.strip_edges()
 	if new_name.is_empty():
 		return
-	tag.name = new_name
-	%TagDropdown.set_item_text(State.active_tag, new_name)
+	State.set_tag_name(State.active_tag, new_name)
 
 
 func _on_loop_mode_selected(mode: int) -> void:
-	var tag := State.get_active_tag()
-	if tag == null:
-		return
-	tag.loop_mode = mode
-	_sync()
+	State.set_tag_loop_mode(State.active_tag, mode)
 
 
 func _on_repeats_changed(value: float) -> void:
-	var tag := State.get_active_tag()
-	if tag == null:
-		return
-	tag.repeats = int(value)
+	State.set_tag_repeats(State.active_tag, int(value))

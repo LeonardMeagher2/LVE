@@ -111,3 +111,10 @@ This file records confirmed, non-obvious facts learned while working on Voxi. Re
 - 2026-09-07: The center button in the viewport control bar does nothing. `%CenterBtn` exists in `Viewport.tscn` but no signal connects it. `CameraRig.center_active()` exists but is never called.
 - 2026-09-07: The Selection plugin stores `_shift` on press but `_apply_mode()` never reads it. Shift-to-add does not work. The plugin also does not disable the Clear button when the selection is empty.
 - 2026-09-07: The plane axis buttons used `set_pressed_no_signal`, which does not unpress the ButtonGroup siblings. Switching axis left several buttons pressed. Fixed in `Plugins/Plane/Options.gd` by using `button_pressed`.
+
+## Undo/redo
+
+- 2026-09-09: `UndoRedo.MERGE_ENDS` merges a new action with the previous action of the same name. It keeps the first undo and the last do. Use it for drag edits that fire many motions, like tag-range grips.
+- 2026-09-09: An undo or redo callback must emit the state signals itself. The UI does not listen to `version_changed`. Emit `tag_changed`, `frames_changed`, or `frame_changed` to refresh the tag row, the range row, and the frame cells.
+- 2026-09-09: `Array[VoxelFrame].duplicate()` keeps the typed array type. Store it in a `Dictionary` and bind it back to a `Array[VoxelFrame]` parameter. Assigning a plain `Array` to `document.frames` errors at runtime.
+- 2026-09-09: `PopupMenu` checkable items do not toggle themselves. They only show a checkmark. Flip `set_item_checked` in the click handler.

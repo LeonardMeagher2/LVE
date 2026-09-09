@@ -40,9 +40,7 @@ func _on_frame_rendered(rendered_index: int, rendered: ImageTexture) -> void:
 		set_texture(rendered)
 
 func _on_delay_value_changed(value: float) -> void:
-	var voxel_frame = State.get_voxel_frame(frame_index)
-	if voxel_frame:
-		voxel_frame.delay_ms = int(value)
+	State.set_frame_delay(frame_index, int(value))
 
 func _on_button_toggled(toggled_on: bool) -> void:
 	if toggled_on:
