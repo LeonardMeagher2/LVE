@@ -4,7 +4,7 @@ var _cells: Array = []
 
 
 func _ready() -> void:
-	test("can set a frame delay in edit mode", _run)
+	test("can set a frame delay on the timeline", _run)
 
 
 func _refresh_cells() -> void:
@@ -18,16 +18,6 @@ func _refresh_cells() -> void:
 func _run() -> void:
 	step("Given an editor with two frames", func():
 		State.add_frame()
-		_refresh_cells()
-	)
-
-	step("Then the delay fields are hidden", func():
-		for cell in _cells:
-			expect(not cell.get_node("%Delay").is_visible_in_tree(), "the delay field is hidden")
-	)
-
-	step("When the user turns edit mode on", func():
-		main.find_child("EditToggle", true, false).button_pressed = true
 		_refresh_cells()
 	)
 

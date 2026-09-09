@@ -58,7 +58,7 @@ delay_ms = 250
 script = ExtResource("1_p7nc4")
 cells = {
 Vector3i(-5, 2, 0): Color(0.14754099, 0.13458891, 0.14732867, 1),
-Vector3i(-5, 3, 0): Color(0.96862745, 0.7882353, 0.21176471, 1),
+Vector3i(-5, 3, 0): Color(0.99609375, 0.86355686, 0.14785767, 1),
 Vector3i(-4, 3, 0): Color(1, 0.17578125, 0.98648804, 1),
 Vector3i(-4, 4, 0): Color(1, 0.17578125, 0.98648804, 1),
 Vector3i(-3, -1, -1): Color(1, 0.17578125, 0.98648804, 1),
@@ -106,8 +106,14 @@ Vector3i(1, 0, 1): Color(1, 0.17578125, 0.98648804, 1)
 }
 delay_ms = 250
 
+[sub_resource type="Resource" id="Resource_1nepm"]
+script = ExtResource("3_xdfdh")
+name = "Flap"
+to = 1
+
 [resource]
 script = ExtResource("2_1nepm")
 title = "Flamingo"
-palette = Array[Color]([Color(0.96862745, 0.7882353, 0.21176471, 1), Color(0.14754099, 0.13458891, 0.14732867, 1), Color(1, 0.17578125, 0.98648804, 1), Color(0.53125, 0.13903809, 0.52482057, 1)])
+palette = Array[Color]([Color(0.14754099, 0.13458891, 0.14732867, 1), Color(1, 0.17578125, 0.98648804, 1), Color(0.53125, 0.13903809, 0.52482057, 1), Color(0.99609375, 0.86355686, 0.14785767, 1)])
 frames = Array[ExtResource("1_p7nc4")]([SubResource("Resource_bpi0g"), SubResource("Resource_p7nc4")])
+tags = Array[ExtResource("3_xdfdh")]([SubResource("Resource_1nepm")])

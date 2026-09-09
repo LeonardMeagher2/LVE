@@ -86,7 +86,10 @@ max_active: 1
 - [x] UI for the existing tag data (create, select via dropdown, and delete named frame groups)
 - [x] Rename a tag in edit mode (dropdown becomes a name field)
 - [x] Change a tag's frame range with the timeline grab handles
-- [ ] Loop-mode and repeat controls per tag
+- [x] Loop-mode and repeat controls per tag
+- [x] Keep a default tag so the base animation has a loop mode
+- [x] Adjust tag ranges when frames are removed
+- [x] Always show the tag editing controls, drop the edit-mode toggle
 
 
 # Timeline

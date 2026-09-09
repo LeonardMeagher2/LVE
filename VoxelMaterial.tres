@@ -1,0 +1,14 @@
+[gd_resource type="StandardMaterial3D" format=3 uid="uid://chy7xjjy4hcwu"]
+
+[resource]
+resource_local_to_scene = true
+shading_mode = 2
+diffuse_mode = 1
+specular_mode = 2
+vertex_color_use_as_albedo = true
+vertex_color_is_srgb = true
+rim = 0.05
+rim_tint = 0.39
+stencil_flags = 2
+stencil_color = Color(1, 1, 1, 1)
+stencil_outline_thickness = 0.208

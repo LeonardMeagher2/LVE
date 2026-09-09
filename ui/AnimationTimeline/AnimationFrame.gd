@@ -25,15 +25,8 @@ func _ready() -> void:
 	set_texture(texture)
 	State.frame_changed.connect(_on_frame_changed)
 	State.cells_changed.connect(_on_cells_changed)
-	State.tag_changed.connect(_apply_tag_highlight)
-	State.edit_mode_changed.connect(_on_edit_mode_changed)
 	VoxelImageRenderer.frame_rendered.connect(_on_frame_rendered)
 	VoxelImageRenderer.request_frame_render(frame_index)
-	_apply_tag_highlight()
-	_on_edit_mode_changed()
-
-func _on_edit_mode_changed() -> void:
-	%Delay.visible = State.edit_mode
 
 func _on_frame_changed() -> void:
 	set_frame(frame_index)
@@ -45,15 +38,6 @@ func _on_cells_changed(frame: int, _affected: Array[Vector3i]) -> void:
 func _on_frame_rendered(rendered_index: int, rendered: ImageTexture) -> void:
 	if rendered_index == frame_index:
 		set_texture(rendered)
-
-func _apply_tag_highlight() -> void:
-	var tag: AnimationTag = State.get_active_tag()
-	var in_tag := false
-	if tag != null:
-		var lo := mini(tag.from, tag.to)
-		var hi := maxi(tag.from, tag.to)
-		in_tag = frame_index >= lo and frame_index <= hi
-	%TagMark.visible = in_tag
 
 func _on_delay_value_changed(value: float) -> void:
 	var voxel_frame = State.get_voxel_frame(frame_index)

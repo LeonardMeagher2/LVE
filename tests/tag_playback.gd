@@ -17,7 +17,7 @@ func _run() -> void:
 	step("When the user plays a forward tag over frames 2-4", func():
 		State.document.add_tag("Fwd", 1, 3, AnimationTag.LoopMode.FORWARD, 0)
 		State.current_frame = 2
-		State.play_tag(0)
+		State.play_tag(1)
 	)
 
 	step("Then playback continues from the current frame and wraps", func():
@@ -32,7 +32,7 @@ func _run() -> void:
 	step("When the user plays a reverse tag over frames 1-3", func():
 		State.document.add_tag("Rev", 0, 2, AnimationTag.LoopMode.REVERSE, 0)
 		State.current_frame = 2
-		State.play_tag(1)
+		State.play_tag(2)
 	)
 
 	step("Then the frames advance in reverse and wrap", func():
@@ -49,7 +49,7 @@ func _run() -> void:
 	step("When the user plays a ping-pong tag over frames 1-3", func():
 		State.document.add_tag("Ping", 0, 2, AnimationTag.LoopMode.PING_PONG, 0)
 		State.current_frame = 0
-		State.play_tag(2)
+		State.play_tag(3)
 	)
 
 	step("Then the frames ping-pong within the tag", func():
@@ -68,7 +68,7 @@ func _run() -> void:
 	step("When the user plays a finite-repeat forward tag", func():
 		State.document.add_tag("Fin", 0, 1, AnimationTag.LoopMode.FORWARD, 2)
 		State.current_frame = 0
-		State.play_tag(3)
+		State.play_tag(4)
 	)
 
 	step("Then playback stops after the repeats", func():
@@ -83,7 +83,7 @@ func _run() -> void:
 	step("When the user plays an infinite-repeat forward tag", func():
 		State.document.add_tag("Inf", 0, 1, AnimationTag.LoopMode.FORWARD, 0)
 		State.current_frame = 0
-		State.play_tag(4)
+		State.play_tag(5)
 	)
 
 	step("Then playback keeps looping", func():

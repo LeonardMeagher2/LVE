@@ -11,7 +11,6 @@ func _ready() -> void:
 	State.is_playing_toggled.connect(_on_is_playing_toggled)
 	State.frames_changed.connect(_rebuild_strip)
 	State.tag_changed.connect(_on_tag_changed)
-	State.edit_mode_changed.connect(_on_edit_mode_changed)
 	_rebuild_strip()
 	_on_tag_changed()
 
@@ -21,7 +20,7 @@ func _rebuild_strip() -> void:
 		cell.queue_free()
 	var n := State.document.frames.size()
 	%FrameGrid.columns = n
-	_has_tag_row = State.edit_mode and State.get_active_tag() != null
+	_has_tag_row = State.get_active_tag() != null
 	if _has_tag_row:
 		for i in n:
 			var range_cell = RANGE_CELL.instantiate()
@@ -38,22 +37,11 @@ func _on_is_playing_toggled(toggled_on: bool) -> void:
 	%Play.set_pressed_no_signal(toggled_on)
 
 func _on_tag_changed() -> void:
-	%TagDel.disabled = State.active_tag < 0
 	_sync_range_row()
-
-func _on_edit_mode_changed() -> void:
-	%EditToggle.set_pressed_no_signal(State.edit_mode)
-	_sync_range_row()
-
-func _on_edit_toggled(toggled_on: bool) -> void:
-	State.edit_mode = toggled_on
 
 func _sync_range_row() -> void:
-	var has_row := State.edit_mode and State.get_active_tag() != null
+	var has_row := State.get_active_tag() != null
 	if has_row != _has_tag_row:
-		_rebuild_strip()
-	var has_tag := State.active_tag >= 0
-	if has_tag != _has_tag_row:
 		_rebuild_strip()
 
 func _on_prev_pressed() -> void:

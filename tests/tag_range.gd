@@ -41,21 +41,11 @@ func _drag_to(cell: Node, target: Node) -> void:
 	cell._input(release)
 
 
-func _marked_count() -> int:
-	var n := 0
-	for cell in _frame_cells():
-		if cell.get_node("%TagMark").is_visible_in_tree():
-			n += 1
-	return n
-
-
 func _run() -> void:
-	step("Given four frames and a selected tag over all of them", func():
-		State.document.add_frame()
-		State.document.add_frame()
-		State.document.add_frame()
-		State.add_tag("Spin")
-		State.edit_mode = true
+	step("Given four frames and the default tag over all of them", func():
+		State.add_frame()
+		State.add_frame()
+		State.add_frame()
 	)
 	await get_tree().process_frame
 	await get_tree().process_frame
@@ -74,7 +64,6 @@ func _run() -> void:
 
 	step("Then the tag ends on frame three", func():
 		expect(State.document.tags[0].to == 2, "the tag ends on the third frame")
-		expect(_marked_count() == 3, "three frames are marked")
 		expect(_range_cells()[2].get_node("%EndGrip").text == "3", "the end grip shows frame three")
 	)
 
@@ -85,7 +74,6 @@ func _run() -> void:
 
 	step("Then the tag starts on frame two", func():
 		expect(State.document.tags[0].from == 1, "the tag starts on the second frame")
-		expect(_marked_count() == 2, "two frames are marked")
 		expect(_range_cells()[1].get_node("%StartGrip").text == "2", "the start grip shows frame two")
 	)
 
@@ -120,24 +108,6 @@ func _run() -> void:
 		expect(cell.get_node("%EndGrip").is_visible_in_tree(), "the end grip is shown")
 		expect(cell.get_node("%StartGrip").text == "2", "the start grip shows frame two")
 		expect(cell.get_node("%EndGrip").text == "2", "the end grip shows frame two")
-	)
-
-	step("When the user toggles edit mode off", func():
-		State.edit_mode = false
-	)
-
-	step("Then the range row disappears while the tag stays", func():
-		expect(State.get_active_tag() != null, "the tag stays selected")
-		expect(_grid().get_child_count() == 4, "the grid holds only the frames")
-		expect(_range_cells().is_empty(), "no range cells remain")
-	)
-
-	step("When the user toggles edit mode back on", func():
-		State.edit_mode = true
-	)
-
-	step("Then the range row reappears", func():
-		expect(_grid().get_child_count() == 8, "the grid holds the range row and the frames")
 	)
 
 	step("When the user deselects the tag", func():

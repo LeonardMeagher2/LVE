@@ -2,7 +2,7 @@ extends "res://tests/test.gd"
 
 
 func _ready() -> void:
-	test("can add, select, rename, and remove tags with the dropdown and edit mode", _run)
+	test("can select, rename, and remove tags while keeping a default tag", _run)
 
 
 func _tag_row() -> Node:
@@ -14,19 +14,15 @@ func _dropdown() -> OptionButton:
 
 
 func _name_edit() -> LineEdit:
-	return _tag_row().get_node("%TagNameEdit")
+	return _tag_row().get_node("%TagRenameInput")
 
 
-func _edit_toggle() -> Button:
-	return main.find_child("EditToggle", true, false)
+func _rename_dialog() -> ConfirmationDialog:
+	return _tag_row().get_node("%TagRenameDialog")
 
 
-func _tag_add_button() -> Node:
-	return main.find_child("TagAdd", true, false)
-
-
-func _tag_del_button() -> Node:
-	return main.find_child("TagDel", true, false)
+func _actions_popup() -> PopupMenu:
+	return _tag_row().get_node("%TagActions").get_popup()
 
 
 func _frame_cells() -> Array:
@@ -40,31 +36,31 @@ func _frame_cells() -> Array:
 
 func _run() -> void:
 	step("Given a document with three frames", func():
-		State.document.add_frame()
-		State.document.add_frame()
+		State.add_frame()
+		State.add_frame()
 	)
 
-	step("When the user adds a tag", func():
-		_tag_add_button().pressed.emit()
-	)
-
-	step("Then the dropdown shows the tag", func():
+	step("Then the default tag is selected and editable", func():
 		expect(State.document.tags.size() == 1, "the document holds one tag")
 		expect(_dropdown().item_count == 1, "the dropdown shows one item")
-		expect(_dropdown().get_item_text(0) == "Tag", "the item is named Tag")
-		expect(State.active_tag == 0, "the new tag is selected")
-		expect(_dropdown().selected == 0, "the dropdown selection follows the tag")
+		expect(_dropdown().get_item_text(0) == "Default", "the item is named Default")
+		expect(State.active_tag == 0, "the default tag is selected")
+		expect(_actions_popup().is_item_disabled(2), "the delete action is disabled with one tag")
+		for cell in _frame_cells():
+			expect(cell.get_node("%Delay").is_visible_in_tree(), "the delay field is shown")
+		var grid := main.find_child("FrameGrid", true, false)
+		expect(grid.get_child_count() > _frame_cells().size(), "the range row is shown")
 	)
 
-	step("When the user adds a second tag", func():
-		_tag_add_button().pressed.emit()
+	step("When the user adds a tag from the tag menu", func():
+		_actions_popup().id_pressed.emit(0)
 	)
 
-	step("Then two tags exist and the dropdown shows both", func():
+	step("Then two tags exist and the new one is selected", func():
 		expect(State.document.tags.size() == 2, "the document holds two tags")
 		expect(_dropdown().item_count == 2, "the dropdown shows two items")
-		expect(State.active_tag == 1, "the second tag is selected")
-		expect(_dropdown().selected == 1, "the dropdown selection follows the tag")
+		expect(State.active_tag == 1, "the new tag is selected")
+		expect(not _actions_popup().is_item_disabled(2), "the delete action is enabled")
 	)
 
 	step("When the user picks the first tag from the dropdown", func():
@@ -76,29 +72,18 @@ func _run() -> void:
 		expect(_dropdown().selected == 0, "the dropdown selection updates")
 	)
 
-	step("Then the delay fields are hidden and the edit toggle is shown", func():
-		for cell in _frame_cells():
-			expect(not cell.get_node("%Delay").is_visible_in_tree(), "the delay field is hidden")
-		expect(_edit_toggle().is_visible_in_tree(), "the edit toggle is shown")
+	step("When the user renames the tag from the tag menu", func():
+		_actions_popup().id_pressed.emit(1)
 	)
 
-	step("When the user toggles edit mode on", func():
-		_edit_toggle().button_pressed = true
+	step("Then a rename dialog opens with the tag name", func():
+		expect(_rename_dialog().visible, "the rename dialog is shown")
+		expect(_name_edit().text == "Default", "the dialog holds the tag name")
 	)
 
-	step("Then the dropdown becomes a name field and edit controls appear", func():
-		expect(State.edit_mode, "edit mode is on")
-		expect(not _dropdown().is_visible_in_tree(), "the dropdown is hidden")
-		expect(_name_edit().is_visible_in_tree(), "the name field is shown")
-		expect(_name_edit().text == "Tag", "the name field holds the tag name")
-		for cell in _frame_cells():
-			expect(cell.get_node("%Delay").is_visible_in_tree(), "the delay field is shown")
-		var grid := main.find_child("FrameGrid", true, false)
-		expect(grid.get_child_count() > _frame_cells().size(), "the range row is shown")
-	)
-
-	step("When the user renames the tag", func():
-		_tag_row()._on_name_text_changed("Spin")
+	step("When the user types a new name and confirms", func():
+		_name_edit().text = "Spin"
+		_rename_dialog().confirmed.emit()
 	)
 
 	step("Then the tag is renamed and the dropdown updates", func():
@@ -106,47 +91,32 @@ func _run() -> void:
 		expect(_dropdown().get_item_text(0) == "Spin", "the dropdown item updates")
 	)
 
-	step("When the user toggles edit mode off", func():
-		_edit_toggle().button_pressed = false
+	step("When the user opens the rename dialog and cancels", func():
+		_actions_popup().id_pressed.emit(1)
+		_name_edit().text = "Cancelled"
+		_rename_dialog().canceled.emit()
 	)
 
-	step("Then the dropdown returns and edit controls hide", func():
-		expect(not State.edit_mode, "edit mode is off")
-		expect(_dropdown().is_visible_in_tree(), "the dropdown is shown")
-		expect(not _name_edit().is_visible_in_tree(), "the name field is hidden")
-		for cell in _frame_cells():
-			expect(not cell.get_node("%Delay").is_visible_in_tree(), "the delay field is hidden")
-		var grid := main.find_child("FrameGrid", true, false)
-		expect(grid.get_child_count() == _frame_cells().size(), "the range row is hidden")
+	step("Then the tag keeps its name", func():
+		expect(State.document.tags[0].name == "Spin", "the tag keeps the name Spin")
+		expect(_dropdown().get_item_text(0) == "Spin", "the dropdown item stays Spin")
 	)
 
-	step("When the user removes the active tag", func():
-		_tag_del_button().pressed.emit()
+	step("When the user removes the selected tag", func():
+		_actions_popup().id_pressed.emit(2)
 	)
 
-	step("Then the dropdown holds one item", func():
+	step("Then one tag remains and cannot be removed", func():
 		expect(State.document.tags.size() == 1, "one tag remains")
 		expect(_dropdown().item_count == 1, "the dropdown shows one item")
+		expect(_actions_popup().is_item_disabled(2), "the delete action is disabled again")
 	)
 
-	step("When the user removes the last tag", func():
-		_tag_del_button().pressed.emit()
+	step("When the user tries to remove the last tag", func():
+		_actions_popup().id_pressed.emit(2)
 	)
 
-	step("Then the dropdown hides when there are no tags", func():
-		expect(State.document.tags.is_empty(), "no tags remain")
-		expect(not _dropdown().is_visible_in_tree(), "the dropdown is hidden")
-		expect(not _name_edit().is_visible_in_tree(), "no name field is shown")
-	)
-
-	step("When the user toggles edit mode on without a tag", func():
-		_edit_toggle().button_pressed = true
-	)
-
-	step("Then the delay fields appear and the tag controls stay hidden", func():
-		expect(State.edit_mode, "edit mode is on")
-		for cell in _frame_cells():
-			expect(cell.get_node("%Delay").is_visible_in_tree(), "the delay field is shown")
-		expect(not _dropdown().is_visible_in_tree(), "the dropdown stays hidden")
-		expect(not _name_edit().is_visible_in_tree(), "no rename field is shown")
+	step("Then the last tag stays", func():
+		expect(State.document.tags.size() == 1, "the document still holds one tag")
+		expect(_dropdown().is_visible_in_tree(), "the dropdown stays visible")
 	)

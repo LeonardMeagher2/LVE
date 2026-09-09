@@ -10,7 +10,6 @@ signal palette_changed()
 signal selection_changed()
 signal floor_plane_changed()
 signal tag_changed()
-signal edit_mode_changed()
 
 
 var document: VoxiDocument : set=set_document
@@ -24,14 +23,7 @@ var current_frame := 0:
 		
 var is_playing:bool = false: set=set_is_playing
 
-var edit_mode := false:
-	set(value):
-		if value == edit_mode:
-			return
-		edit_mode = value
-		edit_mode_changed.emit()
-
-var active_tag := -1:
+var active_tag := 0:
 	set(value):
 		var new_value := clampi(value, -1, document.tags.size() - 1)
 		if new_value == active_tag:
@@ -87,7 +79,9 @@ func set_document(value:VoxiDocument) -> void:
 		document = value
 	else:
 		document = VoxiDocument.new()
-	active_tag = -1
+	if document.tags.is_empty():
+		document.add_tag("Default", 0, document.frames.size() - 1)
+	active_tag = 0
 		
 	document_changed.emit()
 	palette_changed.emit()
@@ -375,6 +369,8 @@ func get_tag(i: int) -> AnimationTag:
 	return document.get_tag(i)
 
 func remove_tag() -> void:
+	if document.tags.size() <= 1:
+		return
 	document.remove_tag(active_tag)
 	active_tag = clampi(active_tag, -1, document.tags.size() -1)
 	tag_changed.emit()

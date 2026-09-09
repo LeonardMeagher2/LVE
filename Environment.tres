@@ -2,7 +2,6 @@
 
 [resource]
 background_mode = 3
-background_color = Color(0.118, 0.122, 0.133, 1)
 background_canvas_max_layer = -1
 ambient_light_source = 2
 ambient_light_color = Color(0.54901963, 0.5686275, 0.61960787, 1)

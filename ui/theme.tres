@@ -1,5 +1,27 @@
 [gd_resource type="Theme" format=3 uid="uid://cfbvk6vpaexfm"]
 
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_g4v7s"]
+bg_color = Color(0.14901961, 0.15294118, 0.16862746, 1)
+border_width_bottom = 2
+border_color = Color(0.05882353, 0.0627451, 0.06666667, 1)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
+corner_detail = 3
+expand_margin_left = 4.0
+expand_margin_top = 28.0
+expand_margin_right = 4.0
+expand_margin_bottom = 6.0
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_rqugq"]
+bg_color = Color(0.149, 0.153, 0.169, 1)
+border_color = Color(0.227, 0.235, 0.259, 1)
+corner_radius_top_left = 2
+corner_radius_top_right = 2
+corner_radius_bottom_right = 2
+corner_radius_bottom_left = 2
+
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_btn_disabled"]
 bg_color = Color(0.184, 0.192, 0.212, 1)
 border_width_left = 1
@@ -33,6 +55,8 @@ corner_radius_bottom_right = 2
 corner_radius_bottom_left = 2
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_btn"]
+content_margin_left = 3.0
+content_margin_right = 3.0
 bg_color = Color(0.184, 0.192, 0.212, 1)
 border_width_left = 1
 border_width_top = 1
@@ -56,6 +80,9 @@ corner_radius_top_right = 2
 corner_radius_bottom_right = 2
 corner_radius_bottom_left = 2
 
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_denks"]
+draw_center = false
+
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
 bg_color = Color(0.149, 0.153, 0.169, 1)
 border_width_left = 1
@@ -78,11 +105,18 @@ expand_margin_left = 1.0
 expand_margin_right = 1.0
 
 [resource]
+AcceptDialog/constants/buttons_separation = 4
+AcceptDialog/constants/title_height = 24
+AcceptDialog/styles/embedded_border = SubResource("StyleBoxFlat_g4v7s")
+AcceptDialog/styles/panel = SubResource("StyleBoxFlat_rqugq")
 Button/styles/disabled = SubResource("StyleBoxFlat_btn_disabled")
 Button/styles/focus = SubResource("StyleBoxFlat_focus")
 Button/styles/hover = SubResource("StyleBoxFlat_hover")
 Button/styles/normal = SubResource("StyleBoxFlat_btn")
 Button/styles/pressed = SubResource("StyleBoxFlat_active")
+ColorPicker/constants/h_width = 24
+ColorPicker/constants/margin = 0
+ColorPickerButton/styles/normal = SubResource("StyleBoxFlat_denks")
 FlatMenuButton/styles/focus = SubResource("StyleBoxFlat_focus")
 FlatMenuButton/styles/hover = SubResource("StyleBoxFlat_hover")
 FlatMenuButton/styles/normal = SubResource("StyleBoxFlat_btn")

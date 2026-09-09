@@ -22,7 +22,9 @@ func add_frame(from_frame: int = -1) -> VoxelFrame:
 		f.delay_ms = frames[from_frame].delay_ms
 	elif not frames.is_empty():
 		f.delay_ms = frames.back().delay_ms
+	var old_last := frames.size() - 1
 	frames.append(f)
+	_extend_end_tags(old_last)
 	return f
 
 
@@ -33,6 +35,16 @@ func duplicate_frame(i: int) -> void:
 	f.cells = frames[i].cells.duplicate(true)
 	f.delay_ms = frames[i].delay_ms
 	frames.insert(i + 1, f)
+	_extend_end_tags(frames.size() - 2)
+
+
+func _extend_end_tags(old_last: int) -> void:
+	var new_last := frames.size() - 1
+	if new_last <= old_last:
+		return
+	for tag in tags:
+		if tag.to >= old_last:
+			tag.to = new_last
 
 
 func remove_frame(i: int) -> void:
@@ -41,7 +53,21 @@ func remove_frame(i: int) -> void:
 	if i < 0 or i >= frames.size():
 		return
 	frames.remove_at(i)
+	_shift_tags_after_remove(i)
 	_bounds_dirty = true
+
+
+func _shift_tags_after_remove(i: int) -> void:
+	var last := frames.size() - 1
+	for tag in tags:
+		if tag.from > i:
+			tag.from -= 1
+		if tag.to >= i:
+			tag.to -= 1
+		tag.from = clampi(tag.from, 0, last)
+		tag.to = clampi(tag.to, 0, last)
+		if tag.from > tag.to:
+			tag.to = tag.from
 
 
 func move_frame(from: int, to: int) -> void:

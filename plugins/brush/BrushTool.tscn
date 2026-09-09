@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://cfh7uu135xto5"]
 
 [ext_resource type="Script" uid="uid://dt6jni4oe4jda" path="res://Plugins/Brush/BrushTool.gd" id="1_vbqos"]
-[ext_resource type="Material" uid="uid://cspr6d8uervv1" path="res://Plugins/Brush/cursor_material.tres" id="2_y4iw6"]
+[ext_resource type="Material" uid="uid://chy7xjjy4hcwu" path="res://VoxelMaterial.tres" id="2_gb8al"]
 
 [sub_resource type="BoxMesh" id="BoxMesh_nh74m"]
 
@@ -10,6 +10,6 @@ script = ExtResource("1_vbqos")
 
 [node name="Cursor" type="MeshInstance3D" parent="." unique_id=1880237828]
 sorting_offset = 0.1
-material_override = ExtResource("2_y4iw6")
+material_override = ExtResource("2_gb8al")
 cast_shadow = 0
 mesh = SubResource("BoxMesh_nh74m")
