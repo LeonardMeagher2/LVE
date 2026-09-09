@@ -47,3 +47,80 @@ func _run() -> void:
 		expect(_marked(0), "clicked swatch is marked")
 		expect(State.current_color == Color.RED, "the working color is the swatch color")
 	)
+
+	step("When the user picks blue", func():
+		State.set_color(Color.BLUE)
+	)
+
+	step("Then blue is the working color", func():
+		expect(State.current_color == Color.BLUE, "the working color is blue")
+		expect(not _marked(0), "no swatch matches blue")
+	)
+
+	step("When the user undoes the color change", func():
+		State.undo_redo.undo()
+	)
+
+	step("Then the working color returns to the default", func():
+		expect(State.current_color == Color.from_rgba8(20, 20, 20), "the working color is the default")
+	)
+
+	step("When the user redoes the color change", func():
+		State.undo_redo.redo()
+	)
+
+	step("Then blue is the working color again", func():
+		expect(State.current_color == Color.BLUE, "the working color is blue again")
+	)
+
+	step("When the user picks green and adds it to the palette", func():
+		State.set_color(Color.GREEN)
+		State.add_color()
+	)
+
+	step("Then the palette gains a green swatch", func():
+		expect(grid.get_child_count() == 2, "two swatches exist")
+		expect((grid.get_child(1) as Button).color == Color.GREEN, "the new swatch is green")
+	)
+
+	step("When the user undoes the added swatch", func():
+		State.undo_redo.undo()
+	)
+
+	step("Then the palette loses the green swatch", func():
+		expect(grid.get_child_count() == 1, "one swatch remains")
+	)
+
+	step("When the user redoes the added swatch", func():
+		State.undo_redo.redo()
+	)
+
+	step("Then the green swatch returns", func():
+		expect(grid.get_child_count() == 2, "two swatches exist")
+		expect((grid.get_child(1) as Button).color == Color.GREEN, "the green swatch is back")
+	)
+
+	step("When the user removes the current color", func():
+		State.remove_color()
+	)
+
+	step("Then the green swatch leaves the palette", func():
+		expect(grid.get_child_count() == 1, "one swatch remains")
+	)
+
+	step("When the user undoes the removal", func():
+		State.undo_redo.undo()
+	)
+
+	step("Then the green swatch returns at its index", func():
+		expect(grid.get_child_count() == 2, "two swatches exist")
+		expect((grid.get_child(1) as Button).color == Color.GREEN, "the green swatch is back")
+	)
+
+	step("When the user redoes the removal", func():
+		State.undo_redo.redo()
+	)
+
+	step("Then the green swatch leaves again", func():
+		expect(grid.get_child_count() == 1, "one swatch remains")
+	)

@@ -40,10 +40,10 @@ func _rebuild_swatches() -> void:
 
 func _pick_swatch(toggled_on:bool, color:Color) -> void:
 	if toggled_on:
-		State.current_color = color
+		State.set_color(color)
 
 func _on_picker_color_changed(color: Color) -> void:
-	State.current_color = color
+	State.set_color(color)
 
 
 func _select_current() -> void:

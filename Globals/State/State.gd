@@ -49,7 +49,7 @@ var floor_index := 0:
 		floor_index = value
 		floor_plane_changed.emit()
 
-var current_color := Color.from_rgba8(20, 20, 20) : set=set_color
+var current_color := Color.from_rgba8(20, 20, 20)
 var selection := VoxelSelection.new()
 var undo_redo := UndoRedo.new()
 
@@ -228,12 +228,37 @@ func _current_delay() -> float:
 	return maxf(current_voxel_frame.delay_ms, 1.0) / 1000.0
 
 func set_color(color: Color) -> void:
+	if color == current_color:
+		return
+	undo_redo.create_action("Set Color", UndoRedo.MERGE_ENDS)
+	undo_redo.add_undo_method(_apply_color.bind(current_color))
+	undo_redo.add_do_method(_apply_color.bind(color))
+	undo_redo.commit_action(false)
+	_apply_color(color)
+
+
+func _apply_color(color: Color) -> void:
 	current_color = color
 	color_changed.emit(color)
 
 func add_color(color: Color = current_color) -> void:
-	if document.add_color(color):
-		palette_changed.emit()
+	if not document.add_color(color):
+		return
+	undo_redo.create_action("Add Palette Color")
+	undo_redo.add_undo_method(_remove_palette_color.bind(color))
+	undo_redo.add_do_method(_add_palette_color.bind(color))
+	undo_redo.commit_action(false)
+	palette_changed.emit()
+
+
+func _add_palette_color(color: Color) -> void:
+	document.add_color(color)
+	palette_changed.emit()
+
+
+func _remove_palette_color(color: Color) -> void:
+	document.remove_color(color)
+	palette_changed.emit()
 
 func get_color(index: int) -> Color:
 	return document.get_color(index)
@@ -242,8 +267,21 @@ func get_color_at(position: Vector3i) -> Color:
 	return document.get_color_at(current_frame, position)
 
 func remove_color(color: Color = current_color) -> void:
-	if document.remove_color(color):
-		palette_changed.emit()
+	var index := document.palette.find(color)
+	if index == -1:
+		return
+	undo_redo.create_action("Remove Palette Color")
+	undo_redo.add_undo_method(_insert_palette_color.bind(index, color))
+	undo_redo.add_do_method(_remove_palette_color.bind(color))
+	undo_redo.commit_action(false)
+	document.remove_color(color)
+	palette_changed.emit()
+
+
+func _insert_palette_color(index: int, color: Color) -> void:
+	if not document.palette.has(color):
+		document.palette.insert(index, color)
+	palette_changed.emit()
 
 func get_palette() -> PackedColorArray:
 	return document.palette
