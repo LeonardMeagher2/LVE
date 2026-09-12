@@ -65,6 +65,7 @@ func _ready() -> void:
 	add_plugin(load("res://Plugins/Eraser/EraserPlugin.gd").new())
 	add_plugin(load("res://Plugins/Fill/FillPlugin.gd").new())
 	add_plugin(load("res://Plugins/Selection/SelectionPlugin.gd").new())
+	add_plugin(load("res://Plugins/Transform/TransformPlugin.gd").new())
 	add_plugin(load("res://Plugins/Plane/PlanePlugin.gd").new())
 	
 

@@ -92,7 +92,7 @@ presets_visible = false
 
 [node name="ColorPickerButton" type="ColorPickerButton" parent="PanelContainer2/MarginContainer/VBoxContainer" unique_id=1988355421]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 24)
+custom_minimum_size = Vector2(0, 26)
 layout_mode = 2
 edit_alpha = false
 edit_intensity = false

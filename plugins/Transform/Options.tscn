@@ -1,0 +1,34 @@
+[gd_scene format=3 uid="uid://ep06h86t32q7"]
+
+[ext_resource type="Script" uid="uid://cscx342uvh5am" path="res://Plugins/Transform/Options.gd" id="1_script"]
+[ext_resource type="Texture2D" uid="uid://8m24dpr5faeh" path="res://icons/snap.svg" id="2_snap"]
+[ext_resource type="Texture2D" uid="uid://bsbljlu17soe3" path="res://icons/check.svg" id="3_check"]
+[ext_resource type="Texture2D" uid="uid://dj33i6smxtptq" path="res://icons/cross.svg" id="4_cross"]
+
+[node name="Options" type="HBoxContainer" unique_id=1914023151]
+script = ExtResource("1_script")
+
+[node name="snap" type="Button" parent="." unique_id=251207526]
+layout_mode = 2
+tooltip_text = "Snap to 90 degrees"
+toggle_mode = true
+icon = ExtResource("2_snap")
+icon_alignment = 1
+
+[node name="commit" type="Button" parent="." unique_id=829965376]
+layout_mode = 2
+disabled = true
+tooltip_text = "Commit"
+icon = ExtResource("3_check")
+icon_alignment = 1
+
+[node name="cancel" type="Button" parent="." unique_id=536087596]
+layout_mode = 2
+disabled = true
+tooltip_text = "Cancel"
+icon = ExtResource("4_cross")
+icon_alignment = 1
+
+[connection signal="toggled" from="snap" to="." method="_on_snap_toggled"]
+[connection signal="pressed" from="commit" to="." method="_on_commit_pressed"]
+[connection signal="pressed" from="cancel" to="." method="_on_cancel_pressed"]

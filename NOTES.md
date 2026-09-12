@@ -111,6 +111,8 @@ This file records confirmed, non-obvious facts learned while working on Voxi. Re
 - 2026-09-07: The center button in the viewport control bar does nothing. `%CenterBtn` exists in `Viewport.tscn` but no signal connects it. `CameraRig.center_active()` exists but is never called.
 - 2026-09-07: The Selection plugin stores `_shift` on press but `_apply_mode()` never reads it. Shift-to-add does not work. The plugin also does not disable the Clear button when the selection is empty.
 - 2026-09-07: The plane axis buttons used `set_pressed_no_signal`, which does not unpress the ButtonGroup siblings. Switching axis left several buttons pressed. Fixed in `Plugins/Plane/Options.gd` by using `button_pressed`.
+- 2026-09-12: The dead move and rotate tool preview erased only the original grab-time cells, then redrew over a destination bounding box padded by one voxel. A drag that moved more than the padding between two updates left the prior redraw uncleared, cloning voxels. The box also scaled with its volume, not with voxel count, so a large or rotated selection could iterate millions of cells per drag update. The Transform plugin fixes this by erasing the previous update's exact destination cells and forward-mapping only the grabbed cells to their new positions.
+- 2026-09-12: `VoxelRenderer.Chunk.set_color` finds a cell's multimesh index with `indexes.find_key(cell)`, a linear scan by value, not by key. Reporting a large `affected` array to `cells_changed` (such as an entire frame) turns a cheap edit into O(n²) work. Report only the cells that actually changed.
 
 ## Undo/redo
 

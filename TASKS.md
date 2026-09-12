@@ -10,24 +10,24 @@ max_active: 1
 - [ ] Migrate the Transform and Plane tools to plugins
   - [x] Add the Fill plugin (button, connected option)
   - [x] Add the Selection plugin (MenuButton: box, lasso, wand; mode picker, clear, connected)
-  - [ ] Add the Transform plugin (MenuButton: move, rotate; snap, commit, cancel)
+  - [x] Add the Transform plugin (MenuButton: move, rotate; snap, commit, cancel)
   - [x] Add the Plane plugin (button, axis picker)
-  - [ ] Register the plugins in the toolbar in order
-  - [ ] Fix the eyedropper shortcut and tooltip
-  - [ ] Delete the dead tool scripts, scenes, option widgets, and ToolInfo resources
+  - [x] Register the plugins in the toolbar in order
+  - [x] Fix the eyedropper shortcut and tooltip
+  - [x] Delete the dead tool scripts, scenes, option widgets, and ToolInfo resources
   - [ ] Ask the user to test the Transform and Plane tools manually
 - [ ] Line tool
   - [ ] Click to start, click to end, or click and drag to draw a line
 - [ ] Extrude tool
   - [ ] Selection of voxels extruded along plane normal, with a drag to set the distance
-- [ ] Move tool
-  - [ ] Remove auto creation of voxel selection object when no voxels were in a selection
-  - [ ] Add a "commit" button to the move tool, so that the user can move voxels and then commit or cancel the move
-  - [ ] Switching to another tool while moving voxels should commit the move
-- [ ] Rotate tool (group with move tool)
-  - [ ] Selection of voxels rotated around the center of the selection, with a drag to set the angle
-  - [ ] Add a "commit" button to the rotate tool, so that the user can rotate voxels and then commit or cancel the rotation
-  - [ ] Switching to another tool while rotating voxels should commit the rotation
+- [x] Move tool
+  - [x] Remove auto creation of voxel selection object when no voxels were in a selection
+  - [x] Add a "commit" button to the move tool, so that the user can move voxels and then commit or cancel the move
+  - [x] Switching to another tool while moving voxels should commit the move
+- [x] Rotate tool (group with move tool)
+  - [x] Selection of voxels rotated around the center of the selection, with a drag to set the angle
+  - [x] Add a "commit" button to the rotate tool, so that the user can rotate voxels and then commit or cancel the rotation
+  - [x] Switching to another tool while rotating voxels should commit the rotation
 - [ ] Scale tool (group with move tool)
   - [ ] Selection of voxels scaled around the center of the selection, with a drag to set the scale
   - [ ] Add a "commit" button to the scale tool, so that the user can scale voxels and then commit or cancel the scale
