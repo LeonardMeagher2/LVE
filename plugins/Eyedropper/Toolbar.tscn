@@ -11,7 +11,7 @@ pressed = true
 events = [SubResource("InputEventAction_qwrxr")]
 
 [node name="eyedropper" type="Button" unique_id=26512838]
-tooltip_text = "Erase voxels"
+tooltip_text = "Pick a color from a voxel"
 toggle_mode = true
 button_group = ExtResource("1_kcwig")
 shortcut = SubResource("Shortcut_t2id0")
