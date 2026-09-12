@@ -3,7 +3,7 @@ extends Button
 const DRAG_TYPE := "voxi_frame"
 
 
-func _get_drag_data(at_position: Vector2) -> Variant:
+func _get_drag_data(_at_position: Vector2) -> Variant:
 	var frame := get_parent() as AnimationFrame
 	if frame == null:
 		return null
@@ -15,11 +15,11 @@ func _get_drag_data(at_position: Vector2) -> Variant:
 	return data
 
 
-func _can_drop_data(at_position: Vector2, data) -> bool:
+func _can_drop_data(_at_position: Vector2, data) -> bool:
 	return data is Dictionary and data.get("type", "") == DRAG_TYPE
 
 
-func _drop_data(at_position: Vector2, data) -> void:
+func _drop_data(_at_position: Vector2, data) -> void:
 	var frame := get_parent() as AnimationFrame
 	if frame == null:
 		return

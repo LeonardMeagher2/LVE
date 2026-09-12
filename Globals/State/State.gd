@@ -409,6 +409,7 @@ func _frame_snapshot() -> Dictionary:
 	}
 
 
+@warning_ignore("shadowed_variable_base_class")
 func _record_frame_action(name: String, before: Dictionary, after: Dictionary) -> void:
 	undo_redo.create_action(name)
 	undo_redo.add_undo_method(_restore_frame_layout.bind(before["frames"], before["ranges"], before["current"]))
@@ -459,6 +460,7 @@ func _apply_frame_delay(index: int, ms: int) -> void:
 	frame_changed.emit()
 
 
+@warning_ignore("shadowed_variable_base_class")
 func add_tag(name: String, from: int = 0, to: int = -1) -> void:
 	var end := to
 	if to < 0:
@@ -551,6 +553,7 @@ func _apply_tag_loop_mode(index: int, mode: int) -> void:
 	var tag := document.get_tag(index)
 	if tag == null:
 		return
+	@warning_ignore("int_as_enum_without_cast")
 	tag.loop_mode = mode
 	tag_changed.emit()
 
@@ -574,6 +577,7 @@ func _apply_tag_repeats(index: int, value: int) -> void:
 	tag_changed.emit()
 
 
+@warning_ignore("shadowed_variable_base_class")
 func set_tag_name(index: int, name: String) -> void:
 	var tag := document.get_tag(index)
 	if tag == null or tag.name == name:
@@ -585,6 +589,7 @@ func set_tag_name(index: int, name: String) -> void:
 	_apply_tag_name(index, name)
 
 
+@warning_ignore("shadowed_variable_base_class")
 func _apply_tag_name(index: int, name: String) -> void:
 	var tag := document.get_tag(index)
 	if tag == null:
