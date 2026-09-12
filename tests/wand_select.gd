@@ -15,18 +15,20 @@ func _ready() -> void:
 func _run() -> void:
 	step("Given the wand tool and two gray blobs plus one red voxel", func():
 		viewport = editor_viewport()
+		var container := viewport.get_parent()
+		container.stretch = false
+		viewport.size = Vector2i(800, 500)
 		activate_tool("selection")
 		select_toolbar_item("selection", "Wand")
-		var vsize: Vector2i = viewport.size
-		if vsize.x <= 0 or vsize.y <= 0:
-			viewport.size = Vector2i(800, 500)
-			vsize = viewport.size
-		center = Vector2(vsize.x * 0.5, vsize.y * 0.5)
+		center = Vector2(viewport.size.x * 0.5, viewport.size.y * 0.5)
 		var start := aim(center)
 		seed = start.target
 		blob_a = [seed, seed + Vector3i(1, 0, 0), seed + Vector3i(0, 0, 1)]
 		blob_b = [seed + Vector3i(8, 0, 0), seed + Vector3i(9, 0, 0)]
-		red = seed + Vector3i(0, 1, 0)
+		# Offset in X, not placed directly above seed. The center click's ray has no X
+		# component at the default camera angle, so a voxel stacked with the same X and Z as
+		# seed can sit exactly on that ray and get hit instead of seed.
+		red = seed + Vector3i(1, 1, 0)
 		var gray := Color.from_rgba8(150, 150, 150)
 		var red_c := Color.from_rgba8(200, 60, 60)
 		var f: VoxelFrame = State.document.frames[State.current_frame]

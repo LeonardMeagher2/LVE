@@ -13,7 +13,8 @@ var transforming: bool = false :
 
 enum Tools {
 	MOVE,
-	ROTATE
+	ROTATE,
+	SCALE,
 }
 
 @export var tool: Tools = Tools.MOVE :
@@ -24,11 +25,18 @@ enum Tools {
 		tool_changed.emit(tool)
 		emit_changed()
 
-@export var snap: bool = false :
+@export var snap: bool = true :
 	set(value):
 		if value == snap:
 			return
 		snap = value
+		emit_changed()
+
+@export var uniform: bool = true :
+	set(value):
+		if value == uniform:
+			return
+		uniform = value
 		emit_changed()
 
 

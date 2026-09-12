@@ -21,7 +21,6 @@ func _run() -> void:
 		_select_bar()
 		activate_tool("transform")
 		select_toolbar_item("transform", "Rotate")
-		press_option("Snap to 90 degrees")
 	)
 
 	step("When the user drags the bar straight up and commits", func():
@@ -29,8 +28,8 @@ func _run() -> void:
 		_press_option("Commit")
 	)
 
-	step("Then the bar sits vertical around the pivot", func():
-		_expect_cells([Vector3i(0, -1, 0), Vector3i(0, 0, 0), Vector3i(0, 1, 0)])
+	step("Then the bar sits vertical, its bounding box's near corner unmoved", func():
+		_expect_cells([Vector3i(0, 0, 0), Vector3i(0, 1, 0), Vector3i(0, 2, 0)])
 		expect(State.undo_redo.has_undo(), "the committed rotation is undoable")
 	)
 
@@ -48,8 +47,8 @@ func _run() -> void:
 	)
 
 	step("Then the cells and selection sit vertical", func():
-		_expect_cells([Vector3i(0, -1, 0), Vector3i(0, 0, 0), Vector3i(0, 1, 0)])
-		_expect_selection([Vector3i(0, -1, 0), Vector3i(0, 0, 0), Vector3i(0, 1, 0)])
+		_expect_cells([Vector3i(0, 0, 0), Vector3i(0, 1, 0), Vector3i(0, 2, 0)])
+		_expect_selection([Vector3i(0, 0, 0), Vector3i(0, 1, 0), Vector3i(0, 2, 0)])
 	)
 
 	step("Given the selected bar with the rotate tool again", func():
@@ -60,7 +59,6 @@ func _run() -> void:
 		_select_bar()
 		activate_tool("transform")
 		select_toolbar_item("transform", "Rotate")
-		press_option("Snap to 90 degrees")
 	)
 
 	step("When the user drags the bar straight up and cancels", func():

@@ -28,11 +28,11 @@ max_active: 1
   - [x] Selection of voxels rotated around the center of the selection, with a drag to set the angle
   - [x] Add a "commit" button to the rotate tool, so that the user can rotate voxels and then commit or cancel the rotation
   - [x] Switching to another tool while rotating voxels should commit the rotation
-- [ ] Scale tool (group with move tool)
-  - [ ] Selection of voxels scaled around the center of the selection, with a drag to set the scale
-  - [ ] Add a "commit" button to the scale tool, so that the user can scale voxels and then commit or cancel the scale
-  - [ ] Switching to another tool while scaling voxels should commit the scale
-  - [ ] Add a "uniform scale" option to the scale tool, so that the user can scale voxels uniformly in all directions
+- [x] Scale tool (group with move tool)
+  - [x] Selection of voxels scaled around the center of the selection, with a drag to set the scale
+  - [x] Add a "commit" button to the scale tool, so that the user can scale voxels and then commit or cancel the scale
+  - [x] Switching to another tool while scaling voxels should commit the scale
+  - [x] Add a "uniform scale" option to the scale tool, so that the user can scale voxels uniformly in all directions
 
 # Export/Import
 - [ ] Save/load the current document to a json file, including all frames, tags, and palette

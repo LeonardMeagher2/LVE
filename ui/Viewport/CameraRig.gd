@@ -28,6 +28,7 @@ var _init_dist := 24.0
 func _ready() -> void:
 	configure()
 	State.document_changed.connect(configure)
+	set_view("default")
 
 func configure() -> void:
 	_init_dist = _frame_distance(State.document)
@@ -64,7 +65,7 @@ func _frame_target(d: VoxiDocument) -> Vector3:
 func set_view(name: String) -> void:
 	match name:
 		"default":
-			_set_angles(deg_to_rad(-90.0), deg_to_rad(45.0))
+			_set_angles(deg_to_rad(0.0), deg_to_rad(45.0))
 		"top":
 			_set_angles(0.0, deg_to_rad(89.0))
 		"bottom":

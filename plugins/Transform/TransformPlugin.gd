@@ -7,6 +7,7 @@ var _settings := preload("./settings.tres")
 
 @onready var _move := preload("./tools/MoveTool.tscn").instantiate()
 @onready var _rotate := preload("./tools/RotateTool.tscn").instantiate()
+@onready var _scale := preload("./tools/ScaleTool.tscn").instantiate()
 
 var _current_tool: Node = null
 var _active := false
@@ -49,6 +50,8 @@ func _on_tool_changed(tool: int) -> void:
 			_current_tool = _move
 		_settings.Tools.ROTATE:
 			_current_tool = _rotate
+		_settings.Tools.SCALE:
+			_current_tool = _scale
 		_:
 			_current_tool = null
 			push_error("Unknown transform tool %s" % tool)

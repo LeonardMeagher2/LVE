@@ -7,6 +7,7 @@ class Chunk extends RefCounted:
 	var multimesh:MultiMesh
 	var cells:Dictionary[Vector3i, Color] = {}
 	var indexes:Dictionary[int, Vector3i] = {}
+	var cell_index:Dictionary[Vector3i, int] = {}
 	var chunk_size:int = 0
 	var capacity:int
 	
@@ -59,8 +60,7 @@ class Chunk extends RefCounted:
 			
 	func set_color(cell:Vector3i, color:Color) -> void:
 		var size:int = indexes.size()
-		var index_key:Variant = indexes.find_key(cell)
-		var index = index_key if index_key is int else -1
+		var index:int = cell_index.get(cell, -1)
 		
 		if index == -1:
 			if color == Color.TRANSPARENT:
@@ -68,15 +68,18 @@ class Chunk extends RefCounted:
 			index = size
 			cells[cell] = color
 			indexes[index] = cell
+			cell_index[cell] = index
 			if size + 1 > capacity:
 				grow(capacity + 1)
 			size += 1
 		elif color == Color.TRANSPARENT:
 			cells.erase(cell)
+			cell_index.erase(cell)
 			if index != size - 1:
 				cell = indexes[size - 1]
 				color = cells[cell]
 				indexes[index] = cell
+				cell_index[cell] = index
 			indexes.erase(size - 1)
 			size -= 1
 				

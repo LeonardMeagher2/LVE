@@ -69,7 +69,8 @@ func _on_key(event: InputEventKey) -> bool:
 
 func _press(origin: Vector3, dir: Vector3) -> void:
 	if _dragging or _pending:
-		_regrab(origin, dir)
+		_reanchor()
+		_begin_grab(origin, dir)
 		_dragging = true
 		_dragged = false
 		return
@@ -90,6 +91,26 @@ func _press(origin: Vector3, dir: Vector3) -> void:
 	_dragged = false
 
 
+# Pressing again while a transform is already dragging or pending re-anchors it: the cells and
+# colors currently on screen become the new working set, and _begin_grab starts fresh from there
+# (fresh pivot, transform parameter reset to identity). The tool never resets to the original,
+# pre-transform state on a regrab; only Cancel does that. The undo/redo boundary is unaffected,
+# since it was captured once at the very first press and is not touched again until commit/cancel.
+func _reanchor() -> void:
+	if _dest_cells.is_empty():
+		return
+	var frame: Dictionary = State.document.frames[State.current_frame].cells
+	var new_cells: Array[Vector3i] = []
+	var new_colors := {}
+	for c in _dest_cells:
+		new_cells.append(c)
+		if frame.has(c):
+			new_colors[c] = frame[c]
+	_cells = new_cells
+	_colors = new_colors
+	_dest_cells = []
+
+
 func _release() -> void:
 	if not _dragging:
 		return
@@ -107,10 +128,7 @@ func _apply_preview() -> void:
 	var doc := State.document
 	var frame := State.current_frame
 
-	var new_dest: Dictionary = {}
-	for s in _cells:
-		if _colors.has(s):
-			new_dest[_map_dest(s)] = _colors[s]
+	var new_dest: Dictionary = _compute_new_dest()
 
 	var old_positions: Array[Vector3i] = _dest_cells if not _dest_cells.is_empty() else _cells
 	var old_set := {}
@@ -244,15 +262,7 @@ func _source_bbox() -> AABB:
 	return b
 
 
-func _pivot_point() -> Vector3:
-	return _source_bbox().get_center()
-
-
 func _begin_grab(_origin: Vector3, _dir: Vector3) -> void:
-	pass
-
-
-func _regrab(_origin: Vector3, _dir: Vector3) -> void:
 	pass
 
 
@@ -262,3 +272,11 @@ func _update_params(_origin: Vector3, _dir: Vector3) -> bool:
 
 func _map_dest(s: Vector3i) -> Vector3i:
 	return s
+
+
+func _compute_new_dest() -> Dictionary:
+	var out: Dictionary = {}
+	for s in _cells:
+		if _colors.has(s):
+			out[_map_dest(s)] = _colors[s]
+	return out

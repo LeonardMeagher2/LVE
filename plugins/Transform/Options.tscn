@@ -4,6 +4,7 @@
 [ext_resource type="Texture2D" uid="uid://8m24dpr5faeh" path="res://icons/snap.svg" id="2_snap"]
 [ext_resource type="Texture2D" uid="uid://bsbljlu17soe3" path="res://icons/check.svg" id="3_check"]
 [ext_resource type="Texture2D" uid="uid://dj33i6smxtptq" path="res://icons/cross.svg" id="4_cross"]
+[ext_resource type="Texture2D" uid="uid://do3ouxrp3uwfa" path="res://icons/uniform.svg" id="5_uniform"]
 
 [node name="Options" type="HBoxContainer" unique_id=1914023151]
 script = ExtResource("1_script")
@@ -15,20 +16,29 @@ toggle_mode = true
 icon = ExtResource("2_snap")
 icon_alignment = 1
 
+[node name="uniform" type="Button" parent="." unique_id=1241191382]
+layout_mode = 2
+tooltip_text = "Scale uniformly"
+toggle_mode = true
+button_pressed = true
+icon = ExtResource("5_uniform")
+icon_alignment = 1
+
 [node name="commit" type="Button" parent="." unique_id=829965376]
 layout_mode = 2
-disabled = true
 tooltip_text = "Commit"
+disabled = true
 icon = ExtResource("3_check")
 icon_alignment = 1
 
 [node name="cancel" type="Button" parent="." unique_id=536087596]
 layout_mode = 2
-disabled = true
 tooltip_text = "Cancel"
+disabled = true
 icon = ExtResource("4_cross")
 icon_alignment = 1
 
 [connection signal="toggled" from="snap" to="." method="_on_snap_toggled"]
+[connection signal="toggled" from="uniform" to="." method="_on_uniform_toggled"]
 [connection signal="pressed" from="commit" to="." method="_on_commit_pressed"]
 [connection signal="pressed" from="cancel" to="." method="_on_cancel_pressed"]
