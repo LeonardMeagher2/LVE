@@ -25,6 +25,7 @@ func _ready() -> void:
 	set_texture(texture)
 	State.frame_changed.connect(_on_frame_changed)
 	State.cells_changed.connect(_on_cells_changed)
+	State.chunks_changed.connect(_on_cells_changed)
 	VoxelImageRenderer.frame_rendered.connect(_on_frame_rendered)
 	VoxelImageRenderer.request_frame_render(frame_index)
 

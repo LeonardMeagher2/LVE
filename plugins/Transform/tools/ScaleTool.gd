@@ -14,6 +14,137 @@ var _scale_q := 1.0
 const MIN_REF := 0.5
 const MIN_SCALE := 0.05
 
+class ScaleJob extends TransformJob:
+	var axis := 1
+	var p := 0
+	var q := 2
+	var pivot := Vector3.ZERO
+	var scale_p := 1.0
+	var scale_q := 1.0
+	var uniform := true
+	var _candidate_total := 0
+	var _candidate_completed := 0
+
+	func estimated_work() -> int:
+		var depth := absf(scale_p) if uniform else 1.0
+		return maxi(source_positions.size(), ceili((source_bounds.size[p] * absf(scale_p) + 2) * (source_bounds.size[q] * absf(scale_q) + 2) * (source_bounds.size[axis] * depth + 2)))
+
+	func compute_destination() -> void:
+		if source_colors.is_empty():
+			return
+		var scale3 := Vector3.ONE
+		scale3[p] = scale_p
+		scale3[q] = scale_q
+		scale3[axis] = scale_p if uniform else 1.0
+		var regions: Array[AABB] = [source_bounds]
+		var source_volume := source_bounds.size.x * source_bounds.size.y * source_bounds.size.z
+		if source_volume > source_colors.size() * 4:
+			regions = _occupied_regions()
+		var layers := {}
+		if not uniform:
+			for cell_position in source_positions:
+				layers[cell_position[axis]] = true
+		var candidate_ranges := []
+		for region in regions:
+			var destination_range := _destination_range(region, scale3)
+			var min_d: Vector3i = destination_range[0]
+			var max_d: Vector3i = destination_range[1]
+			var region_layers := {}
+			if uniform:
+				_candidate_total += (max_d.x - min_d.x + 1) * (max_d.y - min_d.y + 1) * (max_d.z - min_d.z + 1)
+			else:
+				for layer in layers:
+					if layer >= region.position[axis] + 0.5 and layer <= region.end[axis] - 0.5:
+						region_layers[layer] = true
+				_candidate_total += region_layers.size() * (max_d[p] - min_d[p] + 1) * (max_d[q] - min_d[q] + 1)
+			candidate_ranges.append([min_d, max_d, region_layers])
+		stage("Calculating scale", _candidate_total)
+		for candidate_range in candidate_ranges:
+			if not checkpoint(_candidate_completed):
+				return
+			if uniform:
+				_compute_3d(candidate_range[0], candidate_range[1], scale3)
+			else:
+				_compute_2d(candidate_range[0], candidate_range[1], candidate_range[2])
+
+	func _occupied_regions() -> Array[AABB]:
+		stage("Preparing scale", source_colors.size())
+		var bounds_by_chunk := {}
+		var completed := 0
+		for cell_position: Vector3i in source_colors:
+			var chunk_location := VoxelFrame.chunk_position(cell_position)
+			var cell_bounds := AABB(Vector3(cell_position) - Vector3.ONE * 0.5, Vector3.ONE)
+			var bounds: AABB = bounds_by_chunk.get(chunk_location, cell_bounds)
+			bounds_by_chunk[chunk_location] = bounds.merge(cell_bounds)
+			completed += 1
+			if completed % 4096 == 0 and not checkpoint(completed):
+				return []
+		var regions: Array[AABB] = []
+		for bounds in bounds_by_chunk.values():
+			regions.append(bounds)
+		return regions
+
+	func _destination_range(region: AABB, scale3: Vector3) -> Array:
+		var src_min := Vector3i(region.position + Vector3.ONE * 0.5)
+		var src_max := Vector3i(region.end - Vector3.ONE * 0.5)
+		var lo := Vector3(INF, INF, INF)
+		var hi := Vector3(-INF, -INF, -INF)
+		for i in 8:
+			var corner := Vector3(
+				src_min.x if i & 1 == 0 else src_max.x + 1,
+				src_min.y if i & 2 == 0 else src_max.y + 1,
+				src_min.z if i & 4 == 0 else src_max.z + 1)
+			var scaled := (corner - pivot) * scale3 + pivot
+			lo = lo.min(scaled)
+			hi = hi.max(scaled)
+		var min_d := Vector3i(floori(lo.x), floori(lo.y), floori(lo.z))
+		var max_d := Vector3i(ceili(hi.x) - 1, ceili(hi.y) - 1, ceili(hi.z) - 1)
+		return [min_d, max_d]
+
+	func _samples(first: int, last: int, pivot_coordinate: float, scale: float) -> PackedInt32Array:
+		var samples := PackedInt32Array()
+		samples.resize(last - first + 1)
+		for coordinate in range(first, last + 1):
+			samples[coordinate - first] = floori((coordinate + 0.5 - pivot_coordinate) / scale + pivot_coordinate)
+		return samples
+
+	func _compute_3d(min_d: Vector3i, max_d: Vector3i, scale3: Vector3) -> void:
+		var samples_x := _samples(min_d.x, max_d.x, pivot.x, scale3.x)
+		var samples_y := _samples(min_d.y, max_d.y, pivot.y, scale3.y)
+		var samples_z := _samples(min_d.z, max_d.z, pivot.z, scale3.z)
+		for dx in range(min_d.x, max_d.x + 1):
+			var sx := samples_x[dx - min_d.x]
+			for dy in range(min_d.y, max_d.y + 1):
+				var sy := samples_y[dy - min_d.y]
+				for dz in range(min_d.z, max_d.z + 1):
+					var color: Color = source_colors.get(Vector3i(sx, sy, samples_z[dz - min_d.z]), Color.TRANSPARENT)
+					if color != Color.TRANSPARENT:
+						destination_colors[Vector3i(dx, dy, dz)] = color
+					_candidate_completed += 1
+					if _candidate_completed % 4096 == 0 and not checkpoint(_candidate_completed):
+						return
+
+	func _compute_2d(min_d: Vector3i, max_d: Vector3i, layers: Dictionary) -> void:
+		var samples_p := _samples(min_d[p], max_d[p], pivot[p], scale_p)
+		var samples_q := _samples(min_d[q], max_d[q], pivot[q], scale_q)
+		for layer in layers:
+			for dp in range(min_d[p], max_d[p] + 1):
+				for dq in range(min_d[q], max_d[q] + 1):
+					var source := Vector3i.ZERO
+					source[axis] = layer
+					source[p] = samples_p[dp - min_d[p]]
+					source[q] = samples_q[dq - min_d[q]]
+					var color: Color = source_colors.get(source, Color.TRANSPARENT)
+					if color != Color.TRANSPARENT:
+						var destination := Vector3i.ZERO
+						destination[axis] = layer
+						destination[p] = dp
+						destination[q] = dq
+						destination_colors[destination] = color
+					_candidate_completed += 1
+					if _candidate_completed % 4096 == 0 and not checkpoint(_candidate_completed):
+						return
+
 
 func _begin_grab(origin: Vector3, dir: Vector3) -> void:
 	_pivot = _source_bbox().get_center()
@@ -78,97 +209,13 @@ func _safe_scale(s: float) -> float:
 	return s
 
 
-# Scaling cannot forward-map one source cell to one destination cell the way Move and Rotate do:
-# scaling up must turn a single source voxel into a block of several destination voxels, and
-# scaling down must merge several into one. So this works backward from the destination instead:
-# for every candidate destination cell, scale its center back into source space and sample the
-# nearest source cell. That gives crisp N-cell blocks when scaling up, and a clean, no-blend pick
-# per cell when scaling down, for any positive or negative (mirrored) factor.
-func _compute_new_dest() -> Dictionary:
-	if _cells.is_empty():
-		return {}
-	var sp := _safe_scale(_scale_p)
-	var sq := _safe_scale(_scale_q)
-
-	var src_min := _cells[0]
-	var src_max := _cells[0]
-	var layers: Dictionary = {}
-	for c in _cells:
-		src_min = Vector3i(mini(src_min.x, c.x), mini(src_min.y, c.y), mini(src_min.z, c.z))
-		src_max = Vector3i(maxi(src_max.x, c.x), maxi(src_max.y, c.y), maxi(src_max.z, c.z))
-		layers[c[_axis]] = true
-
-	# Uniform scale is a true 3D scale: the depth axis moves by the same factor as the two
-	# in-plane ones, even though the mouse only ever drags in 2D. Non-uniform stays confined to
-	# the 2 in-plane axes (there is no way to drive a 3rd axis independently from a 2D drag), and
-	# only samples the layers the source actually occupies rather than padding to a full range.
-	if _settings.uniform:
-		return _compute_new_dest_3d(sp, sq, sp, src_min, src_max)
-	return _compute_new_dest_2d(sp, sq, src_min, src_max, layers)
-
-
-func _compute_new_dest_2d(sp: float, sq: float, src_min: Vector3i, src_max: Vector3i, layers: Dictionary) -> Dictionary:
-	var pivot_pq := Vector2(_pivot[_p], _pivot[_q])
-	var lo := Vector2(INF, INF)
-	var hi := Vector2(-INF, -INF)
-	for i in 4:
-		var corner := Vector2(
-			src_min[_p] if i & 1 == 0 else src_max[_p] + 1,
-			src_min[_q] if i & 2 == 0 else src_max[_q] + 1)
-		var scaled: Vector2 = (corner - pivot_pq) * Vector2(sp, sq) + pivot_pq
-		lo = lo.min(scaled)
-		hi = hi.max(scaled)
-	var min_dp := floori(lo.x)
-	var min_dq := floori(lo.y)
-	var max_dp := ceili(hi.x) - 1
-	var max_dq := ceili(hi.y) - 1
-
-	var out: Dictionary = {}
-	for w in layers:
-		for dp in range(min_dp, max_dp + 1):
-			for dq in range(min_dq, max_dq + 1):
-				var dest_center := Vector2(dp + 0.5, dq + 0.5)
-				var src_point: Vector2 = (dest_center - pivot_pq) / Vector2(sp, sq) + pivot_pq
-				var s := Vector3i.ZERO
-				s[_axis] = w
-				s[_p] = floori(src_point.x)
-				s[_q] = floori(src_point.y)
-				if _colors.has(s):
-					var d := Vector3i.ZERO
-					d[_axis] = w
-					d[_p] = dp
-					d[_q] = dq
-					out[d] = _colors[s]
-	return out
-
-
-func _compute_new_dest_3d(sp: float, sq: float, sr: float, src_min: Vector3i, src_max: Vector3i) -> Dictionary:
-	var scale3 := Vector3.ONE
-	scale3[_p] = sp
-	scale3[_q] = sq
-	scale3[_axis] = sr
-
-	var lo := Vector3(INF, INF, INF)
-	var hi := Vector3(-INF, -INF, -INF)
-	for i in 8:
-		var corner := Vector3(
-			src_min.x if i & 1 == 0 else src_max.x + 1,
-			src_min.y if i & 2 == 0 else src_max.y + 1,
-			src_min.z if i & 4 == 0 else src_max.z + 1)
-		var scaled: Vector3 = (corner - _pivot) * scale3 + _pivot
-		lo = lo.min(scaled)
-		hi = hi.max(scaled)
-	var min_d := Vector3i(floori(lo.x), floori(lo.y), floori(lo.z))
-	var max_d := Vector3i(ceili(hi.x) - 1, ceili(hi.y) - 1, ceili(hi.z) - 1)
-
-	var out: Dictionary = {}
-	for dx in range(min_d.x, max_d.x + 1):
-		for dy in range(min_d.y, max_d.y + 1):
-			for dz in range(min_d.z, max_d.z + 1):
-				var d := Vector3i(dx, dy, dz)
-				var dest_center := Vector3(d) + Vector3(0.5, 0.5, 0.5)
-				var src_point: Vector3 = (dest_center - _pivot) / scale3 + _pivot
-				var s := Vector3i(floori(src_point.x), floori(src_point.y), floori(src_point.z))
-				if _colors.has(s):
-					out[d] = _colors[s]
-	return out
+func _make_job() -> TransformJob:
+	var job := ScaleJob.new()
+	job.axis = _axis
+	job.p = _p
+	job.q = _q
+	job.pivot = _pivot
+	job.scale_p = _safe_scale(_scale_p)
+	job.scale_q = _safe_scale(_scale_q)
+	job.uniform = _settings.uniform
+	return job

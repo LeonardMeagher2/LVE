@@ -4,6 +4,15 @@ This file records confirmed, non-obvious facts learned while working on Voxi. Re
 
 ## Godot API changes
 
+- 2026-10-04: Runtime mesh compression changes positions and normals. Use `ImporterMesh` arrays to verify exported geometry.
+- 2026-10-04: Animated visibility pointers require a defined `KHR_node_visibility` object, including on initially visible nodes.
+- 2026-10-04: Godot 4.7.2 exports and imports visibility tracks with `KHR_node_visibility` and `KHR_animation_pointer`.
+- 2026-10-04: Godot enables glTF animation loops for names that start or end with `loop` or `cycle`.
+- 2026-10-04: Godot 4.7.2 configures glTF materials before reading the first primitive's vertex colors. Two shared-material primitives enable vertex colors.
+- 2026-10-04: `GLTFDocument` exports vertex colors without color conversion. Convert voxel sRGB colors to linear colors before export.
+- 2026-10-04: Zero-scale rest transforms cause glTF quaternion errors. Non-zero rest scales preserve zero-scale animation keys.
+- 2026-10-04: Immutable-track removal can remove inactive flipbook frames from clips. Disable this option to preserve clip changes.
+- 2026-10-04: `PopupMenu` radio items change appearance only. Set their checked states to enforce groups.
 - 2026-10-03: `PROPERTY_USAGE_NONE` excludes a property from resource saves. Existing resource files can still load that property.
 
 - 2026-08-16: `Mesh.PRIMITIVE_TRIANGLE_FAN` does not exist. Use `PRIMITIVE_TRIANGLE_STRIP` for a 4-vertex quad.

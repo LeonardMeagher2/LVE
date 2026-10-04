@@ -2,6 +2,7 @@ extends Node
 
 signal document_changed()
 signal cells_changed(frame: int, affected: Array[Vector3i])
+signal chunks_changed(frame: int, affected: Array[Vector3i])
 signal frames_changed()
 signal frame_changed()
 signal is_playing_toggled(toggled_on:bool)
@@ -10,6 +11,42 @@ signal palette_changed()
 signal selection_changed()
 signal floor_plane_changed()
 signal tag_changed()
+signal activity_changed()
+signal edit_context_changing()
+
+const WORK_SLICE_US := 3000
+
+class Operation extends RefCounted:
+	var label := ""
+	var detail := ""
+	var completed := 0
+	var total := -1
+	var foreground := false
+	var owner_ref: WeakRef
+
+var _operations: Dictionary[int, Operation] = {}
+var _next_operation_id := 1
+var _activity_started_ms := 0
+var _erase_job: EraseJob
+var _erase_operation_id := 0
+var _erase_jobs: Array[EraseJob] = []
+
+class EraseJob extends VoxelFrame.EditJob:
+	var edited_frame: VoxelFrame
+	var selection_mask := {}
+	var changed_chunks: Array[Vector3i] = []
+
+	func run() -> void:
+		stage("Preparing erase", selection_mask.size())
+		var changes := {}
+		var completed := 0
+		for cell_position in selection_mask:
+			changes[cell_position] = Color.TRANSPARENT
+			completed += 1
+			if completed % 4096 == 0 and not checkpoint(completed):
+				return
+		stage("Erasing selection", changes.size())
+		changed_chunks = edited_frame.set_cells(changes, self)
 
 
 var document: VoxiDocument : set=set_document
@@ -18,6 +55,7 @@ var current_frame := 0:
 	set(value):
 		if value == current_frame:
 			return
+		edit_context_changing.emit()
 		current_frame = value
 		frame_changed.emit()
 		
@@ -61,7 +99,9 @@ func _init() -> void:
 	document = VoxiDocument.new()
 
 func _ready() -> void:
+	edit_context_changing.connect(_interrupt_erase)
 	cells_changed.connect(func(_frame, _affected): stop())
+	chunks_changed.connect(func(_frame, _affected): stop())
 	
 	add_plugin(load("res://Plugins/Brush/BrushPlugin.gd").new())
 	add_plugin(load("res://Plugins/Eyedropper/EyedropperPlugin.gd").new())
@@ -70,12 +110,17 @@ func _ready() -> void:
 	add_plugin(load("res://Plugins/Selection/SelectionPlugin.gd").new())
 	add_plugin(load("res://Plugins/Transform/TransformPlugin.gd").new())
 	add_plugin(load("res://Plugins/Plane/PlanePlugin.gd").new())
+	add_plugin(load("res://Plugins/GLTFExport/GLTFExportPlugin.gd").new())
 	
 
 
 func set_document(value:VoxiDocument) -> void:
 	if value == document:
 		return
+	edit_context_changing.emit()
+	_operations.clear()
+	_activity_started_ms = 0
+	activity_changed.emit()
 	_stroke_frame = null
 	_stroke_start_chunks = {}
 	_stroke_start_selection = {}
@@ -105,6 +150,69 @@ func remove_plugin(plugin: VoxiPlugin) -> void:
 
 func paint(position: Vector3i, color:Color) -> void:
 	document.paint(current_frame, position, color)
+
+
+func begin_operation(label: String, total: int = -1, foreground: bool = false, operation_owner: Node = null) -> int:
+	var operation := Operation.new()
+	operation.label = label
+	operation.total = total
+	operation.foreground = foreground
+	if operation_owner:
+		operation.owner_ref = weakref(operation_owner)
+	if _operations.is_empty():
+		_activity_started_ms = Time.get_ticks_msec()
+	var operation_id := _next_operation_id
+	_next_operation_id += 1
+	_operations[operation_id] = operation
+	activity_changed.emit()
+	return operation_id
+
+
+func update_operation(operation_id: int, completed: int, total: int = -1, label: String = "", detail: String = "") -> void:
+	var operation: Operation = _operations.get(operation_id)
+	if operation == null:
+		return
+	if operation.completed == completed and operation.total == total and operation.detail == detail and (label.is_empty() or operation.label == label):
+		return
+	operation.completed = completed
+	operation.total = total
+	operation.detail = detail
+	if not label.is_empty():
+		operation.label = label
+	activity_changed.emit()
+
+
+func finish_operation(operation_id: int) -> void:
+	if not _operations.erase(operation_id):
+		return
+	if _operations.is_empty():
+		_activity_started_ms = 0
+	activity_changed.emit()
+
+
+func has_operation(operation_id: int) -> bool:
+	return _operations.has(operation_id)
+
+
+func get_activity() -> Operation:
+	var background_operation: Operation
+	for operation in _operations.values():
+		if operation.foreground:
+			return operation
+		if background_operation == null:
+			background_operation = operation
+	return background_operation
+
+
+func activity_elapsed_ms() -> int:
+	return Time.get_ticks_msec() - _activity_started_ms if not _operations.is_empty() else 0
+
+
+func edit_busy(requester: Node = null) -> bool:
+	for operation in _operations.values():
+		if operation.foreground and (requester == null or operation.owner_ref == null or operation.owner_ref.get_ref() != requester):
+			return true
+	return false
 
 
 func begin_stroke() -> void:
@@ -189,6 +297,10 @@ func deselect_tag() -> void:
 
 
 func _process(delta: float) -> void:
+	for operation_id in _operations.keys():
+		var operation: Operation = _operations[operation_id]
+		if operation.owner_ref and operation.owner_ref.get_ref() == null:
+			finish_operation(operation_id)
 	if not is_playing:
 		return
 	_play_elapsed += delta
@@ -361,19 +473,63 @@ func clear_selection() -> void:
 
 
 func erase_selection() -> void:
-	if selection.is_empty():
+	if selection.is_empty() or edit_busy():
 		return
-	var i := current_frame
+	var edited_document := document
+	var edited_frame := get_current_voxel_frame()
 	begin_stroke()
-	var affected: Array[Vector3i] = []
-	var cells := document.frames[i]
-	for c in selection.all_cells():
-		if cells.has(c):
-			document.erase(i, c)
-			affected.append(c)
+	var job := EraseJob.new()
+	job.edited_frame = edited_frame.copy_frame()
+	job.selection_mask = selection.capture()
+	_erase_job = job
+	var operation_id := begin_operation("Erasing selection", selection.count(), true, self)
+	_erase_operation_id = operation_id
+	if selection.count() <= 4096:
+		job.run()
+	else:
+		job.worker_task_id = WorkerThreadPool.add_task(job.run, true, "Erase selection")
+		_erase_jobs.append(job)
+		while not WorkerThreadPool.is_task_completed(job.worker_task_id):
+			var progress := job.progress()
+			update_operation(operation_id, progress[1], progress[2], progress[0])
+			await get_tree().process_frame
+		WorkerThreadPool.wait_for_task_completion(job.worker_task_id)
+		_erase_jobs.erase(job)
+	if _erase_job != job:
+		return
+	if document != edited_document or get_current_voxel_frame() != edited_frame:
+		_interrupt_erase()
+		return
+	edited_frame.restore(job.edited_frame.capture())
+	document._bounds_dirty = true
 	end_stroke("Erase Selection")
-	if not affected.is_empty():
-		cells_changed.emit(i, affected)
+	if not job.changed_chunks.is_empty():
+		chunks_changed.emit(current_frame, job.changed_chunks)
+	_erase_job = null
+	finish_operation(operation_id)
+	_erase_operation_id = 0
+
+
+func _interrupt_erase() -> void:
+	if _erase_job == null:
+		return
+	_erase_job.cancel()
+	_erase_job = null
+	cancel_stroke()
+	finish_operation(_erase_operation_id)
+	_erase_operation_id = 0
+
+
+func _input(event: InputEvent) -> void:
+	if _erase_job and event.is_action_pressed("ui_cancel"):
+		_interrupt_erase()
+		get_viewport().set_input_as_handled()
+
+
+func _exit_tree() -> void:
+	for job in _erase_jobs:
+		job.cancel()
+		WorkerThreadPool.wait_for_task_completion(job.worker_task_id)
 
 
 func next_frame() -> void:
@@ -400,6 +556,7 @@ func get_current_voxel_frame() -> VoxelFrame:
 
 
 func add_frame() -> void:
+	edit_context_changing.emit()
 	is_playing = false
 	var before := _frame_snapshot()
 	document.add_frame()
@@ -408,6 +565,7 @@ func add_frame() -> void:
 
 
 func duplicate_frame() -> void:
+	edit_context_changing.emit()
 	is_playing = false
 	var before := _frame_snapshot()
 	document.duplicate_frame(current_frame)
@@ -418,6 +576,7 @@ func duplicate_frame() -> void:
 func delete_frame() -> void:
 	if document.frames.size() <= 1:
 		return
+	edit_context_changing.emit()
 	is_playing = false
 	var before := _frame_snapshot()
 	document.remove_frame(current_frame)
@@ -431,6 +590,7 @@ func move_frame(from: int, to: int) -> void:
 	var t := clampi(to, 0, document.frames.size() - 1)
 	if f == t:
 		return
+	edit_context_changing.emit()
 	var before := _frame_snapshot()
 	document.move_frame(f, t)
 	if current_frame == f:
@@ -460,6 +620,7 @@ func _record_frame_action(name: String, before: Dictionary, after: Dictionary) -
 
 
 func _restore_frame_layout(frames: Array[VoxelFrame], ranges: Array[Vector2i], current: int) -> void:
+	edit_context_changing.emit()
 	document.frames = frames
 	_set_tag_ranges(ranges)
 	document._bounds_dirty = true

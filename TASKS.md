@@ -35,6 +35,26 @@ max_active: 1
   - [x] Add a "uniform scale" option to the scale tool, so that the user can scale voxels uniformly in all directions
 
 # Rendering and storage
+- [x] Group adjacent radio items in the camera menu
+- [x] Keep voxel edits fast and report long-running activity
+  - [x] Track overlapping foreground and background operations
+  - [x] Report surface generation and selection outlines
+  - [x] Prepare large transforms, fills, and selection erases on workers
+  - [x] Apply voxel changes by chunk and send one preview notification
+  - [x] Keep small edits immediate and use the latest drag input
+  - [x] Limit sparse scaling to occupied chunk regions
+  - [x] Verify completion, cancellation, and context changes
+  - [x] Review the full suite and run focused checks for final changes
+    - The full run passed 64 tests.
+    - The activity test used the wrong clock. The corrected test passes.
+    - `selection_modes` retains the six known failures.
+    - The new sparse-scale test and the final storage checks pass.
+  - Scale 32,768 voxels to 262,144 voxels at 60 FPS:
+    - The edit time decreased from 5.95 seconds to approximately 0.98 seconds.
+    - The longest edit-frame interval decreased from 57 milliseconds to approximately 31 milliseconds.
+    - The edit sends one notification instead of 256 notifications.
+    - A windowed run completed rendering in approximately 1.52 seconds.
+  - Scaling two distant voxels completed in approximately two milliseconds in a headless run.
 - [x] Build cached chunk surfaces and compact document storage
   - [x] Store edits in copy-on-write chunks
   - [x] Share selection snapshots until the next edit
@@ -61,7 +81,22 @@ max_active: 1
 
 # Export/Import
 - [ ] Save/load the current document to a json file, including all frames, tags, and palette
-- [ ] Export to GLB and OBJ formats
+- [x] Export voxel meshes and animation clips as glTF and GLB
+  - [x] Add an export button with its own icon and file dialog
+  - [x] Reuse greedy meshing and build export meshes on a worker
+  - [x] Preserve frame delays, empty frames, colors, and tag names
+  - [x] Bake tag directions and finite repeats into stepped scale tracks
+  - [x] Verify glTF and GLB import with the focused export test
+  - [x] Verify imported vertex-color flags and shared materials across all surfaces
+  - [x] Center all frame meshes with one shared offset
+  - [x] Export only tag clips and preserve infinite looping on Godot import
+  - [x] Move the exporter and its MenuBar control into a dedicated plugin
+  - [x] Use core glTF scale animation with no animation-method selection
+  - [x] Verify frame switches, delays, and looping with scale tracks
+  - [x] Merge same-color coplanar export faces across chunk boundaries
+  - [x] Verify color boundaries, cavities, sparse shapes, and triangle reductions
+  - See [GLTF_EXPORT.md](GLTF_EXPORT.md) for the format and import settings.
+- [ ] Export to OBJ format
 - [ ] Import image files as a voxel grid (png, jpg, bmp, aseprite)
 - [ ] Export a sprite sheet of the animation frames
   - [ ] Build the export UI

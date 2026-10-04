@@ -2,7 +2,10 @@ extends HBoxContainer
 
 var current_save_path:String = ""
 
+
 func save_doc(path:String) -> void:
+	if State.edit_busy():
+		return
 	current_save_path = path
 	var err := ResourceSaver.save(State.document, path)
 	if err != OK:
@@ -42,8 +45,10 @@ func _on_save_as_btn_pressed() -> void:
 
 
 func _on_undo_btn_pressed() -> void:
-	State.undo_redo.undo()
+	if not State.edit_busy():
+		State.undo_redo.undo()
 
 
 func _on_redo_btn_pressed() -> void:
-	State.undo_redo.redo()
+	if not State.edit_busy():
+		State.undo_redo.redo()

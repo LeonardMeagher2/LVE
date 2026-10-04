@@ -14,6 +14,39 @@ extends Resource
 const CHUNK_SIZE := 16
 const DIRECTIONS := [Vector3i.RIGHT, Vector3i.LEFT, Vector3i.UP, Vector3i.DOWN, Vector3i.BACK, Vector3i.FORWARD]
 
+class EditJob extends RefCounted:
+	var worker_task_id := -1
+	var _label := "Preparing edit"
+	var _completed := 0
+	var _total := -1
+	var _cancel_requested := false
+	var _progress_lock := Mutex.new()
+
+	func stage(label: String, total: int) -> void:
+		_progress_lock.lock()
+		_label = label
+		_completed = 0
+		_total = total
+		_progress_lock.unlock()
+
+	func checkpoint(completed: int) -> bool:
+		_progress_lock.lock()
+		_completed = completed
+		var keep_running := not _cancel_requested
+		_progress_lock.unlock()
+		return keep_running
+
+	func progress() -> Array:
+		_progress_lock.lock()
+		var result := [_label, _completed, _total]
+		_progress_lock.unlock()
+		return result
+
+	func cancel() -> void:
+		_progress_lock.lock()
+		_cancel_requested = true
+		_progress_lock.unlock()
+
 class Chunk extends RefCounted:
 	var cell_colors: Dictionary = {}
 	var voxel_revision := 0
@@ -70,10 +103,11 @@ func get_color(cell_position: Vector3i) -> Color:
 
 
 func set_cell(cell_position: Vector3i, color: Color) -> void:
-	if get_color(cell_position) == color:
-		return
 	var chunk_location := chunk_position(cell_position)
 	var chunk: Chunk = chunks.get(chunk_location)
+	var previous_color: Color = chunk.cell_colors.get(cell_position, Color.TRANSPARENT) if chunk else Color.TRANSPARENT
+	if previous_color == color:
+		return
 	if chunk == null:
 		chunk = Chunk.new()
 		chunks[chunk_location] = chunk
@@ -97,6 +131,60 @@ func set_cell(cell_position: Vector3i, color: Color) -> void:
 	chunk.positions_by_color.clear()
 	if chunk.cell_colors.is_empty():
 		chunks.erase(chunk_location)
+
+
+# Batch writes copy and invalidate each changed chunk once. Return changed chunk positions.
+func set_cells(cell_colors: Dictionary, edit_job: EditJob = null) -> Array[Vector3i]:
+	var changes_by_chunk := {}
+	var completed := 0
+	for cell_position: Vector3i in cell_colors:
+		var chunk_location := chunk_position(cell_position)
+		if not changes_by_chunk.has(chunk_location):
+			changes_by_chunk[chunk_location] = {}
+		changes_by_chunk[chunk_location][cell_position] = cell_colors[cell_position]
+		completed += 1
+		if edit_job and completed % 4096 == 0 and not edit_job.checkpoint(0):
+			return []
+	var changed_chunks: Array[Vector3i] = []
+	completed = 0
+	for chunk_location: Vector3i in changes_by_chunk:
+		if edit_job and not edit_job.checkpoint(completed):
+			return []
+		var chunk: Chunk = chunks.get(chunk_location)
+		var chunk_changes: Dictionary = changes_by_chunk[chunk_location]
+		var changed := false
+		for cell_position in chunk_changes:
+			var color: Color = chunk_changes[cell_position]
+			var previous_color: Color = chunk.cell_colors.get(cell_position, Color.TRANSPARENT) if chunk else Color.TRANSPARENT
+			if previous_color == color:
+				continue
+			if not changed:
+				if chunk == null:
+					chunk = Chunk.new()
+				elif _shared_chunks.has(chunk_location):
+					chunk = chunk.copy()
+				chunks[chunk_location] = chunk
+				_shared_chunks.erase(chunk_location)
+				changed = true
+			if color == Color.TRANSPARENT:
+				chunk.cell_colors.erase(cell_position)
+			else:
+				chunk.cell_colors[cell_position] = color
+		completed += chunk_changes.size()
+		if not changed:
+			continue
+		chunk.voxel_revision += 1
+		chunk.serialized_record.clear()
+		chunk.positions_by_color.clear()
+		chunk.bounds_dirty = true
+		if chunk.cell_colors.is_empty():
+			chunks.erase(chunk_location)
+		else:
+			chunk.get_bounds()
+		changed_chunks.append(chunk_location)
+	if edit_job:
+		edit_job.checkpoint(completed)
+	return changed_chunks
 
 
 func capture() -> Dictionary:

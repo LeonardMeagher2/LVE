@@ -13,17 +13,27 @@ func _ready() -> void:
 	%CameraRig.zoom_changed.connect(%ZoomSlider.set_value_no_signal)
 
 func _on_camera_index_pressed(index:int) -> void:
-	var text = %CameraMenu.get_popup().get_item_text(index).to_lower()
+	var popup:PopupMenu = %CameraMenu.get_popup()
+	var text = popup.get_item_text(index).to_lower()
+	if popup.is_item_radio_checkable(index):
+		popup.set_item_checked(index, not popup.is_item_checked(index))
+		for direction in [-1, 1]:
+			var adjacent_index: int = index + direction
+			while adjacent_index >= 0 and adjacent_index < popup.item_count and popup.is_item_radio_checkable(adjacent_index):
+				popup.set_item_checked(adjacent_index, false)
+				adjacent_index += direction
 	
 	match text:
 		"orthographic":
-			var is_orthogonal = not %CameraMenu.get_popup().is_item_checked(index)
+			var is_orthogonal = not popup.is_item_checked(index)
 			%CameraRig.is_orthogonal = is_orthogonal
-			%CameraMenu.get_popup().set_item_checked(index, is_orthogonal)
+			popup.set_item_checked(index, is_orthogonal)
 		"unshaded":
-			var is_unshaded = not %CameraMenu.get_popup().is_item_checked(index)
+			var is_unshaded = popup.is_item_checked(index)
 			%Viewport.debug_draw = Viewport.DEBUG_DRAW_UNSHADED if is_unshaded else Viewport.DEBUG_DRAW_DISABLED
-			%CameraMenu.get_popup().set_item_checked(index, is_unshaded)
+		"wireframe":
+			var is_wireframe = popup.is_item_checked(index)
+			%Viewport.debug_draw = Viewport.DEBUG_DRAW_WIREFRAME if is_wireframe else Viewport.DEBUG_DRAW_DISABLED
 		_:
 			%CameraRig.set_view(text)
 

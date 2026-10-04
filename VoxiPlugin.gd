@@ -12,7 +12,12 @@ func _safe_remove(parent:Node, child:Node) -> void:
 	parent.remove_child(child)
 
 func add_menu_bar_item(control:Control) -> void:
-	_safe_add(get_node("/root/Main").get_node("%MenuBar"), control)
+	var menu_bar := get_node("/root/Main").get_node("%MenuBar")
+	_safe_add(menu_bar, control)
+	var separator_index := menu_bar.get_node("Sep1").get_index()
+	if control.get_index() < separator_index:
+		separator_index -= 1
+	menu_bar.move_child(control, separator_index)
 
 func remove_menu_bar_item(control:Control) -> void:
 	_safe_remove(get_node("/root/Main").get_node("%MenuBar"), control)

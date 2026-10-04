@@ -6,7 +6,6 @@ const PADDED_CHUNK_SIZE := CHUNK_SIZE + 2
 const MAX_SURFACE_JOBS := 2
 const SURFACE_CACHE_LIMIT_BYTES := 64 * 1024 * 1024
 const SURFACE_CACHE_LIMIT_ENTRIES := 1024
-const MESH_UPDATE_BUDGET_US := 3000
 
 # All viewports share meshes and jobs. Workers own their input and output arrays.
 static var _surface_cache: Dictionary = {}
@@ -16,12 +15,16 @@ static var _surface_jobs: Dictionary = {}
 static var _active_renderer_count := 0
 
 class MeshJob extends RefCounted:
+	var source_frame: VoxelFrame
+	var chunk_location := Vector3i.ZERO
 	var padded_cell_colors := PackedColorArray()
 	var worker_task_id := -1
 	var surface_arrays: Array = []
 	var geometry_bytes := 0
 
 	func run() -> void:
+		padded_cell_colors = VoxelRenderer._snapshot(source_frame, chunk_location)
+		source_frame = null
 		var vertex_positions := PackedVector3Array()
 		var vertex_normals := PackedVector3Array()
 		var vertex_colors := PackedColorArray()
@@ -105,11 +108,14 @@ class MeshJob extends RefCounted:
 
 # Keep the scene's shared voxel material as the source of render settings.
 @export var mesh: Mesh
+@export var report_activity := true
 var _chunk_instances: Dictionary = {}
 var _displayed_surface_keys: Dictionary = {}
 var _pending_surface_keys: Dictionary = {}
 var _retired_chunk_instances: Array[MeshInstance3D] = []
 var _displayed_frame: VoxelFrame
+var _operation_id := 0
+var _reported_remaining := -1
 
 
 func _ready() -> void:
@@ -117,11 +123,14 @@ func _ready() -> void:
 	State.frame_changed.connect(_on_frame_changed)
 	State.frames_changed.connect(_rebuild)
 	State.cells_changed.connect(_update)
+	State.chunks_changed.connect(_update_chunks)
 	State.document_changed.connect(_rebuild)
 	_rebuild()
 
 
 func _exit_tree() -> void:
+	State.finish_operation(_operation_id)
+	_operation_id = 0
 	# No worker accesses a renderer. Collect every task when the last viewport exits.
 	_active_renderer_count -= 1
 	if _active_renderer_count == 0:
@@ -158,6 +167,7 @@ func _rebuild() -> void:
 	if source_frame:
 		for chunk_location in source_frame.chunks:
 			_request(source_frame, chunk_location)
+	_report_activity()
 
 
 func _update(updated_frame: int, affected_cells: Array[Vector3i]) -> void:
@@ -178,6 +188,7 @@ func _update(updated_frame: int, affected_cells: Array[Vector3i]) -> void:
 				affected_chunks[chunk_location + direction] = true
 	for chunk_location in affected_chunks:
 		_request(source_frame, chunk_location)
+	_report_activity()
 
 
 func _request(source_frame: VoxelFrame, chunk_location: Vector3i) -> void:
@@ -193,6 +204,20 @@ func _request(source_frame: VoxelFrame, chunk_location: Vector3i) -> void:
 	else:
 		_pending_surface_keys[chunk_location] = surface_key
 		# Keep the completed mesh visible until the replacement is ready.
+
+
+func _update_chunks(updated_frame: int, chunk_positions: Array[Vector3i]) -> void:
+	if updated_frame != (frame if frame >= 0 else State.current_frame):
+		return
+	var source_frame := _get_frame()
+	var affected_chunks := {}
+	for chunk_location in chunk_positions:
+		affected_chunks[chunk_location] = true
+		for direction in VoxelFrame.DIRECTIONS:
+			affected_chunks[chunk_location + direction] = true
+	for chunk_location in affected_chunks:
+		_request(source_frame, chunk_location)
+	_report_activity()
 
 
 static func _signature(source_frame: VoxelFrame, chunk_location: Vector3i) -> String:
@@ -226,6 +251,11 @@ static func _snapshot(source_frame: VoxelFrame, chunk_location: Vector3i) -> Pac
 
 
 func _process(_delta: float) -> void:
+	_update_surfaces()
+	_report_activity()
+
+
+func _update_surfaces() -> void:
 	var update_started_us := Time.get_ticks_usec()
 	for surface_key in _surface_jobs.keys():
 		var surface_job: MeshJob = _surface_jobs[surface_key]
@@ -237,7 +267,7 @@ func _process(_delta: float) -> void:
 				chunk_surface.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, surface_job.surface_arrays)
 			_cache_surface(surface_key, chunk_surface, surface_job.geometry_bytes)
 			_surface_jobs.erase(surface_key)
-		if Time.get_ticks_usec() - update_started_us >= MESH_UPDATE_BUDGET_US:
+		if Time.get_ticks_usec() - update_started_us >= State.WORK_SLICE_US:
 			return
 	var source_frame := _get_frame()
 	for chunk_location in _pending_surface_keys.keys():
@@ -249,15 +279,31 @@ func _process(_delta: float) -> void:
 			_surface_use_order.append(surface_key)
 		elif not _surface_jobs.has(surface_key) and _surface_jobs.size() < MAX_SURFACE_JOBS:
 			var surface_job := MeshJob.new()
-			surface_job.padded_cell_colors = _snapshot(source_frame, chunk_location)
+			surface_job.source_frame = source_frame.copy_frame()
+			surface_job.chunk_location = chunk_location
 			surface_job.worker_task_id = WorkerThreadPool.add_task(surface_job.run, false, "Voxel surface")
 			_surface_jobs[surface_key] = surface_job
-		if Time.get_ticks_usec() - update_started_us >= MESH_UPDATE_BUDGET_US:
+		if Time.get_ticks_usec() - update_started_us >= State.WORK_SLICE_US:
 			return
 	while not _retired_chunk_instances.is_empty():
 		_retired_chunk_instances.pop_back().queue_free()
-		if Time.get_ticks_usec() - update_started_us >= MESH_UPDATE_BUDGET_US:
+		if Time.get_ticks_usec() - update_started_us >= State.WORK_SLICE_US:
 			break
+
+
+func _report_activity() -> void:
+	var remaining := _pending_surface_keys.size()
+	if not report_activity or remaining == 0:
+		State.finish_operation(_operation_id)
+		_operation_id = 0
+		_reported_remaining = -1
+		return
+	if not State.has_operation(_operation_id):
+		_operation_id = State.begin_operation("Building surfaces", -1, false, self)
+		_reported_remaining = -1
+	if remaining != _reported_remaining:
+		State.update_operation(_operation_id, 0, -1, "", "%d chunks remaining" % remaining)
+		_reported_remaining = remaining
 
 
 static func _cache_surface(surface_key: String, chunk_surface: ArrayMesh, geometry_bytes: int) -> void:

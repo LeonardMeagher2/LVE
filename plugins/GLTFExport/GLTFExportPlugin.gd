@@ -1,0 +1,367 @@
+extends VoxiPlugin
+
+@onready var _menu_item := preload("./MenuBarItem.tscn").instantiate()
+@onready var _dialog: FileDialog = _menu_item.get_node("ExportDialog")
+var _export_job: ExportJob
+var _export_root: Node3D
+var _export_operation_id := 0
+
+
+func _ready() -> void:
+	name = "GLTFExportPlugin"
+	_menu_item.get_node("ExportGLTFBtn").pressed.connect(_on_export_gltf_btn_pressed)
+	_dialog.file_selected.connect(export_gltf)
+	add_menu_bar_item(_menu_item)
+
+
+func _enter_tree() -> void:
+	if is_instance_valid(_menu_item):
+		add_menu_bar_item(_menu_item)
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_PREDELETE and is_instance_valid(_menu_item):
+		_menu_item.free()
+
+class ExportJob extends VoxelFrame.EditJob:
+	var frames: Array[VoxelFrame] = []
+	var tags: Array[AnimationTag] = []
+	var frame_surfaces: Array[Array] = []
+	var has_transparency := false
+
+	func run() -> void:
+		var total := 0
+		for frame in frames:
+			total += frame.chunks.size()
+		stage("Building export meshes", total)
+		var completed := 0
+		var min_position := Vector3(INF, INF, INF)
+		var max_position := Vector3(-INF, -INF, -INF)
+		var vertex_count := 0
+		for frame in frames:
+			var positions := PackedVector3Array()
+			var normals := PackedVector3Array()
+			var colors := PackedColorArray()
+			var indices := PackedInt32Array()
+			for chunk_location: Vector3i in frame.chunks:
+				if not checkpoint(completed):
+					return
+				var mesh_job := VoxelRenderer.MeshJob.new()
+				mesh_job.source_frame = frame
+				mesh_job.chunk_location = chunk_location
+				mesh_job.run()
+				var first_vertex := positions.size()
+				var origin := Vector3(chunk_location * VoxelFrame.CHUNK_SIZE)
+				for position: Vector3 in mesh_job.surface_arrays[Mesh.ARRAY_VERTEX]:
+					var world_position := position + origin
+					positions.append(world_position)
+					min_position = min_position.min(world_position)
+					max_position = max_position.max(world_position)
+				normals.append_array(mesh_job.surface_arrays[Mesh.ARRAY_NORMAL])
+				for color: Color in mesh_job.surface_arrays[Mesh.ARRAY_COLOR]:
+					colors.append(color.srgb_to_linear())
+					has_transparency = has_transparency or color.a < 1.0
+				for triangle_index: int in mesh_job.surface_arrays[Mesh.ARRAY_INDEX]:
+					indices.append(first_vertex + triangle_index)
+				completed += 1
+			var arrays := []
+			arrays.resize(Mesh.ARRAY_MAX)
+			arrays[Mesh.ARRAY_VERTEX] = positions
+			arrays[Mesh.ARRAY_NORMAL] = normals
+			arrays[Mesh.ARRAY_COLOR] = colors
+			arrays[Mesh.ARRAY_INDEX] = indices
+			frame_surfaces.append(arrays)
+		checkpoint(completed)
+		for frame_index in frame_surfaces.size():
+			var simplified := _simplify_frame(frame_surfaces[frame_index], frame_index)
+			if simplified.is_empty():
+				return
+			frame_surfaces[frame_index] = simplified
+			vertex_count += simplified[Mesh.ARRAY_VERTEX].size()
+		if vertex_count == 0:
+			return
+		var center := (min_position + max_position) * 0.5
+		stage("Centering export meshes", vertex_count)
+		completed = 0
+		for arrays in frame_surfaces:
+			var positions: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+			for vertex_index in positions.size():
+				positions[vertex_index] -= center
+				completed += 1
+				if completed % 4096 == 0 and not checkpoint(completed):
+					return
+			arrays[Mesh.ARRAY_VERTEX] = positions
+		checkpoint(completed)
+
+	func _simplify_frame(arrays: Array, frame_index: int) -> Array:
+		var source_positions: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+		if source_positions.is_empty():
+			return arrays
+		var source_normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
+		var source_colors: PackedColorArray = arrays[Mesh.ARRAY_COLOR]
+		var quad_count: int = arrays[Mesh.ARRAY_INDEX].size() / 6
+		stage("Simplifying frame %d/%d" % [frame_index + 1, frames.size()], quad_count)
+		# Sparse face masks merge chunk boundaries without scanning empty frame bounds.
+		var planes := {}
+		var face_count := 0
+		for quad_index in quad_count:
+			if not checkpoint(quad_index):
+				return []
+			var first_vertex := quad_index * 4
+			var origin := source_positions[first_vertex]
+			var normal := source_normals[first_vertex]
+			var axis := 0 if normal.x != 0 else (1 if normal.y != 0 else 2)
+			var column_axis := (axis + 1) % 3
+			var row_axis := (axis + 2) % 3
+			var plane_key := Vector3i(axis, int(normal[axis]), roundi(origin[axis] * 2))
+			var face_cells: Dictionary = planes.get(plane_key, {})
+			planes[plane_key] = face_cells
+			var column := roundi(origin[column_axis] + 0.5)
+			var row := roundi(origin[row_axis] + 0.5)
+			var width := roundi(source_positions[first_vertex + 1][column_axis] - origin[column_axis])
+			var height := roundi(source_positions[first_vertex + 3][row_axis] - origin[row_axis])
+			for row_offset in height:
+				for column_offset in width:
+					face_cells[Vector2i(column + column_offset, row + row_offset)] = source_colors[first_vertex]
+			face_count += width * height
+		stage("Merging frame %d/%d surfaces" % [frame_index + 1, frames.size()], face_count)
+		var positions := PackedVector3Array()
+		var normals := PackedVector3Array()
+		var colors := PackedColorArray()
+		var indices := PackedInt32Array()
+		var completed := 0
+		for plane_key: Vector3i in planes:
+			var face_cells: Dictionary = planes[plane_key]
+			var face_positions := face_cells.keys()
+			face_positions.sort_custom(func(first, second): return first.y < second.y or (first.y == second.y and first.x < second.x))
+			var column_axis := (plane_key.x + 1) % 3
+			var row_axis := (plane_key.x + 2) % 3
+			var normal := Vector3.ZERO
+			normal[plane_key.x] = plane_key.y
+			for face_position: Vector2i in face_positions:
+				if not face_cells.has(face_position):
+					continue
+				if not checkpoint(completed):
+					return []
+				var color: Color = face_cells[face_position]
+				var width := 1
+				while face_cells.get(face_position + Vector2i(width, 0), Color.TRANSPARENT) == color:
+					width += 1
+				var height := 1
+				var row_matches := true
+				while row_matches:
+					for column_offset in width:
+						if face_cells.get(face_position + Vector2i(column_offset, height), Color.TRANSPARENT) != color:
+							row_matches = false
+							break
+					if row_matches:
+						height += 1
+				var origin := Vector3.ZERO
+				origin[plane_key.x] = plane_key.z * 0.5
+				origin[column_axis] = face_position.x - 0.5
+				origin[row_axis] = face_position.y - 0.5
+				var column_edge := Vector3.ZERO
+				var row_edge := Vector3.ZERO
+				column_edge[column_axis] = width
+				row_edge[row_axis] = height
+				var first_vertex := positions.size()
+				positions.append_array(PackedVector3Array([origin, origin + column_edge, origin + column_edge + row_edge, origin + row_edge]))
+				for _corner in 4:
+					normals.append(normal)
+					colors.append(color)
+				if plane_key.y > 0:
+					indices.append_array(PackedInt32Array([first_vertex, first_vertex + 2, first_vertex + 1, first_vertex, first_vertex + 3, first_vertex + 2]))
+				else:
+					indices.append_array(PackedInt32Array([first_vertex, first_vertex + 1, first_vertex + 2, first_vertex, first_vertex + 2, first_vertex + 3]))
+				for row_offset in height:
+					for column_offset in width:
+						face_cells.erase(face_position + Vector2i(column_offset, row_offset))
+					completed += width
+					if not checkpoint(completed):
+						return []
+		if indices.size() >= arrays[Mesh.ARRAY_INDEX].size():
+			return arrays
+		var simplified := arrays.duplicate()
+		simplified[Mesh.ARRAY_VERTEX] = positions
+		simplified[Mesh.ARRAY_NORMAL] = normals
+		simplified[Mesh.ARRAY_COLOR] = colors
+		simplified[Mesh.ARRAY_INDEX] = indices
+		return simplified
+
+
+func _exit_tree() -> void:
+	if _export_job and _export_job.worker_task_id >= 0:
+		_export_job.cancel()
+		WorkerThreadPool.wait_for_task_completion(_export_job.worker_task_id)
+		_export_job.worker_task_id = -1
+	_finish_export()
+	if is_instance_valid(_menu_item) and _menu_item.get_parent():
+		_menu_item.get_parent().remove_child(_menu_item)
+
+
+func _on_export_gltf_btn_pressed() -> void:
+	if State.edit_busy() or _export_job:
+		return
+	_dialog.current_file = State.document.title.get_file().get_basename() + ".glb"
+	_dialog.popup_centered()
+
+
+func export_gltf(path: String) -> Error:
+	if State.edit_busy() or _export_job:
+		return ERR_BUSY
+	State.stop()
+	var job := ExportJob.new()
+	for frame in State.document.frames:
+		job.frames.append(frame.copy_frame())
+	for tag in State.document.tags:
+		job.tags.append(tag.duplicate())
+	_export_job = job
+	_export_operation_id = State.begin_operation("Building export meshes", -1, true, self)
+	job.worker_task_id = WorkerThreadPool.add_task(job.run, false, "glTF export meshes")
+	while job.worker_task_id >= 0 and not WorkerThreadPool.is_task_completed(job.worker_task_id):
+		if not State.has_operation(_export_operation_id):
+			job.cancel()
+		var progress := job.progress()
+		State.update_operation(_export_operation_id, progress[1], progress[2], progress[0])
+		await State.get_tree().process_frame
+	if job.worker_task_id < 0:
+		return ERR_UNAVAILABLE
+	WorkerThreadPool.wait_for_task_completion(job.worker_task_id)
+	job.worker_task_id = -1
+	if not is_inside_tree() or not State.has_operation(_export_operation_id):
+		_finish_export()
+		return ERR_UNAVAILABLE
+	_export_root = Node3D.new()
+	_export_root.name = "Voxi"
+	var material: StandardMaterial3D = preload("res://VoxelMaterial.tres").duplicate()
+	material.vertex_color_is_srgb = false
+	if job.has_transparency:
+		material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	var slice_started_us := Time.get_ticks_usec()
+	for frame_index in job.frames.size():
+		State.update_operation(_export_operation_id, frame_index, job.frames.size(), "Preparing glTF scene")
+		var frame_node: Node3D
+		var arrays := job.frame_surfaces[frame_index]
+		if not arrays[Mesh.ARRAY_VERTEX].is_empty():
+			var frame_mesh := ArrayMesh.new()
+			# Godot 4.7 reads the first primitive's colors after it configures the material.
+			# Two real surfaces enable vertex colors on their shared material during import.
+			var quad_count: int = arrays[Mesh.ARRAY_INDEX].size() / 6
+			var split_quad: int = quad_count / 2
+			for quad_range in [Vector2i(0, split_quad), Vector2i(split_quad, quad_count)]:
+				var vertex_start: int = quad_range.x * 4
+				var vertex_end: int = quad_range.y * 4
+				var surface_arrays := arrays.duplicate()
+				for attribute in [Mesh.ARRAY_VERTEX, Mesh.ARRAY_NORMAL, Mesh.ARRAY_COLOR]:
+					surface_arrays[attribute] = arrays[attribute].slice(vertex_start, vertex_end)
+				var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX].slice(quad_range.x * 6, quad_range.y * 6)
+				for triangle_index in indices.size():
+					indices[triangle_index] -= vertex_start
+				surface_arrays[Mesh.ARRAY_INDEX] = indices
+				frame_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, surface_arrays)
+				frame_mesh.surface_set_material(frame_mesh.get_surface_count() - 1, material)
+			var mesh_instance := MeshInstance3D.new()
+			mesh_instance.mesh = frame_mesh
+			frame_node = mesh_instance
+		else:
+			frame_node = Node3D.new()
+		frame_node.name = "Frame_%d" % frame_index
+		if frame_index != 0:
+			# Keep the rest basis invertible. Scale animation keys use exact zero.
+			frame_node.scale = Vector3.ONE * 0.000001
+		_export_root.add_child(frame_node)
+		frame_node.owner = _export_root
+		if Time.get_ticks_usec() - slice_started_us >= State.WORK_SLICE_US:
+			await State.get_tree().process_frame
+			if not is_inside_tree() or not State.has_operation(_export_operation_id):
+				_finish_export()
+				return ERR_UNAVAILABLE
+			slice_started_us = Time.get_ticks_usec()
+	var player := AnimationPlayer.new()
+	player.name = "AnimationPlayer"
+	_export_root.add_child(player)
+	player.owner = _export_root
+	var library := AnimationLibrary.new()
+	player.add_animation_library("", library)
+	for tag in job.tags:
+		_add_export_clip(library, tag.name, _tag_sequence(tag), job.frames, tag.repeats == 0)
+	State.update_operation(_export_operation_id, 0, -1, "Writing glTF")
+	var gltf_document := GLTFDocument.new()
+	gltf_document.root_node_mode = GLTFDocument.ROOT_NODE_MODE_KEEP_ROOT
+	var gltf_state := GLTFState.new()
+	var error := gltf_document.append_from_scene(_export_root, gltf_state)
+	if error == OK:
+		error = gltf_document.write_to_filesystem(gltf_state, path)
+	_finish_export()
+	if error != OK:
+		push_error("Voxi: glTF export failed: %s" % error_string(error))
+	return error
+
+
+func _finish_export() -> void:
+	State.finish_operation(_export_operation_id)
+	_export_operation_id = 0
+	_export_job = null
+	if is_instance_valid(_export_root):
+		_export_root.free()
+	_export_root = null
+
+
+func _tag_sequence(tag: AnimationTag) -> Array[int]:
+	var cycle: Array[int] = []
+	if tag.loop_mode == AnimationTag.LoopMode.REVERSE:
+		for frame_index in range(tag.to, tag.from - 1, -1):
+			cycle.append(frame_index)
+	else:
+		for frame_index in range(tag.from, tag.to + 1):
+			cycle.append(frame_index)
+		if tag.loop_mode == AnimationTag.LoopMode.PING_PONG:
+			for frame_index in range(tag.to - 1, tag.from, -1):
+				cycle.append(frame_index)
+	var sequence: Array[int] = []
+	for _repeat in maxi(tag.repeats, 1):
+		sequence.append_array(cycle)
+	if tag.loop_mode == AnimationTag.LoopMode.PING_PONG and tag.repeats > 0 and tag.from != tag.to:
+		sequence.append(tag.from)
+	return sequence
+
+
+func _add_export_clip(library: AnimationLibrary, clip_name: String, sequence: Array[int], frames: Array[VoxelFrame], looping: bool) -> void:
+	var animation := Animation.new()
+	animation.loop_mode = Animation.LOOP_LINEAR if looping else Animation.LOOP_NONE
+	for frame_index in frames.size():
+		var track := animation.add_track(Animation.TYPE_SCALE_3D)
+		animation.track_set_path(track, NodePath("Frame_%d:scale" % frame_index))
+		animation.track_set_interpolation_type(track, Animation.INTERPOLATION_NEAREST)
+		animation.track_set_interpolation_loop_wrap(track, false)
+		animation.scale_track_insert_key(track, 0.0, Vector3.ONE if frame_index == sequence[0] else Vector3.ZERO)
+	var time := 0.0
+	for step_index in sequence.size():
+		var frame_index := sequence[step_index]
+		time += maxf(frames[frame_index].delay_ms, 1.0) / 1000.0
+		if step_index + 1 < sequence.size():
+			var next_frame := sequence[step_index + 1]
+			if next_frame != frame_index:
+				animation.scale_track_insert_key(frame_index, time, Vector3.ZERO)
+				animation.scale_track_insert_key(next_frame, time, Vector3.ONE)
+	animation.length = time
+	for frame_index in frames.size():
+		animation.scale_track_insert_key(frame_index, time, Vector3.ONE if frame_index == sequence.back() else Vector3.ZERO)
+	var name_base := clip_name
+	for character in ["/", ":", "[", "]", "."]:
+		name_base = name_base.replace(character, "_")
+	if name_base.is_empty() or name_base == "RESET":
+		name_base = "Animation"
+	if not looping:
+		var lower_name := name_base.to_lower()
+		if lower_name.begins_with("loop") or lower_name.begins_with("cycle"):
+			name_base = "Clip_" + name_base
+		if lower_name.ends_with("loop") or lower_name.ends_with("cycle"):
+			name_base += "_once"
+	var loop_suffix := "_loop" if looping else ""
+	var name_candidate := name_base + loop_suffix
+	var suffix := 2
+	while library.has_animation(name_candidate):
+		name_candidate = "%s_%d%s" % [name_base, suffix, loop_suffix]
+		suffix += 1
+	library.add_animation(name_candidate, animation)

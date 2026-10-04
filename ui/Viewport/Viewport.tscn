@@ -97,7 +97,7 @@ focus_mode = 2
 icon = ExtResource("11_jtuva")
 flat = false
 icon_alignment = 1
-item_count = 10
+item_count = 11
 popup/item_0/text = "Top"
 popup/item_0/id = 0
 popup/item_1/text = "Bottom"
@@ -118,8 +118,11 @@ popup/item_8/text = "Orthographic"
 popup/item_8/checkable = 1
 popup/item_8/id = 8
 popup/item_9/text = "Unshaded"
-popup/item_9/checkable = 1
+popup/item_9/checkable = 2
 popup/item_9/id = 9
+popup/item_10/text = "Wireframe"
+popup/item_10/checkable = 2
+popup/item_10/id = 10
 
 [node name="PanToggle" type="Button" parent="ControlBar" unique_id=1802399301]
 layout_mode = 2

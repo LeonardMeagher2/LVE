@@ -16,6 +16,20 @@ label_settings = SubResource("LabelSettings_denks")
 layout_mode = 2
 size_flags_horizontal = 3
 
+[node name="Activity" type="HBoxContainer" parent="."]
+visible = false
+layout_mode = 2
+
+[node name="ActivityLabel" type="Label" parent="Activity"]
+layout_mode = 2
+label_settings = SubResource("LabelSettings_denks")
+
+[node name="ActivityProgress" type="ProgressBar" parent="Activity"]
+custom_minimum_size = Vector2(100, 12)
+layout_mode = 2
+size_flags_vertical = 4
+show_percentage = false
+
 [node name="StatusRight" type="Label" parent="." unique_id=424105243]
 layout_mode = 2
 label_settings = SubResource("LabelSettings_denks")

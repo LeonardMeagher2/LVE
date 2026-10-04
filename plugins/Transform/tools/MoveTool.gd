@@ -24,5 +24,7 @@ func _update_params(origin: Vector3, dir: Vector3) -> bool:
 	return true
 
 
-func _map_dest(s: Vector3i) -> Vector3i:
-	return s + _offset
+func _make_job() -> TransformJob:
+	var job := TransformJob.new()
+	job.offset = _offset
+	return job

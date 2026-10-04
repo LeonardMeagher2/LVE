@@ -33,3 +33,4 @@ fov = 45.0
 
 [node name="VoxelRenderer" parent="Node3D" unique_id=1911856473 instance=ExtResource("2_l588j")]
 unique_name_in_owner = true
+report_activity = false

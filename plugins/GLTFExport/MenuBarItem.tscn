@@ -1,0 +1,17 @@
+[gd_scene format=3]
+
+[ext_resource type="Texture2D" path="res://icons/export_gltf.svg" id="1_export"]
+
+[node name="GLTFExportMenuItem" type="HBoxContainer"]
+
+[node name="ExportGLTFBtn" type="Button" parent="."]
+layout_mode = 2
+tooltip_text = "Export as glTF"
+icon = ExtResource("1_export")
+icon_alignment = 1
+
+[node name="ExportDialog" type="FileDialog" parent="."]
+title = "Export as glTF"
+file_mode = 4
+access = 2
+filters = PackedStringArray("*.glb ; Binary glTF", "*.gltf ; glTF JSON")

@@ -5,6 +5,7 @@ var _pending_selection: VoxelSelection
 var _request_revision := 0
 var _outline_due_ms := 0
 var _outline_job: OutlineJob
+var _operation_id := 0
 
 class OutlineJob extends RefCounted:
 	var selection_snapshot: VoxelSelection
@@ -17,12 +18,15 @@ func show_selection(selection: VoxelSelection) -> void:
 	if selection == null or selection.is_empty():
 		_pending_selection = null
 		visible = false
+		_finish_activity()
 		return
 	if selection.count() > 4096:
 		_pending_selection = selection
 		_outline_due_ms = Time.get_ticks_msec() + 100
+		_start_activity()
 		return
 	_pending_selection = null
+	_finish_activity()
 	mesh = outline_mesh(selection)
 	position = Vector3.ZERO
 	visible = true
@@ -31,6 +35,7 @@ func show_selection(selection: VoxelSelection) -> void:
 func show_cell(cell_position: Vector3i) -> void:
 	_request_revision += 1
 	_pending_selection = null
+	_finish_activity()
 	if cell_position == VoxelPicking.NONE:
 		visible = false
 		return
@@ -84,12 +89,25 @@ func _process(_delta: float) -> void:
 		_outline_job.request_revision = _request_revision
 		_outline_job.worker_task_id = WorkerThreadPool.add_task(_build_outline.bind(_outline_job), false, "Selection outline")
 		_pending_selection = null
+	if is_settled():
+		_finish_activity()
 
 
 func _exit_tree() -> void:
+	_finish_activity()
 	if _outline_job:
 		WorkerThreadPool.wait_for_task_completion(_outline_job.worker_task_id)
 		_outline_job = null
+
+
+func _start_activity() -> void:
+	if not State.has_operation(_operation_id):
+		_operation_id = State.begin_operation("Updating selection outline", -1, false, self)
+
+
+func _finish_activity() -> void:
+	State.finish_operation(_operation_id)
+	_operation_id = 0
 
 
 func is_settled() -> bool:

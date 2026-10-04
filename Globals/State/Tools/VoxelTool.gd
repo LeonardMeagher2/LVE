@@ -11,6 +11,9 @@ var _affected: Array[Vector3i] = []
 func _unhandled_input(event: InputEvent) -> void:
 	if not _accepts(event):
 		return
+	if State.edit_busy(self):
+		get_viewport().set_input_as_handled()
+		return
 	var pos := Vector2.ZERO
 	if event is InputEventMouse:
 		pos = (event as InputEventMouse).position

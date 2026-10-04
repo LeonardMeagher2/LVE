@@ -15,6 +15,8 @@ func _ready() -> void:
 func _run() -> void:
 	step("Given the fill tool with a blue brush and three separate red voxels", func():
 		viewport = editor_viewport()
+		viewport.get_parent().stretch = false
+		viewport.size = Vector2i(800, 500)
 		activate_tool("fill")
 		State.set_color(Color.BLUE)
 		var vsize: Vector2i = viewport.size
