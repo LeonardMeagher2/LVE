@@ -28,7 +28,7 @@ func _run() -> void:
 		var gray := Color.from_rgba8(150, 150, 150)
 		var f: VoxelFrame = State.document.frames[State.current_frame]
 		for c in pair_a + pair_b:
-			f.cells[c] = gray
+			f.set_cell(c, gray)
 	)
 
 	step("Then the option bar shows the mode buttons", func():

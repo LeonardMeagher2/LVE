@@ -43,9 +43,9 @@ func _run() -> void:
 		far = seed + du * 12
 		var gray := Color.from_rgba8(150, 150, 150)
 		var f: VoxelFrame = State.document.frames[State.current_frame]
-		f.cells[seed] = gray
-		f.cells[near] = gray
-		f.cells[far] = gray
+		f.set_cell(seed, gray)
+		f.set_cell(near, gray)
+		f.set_cell(far, gray)
 	)
 
 	step("When the user drags across five tiles from the seeded voxel", func():
@@ -69,7 +69,7 @@ func _run() -> void:
 			expect(sel.contains(c), "a swept tile is selected")
 		var has_air := false
 		for c in sel.to_array():
-			if not State.document.frames[State.current_frame].cells.has(c):
+			if not State.document.frames[State.current_frame].has(c):
 				has_air = true
 				break
 		expect(has_air, "a swept empty tile is selected")

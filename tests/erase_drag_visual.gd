@@ -21,8 +21,8 @@ func _run() -> void:
 		var start := aim(center)
 		c0 = start.target
 		c_mid = drag(center + Vector2(0.0, 20.0), start.plane).target
-		State.document.frames[0].cells[c0] = State.current_color
-		State.document.frames[0].cells[c_mid] = State.current_color
+		State.document.set_cell(0, c0, State.current_color)
+		State.document.set_cell(0, c_mid, State.current_color)
 		sync_viewport()
 	)
 

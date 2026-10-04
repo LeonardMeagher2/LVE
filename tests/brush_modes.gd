@@ -21,7 +21,7 @@ func _run() -> void:
 		select_toolbar_item("Toolbar", "Pencil")
 		State.current_color = Color.from_rgba8(200, 60, 60)
 		anchor = aim(center).target
-		State.document.frames[0].cells[anchor] = Color.from_rgba8(150, 150, 150)
+		State.document.set_cell(0, anchor, Color.from_rgba8(150, 150, 150))
 		sync_viewport()
 		front = aim(center).add_target
 	)
@@ -38,7 +38,7 @@ func _run() -> void:
 
 	step("Then a voxel appears in front of the clicked face", func():
 		var frame: VoxelFrame = State.document.frames[0]
-		expect(frame.cells.has(front), "a voxel is added beside the clicked voxel")
+		expect(frame.has(front), "a voxel is added beside the clicked voxel")
 	)
 
 	step("When the user switches to paint mode and clicks the front voxel", func():
@@ -54,12 +54,12 @@ func _run() -> void:
 
 	step("Then the front voxel is recolored and no voxel is added", func():
 		var frame: VoxelFrame = State.document.frames[0]
-		expect(frame.cells.size() == 2, "paint mode adds no new voxels")
-		expect(frame.cells[front] == Color.from_rgba8(200, 60, 60), "the front voxel has the brush color")
+		expect(frame.count() == 2, "paint mode adds no new voxels")
+		expect(frame.get_color(front) == Color.from_rgba8(200, 60, 60), "the front voxel has the brush color")
 	)
 
 	step("When the user clears the grid and clicks the empty grid in paint mode", func():
-		State.document.frames[0].cells.clear()
+		State.document.frames[0].clear()
 		sync_viewport()
 		var click := InputEventMouseButton.new()
 		click.button_index = MOUSE_BUTTON_LEFT
@@ -71,5 +71,5 @@ func _run() -> void:
 	)
 
 	step("Then paint mode leaves the empty grid unchanged", func():
-		expect(State.document.frames[0].cells.is_empty(), "no voxel is painted on empty cells")
+		expect(State.document.frames[0].count() == 0, "no voxel is painted on empty cells")
 	)

@@ -28,10 +28,10 @@ func _run() -> void:
 		red = a + Vector3i(0, 1, 0)
 		var gray := Color.from_rgba8(150, 150, 150)
 		var f: VoxelFrame = State.document.frames[State.current_frame]
-		f.cells[a] = gray
-		f.cells[b] = gray
-		f.cells[c] = gray
-		f.cells[red] = Color.RED
+		f.set_cell(a, gray)
+		f.set_cell(b, gray)
+		f.set_cell(c, gray)
+		f.set_cell(red, Color.RED)
 	)
 
 	step("When the user clicks one gray voxel with connected on", func():

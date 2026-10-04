@@ -27,8 +27,8 @@ func _run() -> void:
 		var plane := start.plane
 		_a = start.target
 		_b = drag(_vp, _center + Vector2(0.0, 20.0), plane).target
-		State.document.frames[0].cells[_a] = State.current_color
-		State.document.frames[0].cells[_b] = Color.from_rgba8(200, 60, 200)
+		State.document.set_cell(0, _a, State.current_color)
+		State.document.set_cell(0, _b, Color.from_rgba8(200, 60, 200))
 		State.selection.clear()
 		_vp.sync_to(0)
 		State.set_tool(State.tools.move)
@@ -44,10 +44,10 @@ func _run() -> void:
 	step("Then both voxels moved", func():
 		var frame: VoxelFrame = State.document.frames[0]
 		var expected := drag(_vp, _center + Vector2(0.0, 40.0), aim(_vp, _center).plane).target
-		expect(not frame.cells.has(_a), "first original cell is cleared")
-		expect(not frame.cells.has(_b), "second original cell is cleared")
-		expect(frame.cells.size() == 2, "two voxels remain")
-		expect(frame.cells.has(expected), "the drag target holds a voxel")
+		expect(not frame.has(_a), "first original cell is cleared")
+		expect(not frame.has(_b), "second original cell is cleared")
+		expect(frame.count() == 2, "two voxels remain")
+		expect(frame.has(expected), "the drag target holds a voxel")
 	)
 
 	step("When the user undoes the move", func():
@@ -56,8 +56,8 @@ func _run() -> void:
 
 	step("Then both voxels return", func():
 		var frame: VoxelFrame = State.document.frames[0]
-		expect(frame.cells.has(_a), "first voxel back")
-		expect(frame.cells.has(_b), "second voxel back")
+		expect(frame.has(_a), "first voxel back")
+		expect(frame.has(_b), "second voxel back")
 	)
 
 

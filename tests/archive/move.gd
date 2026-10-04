@@ -33,8 +33,8 @@ func _run() -> void:
 		_c3 = drag(_vp, _center + Vector2(0.0, 80.0), start.plane).target
 		var obstacle := drag(_vp, _center + Vector2(0.0, 20.0), start.plane)
 		_obstacle = obstacle.target
-		State.document.frames[0].cells[_c0] = State.current_color
-		State.document.frames[0].cells[_obstacle] = Color.from_rgba8(40, 120, 40)
+		State.document.set_cell(0, _c0, State.current_color)
+		State.document.set_cell(0, _obstacle, Color.from_rgba8(40, 120, 40))
 		State.selection.add(_c0)
 		_vp.sync_to(0)
 		State.set_tool(State.tools.move)
@@ -50,9 +50,9 @@ func _run() -> void:
 
 	step("Then the voxel moved and the obstacle survived", func():
 		var frame: VoxelFrame = State.document.frames[0]
-		expect(not frame.cells.has(_c0), "original cell is cleared")
-		expect(frame.cells.has(_c2), "voxel reached the far cell")
-		expect(frame.cells.has(_obstacle), "obstacle voxel is not destroyed")
+		expect(not frame.has(_c0), "original cell is cleared")
+		expect(frame.has(_c2), "voxel reached the far cell")
+		expect(frame.has(_obstacle), "obstacle voxel is not destroyed")
 	)
 
 	step("When the user selects the moved voxel, drags it again, and commits", func():
@@ -67,9 +67,9 @@ func _run() -> void:
 
 	step("Then the voxel moved again and the obstacle still survives", func():
 		var frame: VoxelFrame = State.document.frames[0]
-		expect(not frame.cells.has(_c2), "second start is cleared")
-		expect(frame.cells.has(_c3), "voxel reached the far cell")
-		expect(frame.cells.has(_obstacle), "obstacle voxel still present")
+		expect(not frame.has(_c2), "second start is cleared")
+		expect(frame.has(_c3), "voxel reached the far cell")
+		expect(frame.has(_obstacle), "obstacle voxel still present")
 	)
 
 	step("When the user undoes the second move", func():
@@ -78,7 +78,7 @@ func _run() -> void:
 
 	step("Then the voxel returns to the sweep destination", func():
 		var frame: VoxelFrame = State.document.frames[0]
-		expect(frame.cells.has(_c2), "voxel back at the sweep destination")
+		expect(frame.has(_c2), "voxel back at the sweep destination")
 	)
 
 	step("When the user undoes the sweep", func():
@@ -87,7 +87,7 @@ func _run() -> void:
 
 	step("Then the voxel returns", func():
 		var frame: VoxelFrame = State.document.frames[0]
-		expect(frame.cells.has(_c0), "voxel back at the original cell")
+		expect(frame.has(_c0), "voxel back at the original cell")
 	)
 
 

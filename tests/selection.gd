@@ -22,8 +22,8 @@ func _run() -> void:
 		seed = aim(center).target
 		var gray := Color.from_rgba8(150, 150, 150)
 		var f: VoxelFrame = State.document.frames[State.current_frame]
-		f.cells[seed] = gray
-		f.cells[seed + Vector3i(12, 0, 0)] = gray
+		f.set_cell(seed, gray)
+		f.set_cell(seed + Vector3i(12, 0, 0), gray)
 	)
 
 	step("When the user drags a box across the grid", func():
@@ -51,7 +51,7 @@ func _run() -> void:
 		expect(not State.selection.contains(seed + Vector3i(12, 0, 0)), "the far voxel is not selected")
 		var has_air := false
 		for c in State.selection.to_array():
-			if not State.document.frames[State.current_frame].cells.has(c):
+			if not State.document.frames[State.current_frame].has(c):
 				has_air = true
 				break
 		expect(has_air, "the selection includes empty cells")

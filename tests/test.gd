@@ -141,17 +141,17 @@ func pick_request(pos: Vector2) -> PickRequest:
 	var req := PickRequest.new()
 	req.origin = cam.project_ray_origin(pos)
 	req.dir = cam.project_ray_normal(pos)
-	req.cells = State.document.frames[State.current_frame].cells
+	req.frame = State.get_current_voxel_frame()
 	req.forward = -cam.basis.z
 	return req
 
 func aim(pos: Vector2) -> PickResult:
 	var req := pick_request(pos)
-	return VoxelPicking.start_pick(req.origin, req.dir, req.cells, req.forward)
+	return VoxelPicking.start_pick(req.origin, req.dir, req.frame, req.forward)
 
 func drag(pos: Vector2, plane: StrokePlane) -> PickResult:
 	var req := pick_request(pos)
-	return VoxelPicking.drag_pick(req.origin, req.dir, req.cells, plane)
+	return VoxelPicking.drag_pick(req.origin, req.dir, req.frame, plane)
 
 func activate_tool(button_name: String) -> void:
 	for b in main.get_node("%ToolBar").get_children():
@@ -194,7 +194,9 @@ func plugin(plugin_name: String) -> Node:
 	return get_tree().root.get_node_or_null(plugin_name)
 
 func sync_viewport() -> void:
-	State.cells_changed.emit(State.current_frame, [])
+	State.document._bounds_dirty = true
+	var affected: Array[Vector3i] = []
+	State.cells_changed.emit(State.current_frame, affected)
 
 func active_tool_node(plugin_name: String) -> Node3D:
 	var p := plugin(plugin_name)

@@ -46,9 +46,9 @@ func _run() -> void:
 	step("Then the cells between press and release are all painted", func():
 		var frame: VoxelFrame = State.document.frames[0]
 		var path := StrokeLine.cells(pressed, mouse_end)
-		expect(frame.cells.has(pressed), "the pressed cell is painted")
-		expect(frame.cells.has(mouse_end), "the cell under the mouse is painted")
+		expect(frame.has(pressed), "the pressed cell is painted")
+		expect(frame.has(mouse_end), "the cell under the mouse is painted")
 		expect(path.size() >= 3, "the stroke spans several cells")
 		for c in path:
-			expect(frame.cells.has(c), "every cell along the stroke is painted")
+			expect(frame.has(c), "every cell along the stroke is painted")
 	)

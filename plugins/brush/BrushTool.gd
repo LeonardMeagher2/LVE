@@ -42,7 +42,7 @@ func _pick_start(origin: Vector3, dir: Vector3) -> PickResult:
 func pick_drag(request: PickRequest) -> PickResult:
 	if not _settings.mode == _settings.BrushMode.PAINT:
 		return super.pick_drag(request)
-	return VoxelPicking.start_pick(request.origin, request.dir, request.cells, request.forward)
+	return VoxelPicking.start_pick(request.origin, request.dir, request.frame, request.forward)
 
 
 func apply(target: Vector3i, hit: Vector3i) -> bool:

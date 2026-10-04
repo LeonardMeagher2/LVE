@@ -14,7 +14,7 @@ func _run() -> void:
 
 	step("Then the cell persists and the bounds expand", func():
 		var frame: VoxelFrame = State.document.frames[0]
-		expect(frame.cells.has(Vector3i(20, 0, 20)), "the far cell is stored")
+		expect(frame.has(Vector3i(20, 0, 20)), "the far cell is stored")
 		var b := State.document.bounds()
 		expect(b.has_volume(), "the bounds cover the content")
 		expect(int(b.end.x) == 20, "the bounds reach the painted column")

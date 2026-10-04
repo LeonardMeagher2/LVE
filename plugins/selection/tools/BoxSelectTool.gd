@@ -70,7 +70,7 @@ func _commit_box() -> void:
 		return
 	var box := VoxelSelection.new()
 	box.from_box(_corner, _box_end)
-	State.selection.cells = _apply_mode(box).cells
+	State.selection.restore(_apply_mode(box).capture())
 	State.selection_changed.emit()
 
 

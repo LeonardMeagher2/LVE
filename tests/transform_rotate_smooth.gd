@@ -17,10 +17,10 @@ func _run() -> void:
 		camera_rig().set_view("front")
 		State.undo_redo.clear_history()
 		State.selection.clear()
-		_cells().clear()
+		_frame().clear()
 		for x in SIZE:
 			for y in SIZE:
-				_cells()[Vector3i(x, y, 0)] = Color.from_rgba8(200, 60, 60)
+				_frame().set_cell(Vector3i(x, y, 0), Color.from_rgba8(200, 60, 60))
 				State.selection.add(Vector3i(x, y, 0))
 		State.selection_changed.emit()
 		activate_tool("transform")
@@ -33,7 +33,7 @@ func _run() -> void:
 	)
 
 	step("Then the preview is a plausible rotated silhouette, not a hole-riddled mess", func():
-		var count := _cells().size()
+		var count := _frame().count()
 		var original := SIZE * SIZE
 		expect(count > original * 0.6, "the rotated preview keeps most of the block's voxels (has %d, started with %d)" % [count, original])
 		expect(count < original * 1.6, "the rotated preview does not balloon in voxel count (has %d, started with %d)" % [count, original])
@@ -52,21 +52,21 @@ func _run() -> void:
 	)
 
 	step("Then the original solid block returns exactly", func():
-		expect(_cells().size() == SIZE * SIZE, "the block returns to its original %d voxels" % (SIZE * SIZE))
+		expect(_frame().count() == SIZE * SIZE, "the block returns to its original %d voxels" % (SIZE * SIZE))
 		for x in SIZE:
 			for y in SIZE:
-				expect(_cells().has(Vector3i(x, y, 0)), "cell (%d, %d, 0) is back" % [x, y])
+				expect(_frame().has(Vector3i(x, y, 0)), "cell (%d, %d, 0) is back" % [x, y])
 	)
 
 
-func _cells() -> Dictionary:
-	return State.document.frames[0].cells
+func _frame() -> VoxelFrame:
+	return State.document.frames[0]
 
 
 func _current_center() -> Vector3:
 	var b := AABB()
 	var first := true
-	for c in _cells():
+	for c in _frame().positions():
 		var cb := AABB(Vector3(c) - Vector3(0.5, 0.5, 0.5), Vector3.ONE)
 		b = cb if first else b.merge(cb)
 		first = false

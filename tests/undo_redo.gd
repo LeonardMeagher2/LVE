@@ -20,7 +20,7 @@ func _run() -> void:
 
 	step("When the user paints a voxel at the cursor", func():
 		var req := pick_request(center)
-		painted = VoxelPicking.start_pick(req.origin, req.dir, req.cells, req.forward).target
+		painted = VoxelPicking.start_pick(req.origin, req.dir, req.frame, req.forward).target
 		var click := InputEventMouseButton.new()
 		click.button_index = MOUSE_BUTTON_LEFT
 		click.pressed = true
@@ -31,7 +31,7 @@ func _run() -> void:
 	)
 
 	step("Then the stroke voxel is in the frame", func():
-		expect(State.document.frames[0].cells.has(painted), "stroke voxel present")
+		expect(State.document.frames[0].has(painted), "stroke voxel present")
 	)
 
 	step("When the user undoes the stroke", func():
@@ -39,7 +39,7 @@ func _run() -> void:
 	)
 
 	step("Then the stroke voxel is removed", func():
-		expect(not State.document.frames[0].cells.has(painted), "stroke voxel removed after undo")
+		expect(not State.document.frames[0].has(painted), "stroke voxel removed after undo")
 	)
 
 	step("When the user redoes the stroke", func():
@@ -47,5 +47,5 @@ func _run() -> void:
 	)
 
 	step("Then the stroke voxel returns", func():
-		expect(State.document.frames[0].cells.has(painted), "stroke voxel present after redo")
+		expect(State.document.frames[0].has(painted), "stroke voxel present after redo")
 	)

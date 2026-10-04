@@ -21,8 +21,8 @@ func _run() -> void:
 		var start := aim(center)
 		c0 = start.target
 		c1 = drag(center + Vector2(0.0, -20.0), start.plane).target
-		State.document.frames[0].cells[c0] = State.current_color
-		State.document.frames[0].cells[c1] = State.current_color
+		State.document.set_cell(0, c0, State.current_color)
+		State.document.set_cell(0, c1, State.current_color)
 		sync_viewport()
 	)
 
@@ -47,13 +47,13 @@ func _run() -> void:
 
 	step("Then the voxels under the drag are erased", func():
 		var frame: VoxelFrame = State.document.frames[0]
-		expect(not frame.cells.has(c0), "pressed voxel is erased")
-		expect(not frame.cells.has(c1), "dragged voxel is erased")
+		expect(not frame.has(c0), "pressed voxel is erased")
+		expect(not frame.has(c1), "dragged voxel is erased")
 	)
 
 	step("Then the whole stroke can be undone", func():
 		State.undo_redo.undo()
 		var frame: VoxelFrame = State.document.frames[0]
-		expect(frame.cells.has(c0), "pressed voxel returns after undo")
-		expect(frame.cells.has(c1), "dragged voxel returns after undo")
+		expect(frame.has(c0), "pressed voxel returns after undo")
+		expect(frame.has(c1), "dragged voxel returns after undo")
 	)

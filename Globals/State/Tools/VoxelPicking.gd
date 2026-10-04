@@ -3,8 +3,8 @@ extends RefCounted
 
 const NONE:Vector3i = Vector3i(Vector3.INF)
 
-static func start_pick(origin: Vector3, dir: Vector3, cells: Dictionary, forward: Vector3) -> PickResult:
-	var res := ray_voxel(origin, dir, cells)
+static func start_pick(origin: Vector3, dir: Vector3, frame: VoxelFrame, forward: Vector3) -> PickResult:
+	var res := ray_voxel(origin, dir, frame)
 	if res.hit != VoxelPicking.NONE:
 		res.target = res.hit
 		res.add_target = res.hit + res.entry
@@ -13,7 +13,7 @@ static func start_pick(origin: Vector3, dir: Vector3, cells: Dictionary, forward
 	return ground_pick(origin, dir, forward)
 
 
-static func drag_pick(origin: Vector3, dir: Vector3, cells: Dictionary, plane: StrokePlane) -> PickResult:
+static func drag_pick(origin: Vector3, dir: Vector3, frame: VoxelFrame, plane: StrokePlane) -> PickResult:
 	var denom := dir.dot(plane.normal)
 	if absf(denom) < 1e-8:
 		return PickResult.new()
@@ -25,7 +25,7 @@ static func drag_pick(origin: Vector3, dir: Vector3, cells: Dictionary, plane: S
 	c[plane.axis] = plane.idx
 	var res := PickResult.new()
 	res.target = c
-	res.hit = c if cells.has(c) else VoxelPicking.NONE
+	res.hit = c if frame != null and frame.has(c) else VoxelPicking.NONE
 	return res
 
 
@@ -49,9 +49,11 @@ static func view_plane(target: Vector3i, origin: Vector3, forward: Vector3) -> S
 	return p
 
 
-static func ray_voxel(origin: Vector3, dir: Vector3, cells: Dictionary) -> PickResult:
+static func ray_voxel(origin: Vector3, dir: Vector3, frame: VoxelFrame) -> PickResult:
 	var g := origin + Vector3(0.5, 0.5, 0.5)
 	var res := PickResult.new()
+	if frame == null:
+		return res
 	var cell := Vector3i(floori(g.x), floori(g.y), floori(g.z))
 	var step := Vector3i(
 		1 if dir.x > 0 else -1, 1 if dir.y > 0 else -1, 1 if dir.z > 0 else -1
@@ -70,7 +72,7 @@ static func ray_voxel(origin: Vector3, dir: Vector3, cells: Dictionary) -> PickR
 	var t := 0.0
 	var entry := Vector3i.ZERO
 	for i in 1024:
-		if cells.has(cell):
+		if frame.has(cell):
 			res.hit = cell
 			res.entry = entry
 			return res

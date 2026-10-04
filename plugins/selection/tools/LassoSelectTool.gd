@@ -51,14 +51,14 @@ func handle_input(event: InputEvent, pos: Vector2) -> bool:
 
 func _commit() -> void:
 	if _points.size() >= 2:
-		State.selection.cells = _apply_mode(_build_sweep()).cells
+		State.selection.restore(_apply_mode(_build_sweep()).capture())
 	elif _press_target == VoxelPicking.NONE:
 		if _settings.mode == _settings.SelectMode.REPLACE and not State.selection.is_empty():
 			State.selection.clear()
 	else:
 		var single := VoxelSelection.new()
 		single.add(_press_target)
-		State.selection.cells = _apply_mode(single).cells
+		State.selection.restore(_apply_mode(single).capture())
 	State.selection_changed.emit()
 
 

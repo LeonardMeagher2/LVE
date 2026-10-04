@@ -13,12 +13,12 @@ func _run() -> void:
 		_view_setup()
 		State.undo_redo.clear_history()
 		State.selection.clear()
-		_cells().clear()
+		_frame().clear()
 		for x in SIZE:
 			for y in SIZE:
 				for z in SIZE:
 					var c := Vector3i(x, y, z)
-					_cells()[c] = Color.from_rgba8(200, 60, 60)
+					_frame().set_cell(c, Color.from_rgba8(200, 60, 60))
 					State.selection.add(c)
 		State.selection_changed.emit()
 		activate_tool("transform")
@@ -34,7 +34,7 @@ func _run() -> void:
 	)
 
 	step("Then the block kept exactly its voxel count with no duplicates", func():
-		expect(_cells().size() == SIZE * SIZE * SIZE, "the block still holds %d voxels" % (SIZE * SIZE * SIZE))
+		expect(_frame().count() == SIZE * SIZE * SIZE, "the block still holds %d voxels" % (SIZE * SIZE * SIZE))
 	)
 
 	step("When the user switches to Rotate with snap and turns the block a quarter turn", func():
@@ -48,7 +48,7 @@ func _run() -> void:
 	)
 
 	step("Then the block still holds exactly its voxel count after rotating", func():
-		expect(_cells().size() == SIZE * SIZE * SIZE, "the rotated block still holds %d voxels" % (SIZE * SIZE * SIZE))
+		expect(_frame().count() == SIZE * SIZE * SIZE, "the rotated block still holds %d voxels" % (SIZE * SIZE * SIZE))
 	)
 
 
@@ -60,14 +60,14 @@ func _view_setup() -> void:
 	camera_rig().set_view("front")
 
 
-func _cells() -> Dictionary:
-	return State.document.frames[0].cells
+func _frame() -> VoxelFrame:
+	return State.document.frames[0]
 
 
 func _current_center() -> Vector3:
 	var b := AABB()
 	var first := true
-	for c in _cells():
+	for c in _frame().positions():
 		var cb := AABB(Vector3(c) - Vector3(0.5, 0.5, 0.5), Vector3.ONE)
 		b = cb if first else b.merge(cb)
 		first = false

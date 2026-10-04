@@ -3,6 +3,6 @@ extends RefCounted
 
 var origin := Vector3.ZERO
 var dir := Vector3.ZERO
-var cells: Dictionary = {}
+var frame: VoxelFrame
 var plane: StrokePlane = null
 var forward := Vector3.ZERO

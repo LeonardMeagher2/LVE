@@ -1,7 +1,7 @@
 extends "res://tests/test.gd"
 
 var viewport: SubViewport
-var _source: Dictionary = {}
+var _source: VoxelFrame
 
 
 func _ready() -> void:
@@ -15,8 +15,8 @@ func _run() -> void:
 		container.stretch = false
 		viewport.size = Vector2i(800, 500)
 		var doc: VoxiDocument = load("res://Flamingo.tres")
-		_source = doc.frames[0].cells.duplicate()
-		expect(not _source.is_empty(), "the Flamingo asset loaded a non-empty first frame")
+		_source = doc.frames[0].copy_frame()
+		expect(_source.count() > 0, "the Flamingo asset loaded a non-empty first frame")
 		State.undo_redo.clear_history()
 		activate_tool("transform")
 		select_toolbar_item("transform", "Rotate")
@@ -25,9 +25,7 @@ func _run() -> void:
 	for axis_name in ["front", "right", "top"]:
 		step("When the user rotates the Flamingo 90 degrees viewed from %s" % axis_name, func():
 			State.selection.clear()
-			_cells().clear()
-			for c in _source:
-				_cells()[c] = _source[c]
+			_frame().restore(_source.capture())
 			_select_all(_source)
 			camera_rig().set_view(axis_name)
 			_drag_screen(Vector2(0, -100))
@@ -35,25 +33,25 @@ func _run() -> void:
 		)
 
 		step("Then the rotated Flamingo (%s) keeps every voxel, with no holes or duplicates" % axis_name, func():
-			expect(_cells().size() == _source.size(), "the rotated Flamingo still holds %d voxels" % _source.size())
+			expect(_frame().count() == _source.count(), "the rotated Flamingo still holds %d voxels" % _source.count())
 		)
 
 
-func _select_all(source: Dictionary) -> void:
+func _select_all(source: VoxelFrame) -> void:
 	State.selection.clear()
-	for c in source:
+	for c in source.positions():
 		State.selection.add(c)
 	State.selection_changed.emit()
 
 
-func _cells() -> Dictionary:
-	return State.document.frames[0].cells
+func _frame() -> VoxelFrame:
+	return State.document.frames[0]
 
 
 func _current_center() -> Vector3:
 	var b := AABB()
 	var first := true
-	for c in _cells():
+	for c in _frame().positions():
 		var cb := AABB(Vector3(c) - Vector3(0.5, 0.5, 0.5), Vector3.ONE)
 		b = cb if first else b.merge(cb)
 		first = false

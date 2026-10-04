@@ -41,11 +41,11 @@ func _run() -> void:
 		release.position = pos
 		viewport.push_input(release)
 		var req_end := pick_request(pos)
-		mouse_end = VoxelPicking.start_pick(req_end.origin, req_end.dir, req_end.cells, req_end.forward).target
+		mouse_end = VoxelPicking.start_pick(req_end.origin, req_end.dir, req_end.frame, req_end.forward).target
 	)
 
 	step("Then the stroke is connected and the cursor cell is painted", func():
 		var frame: VoxelFrame = State.document.frames[0]
-		expect(frame.cells.size() >= 2, "the stroke painted a line")
-		expect(frame.cells.has(mouse_end), "the cursor cell is painted")
+		expect(frame.count() >= 2, "the stroke painted a line")
+		expect(frame.has(mouse_end), "the cursor cell is painted")
 	)

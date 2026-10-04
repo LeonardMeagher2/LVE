@@ -38,7 +38,7 @@ func _run() -> void:
 		)
 
 		step("Then the rotated shape (%s) keeps every voxel, with no holes or duplicates" % axis_name, func():
-			expect(_cells().size() == SHAPE.size(), "the rotated shape still holds %d voxels" % SHAPE.size())
+			expect(_frame().count() == SHAPE.size(), "the rotated shape still holds %d voxels" % SHAPE.size())
 		)
 
 		step("When the user rotates the same shape 90 degrees three more times", func():
@@ -51,29 +51,29 @@ func _run() -> void:
 			var expected := {}
 			for c in SHAPE:
 				expected[c] = true
-			expect(_cells().size() == SHAPE.size(), "the shape still holds %d voxels after four turns" % SHAPE.size())
+			expect(_frame().count() == SHAPE.size(), "the shape still holds %d voxels after four turns" % SHAPE.size())
 			for c in expected:
-				expect(_cells().has(c), "cell %s returned to its original position" % c)
+				expect(_frame().has(c), "cell %s returned to its original position" % c)
 		)
 
 
 func _paint_shape() -> void:
 	State.selection.clear()
-	_cells().clear()
+	_frame().clear()
 	for c in SHAPE:
-		_cells()[c] = Color.from_rgba8(200, 60, 60)
+		_frame().set_cell(c, Color.from_rgba8(200, 60, 60))
 		State.selection.add(c)
 	State.selection_changed.emit()
 
 
-func _cells() -> Dictionary:
-	return State.document.frames[0].cells
+func _frame() -> VoxelFrame:
+	return State.document.frames[0]
 
 
 func _current_center() -> Vector3:
 	var b := AABB()
 	var first := true
-	for c in _cells():
+	for c in _frame().positions():
 		var cb := AABB(Vector3(c) - Vector3(0.5, 0.5, 0.5), Vector3.ONE)
 		b = cb if first else b.merge(cb)
 		first = false

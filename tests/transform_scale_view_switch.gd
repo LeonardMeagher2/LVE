@@ -24,7 +24,7 @@ func _run() -> void:
 	)
 
 	step("Then both scale steps compound into one 4x scale on every axis, seen from either view", func():
-		expect(_cells().size() == 1024, "the block holds exactly 1024 voxels (has %d)" % _cells().size())
+		expect(_frame().count() == 1024, "the block holds exactly 1024 voxels (has %d)" % _frame().count())
 		_expect_size(Vector3i(16, 16, 4))
 		expect(State.undo_redo.has_undo(), "the compounded scale is still a single undo step")
 	)
@@ -34,7 +34,7 @@ func _run() -> void:
 	)
 
 	step("Then the original 4x4 block returns exactly", func():
-		expect(_cells().size() == 16, "the original block returns with 16 voxels")
+		expect(_frame().count() == 16, "the original block returns with 16 voxels")
 		_expect_size(Vector3i(4, 4, 1))
 	)
 
@@ -49,23 +49,23 @@ func _view_setup(view_name: String) -> void:
 
 func _paint_block(size: int) -> void:
 	State.selection.clear()
-	_cells().clear()
+	_frame().clear()
 	for x in size:
 		for y in size:
 			var c := Vector3i(x, y, 0)
-			_cells()[c] = Color.from_rgba8(200, 60, 60)
+			_frame().set_cell(c, Color.from_rgba8(200, 60, 60))
 			State.selection.add(c)
 	State.selection_changed.emit()
 
 
-func _cells() -> Dictionary:
-	return State.document.frames[0].cells
+func _frame() -> VoxelFrame:
+	return State.document.frames[0]
 
 
 func _current_center() -> Vector3:
 	var b := AABB()
 	var first := true
-	for c in _cells():
+	for c in _frame().positions():
 		var cb := AABB(Vector3(c) - Vector3(0.5, 0.5, 0.5), Vector3.ONE)
 		b = cb if first else b.merge(cb)
 		first = false
@@ -75,7 +75,7 @@ func _current_center() -> Vector3:
 func _expect_size(size: Vector3i) -> void:
 	var min_c := Vector3i(999999, 999999, 999999)
 	var max_c := Vector3i(-999999, -999999, -999999)
-	for c in _cells():
+	for c in _frame().positions():
 		min_c = Vector3i(mini(min_c.x, c.x), mini(min_c.y, c.y), mini(min_c.z, c.z))
 		max_c = Vector3i(maxi(max_c.x, c.x), maxi(max_c.y, c.y), maxi(max_c.z, c.z))
 	var got := max_c - min_c + Vector3i(1, 1, 1)

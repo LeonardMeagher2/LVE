@@ -34,6 +34,31 @@ max_active: 1
   - [x] Switching to another tool while scaling voxels should commit the scale
   - [x] Add a "uniform scale" option to the scale tool, so that the user can scale voxels uniformly in all directions
 
+# Rendering and storage
+- [x] Build cached chunk surfaces and compact document storage
+  - [x] Store edits in copy-on-write chunks
+  - [x] Share selection snapshots until the next edit
+  - [x] Save empty and uniform regions as octree leaves
+  - [x] Generate greedy surfaces on worker threads
+  - [x] Keep completed surfaces visible during drawing
+  - [x] Generate large selection outlines on worker threads
+  - [x] Reuse cached surfaces across frames and thumbnails
+  - [x] Coalesce thumbnail requests after edit bursts
+  - [x] Run the full behavior suite
+    - 61 tests pass. `selection_modes` fails six checks on the unchanged project.
+- [x] Remove the flat-cell compatibility layer
+  - [x] Use the chunk API in all frame callers and tests
+  - [x] Remove the legacy resource fixture
+  - [x] Run the full behavior suite
+- [x] Review names in the storage and rendering code
+  - [x] Use names that show each variable's purpose or contents
+  - [x] Use a typed frame reference in picking requests
+  - [x] Run the full behavior suite
+- [x] Bound the surface cache when chunks have no visible faces
+  - [x] Evict empty surface entries and clear stale display records
+  - [x] Verify repeated enclosed-voxel edits and frame switching
+  - [x] Run the full behavior suite
+
 # Export/Import
 - [ ] Save/load the current document to a json file, including all frames, tags, and palette
 - [ ] Export to GLB and OBJ formats

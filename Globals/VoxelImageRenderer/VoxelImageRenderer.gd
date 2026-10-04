@@ -11,75 +11,96 @@ var yaw_degrees := -45.0
 var pitch_degrees := 45.0
 var orthographic := true
 
-var _viewport: SubViewport
-var _renderer: VoxelRenderer
-var _camera: Camera3D
-var _queue: Array[int] = []
-var _busy := false
+var _thumbnail_viewport: SubViewport
+var _thumbnail_renderer: VoxelRenderer
+var _thumbnail_camera: Camera3D
+var _pending_frames: Array[int] = []
+var _processing_queue := false
+var _render_due_ms: Dictionary = {}
+var _queue_revision := 0
+const RENDER_DELAY_MS := 200
 
 
 func _ready() -> void:
-	_viewport = VIEWPORT_SCENE.instantiate()
-	add_child(_viewport)
-	_viewport.size = Vector2i(resolution, resolution)
-	_renderer = _viewport.get_node("%VoxelRenderer")
-	_camera = _viewport.get_node("Node3D/Camera3D")
-	parked_transform = _camera.transform
-	_viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
+	_thumbnail_viewport = VIEWPORT_SCENE.instantiate()
+	add_child(_thumbnail_viewport)
+	_thumbnail_viewport.size = Vector2i(resolution, resolution)
+	_thumbnail_renderer = _thumbnail_viewport.get_node("%VoxelRenderer")
+	_thumbnail_camera = _thumbnail_viewport.get_node("Node3D/Camera3D")
+	parked_transform = _thumbnail_camera.transform
+	_thumbnail_viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
 	State.frames_changed.connect(_clear_queue)
+	State.document_changed.connect(_clear_queue)
 
 
 func request_frame_render(frame_index: int) -> void:
-	if _queue.has(frame_index):
+	_render_due_ms[frame_index] = Time.get_ticks_msec() + RENDER_DELAY_MS
+	if _pending_frames.has(frame_index):
 		return
-	_queue.append(frame_index)
-	if not _busy:
-		_busy = true
+	_pending_frames.append(frame_index)
+	if not _processing_queue:
+		_processing_queue = true
 		_process_queue.call_deferred()
 
 
 func _clear_queue() -> void:
-	_queue.clear()
+	_pending_frames.clear()
+	_render_due_ms.clear()
+	_queue_revision += 1
 
 
 func _process_queue() -> void:
-	if _queue.is_empty():
-		_busy = false
-		return
-	var index: int = _queue.pop_front()
-	if index < 0 or index >= State.document.frames.size():
-		_process_queue()
-		return
-	var texture := await _render_frame(index)
-	frame_rendered.emit(index, texture)
-	_process_queue()
+	while not _pending_frames.is_empty():
+		var frame_index := -1
+		for queued_frame_index in _pending_frames:
+			if Time.get_ticks_msec() >= _render_due_ms.get(queued_frame_index, 0):
+				frame_index = queued_frame_index
+				break
+		if frame_index == -1:
+			await get_tree().process_frame
+			continue
+		_pending_frames.erase(frame_index)
+		_render_due_ms.erase(frame_index)
+		if frame_index < 0 or frame_index >= State.document.frames.size():
+			continue
+		var render_revision := _queue_revision
+		var requested_frame := State.get_voxel_frame(frame_index)
+		var thumbnail_texture := await _render_frame(frame_index)
+		if render_revision == _queue_revision and State.get_voxel_frame(frame_index) == requested_frame:
+			frame_rendered.emit(frame_index, thumbnail_texture)
+	_processing_queue = false
 
 
-func _render_frame(index: int) -> ImageTexture:
+func _render_frame(frame_index: int) -> ImageTexture:
 	if DisplayServer.get_name() == "headless":
 		return ImageTexture.create_from_image(Image.create(1, 1, false, Image.FORMAT_RGBA8))
-	_renderer.frame = index
+	if _thumbnail_renderer.frame == frame_index:
+		_thumbnail_renderer.refresh()
+	else:
+		_thumbnail_renderer.frame = frame_index
+	while not _thumbnail_renderer.is_settled():
+		await get_tree().process_frame
 	_frame_camera(State.document.bounds())
-	_viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
+	_thumbnail_viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
 	await RenderingServer.frame_post_draw
-	var image: Image = _viewport.get_texture().get_image()
-	_viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
-	return ImageTexture.create_from_image(image)
+	var thumbnail_image: Image = _thumbnail_viewport.get_texture().get_image()
+	_thumbnail_viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
+	return ImageTexture.create_from_image(thumbnail_image)
 
 
-func _frame_camera(bounds: AABB) -> void:
-	_camera.projection = Camera3D.PROJECTION_ORTHOGONAL if orthographic else Camera3D.PROJECTION_PERSPECTIVE
-	if not bounds.has_volume():
-		_camera.transform = parked_transform
+func _frame_camera(document_bounds: AABB) -> void:
+	_thumbnail_camera.projection = Camera3D.PROJECTION_ORTHOGONAL if orthographic else Camera3D.PROJECTION_PERSPECTIVE
+	if not document_bounds.has_volume():
+		_thumbnail_camera.transform = parked_transform
 		return
-	var target: Vector3 = bounds.get_center()
-	var dist: float = bounds.size.length() * 1.25
-	var off: Vector3 = Vector3(
+	var content_center: Vector3 = document_bounds.get_center()
+	var camera_distance: float = document_bounds.size.length() * 1.25
+	var camera_offset: Vector3 = Vector3(
 		sin(deg_to_rad(yaw_degrees)) * cos(deg_to_rad(pitch_degrees)),
 		sin(deg_to_rad(pitch_degrees)),
 		cos(deg_to_rad(yaw_degrees)) * cos(deg_to_rad(pitch_degrees))
-	) * dist
-	_camera.position = target + off
-	_camera.look_at(target, Vector3.UP)
+	) * camera_distance
+	_thumbnail_camera.position = content_center + camera_offset
+	_thumbnail_camera.look_at(content_center, Vector3.UP)
 	if orthographic:
-		_camera.size = 2.0 * dist * tan(deg_to_rad(_camera.fov) / 2.0)
+		_thumbnail_camera.size = 2.0 * camera_distance * tan(deg_to_rad(_thumbnail_camera.fov) / 2.0)

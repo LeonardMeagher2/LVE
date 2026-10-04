@@ -7,12 +7,12 @@ func _apply_mode(drag: VoxelSelection) -> VoxelSelection:
 	match _settings.mode:
 		_settings.SelectMode.ADD:
 			var out := VoxelSelection.new()
-			out.cells = State.selection.cells.duplicate()
+			out.restore(State.selection.capture())
 			out.union(drag)
 			return out
 		_settings.SelectMode.SUBTRACT:
 			var out := VoxelSelection.new()
-			out.cells = State.selection.cells.duplicate()
+			out.restore(State.selection.capture())
 			out.subtract(drag)
 			return out
 	return drag

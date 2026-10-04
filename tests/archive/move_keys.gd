@@ -22,7 +22,7 @@ func _run() -> void:
 		svp.size = Vector2i(800, 500)
 		_center = Vector2(400.0, 250.0)
 		_cell = aim(_vp, _center).target
-		State.document.frames[0].cells[_cell] = State.current_color
+		State.document.set_cell(0, _cell, State.current_color)
 		State.selection.add(_cell)
 		_vp.sync_to(0)
 		State.set_tool(State.tools.move)
@@ -34,8 +34,8 @@ func _run() -> void:
 
 	step("Then the voxel moved left", func():
 		var frame: VoxelFrame = State.document.frames[0]
-		expect(not frame.cells.has(_cell), "original cell is cleared")
-		expect(frame.cells.has(_cell + Vector3i(-1, 0, 0)), "voxel moved left")
+		expect(not frame.has(_cell), "original cell is cleared")
+		expect(frame.has(_cell + Vector3i(-1, 0, 0)), "voxel moved left")
 	)
 
 	step("When the user presses the delete action", func():
@@ -44,8 +44,8 @@ func _run() -> void:
 
 	step("Then the selection is erased", func():
 		var frame: VoxelFrame = State.document.frames[0]
-		expect(not frame.cells.has(_cell + Vector3i(-1, 0, 0)), "moved voxel is erased")
-		expect(frame.cells.is_empty(), "frame is empty")
+		expect(not frame.has(_cell + Vector3i(-1, 0, 0)), "moved voxel is erased")
+		expect(frame.count() == 0, "frame is empty")
 	)
 
 

@@ -52,6 +52,9 @@ var floor_index := 0:
 var current_color := Color.from_rgba8(20, 20, 20)
 var selection := VoxelSelection.new()
 var undo_redo := UndoRedo.new()
+var _stroke_frame: VoxelFrame
+var _stroke_start_chunks := {}
+var _stroke_start_selection := {}
 
 
 func _init() -> void:
@@ -73,6 +76,9 @@ func _ready() -> void:
 func set_document(value:VoxiDocument) -> void:
 	if value == document:
 		return
+	_stroke_frame = null
+	_stroke_start_chunks = {}
+	_stroke_start_selection = {}
 	selection.clear()
 	selection_changed.emit()
 	undo_redo.clear_history()
@@ -99,6 +105,60 @@ func remove_plugin(plugin: VoxiPlugin) -> void:
 
 func paint(position: Vector3i, color:Color) -> void:
 	document.paint(current_frame, position, color)
+
+
+func begin_stroke() -> void:
+	_stroke_frame = get_current_voxel_frame()
+	_stroke_start_chunks = _stroke_frame.capture()
+	_stroke_start_selection = selection.capture()
+
+
+func end_stroke(action: String = "Stroke") -> void:
+	if _stroke_frame == null:
+		return
+	var stroke_end_chunks := _stroke_frame.capture()
+	if not _chunks_equal(_stroke_start_chunks, stroke_end_chunks) or _stroke_start_selection != selection.all_cells():
+		undo_redo.create_action(action)
+		undo_redo.add_undo_method(_restore_chunks.bind(_stroke_frame, _stroke_start_chunks, _stroke_start_selection))
+		undo_redo.add_do_method(_restore_chunks.bind(_stroke_frame, stroke_end_chunks, selection.capture()))
+		undo_redo.commit_action(false)
+	_stroke_frame = null
+	_stroke_start_chunks = {}
+	_stroke_start_selection = {}
+
+
+func cancel_stroke() -> void:
+	if _stroke_frame == null:
+		return
+	_restore_chunks(_stroke_frame, _stroke_start_chunks, _stroke_start_selection)
+	_stroke_frame = null
+	_stroke_start_chunks = {}
+	_stroke_start_selection = {}
+
+
+func _chunks_equal(first_chunks: Dictionary, second_chunks: Dictionary) -> bool:
+	if first_chunks.size() != second_chunks.size():
+		return false
+	for chunk_location in first_chunks:
+		if not second_chunks.has(chunk_location):
+			return false
+		if first_chunks[chunk_location] != second_chunks[chunk_location] and first_chunks[chunk_location].cell_colors != second_chunks[chunk_location].cell_colors:
+			return false
+	return true
+
+
+func _restore_chunks(edited_frame: VoxelFrame, chunk_snapshot: Dictionary, selection_snapshot: Dictionary) -> void:
+	var frame_index := document.frames.find(edited_frame)
+	if frame_index == -1:
+		return
+	var cells_restored := edited_frame.chunks != chunk_snapshot
+	edited_frame.restore(chunk_snapshot)
+	document._bounds_dirty = true
+	selection.restore(selection_snapshot)
+	if cells_restored:
+		var affected_cells: Array[Vector3i] = []
+		cells_changed.emit(frame_index, affected_cells)
+	selection_changed.emit()
 
 func has_cell(position: Vector3i) -> bool:
 	return document.has_cell(current_frame, position)
@@ -304,35 +364,16 @@ func erase_selection() -> void:
 	if selection.is_empty():
 		return
 	var i := current_frame
-	var removed := {}
-	var cells: Dictionary = document.frames[i].cells
-	for c in selection.cells:
+	begin_stroke()
+	var affected: Array[Vector3i] = []
+	var cells := document.frames[i]
+	for c in selection.all_cells():
 		if cells.has(c):
-			removed[c] = cells[c]
 			document.erase(i, c)
-	if removed.is_empty():
-		return
-	cells_changed.emit(i, _vec3i_array(removed.keys()))
-	undo_redo.create_action("Erase Selection")
-	undo_redo.add_undo_method(_restore_cells.bind(i, removed))
-	undo_redo.add_do_method(_erase_cells.bind(i, removed.keys()))
-	undo_redo.commit_action(false)
-
-
-func _restore_cells(i: int, cells: Dictionary) -> void:
-	if i < 0 or i >= document.frames.size():
-		return
-	for c in cells:
-		document.set_cell(i, c, cells[c])
-	cells_changed.emit(i, _vec3i_array(cells.keys()))
-
-
-func _erase_cells(i: int, keys: Array) -> void:
-	if i < 0 or i >= document.frames.size():
-		return
-	for c in keys:
-		document.erase(i, c)
-	cells_changed.emit(i, _vec3i_array(keys))
+			affected.append(c)
+	end_stroke("Erase Selection")
+	if not affected.is_empty():
+		cells_changed.emit(i, affected)
 
 
 func next_frame() -> void:
@@ -612,14 +653,3 @@ func to_end() -> void:
 	else:
 		current_frame = document.frames.size() - 1
 
-func notify_restored() -> void:
-	frame_changed.emit()
-	cells_changed.emit(current_frame, _vec3i_array([]))
-	selection_changed.emit()
-
-
-func _vec3i_array(keys: Array) -> Array[Vector3i]:
-	var out: Array[Vector3i] = []
-	for k in keys:
-		out.append(k)
-	return out

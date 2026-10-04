@@ -29,26 +29,25 @@ func handle_input(event: InputEvent, pos: Vector2) -> bool:
 func _commit(seed_cell: Vector3i) -> void:
 	if seed_cell == VoxelPicking.NONE or not State.document.has_cell(State.current_frame, seed_cell):
 		return
-	State.selection.cells = _apply_mode(_flood(seed_cell)).cells
+	State.selection.restore(_apply_mode(_flood(seed_cell)).capture())
 	State.selection_changed.emit()
 
 
 func _flood(seed_cell: Vector3i) -> VoxelSelection:
 	var frame: VoxelFrame = State.document.frames[State.current_frame]
-	var target: Color = frame.cells[seed_cell]
+	var target := frame.get_color(seed_cell)
 	var sel := VoxelSelection.new()
 	sel.add(seed_cell)
 	if not _settings.connected:
-		for c in frame.cells:
-			if colors_equal(frame.cells[c], target):
-				sel.add(c)
+		for c in frame.cells_with_color(target):
+			sel.add(c)
 		return sel
 	var stack: Array[Vector3i] = [seed_cell]
 	while not stack.is_empty():
 		for n in _neighbors(stack.pop_back()):
 			if sel.contains(n):
 				continue
-			if not frame.cells.has(n) or not colors_equal(frame.cells[n], target):
+			if not frame.has(n) or not colors_equal(frame.get_color(n), target):
 				continue
 			sel.add(n)
 			stack.append(n)

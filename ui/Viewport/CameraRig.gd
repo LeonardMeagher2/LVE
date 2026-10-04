@@ -46,7 +46,7 @@ func center_on(box: AABB) -> void:
 func center_active() -> void:
 	var bounds := AABB()
 	if not State.selection.is_empty():
-		for c in State.selection.cells:
+		for c in State.selection.all_cells():
 			var cb := AABB(Vector3(c) - Vector3(0.5, 0.5, 0.5), Vector3.ONE)
 			bounds = cb if not bounds.has_volume() else bounds.merge(cb)
 	else:

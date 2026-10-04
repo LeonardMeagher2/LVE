@@ -4,7 +4,7 @@ var viewport: SubViewport
 var center := Vector2.ZERO
 var top: PickResult
 var bottom: PickResult
-var before: Dictionary = {}
+var before: Array[Vector3i] = []
 var last_drag := Vector2.ZERO
 
 
@@ -34,12 +34,12 @@ func _run() -> void:
 	)
 
 	step("Given a voxel above the floor at the center aim", func():
-		State.document.frames[0].cells[Vector3i(-3, 3, 0)] = State.current_color
+		State.document.set_cell(0, Vector3i(-3, 3, 0), State.current_color)
 		sync_viewport()
 	)
 
 	step("When the user presses the voxel and drags down", func():
-		before = State.document.frames[0].cells.duplicate()
+		before = State.document.frames[0].positions()
 		_press(center)
 		_drag_to(center + Vector2(0.0, 40.0))
 		_drag_to(center + Vector2(0.0, 80.0))
@@ -52,7 +52,7 @@ func _run() -> void:
 		var drawn := 0
 		var layer := -1
 		var same := true
-		for c in frame.cells:
+		for c in frame.positions():
 			if before.has(c):
 				continue
 			drawn += 1

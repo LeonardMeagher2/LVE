@@ -4,7 +4,6 @@ extends Node3D
 var _plane: StrokePlane = null
 var _last_target := VoxelPicking.NONE
 var _stroke_active := false
-var _stroke_before: Dictionary = {}
 var _cells_dirty := false
 var _affected: Array[Vector3i] = []
 
@@ -91,7 +90,7 @@ func _apply_stroke_to(to: Vector3i) -> void:
 
 
 func _hit_at(c: Vector3i) -> Vector3i:
-	if State.document.frames[State.current_frame].cells.has(c):
+	if State.document.has_cell(State.current_frame, c):
 		return c
 	return VoxelPicking.NONE
 
@@ -141,49 +140,15 @@ func _do_flush() -> void:
 
 
 func begin_stroke() -> void:
-	_stroke_before = _capture()
+	State.begin_stroke()
 
 
 func end_stroke() -> void:
-	if not _stroke_before.is_empty():
-		var after := _capture()
-		if _stroke_differs(_stroke_before, after):
-			State.undo_redo.create_action("Stroke")
-			State.undo_redo.add_undo_method(_restore_snapshot.bind(_stroke_before))
-			State.undo_redo.add_do_method(_restore_snapshot.bind(after))
-			State.undo_redo.commit_action(false)
-	_stroke_before = {}
+	State.end_stroke()
 
 
-func _capture() -> Dictionary:
-	return {
-		"frame": State.current_frame,
-		"cells": State.document.frames[State.current_frame].cells.duplicate(true),
-		"selection": State.selection.cells.duplicate(true),
-	}
-
-
-func _stroke_differs(before: Dictionary, after: Dictionary) -> bool:
-	return _dicts_equal(before["cells"], after["cells"]) == false \
-		or _dicts_equal(before["selection"], after["selection"]) == false
-
-
-func _dicts_equal(a: Dictionary, b: Dictionary) -> bool:
-	if a.size() != b.size():
-		return false
-	for k in a:
-		if not b.has(k) or a[k] != b[k]:
-			return false
-	return true
-
-
-func _restore_snapshot(s: Dictionary) -> void:
-	var i: int = s["frame"]
-	if i < 0 or i >= State.document.frames.size():
-		i = State.current_frame
-	State.document.replace_cells(i, (s["cells"] as Dictionary).duplicate(true))
-	State.selection.cells = (s["selection"] as Dictionary).duplicate(true)
-	State.notify_restored()
+func cancel_stroke() -> void:
+	State.cancel_stroke()
 
 
 func _pick_start(origin: Vector3, dir: Vector3) -> PickResult:
@@ -195,22 +160,21 @@ func _pick_drag(origin: Vector3, dir: Vector3) -> PickResult:
 
 
 func _request(origin: Vector3, dir: Vector3, plane: StrokePlane) -> PickRequest:
-	var voxel_frame := State.get_current_voxel_frame()
 	var req := PickRequest.new()
 	req.origin = origin
 	req.dir = dir
-	req.cells = voxel_frame.cells if voxel_frame else {}
+	req.frame = State.get_current_voxel_frame()
 	req.plane = plane
 	req.forward = _forward()
 	return req
 
 
 func pick_start(request: PickRequest) -> PickResult:
-	return VoxelPicking.start_pick(request.origin, request.dir, request.cells, request.forward)
+	return VoxelPicking.start_pick(request.origin, request.dir, request.frame, request.forward)
 
 
 func pick_drag(request: PickRequest) -> PickResult:
-	return VoxelPicking.drag_pick(request.origin, request.dir, request.cells, request.plane)
+	return VoxelPicking.drag_pick(request.origin, request.dir, request.frame, request.plane)
 
 
 func update_visual(pick: PickResult) -> void:

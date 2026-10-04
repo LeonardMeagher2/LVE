@@ -18,7 +18,7 @@ func applied_cells(_target: Vector3i, _hit: Vector3i) -> Array[Vector3i]:
 
 func _flood_fill(seed_cell: Vector3i) -> bool:
 	var frame: VoxelFrame = State.document.frames[State.current_frame]
-	var target: Color = frame.cells[seed_cell]
+	var target := frame.get_color(seed_cell)
 	var replacement := State.current_color
 	if colors_equal(target, replacement):
 		return false
@@ -31,7 +31,7 @@ func _flood_fill(seed_cell: Vector3i) -> bool:
 		for n in _neighbors(c):
 			if not State.can_edit(n):
 				continue
-			if frame.cells.has(n) and colors_equal(frame.cells[n], target):
+			if frame.has(n) and colors_equal(frame.get_color(n), target):
 				_set_cell(n, replacement)
 				stack.append(n)
 	return true
@@ -39,12 +39,11 @@ func _flood_fill(seed_cell: Vector3i) -> bool:
 
 func _recolor_all(frame: VoxelFrame, target: Color, replacement: Color) -> bool:
 	var changed := false
-	for c in frame.cells.keys():
+	for c in frame.cells_with_color(target):
 		if not State.can_edit(c):
 			continue
-		if colors_equal(frame.cells[c], target):
-			_set_cell(c, replacement)
-			changed = true
+		_set_cell(c, replacement)
+		changed = true
 	return changed
 
 

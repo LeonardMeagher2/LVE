@@ -47,9 +47,9 @@ func _run() -> void:
 	)
 
 	step("Then both rotations compose correctly, seen from either view", func():
-		expect(_cells().size() == SHAPE.size(), "the shape still holds %d voxels" % SHAPE.size())
+		expect(_frame().count() == SHAPE.size(), "the shape still holds %d voxels" % SHAPE.size())
 		for c in EXPECTED:
-			expect(_cells().has(c), "cell %s is at its expected composed position" % c)
+			expect(_frame().has(c), "cell %s is at its expected composed position" % c)
 		expect(State.undo_redo.has_undo(), "the composed rotation is still a single undo step")
 	)
 
@@ -58,29 +58,29 @@ func _run() -> void:
 	)
 
 	step("Then the original shape returns exactly", func():
-		expect(_cells().size() == SHAPE.size(), "the shape still holds %d voxels" % SHAPE.size())
+		expect(_frame().count() == SHAPE.size(), "the shape still holds %d voxels" % SHAPE.size())
 		for c in SHAPE:
-			expect(_cells().has(c), "cell %s is back at its original position" % c)
+			expect(_frame().has(c), "cell %s is back at its original position" % c)
 	)
 
 
 func _paint_shape() -> void:
 	State.selection.clear()
-	_cells().clear()
+	_frame().clear()
 	for c in SHAPE:
-		_cells()[c] = Color.from_rgba8(200, 60, 60)
+		_frame().set_cell(c, Color.from_rgba8(200, 60, 60))
 		State.selection.add(c)
 	State.selection_changed.emit()
 
 
-func _cells() -> Dictionary:
-	return State.document.frames[0].cells
+func _frame() -> VoxelFrame:
+	return State.document.frames[0]
 
 
 func _current_center() -> Vector3:
 	var b := AABB()
 	var first := true
-	for c in _cells():
+	for c in _frame().positions():
 		var cb := AABB(Vector3(c) - Vector3(0.5, 0.5, 0.5), Vector3.ONE)
 		b = cb if first else b.merge(cb)
 		first = false

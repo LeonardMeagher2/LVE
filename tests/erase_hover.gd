@@ -28,7 +28,7 @@ func _run() -> void:
 	step("Then the highlight is visible at the cursor cell", func():
 		var v: Node3D = active_tool_node("EraserPlugin")
 		var req := pick_request(center)
-		var target := VoxelPicking.start_pick(req.origin, req.dir, req.cells, req.forward).target
+		var target := VoxelPicking.start_pick(req.origin, req.dir, req.frame, req.forward).target
 		expect(v.visible, "the highlight is visible")
 		expect(v.position == Vector3(target), "the highlight is at the cursor cell")
 	)

@@ -23,7 +23,7 @@ func _run() -> void:
 		svp.size = Vector2i(800, 500)
 		_center = Vector2(400.0, 250.0)
 		_cell = aim(_vp, _center).target
-		State.document.frames[State.current_frame].cells[_cell] = State.current_color
+		State.document.set_cell(State.current_frame, _cell, State.current_color)
 		State.selection.add(_cell)
 	)
 

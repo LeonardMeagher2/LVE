@@ -12,9 +12,9 @@ func _run() -> void:
 		_view_setup()
 		State.undo_redo.clear_history()
 		State.selection.clear()
-		_cells().clear()
-		_cells()[Vector3i(0, 0, 0)] = Color.from_rgba8(200, 60, 60)
-		_cells()[Vector3i(1, 0, 0)] = Color.from_rgba8(40, 120, 40)
+		_frame().clear()
+		_frame().set_cell(Vector3i(0, 0, 0), Color.from_rgba8(200, 60, 60))
+		_frame().set_cell(Vector3i(1, 0, 0), Color.from_rgba8(40, 120, 40))
 		State.selection.add(Vector3i(0, 0, 0))
 		State.selection_changed.emit()
 		activate_tool("transform")
@@ -38,16 +38,16 @@ func _run() -> void:
 	step("Then the stationary voxel is restored and the moved voxel sits at the far cell", func():
 		expect(_color_at(Vector3i(1, 0, 0)).is_equal_approx(Color.from_rgba8(40, 120, 40)), "the stationary voxel survives the pass-over")
 		expect(_color_at(Vector3i(2, 0, 0)).is_equal_approx(Color.from_rgba8(200, 60, 60)), "the moved voxel reached the far cell")
-		expect(not _cells().has(Vector3i(0, 0, 0)), "the origin cell is empty")
+		expect(not _frame().has(Vector3i(0, 0, 0)), "the origin cell is empty")
 		_expect_selection([Vector3i(2, 0, 0)])
 	)
 
 	step("Given the same setup again with the move tool active", func():
 		State.undo_redo.clear_history()
 		State.selection.clear()
-		_cells().clear()
-		_cells()[Vector3i(0, 0, 0)] = Color.from_rgba8(200, 60, 60)
-		_cells()[Vector3i(1, 0, 0)] = Color.from_rgba8(40, 120, 40)
+		_frame().clear()
+		_frame().set_cell(Vector3i(0, 0, 0), Color.from_rgba8(200, 60, 60))
+		_frame().set_cell(Vector3i(1, 0, 0), Color.from_rgba8(40, 120, 40))
 		State.selection.add(Vector3i(0, 0, 0))
 		State.selection_changed.emit()
 	)
@@ -61,7 +61,7 @@ func _run() -> void:
 
 	step("Then the moved voxel wins at the shared cell", func():
 		expect(_color_at(Vector3i(1, 0, 0)).is_equal_approx(Color.from_rgba8(200, 60, 60)), "landing on the stationary voxel overwrites it")
-		expect(_cells().size() == 1, "only one voxel remains at the destination")
+		expect(_frame().count() == 1, "only one voxel remains at the destination")
 	)
 
 
@@ -73,8 +73,8 @@ func _view_setup() -> void:
 	camera_rig().set_view("front")
 
 
-func _cells() -> Dictionary:
-	return State.document.frames[0].cells
+func _frame() -> VoxelFrame:
+	return State.document.frames[0]
 
 
 func _color_at(c: Vector3i) -> Color:

@@ -80,11 +80,11 @@ func _press(origin: Vector3, dir: Vector3) -> void:
 	_track_selection = not State.selection.is_empty()
 	begin_stroke()
 	_cells = cells
-	var frame: Dictionary = State.document.frames[State.current_frame].cells
+	var frame := State.get_current_voxel_frame()
 	_colors = {}
 	for c in _cells:
 		if frame.has(c):
-			_colors[c] = frame[c]
+			_colors[c] = frame.get_color(c)
 	_begin_grab(origin, dir)
 	_settings.transforming = true
 	_dragging = true
@@ -99,13 +99,13 @@ func _press(origin: Vector3, dir: Vector3) -> void:
 func _reanchor() -> void:
 	if _dest_cells.is_empty():
 		return
-	var frame: Dictionary = State.document.frames[State.current_frame].cells
+	var frame := State.get_current_voxel_frame()
 	var new_cells: Array[Vector3i] = []
 	var new_colors := {}
 	for c in _dest_cells:
 		new_cells.append(c)
 		if frame.has(c):
-			new_colors[c] = frame[c]
+			new_colors[c] = frame.get_color(c)
 	_cells = new_cells
 	_colors = new_colors
 	_dest_cells = []
@@ -152,9 +152,10 @@ func _apply_preview() -> void:
 		doc.set_cell(frame, d, new_dest[d])
 
 	if _track_selection:
-		State.selection.cells.clear()
+		var selected := {}
 		for d in new_dest:
-			State.selection.cells[d] = true
+			selected[d] = true
+		State.selection.cells = selected
 		State.selection_changed.emit()
 
 	var affected := _changed_cells(old_set, new_dest)
@@ -187,7 +188,7 @@ func _commit() -> void:
 func _cancel() -> void:
 	if not (_dragging or _pending):
 		return
-	_restore_snapshot(_stroke_before)
+	cancel_stroke()
 	_dragging = false
 	_pending = false
 	_clear_grab()
@@ -205,10 +206,7 @@ func _clear_grab() -> void:
 func _grab_cells() -> Array[Vector3i]:
 	if not State.selection.is_empty():
 		return State.selection.to_array()
-	var out: Array[Vector3i] = []
-	for c in State.document.frames[State.current_frame].cells:
-		out.append(c)
-	return out
+	return State.get_current_voxel_frame().positions()
 
 
 func _plane_point(origin: Vector3, dir: Vector3) -> Vector3:

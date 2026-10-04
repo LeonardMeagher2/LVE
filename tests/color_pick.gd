@@ -27,7 +27,7 @@ func _run() -> void:
 
 	step("Then the brush paints with the picked color", func():
 		var req := pick_request(center)
-		var target := VoxelPicking.start_pick(req.origin, req.dir, req.cells, req.forward).target
+		var target := VoxelPicking.start_pick(req.origin, req.dir, req.frame, req.forward).target
 		var click := InputEventMouseButton.new()
 		click.button_index = MOUSE_BUTTON_LEFT
 		click.pressed = true
@@ -36,6 +36,6 @@ func _run() -> void:
 		click.pressed = false
 		viewport.push_input(click)
 		var frame: VoxelFrame = State.document.frames[0]
-		expect(frame.cells.has(target), "the clicked cell is painted")
-		expect(frame.cells[target] == Color.from_rgba8(200, 60, 60), "the painted cell has the picked color")
+		expect(frame.has(target), "the clicked cell is painted")
+		expect(frame.get_color(target) == Color.from_rgba8(200, 60, 60), "the painted cell has the picked color")
 	)

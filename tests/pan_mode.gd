@@ -3,15 +3,15 @@ extends "res://tests/test.gd"
 var viewport: SubViewport
 var center := Vector2.ZERO
 var target_before := Vector3.ZERO
-var cells_before := {}
+var count_before := 0
 
 
 func _ready() -> void:
 	test("pan mode turns left-drag into panning instead of painting", _run)
 
 
-func _cells() -> Dictionary:
-	return State.document.frames[0].cells
+func _frame() -> VoxelFrame:
+	return State.document.frames[0]
 
 
 func _left_drag(from: Vector2, rel: Vector2) -> void:
@@ -54,7 +54,7 @@ func _run() -> void:
 		_left_drag(center, Vector2(0.0, 120.0))
 	)
 	step("Then voxels are painted", func():
-		expect(_cells().size() > 0, "the drag painted voxels")
+		expect(_frame().count() > 0, "the drag painted voxels")
 	)
 
 	step("When the user presses the pan toggle", func():
@@ -62,24 +62,24 @@ func _run() -> void:
 		expect(viewport_scene().view_mode == viewport_scene().ViewMode.PAN, "the rig holds the pan mode")
 		expect(not _rotate_toggle().button_pressed, "the rotate toggle stays off")
 		target_before = camera_rig()._target
-		cells_before = _cells().duplicate(true)
+		count_before = _frame().count()
 		_left_drag(center, Vector2(40.0, -20.0))
 	)
 
 	step("Then the view pans and no voxel is painted", func():
 		expect(camera_rig()._target != target_before, "left-drag pans the camera target")
-		expect(_cells().size() == cells_before.size(), "left-drag paints nothing")
+		expect(_frame().count() == count_before, "left-drag paints nothing")
 	)
 
 	step("When the user presses the pan toggle again", func():
 		_pan_toggle().button_pressed = false
 		expect(viewport_scene().view_mode == viewport_scene().ViewMode.NONE, "the rig holds no view mode")
 		target_before = camera_rig()._target
-		cells_before = _cells().duplicate(true)
+		count_before = _frame().count()
 		_left_drag(center + Vector2(200.0, 0.0), Vector2(0.0, 100.0))
 	)
 
 	step("Then painting works again and the camera target stays", func():
 		expect(is_equal_approx(camera_rig()._target.x, target_before.x), "left-drag leaves the camera target alone")
-		expect(_cells().size() > cells_before.size(), "left-drag paints voxels again")
+		expect(_frame().count() > count_before, "left-drag paints voxels again")
 	)

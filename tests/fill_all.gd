@@ -27,10 +27,10 @@ func _run() -> void:
 		r3 = r1 + Vector3i(16, 0, 0)
 		control = r1 + Vector3i(0, 1, 0)
 		var f: VoxelFrame = State.document.frames[State.current_frame]
-		f.cells[r1] = Color.RED
-		f.cells[r2] = Color.RED
-		f.cells[r3] = Color.RED
-		f.cells[control] = Color.GREEN
+		f.set_cell(r1, Color.RED)
+		f.set_cell(r2, Color.RED)
+		f.set_cell(r3, Color.RED)
+		f.set_cell(control, Color.GREEN)
 	)
 
 	step("Then the option bar shows a connected icon toggle", func():
@@ -50,9 +50,9 @@ func _run() -> void:
 
 	step("Then only that voxel changes color", func():
 		var f: VoxelFrame = State.document.frames[State.current_frame]
-		expect(f.cells[r2] == Color.BLUE, "the clicked voxel takes the brush color")
-		expect(f.cells[r1] == Color.RED, "the distant red voxel keeps its color")
-		expect(f.cells[r3] == Color.RED, "the farthest red voxel keeps its color")
+		expect(f.get_color(r2) == Color.BLUE, "the clicked voxel takes the brush color")
+		expect(f.get_color(r1) == Color.RED, "the distant red voxel keeps its color")
+		expect(f.get_color(r3) == Color.RED, "the farthest red voxel keeps its color")
 	)
 
 	step("When the user turns connected off and fills another red voxel", func():
@@ -62,9 +62,9 @@ func _run() -> void:
 
 	step("Then every red voxel takes the brush color", func():
 		var f: VoxelFrame = State.document.frames[State.current_frame]
-		expect(f.cells[r1] == Color.BLUE, "the first red voxel takes the brush color")
-		expect(f.cells[r3] == Color.BLUE, "the last red voxel takes the brush color")
-		expect(f.cells[control] == Color.GREEN, "the green voxel keeps its color")
+		expect(f.get_color(r1) == Color.BLUE, "the first red voxel takes the brush color")
+		expect(f.get_color(r3) == Color.BLUE, "the last red voxel takes the brush color")
+		expect(f.get_color(control) == Color.GREEN, "the green voxel keeps its color")
 	)
 
 

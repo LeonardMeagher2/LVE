@@ -36,7 +36,7 @@ func _run() -> void:
 		var frame: VoxelFrame = State.document.frames[0]
 		var all_present := true
 		for c in BAR_CELLS:
-			if not frame.cells.has(c):
+			if not frame.has(c):
 				all_present = false
 		expect(all_present, "discard restored every original cell")
 	)
@@ -54,7 +54,7 @@ func _run() -> void:
 		var frame: VoxelFrame = State.document.frames[0]
 		var all_present := true
 		for c in expected:
-			if not frame.cells.has(c):
+			if not frame.has(c):
 				all_present = false
 		expect(all_present, "rotated cells present after commit")
 	)
@@ -67,7 +67,7 @@ func _run() -> void:
 		var frame: VoxelFrame = State.document.frames[0]
 		var all_present := true
 		for c in BAR_CELLS:
-			if not frame.cells.has(c):
+			if not frame.has(c):
 				all_present = false
 		expect(all_present, "undo restored every original cell")
 	)
@@ -81,7 +81,7 @@ func _run() -> void:
 		var frame: VoxelFrame = State.document.frames[0]
 		var all_present := true
 		for c in expected:
-			if not frame.cells.has(c):
+			if not frame.has(c):
 				all_present = false
 		expect(all_present, "redo restored rotated cells")
 	)
@@ -111,10 +111,10 @@ func _rotate_test(drag_offset: Vector2, view_name: String, axis: int, axis_sign:
 	step("Then the bar sits at the rotated cells", func():
 		var expected := _expected_cells(axis, axis_sign)
 		var frame: VoxelFrame = State.document.frames[0]
-		expect(frame.cells.size() == expected.size(), "the rotated frame holds three voxels")
+		expect(frame.count() == expected.size(), "the rotated frame holds three voxels")
 		var all_present := true
 		for c in expected:
-			if not frame.cells.has(c):
+			if not frame.has(c):
 				all_present = false
 		expect(all_present, "every source voxel reached its rotated cell in %s view" % view_name)
 	)
@@ -127,16 +127,16 @@ func _rotate_test(drag_offset: Vector2, view_name: String, axis: int, axis_sign:
 		var frame: VoxelFrame = State.document.frames[0]
 		var all_present := true
 		for c in BAR_CELLS:
-			if not frame.cells.has(c):
+			if not frame.has(c):
 				all_present = false
 		expect(all_present, "undo restored every original cell in %s view" % view_name)
 	)
 
 
 func _setup_bar() -> void:
-	State.document.frames[0].cells.clear()
+	State.document.frames[0].clear()
 	for c in BAR_CELLS:
-		State.document.frames[0].cells[c] = Color.from_rgba8(200, 60, 60)
+		State.document.set_cell(0, c, Color.from_rgba8(200, 60, 60))
 	_select_frame_cells()
 	_vp.sync_to(0)
 
@@ -156,7 +156,7 @@ func _expected_cells(axis: int, axis_sign: float) -> Dictionary:
 
 func _select_frame_cells() -> void:
 	State.selection.clear()
-	for c in State.document.frames[0].cells:
+	for c in State.document.frames[0].positions():
 		State.selection.add(c)
 	State.selection_changed.emit()
 

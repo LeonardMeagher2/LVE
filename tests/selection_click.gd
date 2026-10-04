@@ -22,7 +22,7 @@ func _run() -> void:
 		center = Vector2(vsize.x * 0.5, vsize.y * 0.5)
 		cell = aim(center).target
 		var f: VoxelFrame = State.document.frames[State.current_frame]
-		f.cells[cell] = Color.from_rgba8(150, 150, 150)
+		f.set_cell(cell, Color.from_rgba8(150, 150, 150))
 	)
 
 	step("When the user clicks the voxel", func():

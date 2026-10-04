@@ -26,7 +26,7 @@ func _run() -> void:
 	)
 
 	step("When the tool picks empty space from below", func():
-		var pick := VoxelPicking.start_pick(Vector3(1, -7, 4), Vector3(0.2, 1.0, -0.1), {}, Vector3(0, 1, 0))
+		var pick := VoxelPicking.start_pick(Vector3(1, -7, 4), Vector3(0.2, 1.0, -0.1), VoxelFrame.new(), Vector3(0, 1, 0))
 		expect(pick.target.x == 1 or pick.target.x == 2, "the slanted pick keeps the in-plane column near the ray")
 		expect(pick.target.y == -1, "the start pick from below rests under the plane")
 		expect(pick.hit == VoxelPicking.NONE, "empty space has no voxel hit")

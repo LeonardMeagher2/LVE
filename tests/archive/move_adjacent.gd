@@ -29,9 +29,9 @@ func _run() -> void:
 		_b = drag(_vp, _center + Vector2(0.0, 20.0), start.plane).target
 		var obstacle := drag(_vp, _center + Vector2(0.0, 40.0), start.plane)
 		_obstacle = obstacle.target
-		State.document.frames[0].cells[_a] = State.current_color
-		State.document.frames[0].cells[_b] = Color.from_rgba8(200, 60, 200)
-		State.document.frames[0].cells[_obstacle] = Color.from_rgba8(40, 120, 40)
+		State.document.set_cell(0, _a, State.current_color)
+		State.document.set_cell(0, _b, Color.from_rgba8(200, 60, 200))
+		State.document.set_cell(0, _obstacle, Color.from_rgba8(40, 120, 40))
 		State.selection.add(_a)
 		State.selection.add(_b)
 		_vp.sync_to(0)
@@ -46,9 +46,9 @@ func _run() -> void:
 
 	step("Then the move is pending and the pair sits on the obstacle cell", func():
 		var frame: VoxelFrame = State.document.frames[0]
-		expect(not frame.cells.has(_a), "first original cell is cleared")
-		expect(not frame.cells.has(_b), "second original cell is cleared")
-		expect(frame.cells.size() == 2, "two voxels remain")
+		expect(not frame.has(_a), "first original cell is cleared")
+		expect(not frame.has(_b), "second original cell is cleared")
+		expect(frame.count() == 2, "two voxels remain")
 		expect(State.selection.cells.size() == 2, "selection keeps two cells")
 	)
 
@@ -59,9 +59,9 @@ func _run() -> void:
 
 	step("Then the move is committed and the selection is cleared", func():
 		var frame: VoxelFrame = State.document.frames[0]
-		expect(not frame.cells.has(_a), "first original cell is cleared")
-		expect(not frame.cells.has(_b), "second original cell is cleared")
-		expect(frame.cells.size() == 2, "two voxels remain")
+		expect(not frame.has(_a), "first original cell is cleared")
+		expect(not frame.has(_b), "second original cell is cleared")
+		expect(frame.count() == 2, "two voxels remain")
 		expect(State.selection.is_empty(), "selection is cleared after commit")
 	)
 
@@ -71,9 +71,9 @@ func _run() -> void:
 
 	step("Then both voxels and the obstacle return", func():
 		var frame: VoxelFrame = State.document.frames[0]
-		expect(frame.cells.has(_a), "first voxel back")
-		expect(frame.cells.has(_b), "second voxel back")
-		expect(frame.cells.has(_obstacle), "obstacle voxel back")
+		expect(frame.has(_a), "first voxel back")
+		expect(frame.has(_b), "second voxel back")
+		expect(frame.has(_obstacle), "obstacle voxel back")
 	)
 
 	step("When the user drags again and clicks outside the selection", func():
@@ -86,9 +86,9 @@ func _run() -> void:
 
 	step("Then the outside click cancels the move", func():
 		var frame: VoxelFrame = State.document.frames[0]
-		expect(frame.cells.has(_a), "first voxel stayed")
-		expect(frame.cells.has(_b), "second voxel stayed")
-		expect(frame.cells.has(_obstacle), "obstacle voxel survived")
+		expect(frame.has(_a), "first voxel stayed")
+		expect(frame.has(_b), "second voxel stayed")
+		expect(frame.has(_obstacle), "obstacle voxel survived")
 	)
 
 

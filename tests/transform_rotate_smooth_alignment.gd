@@ -59,15 +59,15 @@ func _rotate_tool() -> Node:
 
 func _paint_shape() -> void:
 	State.selection.clear()
-	_cells().clear()
+	_frame().clear()
 	for c in SHAPE:
-		_cells()[c] = Color.from_rgba8(200, 60, 60)
+		_frame().set_cell(c, Color.from_rgba8(200, 60, 60))
 		State.selection.add(c)
 	State.selection_changed.emit()
 
 
-func _cells() -> Dictionary:
-	return State.document.frames[0].cells
+func _frame() -> VoxelFrame:
+	return State.document.frames[0]
 
 
 func _min_corner(dest: Dictionary) -> Vector2i:
@@ -81,7 +81,7 @@ func _min_corner(dest: Dictionary) -> Vector2i:
 func _current_center() -> Vector3:
 	var b := AABB()
 	var first := true
-	for c in _cells():
+	for c in _frame().positions():
 		var cb := AABB(Vector3(c) - Vector3(0.5, 0.5, 0.5), Vector3.ONE)
 		b = cb if first else b.merge(cb)
 		first = false

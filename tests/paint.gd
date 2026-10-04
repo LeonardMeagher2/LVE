@@ -21,7 +21,7 @@ func _run() -> void:
 
 	step("When the user presses and drags the viewport", func():
 		var req := pick_request(center)
-		pressed = VoxelPicking.start_pick(req.origin, req.dir, req.cells, req.forward).target
+		pressed = VoxelPicking.start_pick(req.origin, req.dir, req.frame, req.forward).target
 		var press := InputEventMouseButton.new()
 		press.button_index = MOUSE_BUTTON_LEFT
 		press.pressed = true
@@ -42,8 +42,8 @@ func _run() -> void:
 
 	step("Then a stroke of voxels is painted", func():
 		var frame: VoxelFrame = State.document.frames[0]
-		expect(frame.cells.size() > 1, "the drag painted a stroke")
-		expect(frame.cells.has(pressed), "the pressed cell is painted")
+		expect(frame.count() > 1, "the drag painted a stroke")
+		expect(frame.has(pressed), "the pressed cell is painted")
 	)
 
 	step("When the user undoes the stroke", func():
@@ -51,5 +51,5 @@ func _run() -> void:
 	)
 
 	step("Then the stroke is removed", func():
-		expect(State.document.frames[0].cells.is_empty(), "the stroke is removed")
+		expect(State.document.frames[0].count() == 0, "the stroke is removed")
 	)
