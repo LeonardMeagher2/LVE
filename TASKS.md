@@ -80,7 +80,6 @@ max_active: 1
   - [x] Run the full behavior suite
 
 # Export/Import
-- [ ] Save/load the current document to a json file, including all frames, tags, and palette
 - [x] Export voxel meshes and animation clips as glTF and GLB
   - [x] Add an export button with its own icon and file dialog
   - [x] Reuse greedy meshing and build export meshes on a worker
@@ -96,14 +95,12 @@ max_active: 1
   - [x] Merge same-color coplanar export faces across chunk boundaries
   - [x] Verify color boundaries, cavities, sparse shapes, and triangle reductions
   - See [GLTF_EXPORT.md](GLTF_EXPORT.md) for the format and import settings.
-- [ ] Export to OBJ format
 - [ ] Import image files as a voxel grid (png, jpg, bmp, aseprite)
 - [ ] Export a sprite sheet of the animation frames
   - [ ] Build the export UI
   - [ ] Render each frame with a transparent background
 
 # Palette
-- [ ] Palette should allow duplicate colors
 - [ ] Modifying the palette should add undo/redo support
 - [ ] Drag to select multiple swatches
 - [ ] Dragging a selection of swatches moves them to a new location in the palette
