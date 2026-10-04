@@ -1,0 +1,7 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://Plugins/Brush/LineTool.tscn" id="1_scene"]
+[ext_resource type="Script" path="res://Plugins/Clipboard/PasteTool.gd" id="2_script"]
+
+[node name="PasteTool" instance=ExtResource("1_scene")]
+script = ExtResource("2_script")

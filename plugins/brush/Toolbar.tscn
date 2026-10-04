@@ -4,6 +4,8 @@
 [ext_resource type="Texture2D" uid="uid://ejqpo0v0d1op" path="res://icons/pencil.svg" id="2_ccmv0"]
 [ext_resource type="Texture2D" uid="uid://os815iumesvl" path="res://icons/paint.svg" id="3_21n6l"]
 [ext_resource type="Script" uid="uid://co50uowx18hkb" path="res://Plugins/Brush/Toolbar.gd" id="4_ccmv0"]
+[ext_resource type="Texture2D" path="res://icons/line.svg" id="5_line"]
+[ext_resource type="Texture2D" path="res://icons/eraser.svg" id="6_eraser"]
 
 [sub_resource type="InputEventAction" id="InputEventAction_pencil"]
 action = &"tool_pencil"
@@ -15,17 +17,23 @@ events = [SubResource("InputEventAction_pencil")]
 [node name="Toolbar" type="MenuButton" unique_id=321580023]
 offset_right = 26.0
 offset_bottom = 26.0
-tooltip_text = "Pencil and paint tools"
+tooltip_text = "Brush tools"
 button_group = ExtResource("1_o5fq1")
 shortcut = SubResource("Shortcut_pencil")
 icon = ExtResource("2_ccmv0")
 flat = false
 icon_alignment = 1
-item_count = 2
+item_count = 4
 popup/item_0/text = "Pencil"
 popup/item_0/icon = ExtResource("2_ccmv0")
 popup/item_0/id = 0
 popup/item_1/text = "Paint"
 popup/item_1/icon = ExtResource("3_21n6l")
 popup/item_1/id = 1
+popup/item_2/text = "Line"
+popup/item_2/icon = ExtResource("5_line")
+popup/item_2/id = 2
+popup/item_3/text = "Eraser"
+popup/item_3/icon = ExtResource("6_eraser")
+popup/item_3/id = 3
 script = ExtResource("4_ccmv0")

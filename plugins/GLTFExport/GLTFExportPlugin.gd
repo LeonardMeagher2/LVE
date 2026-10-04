@@ -24,6 +24,7 @@ func _notification(what: int) -> void:
 		_menu_item.free()
 
 class ExportJob extends VoxelFrame.EditJob:
+	const WELD_EPSILON := 0.00001
 	var frames: Array[VoxelFrame] = []
 	var tags: Array[AnimationTag] = []
 	var frame_surfaces: Array[Array] = []
@@ -73,11 +74,16 @@ class ExportJob extends VoxelFrame.EditJob:
 			frame_surfaces.append(arrays)
 		checkpoint(completed)
 		for frame_index in frame_surfaces.size():
-			var simplified := _simplify_frame(frame_surfaces[frame_index], frame_index)
+			var welded := _weld_frame(frame_surfaces[frame_index], frame_index)
+			if welded.is_empty():
+				return
+			var simplified := _simplify_frame(welded, frame_index)
 			if simplified.is_empty():
 				return
-			frame_surfaces[frame_index] = simplified
-			vertex_count += simplified[Mesh.ARRAY_VERTEX].size()
+			frame_surfaces[frame_index] = _weld_frame(simplified, frame_index)
+			if frame_surfaces[frame_index].is_empty():
+				return
+			vertex_count += frame_surfaces[frame_index][Mesh.ARRAY_VERTEX].size()
 		if vertex_count == 0:
 			return
 		var center := (min_position + max_position) * 0.5
@@ -93,12 +99,67 @@ class ExportJob extends VoxelFrame.EditJob:
 			arrays[Mesh.ARRAY_VERTEX] = positions
 		checkpoint(completed)
 
+	func _weld_frame(arrays: Array, frame_index: int) -> Array:
+		var source_positions: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+		if source_positions.is_empty():
+			return arrays
+		var source_normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
+		var source_colors: PackedColorArray = arrays[Mesh.ARRAY_COLOR]
+		var source_indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
+		var positions := PackedVector3Array()
+		var normals := PackedVector3Array()
+		var colors := PackedColorArray()
+		var remap := PackedInt32Array()
+		remap.resize(source_positions.size())
+		var buckets := {}
+		stage("Welding frame %d/%d vertices" % [frame_index + 1, frames.size()], source_positions.size())
+		for vertex_index in source_positions.size():
+			if vertex_index % 256 == 0 and not checkpoint(vertex_index):
+				return []
+			var position := source_positions[vertex_index]
+			var bucket := Vector3i((position / WELD_EPSILON).floor())
+			var match_index := -1
+			for x in range(-1, 2):
+				for y in range(-1, 2):
+					for z in range(-1, 2):
+						for candidate: int in buckets.get(bucket + Vector3i(x, y, z), []):
+							if normals[candidate] == source_normals[vertex_index] and colors[candidate] == source_colors[vertex_index] and positions[candidate].distance_squared_to(position) <= WELD_EPSILON * WELD_EPSILON:
+								match_index = candidate
+								break
+						if match_index != -1:
+							break
+					if match_index != -1:
+						break
+				if match_index != -1:
+					break
+			if match_index == -1:
+				match_index = positions.size()
+				positions.append(position)
+				normals.append(source_normals[vertex_index])
+				colors.append(source_colors[vertex_index])
+				if not buckets.has(bucket):
+					buckets[bucket] = []
+				buckets[bucket].append(match_index)
+			remap[vertex_index] = match_index
+		var indices := PackedInt32Array()
+		indices.resize(source_indices.size())
+		for index in source_indices.size():
+			indices[index] = remap[source_indices[index]]
+		var welded := arrays.duplicate()
+		welded[Mesh.ARRAY_VERTEX] = positions
+		welded[Mesh.ARRAY_NORMAL] = normals
+		welded[Mesh.ARRAY_COLOR] = colors
+		welded[Mesh.ARRAY_INDEX] = indices
+		return welded
+
+
 	func _simplify_frame(arrays: Array, frame_index: int) -> Array:
 		var source_positions: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
 		if source_positions.is_empty():
 			return arrays
 		var source_normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
 		var source_colors: PackedColorArray = arrays[Mesh.ARRAY_COLOR]
+		var source_indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
 		var quad_count: int = arrays[Mesh.ARRAY_INDEX].size() / 6
 		stage("Simplifying frame %d/%d" % [frame_index + 1, frames.size()], quad_count)
 		# Sparse face masks merge chunk boundaries without scanning empty frame bounds.
@@ -107,7 +168,7 @@ class ExportJob extends VoxelFrame.EditJob:
 		for quad_index in quad_count:
 			if not checkpoint(quad_index):
 				return []
-			var first_vertex := quad_index * 4
+			var first_vertex := source_indices[quad_index * 6]
 			var origin := source_positions[first_vertex]
 			var normal := source_normals[first_vertex]
 			var axis := 0 if normal.x != 0 else (1 if normal.y != 0 else 2)
@@ -118,8 +179,10 @@ class ExportJob extends VoxelFrame.EditJob:
 			planes[plane_key] = face_cells
 			var column := roundi(origin[column_axis] + 0.5)
 			var row := roundi(origin[row_axis] + 0.5)
-			var width := roundi(source_positions[first_vertex + 1][column_axis] - origin[column_axis])
-			var height := roundi(source_positions[first_vertex + 3][row_axis] - origin[row_axis])
+			var column_vertex := source_indices[quad_index * 6 + (2 if normal[axis] > 0 else 1)]
+			var row_vertex := source_indices[quad_index * 6 + (4 if normal[axis] > 0 else 5)]
+			var width := roundi(source_positions[column_vertex][column_axis] - origin[column_axis])
+			var height := roundi(source_positions[row_vertex][row_axis] - origin[row_axis])
 			for row_offset in height:
 				for column_offset in width:
 					face_cells[Vector2i(column + column_offset, row + row_offset)] = source_colors[first_vertex]
@@ -309,9 +372,12 @@ func _finish_export() -> void:
 
 func _tag_sequence(tag: AnimationTag) -> Array[int]:
 	var cycle: Array[int] = []
-	if tag.loop_mode == AnimationTag.LoopMode.REVERSE:
+	if tag.loop_mode in [AnimationTag.LoopMode.REVERSE, AnimationTag.LoopMode.PING_PONG_REVERSE]:
 		for frame_index in range(tag.to, tag.from - 1, -1):
 			cycle.append(frame_index)
+		if tag.loop_mode == AnimationTag.LoopMode.PING_PONG_REVERSE:
+			for frame_index in range(tag.from + 1, tag.to):
+				cycle.append(frame_index)
 	else:
 		for frame_index in range(tag.from, tag.to + 1):
 			cycle.append(frame_index)
@@ -323,6 +389,8 @@ func _tag_sequence(tag: AnimationTag) -> Array[int]:
 		sequence.append_array(cycle)
 	if tag.loop_mode == AnimationTag.LoopMode.PING_PONG and tag.repeats > 0 and tag.from != tag.to:
 		sequence.append(tag.from)
+	elif tag.loop_mode == AnimationTag.LoopMode.PING_PONG_REVERSE and tag.repeats > 0 and tag.from != tag.to:
+		sequence.append(tag.to)
 	return sequence
 
 

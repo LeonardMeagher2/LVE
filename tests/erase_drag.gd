@@ -17,7 +17,7 @@ func _run() -> void:
 		container.stretch = false
 		viewport.size = Vector2i(800, 500)
 		center = Vector2(400.0, 250.0)
-		activate_tool("eraser")
+		select_toolbar_item("Toolbar", "Eraser")
 		var start := aim(center)
 		c0 = start.target
 		c1 = drag(center + Vector2(0.0, -20.0), start.plane).target

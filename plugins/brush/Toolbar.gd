@@ -12,3 +12,11 @@ func _on_index_pressed(index: int) -> void:
 	_settings.mode = _settings.BrushMode[item_text]
 	icon = item_icon
 	button_pressed = true
+
+
+func _shortcut_input(event: InputEvent) -> void:
+	if not disabled and is_visible_in_tree() and event.is_action_pressed("tool_eraser") and not event.is_echo():
+		_on_index_pressed(_settings.BrushMode.ERASER)
+		accept_event()
+		return
+	super._shortcut_input(event)

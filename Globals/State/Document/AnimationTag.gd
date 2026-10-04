@@ -1,7 +1,7 @@
 class_name AnimationTag
 extends Resource
 
-enum LoopMode { FORWARD, REVERSE, PING_PONG }
+enum LoopMode { FORWARD, REVERSE, PING_PONG, PING_PONG_REVERSE }
 
 @export var name := "Tag"
 @export var from := 0

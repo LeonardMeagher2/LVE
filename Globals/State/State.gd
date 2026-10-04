@@ -53,6 +53,7 @@ var document: VoxiDocument : set=set_document
 
 var current_frame := 0:
 	set(value):
+		value = clampi(value, 0, document.frames.size() - 1)
 		if value == current_frame:
 			return
 		edit_context_changing.emit()
@@ -67,6 +68,8 @@ var active_tag := 0:
 		if new_value == active_tag:
 			return
 		active_tag = new_value
+		if is_playing:
+			_init_playback()
 		tag_changed.emit()
 
 var _play_dir := 1
@@ -105,12 +108,13 @@ func _ready() -> void:
 	
 	add_plugin(load("res://Plugins/Brush/BrushPlugin.gd").new())
 	add_plugin(load("res://Plugins/Eyedropper/EyedropperPlugin.gd").new())
-	add_plugin(load("res://Plugins/Eraser/EraserPlugin.gd").new())
 	add_plugin(load("res://Plugins/Fill/FillPlugin.gd").new())
 	add_plugin(load("res://Plugins/Selection/SelectionPlugin.gd").new())
 	add_plugin(load("res://Plugins/Transform/TransformPlugin.gd").new())
 	add_plugin(load("res://Plugins/Plane/PlanePlugin.gd").new())
 	add_plugin(load("res://Plugins/GLTFExport/GLTFExportPlugin.gd").new())
+	add_plugin(load("res://Plugins/Clipboard/ClipboardPlugin.gd").new())
+	add_plugin(load("res://Plugins/PNGImport/PNGImportPlugin.gd").new())
 	
 
 
@@ -313,20 +317,22 @@ func _init_playback() -> void:
 	_play_elapsed = 0.0
 	_play_passes = 0
 	_play_dir = 1
-	current_frame = clampi(current_frame, _play_lo(), _play_hi())
+	current_frame = _play_hi() if _play_mode() in [AnimationTag.LoopMode.REVERSE, AnimationTag.LoopMode.PING_PONG_REVERSE] else _play_lo()
+	if _play_mode() == AnimationTag.LoopMode.PING_PONG_REVERSE:
+		_play_dir = -1
 
 
 func _play_lo() -> int:
 	var tag := get_active_tag()
 	if tag:
-		return mini(tag.from, tag.to)
+		return clampi(mini(tag.from, tag.to), 0, document.frames.size() - 1)
 	return 0
 
 
 func _play_hi() -> int:
 	var tag := get_active_tag()
 	if tag:
-		return maxi(tag.from, tag.to)
+		return clampi(maxi(tag.from, tag.to), 0, document.frames.size() - 1)
 	return document.frames.size() - 1
 
 
@@ -345,6 +351,9 @@ func _play_repeats() -> int:
 
 
 func _advance_playback() -> void:
+	if current_frame < _play_lo() or current_frame > _play_hi():
+		_init_playback()
+		return
 	if _play_lo() == _play_hi():
 		return
 	match _play_mode():
@@ -369,16 +378,22 @@ func _advance_playback() -> void:
 		_:
 			if _play_dir == 1:
 				if current_frame == _play_hi():
+					if _play_mode() == AnimationTag.LoopMode.PING_PONG_REVERSE:
+						_play_passes += 1
+						if _finished():
+							stop()
+							return
 					current_frame = _play_hi() - 1
 					_play_dir = -1
 				else:
 					current_frame += 1
 			else:
 				if current_frame == _play_lo():
-					_play_passes += 1
-					if _finished():
-						stop()
-						return
+					if _play_mode() != AnimationTag.LoopMode.PING_PONG_REVERSE:
+						_play_passes += 1
+						if _finished():
+							stop()
+							return
 					current_frame = _play_lo() + 1
 					_play_dir = 1
 				else:

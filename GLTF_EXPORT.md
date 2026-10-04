@@ -61,6 +61,8 @@ Other applications can require their own loop setting.
 ## Final mesh simplification
 
 The worker simplifies each frame before export.
+The worker welds vertices within 0.00001 voxel units before and after simplification.
+Vertices with different normals or colors remain separate.
 The worker merges coplanar faces with the same color across chunk boundaries.
 The pass preserves silhouettes, cavities, sharp normals, and color boundaries.
 The pass uses sparse face masks instead of scanning empty frame bounds.

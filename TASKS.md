@@ -16,8 +16,26 @@ max_active: 1
   - [x] Fix the eyedropper shortcut and tooltip
   - [x] Delete the dead tool scripts, scenes, option widgets, and ToolInfo resources
   - [ ] Ask the user to test the Transform and Plane tools manually
-- [ ] Line tool
-  - [ ] Click to start, click to end, or click and drag to draw a line
+- [x] Line tool and shared brush shapes
+  - [x] Add Line to the Pencil and Paint menu
+  - [x] Click to start, click to end, or click and drag to draw a line
+  - [x] Preview the line before committing one undo action
+  - [x] Cancel the preview with Escape or a tool change
+  - [x] Add a brush diameter option with a minimum of one
+  - [x] Add cube and sphere brush shapes
+  - [x] Copy a selection as a brush shape with its original colors
+  - [x] Use icons for the brush option controls
+  - [x] Select brush shapes with grouped icon buttons
+  - [x] Use selected voxels or all frame voxels for the voxel brush
+  - [x] Use the selection icon for the voxel brush
+  - [x] Add Eraser to the brush menu with the shared diameter and shapes
+  - [x] Keep solid Brush and Line previews and outline Eraser previews
+  - [x] Separate the shape, size, stroke, and clipboard controls
+  - [x] Prepare large brush shapes and strokes on workers
+  - [x] Verify volume brushes, selection masks, undo, cancellation, and frame changes
+  - [x] Run the full behavior suite
+    - 71 tests report a pass. `selection_modes` retains the six known failures.
+    - `tag_range` retains its existing grip-text errors.
 - [ ] Extrude tool
   - [ ] Selection of voxels extruded along plane normal, with a drag to set the distance
 - [x] Move tool
@@ -35,6 +53,9 @@ max_active: 1
   - [x] Add a "uniform scale" option to the scale tool, so that the user can scale voxels uniformly in all directions
 
 # Rendering and storage
+- [ ] Distribute expensive jobs across the worker threads available on each system
+  - [ ] Use chunk work groups for independent matching and edit work
+  - [ ] Preserve cancellation, bounded publication, and UI responsiveness
 - [x] Group adjacent radio items in the camera menu
 - [x] Keep voxel edits fast and report long-running activity
   - [x] Track overlapping foreground and background operations
@@ -93,14 +114,30 @@ max_active: 1
   - [x] Use core glTF scale animation with no animation-method selection
   - [x] Verify frame switches, delays, and looping with scale tracks
   - [x] Merge same-color coplanar export faces across chunk boundaries
+  - [x] Weld epsilon-close vertices before and after export simplification
+  - [x] Preserve sharp normals and color boundaries during welding
   - [x] Verify color boundaries, cavities, sparse shapes, and triangle reductions
   - See [GLTF_EXPORT.md](GLTF_EXPORT.md) for the format and import settings.
-- [ ] Import image files as a voxel grid (png, jpg, bmp, aseprite)
+- [x] Open PNG images as voxel documents
+  - [x] Clip pixels below 0.5 alpha and make retained pixels opaque
+  - [x] Fill the palette with distinct retained image colors
+  - [x] Center occupied content on the nearest origin-aligned voxel grid
+  - [x] Read matching Aseprite JSON sidecars in array and hash formats
+  - [x] Preserve frame timing, trim offsets, tag ranges, directions, and repeats
+  - [x] Honor the example's custom `no_loop` tag marker
+  - [x] Use one centering offset across animation frames
+  - [x] Prepare images and voxel frames on workers
+  - [x] Verify PNG loading, black swatches, cancellation, and the Dog example
+  - [x] Use a self-contained Aseprite fixture for the behavior test
+  - The final full run reported 79 passes and the six known windowed selection failures.
+  - The Dog fixture was removed during the run. The self-contained Aseprite rerun passes.
+- [ ] Import other image formats (jpg, bmp, aseprite files)
 - [ ] Export a sprite sheet of the animation frames
   - [ ] Build the export UI
   - [ ] Render each frame with a transparent background
 
 # Palette
+- [x] Initialize black swatch backgrounds and tooltips
 - [ ] Modifying the palette should add undo/redo support
 - [ ] Drag to select multiple swatches
 - [ ] Dragging a selection of swatches moves them to a new location in the palette
@@ -115,8 +152,28 @@ max_active: 1
 
 
 # Selection
-- [ ] Copy selection to clipboard
-- [ ] Paste selection at an offset
+- [x] Preselect mode buttons from the stored selection state
+  - [x] Keep the buttons synchronized when the tool or mode changes
+  - [x] Verify the selection mode state and behavior tests
+- [x] Prepare large wand selections as batched worker jobs
+  - [x] Reuse the fill matching and connected search
+  - [x] Publish one complete selection with undo and context cancellation
+- [x] Copy selected voxels or all frame voxels to the clipboard
+- [x] Paste voxels at an offset with a preview and one undo action
+  - [x] Share Copy and Paste controls across Brush, Selection, and Transform
+  - [x] Add Cut, Copy, Paste, and Delete controls to the shared editing plugin
+  - [x] Add Ctrl+X, Ctrl+C, Ctrl+V, and Delete shortcuts
+  - [x] Cut a selection or the whole frame with one undo action
+  - [x] Delete selected voxels with the Delete key and one undo action
+  - [x] Preserve voxel colors and relative positions across documents
+  - [x] Prepare large copies and paste previews on workers
+  - [x] Cancel paste previews on tool and frame changes
+  - [x] Remove paste previews after the input event finishes
+  - [x] Retain the input viewport when a tool detaches during its input handler
+  - [x] Verify Cut, Delete, paste input, undo, cancellation, and large clipboard operations
+    - The full run reported 73 passes and the known `selection_modes` failure.
+    - The surface-cache test used a scene changed during the run. Its focused rerun passes.
+    - The windowed paste, Cut, and Delete tests pass.
 - [ ] First mode: select a flat section on the press plane
 - [ ] After the section is set, expand the volume along the 3rd axis by dragging the mouse. The 3rd axis is along the normal of the press plane. The drag distance sets the depth of the volume.
 - [ ] Visual feedback for both phases
@@ -140,6 +197,11 @@ max_active: 1
 
 
 # Animation Tags
+- [x] Snap playback to the selected tag bounds
+  - [x] Start forward and reverse playback at the correct boundary
+  - [x] Resnap when the selected tag changes during playback
+  - [x] Bound current frame indices and handle single-frame tags
+  - [x] Support reverse ping-pong playback and export
 - [x] UI for the existing tag data (create, select via dropdown, and delete named frame groups)
 - [x] Rename a tag in edit mode (dropdown becomes a name field)
 - [x] Change a tag's frame range with the timeline grab handles

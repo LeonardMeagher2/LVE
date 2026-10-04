@@ -1,16 +1,69 @@
 [gd_scene format=3 uid="uid://de7rwt1nnpu1k"]
 
-[ext_resource type="Texture2D" uid="uid://cl0exu5ldguw" path="res://icons/pixel_perfect.svg" id="1_icon"]
-[ext_resource type="Script" uid="uid://c20cgmyn06xbj" path="res://Plugins/Brush/Options.gd" id="1_iwsrx"]
+[ext_resource type="Texture2D" uid="uid://cl0exu5ldguw" path="res://icons/pixel_perfect.svg" id="1_pixel"]
+[ext_resource type="Script" uid="uid://c20cgmyn06xbj" path="res://Plugins/Brush/Options.gd" id="2_script"]
+[ext_resource type="Texture2D" uid="uid://dtgqku4g3l22e" path="res://icons/cube.svg" id="3_cube"]
+[ext_resource type="Texture2D" uid="uid://broaps7lc7g1u" path="res://icons/sphere.svg" id="4_sphere"]
+[ext_resource type="Texture2D" uid="uid://cwgfstwbiogcd" path="res://icons/select.svg" id="5_selection"]
+[ext_resource type="Texture2D" uid="uid://bbt7tj3kwq42w" path="res://icons/brush_diameter.svg" id="6_diameter"]
 
-[node name="Options" type="HBoxContainer" unique_id=2043976841]
-script = ExtResource("1_iwsrx")
+[sub_resource type="ButtonGroup" id="ShapeGroup"]
 
-[node name="PixelPerfect" type="Button" parent="." unique_id=1727200567]
+[node name="Options" type="HBoxContainer" unique_id=1099487624]
+script = ExtResource("2_script")
+
+[node name="Shape" type="HBoxContainer" parent="." unique_id=632699455]
+layout_mode = 2
+
+[node name="Cube" type="Button" parent="Shape" unique_id=1447056993]
+layout_mode = 2
+tooltip_text = "Cube brush"
+toggle_mode = true
+button_group = SubResource("ShapeGroup")
+icon = ExtResource("3_cube")
+icon_alignment = 1
+
+[node name="Sphere" type="Button" parent="Shape" unique_id=1314283397]
+layout_mode = 2
+tooltip_text = "Sphere brush"
+toggle_mode = true
+button_group = SubResource("ShapeGroup")
+icon = ExtResource("4_sphere")
+icon_alignment = 1
+
+[node name="Selection" type="Button" parent="Shape" unique_id=1997957617]
+layout_mode = 2
+tooltip_text = "Use selected voxels as a brush, or all frame voxels when no selection exists"
+toggle_mode = true
+button_group = SubResource("ShapeGroup")
+icon = ExtResource("5_selection")
+icon_alignment = 1
+
+[node name="ShapeSeparator" type="VSeparator" parent="." unique_id=988385395]
+layout_mode = 2
+
+[node name="DiameterIcon" type="TextureRect" parent="." unique_id=1530116851]
+layout_mode = 2
+tooltip_text = "Brush diameter in voxels"
+texture = ExtResource("6_diameter")
+stretch_mode = 3
+
+[node name="Diameter" type="SpinBox" parent="." unique_id=185750120]
+layout_mode = 2
+tooltip_text = "Brush diameter in voxels. Diameter 1 paints one voxel."
+min_value = 1.0
+max_value = 64.0
+value = 1.0
+
+[node name="PixelPerfect" type="Button" parent="." unique_id=1592156203]
 layout_mode = 2
 tooltip_text = "Pixel perfect strokes"
 toggle_mode = true
-icon = ExtResource("1_icon")
+icon = ExtResource("1_pixel")
 icon_alignment = 1
 
+[connection signal="pressed" from="Shape/Cube" to="." method="_on_cube_pressed"]
+[connection signal="pressed" from="Shape/Sphere" to="." method="_on_sphere_pressed"]
+[connection signal="pressed" from="Shape/Selection" to="." method="_on_selection_pressed"]
+[connection signal="value_changed" from="Diameter" to="." method="_on_diameter_changed"]
 [connection signal="toggled" from="PixelPerfect" to="." method="_on_pixel_perfect_toggled"]

@@ -36,17 +36,17 @@ button_group = SubResource("ButtonGroup_j1b3m")
 icon = ExtResource("4_sub")
 icon_alignment = 1
 
-[node name="Sep" type="VSeparator" parent="." unique_id=662669810]
-layout_mode = 2
-
 [node name="clear" type="Button" parent="." unique_id=2120122340]
 layout_mode = 2
 tooltip_text = "Clear Selection"
 icon = ExtResource("5_clear")
 icon_alignment = 1
 
+[node name="Sep" type="VSeparator" parent="." unique_id=662669810]
+unique_name_in_owner = true
+layout_mode = 2
+
 [node name="Connected" type="Button" parent="." unique_id=178691740]
-visible = false
 layout_mode = 2
 tooltip_text = "Connected"
 toggle_mode = true

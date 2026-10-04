@@ -28,6 +28,9 @@ func _rebuild_dropdown() -> void:
 
 
 func _sync() -> void:
+	if %TagDropdown.item_count != State.document.tags.size():
+		_rebuild_dropdown()
+		return
 	%TagDropdown.selected = State.active_tag
 	var has_tag := State.get_active_tag() != null
 	%TagActions.visible = has_tag
@@ -50,7 +53,7 @@ func _loop_icon(mode: int) -> Texture2D:
 	match mode:
 		AnimationTag.LoopMode.REVERSE:
 			return LOOP_REVERSE_ICON
-		AnimationTag.LoopMode.PING_PONG:
+		AnimationTag.LoopMode.PING_PONG, AnimationTag.LoopMode.PING_PONG_REVERSE:
 			return LOOP_PING_PONG_ICON
 	return LOOP_FORWARD_ICON
 
@@ -61,6 +64,8 @@ func _loop_tooltip(mode: int) -> String:
 			return "Loop mode: reverse"
 		AnimationTag.LoopMode.PING_PONG:
 			return "Loop mode: ping-pong"
+		AnimationTag.LoopMode.PING_PONG_REVERSE:
+			return "Loop mode: ping-pong reverse"
 	return "Loop mode: forward"
 
 

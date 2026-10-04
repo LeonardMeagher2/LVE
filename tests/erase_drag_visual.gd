@@ -17,7 +17,7 @@ func _run() -> void:
 		container.stretch = false
 		viewport.size = Vector2i(800, 500)
 		center = Vector2(400.0, 250.0)
-		activate_tool("eraser")
+		select_toolbar_item("Toolbar", "Eraser")
 		var start := aim(center)
 		c0 = start.target
 		c_mid = drag(center + Vector2(0.0, 20.0), start.plane).target
@@ -41,7 +41,7 @@ func _run() -> void:
 	)
 
 	step("Then the highlight is on the voxel being erased", func():
-		var v: Node3D = active_tool_node("EraserPlugin")
+		var v: Node3D = active_tool_node("BrushPlugin")
 		expect(v.visible, "the highlight is visible")
 		expect(v.position == Vector3(c_mid), "the highlight is on the voxel being erased")
 	)
@@ -56,7 +56,7 @@ func _run() -> void:
 	)
 
 	step("Then the highlight stays visible", func():
-		var v: Node3D = active_tool_node("EraserPlugin")
+		var v: Node3D = active_tool_node("BrushPlugin")
 		expect(v.visible, "the highlight is still visible")
 	)
 

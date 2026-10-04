@@ -3,12 +3,15 @@ extends HBoxContainer
 var _settings := preload("./settings.tres")
 
 func _ready() -> void:
-	$Connected.set_pressed_no_signal(_settings.connected)
-	_settings.tool_changed.connect(_on_tool_changed)
-	_on_tool_changed(_settings.tool)
+	_settings.changed.connect(_sync)
+	_sync()
 	
-func _on_tool_changed(tool: int) -> void:
-	$Connected.visible = tool == _settings.Tools.WAND
+func _sync() -> void:
+	var mode_buttons := [$replace, $add, $subtract]
+	mode_buttons[_settings.mode].button_pressed = true
+	$Connected.set_pressed_no_signal(_settings.connected)
+	$Connected.visible = _settings.tool == _settings.Tools.WAND
+	$Sep.visible = $Connected.visible
 
 
 func _on_connected_toggled(toggled_on: bool) -> void:

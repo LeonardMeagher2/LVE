@@ -19,6 +19,8 @@ class FillJob extends VoxelFrame.EditJob:
 	var connected := true
 	var replacement_color := Color.TRANSPARENT
 	var changed_chunks: Array[Vector3i] = []
+	var apply_changes := true
+	var matching_cells := {}
 
 	func run() -> void:
 		var changes := {}
@@ -49,8 +51,10 @@ class FillJob extends VoxelFrame.EditJob:
 				examined += 1
 				if examined % 4096 == 0 and not checkpoint(changes.size()):
 					return
-		stage("Applying fill", changes.size())
-		changed_chunks = source_frame.set_cells(changes, self)
+		matching_cells = changes
+		if apply_changes:
+			stage("Applying fill", changes.size())
+			changed_chunks = source_frame.set_cells(changes, self)
 
 
 func _enter_tree() -> void:

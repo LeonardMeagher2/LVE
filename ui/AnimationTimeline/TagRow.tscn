@@ -77,7 +77,7 @@ tooltip_text = "Loop mode"
 icon = ExtResource("3_loop_fwd")
 flat = false
 icon_alignment = 1
-item_count = 3
+item_count = 4
 popup/item_0/text = "Forward"
 popup/item_0/icon = ExtResource("3_loop_fwd")
 popup/item_0/id = 0
@@ -87,6 +87,9 @@ popup/item_1/id = 1
 popup/item_2/text = "Ping-Pong"
 popup/item_2/icon = ExtResource("5_loop_ping")
 popup/item_2/id = 2
+popup/item_3/text = "Ping-Pong Reverse"
+popup/item_3/icon = ExtResource("5_loop_ping")
+popup/item_3/id = 3
 
 [node name="RepeatsSpin" type="SpinBox" parent="." unique_id=2010203320]
 unique_name_in_owner = true

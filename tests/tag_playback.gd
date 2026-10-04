@@ -20,8 +20,10 @@ func _run() -> void:
 		State.play_tag(1)
 	)
 
-	step("Then playback continues from the current frame and wraps", func():
-		expect(State.current_frame == 2, "playback keeps the current frame")
+	step("Then playback starts at the tag boundary and wraps", func():
+		expect(State.current_frame == 1, "playback starts at the tag start")
+		State._advance_playback()
+		expect(State.current_frame == 2, "playback advances inside the tag")
 		State._advance_playback()
 		expect(State.current_frame == 3, "frame advances to the tag end")
 		State._advance_playback()
@@ -91,5 +93,41 @@ func _run() -> void:
 		State._advance_playback()
 		State._advance_playback()
 		expect(State.is_playing, "playback keeps running")
+		State.stop()
+	)
+	step("When the selected tag changes during playback", func():
+		State.play_tag(1)
+		State.current_frame = 3
+		State.active_tag = 4
+	)
+	step("Then playback snaps into the selected tag range", func():
+		expect(State.current_frame == 0, "switching tags starts at the new tag boundary")
+		var bounded := true
+		for _tick in 8:
+			State._advance_playback()
+			bounded = bounded and State.current_frame >= 0 and State.current_frame <= 1
+		expect(bounded, "playback stays inside the selected tag")
+		State.stop()
+	)
+	step("When a single-frame tag is selected during playback", func():
+		var index := State.document.add_tag("Single", 2, 2)
+		State.play_tag(1)
+		State.active_tag = index
+		State._advance_playback()
+	)
+	step("Then the selected single frame is displayed", func():
+		expect(State.current_frame == 2, "the single-frame tag snaps to its only frame")
+		State.stop()
+	)
+	step("When a stale tag range extends past the document", func():
+		State.document.tags[1].to = 100
+		State.play_tag(1)
+	)
+	step("Then playback exposes only valid frames", func():
+		var valid := true
+		for _tick in 8:
+			State._advance_playback()
+			valid = valid and State.get_current_voxel_frame() != null
+		expect(valid, "every displayed playback frame exists")
 		State.stop()
 	)

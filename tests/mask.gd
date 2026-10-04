@@ -58,7 +58,7 @@ func _run() -> void:
 	)
 
 	step("Given an eraser on the same two voxels", func():
-		activate_tool("eraser")
+		select_toolbar_item("Toolbar", "Eraser")
 	)
 
 	step("When the user clicks both voxels with the eraser", func():

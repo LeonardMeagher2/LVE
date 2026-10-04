@@ -4,6 +4,9 @@ This file records confirmed, non-obvious facts learned while working on Voxi. Re
 
 ## Godot API changes
 
+- 2026-10-04: Aseprite exports JSON tag repeat counts as strings. Convert the `repeat` field to an integer.
+- 2026-10-04: An input callback can detach its tool. Retain the viewport before calling the tool.
+- 2026-10-04: Nested GDScript classes must use the outer class name to call its static methods.
 - 2026-10-04: Runtime mesh compression changes positions and normals. Use `ImporterMesh` arrays to verify exported geometry.
 - 2026-10-04: Animated visibility pointers require a defined `KHR_node_visibility` object, including on initially visible nodes.
 - 2026-10-04: Godot 4.7.2 exports and imports visibility tracks with `KHR_node_visibility` and `KHR_animation_pointer`.

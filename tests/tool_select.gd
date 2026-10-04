@@ -10,7 +10,7 @@ func _ready() -> void:
 func _run() -> void:
 	step("Given the inactive brush tool button", func():
 		for b in main.get_node("%ToolBar").get_children():
-			if b is MenuButton and b.tooltip_text == "Pencil and paint tools":
+			if b is MenuButton and b.tooltip_text == "Brush tools":
 				brush_button = b
 				break
 		expect(brush_button != null, "the brush tool is a menu button")

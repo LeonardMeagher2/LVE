@@ -1,62 +1,115 @@
 extends "./SelectTool.gd"
 
-var _shift:bool = false
+const FillTool := preload("res://Plugins/Fill/FillTool.gd")
+
+var _source_document: VoxiDocument
+var _source_frame: VoxelFrame
+var _job: WandJob
+var _operation_id := 0
+
+class WandJob extends FillTool.FillJob:
+	var previous_selection := {}
+	var mode := 0
+	var result := {}
+
+	func run() -> void:
+		apply_changes = false
+		super.run()
+		if not checkpoint(0):
+			return
+		stage("Applying selection mode", matching_cells.size())
+		result = {} if mode == 0 else previous_selection.duplicate()
+		var completed := 0
+		for cell_position in matching_cells:
+			if mode == 2:
+				result.erase(cell_position)
+			else:
+				result[cell_position] = true
+			completed += 1
+			if completed % 4096 == 0 and not checkpoint(completed):
+				return
+
+
+func _enter_tree() -> void:
+	State.edit_context_changing.connect(_cancel_selection)
+
+
+func _exit_tree() -> void:
+	_cancel_selection()
+	if _job and _job.worker_task_id != -1:
+		WorkerThreadPool.wait_for_task_completion(_job.worker_task_id)
+	_job = null
+	State.edit_context_changing.disconnect(_cancel_selection)
+
 
 func handle_input(event: InputEvent, pos: Vector2) -> bool:
-	var r := _ray(pos)
-	var origin: Vector3 = r[0]
-	var dir: Vector3 = r[1]
-	if event is InputEventMouseButton:
-		var mb := event as InputEventMouseButton
-		if mb.button_index != MOUSE_BUTTON_LEFT:
-			return false
-		if mb.pressed:
-			begin_stroke()
-			_shift = mb.shift_pressed
-			var pick := _pick_start(origin, dir)
-			_commit(pick.target)
-			_end()
+	if event.is_action_pressed("ui_cancel") and _job:
+		_cancel_selection()
 		return true
-	if event is InputEventMouseMotion:
-		var mm := event as InputEventMouseMotion
-		if mm.button_mask == 0:
-			update_visual(_pick_start(origin, dir))
-			return true
-		return false
+	if event is InputEventMouseButton:
+		if event.button_index != MOUSE_BUTTON_LEFT:
+			return false
+		if event.pressed and _job == null:
+			var ray := _ray(pos)
+			_commit(_pick_start(ray[0], ray[1]).hit)
+		return true
+	if event is InputEventMouseMotion and event.button_mask == 0:
+		var ray := _ray(pos)
+		update_visual(_pick_start(ray[0], ray[1]))
+		return true
 	return false
 
 
 func _commit(seed_cell: Vector3i) -> void:
-	if seed_cell == VoxelPicking.NONE or not State.document.has_cell(State.current_frame, seed_cell):
+	if _job or State.edit_busy() or seed_cell == VoxelPicking.NONE or not State.has_cell(seed_cell):
 		return
-	State.selection.restore(_apply_mode(_flood(seed_cell)).capture())
-	State.selection_changed.emit()
+	_source_document = State.document
+	_source_frame = State.get_current_voxel_frame()
+	_job = WandJob.new()
+	_job.source_frame = _source_frame.copy_frame()
+	_job.seed_cell = seed_cell
+	_job.target_color = _source_frame.get_color(seed_cell)
+	_job.connected = _settings.connected
+	_job.previous_selection = State.selection.capture()
+	_job.mode = _settings.mode
+	var work := _source_frame.count() + State.selection.count()
+	if work <= 4096:
+		_job.run()
+		_finish_selection()
+	else:
+		_operation_id = State.begin_operation("Selecting matching voxels", work, true, self)
+		_job.worker_task_id = WorkerThreadPool.add_task(_job.run, true, "Wand selection")
 
 
-func _flood(seed_cell: Vector3i) -> VoxelSelection:
-	var frame: VoxelFrame = State.document.frames[State.current_frame]
-	var target := frame.get_color(seed_cell)
-	var sel := VoxelSelection.new()
-	sel.add(seed_cell)
-	if not _settings.connected:
-		for c in frame.cells_with_color(target):
-			sel.add(c)
-		return sel
-	var stack: Array[Vector3i] = [seed_cell]
-	while not stack.is_empty():
-		for n in _neighbors(stack.pop_back()):
-			if sel.contains(n):
-				continue
-			if not frame.has(n) or not colors_equal(frame.get_color(n), target):
-				continue
-			sel.add(n)
-			stack.append(n)
-	return sel
+func _process(_delta: float) -> void:
+	if _job == null:
+		return
+	if not WorkerThreadPool.is_task_completed(_job.worker_task_id):
+		var progress := _job.progress()
+		State.update_operation(_operation_id, progress[1], progress[2], progress[0])
+		return
+	WorkerThreadPool.wait_for_task_completion(_job.worker_task_id)
+	_finish_selection()
 
 
-func _neighbors(c: Vector3i) -> Array[Vector3i]:
-	return [
-		Vector3i(c.x + 1, c.y, c.z), Vector3i(c.x - 1, c.y, c.z),
-		Vector3i(c.x, c.y + 1, c.z), Vector3i(c.x, c.y - 1, c.z),
-		Vector3i(c.x, c.y, c.z + 1), Vector3i(c.x, c.y, c.z - 1),
-	]
+func _finish_selection() -> void:
+	var job := _job
+	_job = null
+	if job.checkpoint(0) and State.document == _source_document and State.get_current_voxel_frame() == _source_frame:
+		State.begin_stroke()
+		State.selection.restore(job.result)
+		State.end_stroke("Wand selection")
+		State.selection_changed.emit()
+	State.finish_operation(_operation_id)
+	_operation_id = 0
+	_source_document = null
+	_source_frame = null
+
+
+func _cancel_selection() -> void:
+	if _job:
+		_job.cancel()
+	_source_document = null
+	_source_frame = null
+	State.finish_operation(_operation_id)
+	_operation_id = 0
