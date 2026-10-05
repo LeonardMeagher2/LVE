@@ -66,6 +66,138 @@ func _run() -> void:
 			connected = connected and frame.has(Vector3i(offset, 0, offset))
 		expect(connected, "the diagonal contains each cell between its endpoints")
 	)
+	step("Given a voxel above the floor and a thin line brush", func():
+		_empty()
+		State.get_current_voxel_frame().set_cell(Vector3i(4, 3, 0), Color.BLUE)
+	)
+	step("When the user clicks the floor and previews an elevated hit", func():
+		_click(Vector3.ZERO)
+		_motion(Vector3(4, 3, 0))
+	)
+	while not tool.get_node("Cursor").is_settled():
+		await get_tree().process_frame
+	step("Then the preview connects the floor to the elevated surface", func():
+		expect(State.get_current_voxel_frame().count() == 1, "the preview preserves the source voxel")
+		expect(tool.get_node("Cursor").mesh.get_aabb().size == Vector3(5, 5, 1), "the two-click preview spans both endpoint heights")
+	)
+	step("When the user clicks the elevated hit", func():
+		_click(Vector3(4, 3, 0))
+	)
+	step("Then the line follows both hits without a plane restriction", func():
+		var frame := State.get_current_voxel_frame()
+		var connected := true
+		for offset in 5:
+			connected = connected and frame.has(Vector3i(offset, offset, 0))
+		expect(connected, "the line connects the floor to the elevated surface")
+		expect(frame.count() == 6, "the line adds five voxels beside the source voxel")
+		State.undo_redo.undo()
+		expect(frame.count() == 1 and frame.has(Vector3i(4, 3, 0)), "one undo retains the source voxel")
+	)
+	step("When the user drags from the floor across the elevated hit", func():
+		_button(Vector3.ZERO, true)
+		_motion(Vector3(4, 3, 0), true)
+		_button(Vector3(4, 3, 0), false)
+	)
+	step("Then the dragged line stays on the starting plane", func():
+		var frame := State.get_current_voxel_frame()
+		var connected := true
+		for offset in 5:
+			connected = connected and frame.has(Vector3i(offset, 0, 0))
+		expect(connected, "the dragged line connects five floor cells")
+		expect(not frame.has(Vector3i(4, 4, 0)), "the elevated surface has no line endpoint")
+		expect(frame.count() == 6, "the dragged line preserves the source voxel")
+	)
+	step("Given two voxels at different heights", func():
+		_empty()
+		var frame := State.get_current_voxel_frame()
+		frame.set_cell(Vector3i(0, 3, 0), Color.BLUE)
+		frame.set_cell(Vector3i(4, 0, 0), Color.BLUE)
+	)
+	step("When the user starts above the floor and previews empty space", func():
+		_click(Vector3(0, 3, 0))
+		_motion(Vector3(8, 0, 0))
+	)
+	while not tool.get_node("Cursor").is_settled():
+		await get_tree().process_frame
+	step("Then the empty-space preview stays on the starting plane", func():
+		var bounds: AABB = tool.get_node("Cursor").mesh.get_aabb()
+		expect(bounds.position.y == 3.5 and bounds.size.y == 1.0, "the preview stays at the starting height")
+	)
+	step("When the user clicks that empty space", func():
+		_click(Vector3(8, 0, 0))
+	)
+	step("Then the line ends on the starting plane", func():
+		var frame := State.get_current_voxel_frame()
+		expect(frame.has(Vector3i(8, 4, 0)), "the empty-space endpoint uses the starting plane")
+		expect(not frame.has(Vector3i(8, 0, 0)), "the floor remains empty below the endpoint")
+		State.undo_redo.undo()
+	)
+	step("When the user starts again and clicks the lower voxel", func():
+		_click(Vector3(0, 3, 0))
+		_motion(Vector3(4, 0, 0))
+		_click(Vector3(4, 0, 0))
+	)
+	step("Then the voxel hit moves the endpoint off the starting plane", func():
+		var frame := State.get_current_voxel_frame()
+		expect(frame.has(Vector3i(0, 4, 0)) and frame.has(Vector3i(4, 1, 0)), "the line connects both voxel surfaces")
+		expect(not frame.has(Vector3i(4, 4, 0)), "the endpoint follows the lower voxel surface")
+	)
+	step("Given a pending line in the top view", func():
+		_empty()
+		_click(Vector3.ZERO)
+	)
+	step("When the user changes to the front view and moves the endpoint", func():
+		camera_rig().set_view("front")
+		_motion(Vector3(4, 3, 0))
+	)
+	while not tool.get_node("Cursor").is_settled():
+		await get_tree().process_frame
+	step("Then the preview follows the front-view plane through the start", func():
+		expect(tool.get_node("Cursor").mesh.get_aabb().size == Vector3(5, 4, 1), "the front-view preview spans width and height")
+		expect(State.get_current_voxel_frame().count() == 0, "the view change leaves the line pending")
+	)
+	step("When the user changes to the side view and moves the endpoint", func():
+		camera_rig().set_view("right")
+		_motion(Vector3(0, 3, 4))
+	)
+	while not tool.get_node("Cursor").is_settled():
+		await get_tree().process_frame
+	step("Then the preview follows the side-view plane through the start", func():
+		expect(tool.get_node("Cursor").mesh.get_aabb().size == Vector3(1, 4, 5), "the side-view preview spans height and depth")
+	)
+	step("When the user clicks the endpoint in the side view", func():
+		_click(Vector3(0, 3, 4))
+	)
+	step("Then the line retains its start and uses the current view plane", func():
+		var frame := State.get_current_voxel_frame()
+		expect(frame.has(Vector3i.ZERO) and frame.has(Vector3i(0, 3, 4)), "the line connects the original start to the side-view endpoint")
+		State.undo_redo.undo()
+		expect(frame.count() == 0, "one undo removes the line after the view changes")
+	)
+	step("Given a voxel viewed from an angle", func():
+		_empty()
+		State.get_current_voxel_frame().set_cell(Vector3i.ZERO, Color.BLUE)
+		camera_rig().set_view("isometric")
+	)
+	step("When the user clicks and releases on the voxel", func():
+		_click(Vector3.ZERO)
+	)
+	step("Then the first click leaves the line pending", func():
+		expect(State.get_current_voxel_frame().count() == 1, "the first click preserves the document")
+		expect(not State.undo_redo.has_undo(), "the first click adds no undo action")
+		expect(tool.visible, "the first click shows the pending endpoint")
+	)
+	step("When the user clicks a second endpoint", func():
+		_motion(Vector3(4, 0, 0))
+		_click(Vector3(4, 0, 0))
+	)
+	step("Then the second click commits one line", func():
+		var frame := State.get_current_voxel_frame()
+		expect(frame.count() > 1, "the second click adds the line voxels")
+		State.undo_redo.undo()
+		expect(frame.count() == 1 and frame.has(Vector3i.ZERO), "one undo retains the source voxel")
+		expect(not State.undo_redo.has_undo(), "the two clicks create one undo action")
+	)
 	step("When the user draws a line with a sphere brush", func():
 		_empty()
 		options.get_node("Diameter").value = 3

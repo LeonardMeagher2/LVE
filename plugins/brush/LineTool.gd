@@ -51,25 +51,23 @@ func handle_input(event: InputEvent, pos: Vector2) -> bool:
 					return false
 				_begin_line(pick)
 			else:
-				var pick := _pick_drag(ray[0], ray[1])
+				var pick := _pick_endpoint(ray[0], ray[1])
 				if pick.target != VoxelPicking.NONE:
 					_update_endpoint(pick.target)
 					_request_commit()
 		else:
 			_mouse_pressed = false
-			if _anchor != VoxelPicking.NONE:
-				var pick := _pick_drag(ray[0], ray[1])
+			if _anchor != VoxelPicking.NONE and _dragged:
+				var pick := _pick_endpoint(ray[0], ray[1], true)
 				if pick.target != VoxelPicking.NONE:
-					_dragged = _dragged or pick.target != _anchor
 					_update_endpoint(pick.target)
-				if _dragged:
-					_request_commit()
+				_request_commit()
 		return true
 	if event is InputEventMouseMotion:
 		var ray := _ray(pos)
 		if _anchor != VoxelPicking.NONE:
 			if not _commit_requested:
-				var pick := _pick_drag(ray[0], ray[1])
+				var pick := _pick_endpoint(ray[0], ray[1], _mouse_pressed)
 				if pick.target != VoxelPicking.NONE:
 					_dragged = _dragged or (_mouse_pressed and pick.target != _anchor)
 					_update_endpoint(pick.target)
@@ -89,7 +87,16 @@ func _pick_start(origin: Vector3, dir: Vector3) -> PickResult:
 
 
 func pick_drag(request: PickRequest) -> PickResult:
-	return VoxelPicking.drag_pick(request.origin, request.dir, request.frame, request.plane)
+	_plane = VoxelPicking.view_plane(_anchor, request.origin, request.forward)
+	return VoxelPicking.drag_pick(request.origin, request.dir, request.frame, _plane)
+
+
+func _pick_endpoint(origin: Vector3, dir: Vector3, plane_only := false) -> PickResult:
+	if not plane_only:
+		var pick := _pick_start(origin, dir)
+		if pick.hit != VoxelPicking.NONE:
+			return pick
+	return _pick_drag(origin, dir)
 
 
 func _begin_line(pick: PickResult) -> void:
@@ -128,7 +135,7 @@ func _request_preview() -> void:
 
 func _start_preview() -> void:
 	_preview_requested = false
-	_job = BrushJob.new()
+	_job = _create_preview_job()
 	_job.centers = _preview_centers()
 	_job.pattern = _stroke_pattern
 	_job.diameter = _stroke_diameter
@@ -145,6 +152,10 @@ func _start_preview() -> void:
 		if not State.has_operation(_operation_id):
 			_operation_id = State.begin_operation("Preparing line", work, true, self)
 		_job.worker_task_id = WorkerThreadPool.add_task(_job.run, true, "Line preview")
+
+
+func _create_preview_job() -> BrushJob:
+	return BrushJob.new()
 
 
 func _preview_centers() -> Array[Vector3i]:
@@ -178,11 +189,9 @@ func _finish_preview() -> void:
 	_preview_result = job
 	_settings.cache_pattern(job.diameter, job.shape, job.pattern)
 	_stroke_pattern = job.pattern
-	var preview := VoxelSelection.new()
-	preview.restore(job.cell_colors)
 	position = Vector3.ZERO
 	$Cursor.show_voxels(job.cell_colors, _stroke_color)
-	visible = not preview.is_empty()
+	visible = not job.cell_colors.is_empty()
 
 
 func _request_commit() -> void:

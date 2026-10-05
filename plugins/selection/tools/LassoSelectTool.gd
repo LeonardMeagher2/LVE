@@ -2,6 +2,7 @@ extends "./SelectTool.gd"
 
 var _points: Array[Vector3i] = []
 var _press_target := VoxelPicking.NONE
+var _last_pointer_pos := Vector2.ZERO
 var _shift: bool = false
 
 
@@ -15,6 +16,7 @@ func handle_input(event: InputEvent, pos: Vector2) -> bool:
 			return false
 		if mb.pressed:
 			begin_stroke()
+			_last_pointer_pos = pos
 			_shift = mb.shift_pressed
 			var pick := _pick_start(origin, dir)
 			_plane = pick.plane
@@ -28,6 +30,7 @@ func handle_input(event: InputEvent, pos: Vector2) -> bool:
 			return true
 		else:
 			if _stroke_active:
+				_extend_to(pos, origin, dir)
 				_stroke_active = false
 				_commit()
 				visible = false
@@ -36,17 +39,24 @@ func handle_input(event: InputEvent, pos: Vector2) -> bool:
 	if event is InputEventMouseMotion:
 		var mm := event as InputEventMouseMotion
 		if _stroke_active and _plane != null and mm.button_mask & MOUSE_BUTTON_MASK_LEFT:
-			var pick := _pick_drag(origin, dir)
-			if pick.target != VoxelPicking.NONE and pick.target != _last_target:
-				_points.append(pick.target)
-				_last_target = pick.target
-				_update_line()
+			_extend_to(pos, origin, dir)
 			return true
 		if mm.button_mask == 0:
 			update_visual(_pick_start(origin, dir))
 			return true
 		return false
 	return false
+
+
+func _extend_to(pos: Vector2, origin: Vector3, dir: Vector3) -> void:
+	if pos == _last_pointer_pos or _plane == null:
+		return
+	_last_pointer_pos = pos
+	var pick := _pick_drag(origin, dir)
+	if pick.target != VoxelPicking.NONE and pick.target != _last_target:
+		_points.append(pick.target)
+		_last_target = pick.target
+		_update_line()
 
 
 func _commit() -> void:

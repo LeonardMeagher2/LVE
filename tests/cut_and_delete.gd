@@ -31,7 +31,7 @@ func _run() -> void:
 	step("Then the selected voxels are copied and removed in one action", func():
 		expect(clipboard._pattern.size() == 2, "Cut copies both selected voxels")
 		expect(frame.count() == 1 and frame.get_color(Vector3i(8, 0, 0)) == Color.GREEN, "Cut preserves the unselected marker")
-		expect(State.selection.is_empty(), "Cut clears the removed selection")
+		expect(State.selection.is_empty(), "Cut clears the source selection")
 		expect(State.document.palette == [Color.MAGENTA], "Cut preserves the existing palette")
 		State.undo_redo.undo()
 		expect(frame.count() == 3, "one undo restores both cut voxels")
@@ -39,6 +39,7 @@ func _run() -> void:
 		expect(not State.undo_redo.has_undo(), "Cut creates one undo action")
 		State.undo_redo.redo()
 		expect(frame.count() == 1, "one redo removes the cut voxels")
+		expect(State.selection.is_empty(), "redo clears the cut selection")
 	)
 	step("When the user pastes the cut voxels into another document", func():
 		State.document = VoxiDocument.new()
@@ -55,6 +56,7 @@ func _run() -> void:
 		expect(frame.count() == 2, "Paste restores both cut voxels")
 		expect(frame.get_color(Vector3i.ZERO) == Color.RED, "the cut red voxel retains its color")
 		expect(frame.get_color(Vector3i.RIGHT) == Color.BLUE, "the cut blue voxel retains its color")
+		expect(State.selection.count() == 2 and State.selection.contains(Vector3i.ZERO) and State.selection.contains(Vector3i.RIGHT), "Paste restores the cut selection")
 	)
 	step("Given another selected pair and an unselected marker", _setup)
 	step("When the user presses the Delete key", func():
@@ -66,6 +68,7 @@ func _run() -> void:
 	step("Then Delete erases only the selected voxels and supports undo", func():
 		expect(frame.count() == 1, "Delete removes the selected pair")
 		expect(frame.get_color(Vector3i(8, 0, 0)) == Color.GREEN, "Delete preserves the unselected marker")
+		expect(State.selection.count() == 2, "Delete preserves the source selection")
 		State.undo_redo.undo()
 		expect(frame.count() == 3, "one undo restores the deleted voxels")
 		expect(not State.undo_redo.has_undo(), "Delete creates one undo action")

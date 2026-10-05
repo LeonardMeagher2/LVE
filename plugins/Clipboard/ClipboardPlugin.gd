@@ -6,6 +6,7 @@ const CLIPBOARD_PREFIX := '{"voxi_voxels":'
 @onready var _paste_tool := preload("./PasteTool.tscn").instantiate()
 var _button_group := preload("res://Plugins/ToolBarButtonGroup.tres")
 var _pattern := {}
+var _selection_pattern := {}
 var _center := Vector3i.ZERO
 var _clipboard_text := ""
 var _copy_job: ClipboardCopyJob
@@ -16,6 +17,7 @@ var _shutting_down := false
 
 class ClipboardCopyJob extends BrushToolSettings.CopyJob:
 	var text := ""
+	var selection_pattern := {}
 	var cut_source := false
 	var changed_chunks: Array[Vector3i] = []
 
@@ -30,7 +32,15 @@ class ClipboardCopyJob extends BrushToolSettings.CopyJob:
 			records.append([cell_position.x, cell_position.y, cell_position.z, color.r, color.g, color.b, color.a])
 			if records.size() % 4096 == 0 and not checkpoint(records.size()):
 				return
-		text = JSON.stringify({"voxi_voxels": records}, "", true, true)
+		stage("Writing clipboard selection", selection_mask.size())
+		var selected_records := []
+		for cell_position: Vector3i in selection_mask:
+			var offset := cell_position - center
+			selection_pattern[offset] = true
+			selected_records.append([offset.x, offset.y, offset.z])
+			if selected_records.size() % 4096 == 0 and not checkpoint(selected_records.size()):
+				return
+		text = JSON.stringify({"voxi_voxels": records, "voxi_selection": selected_records}, "", false, true)
 		if cut_source and checkpoint(0):
 			stage("Cutting voxels", _colors.size())
 			var changes := {}
@@ -43,6 +53,7 @@ class ClipboardCopyJob extends BrushToolSettings.CopyJob:
 class ClipboardImportJob extends VoxelFrame.EditJob:
 	var text := ""
 	var pattern := {}
+	var selection_pattern := {}
 
 	func run() -> void:
 		stage("Reading voxel clipboard", -1)
@@ -61,6 +72,24 @@ class ClipboardImportJob extends VoxelFrame.EditJob:
 					return
 			var cell_position := Vector3i(int(record[0]), int(record[1]), int(record[2]))
 			pattern[cell_position] = Color(record[3], record[4], record[5], record[6])
+			completed += 1
+			if completed % 4096 == 0 and not checkpoint(completed):
+				return
+		var selected_records = data.get("voxi_selection", [])
+		if not selected_records is Array:
+			pattern = {}
+			return
+		stage("Reading clipboard selection", selected_records.size())
+		completed = 0
+		for record in selected_records:
+			if not record is Array or record.size() != 3:
+				pattern = {}
+				return
+			for value in record:
+				if not (value is float or value is int):
+					pattern = {}
+					return
+			selection_pattern[Vector3i(int(record[0]), int(record[1]), int(record[2]))] = true
 			completed += 1
 			if completed % 4096 == 0 and not checkpoint(completed):
 				return
@@ -164,6 +193,7 @@ func _copy_voxels(cut_source: bool) -> void:
 	_copy_job = null
 	if State.document == document and State.get_current_voxel_frame() == frame and job.checkpoint(0) and not job.pattern.is_empty():
 		_pattern = job.pattern
+		_selection_pattern = job.selection_pattern
 		_center = job.center
 		_clipboard_text = job.text
 		_has_clipboard_voxels = true
@@ -221,10 +251,11 @@ func paste_voxels() -> void:
 		if State.document != document or State.get_current_voxel_frame() != frame or not job.checkpoint(0) or job.pattern.is_empty():
 			return
 		_pattern = job.pattern
+		_selection_pattern = job.selection_pattern
 		_center = Vector3i.ZERO
 		_clipboard_text = text
 	add_editor_node(_paste_tool)
-	_paste_tool.begin_paste(_pattern, _center)
+	_paste_tool.begin_paste(_pattern, _selection_pattern, _center)
 
 
 func _report_job(operation_id: int, job: VoxelFrame.EditJob) -> void:

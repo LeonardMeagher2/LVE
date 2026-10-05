@@ -24,21 +24,28 @@ class ScaleJob extends TransformJob:
 	var uniform := true
 	var _candidate_total := 0
 	var _candidate_completed := 0
+	var _source_selection := {}
 
 	func estimated_work() -> int:
 		var depth := absf(scale_p) if uniform else 1.0
 		return maxi(source_positions.size(), ceili((source_bounds.size[p] * absf(scale_p) + 2) * (source_bounds.size[q] * absf(scale_q) + 2) * (source_bounds.size[axis] * depth + 2)))
 
 	func compute_destination() -> void:
-		if source_colors.is_empty():
+		if source_positions.is_empty():
 			return
+		if track_selection:
+			stage("Preparing scale selection", source_positions.size())
+			for cell_position in source_positions:
+				_source_selection[cell_position] = true
+				if _source_selection.size() % 4096 == 0 and not checkpoint(_source_selection.size()):
+					return
 		var scale3 := Vector3.ONE
 		scale3[p] = scale_p
 		scale3[q] = scale_q
 		scale3[axis] = scale_p if uniform else 1.0
 		var regions: Array[AABB] = [source_bounds]
 		var source_volume := source_bounds.size.x * source_bounds.size.y * source_bounds.size.z
-		if source_volume > source_colors.size() * 4:
+		if source_volume > source_positions.size() * 4:
 			regions = _occupied_regions()
 		var layers := {}
 		if not uniform:
@@ -68,10 +75,10 @@ class ScaleJob extends TransformJob:
 				_compute_2d(candidate_range[0], candidate_range[1], candidate_range[2])
 
 	func _occupied_regions() -> Array[AABB]:
-		stage("Preparing scale", source_colors.size())
+		stage("Preparing scale", source_positions.size())
 		var bounds_by_chunk := {}
 		var completed := 0
-		for cell_position: Vector3i in source_colors:
+		for cell_position in source_positions:
 			var chunk_location := VoxelFrame.chunk_position(cell_position)
 			var cell_bounds := AABB(Vector3(cell_position) - Vector3.ONE * 0.5, Vector3.ONE)
 			var bounds: AABB = bounds_by_chunk.get(chunk_location, cell_bounds)
@@ -117,9 +124,13 @@ class ScaleJob extends TransformJob:
 			for dy in range(min_d.y, max_d.y + 1):
 				var sy := samples_y[dy - min_d.y]
 				for dz in range(min_d.z, max_d.z + 1):
-					var color: Color = source_colors.get(Vector3i(sx, sy, samples_z[dz - min_d.z]), Color.TRANSPARENT)
+					var source := Vector3i(sx, sy, samples_z[dz - min_d.z])
+					var destination := Vector3i(dx, dy, dz)
+					var color: Color = source_colors.get(source, Color.TRANSPARENT)
 					if color != Color.TRANSPARENT:
-						destination_colors[Vector3i(dx, dy, dz)] = color
+						destination_colors[destination] = color
+					if track_selection and _source_selection.has(source):
+						destination_selection[destination] = true
 					_candidate_completed += 1
 					if _candidate_completed % 4096 == 0 and not checkpoint(_candidate_completed):
 						return
@@ -135,12 +146,14 @@ class ScaleJob extends TransformJob:
 					source[p] = samples_p[dp - min_d[p]]
 					source[q] = samples_q[dq - min_d[q]]
 					var color: Color = source_colors.get(source, Color.TRANSPARENT)
+					var destination := Vector3i.ZERO
+					destination[axis] = layer
+					destination[p] = dp
+					destination[q] = dq
 					if color != Color.TRANSPARENT:
-						var destination := Vector3i.ZERO
-						destination[axis] = layer
-						destination[p] = dp
-						destination[q] = dq
 						destination_colors[destination] = color
+					if track_selection and _source_selection.has(source):
+						destination_selection[destination] = true
 					_candidate_completed += 1
 					if _candidate_completed % 4096 == 0 and not checkpoint(_candidate_completed):
 						return

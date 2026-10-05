@@ -49,8 +49,11 @@ class RotateJob extends TransformJob:
 		stage("Calculating rotation", source_positions.size())
 		var completed := 0
 		for source in source_positions:
+			var destination := _rotate_cell(source, p, q, min_c, max_c, direction, turns)
 			if source_colors.has(source):
-				destination_colors[_rotate_cell(source, p, q, min_c, max_c, direction, turns)] = source_colors[source]
+				destination_colors[destination] = source_colors[source]
+			if track_selection:
+				destination_selection[destination] = true
 			completed += 1
 			if completed % 4096 == 0 and not checkpoint(completed):
 				return
@@ -89,11 +92,18 @@ class RotateJob extends TransformJob:
 		var direction := 1.0 if probe_rot[q] > 0.5 else -1.0
 		var pivot2d := Vector2(pivot[p], pivot[q])
 		var layers := {}
+		var selection_layers := {}
 		stage("Preparing rotation", source_positions.size())
 		var completed := 0
 		for source in source_positions:
+			var layer: int = source[axis]
+			if track_selection:
+				if not selection_layers.has(layer):
+					selection_layers[layer] = {}
+				selection_layers[layer][Vector2i(source[p], source[q])] = Color.WHITE
+				if not layers.has(layer):
+					layers[layer] = {}
 			if source_colors.has(source):
-				var layer: int = source[axis]
 				if not layers.has(layer):
 					layers[layer] = {}
 				layers[layer][Vector2i(source[p], source[q])] = source_colors[source]
@@ -101,15 +111,23 @@ class RotateJob extends TransformJob:
 			if completed % 4096 == 0 and not checkpoint(completed):
 				return
 		var layer_results := {}
+		var selection_results := {}
 		var natural_min := Vector2i.ZERO
 		var first := true
 		stage("Calculating rotation", layers.size())
 		completed = 0
 		for layer in layers:
-			var sampler := RotSprite.new(layers[layer])
-			var destination_layer := sampler.rotate(pivot2d, direction * angle)
+			var destination_layer := {}
+			if not layers[layer].is_empty():
+				var sampler := RotSprite.new(layers[layer])
+				destination_layer = sampler.rotate(pivot2d, direction * angle)
 			layer_results[layer] = destination_layer
-			for uv: Vector2i in destination_layer:
+			var alignment_layer := destination_layer
+			if track_selection:
+				var sampler := RotSprite.new(selection_layers[layer])
+				selection_results[layer] = sampler.rotate(pivot2d, direction * angle)
+				alignment_layer = selection_results[layer]
+			for uv: Vector2i in alignment_layer:
 				if first:
 					natural_min = uv
 					first = false
@@ -130,6 +148,15 @@ class RotateJob extends TransformJob:
 				destination[p] = uv.x + correction.x
 				destination[q] = uv.y + correction.y
 				destination_colors[destination] = layer_results[layer][uv]
+				if track_selection:
+					destination_selection[destination] = true
+			if track_selection:
+				for uv: Vector2i in selection_results[layer]:
+					var destination := Vector3i.ZERO
+					destination[axis] = layer
+					destination[p] = uv.x + correction.x
+					destination[q] = uv.y + correction.y
+					destination_selection[destination] = true
 			if not checkpoint(completed):
 				return
 

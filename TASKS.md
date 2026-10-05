@@ -19,6 +19,9 @@ max_active: 1
 - [x] Line tool and shared brush shapes
   - [x] Add Line to the Pencil and Paint menu
   - [x] Click to start, click to end, or click and drag to draw a line
+  - [x] Keep two-click lines on the starting plane unless the endpoint hits a voxel
+  - [x] Adjust the line plane to the view through the starting voxel
+  - [x] Keep dragged lines on that plane
   - [x] Preview the line before committing one undo action
   - [x] Cancel the preview with Escape or a tool change
   - [x] Add a brush diameter option with a minimum of one
@@ -43,6 +46,8 @@ max_active: 1
   - [x] Add a "commit" button to the move tool, so that the user can move voxels and then commit or cancel the move
   - [x] Switching to another tool while moving voxels should commit the move
 - [x] Rotate tool (group with move tool)
+  - [x] Preserve selected empty cells during Move, Rotate, Scale, and repeated drags
+    - All transform tests pass. The final full suite passes after the lasso release fix.
   - [x] Selection of voxels rotated around the center of the selection, with a drag to set the angle
   - [x] Add a "commit" button to the rotate tool, so that the user can rotate voxels and then commit or cancel the rotation
   - [x] Switching to another tool while rotating voxels should commit the rotation
@@ -51,6 +56,11 @@ max_active: 1
   - [x] Add a "commit" button to the scale tool, so that the user can scale voxels and then commit or cancel the scale
   - [x] Switching to another tool while scaling voxels should commit the scale
   - [x] Add a "uniform scale" option to the scale tool, so that the user can scale voxels uniformly in all directions
+
+- [x] Fix the missing lasso endpoint in `selection_modes`
+  - [x] Include the mouse-release position when the pointer moved
+  - [x] Preserve single-click selection behavior
+  - [x] Verify the windowed mode test and the full behavior suite
 
 # Rendering and storage
 - [ ] Distribute expensive jobs across the worker threads available on each system
@@ -164,6 +174,8 @@ max_active: 1
   - [x] Add Cut, Copy, Paste, and Delete controls to the shared editing plugin
   - [x] Add Ctrl+X, Ctrl+C, Ctrl+V, and Delete shortcuts
   - [x] Cut a selection or the whole frame with one undo action
+  - [x] Preserve the selection during Copy and clear it during Cut
+  - [x] Restore the exact clipboard selection at the paste offset, including empty cells
   - [x] Delete selected voxels with the Delete key and one undo action
   - [x] Preserve voxel colors and relative positions across documents
   - [x] Prepare large copies and paste previews on workers

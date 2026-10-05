@@ -104,9 +104,13 @@ class TransformJob extends VoxelFrame.EditJob:
 				if previous_color != Color.TRANSPARENT:
 					covered[cell_position] = previous_color
 			changes[cell_position] = destination_colors[cell_position]
-			destination_positions.append(cell_position)
-			if track_selection:
-				destination_selection[cell_position] = true
+			completed += 1
+			if completed % 4096 == 0 and not checkpoint(completed):
+				return
+		destination_positions.assign(destination_selection.keys() if track_selection else destination_colors.keys())
+		stage("Preparing transform bounds", destination_positions.size())
+		completed = 0
+		for cell_position in destination_positions:
 			var cell_bounds := AABB(Vector3(cell_position) - Vector3.ONE * 0.5, Vector3.ONE)
 			destination_bounds = destination_bounds.merge(cell_bounds) if destination_bounds.has_volume() else cell_bounds
 			completed += 1
@@ -119,6 +123,8 @@ class TransformJob extends VoxelFrame.EditJob:
 		stage("Calculating transform", source_positions.size())
 		var completed := 0
 		for cell_position in source_positions:
+			if track_selection:
+				destination_selection[cell_position + offset] = true
 			if source_colors.has(cell_position):
 				destination_colors[cell_position + offset] = source_colors[cell_position]
 			completed += 1
@@ -306,7 +312,7 @@ func _apply_preview() -> void:
 		job.source_positions = _cells
 		job.source_colors = _colors
 		job.source_bounds = _source_bounds
-		job.old_positions = _dest_cells if not _dest_cells.is_empty() else _cells
+		job.old_positions.assign(_dest_colors.keys() if not _dest_cells.is_empty() else _colors.keys())
 		job.previous_covered = _covered
 		job.edited_frame = _source_frame.copy_frame()
 		job.track_selection = _track_selection
