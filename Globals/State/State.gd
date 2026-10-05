@@ -8,6 +8,7 @@ signal frame_changed()
 signal is_playing_toggled(toggled_on:bool)
 signal color_changed(color: Color)
 signal palette_changed()
+signal default_palette_changed()
 signal selection_changed()
 signal floor_plane_changed()
 signal tag_changed()
@@ -15,6 +16,9 @@ signal activity_changed()
 signal edit_context_changing()
 
 const WORK_SLICE_US := 3000
+const DEFAULT_PALETTE_PATH := "user://default_palette.cfg"
+
+var default_palette := get_builtin_palette()
 
 class Operation extends RefCounted:
 	var label := ""
@@ -90,7 +94,7 @@ var floor_index := 0:
 		floor_index = value
 		floor_plane_changed.emit()
 
-var current_color := Color.from_rgba8(20, 20, 20)
+var current_color := Color.BLACK
 var selection := VoxelSelection.new()
 var undo_redo := UndoRedo.new()
 var _stroke_frame: VoxelFrame
@@ -102,6 +106,9 @@ func _init() -> void:
 	document = VoxiDocument.new()
 
 func _ready() -> void:
+	load_default_palette()
+	document.palette.assign(default_palette)
+	current_color = default_palette[0]
 	edit_context_changing.connect(_interrupt_erase)
 	cells_changed.connect(func(_frame, _affected): stop())
 	chunks_changed.connect(func(_frame, _affected): stop())
@@ -135,6 +142,8 @@ func set_document(value:VoxiDocument) -> void:
 		document = value
 	else:
 		document = VoxiDocument.new()
+		document.palette.assign(default_palette)
+		_apply_color(default_palette[0])
 	if document.tags.is_empty():
 		document.add_tag("Default", 0, document.frames.size() - 1)
 	active_tag = 0
@@ -473,6 +482,78 @@ func _insert_palette_color(index: int, color: Color) -> void:
 
 func get_palette() -> PackedColorArray:
 	return document.palette
+
+
+func set_palette(colors: PackedColorArray, action_name: String = "Replace Palette") -> void:
+	if edit_busy() or get_palette() == colors:
+		return
+	undo_redo.create_action(action_name)
+	undo_redo.add_undo_method(_apply_palette.bind(get_palette()))
+	undo_redo.add_do_method(_apply_palette.bind(colors))
+	undo_redo.commit_action()
+
+
+func _apply_palette(colors: PackedColorArray) -> void:
+	document.palette.assign(colors)
+	palette_changed.emit()
+
+
+func move_palette_color(from_index: int, to_index: int) -> void:
+	var colors := get_palette()
+	if edit_busy() or from_index == to_index or from_index < 0 or to_index < 0 or from_index >= colors.size() or to_index >= colors.size():
+		return
+	var color := colors[from_index]
+	colors.remove_at(from_index)
+	colors.insert(to_index, color)
+	set_palette(colors, "Move Palette Color")
+
+
+static func get_builtin_palette() -> PackedColorArray:
+	# Keep grayscale first, then vivid hues, cooler shadows, and warmer highlights.
+	return PackedColorArray([
+		Color.BLACK, Color("808080"), Color.WHITE,
+		Color("ff0000"), Color("ff8000"), Color("ffff00"), Color("80ff00"), Color("00ff00"), Color("00ff80"),
+		Color("00ffff"), Color("0080ff"), Color("0000ff"), Color("8000ff"), Color("ff00ff"), Color("ff0080"),
+		Color("800020"), Color("608000"), Color("008020"), Color("006080"), Color("200080"), Color("600080"),
+		Color("ffb399"), Color("fffbef"), Color("bfffaa"), Color("b3ffec"), Color("b3c6ff"), Color("ffb3ec"),
+	])
+
+
+func load_default_palette(path: String = DEFAULT_PALETTE_PATH) -> void:
+	default_palette = get_builtin_palette()
+	var config := ConfigFile.new()
+	if config.load(path) == OK:
+		var colors: Variant = config.get_value("palette", "colors", PackedColorArray())
+		if colors is PackedColorArray and not colors.is_empty():
+			default_palette = colors
+	default_palette_changed.emit()
+
+
+func save_default_palette(path: String = DEFAULT_PALETTE_PATH) -> Error:
+	if edit_busy():
+		return ERR_BUSY
+	var colors := get_palette()
+	if colors.is_empty():
+		return ERR_INVALID_DATA
+	var config := ConfigFile.new()
+	config.set_value("palette", "colors", colors)
+	var error := config.save(path)
+	if error == OK:
+		default_palette = colors
+		default_palette_changed.emit()
+	return error
+
+
+func reset_default_palette(path: String = DEFAULT_PALETTE_PATH) -> Error:
+	if edit_busy():
+		return ERR_BUSY
+	if FileAccess.file_exists(path):
+		var error := DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+		if error != OK:
+			return error
+	default_palette = get_builtin_palette()
+	default_palette_changed.emit()
+	return OK
 
 func can_edit(cell: Vector3i) -> bool:
 	if selection.is_empty():

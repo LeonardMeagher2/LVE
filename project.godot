@@ -22,7 +22,7 @@ VoxelImageRenderer="*res://Globals/VoxelImageRenderer/VoxelImageRenderer.gd"
 
 [display]
 
-window/size/viewport_width=1280
+window/size/viewport_width=1000
 window/size/viewport_height=800
 window/stretch/aspect="expand"
 window/handheld/orientation=6

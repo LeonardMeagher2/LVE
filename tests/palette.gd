@@ -2,6 +2,7 @@ extends "res://tests/test.gd"
 
 var panel: Node = null
 var grid: Node = null
+var default_color := Color.BLACK
 
 
 func _ready() -> void:
@@ -17,6 +18,8 @@ func _run() -> void:
 	step("Given a palette with one red swatch", func():
 		panel = main.find_child("PalettePanel", true, false)
 		grid = panel.get_node("%SwatchGrid")
+		default_color = State.current_color
+		State.document = VoxiDocument.new()
 		State.document.add_color(Color.RED)
 		panel._rebuild_swatches()
 	)
@@ -62,7 +65,7 @@ func _run() -> void:
 	)
 
 	step("Then the working color returns to the default", func():
-		expect(State.current_color == Color.from_rgba8(20, 20, 20), "the working color is the default")
+		expect(State.current_color == default_color, "the working color is the default")
 	)
 
 	step("When the user redoes the color change", func():

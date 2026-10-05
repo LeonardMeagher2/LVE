@@ -4,6 +4,7 @@ This file records confirmed, non-obvious facts learned while working on Voxi. Re
 
 ## Godot API changes
 
+- 2026-10-05: `align_to_largest_stylebox` uses the largest button margins across states. It is a theme constant.
 - 2026-10-05: View rotation consumes right-click in `_input()` before tools receive `_unhandled_input()`.
 - 2026-10-05: `is_same()` compares dictionary references. Use it with read-only patterns to avoid content comparisons.
 - 2026-10-04: Aseprite exports JSON tag repeat counts as strings. Convert the `repeat` field to an integer.

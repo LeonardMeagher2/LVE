@@ -4,6 +4,9 @@
 [ext_resource type="Script" uid="uid://cs8h0occl2amh" path="res://ui/PalettePanel/ColorPickerButton.gd" id="2_8seap"]
 [ext_resource type="Texture2D" uid="uid://di606d0g4f27a" path="res://icons/add.svg" id="3_add"]
 [ext_resource type="Texture2D" uid="uid://cv15qg24amrlt" path="res://icons/remove.svg" id="5_remove"]
+[ext_resource type="Texture2D" path="res://icons/open.svg" id="6_import"]
+[ext_resource type="Texture2D" path="res://icons/save_as.svg" id="7_export"]
+[ext_resource type="Texture2D" path="res://icons/more.svg" id="8_menu"]
 
 [node name="PalettePanel" type="VBoxContainer" unique_id=920144879]
 custom_maximum_size = Vector2(512, -1)
@@ -43,6 +46,30 @@ unique_name_in_owner = true
 layout_mode = 2
 tooltip_text = "Remove selected color"
 icon = ExtResource("5_remove")
+icon_alignment = 1
+
+[node name="Separator" type="VSeparator" parent="PanelContainer/MarginContainer/VBoxContainer/Toolbar"]
+layout_mode = 2
+
+[node name="ImportBtn" type="Button" parent="PanelContainer/MarginContainer/VBoxContainer/Toolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Import palette from an image"
+icon = ExtResource("6_import")
+icon_alignment = 1
+
+[node name="ExportBtn" type="Button" parent="PanelContainer/MarginContainer/VBoxContainer/Toolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Save palette as a PNG image"
+icon = ExtResource("7_export")
+icon_alignment = 1
+
+[node name="PaletteMenu" type="MenuButton" parent="PanelContainer/MarginContainer/VBoxContainer/Toolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Default palette options"
+icon = ExtResource("8_menu")
 icon_alignment = 1
 
 [node name="PanelContainer" type="PanelContainer" parent="PanelContainer/MarginContainer/VBoxContainer" unique_id=653745350]
@@ -98,7 +125,25 @@ edit_alpha = false
 edit_intensity = false
 script = ExtResource("2_8seap")
 
+[node name="ImportDialog" type="FileDialog" parent="."]
+unique_name_in_owner = true
+title = "Import Palette"
+file_mode = 0
+access = 2
+filters = PackedStringArray("*.png, *.jpg, *.jpeg, *.webp, *.bmp, *.tga, *.svg ; Images")
+
+[node name="ExportDialog" type="FileDialog" parent="."]
+unique_name_in_owner = true
+title = "Save Palette"
+access = 2
+filters = PackedStringArray("*.png ; PNG palette")
+current_file = "palette.png"
+
 [connection signal="pressed" from="PanelContainer/MarginContainer/VBoxContainer/Toolbar/AddBtn" to="." method="_on_add_btn_pressed"]
 [connection signal="pressed" from="PanelContainer/MarginContainer/VBoxContainer/Toolbar/RemoveBtn" to="." method="_on_remove_btn_pressed"]
+[connection signal="pressed" from="PanelContainer/MarginContainer/VBoxContainer/Toolbar/ImportBtn" to="." method="_on_import_btn_pressed"]
+[connection signal="pressed" from="PanelContainer/MarginContainer/VBoxContainer/Toolbar/ExportBtn" to="." method="_on_export_btn_pressed"]
 [connection signal="color_changed" from="PanelContainer2/MarginContainer/VBoxContainer/ColorPicker" to="." method="_on_picker_color_changed"]
 [connection signal="color_changed" from="PanelContainer2/MarginContainer/VBoxContainer/ColorPickerButton" to="." method="_on_picker_color_changed"]
+[connection signal="file_selected" from="ImportDialog" to="." method="_on_import_file_selected"]
+[connection signal="file_selected" from="ExportDialog" to="." method="_on_export_file_selected"]

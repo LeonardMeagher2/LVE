@@ -109,6 +109,7 @@ AcceptDialog/constants/buttons_separation = 4
 AcceptDialog/constants/title_height = 24
 AcceptDialog/styles/embedded_border = SubResource("StyleBoxFlat_g4v7s")
 AcceptDialog/styles/panel = SubResource("StyleBoxFlat_rqugq")
+Button/constants/align_to_largest_stylebox = 1
 Button/styles/disabled = SubResource("StyleBoxFlat_btn_disabled")
 Button/styles/focus = SubResource("StyleBoxFlat_focus")
 Button/styles/hover = SubResource("StyleBoxFlat_hover")

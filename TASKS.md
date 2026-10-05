@@ -163,13 +163,27 @@ max_active: 1
   - [ ] Render each frame with a transparent background
 
 # Palette
+- [x] Image palettes and startup defaults
+  - [x] Add image import and PNG export to the palette panel
+  - [x] Preserve swatch order and support undo for palette replacement
+  - [x] Add a built-in palette and a saved custom startup palette
+  - [x] Use a compact palette with 27 high-contrast colors
+  - [x] Put grayscale first, then saturated hues in rainbow order, shadows, and highlights
+  - [x] Keep main colors and shadows fully saturated and use warm tints for highlights
+  - [x] Select the first palette color at startup and in new documents
+  - [x] Reorder palette swatches by dragging with undo support
+  - [x] Show the restore option only for a changed startup default
+  - [x] Hide the More button when the current palette matches the built-in palette
+  - [x] Apply the default to new documents without changing opened documents
+  - [x] Verify palette behavior with targeted tests
+  - The four targeted palette tests pass.
 - [x] Initialize black swatch backgrounds and tooltips
-- [ ] Modifying the palette should add undo/redo support
+- [x] Support undo and redo for palette changes
 - [ ] Drag to select multiple swatches
 - [ ] Dragging a selection of swatches moves them to a new location in the palette
 - [ ] Palette toolbar
-  - [ ] Add/Remove
-  - [ ] Load/Save/Set default palette
+  - [x] Add/Remove
+  - [x] Load/Save/Set default palette
   - [ ] Sort
 	- [ ] reverse
 	- [ ] By hue, saturation, and brightness
@@ -244,6 +258,9 @@ max_active: 1
 
 
 # Timeline
+- [x] Keep the Play button size stable when playback changes
+  - [x] Use the largest button state margins for layout
+  - [x] Verify playback, pause, and button size with the targeted playback test
 - [x] Drag frames on the timeline to reorder them
 
 
