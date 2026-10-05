@@ -42,6 +42,7 @@ max_active: 1
 - [ ] Extrude tool
   - [ ] Selection of voxels extruded along plane normal, with a drag to set the distance
 - [x] Move tool
+  - [x] Keep right-drag available for view rotation during pending transforms
   - [x] Remove auto creation of voxel selection object when no voxels were in a selection
   - [x] Add a "commit" button to the move tool, so that the user can move voxels and then commit or cancel the move
   - [x] Switching to another tool while moving voxels should commit the move
@@ -63,6 +64,21 @@ max_active: 1
   - [x] Verify the windowed mode test and the full behavior suite
 
 # Rendering and storage
+
+- [x] Share mesh caching and worker handling across voxel previews
+  - [x] Use one lifecycle for solid and outline previews
+  - [x] Cache completed geometry across brush, line, paste, and selection previews
+  - [x] Keep uniform display colors separate from geometry
+  - [x] Reuse local paste geometry when the placement position changes
+  - [x] Publish read-only brush and clipboard patterns
+  - [x] Bound the cache and share the main-thread mesh-install budget
+  - [x] Cancel old solid and outline jobs when a request changes
+  - [x] Verify colored previews, input snapshots, cancellation, and the full behavior suite
+  - The final full behavior suite passes.
+  - Headless benchmark: eight move/color updates for 32,768 voxels changed from 1.214 seconds to 0.090 seconds.
+- [ ] Rebuild only changed preview chunks
+  - [ ] Reuse completed chunk geometry during shape changes
+  - [ ] Reduce array copies and divide large mesh installations across frames
 - [ ] Distribute expensive jobs across the worker threads available on each system
   - [ ] Use chunk work groups for independent matching and edit work
   - [ ] Preserve cancellation, bounded publication, and UI responsiveness
@@ -173,6 +189,10 @@ max_active: 1
   - [x] Share Copy and Paste controls across Brush, Selection, and Transform
   - [x] Add Cut, Copy, Paste, and Delete controls to the shared editing plugin
   - [x] Add Ctrl+X, Ctrl+C, Ctrl+V, and Delete shortcuts
+  - [x] Show Cancel Paste during clipboard reading and placement
+  - [x] Cancel Paste from its UI button or Escape
+  - [x] Verify view rotation during pending edits and UI cancellation during large paste work
+    - The windowed cancellation test and the full behavior suite pass.
   - [x] Cut a selection or the whole frame with one undo action
   - [x] Preserve the selection during Copy and clear it during Cut
   - [x] Restore the exact clipboard selection at the paste offset, including empty cells

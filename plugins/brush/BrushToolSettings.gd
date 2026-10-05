@@ -83,6 +83,7 @@ func use_selection(copied_pattern: Dictionary) -> void:
 	if copied_pattern.is_empty():
 		return
 	selection_pattern = copied_pattern
+	selection_pattern.make_read_only()
 	shape = BrushShape.SELECTION
 	emit_changed()
 
@@ -96,12 +97,14 @@ func pattern() -> Dictionary:
 		return selection_pattern
 	if _cached_pattern.is_empty() and estimated_size() <= 4096:
 		_cached_pattern = build_pattern(diameter, shape)
+		_cached_pattern.make_read_only()
 	return _cached_pattern
 
 
 func cache_pattern(brush_diameter: int, brush_shape: int, cells: Dictionary) -> void:
 	if diameter == brush_diameter and shape == brush_shape and shape != BrushShape.SELECTION:
 		_cached_pattern = cells
+		_cached_pattern.make_read_only()
 
 
 static func build_pattern(brush_diameter: int, brush_shape: int, job: VoxelFrame.EditJob = null) -> Dictionary:

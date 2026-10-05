@@ -4,6 +4,7 @@
 [ext_resource type="Texture2D" uid="uid://cmoc2txrei1bt" path="res://icons/paste.svg" id="2_paste"]
 [ext_resource type="Texture2D" uid="uid://cjkqf1nk20c73" path="res://icons/cut.svg" id="3_cut"]
 [ext_resource type="Texture2D" uid="uid://bca3qyfqeqjls" path="res://icons/trash.svg" id="4_delete"]
+[ext_resource type="Texture2D" uid="uid://dj33i6smxtptq" path="res://icons/cross.svg" id="5_cancel"]
 
 [sub_resource type="InputEventKey" id="CutKey"]
 ctrl_pressed = true
@@ -47,7 +48,7 @@ icon_alignment = 1
 
 [node name="Paste" type="Button" parent="." unique_id=1792386152]
 layout_mode = 2
-tooltip_text = "Paste voxels at the cursor. Click to place. Escape cancels (Ctrl+V)"
+tooltip_text = "Paste voxels at the cursor (Ctrl+V). Click to place. Cancel Paste or Escape cancels."
 shortcut = SubResource("PasteShortcut")
 icon = ExtResource("2_paste")
 icon_alignment = 1
@@ -56,4 +57,11 @@ icon_alignment = 1
 layout_mode = 2
 tooltip_text = "Delete selected voxels (Delete)"
 icon = ExtResource("4_delete")
+icon_alignment = 1
+
+[node name="CancelPaste" type="Button" parent="."]
+visible = false
+layout_mode = 2
+tooltip_text = "Cancel Paste (Escape)"
+icon = ExtResource("5_cancel")
 icon_alignment = 1

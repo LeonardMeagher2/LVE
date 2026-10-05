@@ -4,6 +4,8 @@ This file records confirmed, non-obvious facts learned while working on Voxi. Re
 
 ## Godot API changes
 
+- 2026-10-05: View rotation consumes right-click in `_input()` before tools receive `_unhandled_input()`.
+- 2026-10-05: `is_same()` compares dictionary references. Use it with read-only patterns to avoid content comparisons.
 - 2026-10-04: Aseprite exports JSON tag repeat counts as strings. Convert the `repeat` field to an integer.
 - 2026-10-04: An input callback can detach its tool. Retain the viewport before calling the tool.
 - 2026-10-04: Nested GDScript classes must use the outer class name to call its static methods.

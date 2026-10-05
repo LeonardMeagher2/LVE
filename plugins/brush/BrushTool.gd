@@ -292,7 +292,8 @@ func _show_brush_shape(axis: int) -> void:
 			_hover_job.worker_task_id = WorkerThreadPool.add_task(_hover_job.run, false, "Brush shape")
 		return
 	var cube_diameter: int = _settings.diameter if _settings.shape == _settings.BrushShape.CUBE else 0
-	$Cursor.show_voxels(pattern, State.current_color, _settings.mode == _settings.BrushMode.ERASER, cube_diameter)
+	var use_voxel_colors: bool = _settings.shape == _settings.BrushShape.SELECTION
+	$Cursor.show_voxels(pattern, Color.WHITE if use_voxel_colors else State.current_color, _settings.mode == _settings.BrushMode.ERASER, cube_diameter, use_voxel_colors)
 	_cursor_axis = axis
 
 

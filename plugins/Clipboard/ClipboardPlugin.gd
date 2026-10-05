@@ -101,6 +101,7 @@ func _ready() -> void:
 	_options.get_node("Copy").pressed.connect(copy_voxels)
 	_options.get_node("Paste").pressed.connect(paste_voxels)
 	_options.get_node("Delete").pressed.connect(delete_voxels)
+	_options.get_node("CancelPaste").pressed.connect(cancel_paste)
 	_paste_tool.finished.connect(_on_paste_finished)
 	for button in _button_group.get_buttons():
 		button.toggled.connect(_on_tool_toggled)
@@ -140,6 +141,7 @@ func _sync_buttons() -> void:
 	_options.get_node("Cut").disabled = _options.get_node("Copy").disabled
 	_options.get_node("Paste").disabled = busy or not _has_clipboard_voxels
 	_options.get_node("Delete").disabled = busy or State.selection.is_empty()
+	_options.get_node("CancelPaste").visible = _import_job != null or _paste_tool._active
 
 
 func _on_cells_changed(_frame: int, _affected: Array[Vector3i]) -> void:
@@ -193,6 +195,7 @@ func _copy_voxels(cut_source: bool) -> void:
 	_copy_job = null
 	if State.document == document and State.get_current_voxel_frame() == frame and job.checkpoint(0) and not job.pattern.is_empty():
 		_pattern = job.pattern
+		_pattern.make_read_only()
 		_selection_pattern = job.selection_pattern
 		_center = job.center
 		_clipboard_text = job.text
@@ -219,9 +222,22 @@ func delete_voxels() -> void:
 
 
 func _unhandled_key_input(event: InputEvent) -> void:
+	if event.is_action_pressed("ui_cancel") and cancel_paste():
+		get_viewport().set_input_as_handled()
+		return
 	if event.is_action_pressed("delete") and not event.is_echo():
 		delete_voxels()
 		get_viewport().set_input_as_handled()
+
+
+func cancel_paste() -> bool:
+	if _import_job:
+		_import_job.cancel()
+		return true
+	if _paste_tool._active:
+		_paste_tool._cancel_edit()
+		return true
+	return false
 
 
 func paste_voxels() -> void:
@@ -251,6 +267,7 @@ func paste_voxels() -> void:
 		if State.document != document or State.get_current_voxel_frame() != frame or not job.checkpoint(0) or job.pattern.is_empty():
 			return
 		_pattern = job.pattern
+		_pattern.make_read_only()
 		_selection_pattern = job.selection_pattern
 		_center = Vector3i.ZERO
 		_clipboard_text = text

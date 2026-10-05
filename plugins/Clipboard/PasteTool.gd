@@ -47,9 +47,6 @@ func handle_input(event: InputEvent, pos: Vector2) -> bool:
 	if event.is_action_pressed("ui_accept"):
 		_request_commit()
 		return true
-	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT and event.pressed:
-		_cancel_edit()
-		return true
 	if event is InputEventMouseMotion or (event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed):
 		if _commit_requested:
 			return true
@@ -65,6 +62,11 @@ func handle_input(event: InputEvent, pos: Vector2) -> bool:
 
 func _preview_centers() -> Array[Vector3i]:
 	return [_endpoint]
+
+
+func _show_preview(_job: BrushJob) -> void:
+	position = Vector3(_endpoint)
+	$Cursor.show_voxels(_stroke_pattern, Color.WHITE)
 
 
 func _create_preview_job() -> BrushJob:

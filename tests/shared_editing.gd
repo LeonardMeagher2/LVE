@@ -5,6 +5,7 @@ var clipboard: Node
 var options: Control
 var frame: VoxelFrame
 var original_clipboard := ""
+var paste_mesh: Mesh
 
 
 func _ready() -> void:
@@ -81,9 +82,17 @@ func _run() -> void:
 	)
 	step("When the user starts a paste and moves its preview", func():
 		clipboard.paste_voxels()
-		_motion(clipboard._paste_tool, Vector3(8, 0, 0))
 		expect(frame.count() == 2, "the paste preview preserves the source frame")
 		expect(State.edit_busy(), "paste placement reserves editing")
+	)
+	while not clipboard._paste_tool.get_node("Cursor").is_settled():
+		await get_tree().process_frame
+	step("Then moving the paste reuses its colored preview mesh", func():
+		paste_mesh = clipboard._paste_tool.get_node("Cursor").mesh
+		_motion(clipboard._paste_tool, Vector3(8, 0, 0))
+		expect(clipboard._paste_tool.position == Vector3(8, 0, 0), "the paste preview follows its latest position")
+		expect(clipboard._paste_tool.get_node("Cursor").mesh == paste_mesh, "the moved paste reuses its colored mesh")
+		expect(clipboard._paste_tool.get_node("Cursor").is_settled(), "the moved paste needs no mesh worker")
 		_click(clipboard._paste_tool, Vector3(8, 0, 0))
 	)
 	step("Then the copy appears at the cursor and supports one undo", func():

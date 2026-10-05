@@ -35,9 +35,6 @@ func handle_input(event: InputEvent, pos: Vector2) -> bool:
 		_request_commit()
 		return true
 	if event is InputEventMouseButton:
-		if event.button_index == MOUSE_BUTTON_RIGHT and event.pressed and _anchor != VoxelPicking.NONE:
-			_cancel_edit()
-			return true
 		if event.button_index != MOUSE_BUTTON_LEFT:
 			return false
 		if _commit_requested:
@@ -189,9 +186,13 @@ func _finish_preview() -> void:
 	_preview_result = job
 	_settings.cache_pattern(job.diameter, job.shape, job.pattern)
 	_stroke_pattern = job.pattern
-	position = Vector3.ZERO
-	$Cursor.show_voxels(job.cell_colors, _stroke_color)
+	_show_preview(job)
 	visible = not job.cell_colors.is_empty()
+
+
+func _show_preview(job: BrushJob) -> void:
+	position = Vector3.ZERO
+	$Cursor.show_voxels(job.cell_colors, _stroke_color, false, 0, _stroke_shape == _settings.BrushShape.SELECTION)
 
 
 func _request_commit() -> void:

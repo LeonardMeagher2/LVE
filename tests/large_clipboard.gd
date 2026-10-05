@@ -59,6 +59,21 @@ func _run() -> void:
 		expect(target.count() == 0, "one undo removes the complete paste")
 		expect(not State.undo_redo.has_undo(), "the paste creates one undo action")
 	)
+	step("When the user cancels a large paste with the UI", func():
+		State.undo_redo.clear_history()
+		clipboard.paste_voxels()
+		_motion(Vector3(32, 0, 0))
+		expect(clipboard._options.get_node("CancelPaste").visible, "Cancel Paste is available during large preview work")
+		clipboard._options.get_node("CancelPaste").pressed.emit()
+	)
+	await get_tree().process_frame
+	step("Then the cancelled worker cannot publish the paste", func():
+		expect(target.count() == 0, "the cancelled large paste leaves the target empty")
+		expect(State.selection.is_empty(), "the cancelled large paste preserves the empty selection")
+		expect(not State.edit_busy(), "the cancelled large paste releases editing")
+		expect(not State.undo_redo.has_undo(), "the cancelled large paste adds no undo action")
+		expect(not clipboard._paste_tool.is_inside_tree(), "the cancelled large paste removes its preview")
+	)
 	step("When the user changes frames during another paste", func():
 		State.undo_redo.clear_history()
 		clipboard.paste_voxels()
