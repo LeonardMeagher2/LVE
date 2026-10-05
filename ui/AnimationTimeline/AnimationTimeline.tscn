@@ -7,7 +7,7 @@
 [ext_resource type="Texture2D" uid="uid://djqb5uqnxxmhe" path="res://icons/step_forward.svg" id="5_sm24x"]
 [ext_resource type="Texture2D" uid="uid://c4401j16xtgri" path="res://icons/to_end.svg" id="6_5wbnp"]
 [ext_resource type="Texture2D" uid="uid://cws8qlcj15h1m" path="res://icons/frame_plus.svg" id="7_j1idt"]
-[ext_resource type="Texture2D" uid="uid://b4sy3cgu4fauw" path="res://icons/duplicate.svg" id="8_whytp"]
+[ext_resource type="Texture2D" uid="uid://dhc8akox1ke3g" path="res://icons/frame_duplicate.svg" id="8_whytp"]
 [ext_resource type="Texture2D" uid="uid://matl4t70t4my" path="res://icons/frame_minus.svg" id="9_tjres"]
 [ext_resource type="PackedScene" uid="uid://cf3ybcr7rxq8h" path="res://ui/AnimationTimeline/TagRow.tscn" id="10_k7z2a"]
 
