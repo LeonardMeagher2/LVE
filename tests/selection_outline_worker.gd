@@ -12,7 +12,7 @@ func _run() -> void:
 	step("Given a large rectangular selection", func():
 		selected = VoxelSelection.new()
 		selected.from_box(Vector3i.ZERO, Vector3i(31, 15, 15))
-		preview = load("res://Plugins/Selection/SelectionPreview.tscn").instantiate()
+		preview = load("res://plugins/selection/SelectionPreview.tscn").instantiate()
 		main.add_child(preview)
 		preview.show_selection(selected)
 	)

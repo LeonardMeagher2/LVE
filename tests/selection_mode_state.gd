@@ -1,7 +1,7 @@
 extends "res://tests/test.gd"
 
 var options: Control
-var settings := preload("res://Plugins/Selection/settings.tres")
+var settings := preload("res://plugins/selection/settings.tres")
 
 
 func _ready() -> void:

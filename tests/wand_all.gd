@@ -32,6 +32,7 @@ func _run() -> void:
 		f.set_cell(b, gray)
 		f.set_cell(c, gray)
 		f.set_cell(red, Color.RED)
+		camera_rig().center_on(f.get_bounds())
 	)
 
 	step("When the user clicks one gray voxel with connected on", func():

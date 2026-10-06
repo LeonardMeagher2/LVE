@@ -1,4 +1,4 @@
-extends "res://Plugins/Brush/LineTool.gd"
+extends "res://plugins/brush/LineTool.gd"
 
 signal finished()
 

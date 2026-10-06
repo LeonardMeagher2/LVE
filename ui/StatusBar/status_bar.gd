@@ -67,6 +67,10 @@ func set_status(color_html: String, frame: int, frame_count: int, zoom: int) -> 
 	_right.text = "Frame %d/%d   %d%%" % [frame + 1, frame_count, zoom]
 
 
+func _on_ui_scale_item_selected(index: int) -> void:
+	get_node("/root/Main").set_ui_scale(%UIScale.get_item_id(index) / 100.0)
+
+
 func set_context(provider: Callable, cancel := Callable()) -> void:
 	_context = provider
 	_cancel = cancel

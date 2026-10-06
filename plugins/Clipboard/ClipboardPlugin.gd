@@ -4,7 +4,7 @@ const CLIPBOARD_PREFIX := '{"voxi_voxels":'
 
 @onready var _options := preload("./Options.tscn").instantiate()
 @onready var _paste_tool := preload("./PasteTool.tscn").instantiate()
-var _button_group := preload("res://Plugins/ToolBarButtonGroup.tres")
+var _button_group := preload("res://plugins/ToolBarButtonGroup.tres")
 var _pattern := {}
 var _selection_pattern := {}
 var _center := Vector3i.ZERO

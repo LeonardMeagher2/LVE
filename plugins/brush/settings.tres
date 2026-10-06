@@ -1,6 +1,6 @@
 [gd_resource type="Resource" format=3 uid="uid://chs0jnsggje1e"]
 
-[ext_resource type="Script" uid="uid://c2m34n24rtmri" path="res://Plugins/Brush/BrushToolSettings.gd" id="1_2ohid"]
+[ext_resource type="Script" uid="uid://c2m34n24rtmri" path="res://plugins/brush/BrushToolSettings.gd" id="1_2ohid"]
 
 [resource]
 script = ExtResource("1_2ohid")

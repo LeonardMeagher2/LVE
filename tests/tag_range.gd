@@ -2,6 +2,7 @@ extends "res://tests/test.gd"
 
 
 func _ready() -> void:
+	timeout = 20.0
 	test("can drag a tag's start and end frame on the timeline", _run)
 
 
@@ -25,7 +26,7 @@ func _frame_cells() -> Array:
 	return out
 
 
-func _drag_to(cell: Node, target: Node) -> void:
+func _drag_to(cell: Node, target: Node, release: bool = true) -> void:
 	var press := InputEventMouseButton.new()
 	press.button_index = MOUSE_BUTTON_LEFT
 	press.pressed = true
@@ -34,11 +35,16 @@ func _drag_to(cell: Node, target: Node) -> void:
 	var motion := InputEventMouseMotion.new()
 	motion.position = target.get_global_rect().get_center()
 	cell._input(motion)
-	var release := InputEventMouseButton.new()
-	release.button_index = MOUSE_BUTTON_LEFT
-	release.pressed = false
-	release.position = target.get_global_rect().get_center()
-	cell._input(release)
+	if release:
+		_release_at(cell, target)
+
+
+func _release_at(cell: Node, target: Node) -> void:
+	var event := InputEventMouseButton.new()
+	event.button_index = MOUSE_BUTTON_LEFT
+	event.pressed = false
+	event.position = target.get_global_rect().get_center()
+	cell._input(event)
 
 
 func _run() -> void:
@@ -64,7 +70,7 @@ func _run() -> void:
 
 	step("Then the tag ends on frame three", func():
 		expect(State.document.tags[0].to == 2, "the tag ends on the third frame")
-		expect(_range_cells()[2].get_node("%EndGrip").text == "3", "the end grip shows frame three")
+		expect(_range_cells()[2].get_node("%EndGrip").tooltip_text == "End frame 3", "the end grip identifies frame three")
 	)
 
 	step("When the user drags the start grip to frame two", func():
@@ -74,10 +80,13 @@ func _run() -> void:
 
 	step("Then the tag starts on frame two", func():
 		expect(State.document.tags[0].from == 1, "the tag starts on the second frame")
-		expect(_range_cells()[1].get_node("%StartGrip").text == "2", "the start grip shows frame two")
+		expect(_range_cells()[1].get_node("%StartGrip").tooltip_text == "Start frame 2", "the start grip identifies frame two")
 	)
 
 	step("When the user undoes the range drags", func():
+		State.undo_redo.undo()
+		expect(State.document.tags[0].from == 0, "undo restores the first frame")
+		expect(State.document.tags[0].to == 2, "undo preserves the previous end-grip drag")
 		State.undo_redo.undo()
 	)
 
@@ -87,6 +96,9 @@ func _run() -> void:
 	)
 
 	step("When the user redoes the range drags", func():
+		State.undo_redo.redo()
+		expect(State.document.tags[0].from == 0, "redo preserves the original start frame")
+		expect(State.document.tags[0].to == 2, "redo restores the end-grip drag")
 		State.undo_redo.redo()
 	)
 
@@ -113,9 +125,19 @@ func _run() -> void:
 		State.stop()
 	)
 
-	step("When the user drags the end grip onto the start frame", func():
+	step("When the user drags the end grip and pauses", func():
 		var cells := _range_cells()
-		_drag_to(cells[3], cells[1])
+		_drag_to(cells[3], cells[2], false)
+	)
+	var started := Time.get_ticks_msec()
+	while Time.get_ticks_msec() - started < 900:
+		await get_tree().process_frame
+	step("When the user continues the drag onto the start frame", func():
+		var cells := _range_cells()
+		var motion := InputEventMouseMotion.new()
+		motion.position = cells[1].get_global_rect().get_center()
+		cells[3]._input(motion)
+		_release_at(cells[3], cells[1])
 	)
 
 	step("Then the single frame shows both grips", func():
@@ -124,8 +146,35 @@ func _run() -> void:
 		var cell = _range_cells()[1]
 		expect(cell.get_node("%StartGrip").is_visible_in_tree(), "the start grip is shown")
 		expect(cell.get_node("%EndGrip").is_visible_in_tree(), "the end grip is shown")
-		expect(cell.get_node("%StartGrip").text == "2", "the start grip shows frame two")
-		expect(cell.get_node("%EndGrip").text == "2", "the end grip shows frame two")
+		expect(cell.get_node("%StartGrip").tooltip_text == "Start frame 2", "the start grip identifies frame two")
+		expect(cell.get_node("%EndGrip").tooltip_text == "End frame 2", "the end grip identifies frame two")
+	)
+
+	step("When the user undoes and redoes the paused drag", func():
+		State.undo_redo.undo()
+		expect(State.document.tags[0].to == 3, "one undo restores the range before the paused drag")
+		State.undo_redo.redo()
+		expect(State.document.tags[0].to == 1, "one redo restores the complete paused drag")
+	)
+
+	step("Given two tags with separate range edits", func():
+		State.document.add_tag("Second", 0, 3)
+		State.undo_redo.clear_history()
+		State.active_tag = 0
+		State.set_tag_range(0, 2)
+		State.active_tag = 1
+		State.set_tag_range(1, 3)
+	)
+
+	step("Then each tag range has a separate undo action", func():
+		State.undo_redo.undo()
+		expect(State.document.tags[1].from == 0, "undo restores the second tag range")
+		expect(State.document.tags[0].to == 2, "undo preserves the first tag range edit")
+		State.undo_redo.undo()
+		expect(State.document.tags[0].from == 1 and State.document.tags[0].to == 1, "the next undo restores the first tag range")
+		State.undo_redo.redo()
+		State.undo_redo.redo()
+		expect(State.document.tags[0].to == 2 and State.document.tags[1].from == 1, "redo restores both tag range edits")
 	)
 
 	step("When the user deselects the tag", func():

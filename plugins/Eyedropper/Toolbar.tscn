@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://bqgnoc287d87h"]
 
-[ext_resource type="ButtonGroup" uid="uid://tm4elm05vye0" path="res://Plugins/ToolBarButtonGroup.tres" id="1_kcwig"]
+[ext_resource type="ButtonGroup" uid="uid://tm4elm05vye0" path="res://plugins/ToolBarButtonGroup.tres" id="1_kcwig"]
 [ext_resource type="Texture2D" uid="uid://dms4velsjderh" path="res://icons/pick.svg" id="2_kcwig"]
 
 [sub_resource type="InputEventAction" id="InputEventAction_qwrxr"]

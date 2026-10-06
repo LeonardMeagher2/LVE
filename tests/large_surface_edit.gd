@@ -18,13 +18,13 @@ func _run() -> void:
 	step("Given a quarter-million-voxel frame", func():
 		State.document = VoxiDocument.new()
 		State.paint(Vector3i.ZERO, Color.RED)
-		State.selection.add(Vector3i.ZERO)
 		State.begin_stroke()
+		var colors := {}
 		for z in 64:
 			for y in 64:
 				for x in 64:
-					State.paint(Vector3i(x, y, z), Color.RED)
-					State.selection.add(Vector3i(x, y, z))
+					colors[Vector3i(x, y, z)] = Color.RED
+		State.get_current_voxel_frame().set_cells(colors)
 		State.end_stroke()
 		State.selection_changed.emit()
 		large = State.get_current_voxel_frame()

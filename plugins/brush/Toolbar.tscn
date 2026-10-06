@@ -1,9 +1,9 @@
 [gd_scene format=3 uid="uid://cq3ahxkvyrlsg"]
 
-[ext_resource type="ButtonGroup" uid="uid://tm4elm05vye0" path="res://Plugins/ToolBarButtonGroup.tres" id="1_o5fq1"]
+[ext_resource type="ButtonGroup" uid="uid://tm4elm05vye0" path="res://plugins/ToolBarButtonGroup.tres" id="1_o5fq1"]
 [ext_resource type="Texture2D" uid="uid://ejqpo0v0d1op" path="res://icons/pencil.svg" id="2_ccmv0"]
 [ext_resource type="Texture2D" uid="uid://os815iumesvl" path="res://icons/paint.svg" id="3_21n6l"]
-[ext_resource type="Script" uid="uid://co50uowx18hkb" path="res://Plugins/Brush/Toolbar.gd" id="4_ccmv0"]
+[ext_resource type="Script" uid="uid://co50uowx18hkb" path="res://plugins/brush/Toolbar.gd" id="4_ccmv0"]
 [ext_resource type="Texture2D" path="res://icons/line.svg" id="5_line"]
 [ext_resource type="Texture2D" path="res://icons/eraser.svg" id="6_eraser"]
 

@@ -106,7 +106,7 @@ func _run() -> void:
 
 func _new_preview() -> MeshInstance3D:
 	var instance := MeshInstance3D.new()
-	instance.set_script(load("res://Plugins/Brush/BrushPreview.gd"))
+	instance.set_script(load("res://plugins/brush/BrushPreview.gd"))
 	main.add_child(instance)
 	return instance
 

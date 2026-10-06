@@ -1,6 +1,6 @@
 [gd_resource type="ShaderMaterial" format=3 uid="uid://b8kfc7ofi3m41"]
 
-[ext_resource type="Shader" uid="uid://c8ewquo4b8b6n" path="res://Plugins/Selection/ants.gdshader" id="1_dan6g"]
+[ext_resource type="Shader" uid="uid://c8ewquo4b8b6n" path="res://plugins/selection/ants.gdshader" id="1_dan6g"]
 
 [resource]
 render_priority = 0

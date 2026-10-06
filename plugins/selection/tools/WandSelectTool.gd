@@ -1,6 +1,6 @@
 extends "./SelectTool.gd"
 
-const FillTool := preload("res://Plugins/Fill/FillTool.gd")
+const FillTool := preload("res://plugins/Fill/FillTool.gd")
 
 var _source_document: VoxiDocument
 var _source_frame: VoxelFrame

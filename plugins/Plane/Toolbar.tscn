@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://qn5n8eyoymd5"]
 
-[ext_resource type="ButtonGroup" uid="uid://tm4elm05vye0" path="res://Plugins/ToolBarButtonGroup.tres" id="1_s6403"]
+[ext_resource type="ButtonGroup" uid="uid://tm4elm05vye0" path="res://plugins/ToolBarButtonGroup.tres" id="1_s6403"]
 [ext_resource type="Texture2D" uid="uid://bhg85sqfio31d" path="res://icons/grid.svg" id="2_icon"]
 
 [node name="plane" type="Button" unique_id=659208998]

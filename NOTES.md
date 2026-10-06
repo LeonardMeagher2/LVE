@@ -4,6 +4,8 @@ This file records confirmed, non-obvious facts learned while working on Voxi. Re
 
 ## Godot API changes
 
+- 2026-10-06: Godot 4.7.2 on Windows returns scale 1.0 and DPI 192 for this 200% display.
+- 2026-10-06: DPITexture imports retain SVG dimensions and rasterize icons at the viewport scale.
 - 2026-10-06: A disabled workspace stops renderer processing unless the renderer uses `PROCESS_MODE_ALWAYS`.
 - 2026-10-05: For independent frame renders, give each viewport its own `World3D`. `resource_local_to_scene` creates a world per scene instance.
 - 2026-10-05: `VoxelTool` checks edit locks before `handle_input()`. Inactive modifier tools must reject events in `_accepts()`.

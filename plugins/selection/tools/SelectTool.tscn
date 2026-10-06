@@ -1,9 +1,9 @@
 [gd_scene format=3 uid="uid://b1lkdaijckvw6"]
 
-[ext_resource type="Script" uid="uid://dk4jhhhrqeexi" path="res://Plugins/Selection/tools/SelectTool.gd" id="1_cmmhg"]
-[ext_resource type="ArrayMesh" uid="uid://cqj6xncf14cm" path="res://Plugins/OutlineCube.tres" id="2_7qumi"]
-[ext_resource type="Material" uid="uid://dv7wwwbfihlej" path="res://Plugins/cursor_material.tres" id="2_j1b3m"]
-[ext_resource type="PackedScene" uid="uid://cw3tcgea2f3x4" path="res://Plugins/Selection/SelectionPreview.tscn" id="4_j1b3m"]
+[ext_resource type="Script" uid="uid://dk4jhhhrqeexi" path="res://plugins/selection/tools/SelectTool.gd" id="1_cmmhg"]
+[ext_resource type="ArrayMesh" uid="uid://cqj6xncf14cm" path="res://plugins/OutlineCube.tres" id="2_7qumi"]
+[ext_resource type="Material" uid="uid://dv7wwwbfihlej" path="res://plugins/cursor_material.tres" id="2_j1b3m"]
+[ext_resource type="PackedScene" uid="uid://cw3tcgea2f3x4" path="res://plugins/selection/SelectionPreview.tscn" id="4_j1b3m"]
 
 [node name="SelectionTool" type="Node3D" unique_id=1152130835]
 script = ExtResource("1_cmmhg")

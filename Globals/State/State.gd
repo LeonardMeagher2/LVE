@@ -133,16 +133,16 @@ func _ready() -> void:
 	cells_changed.connect(func(_frame, _affected): stop())
 	chunks_changed.connect(func(_frame, _affected): stop())
 	
-	add_plugin(load("res://Plugins/Brush/BrushPlugin.gd").new())
-	add_plugin(load("res://Plugins/Eyedropper/EyedropperPlugin.gd").new())
-	add_plugin(load("res://Plugins/Fill/FillPlugin.gd").new())
-	add_plugin(load("res://Plugins/Selection/SelectionPlugin.gd").new())
-	add_plugin(load("res://Plugins/Transform/TransformPlugin.gd").new())
-	add_plugin(load("res://Plugins/Symmetry/SymmetryPlugin.gd").new())
-	add_plugin(load("res://Plugins/Plane/PlanePlugin.gd").new())
-	add_plugin(load("res://Plugins/Export/ExportPlugin.gd").new())
-	add_plugin(load("res://Plugins/Clipboard/ClipboardPlugin.gd").new())
-	add_plugin(load("res://Plugins/ImageImport/ImageImportPlugin.gd").new())
+	add_plugin(load("res://plugins/brush/BrushPlugin.gd").new())
+	add_plugin(load("res://plugins/Eyedropper/EyedropperPlugin.gd").new())
+	add_plugin(load("res://plugins/Fill/FillPlugin.gd").new())
+	add_plugin(load("res://plugins/selection/SelectionPlugin.gd").new())
+	add_plugin(load("res://plugins/Transform/TransformPlugin.gd").new())
+	add_plugin(load("res://plugins/Symmetry/SymmetryPlugin.gd").new())
+	add_plugin(load("res://plugins/Plane/PlanePlugin.gd").new())
+	add_plugin(load("res://plugins/Export/ExportPlugin.gd").new())
+	add_plugin(load("res://plugins/Clipboard/ClipboardPlugin.gd").new())
+	add_plugin(load("res://plugins/ImageImport/ImageImportPlugin.gd").new())
 	
 
 
@@ -903,7 +903,7 @@ func remove_tag() -> void:
 	undo_redo.commit_action(false)
 	_apply_tag_removed(index, new_active)
 
-func set_tag_range(from: int, to: int) -> void:
+func set_tag_range(from: int, to: int, record_history: bool = true) -> void:
 	var tag := get_active_tag()
 	if tag == null:
 		return
@@ -913,13 +913,20 @@ func set_tag_range(from: int, to: int) -> void:
 	if tag.from == new_from and tag.to == new_to:
 		return
 	var index := active_tag
-	var old_from := tag.from
-	var old_to := tag.to
-	undo_redo.create_action("Set Tag Range", UndoRedo.MERGE_ENDS)
-	undo_redo.add_undo_method(_apply_tag_range.bind(index, old_from, old_to))
-	undo_redo.add_do_method(_apply_tag_range.bind(index, new_from, new_to))
-	undo_redo.commit_action(false)
+	var previous_range := Vector2i(tag.from, tag.to)
 	_apply_tag_range(index, new_from, new_to)
+	if record_history:
+		commit_tag_range(index, previous_range)
+
+
+func commit_tag_range(index: int, previous_range: Vector2i) -> void:
+	var tag := document.get_tag(index)
+	if tag == null or previous_range == Vector2i(tag.from, tag.to):
+		return
+	undo_redo.create_action("Set Tag Range")
+	undo_redo.add_undo_method(_apply_tag_range.bind(index, previous_range.x, previous_range.y))
+	undo_redo.add_do_method(_apply_tag_range.bind(index, tag.from, tag.to))
+	undo_redo.commit_action(false)
 
 
 func _apply_tag_range(index: int, from: int, to: int) -> void:

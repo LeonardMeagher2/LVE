@@ -1,6 +1,6 @@
 [gd_resource type="Resource" format=3 uid="uid://4i1fwbs7eqth"]
 
-[ext_resource type="Script" uid="uid://ehdaiiw1qwgn" path="res://Plugins/Selection/SelectionToolSettings.gd" id="1_settings"]
+[ext_resource type="Script" uid="uid://ehdaiiw1qwgn" path="res://plugins/selection/SelectionToolSettings.gd" id="1_settings"]
 
 [resource]
 script = ExtResource("1_settings")

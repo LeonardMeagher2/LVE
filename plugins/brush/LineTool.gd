@@ -1,4 +1,4 @@
-extends "res://Plugins/Brush/BrushTool.gd"
+extends "res://plugins/brush/BrushTool.gd"
 
 var _anchor := VoxelPicking.NONE
 var _endpoint := VoxelPicking.NONE

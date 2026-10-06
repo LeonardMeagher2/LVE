@@ -6,6 +6,8 @@ var _is_from := false
 var _is_to := false
 var _dragging := false
 var _drag_from := false
+var _drag_tag := -1
+var _drag_range := Vector2i.ZERO
 
 
 func set_column_index(i: int) -> void:
@@ -50,6 +52,9 @@ func _gui_input(event: InputEvent) -> void:
 		return
 	_drag_from = _is_from and (not _is_to or mb.position.x < size.x * 0.5)
 	_dragging = true
+	_drag_tag = State.active_tag
+	var tag := State.get_active_tag()
+	_drag_range = Vector2i(tag.from, tag.to)
 	accept_event()
 
 
@@ -59,19 +64,21 @@ func _input(event: InputEvent) -> void:
 	var mb := event as InputEventMouseButton
 	if mb != null and not mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
 		_dragging = false
+		State.commit_tag_range(_drag_tag, _drag_range)
 		get_viewport().set_input_as_handled()
 		return
 	var mm := event as InputEventMouseMotion
 	if mm == null:
 		return
 	var tag: AnimationTag = State.get_active_tag()
-	if tag == null:
+	if tag == null or State.active_tag != _drag_tag:
 		return
 	var col := _column_from_x(mm.position.x)
-	if _drag_from:
-		State.set_tag_range(col, tag.to)
-	else:
-		State.set_tag_range(tag.from, col)
+	var from := col if _drag_from else tag.from
+	var to := tag.to if _drag_from else col
+	if from == tag.from and to == tag.to:
+		return
+	State.set_tag_range(from, to, false)
 
 
 func _column_from_x(x: float) -> int:

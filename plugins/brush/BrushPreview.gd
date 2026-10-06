@@ -1,11 +1,11 @@
-extends "res://Plugins/Selection/SelectionPreview.gd"
+extends "res://plugins/selection/SelectionPreview.gd"
 
 @export var apply_edit_symmetry := false
 var _mirrors: Array[MeshInstance3D] = []
 
 
 func _ready() -> void:
-	material_override = preload("res://Plugins/cursor_material.tres").duplicate()
+	material_override = preload("res://plugins/cursor_material.tres").duplicate()
 	super._ready()
 	if apply_edit_symmetry:
 		_solid_material.cull_mode = BaseMaterial3D.CULL_DISABLED

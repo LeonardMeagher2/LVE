@@ -1,8 +1,8 @@
 [gd_scene format=3 uid="uid://bsblusihptbce"]
 
-[ext_resource type="Script" uid="uid://cticeylt2p15v" path="res://Plugins/Eyedropper/EyedropperTool.gd" id="1_ac15l"]
-[ext_resource type="Material" uid="uid://dv7wwwbfihlej" path="res://Plugins/cursor_material.tres" id="2_olwas"]
-[ext_resource type="ArrayMesh" uid="uid://cqj6xncf14cm" path="res://Plugins/OutlineCube.tres" id="3_j0o6w"]
+[ext_resource type="Script" uid="uid://cticeylt2p15v" path="res://plugins/Eyedropper/EyedropperTool.gd" id="1_ac15l"]
+[ext_resource type="Material" uid="uid://dv7wwwbfihlej" path="res://plugins/cursor_material.tres" id="2_olwas"]
+[ext_resource type="ArrayMesh" uid="uid://cqj6xncf14cm" path="res://plugins/OutlineCube.tres" id="3_j0o6w"]
 
 [node name="EyedropperTool" type="Node3D" unique_id=1760587671]
 script = ExtResource("1_ac15l")

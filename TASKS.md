@@ -345,6 +345,15 @@ max_active: 1
 - [ ] Detect narrow layouts and adapt the layout, so the editor can run on a phone
 
 # Test harness
+- [x] Review the recent merge to main
+  - [x] Correct plugin resource paths to match the stored directory names
+  - [x] Keep each tag range drag in one separate undo action
+  - [x] Update the tag grip, large surface, and wand test setups
+  - [x] Add automatic HiDPI scaling and a saved UI Scale selector
+  - [x] Import all UI SVG icons as DPITexture resources
+  - [x] Put the UI Scale selector in the status bar
+  - The focused tests passed before the status bar change.
+  - The user stopped the full suite and requested no more tests.
 - [x] Include every step duration in logs and reports
   - [x] Measure synchronous and awaited work with the wall clock
   - [x] Include steps without checks and preserve callable results

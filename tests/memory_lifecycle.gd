@@ -81,7 +81,7 @@ func _run() -> void:
 				for z in 32:
 					colors[Vector3i(x, y, z)] = Color.RED
 		State.get_current_voxel_frame().set_cells(colors)
-		copy_options = load("res://Plugins/Brush/Options.tscn").instantiate()
+		copy_options = load("res://plugins/brush/Options.tscn").instantiate()
 		main.add_child(copy_options)
 		copy_options._on_selection_pressed()
 		expect(copy_options._source_job != null, "brush source preparation runs on a worker")
