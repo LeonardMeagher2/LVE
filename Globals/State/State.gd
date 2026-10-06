@@ -15,6 +15,7 @@ signal symmetry_changed()
 signal tag_changed()
 signal activity_changed()
 signal edit_context_changing()
+signal model_settings_changed()
 
 const WORK_SLICE_US := 3000
 const DEFAULT_PALETTE_PATH := "user://default_palette.cfg"
@@ -619,6 +620,22 @@ func prev_frame() -> void:
 
 func get_frame_count() -> int:
 	return document.frames.size()
+
+
+func set_smooth_normals(value: bool) -> void:
+	if edit_busy() or value == document.smooth_normals:
+		return
+	undo_redo.create_action("Set Smooth Normals")
+	undo_redo.add_undo_method(_apply_smooth_normals.bind(document.smooth_normals))
+	undo_redo.add_do_method(_apply_smooth_normals.bind(value))
+	undo_redo.commit_action(false)
+	_apply_smooth_normals(value)
+
+
+func _apply_smooth_normals(value: bool) -> void:
+	document.smooth_normals = value
+	model_settings_changed.emit()
+
 
 func get_voxel_frame(frame:int) -> VoxelFrame:
 	if frame < 0 or frame >= document.frames.size():

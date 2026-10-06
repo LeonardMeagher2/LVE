@@ -31,6 +31,13 @@ func _ready() -> void:
 	_thumbnail_viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
 	State.frames_changed.connect(_clear_queue)
 	State.document_changed.connect(_clear_queue)
+	State.model_settings_changed.connect(_on_model_settings_changed)
+
+
+func _on_model_settings_changed() -> void:
+	_clear_queue()
+	for frame_index in State.get_frame_count():
+		request_frame_render(frame_index)
 
 
 func request_frame_render(frame_index: int) -> void:

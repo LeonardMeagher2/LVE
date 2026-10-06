@@ -6,19 +6,21 @@ const PADDED_CHUNK_SIZE := CHUNK_SIZE + 2
 
 var source_frame: VoxelFrame
 var chunk_location := Vector3i.ZERO
+var smooth_normals := false
 var worker_task_id := -1
 var surface_arrays: Array = []
 var geometry_bytes := 0
 
 
 func run() -> void:
-	var padded_cell_colors := _snapshot(source_frame, chunk_location)
+	var padded_cell_colors := _snapshot(source_frame, chunk_location, smooth_normals)
 	source_frame = null
 	var vertex_positions := PackedVector3Array()
 	var vertex_normals := PackedVector3Array()
 	var vertex_colors := PackedColorArray()
 	var triangle_indices := PackedInt32Array()
 	var face_colors := PackedColorArray()
+	var corner_normals := {}
 	face_colors.resize(CHUNK_SIZE * CHUNK_SIZE)
 	for face_axis in 3:
 		var column_axis := (face_axis + 1) % 3
@@ -46,11 +48,11 @@ func run() -> void:
 							column += 1
 							continue
 						var quad_width := 1
-						while column + quad_width < CHUNK_SIZE and face_colors[column + quad_width + CHUNK_SIZE * row] == face_color:
+						while not smooth_normals and column + quad_width < CHUNK_SIZE and face_colors[column + quad_width + CHUNK_SIZE * row] == face_color:
 							quad_width += 1
 						var quad_height := 1
 						var row_matches := true
-						while row + quad_height < CHUNK_SIZE and row_matches:
+						while not smooth_normals and row + quad_height < CHUNK_SIZE and row_matches:
 							for column_offset in quad_width:
 								if face_colors[column + column_offset + CHUNK_SIZE * (row + quad_height)] != face_color:
 									row_matches = false
@@ -67,8 +69,16 @@ func run() -> void:
 						row_edge[row_axis] = quad_height
 						var first_vertex := vertex_positions.size()
 						vertex_positions.append_array(PackedVector3Array([face_origin, face_origin + column_edge, face_origin + column_edge + row_edge, face_origin + row_edge]))
-						for _vertex_corner in 4:
-							vertex_normals.append(face_normal)
+						for vertex_corner in 4:
+							var normal := face_normal
+							if smooth_normals:
+								var corner := Vector3i(vertex_positions[first_vertex + vertex_corner].floor())
+								if not corner_normals.has(corner):
+									corner_normals[corner] = _corner_normal(corner, padded_cell_colors)
+								normal = corner_normals[corner]
+								if normal.is_zero_approx():
+									normal = face_normal
+							vertex_normals.append(normal)
 							vertex_colors.append(face_color)
 						if face_sign > 0:
 							triangle_indices.append_array(PackedInt32Array([first_vertex, first_vertex + 2, first_vertex + 1, first_vertex, first_vertex + 3, first_vertex + 2]))
@@ -87,16 +97,38 @@ func run() -> void:
 	geometry_bytes = vertex_positions.size() * 40 + triangle_indices.size() * 4
 
 
-static func _snapshot(source_frame: VoxelFrame, chunk_location: Vector3i) -> PackedColorArray:
+static func neighbor_offsets(smooth_normals: bool) -> Array[Vector3i]:
+	var offsets: Array[Vector3i] = [Vector3i.ZERO]
+	if not smooth_normals:
+		offsets.append_array(VoxelFrame.DIRECTIONS)
+		return offsets
+	for z in range(-1, 2):
+		for y in range(-1, 2):
+			for x in range(-1, 2):
+				var offset := Vector3i(x, y, z)
+				if offset != Vector3i.ZERO:
+					offsets.append(offset)
+	return offsets
+
+
+static func _corner_normal(corner: Vector3i, padded_cell_colors: PackedColorArray) -> Vector3:
+	var normal := Vector3.ZERO
+	for z in 2:
+		for y in 2:
+			for x in 2:
+				var sample := corner + Vector3i.ONE + Vector3i(x, y, z)
+				if padded_cell_colors[sample.x + PADDED_CHUNK_SIZE * (sample.y + PADDED_CHUNK_SIZE * sample.z)] != Color.TRANSPARENT:
+					normal += Vector3(0.5 - x, 0.5 - y, 0.5 - z)
+	return normal.normalized()
+
+
+static func _snapshot(source_frame: VoxelFrame, chunk_location: Vector3i, smooth_normals: bool) -> PackedColorArray:
 	var padded_cell_colors := PackedColorArray()
 	padded_cell_colors.resize(PADDED_CHUNK_SIZE * PADDED_CHUNK_SIZE * PADDED_CHUNK_SIZE)
 	padded_cell_colors.fill(Color.TRANSPARENT)
 	var padded_origin := chunk_location * CHUNK_SIZE - Vector3i.ONE
-	var sampled_chunks: Array = [chunk_location]
-	for direction in VoxelFrame.DIRECTIONS:
-		sampled_chunks.append(chunk_location + direction)
-	for sampled_location in sampled_chunks:
-		var chunk: VoxelFrame.Chunk = source_frame.chunks.get(sampled_location)
+	for offset in neighbor_offsets(smooth_normals):
+		var chunk: VoxelFrame.Chunk = source_frame.chunks.get(chunk_location + offset)
 		if chunk == null:
 			continue
 		for cell_position in chunk.cell_colors:

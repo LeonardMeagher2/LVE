@@ -49,6 +49,7 @@ func _enter_tree() -> void:
 	State.cells_changed.connect(_update)
 	State.chunks_changed.connect(_update_chunks)
 	State.document_changed.connect(_rebuild)
+	State.model_settings_changed.connect(_rebuild)
 
 
 func _notification(what: int) -> void:
@@ -62,6 +63,7 @@ func _exit_tree() -> void:
 	State.cells_changed.disconnect(_update)
 	State.chunks_changed.disconnect(_update_chunks)
 	State.document_changed.disconnect(_rebuild)
+	State.model_settings_changed.disconnect(_rebuild)
 	State.finish_operation(_operation_id)
 	_operation_id = 0
 	# No worker accesses a renderer. Collect every task when the last viewport exits.
@@ -115,14 +117,10 @@ func _update(updated_frame: int, affected_cells: Array[Vector3i]) -> void:
 		return
 	var source_frame := _get_frame()
 	var affected_chunks := {}
+	var offsets := VoxelMeshBuilder.neighbor_offsets(State.document.smooth_normals)
 	for cell_position in affected_cells:
-		var chunk_location := VoxelFrame.chunk_position(cell_position)
-		affected_chunks[chunk_location] = true
-		var local_cell: Vector3i = cell_position - chunk_location * CHUNK_SIZE
-		for direction in VoxelFrame.DIRECTIONS:
-			var neighbor_cell: Vector3i = local_cell + direction
-			if neighbor_cell.x < 0 or neighbor_cell.y < 0 or neighbor_cell.z < 0 or neighbor_cell.x >= CHUNK_SIZE or neighbor_cell.y >= CHUNK_SIZE or neighbor_cell.z >= CHUNK_SIZE:
-				affected_chunks[chunk_location + direction] = true
+		for offset in offsets:
+			affected_chunks[VoxelFrame.chunk_position(cell_position + offset)] = true
 	for chunk_location in affected_chunks:
 		_request(source_frame, chunk_location)
 	_report_activity()
@@ -133,7 +131,7 @@ func _request(source_frame: VoxelFrame, chunk_location: Vector3i) -> void:
 		_pending_surface_keys.erase(chunk_location)
 		_retire(chunk_location)
 		return
-	var surface_key := _signature(source_frame, chunk_location)
+	var surface_key := _signature(source_frame, chunk_location, State.document.smooth_normals)
 	if _displayed_surface_keys.get(chunk_location) == surface_key:
 		_pending_surface_keys.erase(chunk_location)
 		if _chunk_instances.has(chunk_location):
@@ -148,22 +146,19 @@ func _update_chunks(updated_frame: int, chunk_positions: Array[Vector3i]) -> voi
 		return
 	var source_frame := _get_frame()
 	var affected_chunks := {}
+	var offsets := VoxelMeshBuilder.neighbor_offsets(State.document.smooth_normals)
 	for chunk_location in chunk_positions:
-		affected_chunks[chunk_location] = true
-		for direction in VoxelFrame.DIRECTIONS:
-			affected_chunks[chunk_location + direction] = true
+		for offset in offsets:
+			affected_chunks[chunk_location + offset] = true
 	for chunk_location in affected_chunks:
 		_request(source_frame, chunk_location)
 	_report_activity()
 
 
-static func _signature(source_frame: VoxelFrame, chunk_location: Vector3i) -> String:
-	var surface_key := ""
-	var sampled_chunks: Array = [chunk_location]
-	for direction in VoxelFrame.DIRECTIONS:
-		sampled_chunks.append(chunk_location + direction)
-	for sampled_location in sampled_chunks:
-		var chunk: VoxelFrame.Chunk = source_frame.chunks.get(sampled_location)
+static func _signature(source_frame: VoxelFrame, chunk_location: Vector3i, smooth_normals: bool) -> String:
+	var surface_key := "smooth/" if smooth_normals else "flat/"
+	for offset in VoxelMeshBuilder.neighbor_offsets(smooth_normals):
+		var chunk: VoxelFrame.Chunk = source_frame.chunks.get(chunk_location + offset)
 		surface_key += "%s:%s/" % [chunk.get_instance_id(), chunk.voxel_revision] if chunk else "0/"
 	return surface_key
 
@@ -199,6 +194,7 @@ func _update_surfaces() -> void:
 			var surface_job := VoxelMeshBuilder.new()
 			surface_job.source_frame = source_frame.copy_frame()
 			surface_job.chunk_location = chunk_location
+			surface_job.smooth_normals = State.document.smooth_normals
 			surface_job.worker_task_id = WorkerThreadPool.add_task(surface_job.run, false, "Voxel surface")
 			_surface_jobs[surface_key] = surface_job
 		if Time.get_ticks_usec() - update_started_us >= State.WORK_SLICE_US:

@@ -17,6 +17,7 @@ class ExportJob extends VoxelFrame.EditJob:
 	var frame_surfaces: Array[Array] = []
 	var has_transparency := false
 	var center_origin := true
+	var smooth_normals := false
 
 	func run() -> void:
 		var total := 0
@@ -38,6 +39,7 @@ class ExportJob extends VoxelFrame.EditJob:
 				var mesh_job := VoxelMeshBuilder.new()
 				mesh_job.source_frame = frame
 				mesh_job.chunk_location = chunk_location
+				mesh_job.smooth_normals = smooth_normals
 				mesh_job.run()
 				var first_vertex := positions.size()
 				var origin := Vector3(chunk_location * VoxelFrame.CHUNK_SIZE)
@@ -65,10 +67,10 @@ class ExportJob extends VoxelFrame.EditJob:
 			var welded := _weld_frame(frame_surfaces[frame_index], frame_index)
 			if welded.is_empty():
 				return
-			var simplified := _simplify_frame(welded, frame_index)
+			var simplified := welded if smooth_normals else _simplify_frame(welded, frame_index)
 			if simplified.is_empty():
 				return
-			frame_surfaces[frame_index] = _weld_frame(simplified, frame_index)
+			frame_surfaces[frame_index] = simplified if smooth_normals else _weld_frame(simplified, frame_index)
 			if frame_surfaces[frame_index].is_empty():
 				return
 			vertex_count += frame_surfaces[frame_index][Mesh.ARRAY_VERTEX].size()
@@ -256,6 +258,7 @@ func export_gltf(path: String, center_origin := true, tag_index := -1) -> Error:
 	State.stop()
 	var job := ExportJob.new()
 	job.center_origin = center_origin
+	job.smooth_normals = State.document.smooth_normals
 	var selected_tag := State.document.get_tag(tag_index)
 	var first := selected_tag.from if selected_tag else 0
 	var last := selected_tag.to if selected_tag else State.get_frame_count() - 1
@@ -302,15 +305,7 @@ func export_gltf(path: String, center_origin := true, tag_index := -1) -> Error:
 			var quad_count: int = arrays[Mesh.ARRAY_INDEX].size() / 6
 			var split_quad: int = quad_count / 2
 			for quad_range in [Vector2i(0, split_quad), Vector2i(split_quad, quad_count)]:
-				var vertex_start: int = quad_range.x * 4
-				var vertex_end: int = quad_range.y * 4
-				var surface_arrays := arrays.duplicate()
-				for attribute in [Mesh.ARRAY_VERTEX, Mesh.ARRAY_NORMAL, Mesh.ARRAY_COLOR]:
-					surface_arrays[attribute] = arrays[attribute].slice(vertex_start, vertex_end)
-				var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX].slice(quad_range.x * 6, quad_range.y * 6)
-				for triangle_index in indices.size():
-					indices[triangle_index] -= vertex_start
-				surface_arrays[Mesh.ARRAY_INDEX] = indices
+				var surface_arrays := _surface_slice(arrays, quad_range)
 				frame_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, surface_arrays)
 				frame_mesh.surface_set_material(frame_mesh.get_surface_count() - 1, material)
 			var mesh_instance := MeshInstance3D.new()
@@ -349,6 +344,28 @@ func export_gltf(path: String, center_origin := true, tag_index := -1) -> Error:
 	if error != OK:
 		push_error("Voxi: glTF export failed: %s" % error_string(error))
 	return error
+
+
+func _surface_slice(arrays: Array, quad_range: Vector2i) -> Array:
+	var positions := PackedVector3Array()
+	var normals := PackedVector3Array()
+	var colors := PackedColorArray()
+	var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX].slice(quad_range.x * 6, quad_range.y * 6)
+	var remap := {}
+	for index in indices.size():
+		var source_index := indices[index]
+		if not remap.has(source_index):
+			remap[source_index] = positions.size()
+			positions.append(arrays[Mesh.ARRAY_VERTEX][source_index])
+			normals.append(arrays[Mesh.ARRAY_NORMAL][source_index])
+			colors.append(arrays[Mesh.ARRAY_COLOR][source_index])
+		indices[index] = remap[source_index]
+	var surface_arrays := arrays.duplicate()
+	surface_arrays[Mesh.ARRAY_VERTEX] = positions
+	surface_arrays[Mesh.ARRAY_NORMAL] = normals
+	surface_arrays[Mesh.ARRAY_COLOR] = colors
+	surface_arrays[Mesh.ARRAY_INDEX] = indices
+	return surface_arrays
 
 
 func _finish_export() -> void:

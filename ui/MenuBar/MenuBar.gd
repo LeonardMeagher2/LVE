@@ -3,6 +3,28 @@ extends HBoxContainer
 var current_save_path:String = ""
 
 
+func _ready() -> void:
+	%ModelSettingsBtn.get_popup().id_pressed.connect(_on_model_setting_selected)
+	%ModelSettingsBtn.about_to_popup.connect(_sync_model_settings)
+	State.document_changed.connect(_sync_model_settings)
+	State.model_settings_changed.connect(_sync_model_settings)
+	State.activity_changed.connect(_sync_model_settings)
+	_sync_model_settings()
+
+
+func _sync_model_settings() -> void:
+	var popup: PopupMenu = %ModelSettingsBtn.get_popup()
+	popup.set_item_checked(0, State.document.smooth_normals)
+	popup.set_item_disabled(0, State.edit_busy())
+	%ModelSettingsBtn.disabled = State.edit_busy()
+
+
+func _on_model_setting_selected(id: int) -> void:
+	if id == 0:
+		State.set_smooth_normals(not State.document.smooth_normals)
+	_sync_model_settings()
+
+
 func save_doc(path:String) -> void:
 	if State.edit_busy():
 		return

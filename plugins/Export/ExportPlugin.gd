@@ -94,6 +94,7 @@ func _ready() -> void:
 	State.tag_changed.connect(_source_changed)
 	State.cells_changed.connect(_source_changed.unbind(2))
 	State.chunks_changed.connect(_source_changed.unbind(2))
+	State.model_settings_changed.connect(_source_changed)
 	State.activity_changed.connect(_sync)
 	_model.get_node("Viewport/ControlBar/GridToggle").button_pressed = false
 	_model.get_node("Viewport/ControlBar/RotateToggle").button_pressed = true

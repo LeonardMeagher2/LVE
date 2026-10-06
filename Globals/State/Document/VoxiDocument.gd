@@ -5,6 +5,7 @@ extends Resource
 @export var palette: Array[Color] = []
 @export var frames: Array[VoxelFrame] = []
 @export var tags: Array[AnimationTag] = []
+@export var smooth_normals := false
 
 var _bounds: AABB
 var _bounds_dirty := true

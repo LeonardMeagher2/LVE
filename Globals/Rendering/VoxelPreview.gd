@@ -17,6 +17,7 @@ var _single_cell_outline: ArrayMesh
 var _requested_cells := {}
 var _requested_style := PreviewStyle.OUTLINE
 var _requested_voxel_colors := false
+var _requested_smooth_normals := false
 var _requested_color_key := Color.WHITE
 var _requested_cache_key := ""
 var _request_revision := 0
@@ -33,6 +34,7 @@ class PreviewJob extends VoxelFrame.EditJob:
 	var cells := {}
 	var style := PreviewStyle.OUTLINE
 	var use_voxel_colors := false
+	var smooth_normals := false
 	var color_key := Color.WHITE
 	var revision := 0
 	var cache_key := ""
@@ -71,6 +73,7 @@ class PreviewJob extends VoxelFrame.EditJob:
 			var job := VoxelMeshBuilder.new()
 			job.source_frame = frame
 			job.chunk_location = chunk_location
+			job.smooth_normals = smooth_normals
 			job.run()
 			var vertex_offset := vertices.size()
 			var chunk_origin := Vector3(chunk_location * VoxelFrame.CHUNK_SIZE)
@@ -91,6 +94,13 @@ class PreviewJob extends VoxelFrame.EditJob:
 
 func _enter_tree() -> void:
 	_preview_count += 1
+	State.model_settings_changed.connect(_on_model_settings_changed)
+	State.document_changed.connect(_on_model_settings_changed)
+
+
+func _on_model_settings_changed() -> void:
+	if _requested_style == PreviewStyle.SOLID and not _requested_cells.is_empty():
+		_request(_requested_cells, _requested_style, _requested_voxel_colors, _requested_color_key)
 
 
 func _ready() -> void:
@@ -137,18 +147,20 @@ func show_selection(selection: VoxelSelection) -> void:
 
 func _request(cells: Dictionary, style: PreviewStyle, use_voxel_colors: bool = false, color_key: Color = Color.WHITE) -> void:
 	var colored := style == PreviewStyle.SOLID and use_voxel_colors
-	if style == _requested_style and use_voxel_colors == _requested_voxel_colors and color_key == _requested_color_key and _same_cells(_requested_cells, cells, colored):
+	var smooth_normals := style == PreviewStyle.SOLID and State.document.smooth_normals
+	if style == _requested_style and use_voxel_colors == _requested_voxel_colors and smooth_normals == _requested_smooth_normals and color_key == _requested_color_key and _same_cells(_requested_cells, cells, colored):
 		return
 	_request_revision += 1
 	if _preview_job:
 		_preview_job.cancel()
 	_requested_style = style
 	_requested_voxel_colors = use_voxel_colors
+	_requested_smooth_normals = smooth_normals
 	_requested_color_key = color_key
 	_requested_cells = cells if cells.is_read_only() else cells.duplicate()
 	_requested_cells.make_read_only()
 	_pending_cells = {}
-	var cache_key := _cache_key(_requested_cells, style, colored, color_key)
+	var cache_key := _cache_key(_requested_cells, style, colored, color_key, smooth_normals)
 	_requested_cache_key = cache_key
 	var cached: Dictionary = _mesh_cache.get(cache_key, {})
 	if not cached.is_empty() and cached.color_key == color_key and _same_cells(cached.cells, _requested_cells, colored):
@@ -178,9 +190,9 @@ static func _same_cells(first: Dictionary, second: Dictionary, colored: bool) ->
 	return true
 
 
-static func _cache_key(cells: Dictionary, style: PreviewStyle, colored: bool, color_key: Color) -> String:
+static func _cache_key(cells: Dictionary, style: PreviewStyle, colored: bool, color_key: Color, smooth_normals: bool) -> String:
 	var cell_hash := cells.hash() if colored else cells.keys().hash()
-	return "%d:%s:%d:%s" % [style, colored, cell_hash, color_key]
+	return "%d:%s:%d:%s:%s" % [style, colored, cell_hash, color_key, smooth_normals]
 
 
 func _clear_request() -> void:
@@ -240,6 +252,7 @@ func _start_preview() -> void:
 	_preview_job.outline_builder = _outline_vertices
 	_preview_job.style = _requested_style
 	_preview_job.use_voxel_colors = _requested_voxel_colors
+	_preview_job.smooth_normals = _requested_smooth_normals
 	_preview_job.color_key = _requested_color_key
 	_preview_job.revision = _request_revision
 	_preview_job.cache_key = _requested_cache_key
@@ -305,6 +318,8 @@ static func _cache_mesh(job: PreviewJob, surface: ArrayMesh) -> void:
 
 
 func _exit_tree() -> void:
+	State.model_settings_changed.disconnect(_on_model_settings_changed)
+	State.document_changed.disconnect(_on_model_settings_changed)
 	_clear_request()
 	if _preview_job:
 		_preview_job.cancel()

@@ -7,6 +7,7 @@
 [ext_resource type="Texture2D" uid="uid://bsdc6hsaxlttw" path="res://icons/save_as.svg" id="5_save_as"]
 [ext_resource type="Texture2D" uid="uid://by28nxj3x7ily" path="res://icons/undo.svg" id="6_undo"]
 [ext_resource type="Texture2D" uid="uid://b4jrotar1sqwf" path="res://icons/redo.svg" id="7_redo"]
+[ext_resource type="Texture2D" path="res://icons/settings.svg" id="8_settings"]
 
 [node name="MenuBar" type="HBoxContainer" unique_id=1142549001]
 script = ExtResource("1_toolbar")
@@ -34,6 +35,18 @@ layout_mode = 2
 tooltip_text = "Save As (Ctrl+Shift+S)"
 icon = ExtResource("5_save_as")
 icon_alignment = 1
+
+[node name="ModelSettingsBtn" type="MenuButton" parent="." unique_id=1276117650]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Model settings"
+icon = ExtResource("8_settings")
+flat = false
+icon_alignment = 1
+item_count = 1
+popup/item_0/text = "Smooth normals"
+popup/item_0/checkable = 1
+popup/item_0/id = 0
 
 [node name="Sep1" type="VSeparator" parent="." unique_id=2069431167]
 layout_mode = 2

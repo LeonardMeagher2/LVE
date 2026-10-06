@@ -74,6 +74,14 @@ max_active: 1
 
 # Rendering and storage
 
+- [x] Add document smooth normals
+  - [x] Add a document settings dropdown after Save As
+  - [x] Use the document icon with a gear badge at the bottom right
+  - [x] Save the smooth normals option and support undo
+  - [x] Use the option in editor surfaces, previews, thumbnails, and exports
+  - [x] Verify shading, chunk boundaries, save/load, undo, and export
+  - The windowed settings test passes. The full suite and the final suite pass all 99 behavior tests with Godot 4.7.2.
+
 - [x] Simplify shared preview and geometry ownership
   - [x] Move the shared preview script to `Globals/Rendering/VoxelPreview.gd`
   - [x] Use one mesh builder for editor surfaces, previews, and export
