@@ -3,6 +3,8 @@ max_active: 1
 ---
 
 # Tools
+- [x] Match the brush toolbar filename to the PascalCase resource path
+  - [x] Verify brush loading without the case mismatch warning
 - [x] floor plane
   - [x] Allow picking on any side of the "floor" plane, not just the top
   - [x] Add option to change the floor plane to a different axis (X, Y, Z)
@@ -157,7 +159,13 @@ max_active: 1
   - [x] Use a self-contained Aseprite fixture for the behavior test
   - The final full run reported 79 passes and the six known windowed selection failures.
   - The Dog fixture was removed during the run. The self-contained Aseprite rerun passes.
-- [ ] Import other image formats (jpg, bmp, aseprite files)
+- [x] Load Godot image formats for palettes and voxel documents
+  - [x] Rename the PNG importer to the Image importer
+  - [x] Share the image format list and file-dialog filter
+  - [x] Use Godot image decoding and decompression
+  - [x] Verify format routing, compressed textures, PNG, Aseprite sidecars, and cancellation with targeted tests
+  - The five targeted image-loading tests pass.
+- [ ] Import native Aseprite files
 - [ ] Export a sprite sheet of the animation frames
   - [ ] Build the export UI
   - [ ] Render each frame with a transparent background

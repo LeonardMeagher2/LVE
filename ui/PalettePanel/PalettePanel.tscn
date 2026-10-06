@@ -130,7 +130,6 @@ unique_name_in_owner = true
 title = "Import Palette"
 file_mode = 0
 access = 2
-filters = PackedStringArray("*.png, *.jpg, *.jpeg, *.webp, *.bmp, *.tga, *.svg ; Images")
 
 [node name="ExportDialog" type="FileDialog" parent="."]
 unique_name_in_owner = true

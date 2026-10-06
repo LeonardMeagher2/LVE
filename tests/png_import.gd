@@ -15,7 +15,7 @@ func _ready() -> void:
 
 func _run() -> void:
 	step("Given a PNG with opaque, clipped, and duplicate colors", func():
-		importer = plugin("PNGImportPlugin")
+		importer = plugin("ImageImportPlugin")
 		clipboard = plugin("ClipboardPlugin")
 		var image := Image.create(4, 2, false, Image.FORMAT_RGBA8)
 		image.fill(Color.TRANSPARENT)
@@ -77,7 +77,7 @@ func _run() -> void:
 		transparent_path = "user://voxi_png_empty_%s.png" % Time.get_ticks_usec()
 		expect(image.save_png(transparent_path) == OK, "the transparent fixture is saved")
 	)
-	var error: Error = await importer.import_png(transparent_path)
+	var error: Error = await importer.import_image(transparent_path)
 	step("Then a transparent PNG opens an empty document", func():
 		expect(error == OK, "the transparent PNG is a valid image")
 		expect(State.get_current_voxel_frame().count() == 0, "the transparent PNG opens with no voxels")
@@ -90,7 +90,7 @@ func _run() -> void:
 		image.set_pixel(7, 0, Color.BLUE)
 		expect(image.save_png(transparent_path) == OK, "the padded PNG fixture is saved")
 	)
-	error = await importer.import_png(transparent_path)
+	error = await importer.import_image(transparent_path)
 	step("Then occupied content is centered independently of transparent margins", func():
 		expect(error == OK, "the padded PNG opens")
 		expect(State.get_current_voxel_frame().get_color(Vector3i.ZERO) == Color.BLUE, "the only visible voxel is at the origin")

@@ -17,6 +17,7 @@ signal edit_context_changing()
 
 const WORK_SLICE_US := 3000
 const DEFAULT_PALETTE_PATH := "user://default_palette.cfg"
+const IMAGE_EXTENSIONS := ["bmp", "dds", "exr", "hdr", "jpg", "jpeg", "ktx", "ktx2", "png", "svg", "tga", "webp"]
 
 var default_palette := get_builtin_palette()
 
@@ -121,7 +122,7 @@ func _ready() -> void:
 	add_plugin(load("res://Plugins/Plane/PlanePlugin.gd").new())
 	add_plugin(load("res://Plugins/GLTFExport/GLTFExportPlugin.gd").new())
 	add_plugin(load("res://Plugins/Clipboard/ClipboardPlugin.gd").new())
-	add_plugin(load("res://Plugins/PNGImport/PNGImportPlugin.gd").new())
+	add_plugin(load("res://Plugins/ImageImport/ImageImportPlugin.gd").new())
 	
 
 
@@ -553,6 +554,32 @@ func reset_default_palette(path: String = DEFAULT_PALETTE_PATH) -> Error:
 			return error
 	default_palette = get_builtin_palette()
 	default_palette_changed.emit()
+	return OK
+
+
+static func get_image_file_filter() -> String:
+	var patterns := PackedStringArray()
+	for extension in IMAGE_EXTENSIONS:
+		patterns.append("*." + extension)
+	return ", ".join(patterns) + " ; Images"
+
+
+static func load_image(path: String, image: Image) -> Error:
+	var extension := path.get_extension().to_lower()
+	var error: Error = OK
+	if extension in ["dds", "ktx", "ktx2"]:
+		var file := FileAccess.open(path, FileAccess.READ)
+		if file == null:
+			return FileAccess.get_open_error()
+		var bytes := file.get_buffer(file.get_length())
+		file.close()
+		error = image.load_dds_from_buffer(bytes) if extension == "dds" else image.load_ktx_from_buffer(bytes)
+	else:
+		error = image.load(path)
+	if error != OK:
+		return error
+	if image.is_compressed():
+		return image.decompress()
 	return OK
 
 func can_edit(cell: Vector3i) -> bool:

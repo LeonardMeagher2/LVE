@@ -12,7 +12,7 @@ func _ready() -> void:
 
 func _run() -> void:
 	step("Given a hash-format sheet with two trimmed frames", func():
-		importer = plugin("PNGImportPlugin")
+		importer = plugin("ImageImportPlugin")
 		State.floor_axis = Vector3.Axis.AXIS_Y
 		var image := Image.create(2, 1, false, Image.FORMAT_RGBA8)
 		image.set_pixel(0, 0, Color.RED)
@@ -35,7 +35,7 @@ func _run() -> void:
 		file.store_string(JSON.stringify(data, "", false))
 		file.close()
 	)
-	var error: Error = await importer.import_png(png_path)
+	var error: Error = await importer.import_image(png_path)
 	step("Then frame order and source-canvas motion are preserved", func():
 		expect(error == OK, "the trimmed hash animation opens")
 		expect(State.document.frames.size() == 2, "both trimmed frames are present")
@@ -67,7 +67,7 @@ func _run() -> void:
 		file.store_string(JSON.stringify(data))
 		file.close()
 	)
-	error = await importer.import_png(png_path)
+	error = await importer.import_image(png_path)
 	step("Then array metadata preserves the same animation", func():
 		expect(error == OK, "the array-format animation opens")
 		expect(State.document.frames.size() == 2, "array metadata restores both frames")

@@ -14,9 +14,9 @@ class ImportJob extends VoxelFrame.EditJob:
 	var _palette_colors := {}
 
 	func run() -> void:
-		stage("Reading PNG", -1)
+		stage("Reading image", -1)
 		var image := Image.new()
-		error = image.load(path)
+		error = State.load_image(path, image)
 		if error != OK or not checkpoint(0):
 			return
 		imported_document.title = path.get_file().get_basename()
@@ -53,12 +53,12 @@ class ImportJob extends VoxelFrame.EditJob:
 		var center := Vector3i((_occupied_bounds.get_center() + Vector3.ONE * 0.5).floor())
 		for frame_index in _patterns.size():
 			var centered_colors := {}
-			stage("Centering PNG voxels", _patterns[frame_index].size())
+			stage("Centering image voxels", _patterns[frame_index].size())
 			for cell_position: Vector3i in _patterns[frame_index]:
 				centered_colors[cell_position - center] = _patterns[frame_index][cell_position]
 				if centered_colors.size() % 4096 == 0 and not checkpoint(centered_colors.size()):
 					return
-			stage("Building PNG voxels", centered_colors.size())
+			stage("Building image voxels", centered_colors.size())
 			imported_document.frames[frame_index].set_cells(centered_colors, self)
 			if not checkpoint(centered_colors.size()):
 				return
@@ -83,7 +83,7 @@ class ImportJob extends VoxelFrame.EditJob:
 		var first_x := int(source_rect.get("x", 0)) - floori(int(source_size.w) * 0.5)
 		var top_y := floori((int(source_size.h) - 1) * 0.5) - int(source_rect.get("y", 0))
 		var pattern := {}
-		stage("Importing PNG frame %s" % (imported_document.frames.size() + 1), rect.size.x * rect.size.y)
+		stage("Importing image frame %s" % (imported_document.frames.size() + 1), rect.size.x * rect.size.y)
 		var completed := 0
 		for y in rect.size.y:
 			for x in rect.size.x:
@@ -122,10 +122,10 @@ class ImportJob extends VoxelFrame.EditJob:
 
 
 func _ready() -> void:
-	name = "PNGImportPlugin"
+	name = "ImageImportPlugin"
 
 
-func import_png(path: String) -> Error:
+func import_image(path: String) -> Error:
 	if State.edit_busy() or _import_job:
 		return ERR_BUSY
 	State.edit_context_changing.emit()
@@ -136,8 +136,8 @@ func import_png(path: String) -> Error:
 	job.path = path
 	job.plane_axis = State.floor_axis
 	_import_job = job
-	var operation_id := State.begin_operation("Importing PNG", -1, true, self)
-	job.worker_task_id = WorkerThreadPool.add_task(job.run, true, "PNG import")
+	var operation_id := State.begin_operation("Importing image", -1, true, self)
+	job.worker_task_id = WorkerThreadPool.add_task(job.run, true, "Image import")
 	while not WorkerThreadPool.is_task_completed(job.worker_task_id):
 		if State.document != document or State.get_current_voxel_frame() != frame:
 			job.cancel()

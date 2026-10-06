@@ -4,6 +4,8 @@ This file records confirmed, non-obvious facts learned while working on Voxi. Re
 
 ## Godot API changes
 
+- 2026-10-05: Windows and embedded `FileDialog` controls filter by extensions. An image label does not select image formats.
+- 2026-10-05: DDS and KTX files use `Image` buffer loaders. If an image is compressed, decompress it before reading pixels.
 - 2026-10-05: `align_to_largest_stylebox` uses the largest button margins across states. It is a theme constant.
 - 2026-10-05: View rotation consumes right-click in `_input()` before tools receive `_unhandled_input()`.
 - 2026-10-05: `is_same()` compares dictionary references. Use it with read-only patterns to avoid content comparisons.

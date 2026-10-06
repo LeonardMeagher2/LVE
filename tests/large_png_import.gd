@@ -15,7 +15,7 @@ func _ready() -> void:
 
 func _run() -> void:
 	step("Given an opaque PNG with sixteen thousand pixels", func():
-		importer = plugin("PNGImportPlugin")
+		importer = plugin("ImageImportPlugin")
 		clipboard = plugin("ClipboardPlugin")
 		var image := Image.create(128, 128, false, Image.FORMAT_RGBA8)
 		image.fill(Color.RED)
@@ -27,7 +27,7 @@ func _run() -> void:
 		camera_rig().set_view("top")
 		camera_rig().is_orthogonal = true
 	)
-	var error: Error = await importer.import_png(image_path)
+	var error: Error = await importer.import_image(image_path)
 	step("Then the complete image opens directly with its palette", func():
 		expect(error == OK, "the large PNG is loaded")
 		frame = State.get_current_voxel_frame()
@@ -56,5 +56,5 @@ func _run() -> void:
 
 
 func _start_cancelled_import() -> void:
-	cancelled_result = await importer.import_png(image_path)
+	cancelled_result = await importer.import_image(image_path)
 	cancelled_done = true

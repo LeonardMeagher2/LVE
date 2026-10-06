@@ -12,7 +12,7 @@ class ImportJob extends VoxelFrame.EditJob:
 
 	func run() -> void:
 		var image := Image.new()
-		error = image.load(path)
+		error = State.load_image(path, image)
 		if error != OK:
 			return
 		stage("Reading palette colors", image.get_width() * image.get_height())
@@ -40,6 +40,7 @@ var _import_job: ImportJob
 
 
 func _ready() -> void:
+	%ImportDialog.filters = PackedStringArray([State.get_image_file_filter()])
 	State.document_changed.connect(_rebuild_swatches)
 	State.color_changed.connect(_on_color_changed)
 	State.palette_changed.connect(_rebuild_swatches)

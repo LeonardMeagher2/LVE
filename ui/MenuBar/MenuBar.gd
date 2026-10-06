@@ -20,17 +20,17 @@ func _on_open_btn_pressed() -> void:
 	%FileDialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
 	%FileDialog.clear_filters()
 	%FileDialog.add_filter("*.tres ; Voxel animation")
-	%FileDialog.add_filter("*.png ; PNG image")
+	%FileDialog.add_filter(State.get_image_file_filter())
 	%FileDialog.file_selected.connect(_on_file_opened, CONNECT_ONE_SHOT)
 	%FileDialog.popup_centered()
 
 func _on_file_opened(path: String) -> void:
-	if path.get_extension().to_lower() == "png":
-		var error: Error = await get_node("/root/PNGImportPlugin").import_png(path)
+	if path.get_extension().to_lower() in State.IMAGE_EXTENSIONS:
+		var error: Error = await get_node("/root/ImageImportPlugin").import_image(path)
 		if error == OK:
 			current_save_path = ""
 		if error != OK and error != ERR_BUSY:
-			push_error("Voxi: PNG import failed: %s" % error_string(error))
+			push_error("Voxi: image import failed: %s" % error_string(error))
 		return
 	var res: Resource = ResourceLoader.load(path)
 	if res is VoxiDocument:
