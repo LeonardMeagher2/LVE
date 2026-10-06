@@ -1,0 +1,6 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://tests/tag_frame_remove.gd" id="1"]
+
+[node name="TagFrameRemove" type="Node"]
+script = ExtResource("1")

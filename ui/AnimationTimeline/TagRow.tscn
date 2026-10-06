@@ -1,0 +1,107 @@
+[gd_scene format=3 uid="uid://cf3ybcr7rxq8h"]
+
+[ext_resource type="Script" uid="uid://cjpsjwaa75csu" path="res://ui/AnimationTimeline/TagRow.gd" id="1_kp8dp"]
+[ext_resource type="Texture2D" uid="uid://deh5jdev5fvl8" path="res://icons/loop_forward.svg" id="3_loop_fwd"]
+[ext_resource type="Texture2D" uid="uid://hgfi4nq2gusw" path="res://icons/loop_reverse.svg" id="4_loop_rev"]
+[ext_resource type="Texture2D" uid="uid://dv6oavoen082w" path="res://icons/loop_ping_pong.svg" id="5_loop_ping"]
+[ext_resource type="Texture2D" uid="uid://cwi2kxevnd3vt" path="res://icons/tag_plus.svg" id="6_tag_add"]
+[ext_resource type="Texture2D" uid="uid://bca3qyfqeqjls" path="res://icons/trash.svg" id="7_tag_del"]
+[ext_resource type="Texture2D" uid="uid://c0ldun0afv8y2" path="res://icons/rename.svg" id="8_rename"]
+[ext_resource type="Texture2D" uid="uid://dw0wg8jnwe0x0" path="res://icons/more.svg" id="9_more"]
+
+[node name="TagRow" type="HBoxContainer" unique_id=519130529]
+theme_override_constants/separation = 4
+script = ExtResource("1_kp8dp")
+
+[node name="TagActions" type="MenuButton" parent="." unique_id=2010203322]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Tag actions"
+icon = ExtResource("9_more")
+flat = false
+icon_alignment = 1
+item_count = 5
+popup/item_0/text = "Add tag"
+popup/item_0/icon = ExtResource("6_tag_add")
+popup/item_0/id = 0
+popup/item_1/text = "Rename tag"
+popup/item_1/icon = ExtResource("8_rename")
+popup/item_1/id = 1
+popup/item_2/text = "Delete tag"
+popup/item_2/icon = ExtResource("7_tag_del")
+popup/item_2/id = 2
+popup/item_3/id = 3
+popup/item_3/separator = true
+popup/item_4/text = "Repeats"
+popup/item_4/checkable = 1
+popup/item_4/id = 3
+
+[node name="TagDropdown" type="OptionButton" parent="." unique_id=2010203315]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "Select a tag"
+alignment = 1
+text_overrun_behavior = 3
+clip_text = true
+search_bar_enabled = true
+search_bar_min_item_count = 3
+
+[node name="TagRenameDialog" type="ConfirmationDialog" parent="." unique_id=2010203323]
+unique_name_in_owner = true
+oversampling_override = 1.0
+title = "Rename tag"
+initial_position = 1
+size = Vector2i(200, 82)
+
+[node name="MarginContainer" type="MarginContainer" parent="TagRenameDialog" unique_id=601835111]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="TagRenameDialog/MarginContainer" unique_id=557299118]
+layout_mode = 2
+alignment = 1
+
+[node name="TagRenameInput" type="LineEdit" parent="TagRenameDialog/MarginContainer/VBoxContainer" unique_id=2010203324]
+unique_name_in_owner = true
+layout_mode = 2
+select_all_on_focus = true
+
+[node name="LoopMenu" type="MenuButton" parent="." unique_id=2010203317]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Loop mode"
+icon = ExtResource("3_loop_fwd")
+flat = false
+icon_alignment = 1
+item_count = 4
+popup/item_0/text = "Forward"
+popup/item_0/icon = ExtResource("3_loop_fwd")
+popup/item_0/id = 0
+popup/item_1/text = "Reverse"
+popup/item_1/icon = ExtResource("4_loop_rev")
+popup/item_1/id = 1
+popup/item_2/text = "Ping-Pong"
+popup/item_2/icon = ExtResource("5_loop_ping")
+popup/item_2/id = 2
+popup/item_3/text = "Ping-Pong Reverse"
+popup/item_3/icon = ExtResource("5_loop_ping")
+popup/item_3/id = 3
+
+[node name="RepeatsSpin" type="SpinBox" parent="." unique_id=2010203320]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Number of passes; 0 loops forever"
+min_value = 1.0
+value = 1.0
+rounded = true
+allow_greater = true
+prefix = "× "
+select_all_on_focus = true
+
+[connection signal="item_selected" from="TagDropdown" to="." method="_on_tag_selected"]
+[connection signal="confirmed" from="TagRenameDialog" to="." method="_on_rename_confirmed"]
+[connection signal="value_changed" from="RepeatsSpin" to="." method="_on_repeats_changed"]

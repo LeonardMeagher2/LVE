@@ -1,0 +1,55 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://Plugins/Symmetry/SymmetryTool.gd" id="1_script"]
+
+[sub_resource type="StandardMaterial3D" id="XMaterial"]
+transparency = 1
+shading_mode = 0
+cull_mode = 2
+depth_draw_mode = 2
+albedo_color = Color(0.95, 0.25, 0.25, 0.07)
+
+[sub_resource type="StandardMaterial3D" id="YMaterial"]
+transparency = 1
+shading_mode = 0
+cull_mode = 2
+depth_draw_mode = 2
+albedo_color = Color(0.25, 0.95, 0.35, 0.07)
+
+[sub_resource type="StandardMaterial3D" id="ZMaterial"]
+transparency = 1
+shading_mode = 0
+cull_mode = 2
+depth_draw_mode = 2
+albedo_color = Color(0.25, 0.45, 0.95, 0.07)
+
+[sub_resource type="SphereMesh" id="OriginMesh"]
+radius = 0.5
+height = 1.0
+radial_segments = 12
+rings = 6
+
+[sub_resource type="StandardMaterial3D" id="OriginMaterial"]
+shading_mode = 0
+no_depth_test = true
+albedo_color = Color(1, 1, 1, 1)
+
+[node name="SymmetryTool" type="Node3D"]
+script = ExtResource("1_script")
+
+[node name="XPlane" type="MeshInstance3D" parent="."]
+material_override = SubResource("XMaterial")
+cast_shadow = 0
+
+[node name="YPlane" type="MeshInstance3D" parent="."]
+material_override = SubResource("YMaterial")
+cast_shadow = 0
+
+[node name="ZPlane" type="MeshInstance3D" parent="."]
+material_override = SubResource("ZMaterial")
+cast_shadow = 0
+
+[node name="Origin" type="MeshInstance3D" parent="."]
+material_override = SubResource("OriginMaterial")
+mesh = SubResource("OriginMesh")
+cast_shadow = 0

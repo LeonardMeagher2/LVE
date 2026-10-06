@@ -1,0 +1,75 @@
+[gd_scene format=3 uid="uid://c2301xo3rbrka"]
+
+[ext_resource type="Script" uid="uid://diaylp7imw342" path="res://ui/AnimationTimeline/AnimationFrame.gd" id="1_50uxx"]
+[ext_resource type="ButtonGroup" uid="uid://bct0x4oxfq5kd" path="res://ui/AnimationTimeline/FrameButtonGroup.tres" id="2_it13l"]
+[ext_resource type="Texture2D" uid="uid://cmfirdobdfgqh" path="res://ui/Checker.png" id="3_fil1o"]
+[ext_resource type="Script" uid="uid://b5aa6d3si7hvm" path="res://ui/AnimationTimeline/AnimationFrameButton.gd" id="4_btn3p"]
+
+[node name="AnimationFrame" type="PanelContainer" unique_id=276647722]
+offset_right = 80.0
+offset_bottom = 109.0
+mouse_filter = 1
+script = ExtResource("1_50uxx")
+
+[node name="Button" type="Button" parent="." unique_id=672221709]
+unique_name_in_owner = true
+layout_mode = 2
+focus_behavior_recursive = 2
+toggle_mode = true
+button_group = ExtResource("2_it13l")
+script = ExtResource("4_btn3p")
+
+[node name="MarginContainer" type="MarginContainer" parent="." unique_id=1035997408]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer" unique_id=1491507976]
+layout_mode = 2
+focus_behavior_recursive = 1
+mouse_filter = 2
+
+[node name="PanelContainer" type="PanelContainer" parent="MarginContainer/VBoxContainer" unique_id=2088539589]
+layout_mode = 2
+size_flags_vertical = 0
+mouse_filter = 2
+
+[node name="Number" type="Label" parent="MarginContainer/VBoxContainer/PanelContainer" unique_id=653081230]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 1
+text = "0"
+horizontal_alignment = 1
+
+[node name="PanelContainer2" type="PanelContainer" parent="MarginContainer/VBoxContainer" unique_id=1415986218]
+layout_mode = 2
+mouse_filter = 2
+
+[node name="TextureRect" type="TextureRect" parent="MarginContainer/VBoxContainer/PanelContainer2" unique_id=2002667655]
+layout_mode = 2
+mouse_filter = 2
+texture = ExtResource("3_fil1o")
+stretch_mode = 1
+
+[node name="Thumbnail" type="TextureRect" parent="MarginContainer/VBoxContainer/PanelContainer2" unique_id=1441147444]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(64, 64)
+layout_mode = 2
+mouse_filter = 2
+stretch_mode = 5
+
+[node name="Delay" type="SpinBox" parent="MarginContainer/VBoxContainer" unique_id=755136778]
+unique_name_in_owner = true
+layout_mode = 2
+focus_mode = 2
+focus_behavior_recursive = 2
+min_value = 1.0
+max_value = 1000.0
+value = 100.0
+rounded = true
+allow_greater = true
+alignment = 1
+suffix = "ms"
+select_all_on_focus = true
+
+[connection signal="toggled" from="Button" to="." method="_on_button_toggled"]
+[connection signal="value_changed" from="MarginContainer/VBoxContainer/Delay" to="." method="_on_delay_value_changed"]

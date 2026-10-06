@@ -1,0 +1,25 @@
+[gd_scene format=3]
+
+[ext_resource type="ButtonGroup" uid="uid://tm4elm05vye0" path="res://Plugins/ToolBarButtonGroup.tres" id="1_bg"]
+[ext_resource type="Texture2D" uid="uid://b3vwhkvtja3xb" path="res://icons/move.svg" id="2_move"]
+[ext_resource type="Texture2D" uid="uid://dy2x8ri5jrac1" path="res://icons/rotate.svg" id="3_rotate"]
+[ext_resource type="Script" path="res://Plugins/Transform/Toolbar.gd" id="4_script"]
+[ext_resource type="Texture2D" path="res://icons/scale.svg" id="5_scale"]
+
+[node name="transform" type="MenuButton"]
+tooltip_text = "Move, rotate, and scale voxels"
+button_group = ExtResource("1_bg")
+icon = ExtResource("2_move")
+flat = false
+icon_alignment = 1
+item_count = 3
+popup/item_0/text = "Move"
+popup/item_0/icon = ExtResource("2_move")
+popup/item_0/id = 0
+popup/item_1/text = "Rotate"
+popup/item_1/icon = ExtResource("3_rotate")
+popup/item_1/id = 1
+popup/item_2/text = "Scale"
+popup/item_2/icon = ExtResource("5_scale")
+popup/item_2/id = 2
+script = ExtResource("4_script")

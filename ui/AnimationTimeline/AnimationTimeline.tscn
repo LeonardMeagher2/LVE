@@ -1,0 +1,138 @@
+[gd_scene format=3 uid="uid://8g827rqodt23"]
+
+[ext_resource type="Script" uid="uid://h3qnfjoqxy0f" path="res://ui/AnimationTimeline/AnimationTimeline.gd" id="1_3bvsl"]
+[ext_resource type="Texture2D" uid="uid://wx5jy0fisyiy" path="res://icons/to_start.svg" id="2_3c7d8"]
+[ext_resource type="Texture2D" uid="uid://dqdve5t4ixwpy" path="res://icons/step_back.svg" id="3_ad7bi"]
+[ext_resource type="Texture2D" uid="uid://bshoasjpvru2h" path="res://icons/play.svg" id="4_vr210"]
+[ext_resource type="Texture2D" uid="uid://djqb5uqnxxmhe" path="res://icons/step_forward.svg" id="5_sm24x"]
+[ext_resource type="Texture2D" uid="uid://c4401j16xtgri" path="res://icons/to_end.svg" id="6_5wbnp"]
+[ext_resource type="Texture2D" uid="uid://cws8qlcj15h1m" path="res://icons/frame_plus.svg" id="7_j1idt"]
+[ext_resource type="Texture2D" uid="uid://dhc8akox1ke3g" path="res://icons/frame_duplicate.svg" id="8_whytp"]
+[ext_resource type="Texture2D" uid="uid://matl4t70t4my" path="res://icons/frame_minus.svg" id="9_tjres"]
+[ext_resource type="PackedScene" uid="uid://cf3ybcr7rxq8h" path="res://ui/AnimationTimeline/TagRow.tscn" id="10_k7z2a"]
+
+[sub_resource type="Animation" id="Animation_kqkb2"]
+resource_name = "Preview"
+tracks/0/type = "method"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath(".")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(),
+"transitions": PackedFloat32Array(),
+"values": []
+}
+
+[sub_resource type="AnimationLibrary" id="AnimationLibrary_3bvsl"]
+_data = {
+&"Preview": SubResource("Animation_kqkb2")
+}
+
+[node name="AnimationTimeline" type="VBoxContainer" unique_id=106212846]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_3bvsl")
+
+[node name="AnimationPlayer" type="AnimationPlayer" parent="." unique_id=45026943]
+libraries/ = SubResource("AnimationLibrary_3bvsl")
+
+[node name="HBoxContainer" type="HBoxContainer" parent="." unique_id=1744826518]
+layout_mode = 2
+
+[node name="Playback" type="HBoxContainer" parent="HBoxContainer" unique_id=331421757]
+layout_mode = 2
+
+[node name="ToStart" type="Button" parent="HBoxContainer/Playback" unique_id=1508834326]
+layout_mode = 2
+tooltip_text = "Step to start"
+icon = ExtResource("2_3c7d8")
+icon_alignment = 1
+
+[node name="Prev" type="Button" parent="HBoxContainer/Playback" unique_id=1849203195]
+layout_mode = 2
+tooltip_text = "Step back"
+icon = ExtResource("3_ad7bi")
+icon_alignment = 1
+
+[node name="Play" type="Button" parent="HBoxContainer/Playback" unique_id=1338261472]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Play"
+toggle_mode = true
+icon = ExtResource("4_vr210")
+icon_alignment = 1
+
+[node name="Next" type="Button" parent="HBoxContainer/Playback" unique_id=1342544756]
+layout_mode = 2
+tooltip_text = "Step forward"
+icon = ExtResource("5_sm24x")
+icon_alignment = 1
+
+[node name="ToEnd" type="Button" parent="HBoxContainer/Playback" unique_id=1180906050]
+layout_mode = 2
+tooltip_text = "Step to end"
+icon = ExtResource("6_5wbnp")
+icon_alignment = 1
+
+[node name="VSeparator2" type="Control" parent="HBoxContainer" unique_id=172650669]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="Frames" type="HBoxContainer" parent="HBoxContainer" unique_id=1946005374]
+layout_mode = 2
+size_flags_horizontal = 0
+
+[node name="Add" type="Button" parent="HBoxContainer/Frames" unique_id=290217125]
+layout_mode = 2
+size_flags_vertical = 4
+tooltip_text = "Add frame"
+icon = ExtResource("7_j1idt")
+icon_alignment = 1
+
+[node name="Dup" type="Button" parent="HBoxContainer/Frames" unique_id=825756284]
+layout_mode = 2
+size_flags_vertical = 4
+tooltip_text = "Duplicate frame"
+icon = ExtResource("8_whytp")
+icon_alignment = 1
+
+[node name="Del" type="Button" parent="HBoxContainer/Frames" unique_id=2010203312]
+layout_mode = 2
+size_flags_vertical = 4
+tooltip_text = "Delete frame"
+icon = ExtResource("9_tjres")
+icon_alignment = 1
+
+[node name="VSeparator" type="VSeparator" parent="HBoxContainer" unique_id=1102859579]
+layout_mode = 2
+
+[node name="TagRow" parent="HBoxContainer" unique_id=1499213220 instance=ExtResource("10_k7z2a")]
+layout_mode = 2
+
+[node name="ScrollContainer2" type="ScrollContainer" parent="." unique_id=1882226197]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+vertical_scroll_mode = 0
+
+[node name="FrameGrid" type="GridContainer" parent="ScrollContainer2" unique_id=1826857356]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/h_separation = 4
+theme_override_constants/v_separation = 2
+
+[connection signal="pressed" from="HBoxContainer/Playback/ToStart" to="." method="_on_to_start_pressed"]
+[connection signal="pressed" from="HBoxContainer/Playback/Prev" to="." method="_on_prev_pressed"]
+[connection signal="toggled" from="HBoxContainer/Playback/Play" to="." method="_on_play_toggled"]
+[connection signal="pressed" from="HBoxContainer/Playback/Next" to="." method="_on_next_pressed"]
+[connection signal="pressed" from="HBoxContainer/Playback/ToEnd" to="." method="_on_to_end_pressed"]
+[connection signal="pressed" from="HBoxContainer/Frames/Add" to="." method="_on_frame_add"]
+[connection signal="pressed" from="HBoxContainer/Frames/Dup" to="." method="_on_frame_dup"]
+[connection signal="pressed" from="HBoxContainer/Frames/Del" to="." method="_on_frame_del"]

@@ -1,6 +1,9 @@
 class_name Test
 extends Node
 
+const MAIN_SCENE := "res://Main.tscn"
+
+var main: Node
 var timeout := 10.0
 var _name := ""
 var _desc := ""
@@ -15,6 +18,17 @@ var _finished := false
 
 func _init() -> void:
 	ready.connect(_arm_deadman)
+
+
+func _enter_tree() -> void:
+	main = add_main()
+
+
+func add_main() -> Node:
+	var scene: PackedScene = load(MAIN_SCENE)
+	var inst := scene.instantiate()
+	get_tree().root.add_child.call_deferred(inst)
+	return inst
 
 
 func _arm_deadman() -> void:
@@ -40,6 +54,9 @@ func _fail_hard(msg: String) -> void:
 		"src": "",
 		"img": _screenshot_for(Engine.get_process_frames()),
 	})
+	for entry in _steps:
+		if entry.elapsed_ms < 0.0:
+			print("    Time: %.3f ms (interrupted)" % _step_time(entry))
 	_write_report()
 	print("TEST FAILED: %s -> %s/report.md" % [msg, _dir()])
 	get_tree().quit(1)
@@ -75,8 +92,8 @@ func _fail_timeout() -> void:
 func _finish() -> void:
 	_finished = true
 	var failed := _count_failed()
+	_write_report()
 	if failed > 0:
-		_write_report()
 		print("TEST FAILED: %d/%d checks failed -> %s/report.md" % [
 			failed, _checks.size(), _dir()
 		])
@@ -87,10 +104,18 @@ func _finish() -> void:
 
 
 func step(description: String, c: Callable) -> Variant:
-	_steps.append({"desc": description})
+	var entry := {"desc": description, "started_us": Time.get_ticks_usec(), "elapsed_ms": -1.0}
+	_steps.append(entry)
 	_current_step = _steps.size() - 1
 	print("  %s" % description)
-	return await c.call()
+	var result: Variant = await c.call()
+	entry.elapsed_ms = (Time.get_ticks_usec() - int(entry.started_us)) / 1000.0
+	print("    Time: %.3f ms" % entry.elapsed_ms)
+	return result
+
+
+func _step_time(entry: Dictionary) -> float:
+	return entry.elapsed_ms if entry.elapsed_ms >= 0.0 else (Time.get_ticks_usec() - int(entry.started_us)) / 1000.0
 
 
 func expect(cond: bool, msg: String) -> void:
@@ -110,20 +135,85 @@ func expect(cond: bool, msg: String) -> void:
 	_checks.append(entry)
 
 
-func editor_viewport(inst: Node) -> EditorViewport:
-	var panel := inst.get_node("%ViewportContainer") as EditorViewportPanel
-	return panel.get_node("%Editor") as EditorViewport
+func editor_viewport() -> SubViewport:
+	return main.get_node("%Viewport").get_node("PanelContainer/SubViewportContainer/Viewport")
 
+func camera_rig() -> EditorCameraRig:
+	return editor_viewport().get_node("ViewportScene/CameraRig")
 
-func aim(vp: EditorViewport, pos: Vector2) -> PickResult:
-	var req := vp.pick_request(pos)
-	return VoxelPicking.start_pick(req.origin, req.dir, req.cells, req.forward)
+func viewport_scene() -> Node:
+	return editor_viewport().get_node("ViewportScene")
 
+func camera_menu() -> MenuButton:
+	return main.get_node("%Viewport").get_node("ControlBar/CameraMenu")
 
-func drag(vp: EditorViewport, pos: Vector2, plane: StrokePlane) -> PickResult:
-	var req := vp.pick_request(pos)
-	return VoxelPicking.drag_pick(req.origin, req.dir, req.cells, plane)
+func pick_request(pos: Vector2) -> PickRequest:
+	var cam := camera_rig()
+	var req := PickRequest.new()
+	req.origin = cam.project_ray_origin(pos)
+	req.dir = cam.project_ray_normal(pos)
+	req.frame = State.get_current_voxel_frame()
+	req.forward = -cam.basis.z
+	return req
 
+func aim(pos: Vector2) -> PickResult:
+	var req := pick_request(pos)
+	return VoxelPicking.start_pick(req.origin, req.dir, req.frame, req.forward)
+
+func drag(pos: Vector2, plane: StrokePlane) -> PickResult:
+	var req := pick_request(pos)
+	return VoxelPicking.drag_pick(req.origin, req.dir, req.frame, plane)
+
+func activate_tool(button_name: String) -> void:
+	for b in main.get_node("%ToolBar").get_children():
+		if b.name == button_name:
+			b.button_pressed = true
+			return
+
+func select_toolbar_item(button_name: String, item_text: String) -> void:
+	for b in main.get_node("%ToolBar").get_children():
+		if b is MenuButton and b.name == button_name:
+			var popup: PopupMenu = b.get_popup()
+			for i in popup.item_count:
+				if popup.get_item_text(i) == item_text:
+					popup.index_pressed.emit(i)
+					return
+
+func press_option(tooltip: String) -> void:
+	var b := _find_option_button(tooltip)
+	if b != null:
+		b.button_pressed = not b.button_pressed
+
+func _find_option_button(tooltip: String) -> BaseButton:
+	var option_bar := main.get_node("%OptionBar")
+	for container in option_bar.get_children():
+		var b := _find_button_by_tooltip(container, tooltip)
+		if b != null:
+			return b
+	return null
+
+func _find_button_by_tooltip(node: Node, tooltip: String) -> BaseButton:
+	for c in node.get_children():
+		if c is BaseButton and c.tooltip_text == tooltip:
+			return c
+		var found := _find_button_by_tooltip(c, tooltip)
+		if found != null:
+			return found
+	return null
+
+func plugin(plugin_name: String) -> Node:
+	return get_tree().root.get_node_or_null(plugin_name)
+
+func sync_viewport() -> void:
+	State.document._bounds_dirty = true
+	var affected: Array[Vector3i] = []
+	State.cells_changed.emit(State.current_frame, affected)
+
+func active_tool_node(plugin_name: String) -> Node3D:
+	var p := plugin(plugin_name)
+	if p == null:
+		return null
+	return p._tool
 
 func _count_failed() -> int:
 	var n := 0
@@ -158,28 +248,31 @@ func _write_report() -> void:
 		Time.get_datetime_string_from_system(), _checks.size(), _count_failed()
 	])
 	lines.append("")
-	var last_step := -2
-	for ch in _checks:
-		var step_id: int = ch.step
-		if step_id != last_step:
-			last_step = step_id
+	for step_id in range(-1, _steps.size()):
+		if step_id >= 0:
+			var entry: Dictionary = _steps[step_id]
+			lines.append("### %s" % entry.desc)
 			lines.append("")
-			if step_id >= 0:
-				lines.append("### %s" % _steps[step_id].desc)
-			else:
+			lines.append("**Time:** %.3f ms%s" % [_step_time(entry), " (interrupted)" if entry.elapsed_ms < 0.0 else ""])
+			lines.append("")
+		for ch in _checks:
+			if ch.step != step_id:
+				continue
+			if step_id == -1 and not lines.has("### Intro"):
 				lines.append("### Intro")
-			lines.append("")
-		var label: String = ch.msg
-		if ch.ok:
-			lines.append("- ✅ %s: %s" % [label, _loc_link(ch.loc)])
-		else:
-			lines.append("- ❌ %s: %s" % [label, _loc_link(ch.loc)])
-			if ch.src != "":
-				lines.append("  ```gdscript")
-				lines.append("  %s" % ch.src)
-				lines.append("  ```")
-			if ch.img != "":
-				lines.append("  ![screenshot](%s)" % ch.img)
+				lines.append("")
+			var label: String = ch.msg
+			if ch.ok:
+				lines.append("- ✅ %s: %s" % [label, _loc_link(ch.loc)])
+			else:
+				lines.append("- ❌ %s: %s" % [label, _loc_link(ch.loc)])
+				if ch.src != "":
+					lines.append("  ```gdscript")
+					lines.append("  %s" % ch.src)
+					lines.append("  ```")
+				if ch.img != "":
+					lines.append("  ![screenshot](%s)" % ch.img)
+		lines.append("")
 	_write_file(_dir() + "/report.md", "\n".join(lines) + "\n")
 
 

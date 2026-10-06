@@ -1,35 +1,42 @@
 extends "res://tests/test.gd"
 
-var _inst: Node = null
-var _vp: EditorViewport
+var play_button: Button
+var idle_size := Vector2.ZERO
 
 
 func _ready() -> void:
-	var scene: PackedScene = load("res://ui/main.tscn")
-	_inst = scene.instantiate()
-	get_tree().root.add_child.call_deferred(_inst)
 	test("can play the voxel animation", _run)
 
 
 func _run() -> void:
 	step("Given a document with two distinct frames", func():
-		_vp = editor_viewport(_inst)
 		State.document.add_frame()
-		State.document.frames[1].cells[Vector3i(9, 0, 9)] = State.current_color
+		State.document.set_cell(1, Vector3i(9, 0, 9), State.current_color)
 		State.document.frames[0].delay_ms = 250
 		State.document.frames[1].delay_ms = 250
-		_vp.sync_to(0)
+		play_button = main.find_child("BottomDock", true, false).get_node("%Play")
+		idle_size = play_button.size
 	)
 
 	step("When the user plays the animation", func():
-		State.playback.set_playing(true)
+		play_button.button_pressed = true
 	)
 
-	step("Then the displayed frame advances over time", func():
-		var seen := {}
-		for i in 30:
-			await get_tree().process_frame
-			seen[State.current_frame] = true
+	var seen := {}
+	var start := Time.get_ticks_msec()
+	while Time.get_ticks_msec() - start < 800:
+		await get_tree().process_frame
+		seen[State.current_frame] = true
+	step("Then the animation plays with stable controls", func():
 		expect(seen.size() > 1, "the displayed frame changes while playing")
-		State.playback.set_playing(false)
+		expect(play_button.size == idle_size, "the Play button keeps its size during playback")
+	)
+	step("When the user pauses the animation", func():
+		play_button.button_pressed = false
+	)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	step("Then the controls return to their idle state", func():
+		expect(not State.is_playing, "the animation is paused")
+		expect(play_button.size == idle_size, "the Play button keeps its size after playback")
 	)

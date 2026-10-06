@@ -1,0 +1,7 @@
+[gd_scene format=3 uid="uid://bcpdpw0nw66nw"]
+
+[ext_resource type="Script" uid="uid://btb8wisf75uvq" path="res://Plugins/Selection/tools/BoxSelectTool.gd" id="1_j1b3m"]
+[ext_resource type="PackedScene" uid="uid://b1lkdaijckvw6" path="res://Plugins/Selection/tools/SelectTool.tscn" id="1_n7uop"]
+
+[node name="SelectionTool" unique_id=1152130835 instance=ExtResource("1_n7uop")]
+script = ExtResource("1_j1b3m")

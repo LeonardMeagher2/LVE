@@ -1,0 +1,19 @@
+[gd_scene format=3 uid="uid://bqgnoc287d87h"]
+
+[ext_resource type="ButtonGroup" uid="uid://tm4elm05vye0" path="res://Plugins/ToolBarButtonGroup.tres" id="1_kcwig"]
+[ext_resource type="Texture2D" uid="uid://dms4velsjderh" path="res://icons/pick.svg" id="2_kcwig"]
+
+[sub_resource type="InputEventAction" id="InputEventAction_qwrxr"]
+action = &"tool_eyedropper"
+pressed = true
+
+[sub_resource type="Shortcut" id="Shortcut_t2id0"]
+events = [SubResource("InputEventAction_qwrxr")]
+
+[node name="eyedropper" type="Button" unique_id=26512838]
+tooltip_text = "Pick a color from a voxel"
+toggle_mode = true
+button_group = ExtResource("1_kcwig")
+shortcut = SubResource("Shortcut_t2id0")
+icon = ExtResource("2_kcwig")
+icon_alignment = 1

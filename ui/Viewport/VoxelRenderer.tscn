@@ -1,0 +1,8 @@
+[gd_scene format=3 uid="uid://cj402ulggqswh"]
+
+[ext_resource type="Script" uid="uid://d3i6vt2reee27" path="res://ui/Viewport/VoxelRenderer.gd" id="1_oaadu"]
+[ext_resource type="BoxMesh" uid="uid://cmsqlf7r1p284" path="res://VoxelMesh.tres" id="2_flvrc"]
+
+[node name="VoxelRenderer" type="Node3D" unique_id=1911856473]
+script = ExtResource("1_oaadu")
+mesh = ExtResource("2_flvrc")

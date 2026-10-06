@@ -1,12 +1,7 @@
 extends "res://tests/test.gd"
 
-var _inst: Node = null
-
 
 func _ready() -> void:
-	var scene: PackedScene = load("res://ui/main.tscn")
-	_inst = scene.instantiate()
-	get_tree().root.add_child.call_deferred(_inst)
 	test("can add a frame to the document", _run)
 
 
@@ -16,10 +11,28 @@ func _run() -> void:
 	)
 
 	step("When the user adds a frame", func():
-		State.playback.add_frame()
+		State.add_frame()
 	)
 
 	step("Then the document has 2 frames and the new frame is current", func():
 		expect(State.document.frames.size() == 2, "document has 2 frames")
 		expect(State.current_frame == 1, "new frame is current")
+	)
+
+	step("When the user undoes the frame", func():
+		State.undo_redo.undo()
+	)
+
+	step("Then the document has 1 frame again", func():
+		expect(State.document.frames.size() == 1, "document has 1 frame")
+		expect(State.current_frame == 0, "the original frame is current")
+	)
+
+	step("When the user redoes the frame", func():
+		State.undo_redo.redo()
+	)
+
+	step("Then the document has 2 frames again", func():
+		expect(State.document.frames.size() == 2, "document has 2 frames")
+		expect(State.current_frame == 1, "the new frame is current again")
 	)

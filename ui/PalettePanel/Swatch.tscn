@@ -1,0 +1,40 @@
+[gd_scene format=3 uid="uid://cgujhwulu5kh5"]
+
+[ext_resource type="ButtonGroup" uid="uid://bcpymmb4tu18d" path="res://ui/PalettePanel/SwatchButtonGroup.tres" id="1_2rov7"]
+[ext_resource type="Script" uid="uid://dum4xsduynam" path="res://ui/PalettePanel/Swatch.gd" id="1_ksqij"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_cy7bq"]
+resource_local_to_scene = true
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.35, 0.35, 0.35, 1)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_ksqij"]
+resource_local_to_scene = true
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(1, 1, 1, 1)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
+
+[node name="Swatch" type="Button" unique_id=1498824578]
+custom_minimum_size = Vector2(32, 32)
+offset_right = 40.0
+offset_bottom = 40.0
+theme_override_styles/normal = SubResource("StyleBoxFlat_cy7bq")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_ksqij")
+theme_override_styles/hover = SubResource("StyleBoxFlat_cy7bq")
+theme_override_styles/disabled = SubResource("StyleBoxFlat_ksqij")
+toggle_mode = true
+button_group = ExtResource("1_2rov7")
+script = ExtResource("1_ksqij")

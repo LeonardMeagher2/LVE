@@ -5,6 +5,7 @@ type="CompressedTexture2D"
 uid="uid://by28nxj3x7ily"
 path="res://.godot/imported/undo.svg-47430fb6ab13d105e3a8917afe38d46b.ctex"
 metadata={
+"has_editor_variant": true,
 "vram_texture": false
 }
 
@@ -15,7 +16,7 @@ dest_files=["res://.godot/imported/undo.svg-47430fb6ab13d105e3a8917afe38d46b.cte
 
 [params]
 
-compress/mode=0
+compress/mode=4
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0
@@ -39,5 +40,5 @@ process/hdr_clamp_exposure=false
 process/size_limit=0
 detect_3d/compress_to=1
 svg/scale=1.0
-editor/scale_with_editor_scale=false
+editor/scale_with_editor_scale=true
 editor/convert_colors_with_editor_theme=false

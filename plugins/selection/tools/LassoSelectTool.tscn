@@ -1,0 +1,7 @@
+[gd_scene format=3 uid="uid://bomj8dhhdi3ke"]
+
+[ext_resource type="PackedScene" uid="uid://b1lkdaijckvw6" path="res://Plugins/Selection/tools/SelectTool.tscn" id="1_0s2jl"]
+[ext_resource type="Script" uid="uid://cekdwu83fmdgf" path="res://Plugins/Selection/tools/LassoSelectTool.gd" id="1_script"]
+
+[node name="SelectionTool" unique_id=1152130835 instance=ExtResource("1_0s2jl")]
+script = ExtResource("1_script")

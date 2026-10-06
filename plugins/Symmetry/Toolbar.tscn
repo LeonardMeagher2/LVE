@@ -1,0 +1,11 @@
+[gd_scene format=3]
+
+[ext_resource type="ButtonGroup" path="res://Plugins/ToolBarButtonGroup.tres" id="1_group"]
+[ext_resource type="Texture2D" path="res://icons/symmetry.svg" id="2_icon"]
+
+[node name="Symmetry" type="Button"]
+tooltip_text = "Configure symmetry planes. Drag anywhere to move their origin."
+toggle_mode = true
+button_group = ExtResource("1_group")
+icon = ExtResource("2_icon")
+icon_alignment = 1

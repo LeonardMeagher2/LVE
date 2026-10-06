@@ -1,52 +1,48 @@
 extends "res://tests/test.gd"
 
-var _inst: Node = null
-var _vp: EditorViewport
-var _center := Vector2.ZERO
-var _a := State.NONE
-var _b := State.NONE
-var _c := State.NONE
-var _red := State.NONE
+var viewport: SubViewport
+var center := Vector2.ZERO
+var a := VoxelPicking.NONE
+var b := VoxelPicking.NONE
+var c := VoxelPicking.NONE
+var red := VoxelPicking.NONE
 
 
 func _ready() -> void:
-	var scene: PackedScene = load("res://ui/main.tscn")
-	_inst = scene.instantiate()
-	get_tree().root.add_child.call_deferred(_inst)
 	test("wand selects every voxel of the same color when connected is off", _run)
 
 
 func _run() -> void:
 	step("Given the wand tool and three separate gray voxels plus one red voxel", func():
-		_vp = editor_viewport(_inst)
-		State.set_tool(State.tools.wand)
-		var svp := _vp.get_viewport()
-		var vsize: Vector2i = svp.size
+		viewport = editor_viewport()
+		activate_tool("selection")
+		select_toolbar_item("selection", "Wand")
+		var vsize: Vector2i = viewport.size
 		if vsize.x <= 0 or vsize.y <= 0:
-			svp.size = Vector2i(800, 500)
-			vsize = svp.size
-		_center = Vector2(vsize.x * 0.5, vsize.y * 0.5)
-		_a = aim(_vp, _center).target
-		_b = _a + Vector3i(8, 0, 0)
-		_c = _a + Vector3i(16, 0, 0)
-		_red = _a + Vector3i(0, 1, 0)
+			viewport.size = Vector2i(800, 500)
+			vsize = viewport.size
+		center = Vector2(vsize.x * 0.5, vsize.y * 0.5)
+		a = aim(center).target
+		b = a + Vector3i(8, 0, 0)
+		c = a + Vector3i(16, 0, 0)
+		red = a + Vector3i(0, 1, 0)
 		var gray := Color.from_rgba8(150, 150, 150)
 		var f: VoxelFrame = State.document.frames[State.current_frame]
-		f.cells[_a] = gray
-		f.cells[_b] = gray
-		f.cells[_c] = gray
-		f.cells[_red] = Color.RED
+		f.set_cell(a, gray)
+		f.set_cell(b, gray)
+		f.set_cell(c, gray)
+		f.set_cell(red, Color.RED)
 	)
 
 	step("When the user clicks one gray voxel with connected on", func():
-		expect(State.get_tool_option(State.tools.wand, "connected") == true, "connected is on by default")
-		_click(_screen_pos_of(_b))
+		expect(_find_option_button("Connected").button_pressed == true, "connected is on by default")
+		_click(_screen_pos_of(b))
 	)
 
 	step("Then only that voxel is selected", func():
-		expect(State.selection.contains(_b), "the clicked voxel is selected")
-		expect(not State.selection.contains(_a), "the distant gray voxel is not selected")
-		expect(not State.selection.contains(_red), "the red voxel is not selected")
+		expect(State.selection.contains(b), "the clicked voxel is selected")
+		expect(not State.selection.contains(a), "the distant gray voxel is not selected")
+		expect(not State.selection.contains(red), "the red voxel is not selected")
 	)
 
 	step("Given no active selection", func():
@@ -54,16 +50,16 @@ func _run() -> void:
 	)
 
 	step("When the user turns connected off and clicks another gray voxel", func():
-		State.set_tool_option("select", "connected", false)
-		_click(_screen_pos_of(_c))
+		press_option("Connected")
+		_click(_screen_pos_of(c))
 	)
 
 	step("Then every gray voxel is selected", func():
-		expect(State.selection.contains(_c), "the clicked voxel is selected")
-		expect(State.selection.contains(_a), "the first gray voxel is selected")
-		expect(State.selection.contains(_b), "the second gray voxel is selected")
+		expect(State.selection.contains(c), "the clicked voxel is selected")
+		expect(State.selection.contains(a), "the first gray voxel is selected")
+		expect(State.selection.contains(b), "the second gray voxel is selected")
 		expect(State.selection.cells.size() == 3, "selection holds exactly the three gray voxels")
-		expect(not State.selection.contains(_red), "the red voxel is not selected")
+		expect(not State.selection.contains(red), "the red voxel is not selected")
 	)
 
 
@@ -72,16 +68,15 @@ func _click(pos: Vector2) -> void:
 	press.button_index = MOUSE_BUTTON_LEFT
 	press.pressed = true
 	press.position = pos
-	_vp.get_viewport().push_input(press)
+	viewport.push_input(press)
 	press.pressed = false
-	_vp.get_viewport().push_input(press)
+	viewport.push_input(press)
 
 
 func _screen_pos_of(cell: Vector3i) -> Vector2:
-	var svp := _vp.get_viewport()
-	for dy in range(0, int(svp.size.y), 10):
-		for dx in range(0, int(svp.size.x), 10):
+	for dy in range(0, int(viewport.size.y), 10):
+		for dx in range(0, int(viewport.size.x), 10):
 			var pos := Vector2(dx, dy)
-			if aim(_vp, pos).target == cell:
+			if aim(pos).target == cell:
 				return pos
 	return Vector2.INF

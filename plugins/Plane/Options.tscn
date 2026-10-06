@@ -1,0 +1,36 @@
+[gd_scene format=3 uid="uid://dry8h2j8mppx6"]
+
+[ext_resource type="Script" uid="uid://1oua32iblto7" path="res://Plugins/Plane/Options.gd" id="1_script"]
+
+[sub_resource type="ButtonGroup" id="bg"]
+
+[node name="Options" type="HBoxContainer" unique_id=1124271928]
+script = ExtResource("1_script")
+
+[node name="x" type="Button" parent="." unique_id=374004310]
+custom_minimum_size = Vector2(24, 0)
+layout_mode = 2
+tooltip_text = "Floor plane faces the X axis"
+toggle_mode = true
+button_group = SubResource("bg")
+text = "X"
+
+[node name="y" type="Button" parent="." unique_id=1315896421]
+custom_minimum_size = Vector2(24, 0)
+layout_mode = 2
+tooltip_text = "Floor plane faces the Y axis"
+toggle_mode = true
+button_group = SubResource("bg")
+text = "Y"
+
+[node name="z" type="Button" parent="." unique_id=72182484]
+custom_minimum_size = Vector2(24, 0)
+layout_mode = 2
+tooltip_text = "Floor plane faces the Z axis"
+toggle_mode = true
+button_group = SubResource("bg")
+text = "Z"
+
+[connection signal="toggled" from="x" to="." method="_on_x_toggled"]
+[connection signal="toggled" from="y" to="." method="_on_y_toggled"]
+[connection signal="toggled" from="z" to="." method="_on_z_toggled"]

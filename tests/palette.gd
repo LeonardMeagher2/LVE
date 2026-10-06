@@ -1,28 +1,27 @@
 extends "res://tests/test.gd"
 
-var _inst: Node = null
-var _panel: Node = null
-var _grid: Node = null
+var panel: Node = null
+var grid: Node = null
+var default_color := Color.BLACK
 
 
 func _ready() -> void:
-	var scene: PackedScene = load("res://ui/main.tscn")
-	_inst = scene.instantiate()
-	get_tree().root.add_child.call_deferred(_inst)
 	test("the palette marks the swatch that matches the current color", _run)
 
 
 func _marked(i: int) -> bool:
-	var b := _grid.get_child(i) as Button
+	var b := grid.get_child(i) as Button
 	return b.button_pressed
 
 
 func _run() -> void:
 	step("Given a palette with one red swatch", func():
-		_panel = _inst.get_node("%PalettePanel")
-		_grid = _panel.get_node("%SwatchGrid")
+		panel = main.find_child("PalettePanel", true, false)
+		grid = panel.get_node("%SwatchGrid")
+		default_color = State.current_color
+		State.document = VoxiDocument.new()
 		State.document.add_color(Color.RED)
-		_panel._rebuild_swatches()
+		panel._rebuild_swatches()
 	)
 
 	step("When the working color becomes red", func():
@@ -30,7 +29,7 @@ func _run() -> void:
 	)
 
 	step("Then the red swatch is marked", func():
-		expect(_grid.get_child_count() == 1, "one swatch exists")
+		expect(grid.get_child_count() == 1, "one swatch exists")
 		expect(_marked(0), "matching swatch is marked")
 	)
 
@@ -43,11 +42,88 @@ func _run() -> void:
 	)
 
 	step("When the user clicks the red swatch", func():
-		var b := _grid.get_child(0) as Button
+		var b := grid.get_child(0) as Button
 		b.button_pressed = true
 	)
 
 	step("Then the red swatch is marked again", func():
 		expect(_marked(0), "clicked swatch is marked")
 		expect(State.current_color == Color.RED, "the working color is the swatch color")
+	)
+
+	step("When the user picks blue", func():
+		State.set_color(Color.BLUE)
+	)
+
+	step("Then blue is the working color", func():
+		expect(State.current_color == Color.BLUE, "the working color is blue")
+		expect(not _marked(0), "no swatch matches blue")
+	)
+
+	step("When the user undoes the color change", func():
+		State.undo_redo.undo()
+	)
+
+	step("Then the working color returns to the default", func():
+		expect(State.current_color == default_color, "the working color is the default")
+	)
+
+	step("When the user redoes the color change", func():
+		State.undo_redo.redo()
+	)
+
+	step("Then blue is the working color again", func():
+		expect(State.current_color == Color.BLUE, "the working color is blue again")
+	)
+
+	step("When the user picks green and adds it to the palette", func():
+		State.set_color(Color.GREEN)
+		State.add_color()
+	)
+
+	step("Then the palette gains a green swatch", func():
+		expect(grid.get_child_count() == 2, "two swatches exist")
+		expect((grid.get_child(1) as Button).color == Color.GREEN, "the new swatch is green")
+	)
+
+	step("When the user undoes the added swatch", func():
+		State.undo_redo.undo()
+	)
+
+	step("Then the palette loses the green swatch", func():
+		expect(grid.get_child_count() == 1, "one swatch remains")
+	)
+
+	step("When the user redoes the added swatch", func():
+		State.undo_redo.redo()
+	)
+
+	step("Then the green swatch returns", func():
+		expect(grid.get_child_count() == 2, "two swatches exist")
+		expect((grid.get_child(1) as Button).color == Color.GREEN, "the green swatch is back")
+	)
+
+	step("When the user removes the current color", func():
+		State.remove_color()
+	)
+
+	step("Then the green swatch leaves the palette", func():
+		expect(grid.get_child_count() == 1, "one swatch remains")
+	)
+
+	step("When the user undoes the removal", func():
+		State.undo_redo.undo()
+	)
+
+	step("Then the green swatch returns at its index", func():
+		expect(grid.get_child_count() == 2, "two swatches exist")
+		expect((grid.get_child(1) as Button).color == Color.GREEN, "the green swatch is back")
+	)
+
+	step("When the user redoes the removal", func():
+		State.undo_redo.redo()
+	)
+
+	step("Then the green swatch leaves again", func():
+		expect(grid.get_child_count() == 1, "one swatch remains")
 	)

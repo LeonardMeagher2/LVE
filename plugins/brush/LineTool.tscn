@@ -1,0 +1,13 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://Plugins/Brush/LineTool.gd" id="1_tool"]
+[ext_resource type="Material" path="res://Plugins/cursor_material.tres" id="2_material"]
+[ext_resource type="Script" path="res://Plugins/Brush/BrushPreview.gd" id="3_preview"]
+
+[node name="LineTool" type="Node3D"]
+script = ExtResource("1_tool")
+
+[node name="Cursor" type="MeshInstance3D" parent="."]
+material_override = ExtResource("2_material")
+cast_shadow = 0
+script = ExtResource("3_preview")

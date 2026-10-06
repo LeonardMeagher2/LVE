@@ -1,0 +1,48 @@
+[gd_scene format=3 uid="uid://4kp78x0yj2lq"]
+
+[ext_resource type="Script" uid="uid://dcp0x0w5mb55o" path="res://ui/AnimationTimeline/RangeCell.gd" id="1_xy12a"]
+[ext_resource type="Texture2D" uid="uid://cpc5igbfm6q4n" path="res://icons/grip.svg" id="2_beh61"]
+
+[node name="HBoxContainer" type="HBoxContainer" unique_id=1353721404]
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 102.0
+grow_horizontal = 2
+mouse_default_cursor_shape = 6
+theme_override_constants/separation = -1
+script = ExtResource("1_xy12a")
+
+[node name="StartGrip" type="TextureRect" parent="." unique_id=1762168870]
+unique_name_in_owner = true
+custom_maximum_size = Vector2(9, -1)
+layout_mode = 2
+size_flags_horizontal = 0
+size_flags_vertical = 0
+mouse_filter = 2
+texture = ExtResource("2_beh61")
+stretch_mode = 2
+flip_h = true
+
+[node name="Bar" type="ColorRect" parent="." unique_id=643942926]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 2)
+propagate_maximum_size = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 0
+offset_transform_enabled = true
+offset_transform_position = Vector2(0, 7)
+mouse_filter = 2
+color = Color(0.78431374, 0.7921569, 0.8, 1)
+
+[node name="EndGrip" type="TextureRect" parent="." unique_id=72493657]
+unique_name_in_owner = true
+custom_maximum_size = Vector2(9, -1)
+layout_mode = 2
+size_flags_horizontal = 8
+size_flags_vertical = 0
+offset_transform_enabled = true
+offset_transform_position = Vector2(-9, 0)
+mouse_filter = 2
+texture = ExtResource("2_beh61")
+stretch_mode = 2

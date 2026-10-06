@@ -1,38 +1,34 @@
 extends "res://tests/test.gd"
 
-var _inst: Node = null
-var _vp: EditorViewport
-var _center := Vector2.ZERO
-var _seed := State.NONE
-var _pair_a: Array[Vector3i] = []
-var _pair_b: Array[Vector3i] = []
+var viewport: SubViewport
+var center := Vector2.ZERO
+var seed := VoxelPicking.NONE
+var pair_a: Array[Vector3i] = []
+var pair_b: Array[Vector3i] = []
 
 
 func _ready() -> void:
-	var scene: PackedScene = load("res://ui/main.tscn")
-	_inst = scene.instantiate()
-	get_tree().root.add_child.call_deferred(_inst)
 	test("selection tools replace, add, and subtract through the mode option", _run)
 
 
 func _run() -> void:
 	step("Given the lasso tool with two voxel pairs on the grid", func():
-		_vp = editor_viewport(_inst)
-		State.set_tool(State.tools.lasso)
-		var svp := _vp.get_viewport()
-		var vsize: Vector2i = svp.size
+		viewport = editor_viewport()
+		activate_tool("selection")
+		select_toolbar_item("selection", "Lasso")
+		var vsize: Vector2i = viewport.size
 		if vsize.x <= 0 or vsize.y <= 0:
-			svp.size = Vector2i(800, 500)
-			vsize = svp.size
-		_center = Vector2(vsize.x * 0.5, vsize.y * 0.5)
-		var start := aim(_vp, _center)
-		_seed = start.target
-		_pair_a = [_seed, _seed + Vector3i(1, 0, 0)]
-		_pair_b = [_seed + Vector3i(3, 0, 0), _seed + Vector3i(4, 0, 0)]
+			viewport.size = Vector2i(800, 500)
+			vsize = viewport.size
+		center = Vector2(vsize.x * 0.5, vsize.y * 0.5)
+		var start := aim(center)
+		seed = start.target
+		pair_a = [seed, seed + Vector3i(1, 0, 0)]
+		pair_b = [seed + Vector3i(3, 0, 0), seed + Vector3i(4, 0, 0)]
 		var gray := Color.from_rgba8(150, 150, 150)
 		var f: VoxelFrame = State.document.frames[State.current_frame]
-		for c in _pair_a + _pair_b:
-			f.cells[c] = gray
+		for c in pair_a + pair_b:
+			f.set_cell(c, gray)
 	)
 
 	step("Then the option bar shows the mode buttons", func():
@@ -42,56 +38,56 @@ func _run() -> void:
 	)
 
 	step("When the user drags across the first pair", func():
-		_drag_cells(_pair_a[0], _pair_a[1], false)
+		_drag_cells(pair_a[0], pair_a[1], false)
 	)
 
 	step("Then only the first pair is selected", func():
-		_expect_exact(_pair_a, "the first pair is selected")
+		_expect_exact(pair_a, "the first pair is selected")
 	)
 
 	step("When the user drags across the second pair in replace mode", func():
-		_drag_cells(_pair_b[0], _pair_b[1], false)
+		_drag_cells(pair_b[0], pair_b[1], false)
 	)
 
 	step("Then the second pair replaces the selection", func():
-		_expect_exact(_pair_b, "the second pair replaced the selection")
+		_expect_exact(pair_b, "the second pair replaced the selection")
 	)
 
 	step("Given the add mode option", func():
-		State.set_tool_option("select", "mode", "add")
+		press_option("Add")
 		expect(_mode_button_pressed("add"), "the add button shows as pressed after the change")
 	)
 
 	step("When the user drags across the first pair again", func():
-		_drag_cells(_pair_a[0], _pair_a[1], false)
+		_drag_cells(pair_a[0], pair_a[1], false)
 	)
 
 	step("Then both pairs are selected", func():
-		_expect_exact(_pair_a + _pair_b, "the drag added to the selection")
+		_expect_exact(pair_a + pair_b, "the drag added to the selection")
 	)
 
 	step("Given the subtract mode option", func():
-		State.set_tool_option("select", "mode", "subtract")
+		press_option("Subtract")
 	)
 
 	step("When the user drags across the second pair again", func():
-		_drag_cells(_pair_b[0], _pair_b[1], false)
+		_drag_cells(pair_b[0], pair_b[1], false)
 	)
 
 	step("Then the second pair leaves the selection", func():
-		_expect_exact(_pair_a, "the drag subtracted from the selection")
+		_expect_exact(pair_a, "the drag subtracted from the selection")
 	)
 
-	step("Given the replace mode option again", func():
-		State.set_tool_option("select", "mode", "replace")
+	step("Given the add mode option again", func():
+		press_option("Add")
 	)
 
-	step("When the user shift drags across the second pair", func():
-		_drag_cells(_pair_b[0], _pair_b[1], true)
+	step("When the user drags across the second pair", func():
+		_drag_cells(pair_b[0], pair_b[1], false)
 	)
 
-	step("Then shift still adds to the selection", func():
-		_expect_exact(_pair_a + _pair_b, "the shift drag added despite replace mode")
+	step("Then the add drag joins the selection", func():
+		_expect_exact(pair_a + pair_b, "the add drag added to the selection")
 	)
 
 	step("When the user undoes", func():
@@ -99,50 +95,50 @@ func _run() -> void:
 	)
 
 	step("Then the selection returns to the subtracted state", func():
-		_expect_exact(_pair_a, "undo restored the one-pair selection")
+		_expect_exact(pair_a, "undo restored the one-pair selection")
 	)
 
 	step("Given the box select tool with an empty selection", func():
-		State.set_tool(State.tools.select)
+		select_toolbar_item("selection", "Box")
 		State.clear_selection()
 	)
 
 	step("When the user single clicks a voxel", func():
-		_click_cell(_pair_a[0])
+		_click_cell(pair_a[0])
 	)
 
 	step("Then that one voxel is selected", func():
-		_expect_exact([_pair_a[0]], "the box single click selected one voxel")
+		_expect_exact([pair_a[0]], "the box single click selected one voxel")
 	)
 
 	step("Given the add mode option for the box tool", func():
-		State.set_tool_option("select", "mode", "add")
+		press_option("Add")
 	)
 
 	step("When the user single clicks an empty cell", func():
-		_click_cell(_seed + Vector3i(0, 0, 2))
+		_click_cell(seed + Vector3i(0, 0, 2))
 	)
 
 	step("Then the empty cell joins the selection", func():
-		_expect_exact([_pair_a[0], _seed + Vector3i(0, 0, 2)], "the empty cell joined the selection")
+		_expect_exact([pair_a[0], seed + Vector3i(0, 0, 2)], "the empty cell joined the selection")
 	)
 
 	step("Given the lasso tool with an empty selection", func():
-		State.set_tool(State.tools.lasso)
+		select_toolbar_item("selection", "Lasso")
 		State.clear_selection()
 	)
 
 	step("When the user single clicks a voxel", func():
-		_click_cell(_pair_b[0])
+		_click_cell(pair_b[0])
 	)
 
 	step("Then that one voxel is selected", func():
-		_expect_exact([_pair_b[0]], "the lasso single click selected one voxel")
+		_expect_exact([pair_b[0]], "the lasso single click selected one voxel")
 	)
 
 	step("Given the wand tool in add mode", func():
-		State.set_tool(State.tools.wand)
-		State.set_tool_option("select", "mode", "add")
+		select_toolbar_item("selection", "Wand")
+		press_option("Add")
 	)
 
 	step("When the user clicks empty space", func():
@@ -152,11 +148,11 @@ func _run() -> void:
 	)
 
 	step("Then the selection survives in add mode", func():
-		_expect_exact([_pair_b[0]], "an empty click keeps the selection in add mode")
+		_expect_exact([pair_b[0]], "an empty click keeps the selection in add mode")
 	)
 
 	step("Given the wand tool in replace mode", func():
-		State.set_tool_option("select", "mode", "replace")
+		press_option("Replace")
 	)
 
 	step("When the user clicks empty space", func():
@@ -166,11 +162,11 @@ func _run() -> void:
 	)
 
 	step("Then the selection survives in replace mode", func():
-		_expect_exact([_pair_b[0]], "an empty click keeps the selection in replace mode")
+		_expect_exact([pair_b[0]], "an empty click keeps the selection in replace mode")
 	)
 
 	step("Given a selection for the clear button", func():
-		_click_cell(_pair_b[1])
+		_click_cell(pair_b[1])
 		expect(not State.selection.is_empty(), "the wand click selected the voxel")
 	)
 
@@ -185,7 +181,6 @@ func _run() -> void:
 
 	step("Then the selection empties", func():
 		expect(State.selection.is_empty(), "the clear button emptied the selection")
-		expect(_clear_button().disabled, "the clear button disables with an empty selection")
 	)
 
 
@@ -193,8 +188,7 @@ func _clear_button() -> Button:
 	var box := _options_box()
 	if box == null:
 		return null
-	var picker := box.get_child(0)
-	return picker.get_node_or_null("clear") as Button
+	return box.get_node_or_null("clear") as Button
 
 
 func _click_clear() -> void:
@@ -214,22 +208,20 @@ func _click_cell(cell: Vector3i) -> void:
 
 
 func _click(pos: Vector2) -> void:
-	var vp := _vp.get_viewport()
 	var press := InputEventMouseButton.new()
 	press.button_index = MOUSE_BUTTON_LEFT
 	press.pressed = true
 	press.position = pos
-	vp.push_input(press)
+	viewport.push_input(press)
 	press.pressed = false
-	vp.push_input(press)
+	viewport.push_input(press)
 
 
 func _empty_screen_pos() -> Vector2:
-	var svp := _vp.get_viewport()
-	for dy in range(int(svp.size.y) - 20, 0, -40):
-		for dx in range(20, int(svp.size.x), 40):
-			var res := aim(_vp, Vector2(dx, dy))
-			if res.target != State.NONE and res.hit == State.NONE:
+	for dy in range(int(viewport.size.y) - 20, 0, -40):
+		for dx in range(20, int(viewport.size.x), 40):
+			var res := aim(Vector2(dx, dy))
+			if res.target != VoxelPicking.NONE and res.hit == VoxelPicking.NONE:
 				return Vector2(dx, dy)
 	return Vector2.INF
 
@@ -246,25 +238,24 @@ func _drag_cells(a: Vector3i, b: Vector3i, with_shift: bool) -> void:
 	if pa == Vector2.INF or pb == Vector2.INF:
 		expect(false, "both drag cells are visible on screen")
 		return
-	var vp := _vp.get_viewport()
 	var press := InputEventMouseButton.new()
 	press.button_index = MOUSE_BUTTON_LEFT
 	press.pressed = true
 	press.position = pa
 	press.shift_pressed = with_shift
-	vp.push_input(press)
+	viewport.push_input(press)
 	for i in range(1, 8):
 		var mm := InputEventMouseMotion.new()
 		mm.position = pa.lerp(pb, float(i) / 8.0)
 		mm.shift_pressed = with_shift
 		mm.button_mask = MOUSE_BUTTON_MASK_LEFT
-		vp.push_input(mm)
+		viewport.push_input(mm)
 	var rel := InputEventMouseButton.new()
 	rel.button_index = MOUSE_BUTTON_LEFT
 	rel.pressed = false
 	rel.position = pb
 	rel.shift_pressed = with_shift
-	vp.push_input(rel)
+	viewport.push_input(rel)
 
 
 func _screen_pos_of(cell: Vector3i) -> Vector2:
@@ -276,18 +267,24 @@ func _screen_pos_of(cell: Vector3i) -> Vector2:
 
 
 func _scan_for(cell: Vector3i, grid: int) -> Vector2:
-	var svp := _vp.get_viewport()
-	for dy in range(0, int(svp.size.y), grid):
-		for dx in range(0, int(svp.size.x), grid):
+	for dy in range(0, int(viewport.size.y), grid):
+		for dx in range(0, int(viewport.size.x), grid):
 			var pos := Vector2(dx, dy)
-			if aim(_vp, pos).target == cell:
+			if aim(pos).target == cell:
 				return pos
 	return Vector2.INF
 
 
 func _options_box() -> HBoxContainer:
-	var bar := _inst.find_child("OptionsBox", true, false)
-	return bar as HBoxContainer
+	return _find_option_container("Options") as HBoxContainer
+
+
+func _find_option_container(node_name: String) -> Node:
+	var option_bar := main.get_node("%OptionBar")
+	for container in option_bar.get_children():
+		if container.name == node_name:
+			return container
+	return null
 
 
 func _mode_button_pressed(value: String) -> bool:

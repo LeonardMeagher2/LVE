@@ -1,0 +1,6 @@
+[gd_resource type="Resource" format=3]
+
+[ext_resource type="Script" uid="uid://bgxlon46h3fdn" path="res://Plugins/Fill/FillToolSettings.gd" id="1_settings"]
+
+[resource]
+script = ExtResource("1_settings")

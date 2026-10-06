@@ -1,0 +1,15 @@
+[gd_scene format=3 uid="uid://cfh7uu135xto5"]
+
+[ext_resource type="Script" uid="uid://dt6jni4oe4jda" path="res://Plugins/Brush/BrushTool.gd" id="1_vbqos"]
+[ext_resource type="Material" path="res://Plugins/cursor_material.tres" id="2_gb8al"]
+[ext_resource type="Script" path="res://Plugins/Brush/BrushPreview.gd" id="3_preview"]
+
+[node name="BrushTool" type="Node3D" unique_id=965280581]
+script = ExtResource("1_vbqos")
+
+[node name="Cursor" type="MeshInstance3D" parent="." unique_id=1880237828]
+sorting_offset = 0.1
+material_override = ExtResource("2_gb8al")
+cast_shadow = 0
+script = ExtResource("3_preview")
+apply_edit_symmetry = true

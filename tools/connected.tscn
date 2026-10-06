@@ -1,9 +1,0 @@
-[gd_scene load_steps=3 format=3]
-
-[ext_resource type="PackedScene" path="res://tools/icon_toggle_option.tscn" id="1"]
-[ext_resource type="Texture2D" path="res://icons/connected.svg" id="2"]
-
-[node name="ConnectedOption" instance=ExtResource("1")]
-
-[node name="Button" parent="." index="0"]
-icon = ExtResource("2")
