@@ -54,7 +54,7 @@ class FillJob extends VoxelFrame.EditJob:
 		matching_cells = changes
 		if apply_changes:
 			stage("Applying fill", changes.size())
-			changed_chunks = source_frame.set_cells(changes, self)
+			changed_chunks = apply_cells(source_frame, changes, true, target_color)
 
 
 func _enter_tree() -> void:
@@ -139,12 +139,13 @@ func _process_seeds() -> void:
 			continue
 		var search_job := FillJob.new()
 		search_job.source_frame = _source_frame.copy_frame()
+		search_job.edit_context = State.drawing_context()
 		search_job.selection_mask = State.selection.capture()
 		search_job.seed_cell = seed_cell
 		search_job.target_color = _source_frame.get_color(seed_cell)
 		search_job.connected = _settings.connected
 		search_job.replacement_color = _replacement_color
-		if search_job.source_frame.count() <= 4096:
+		if search_job.estimate_work(search_job.source_frame.count()) <= 4096:
 			search_job.run()
 		else:
 			search_job.worker_task_id = WorkerThreadPool.add_task(search_job.run, true, "Fill edit")
@@ -202,3 +203,4 @@ func _interrupt_fill() -> void:
 
 func is_settled() -> bool:
 	return not _fill_running
+

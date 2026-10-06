@@ -5,7 +5,7 @@ var _grab_point := Vector3.ZERO
 var _drag_normal := Vector3.BACK
 
 
-func _ready() -> void:
+func _enter_tree() -> void:
 	State.floor_plane_changed.connect(_sync_cursor_rotation)
 	_sync_cursor_rotation()
 

@@ -52,13 +52,15 @@ godot --headless --path "C:\Users\Leona\Desktop\Gamedev\Voxi" -s res://tests/run
 ```
 
 - The runner exits 0 when all tests pass. It exits non-zero when any test fails.
-- Failures write a report and screenshots under `tests/artifacts/`.
+- Each test writes a report with step durations under `tests/artifacts/`.
+- Failures also write screenshots.
 - A windowed run is required for screenshots. `--headless` skips screenshot capture.
 - Tests are the only verification step.
 
 ## Test harness
 
 - `tests/test.gd` defines the `Test` base class. It extends `Node`. It exposes `test(description, callable)`, `step(description, callable)`, and `expect(cond, msg)`. `step` returns the callable result. The harness prints each test, step, and check result to the console as it runs.
+- Each step logs its wall time in milliseconds. Reports include all steps, including steps without checks.
 - New tests extend `"res://tests/test.gd"` by path. Each test needs a matching `tests/<name>.tscn` scene with the script on the root node. `.gdignore` hides the tests folder, so its `class_name`s are not in the global cache.
 - In `_ready()`, instantiate the scene. Add it with `get_tree().root.add_child.call_deferred(...)`. Call `test("...", _func)`. Defer the add because the root is busy setting up children during `_ready()`.
 - The harness waits two frames before each test body. Put `await` calls in the test's `_run` function, not in step lambdas.

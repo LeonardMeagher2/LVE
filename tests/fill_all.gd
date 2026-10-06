@@ -6,6 +6,7 @@ var r1 := VoxelPicking.NONE
 var r2 := VoxelPicking.NONE
 var r3 := VoxelPicking.NONE
 var control := VoxelPicking.NONE
+var empty_floor := VoxelPicking.NONE
 
 
 func _ready() -> void:
@@ -35,6 +36,28 @@ func _run() -> void:
 		f.set_cell(control, Color.GREEN)
 	)
 
+	step("When the user hovers a voxel with Fill", func():
+		var motion := InputEventMouseMotion.new()
+		motion.position = _screen_pos_of(r2)
+		viewport.push_input(motion)
+	)
+	step("Then Fill shows its wire cube on the voxel", func():
+		var tool: Node3D = plugin("FillPlugin")._tool
+		expect(tool.visible and tool.position == Vector3(r2), "the Fill cursor follows the hovered voxel")
+		var cursor: MeshInstance3D = tool.get_node("Cursor")
+		expect(cursor.mesh.surface_get_primitive_type(0) == Mesh.PRIMITIVE_LINES, "the Fill cursor uses wire lines")
+		expect(cursor.mesh.surface_get_array_len(0) == 24, "the Fill cursor shows all twelve cube edges")
+	)
+	step("When the user moves the Fill cursor over an empty floor cell", func():
+		empty_floor = r1 + Vector3i(0, 0, 4)
+		var motion := InputEventMouseMotion.new()
+		motion.position = camera_rig().unproject_position(Vector3(empty_floor) + Vector3(0, -0.5, 0))
+		viewport.push_input(motion)
+	)
+	step("Then the wire cursor follows the empty floor cell like the picker", func():
+		var tool: Node3D = plugin("FillPlugin")._tool
+		expect(tool.visible and tool.position == Vector3(empty_floor), "the Fill cursor stays visible over the empty floor cell")
+	)
 	step("Then the option bar shows a connected icon toggle", func():
 		var b := _find_option_button("Connected")
 		expect(b != null, "the connected toggle exists")

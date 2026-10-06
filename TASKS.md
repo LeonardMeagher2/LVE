@@ -3,6 +3,13 @@ max_active: 1
 ---
 
 # Tools
+- [x] Keep the Plane cursor rotation correct after tool switches
+  - [x] Reconnect and synchronize the cursor on each tree entry
+  - [x] Verify re-entry and later axis changes with the targeted floor-plane test
+- [x] Restore the Fill tool wire cube cursor
+  - [x] Reuse the shared outline mesh and cursor material
+  - [x] Match the picker cursor behavior over voxels and empty floor cells
+  - [x] Verify hover and Fill behavior with the targeted Fill test
 - [x] Match the brush toolbar filename to the PascalCase resource path
   - [x] Verify brush loading without the case mismatch warning
 - [x] floor plane
@@ -250,8 +257,17 @@ max_active: 1
 
 
 # Symmetry
-- [ ] Symmetry axis + plane toggle
-- [ ] Mirror brush/paint strokes across the plane
+- [x] Symmetry drawing tool
+  - [x] Add independent X, Y, and Z plane controls
+  - [x] Set the origin with half-voxel controls and a viewport drag
+  - [x] Default and reset the origin to (-0.5, -0.5, -0.5)
+  - [x] Keep enabled planes visible when another tool is active
+  - [x] Capture symmetry settings in the shared drawing edit context
+  - [x] Mirror Pencil, Paint, Eraser, Line, and Fill edits with one undo action
+  - [x] Keep selection limits, source colors, cancellation, and raw frame storage correct
+  - [x] Reuse brush preview geometry for mirrored cursor instances
+  - [x] Verify the drawing tools, controls, worker edits, and cleanup with targeted tests
+  - The thirteen targeted tests pass. The symmetry test also passes with a window.
 - [ ] Mirror a selection across an axis
 - [ ] Mirror in place and to a copy
 
@@ -290,3 +306,10 @@ max_active: 1
 
 # Responsive UI
 - [ ] Detect narrow layouts and adapt the layout, so the editor can run on a phone
+
+# Test harness
+- [x] Include every step duration in logs and reports
+  - [x] Measure synchronous and awaited work with the wall clock
+  - [x] Include steps without checks and preserve callable results
+  - [x] Write reports for passing and failing tests
+  - [x] Verify timing and report contents with the targeted harness test

@@ -1,0 +1,64 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://Plugins/Symmetry/Options.gd" id="1_script"]
+[ext_resource type="Texture2D" path="res://icons/center.svg" id="2_reset"]
+
+[node name="SymmetryOptions" type="HBoxContainer"]
+script = ExtResource("1_script")
+
+[node name="X" type="Button" parent="."]
+layout_mode = 2
+tooltip_text = "Mirror drawing across the X plane (X)"
+toggle_mode = true
+text = "X"
+
+[node name="Y" type="Button" parent="."]
+layout_mode = 2
+tooltip_text = "Mirror drawing across the Y plane (Y)"
+toggle_mode = true
+text = "Y"
+
+[node name="Z" type="Button" parent="."]
+layout_mode = 2
+tooltip_text = "Mirror drawing across the Z plane (Z)"
+toggle_mode = true
+text = "Z"
+
+[node name="Separator" type="VSeparator" parent="."]
+layout_mode = 2
+
+[node name="OriginX" type="SpinBox" parent="."]
+layout_mode = 2
+tooltip_text = "Symmetry origin X. Half-voxel positions place the plane between cells."
+min_value = -1000.0
+max_value = 1000.0
+step = 0.5
+allow_greater = true
+allow_lesser = true
+prefix = "X"
+
+[node name="OriginY" type="SpinBox" parent="."]
+layout_mode = 2
+tooltip_text = "Symmetry origin Y"
+min_value = -1000.0
+max_value = 1000.0
+step = 0.5
+allow_greater = true
+allow_lesser = true
+prefix = "Y"
+
+[node name="OriginZ" type="SpinBox" parent="."]
+layout_mode = 2
+tooltip_text = "Symmetry origin Z"
+min_value = -1000.0
+max_value = 1000.0
+step = 0.5
+allow_greater = true
+allow_lesser = true
+prefix = "Z"
+
+[node name="Reset" type="Button" parent="."]
+layout_mode = 2
+tooltip_text = "Reset the symmetry origin"
+icon = ExtResource("2_reset")
+icon_alignment = 1

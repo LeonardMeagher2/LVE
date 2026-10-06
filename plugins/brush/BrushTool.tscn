@@ -12,3 +12,4 @@ sorting_offset = 0.1
 material_override = ExtResource("2_gb8al")
 cast_shadow = 0
 script = ExtResource("3_preview")
+apply_edit_symmetry = true

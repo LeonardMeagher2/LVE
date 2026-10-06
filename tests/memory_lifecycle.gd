@@ -99,7 +99,7 @@ func _run() -> void:
 		State.document = VoxiDocument.new()
 	)
 	step("Given the editor plugins and their active and parked nodes", func():
-		for plugin_name in ["GLTFExportPlugin", "ImageImportPlugin", "ClipboardPlugin", "TransformPlugin", "SelectionPlugin", "PlanePlugin", "FillPlugin", "EyedropperPlugin", "BrushPlugin"]:
+		for plugin_name in ["GLTFExportPlugin", "ImageImportPlugin", "ClipboardPlugin", "SymmetryPlugin", "TransformPlugin", "SelectionPlugin", "PlanePlugin", "FillPlugin", "EyedropperPlugin", "BrushPlugin"]:
 			var item := plugin(plugin_name)
 			plugins.append(item)
 			for property in item.get_property_list():

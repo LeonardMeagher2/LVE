@@ -14,8 +14,49 @@ extends Resource
 const CHUNK_SIZE := 16
 const DIRECTIONS := [Vector3i.RIGHT, Vector3i.LEFT, Vector3i.UP, Vector3i.DOWN, Vector3i.BACK, Vector3i.FORWARD]
 
+class EditContext extends RefCounted:
+	var axes := 0
+	var origin_twice := Vector3i.ZERO
+	var selection := {}
+
+	func expand(changes: Dictionary, frame: VoxelFrame, existing_only: bool, matching_color: Variant, job: EditJob = null) -> Dictionary:
+		if axes == 0 and selection.is_empty() and not existing_only and matching_color == null:
+			return changes
+		var expanded := {}
+		var masks: Array[int] = []
+		for mask in 8:
+			if (mask & ~axes) == 0:
+				masks.append(mask)
+		var completed := 0
+		for cell: Vector3i in changes:
+			for mask in masks:
+				var destination := cell
+				for axis in 3:
+					if mask & (1 << axis):
+						destination[axis] = origin_twice[axis] - cell[axis]
+				if _allows(destination, frame, existing_only, matching_color):
+					expanded[destination] = changes[cell]
+				completed += 1
+				if job and completed % 4096 == 0 and not job.checkpoint(completed):
+					return {}
+		if axes == 0:
+			return expanded
+		# Preserve original colors where the original and reflected patterns overlap.
+		for cell: Vector3i in changes:
+			if _allows(cell, frame, existing_only, matching_color):
+				expanded[cell] = changes[cell]
+			completed += 1
+			if job and completed % 4096 == 0 and not job.checkpoint(completed):
+				return {}
+		return expanded
+
+	func _allows(cell: Vector3i, frame: VoxelFrame, existing_only: bool, matching_color: Variant) -> bool:
+		return (selection.is_empty() or selection.has(cell)) and (not existing_only or frame.has(cell)) and (matching_color == null or frame.get_color(cell) == matching_color)
+
 class EditJob extends RefCounted:
 	var worker_task_id := -1
+	var edit_context: EditContext
+	var applied_cell_colors := {}
 	var _label := "Preparing edit"
 	var _completed := 0
 	var _total := -1
@@ -46,6 +87,20 @@ class EditJob extends RefCounted:
 		_progress_lock.lock()
 		_cancel_requested = true
 		_progress_lock.unlock()
+
+	func apply_cells(frame: VoxelFrame, changes: Dictionary, existing_only := false, matching_color: Variant = null) -> Array[Vector3i]:
+		applied_cell_colors = edit_context.expand(changes, frame, existing_only, matching_color, self) if edit_context else changes
+		if not checkpoint(0):
+			return []
+		return frame.set_cells(applied_cell_colors, self)
+
+	func estimate_work(original_work: int) -> int:
+		var work := original_work
+		if edit_context:
+			for axis in 3:
+				if edit_context.axes & (1 << axis):
+					work *= 2
+		return work
 
 class Chunk extends RefCounted:
 	var cell_colors: Dictionary = {}

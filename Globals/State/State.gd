@@ -11,12 +11,14 @@ signal palette_changed()
 signal default_palette_changed()
 signal selection_changed()
 signal floor_plane_changed()
+signal symmetry_changed()
 signal tag_changed()
 signal activity_changed()
 signal edit_context_changing()
 
 const WORK_SLICE_US := 3000
 const DEFAULT_PALETTE_PATH := "user://default_palette.cfg"
+const DEFAULT_SYMMETRY_ORIGIN := Vector3(-0.5, -0.5, -0.5)
 const IMAGE_EXTENSIONS := ["bmp", "dds", "exr", "hdr", "jpg", "jpeg", "ktx", "ktx2", "png", "svg", "tga", "webp"]
 
 var default_palette := get_builtin_palette()
@@ -95,12 +97,29 @@ var floor_index := 0:
 		floor_index = value
 		floor_plane_changed.emit()
 
+var symmetry_axes := 0:
+	set(value):
+		value &= 7
+		if value == symmetry_axes:
+			return
+		symmetry_axes = value
+		symmetry_changed.emit()
+
+var symmetry_origin := DEFAULT_SYMMETRY_ORIGIN:
+	set(value):
+		value = value.snapped(Vector3.ONE * 0.5)
+		if value == symmetry_origin:
+			return
+		symmetry_origin = value
+		symmetry_changed.emit()
+
 var current_color := Color.BLACK
 var selection := VoxelSelection.new()
 var undo_redo := UndoRedo.new()
 var _stroke_frame: VoxelFrame
 var _stroke_start_chunks := {}
 var _stroke_start_selection := {}
+var _stroke_edit_context: VoxelFrame.EditContext
 
 
 func _init() -> void:
@@ -119,6 +138,7 @@ func _ready() -> void:
 	add_plugin(load("res://Plugins/Fill/FillPlugin.gd").new())
 	add_plugin(load("res://Plugins/Selection/SelectionPlugin.gd").new())
 	add_plugin(load("res://Plugins/Transform/TransformPlugin.gd").new())
+	add_plugin(load("res://Plugins/Symmetry/SymmetryPlugin.gd").new())
 	add_plugin(load("res://Plugins/Plane/PlanePlugin.gd").new())
 	add_plugin(load("res://Plugins/GLTFExport/GLTFExportPlugin.gd").new())
 	add_plugin(load("res://Plugins/Clipboard/ClipboardPlugin.gd").new())
@@ -136,6 +156,7 @@ func set_document(value:VoxiDocument) -> void:
 	_stroke_frame = null
 	_stroke_start_chunks = {}
 	_stroke_start_selection = {}
+	_stroke_edit_context = null
 	selection.clear()
 	selection_changed.emit()
 	undo_redo.clear_history()
@@ -164,7 +185,32 @@ func remove_plugin(plugin: VoxiPlugin) -> void:
 
 
 func paint(position: Vector3i, color:Color) -> void:
-	document.paint(current_frame, position, color)
+	if symmetry_axes == 0 and _stroke_edit_context == null:
+		document.paint(current_frame, position, color)
+		return
+	var context := drawing_context()
+	var changes := context.expand({position: color}, get_current_voxel_frame(), false, null)
+	get_current_voxel_frame().set_cells(changes)
+	document._bounds_dirty = true
+
+
+func drawing_context() -> VoxelFrame.EditContext:
+	if _stroke_edit_context:
+		return _stroke_edit_context
+	var context := VoxelFrame.EditContext.new()
+	context.axes = symmetry_axes
+	context.origin_twice = Vector3i(symmetry_origin * 2.0)
+	context.selection = selection.capture()
+	context.selection.make_read_only()
+	return context
+
+
+static func symmetry_transform(mask: int, origin: Vector3) -> Transform3D:
+	var reflection := Vector3.ONE
+	for axis in 3:
+		if mask & (1 << axis):
+			reflection[axis] = -1.0
+	return Transform3D(Basis.from_scale(reflection), origin - origin * reflection)
 
 
 func begin_operation(label: String, total: int = -1, foreground: bool = false, operation_owner: Node = null) -> int:
@@ -231,6 +277,8 @@ func edit_busy(requester: Node = null) -> bool:
 
 
 func begin_stroke() -> void:
+	_stroke_edit_context = null
+	_stroke_edit_context = drawing_context()
 	_stroke_frame = get_current_voxel_frame()
 	_stroke_start_chunks = _stroke_frame.capture()
 	_stroke_start_selection = selection.capture()
@@ -248,6 +296,7 @@ func end_stroke(action: String = "Stroke") -> void:
 	_stroke_frame = null
 	_stroke_start_chunks = {}
 	_stroke_start_selection = {}
+	_stroke_edit_context = null
 
 
 func cancel_stroke() -> void:
@@ -257,6 +306,7 @@ func cancel_stroke() -> void:
 	_stroke_frame = null
 	_stroke_start_chunks = {}
 	_stroke_start_selection = {}
+	_stroke_edit_context = null
 
 
 func _chunks_equal(first_chunks: Dictionary, second_chunks: Dictionary) -> bool:

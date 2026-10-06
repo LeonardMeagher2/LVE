@@ -103,6 +103,26 @@ func _run() -> void:
 			expect(State.floor_axis == Vector3.Axis.AXIS_Y, "the Y button faces the plane along Y")
 	)
 
+	step("When the user leaves Plane, changes the axis, and returns", func():
+		activate_tool("Toolbar")
+		State.floor_axis = Vector3.Axis.AXIS_X
+		activate_tool("plane")
+	)
+	step("Then the Plane cursor uses the current axis on re-entry", func():
+		var cursor: Node3D = plugin("PlanePlugin")._tool.get_node("Cursor")
+		expect(cursor.basis.is_equal_approx(Basis(Vector3.FORWARD, -PI / 2)), "the returned Plane cursor faces the X axis")
+	)
+	step("When the user changes the axis after returning to Plane", func():
+		State.floor_axis = Vector3.Axis.AXIS_Z
+	)
+	step("Then the Plane cursor keeps following axis changes", func():
+		var cursor: Node3D = plugin("PlanePlugin")._tool.get_node("Cursor")
+		expect(cursor.basis.is_equal_approx(Basis(Vector3.RIGHT, PI / 2)), "the returned Plane cursor follows the Z axis")
+		activate_tool("Toolbar")
+		State.floor_axis = Vector3.Axis.AXIS_Y
+		activate_tool("plane")
+		expect(cursor.basis.is_equal_approx(Basis.IDENTITY), "another tool switch restores the Y cursor rotation")
+	)
 	step("When the editor returns to the default floor", func():
 		State.floor_axis = Vector3.Axis.AXIS_Y
 		State.floor_index = 0

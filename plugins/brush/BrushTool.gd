@@ -18,6 +18,7 @@ var _stroke_color := Color.WHITE
 var _paint_existing := false
 var _erase_existing := false
 var _selection_mask := {}
+var _edit_context: VoxelFrame.EditContext
 var _job: BrushJob
 var _operation_id := 0
 var _cursor_axis := -1
@@ -49,14 +50,15 @@ class BrushJob extends VoxelFrame.EditJob:
 		for center in centers:
 			for offset: Vector3i in pattern:
 				var cell_position := center + offset
-				if (selection_mask.is_empty() or selection_mask.has(cell_position)) and (not paint_existing or edited_frame.has(cell_position)):
+				if edit_context or ((selection_mask.is_empty() or selection_mask.has(cell_position)) and (not paint_existing or edited_frame.has(cell_position))):
 					var source_color: Color = pattern[offset]
 					cell_colors[cell_position] = Color.TRANSPARENT if erase_existing else (color if source_color == Color.TRANSPARENT else source_color)
 				completed += 1
 				if completed % 4096 == 0 and not checkpoint(completed):
 					return
 		stage("Applying brush", cell_colors.size())
-		changed_chunks = edited_frame.set_cells(cell_colors, self)
+		changed_chunks = apply_cells(edited_frame, cell_colors, paint_existing)
+		cell_colors = applied_cell_colors
 
 
 func _enter_tree() -> void:
@@ -126,6 +128,7 @@ func begin_stroke() -> void:
 	_paint_existing = _settings.mode == _settings.BrushMode.PAINT
 	_erase_existing = _settings.mode == _settings.BrushMode.ERASER
 	_selection_mask = State.selection.capture()
+	_edit_context = State.drawing_context()
 
 
 func _apply_pick(target: Vector3i, hit: Vector3i) -> void:
@@ -166,8 +169,9 @@ func _start_edit() -> void:
 	_job.paint_existing = _paint_existing or _erase_existing
 	_job.erase_existing = _erase_existing
 	_job.selection_mask = _selection_mask
+	_job.edit_context = _edit_context
 	_job.edited_frame = _source_frame.copy_frame()
-	var work := _job.centers.size() * _stroke_pattern_size
+	var work := _job.estimate_work(_job.centers.size() * _stroke_pattern_size)
 	if work <= INLINE_EDIT_LIMIT:
 		_job.run()
 		_finish_edit()
@@ -220,6 +224,7 @@ func _finish_stroke() -> void:
 	_end_requested = false
 	_source_document = null
 	_source_frame = null
+	_edit_context = null
 
 
 func end_stroke() -> void:
@@ -247,6 +252,7 @@ func _cancel_edit() -> void:
 	_last_target = VoxelPicking.NONE
 	_source_document = null
 	_source_frame = null
+	_edit_context = null
 	visible = false
 	State.finish_operation(_operation_id)
 	_operation_id = 0

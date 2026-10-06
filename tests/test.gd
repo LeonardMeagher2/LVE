@@ -54,6 +54,9 @@ func _fail_hard(msg: String) -> void:
 		"src": "",
 		"img": _screenshot_for(Engine.get_process_frames()),
 	})
+	for entry in _steps:
+		if entry.elapsed_ms < 0.0:
+			print("    Time: %.3f ms (interrupted)" % _step_time(entry))
 	_write_report()
 	print("TEST FAILED: %s -> %s/report.md" % [msg, _dir()])
 	get_tree().quit(1)
@@ -89,8 +92,8 @@ func _fail_timeout() -> void:
 func _finish() -> void:
 	_finished = true
 	var failed := _count_failed()
+	_write_report()
 	if failed > 0:
-		_write_report()
 		print("TEST FAILED: %d/%d checks failed -> %s/report.md" % [
 			failed, _checks.size(), _dir()
 		])
@@ -101,10 +104,18 @@ func _finish() -> void:
 
 
 func step(description: String, c: Callable) -> Variant:
-	_steps.append({"desc": description})
+	var entry := {"desc": description, "started_us": Time.get_ticks_usec(), "elapsed_ms": -1.0}
+	_steps.append(entry)
 	_current_step = _steps.size() - 1
 	print("  %s" % description)
-	return await c.call()
+	var result: Variant = await c.call()
+	entry.elapsed_ms = (Time.get_ticks_usec() - int(entry.started_us)) / 1000.0
+	print("    Time: %.3f ms" % entry.elapsed_ms)
+	return result
+
+
+func _step_time(entry: Dictionary) -> float:
+	return entry.elapsed_ms if entry.elapsed_ms >= 0.0 else (Time.get_ticks_usec() - int(entry.started_us)) / 1000.0
 
 
 func expect(cond: bool, msg: String) -> void:
@@ -237,28 +248,31 @@ func _write_report() -> void:
 		Time.get_datetime_string_from_system(), _checks.size(), _count_failed()
 	])
 	lines.append("")
-	var last_step := -2
-	for ch in _checks:
-		var step_id: int = ch.step
-		if step_id != last_step:
-			last_step = step_id
+	for step_id in range(-1, _steps.size()):
+		if step_id >= 0:
+			var entry: Dictionary = _steps[step_id]
+			lines.append("### %s" % entry.desc)
 			lines.append("")
-			if step_id >= 0:
-				lines.append("### %s" % _steps[step_id].desc)
-			else:
+			lines.append("**Time:** %.3f ms%s" % [_step_time(entry), " (interrupted)" if entry.elapsed_ms < 0.0 else ""])
+			lines.append("")
+		for ch in _checks:
+			if ch.step != step_id:
+				continue
+			if step_id == -1 and not lines.has("### Intro"):
 				lines.append("### Intro")
-			lines.append("")
-		var label: String = ch.msg
-		if ch.ok:
-			lines.append("- ✅ %s: %s" % [label, _loc_link(ch.loc)])
-		else:
-			lines.append("- ❌ %s: %s" % [label, _loc_link(ch.loc)])
-			if ch.src != "":
-				lines.append("  ```gdscript")
-				lines.append("  %s" % ch.src)
-				lines.append("  ```")
-			if ch.img != "":
-				lines.append("  ![screenshot](%s)" % ch.img)
+				lines.append("")
+			var label: String = ch.msg
+			if ch.ok:
+				lines.append("- ✅ %s: %s" % [label, _loc_link(ch.loc)])
+			else:
+				lines.append("- ❌ %s: %s" % [label, _loc_link(ch.loc)])
+				if ch.src != "":
+					lines.append("  ```gdscript")
+					lines.append("  %s" % ch.src)
+					lines.append("  ```")
+				if ch.img != "":
+					lines.append("  ![screenshot](%s)" % ch.img)
+		lines.append("")
 	_write_file(_dir() + "/report.md", "\n".join(lines) + "\n")
 
 

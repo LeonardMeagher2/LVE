@@ -110,6 +110,7 @@ func _begin_line(pick: PickResult) -> void:
 	_stroke_pattern_size = _settings.estimated_size()
 	_stroke_color = State.current_color
 	_selection_mask = State.selection.capture()
+	_edit_context = State.drawing_context()
 	_update_endpoint(_anchor)
 
 
@@ -139,9 +140,10 @@ func _start_preview() -> void:
 	_job.shape = _stroke_shape
 	_job.color = _stroke_color
 	_job.selection_mask = _selection_mask
+	_job.edit_context = _edit_context
 	_job.edited_frame = _line_snapshot.copy_frame()
 	_job.revision = _revision
-	var work := _job.centers.size() * _stroke_pattern_size
+	var work := _job.estimate_work(_job.centers.size() * _stroke_pattern_size)
 	if work <= INLINE_EDIT_LIMIT:
 		_job.run()
 		_finish_preview()
