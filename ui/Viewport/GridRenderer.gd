@@ -22,10 +22,6 @@ func rebuild() -> void:
 	_last_bounds = bounds
 	_last_axis = axis
 	_last_index = index
-	for child in get_children():
-		remove_child(child)
-		child.queue_free()
-
 	var u := (axis + 1) % 3
 	var v := (axis + 2) % 3
 	var lo := span_lo(bounds)
@@ -33,20 +29,21 @@ func rebuild() -> void:
 	var nu := int(hi[u] - lo[u])
 	var nv := int(hi[v] - lo[v])
 
-	var lines := PackedVector3Array()
-	for i in nu + 1:
-		lines.append(_vec(u, v, float(i), 0.0))
-		lines.append(_vec(u, v, float(i), float(nv)))
-	for j in nv + 1:
-		lines.append(_vec(u, v, 0.0, float(j)))
-		lines.append(_vec(u, v, float(nu), float(j)))
-	var line_mesh := ArrayMesh.new()
+	var vertices := PackedVector3Array([
+		_vec(u, v, 0.0, 0.0),
+		_vec(u, v, float(nu), 0.0),
+		_vec(u, v, float(nu), float(nv)),
+		_vec(u, v, 0.0, float(nv)),
+	])
+	var grid_mesh := ArrayMesh.new()
 	var a := Array()
 	a.resize(Mesh.ARRAY_MAX)
-	a[Mesh.ARRAY_VERTEX] = lines
-	line_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_LINES, a)
+	a[Mesh.ARRAY_VERTEX] = vertices
+	a[Mesh.ARRAY_INDEX] = PackedInt32Array([0, 1, 2, 0, 2, 3])
+	grid_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, a)
 
-	mesh = line_mesh
+	mesh = grid_mesh
+	material_override.set_shader_parameter("floor_axis", axis)
 	var p := Vector3.ZERO
 	p[axis] = float(index) - 0.5
 	p[u] = lo[u]

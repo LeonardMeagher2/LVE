@@ -160,6 +160,7 @@ func add_plugin(plugin: VoxiPlugin) -> void:
 	
 func remove_plugin(plugin: VoxiPlugin) -> void:
 	get_node("/root").remove_child(plugin)
+	plugin.queue_free()
 
 
 func paint(position: Vector3i, color:Color) -> void:
@@ -653,6 +654,11 @@ func _exit_tree() -> void:
 	for job in _erase_jobs:
 		job.cancel()
 		WorkerThreadPool.wait_for_task_completion(job.worker_task_id)
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_PREDELETE:
+		undo_redo.free()
 
 
 func next_frame() -> void:

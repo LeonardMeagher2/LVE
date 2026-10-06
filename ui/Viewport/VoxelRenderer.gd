@@ -118,17 +118,26 @@ var _operation_id := 0
 var _reported_remaining := -1
 
 
-func _ready() -> void:
+func _enter_tree() -> void:
 	_active_renderer_count += 1
 	State.frame_changed.connect(_on_frame_changed)
 	State.frames_changed.connect(_rebuild)
 	State.cells_changed.connect(_update)
 	State.chunks_changed.connect(_update_chunks)
 	State.document_changed.connect(_rebuild)
-	_rebuild()
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_POST_ENTER_TREE:
+		_rebuild()
 
 
 func _exit_tree() -> void:
+	State.frame_changed.disconnect(_on_frame_changed)
+	State.frames_changed.disconnect(_rebuild)
+	State.cells_changed.disconnect(_update)
+	State.chunks_changed.disconnect(_update_chunks)
+	State.document_changed.disconnect(_rebuild)
 	State.finish_operation(_operation_id)
 	_operation_id = 0
 	# No worker accesses a renderer. Collect every task when the last viewport exits.
@@ -155,6 +164,8 @@ func _on_frame_changed() -> void:
 
 
 func _rebuild() -> void:
+	if not is_inside_tree():
+		return
 	var source_frame := _get_frame()
 	if source_frame != _displayed_frame:
 		for chunk_instance in _chunk_instances.values():

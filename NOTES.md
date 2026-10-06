@@ -4,6 +4,10 @@ This file records confirmed, non-obvious facts learned while working on Voxi. Re
 
 ## Godot API changes
 
+- 2026-10-05: `UndoRedo` inherits `Object`. Free it when its owner is deleted.
+- 2026-10-05: `_notification()` runs for each script in the inheritance chain. Do not call `super` from this method.
+- 2026-10-05: `NOTIFICATION_POST_ENTER_TREE` runs on each tree entry. `_ready()` runs once unless `request_ready()` is called.
+- 2026-10-05: Wait for every WorkerThreadPool task, including cancelled tasks, to release the task's allocated resources.
 - 2026-10-05: Windows and embedded `FileDialog` controls filter by extensions. An image label does not select image formats.
 - 2026-10-05: DDS and KTX files use `Image` buffer loaders. If an image is compressed, decompress it before reading pixels.
 - 2026-10-05: `align_to_largest_stylebox` uses the largest button margins across states. It is a theme constant.

@@ -113,6 +113,13 @@ func _ready() -> void:
 	_sync_options.call_deferred()
 
 
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_PREDELETE:
+		for node in [_options, _paste_tool]:
+			if is_instance_valid(node):
+				node.free()
+
+
 func _on_tool_toggled(on: bool) -> void:
 	if on and _paste_tool.is_inside_tree():
 		_paste_tool._cancel_edit()

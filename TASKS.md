@@ -67,6 +67,22 @@ max_active: 1
 
 # Rendering and storage
 
+- [x] Keep the grid readable when zoomed out
+  - [x] Draw the grid on one plane with anti-aliased shader lines
+  - [x] Blend from voxel cells to larger divisions as the view changes
+  - [x] Preserve floor axes, layer positions, and the grid toggle
+  - [x] Verify grid geometry, floor behavior, camera behavior, and the rendered result with targeted tests
+  - The four targeted tests pass. The windowed grid test verifies the rendered line spacing.
+- [x] Review and fix memory cleanup
+  - [x] Free plugin-owned tools and controls, including detached nodes
+  - [x] Keep node cleanup explicit in each plugin
+  - [x] Delete plugins when they are unloaded
+  - [x] Free the State UndoRedo object when State is deleted
+  - [x] Pair renderer registration and signal connections across tree entry and exit
+  - [x] Collect cancelled brush-source worker tasks before deleting their controls
+  - [x] Verify document release, view re-entry, worker deletion, and plugin cleanup
+  - The nine targeted tests pass. The lifecycle test also passes with a window.
+  - Playback shutdown changed from 161 leaked objects and 48 retained resources to no leak reports.
 - [x] Share mesh caching and worker handling across voxel previews
   - [x] Use one lifecycle for solid and outline previews
   - [x] Cache completed geometry across brush, line, paste, and selection previews

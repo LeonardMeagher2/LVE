@@ -2,6 +2,7 @@ extends HBoxContainer
 
 var _settings := preload("./settings.tres")
 var _source_job: VoxelFrame.EditJob
+var _operation_id := 0
 
 
 func _ready() -> void:
@@ -56,27 +57,39 @@ func _on_selection_pressed() -> void:
 	_sync()
 	var source_count := job.selection_mask.size() if not job.selection_mask.is_empty() else frame.count()
 	var operation_id := State.begin_operation("Preparing voxel brush", source_count, true, self)
+	_operation_id = operation_id
 	if source_count <= 4096:
 		job.run()
 	else:
 		job.worker_task_id = WorkerThreadPool.add_task(job.run, true, "Voxel brush")
-		while not WorkerThreadPool.is_task_completed(job.worker_task_id):
+		while job.worker_task_id >= 0 and not WorkerThreadPool.is_task_completed(job.worker_task_id):
 			if State.document != document or State.get_current_voxel_frame() != frame or not is_inside_tree():
 				job.cancel()
 			var progress := job.progress()
 			State.update_operation(operation_id, progress[1], progress[2], progress[0])
 			await State.get_tree().process_frame
-		WorkerThreadPool.wait_for_task_completion(job.worker_task_id)
+		if job.worker_task_id >= 0:
+			WorkerThreadPool.wait_for_task_completion(job.worker_task_id)
+			job.worker_task_id = -1
 	State.finish_operation(operation_id)
-	_source_job = null
+	if _source_job == job:
+		_source_job = null
+		_operation_id = 0
 	if is_inside_tree() and State.document == document and State.get_current_voxel_frame() == frame and job.checkpoint(job.pattern.size()):
 		_settings.use_selection(job.pattern)
-	_sync()
+	if is_inside_tree():
+		_sync()
 
 
 func _exit_tree() -> void:
 	if _source_job:
 		_source_job.cancel()
+		if _source_job.worker_task_id >= 0:
+			WorkerThreadPool.wait_for_task_completion(_source_job.worker_task_id)
+			_source_job.worker_task_id = -1
+		_source_job = null
+	State.finish_operation(_operation_id)
+	_operation_id = 0
 
 
 func _on_cells_changed(_frame: int, _affected: Array[Vector3i]) -> void:

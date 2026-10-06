@@ -19,6 +19,13 @@ func _ready() -> void:
 	add_tool_bar_item(_toolbar)
 
 
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_PREDELETE:
+		for node in [_toolbar, _options, _move, _rotate, _scale]:
+			if is_instance_valid(node):
+				node.free()
+
+
 func activate_tool() -> void:
 	_active = true
 	_toolbar.set_pressed_no_signal(true)

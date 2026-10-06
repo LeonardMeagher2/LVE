@@ -13,11 +13,12 @@
 [ext_resource type="Texture2D" uid="uid://djnb7oucoqdu8" path="res://icons/zoom.svg" id="14_jua01"]
 [ext_resource type="Texture2D" uid="uid://mglj26s40ce4" path="res://icons/center.svg" id="15_0hwp6"]
 [ext_resource type="Texture2D" uid="uid://bhg85sqfio31d" path="res://icons/grid.svg" id="16_x0727"]
+[ext_resource type="Shader" path="res://ui/Viewport/Grid.gdshader" id="17_grid"]
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_grid"]
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_grid"]
+resource_local_to_scene = true
 render_priority = -1
-shading_mode = 0
-albedo_color = Color(0.65, 0.65, 0.65, 1)
+shader = ExtResource("17_grid")
 
 [node name="Viewport" type="VBoxContainer" unique_id=159467693]
 anchors_preset = 15
@@ -73,7 +74,7 @@ shadow_enabled = true
 [node name="Grid" type="MeshInstance3D" parent="PanelContainer/SubViewportContainer/Viewport/ViewportScene" unique_id=1484635508]
 unique_name_in_owner = true
 sorting_offset = -0.1
-material_override = SubResource("StandardMaterial3D_grid")
+material_override = SubResource("ShaderMaterial_grid")
 cast_shadow = 0
 script = ExtResource("4_bqm4n")
 

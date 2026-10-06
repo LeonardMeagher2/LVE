@@ -23,6 +23,7 @@ func _notification(what: int) -> void:
 	if what == NOTIFICATION_PREDELETE and is_instance_valid(_menu_item):
 		_menu_item.free()
 
+
 class ExportJob extends VoxelFrame.EditJob:
 	const WELD_EPSILON := 0.00001
 	var frames: Array[VoxelFrame] = []

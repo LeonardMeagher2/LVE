@@ -24,6 +24,13 @@ func _ready() -> void:
 	_on_selection_changed()
 
 
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_PREDELETE:
+		for node in [_toolbar, _options, _selection, _box, _wand, _lasso]:
+			if is_instance_valid(node):
+				node.free()
+
+
 func _on_selection_changed() -> void:
 	_selection.show_selection(State.selection)
 

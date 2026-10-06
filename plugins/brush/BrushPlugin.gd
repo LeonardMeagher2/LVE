@@ -20,6 +20,13 @@ func _ready() -> void:
 	activate_tool()
 
 
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_PREDELETE:
+		for node in [_toolbar, _options, _brush_tool, _line_tool]:
+			if is_instance_valid(node):
+				node.free()
+
+
 func activate_tool() -> void:
 	_toolbar.set_pressed_no_signal(true)
 	add_editor_node(_tool)
