@@ -37,7 +37,7 @@ func _run() -> void:
 		sparse.set_cell(Vector3i(4096, -4096, 4096), Color.BLUE)
 	)
 	var started := Time.get_ticks_msec()
-	var exporter := plugin("GLTFExportPlugin")
+	var exporter := plugin("ExportPlugin")
 	export_error = await exporter.export_gltf(OUTPUT)
 	step("When the final asset is imported", func():
 		expect(export_error == OK, "the simplified asset exports successfully")

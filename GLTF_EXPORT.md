@@ -2,15 +2,21 @@
 
 ## Export a document
 
-1. Select **Export as glTF** in the MenuBar.
-2. Select a file format.
-3. Select a path and save the file.
+1. Select **Export** in the MenuBar.
+2. Select **All tags** or an animation tag.
+3. To center the model, enable **Center**.
+4. To preview the animation, select **Play**.
+5. Select **Export glTF / GLB...**.
+6. Select a file format.
+7. Select a path and save the file.
+8. To return to the editor, select **Export** again.
 
 - `.glb` stores the scene, geometry, and animation data in one file.
 - `.gltf` stores the scene in JSON and creates a separate `.bin` file.
 - Keep the `.bin` file beside its `.gltf` file.
 
-The export plugin is in `Plugins/GLTFExport/`.
+The shared export plugin is in `Plugins/Export/`.
+Preview playback preserves the editor frame and camera.
 
 ## Scale animation
 
@@ -35,11 +41,12 @@ Godot 4.7.2 reads vertex colors after it configures the first surface material.
 The second surface enables vertex colors on the shared material.
 The split preserves the geometry and adds no custom extension.
 
-All frame meshes use one centering offset from their combined bounds.
-The combined bounds are centered at the origin.
+With **Center** enabled, all frame meshes use one offset from their combined bounds.
+With **Center** disabled, all frame meshes keep their document coordinates.
 Relative frame positions remain the same.
 
-The export contains one clip per animation tag.
+With **All tags**, the export contains one clip per animation tag.
+With one selected tag, the export contains only that tag's frames and clip.
 Scale animation uses glTF `STEP` interpolation.
 This permits different geometry in each frame.
 All frame geometry remains in memory.

@@ -9,6 +9,8 @@ extends HBoxContainer
 
 const ACTIVITY_DELAY_MS := 200
 var _editor_camera: EditorCameraRig
+var _context: Callable
+var _cancel: Callable
 
 
 func _ready() -> void:
@@ -22,6 +24,10 @@ func _ready() -> void:
 		_editor_camera.zoom_changed.connect(_refresh_status.unbind(1))
 	_refresh_status()
 	_refresh_activity()
+	$Activity/Cancel.pressed.connect(func():
+		if _cancel.is_valid():
+			_cancel.call()
+	)
 
 
 func _process(_delta: float) -> void:
@@ -30,6 +36,11 @@ func _process(_delta: float) -> void:
 
 
 func _refresh_status() -> void:
+	if _context.is_valid():
+		var status: Dictionary = _context.call()
+		_left.text = status.left
+		_right.text = status.right
+		return
 	var zoom_percent := roundi(_editor_camera.zoom_percent()) if _editor_camera else 100
 	set_status(State.current_color.to_html(false), State.current_frame, State.document.frames.size(), zoom_percent)
 
@@ -39,6 +50,7 @@ func _refresh_activity() -> void:
 	_activity.visible = operation != null and State.activity_elapsed_ms() >= ACTIVITY_DELAY_MS
 	if operation == null:
 		return
+	$Activity/Cancel.visible = operation.foreground and _cancel.is_valid() and operation.owner_ref != null and operation.owner_ref.get_ref() == _cancel.get_object()
 	_activity_progress.indeterminate = operation.total <= 0
 	if operation.total > 0:
 		var percent := clampf(operation.completed * 100.0 / operation.total, 0.0, 100.0)
@@ -53,3 +65,10 @@ func _refresh_activity() -> void:
 func set_status(color_html: String, frame: int, frame_count: int, zoom: int) -> void:
 	_left.text = "#%s" % [color_html]
 	_right.text = "Frame %d/%d   %d%%" % [frame + 1, frame_count, zoom]
+
+
+func set_context(provider: Callable, cancel := Callable()) -> void:
+	_context = provider
+	_cancel = cancel
+	_refresh_status()
+	_refresh_activity()

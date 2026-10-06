@@ -4,6 +4,8 @@ This file records confirmed, non-obvious facts learned while working on Voxi. Re
 
 ## Godot API changes
 
+- 2026-10-06: A disabled workspace stops renderer processing unless the renderer uses `PROCESS_MODE_ALWAYS`.
+- 2026-10-05: For independent frame renders, give each viewport its own `World3D`. `resource_local_to_scene` creates a world per scene instance.
 - 2026-10-05: `VoxelTool` checks edit locks before `handle_input()`. Inactive modifier tools must reject events in `_accepts()`.
 - 2026-10-05: `SceneTreeTimer` expiry does not guarantee elapsed wall time during headless tests.
 - 2026-10-05: `UndoRedo` inherits `Object`. Free it when its owner is deleted.

@@ -22,6 +22,28 @@ func add_menu_bar_item(control:Control) -> void:
 func remove_menu_bar_item(control:Control) -> void:
 	_safe_remove(get_node("/root/Main").get_node("%MenuBar"), control)
 
+func add_tab(control: Control) -> void:
+	var tabs: TabContainer = get_node("/root/Main").get_node("%TabContainer")
+	_safe_add(tabs, control)
+	control.process_mode = Node.PROCESS_MODE_INHERIT if tabs.get_current_tab_control() == control else Node.PROCESS_MODE_DISABLED
+
+func remove_tab(control: Control) -> void:
+	var main := get_node_or_null("/root/Main")
+	if main == null:
+		return
+	var tabs: TabContainer = main.get_node("%TabContainer")
+	if tabs.get_current_tab_control() == control:
+		show_editor_tab()
+	_safe_remove(tabs, control)
+
+func show_tab(control: Control) -> void:
+	var tabs: TabContainer = get_node("/root/Main").get_node("%TabContainer")
+	if control.get_parent() == tabs:
+		tabs.current_tab = tabs.get_tab_idx_from_control(control)
+
+func show_editor_tab() -> void:
+	show_tab(get_node("/root/Main").get_node("%Editor"))
+
 func add_option_bar_item(control: Control) -> void:
 	_safe_add(get_node("/root/Main").get_node("%OptionBar"), control)
 

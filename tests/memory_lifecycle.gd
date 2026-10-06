@@ -98,8 +98,17 @@ func _run() -> void:
 		expect(not State.edit_busy(), "deleting brush controls releases the foreground operation")
 		State.document = VoxiDocument.new()
 	)
+	if DisplayServer.get_name() != "headless":
+		step("When the user opens Export before unloading its live preview", func():
+			State.get_current_voxel_frame().set_cell(Vector3i.ZERO, Color.RED)
+			State.document.add_frame()
+			State.frames_changed.emit()
+			plugin("ExportPlugin")._menu_item.get_node("ExportBtn").button_pressed = true
+		)
+		while not plugin("ExportPlugin")._preview_running:
+			await get_tree().process_frame
 	step("Given the editor plugins and their active and parked nodes", func():
-		for plugin_name in ["GLTFExportPlugin", "ImageImportPlugin", "ClipboardPlugin", "SymmetryPlugin", "TransformPlugin", "SelectionPlugin", "PlanePlugin", "FillPlugin", "EyedropperPlugin", "BrushPlugin"]:
+		for plugin_name in ["ExportPlugin", "ImageImportPlugin", "ClipboardPlugin", "SymmetryPlugin", "TransformPlugin", "SelectionPlugin", "PlanePlugin", "FillPlugin", "EyedropperPlugin", "BrushPlugin"]:
 			var item := plugin(plugin_name)
 			plugins.append(item)
 			for property in item.get_property_list():

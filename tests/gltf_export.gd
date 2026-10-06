@@ -35,18 +35,21 @@ func _run() -> void:
 		source_document.add_tag("InfinitePing", 0, 2, AnimationTag.LoopMode.PING_PONG, 0)
 		source_document.add_tag("LoopOnce", 0, 1, AnimationTag.LoopMode.FORWARD, 1)
 		menu_bar = main.get_node("Content/VBoxContainer/MenuBar")
-		exporter = plugin("GLTFExportPlugin")
+		exporter = plugin("ExportPlugin")
 		menu_bar.current_save_path = "user://original.tres"
 	)
-	step("When the user opens the glTF export dialog", func():
-		var button: Button = exporter._menu_item.get_node("ExportGLTFBtn")
+	step("When the user opens the Export workspace and chooses glTF", func():
+		var button: Button = exporter._menu_item.get_node("ExportBtn")
 		expect(button.icon != null, "the glTF export button has its own icon")
 		expect(exporter._menu_item.get_parent() == menu_bar, "the export plugin adds its control to the MenuBar")
 		var separator := menu_bar.get_node("Sep1")
 		expect(exporter._menu_item.get_index() < separator.get_index(), "export appears before the history separator")
 		expect(menu_bar.get_node("UndoBtn").get_index() == separator.get_index() + 1, "undo follows the separator")
 		expect(menu_bar.get_node("RedoBtn").get_index() == separator.get_index() + 2, "redo follows undo at the end of the controls")
-		button.pressed.emit()
+		button.button_pressed = true
+		expect(exporter._workspace.visible, "the export button opens the Export workspace")
+		expect(not exporter._dialog.visible, "opening the workspace starts with previews and settings")
+		exporter._model.get_node("Export").pressed.emit()
 		var dialog: FileDialog = exporter._dialog
 		expect(dialog.visible, "the export button opens the export dialog")
 		expect(dialog.file_mode == FileDialog.FILE_MODE_SAVE_FILE, "the export dialog saves a file")
@@ -54,6 +57,7 @@ func _run() -> void:
 		expect(dialog.filters.size() == 2, "the export dialog offers glTF and GLB formats")
 		expect(dialog.option_count == 0, "the export dialog needs no animation-method selection")
 		dialog.hide()
+		exporter.show_editor_tab()
 	)
 	export_error = await exporter.export_gltf(JSON_PATH)
 	step("Then the exported file uses standard stepped scale animation", func():

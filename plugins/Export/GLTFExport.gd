@@ -1,27 +1,13 @@
-extends VoxiPlugin
+extends RefCounted
 
-@onready var _menu_item := preload("./MenuBarItem.tscn").instantiate()
-@onready var _dialog: FileDialog = _menu_item.get_node("ExportDialog")
+var host: Node
 var _export_job: ExportJob
 var _export_root: Node3D
 var _export_operation_id := 0
 
 
-func _ready() -> void:
-	name = "GLTFExportPlugin"
-	_menu_item.get_node("ExportGLTFBtn").pressed.connect(_on_export_gltf_btn_pressed)
-	_dialog.file_selected.connect(export_gltf)
-	add_menu_bar_item(_menu_item)
-
-
-func _enter_tree() -> void:
-	if is_instance_valid(_menu_item):
-		add_menu_bar_item(_menu_item)
-
-
-func _notification(what: int) -> void:
-	if what == NOTIFICATION_PREDELETE and is_instance_valid(_menu_item):
-		_menu_item.free()
+func _init(owner_node: Node) -> void:
+	host = owner_node
 
 
 class ExportJob extends VoxelFrame.EditJob:
@@ -30,6 +16,7 @@ class ExportJob extends VoxelFrame.EditJob:
 	var tags: Array[AnimationTag] = []
 	var frame_surfaces: Array[Array] = []
 	var has_transparency := false
+	var center_origin := true
 
 	func run() -> void:
 		var total := 0
@@ -88,6 +75,8 @@ class ExportJob extends VoxelFrame.EditJob:
 		if vertex_count == 0:
 			return
 		var center := (min_position + max_position) * 0.5
+		if not center_origin:
+			center = Vector3.ZERO
 		stage("Centering export meshes", vertex_count)
 		completed = 0
 		for arrays in frame_surfaces:
@@ -253,34 +242,34 @@ class ExportJob extends VoxelFrame.EditJob:
 		return simplified
 
 
-func _exit_tree() -> void:
+func cancel() -> void:
 	if _export_job and _export_job.worker_task_id >= 0:
 		_export_job.cancel()
 		WorkerThreadPool.wait_for_task_completion(_export_job.worker_task_id)
 		_export_job.worker_task_id = -1
 	_finish_export()
-	if is_instance_valid(_menu_item) and _menu_item.get_parent():
-		_menu_item.get_parent().remove_child(_menu_item)
 
 
-func _on_export_gltf_btn_pressed() -> void:
-	if State.edit_busy() or _export_job:
-		return
-	_dialog.current_file = State.document.title.get_file().get_basename() + ".glb"
-	_dialog.popup_centered()
-
-
-func export_gltf(path: String) -> Error:
+func export_gltf(path: String, center_origin := true, tag_index := -1) -> Error:
 	if State.edit_busy() or _export_job:
 		return ERR_BUSY
 	State.stop()
 	var job := ExportJob.new()
-	for frame in State.document.frames:
-		job.frames.append(frame.copy_frame())
-	for tag in State.document.tags:
-		job.tags.append(tag.duplicate())
+	job.center_origin = center_origin
+	var selected_tag := State.document.get_tag(tag_index)
+	var first := selected_tag.from if selected_tag else 0
+	var last := selected_tag.to if selected_tag else State.get_frame_count() - 1
+	for index in range(first, last + 1):
+		job.frames.append(State.get_voxel_frame(index).copy_frame())
+	for index in State.document.tags.size():
+		if selected_tag and index != tag_index:
+			continue
+		var tag: AnimationTag = State.document.tags[index].duplicate()
+		tag.from -= first
+		tag.to -= first
+		job.tags.append(tag)
 	_export_job = job
-	_export_operation_id = State.begin_operation("Building export meshes", -1, true, self)
+	_export_operation_id = State.begin_operation("Building export meshes", -1, true, host)
 	job.worker_task_id = WorkerThreadPool.add_task(job.run, false, "glTF export meshes")
 	while job.worker_task_id >= 0 and not WorkerThreadPool.is_task_completed(job.worker_task_id):
 		if not State.has_operation(_export_operation_id):
@@ -292,7 +281,7 @@ func export_gltf(path: String) -> Error:
 		return ERR_UNAVAILABLE
 	WorkerThreadPool.wait_for_task_completion(job.worker_task_id)
 	job.worker_task_id = -1
-	if not is_inside_tree() or not State.has_operation(_export_operation_id):
+	if not is_instance_valid(host) or not host.is_inside_tree() or not State.has_operation(_export_operation_id):
 		_finish_export()
 		return ERR_UNAVAILABLE
 	_export_root = Node3D.new()
@@ -337,7 +326,7 @@ func export_gltf(path: String) -> Error:
 		frame_node.owner = _export_root
 		if Time.get_ticks_usec() - slice_started_us >= State.WORK_SLICE_US:
 			await State.get_tree().process_frame
-			if not is_inside_tree() or not State.has_operation(_export_operation_id):
+			if not is_instance_valid(host) or not host.is_inside_tree() or not State.has_operation(_export_operation_id):
 				_finish_export()
 				return ERR_UNAVAILABLE
 			slice_started_us = Time.get_ticks_usec()
@@ -363,9 +352,9 @@ func export_gltf(path: String) -> Error:
 
 
 func _finish_export() -> void:
+	_export_job = null
 	State.finish_operation(_export_operation_id)
 	_export_operation_id = 0
-	_export_job = null
 	if is_instance_valid(_export_root):
 		_export_root.free()
 	_export_root = null

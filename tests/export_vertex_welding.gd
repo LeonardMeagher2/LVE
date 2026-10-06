@@ -11,7 +11,7 @@ func _ready() -> void:
 
 func _run() -> void:
 	step("Given two coplanar quads with an epsilon-close shared edge", func():
-		export_job = plugin("GLTFExportPlugin").ExportJob.new()
+		export_job = plugin("ExportPlugin").GLTF_EXPORT.ExportJob.new()
 		source = _quads(Color.RED, Vector3.UP)
 	)
 	step("When export welding joins their vertices", func():

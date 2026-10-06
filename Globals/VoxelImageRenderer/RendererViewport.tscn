@@ -9,6 +9,7 @@ ambient_light_color = Color(0.54901963, 0.5686275, 0.61960787, 1)
 reflected_light_source = 1
 
 [sub_resource type="World3D" id="World3D_50uxx"]
+resource_local_to_scene = true
 environment = SubResource("Environment_8bj2b")
 
 [node name="RendererViewport" type="SubViewport" unique_id=1309484533]

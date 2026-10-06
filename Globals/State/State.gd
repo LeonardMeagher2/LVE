@@ -140,7 +140,7 @@ func _ready() -> void:
 	add_plugin(load("res://Plugins/Transform/TransformPlugin.gd").new())
 	add_plugin(load("res://Plugins/Symmetry/SymmetryPlugin.gd").new())
 	add_plugin(load("res://Plugins/Plane/PlanePlugin.gd").new())
-	add_plugin(load("res://Plugins/GLTFExport/GLTFExportPlugin.gd").new())
+	add_plugin(load("res://Plugins/Export/ExportPlugin.gd").new())
 	add_plugin(load("res://Plugins/Clipboard/ClipboardPlugin.gd").new())
 	add_plugin(load("res://Plugins/ImageImport/ImageImportPlugin.gd").new())
 	

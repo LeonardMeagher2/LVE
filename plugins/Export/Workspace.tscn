@@ -1,0 +1,206 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://ui/Viewport/Viewport.tscn" id="1_viewport"]
+[ext_resource type="Script" path="res://Plugins/Export/SheetPreview.gd" id="2_sheet"]
+[ext_resource type="Texture2D" path="res://icons/hand.svg" id="3_hand"]
+[ext_resource type="Texture2D" path="res://icons/zoom.svg" id="4_zoom"]
+[ext_resource type="Texture2D" path="res://icons/center.svg" id="5_center"]
+[ext_resource type="Texture2D" path="res://icons/undo.svg" id="6_reset"]
+
+[node name="Export" type="VBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="Panels" type="HBoxContainer" parent="."]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="ModelPanel" type="PanelContainer" parent="Panels"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_stretch_ratio = 1.0
+
+[node name="Margin" type="MarginContainer" parent="Panels/ModelPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 8
+
+[node name="Model" type="VBoxContainer" parent="Panels/ModelPanel/Margin"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="Viewport" parent="Panels/ModelPanel/Margin/Model" instance=ExtResource("1_viewport")]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="AnimationRow" type="HBoxContainer" parent="Panels/ModelPanel/Margin/Model"]
+layout_mode = 2
+
+[node name="Play" type="Button" parent="Panels/ModelPanel/Margin/Model/AnimationRow"]
+layout_mode = 2
+toggle_mode = true
+text = "Play"
+
+[node name="Tags" type="OptionButton" parent="Panels/ModelPanel/Margin/Model/AnimationRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="OriginRow" type="HBoxContainer" parent="Panels/ModelPanel/Margin/Model"]
+layout_mode = 2
+
+[node name="Center" type="CheckBox" parent="Panels/ModelPanel/Margin/Model/OriginRow"]
+layout_mode = 2
+button_pressed = true
+text = "Center"
+tooltip_text = "Center the exported model. Disable this to preserve the document origin."
+
+[node name="Export" type="Button" parent="Panels/ModelPanel/Margin/Model"]
+layout_mode = 2
+text = "Export glTF / GLB..."
+
+[node name="SheetPanel" type="PanelContainer" parent="Panels"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_stretch_ratio = 1.0
+
+[node name="Margin" type="MarginContainer" parent="Panels/SheetPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 8
+
+[node name="Sheet" type="VBoxContainer" parent="Panels/SheetPanel/Margin"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="Preview" type="Control" parent="Panels/SheetPanel/Margin/Sheet"]
+layout_mode = 2
+size_flags_vertical = 3
+clip_contents = true
+texture_filter = 1
+tooltip_text = "Scroll to zoom. Drag with the middle or right button to pan."
+script = ExtResource("2_sheet")
+
+[node name="ControlBar" type="HBoxContainer" parent="Panels/SheetPanel/Margin/Sheet"]
+layout_mode = 2
+
+[node name="PanToggle" type="Button" parent="Panels/SheetPanel/Margin/Sheet/ControlBar"]
+layout_mode = 2
+toggle_mode = true
+tooltip_text = "Pan mode: left-drag pans the sheet"
+icon = ExtResource("3_hand")
+icon_alignment = 1
+
+[node name="ZoomIcon" type="TextureRect" parent="Panels/SheetPanel/Margin/Sheet/ControlBar"]
+layout_mode = 2
+size_flags_vertical = 4
+tooltip_text = "Zoom"
+texture = ExtResource("4_zoom")
+
+[node name="ZoomSlider" type="HSlider" parent="Panels/SheetPanel/Margin/Sheet/ControlBar"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+min_value = 1.0
+max_value = 3200.0
+allow_greater = true
+value = 100.0
+tooltip_text = "Zoom"
+
+[node name="ZoomOne" type="Button" parent="Panels/SheetPanel/Margin/Sheet/ControlBar"]
+layout_mode = 2
+text = "1:1"
+tooltip_text = "Show one image pixel per screen pixel"
+
+[node name="CenterBtn" type="Button" parent="Panels/SheetPanel/Margin/Sheet/ControlBar"]
+layout_mode = 2
+tooltip_text = "Center and fit the sheet in the view"
+icon = ExtResource("5_center")
+icon_alignment = 1
+
+[node name="FrameRow" type="HBoxContainer" parent="Panels/SheetPanel/Margin/Sheet"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="Panels/SheetPanel/Margin/Sheet/FrameRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Tags"
+
+[node name="Frames" type="OptionButton" parent="Panels/SheetPanel/Margin/Sheet/FrameRow"]
+layout_mode = 2
+
+[node name="ViewRow" type="HBoxContainer" parent="Panels/SheetPanel/Margin/Sheet"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="Panels/SheetPanel/Margin/Sheet/ViewRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "View"
+
+[node name="View" type="OptionButton" parent="Panels/SheetPanel/Margin/Sheet/ViewRow"]
+layout_mode = 2
+
+[node name="SizeRow" type="HBoxContainer" parent="Panels/SheetPanel/Margin/Sheet"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="Panels/SheetPanel/Margin/Sheet/SizeRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Frame size"
+
+[node name="Size" type="SpinBox" parent="Panels/SheetPanel/Margin/Sheet/SizeRow"]
+layout_mode = 2
+min_value = 1.0
+max_value = 2048.0
+value = 1.0
+suffix = "px"
+tooltip_text = "The default fits the voxel bounds at one pixel per voxel."
+
+[node name="Reset" type="Button" parent="Panels/SheetPanel/Margin/Sheet/SizeRow"]
+layout_mode = 2
+tooltip_text = "Reset the frame size from the bounds and camera framing"
+icon = ExtResource("6_reset")
+icon_alignment = 1
+
+[node name="ColumnsRow" type="HBoxContainer" parent="Panels/SheetPanel/Margin/Sheet"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="Panels/SheetPanel/Margin/Sheet/ColumnsRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Columns (0 = auto)"
+
+[node name="Columns" type="SpinBox" parent="Panels/SheetPanel/Margin/Sheet/ColumnsRow"]
+layout_mode = 2
+max_value = 256.0
+
+[node name="TurntableRow" type="HBoxContainer" parent="Panels/SheetPanel/Margin/Sheet"]
+layout_mode = 2
+
+[node name="Turntable" type="CheckBox" parent="Panels/SheetPanel/Margin/Sheet/TurntableRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Turntable"
+tooltip_text = "Export each frame from evenly spaced views around the Y axis."
+
+[node name="Views" type="SpinBox" parent="Panels/SheetPanel/Margin/Sheet/TurntableRow"]
+layout_mode = 2
+min_value = 2.0
+max_value = 64.0
+value = 8.0
+suffix = "views"
+
+[node name="Metadata" type="CheckBox" parent="Panels/SheetPanel/Margin/Sheet"]
+layout_mode = 2
+button_pressed = true
+text = "JSON"
+tooltip_text = "Include Aseprite-style frame rectangles, delays, and tags."
+
+[node name="Export" type="Button" parent="Panels/SheetPanel/Margin/Sheet"]
+layout_mode = 2
+text = "Export PNG..."

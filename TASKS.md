@@ -152,6 +152,38 @@ max_active: 1
   - [x] Run the full behavior suite
 
 # Export/Import
+- [x] Combine the exporters in one Export workspace
+  - [x] Add plugin helpers to add, remove, and show tabs
+  - [x] Toggle the Export workspace with the existing export icon
+  - [x] Use two fixed panels without preview headings
+  - [x] Reuse the 3D viewport and its camera controls
+  - [x] Reuse editor playback with a tag selector and a Center checkbox
+  - [x] Keep the current model visible until its replacement frame is ready
+  - [x] Use the bottom status bar for export progress, results, and cancellation
+  - [x] Default left-drag to model orbit and sheet pan
+  - [x] Export all tags or the selected tag without changing the editor frame
+  - [x] Keep preview camera modes separate from editor camera modes
+  - [x] Finish surface work when the editor workspace is hidden
+  - [x] Verify navigation, document loading, live previews, and plugin cleanup
+  - The workspace, sprite sheet, glTF, and cleanup tests pass with a window.
+  - The targeted camera, playback, mesh, and thumbnail tests pass headless.
+  - 2026-10-06: A disabled workspace stops renderer processing unless the renderer uses `PROCESS_MODE_ALWAYS`.
+- [x] Export animation frames as a PNG sprite sheet
+  - [x] Add controls for all tags or a selected tag, view, frame size, and columns
+  - [x] Use transparent output and automatic layout defaults
+  - [x] Set the default size from projected voxel bounds at one pixel per voxel
+  - [x] Include camera zoom, projection, distance, and field of view in the calculated size
+  - [x] Reset a manual frame size to the calculated size with one button
+  - [x] Update the sheet preview when settings change
+  - [x] Add pan, a zoom slider, one-to-one zoom, and a center control
+  - [x] Preserve preset sheet previews when only the model tag changes
+  - [x] Render turntable views around the Y axis with one center and scale
+  - [x] Write optional Aseprite JSON with frame rectangles, delays, and tags
+  - [x] Verify PNG and JSON import through the Image importer
+  - [x] Keep one camera scale and center across the exported frames
+  - [x] Render frame snapshots in a separate viewport
+  - [x] Cancel rendering without writing a partial sheet
+  - [x] Verify PNG pixels, ranges, framing, controls, and cleanup with a windowed export test
 - [x] Export voxel meshes and animation clips as glTF and GLB
   - [x] Add an export button with its own icon and file dialog
   - [x] Reuse greedy meshing and build export meshes on a worker
@@ -189,9 +221,6 @@ max_active: 1
   - [x] Verify format routing, compressed textures, PNG, Aseprite sidecars, and cancellation with targeted tests
   - The five targeted image-loading tests pass.
 - [ ] Import native Aseprite files
-- [ ] Export a sprite sheet of the animation frames
-  - [ ] Build the export UI
-  - [ ] Render each frame with a transparent background
 
 # Palette
 - [x] Image palettes and startup defaults

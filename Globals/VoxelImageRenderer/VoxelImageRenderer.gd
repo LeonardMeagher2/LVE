@@ -93,14 +93,22 @@ func _frame_camera(document_bounds: AABB) -> void:
 	if not document_bounds.has_volume():
 		_thumbnail_camera.transform = parked_transform
 		return
+	frame_camera(_thumbnail_camera, document_bounds, yaw_degrees, pitch_degrees, orthographic)
+
+
+static func frame_camera(camera: Camera3D, document_bounds: AABB, yaw: float, pitch: float, use_orthographic: bool) -> void:
+	camera.projection = Camera3D.PROJECTION_ORTHOGONAL if use_orthographic else Camera3D.PROJECTION_PERSPECTIVE
+	if not document_bounds.has_volume():
+		document_bounds = AABB(Vector3.ONE * -0.5, Vector3.ONE)
 	var content_center: Vector3 = document_bounds.get_center()
 	var camera_distance: float = document_bounds.size.length() * 1.25
+	camera.far = maxf(1000.0, camera_distance * 3.0)
 	var camera_offset: Vector3 = Vector3(
-		sin(deg_to_rad(yaw_degrees)) * cos(deg_to_rad(pitch_degrees)),
-		sin(deg_to_rad(pitch_degrees)),
-		cos(deg_to_rad(yaw_degrees)) * cos(deg_to_rad(pitch_degrees))
+		sin(deg_to_rad(yaw)) * cos(deg_to_rad(pitch)),
+		sin(deg_to_rad(pitch)),
+		cos(deg_to_rad(yaw)) * cos(deg_to_rad(pitch))
 	) * camera_distance
-	_thumbnail_camera.position = content_center + camera_offset
-	_thumbnail_camera.look_at(content_center, Vector3.UP)
-	if orthographic:
-		_thumbnail_camera.size = 2.0 * camera_distance * tan(deg_to_rad(_thumbnail_camera.fov) / 2.0)
+	camera.position = content_center + camera_offset
+	camera.look_at(content_center, Vector3.FORWARD if absf(pitch) >= 89.9 else Vector3.UP)
+	if use_orthographic:
+		camera.size = 2.0 * camera_distance * tan(deg_to_rad(camera.fov) / 2.0)

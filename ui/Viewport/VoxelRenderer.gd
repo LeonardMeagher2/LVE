@@ -109,6 +109,13 @@ class MeshJob extends RefCounted:
 # Keep the scene's shared voxel material as the source of render settings.
 @export var mesh: Mesh
 @export var report_activity := true
+var source_frame: VoxelFrame:
+	set(value):
+		if value == source_frame:
+			return
+		source_frame = value
+		if is_inside_tree():
+			_rebuild()
 var _chunk_instances: Dictionary = {}
 var _displayed_surface_keys: Dictionary = {}
 var _pending_surface_keys: Dictionary = {}
@@ -119,6 +126,8 @@ var _reported_remaining := -1
 
 
 func _enter_tree() -> void:
+	# Finish surface work while a workspace is hidden.
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	_active_renderer_count += 1
 	State.frame_changed.connect(_on_frame_changed)
 	State.frames_changed.connect(_rebuild)
@@ -155,11 +164,13 @@ func _exit_tree() -> void:
 
 
 func _get_frame() -> VoxelFrame:
+	if source_frame:
+		return source_frame
 	return State.get_voxel_frame(frame) if frame >= 0 else State.get_current_voxel_frame()
 
 
 func _on_frame_changed() -> void:
-	if frame == -1:
+	if frame == -1 and source_frame == null:
 		_rebuild()
 
 

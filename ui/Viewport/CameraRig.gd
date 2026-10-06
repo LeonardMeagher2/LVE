@@ -24,6 +24,7 @@ var _pitch := deg_to_rad(45.0)
 var _dist := 24.0
 var _target := Vector3.ZERO
 var _init_dist := 24.0
+var bounds_provider: Callable
 
 func _ready() -> void:
 	configure()
@@ -31,9 +32,10 @@ func _ready() -> void:
 	set_view("default")
 
 func configure() -> void:
-	_init_dist = _frame_distance(State.document)
+	var bounds: AABB = bounds_provider.call() if bounds_provider.is_valid() else State.document.bounds()
+	_init_dist = maxf(bounds.size.length(), 16.0) * 1.25
 	_dist = _init_dist
-	_target = _frame_target(State.document)
+	_target = bounds.get_center()
 	_update()
 
 
@@ -44,6 +46,9 @@ func center_on(box: AABB) -> void:
 	zoom_changed.emit(zoom_percent())
 
 func center_active() -> void:
+	if bounds_provider.is_valid():
+		center_on(bounds_provider.call())
+		return
 	var bounds := AABB()
 	if not State.selection.is_empty():
 		for c in State.selection.all_cells():
