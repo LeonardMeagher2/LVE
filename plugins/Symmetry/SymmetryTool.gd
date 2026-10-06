@@ -82,10 +82,6 @@ func _accepts(event: InputEvent) -> bool:
 func handle_input(event: InputEvent, pos: Vector2) -> bool:
 	if not active:
 		return false
-	if event.is_action_pressed("ui_cancel") and _dragging:
-		_dragging = false
-		State.symmetry_origin = _start_origin
-		return true
 	if event is InputEventKey and event.pressed and not event.echo and not (event.ctrl_pressed or event.alt_pressed or event.meta_pressed):
 		var axis := [KEY_X, KEY_Y, KEY_Z].find(event.keycode)
 		if axis != -1:
@@ -96,11 +92,9 @@ func handle_input(event: InputEvent, pos: Vector2) -> bool:
 			var handled := _dragging
 			_dragging = false
 			return handled
-		var camera := get_viewport().get_camera_3d()
-		if camera == null or pos.distance_to(camera.unproject_position(State.symmetry_origin)) > 14.0:
-			return false
 		_start_origin = State.symmetry_origin
-		_drag_normal = _forward()
+		var ray := _ray(pos)
+		_drag_normal = VoxelPicking.view_plane(Vector3i(_start_origin), ray[0], _forward()).normal
 		_grab_point = _drag_point(pos)
 		_dragging = _grab_point != Vector3.INF
 		return _dragging

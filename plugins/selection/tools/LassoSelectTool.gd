@@ -82,7 +82,7 @@ func _build_sweep() -> VoxelSelection:
 
 
 func _update_line() -> void:
-	$SelectionPreview.show_selection(_preview_region())
+	$SelectionPreview.show_selection(State.selection_region(_preview_region()))
 
 
 func _preview_region() -> VoxelSelection:

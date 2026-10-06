@@ -213,6 +213,20 @@ static func symmetry_transform(mask: int, origin: Vector3) -> Transform3D:
 	return Transform3D(Basis.from_scale(reflection), origin - origin * reflection)
 
 
+func selection_context() -> VoxelFrame.EditContext:
+	var drawing := drawing_context()
+	var context := VoxelFrame.EditContext.new()
+	context.axes = drawing.axes
+	context.origin_twice = drawing.origin_twice
+	return context
+
+
+func selection_region(region: VoxelSelection) -> VoxelSelection:
+	var result := VoxelSelection.new()
+	result.restore(selection_context().expand(region.capture(), get_current_voxel_frame(), false, null))
+	return result
+
+
 func begin_operation(label: String, total: int = -1, foreground: bool = false, operation_owner: Node = null) -> int:
 	var operation := Operation.new()
 	operation.label = label
@@ -992,4 +1006,3 @@ func to_end() -> void:
 		current_frame = mini(tag.to, document.frames.size() - 1)
 	else:
 		current_frame = document.frames.size() - 1
-

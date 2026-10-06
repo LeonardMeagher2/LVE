@@ -80,4 +80,4 @@ func _update_rubber() -> void:
 		return
 	var drag := VoxelSelection.new()
 	drag.from_box(_corner, _box_end)
-	$SelectionPreview.show_selection(drag)
+	$SelectionPreview.show_selection(State.selection_region(drag))

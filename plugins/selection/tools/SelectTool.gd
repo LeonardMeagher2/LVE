@@ -4,6 +4,7 @@ var _settings := preload("../settings.tres")
 
 
 func _apply_mode(drag: VoxelSelection) -> VoxelSelection:
+	drag = State.selection_region(drag)
 	match _settings.mode:
 		_settings.SelectMode.ADD:
 			var out := VoxelSelection.new()

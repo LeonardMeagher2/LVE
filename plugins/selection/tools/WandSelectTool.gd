@@ -17,6 +17,10 @@ class WandJob extends FillTool.FillJob:
 		super.run()
 		if not checkpoint(0):
 			return
+		if edit_context:
+			matching_cells = edit_context.expand(matching_cells, source_frame, false, null, self)
+		if not checkpoint(0):
+			return
 		stage("Applying selection mode", matching_cells.size())
 		result = {} if mode == 0 else previous_selection.duplicate()
 		var completed := 0
@@ -67,12 +71,13 @@ func _commit(seed_cell: Vector3i) -> void:
 	_source_frame = State.get_current_voxel_frame()
 	_job = WandJob.new()
 	_job.source_frame = _source_frame.copy_frame()
+	_job.edit_context = State.selection_context()
 	_job.seed_cell = seed_cell
 	_job.target_color = _source_frame.get_color(seed_cell)
 	_job.connected = _settings.connected
 	_job.previous_selection = State.selection.capture()
 	_job.mode = _settings.mode
-	var work := _source_frame.count() + State.selection.count()
+	var work := _job.estimate_work(_source_frame.count() + State.selection.count())
 	if work <= 4096:
 		_job.run()
 		_finish_selection()

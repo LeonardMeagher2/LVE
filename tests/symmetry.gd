@@ -51,11 +51,42 @@ func _run() -> void:
 		expect(symmetry._options.get_node("OriginY").value == 1.0, "the Y origin control follows the drag")
 		expect(not State.undo_redo.has_undo(), "origin setup adds no document undo action")
 	)
+	step("When the user presses far from the origin and presses Escape", func():
+		_button(Vector3(6, 5, 0), true)
+		expect(State.symmetry_origin == Vector3(2, 1, 0), "pressing elsewhere keeps the origin in place")
+		var event := InputEventKey.new()
+		event.keycode = KEY_ESCAPE
+		event.pressed = true
+		viewport.push_input(event)
+		expect(State.symmetry_origin == Vector3(2, 1, 0), "Escape keeps the origin in place")
+		var motion := InputEventMouseMotion.new()
+		motion.button_mask = MOUSE_BUTTON_MASK_LEFT
+		motion.position = camera_rig().unproject_position(Vector3(7, 7, 0))
+		viewport.push_input(motion)
+		_button(Vector3(7, 7, 0), false)
+	)
+	step("Then dragging uses the pointer offset and continues after Escape", func():
+		expect(State.symmetry_origin == Vector3(3, 3, 0), "the origin follows the drag offset without jumping to the pointer")
+	)
+	step("When the user drags the origin in an angled top-facing view", func():
+		camera_rig().set_view("isometric")
+		State.symmetry_origin = Vector3(0, 1.5, 0)
+		_button(Vector3(5, 1.5, 5), true)
+		var motion := InputEventMouseMotion.new()
+		motion.button_mask = MOUSE_BUTTON_MASK_LEFT
+		motion.position = camera_rig().unproject_position(Vector3(6, 1.5, 7))
+		viewport.push_input(motion)
+		_button(Vector3(6, 1.5, 7), false)
+	)
+	step("Then the drag stays on the same view-facing voxel plane", func():
+		expect(State.symmetry_origin == Vector3(1, 1.5, 2), "the angled drag changes X and Z while preserving the Y offset")
+	)
 	step("When the user sets a half-voxel origin and disables two planes", func():
 		symmetry._options.get_node("OriginX").value = 0.5
 		symmetry._options.get_node("Y").button_pressed = false
 		symmetry._options.get_node("Z").button_pressed = false
 		symmetry._options.get_node("OriginY").value = 0.0
+		symmetry._options.get_node("OriginZ").value = 0.0
 		select_toolbar_item("Toolbar", "Pencil")
 		settings.shape = settings.BrushShape.CUBE
 		settings.diameter = 1

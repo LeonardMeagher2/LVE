@@ -260,6 +260,9 @@ max_active: 1
 - [x] Symmetry drawing tool
   - [x] Add independent X, Y, and Z plane controls
   - [x] Set the origin with half-voxel controls and a viewport drag
+  - [x] Start relative drags anywhere without moving the origin on the initial click
+  - [x] Lock dragging to the dominant view-facing voxel plane
+  - [x] Leave Escape without an origin action
   - [x] Default and reset the origin to (-0.5, -0.5, -0.5)
   - [x] Keep enabled planes visible when another tool is active
   - [x] Capture symmetry settings in the shared drawing edit context
@@ -268,8 +271,13 @@ max_active: 1
   - [x] Reuse brush preview geometry for mirrored cursor instances
   - [x] Verify the drawing tools, controls, worker edits, and cleanup with targeted tests
   - The thirteen targeted tests pass. The symmetry test also passes with a window.
-- [ ] Mirror a selection across an axis
-- [ ] Mirror in place and to a copy
+- [x] Apply enabled symmetry planes to selection tools
+  - [x] Include reflected regions in Box, Lasso, and Wand selection
+  - [x] Apply replace, add, and subtract modes to the complete symmetric region
+  - [x] Preserve selected empty cells, voxel contents, and undo
+  - [x] Capture symmetry settings for worker selections
+  - [x] Verify symmetric selection with targeted tests
+  - The Symmetry tool contains only plane and origin controls.
 
 
 # Primitives

@@ -30,10 +30,7 @@ class EditContext extends RefCounted:
 		var completed := 0
 		for cell: Vector3i in changes:
 			for mask in masks:
-				var destination := cell
-				for axis in 3:
-					if mask & (1 << axis):
-						destination[axis] = origin_twice[axis] - cell[axis]
+				var destination := reflect(cell, mask)
 				if _allows(destination, frame, existing_only, matching_color):
 					expanded[destination] = changes[cell]
 				completed += 1
@@ -49,6 +46,13 @@ class EditContext extends RefCounted:
 			if job and completed % 4096 == 0 and not job.checkpoint(completed):
 				return {}
 		return expanded
+
+	func reflect(cell: Vector3i, mask: int) -> Vector3i:
+		var destination := cell
+		for axis in 3:
+			if mask & (1 << axis):
+				destination[axis] = origin_twice[axis] - cell[axis]
+		return destination
 
 	func _allows(cell: Vector3i, frame: VoxelFrame, existing_only: bool, matching_color: Variant) -> bool:
 		return (selection.is_empty() or selection.has(cell)) and (not existing_only or frame.has(cell)) and (matching_color == null or frame.get_color(cell) == matching_color)
