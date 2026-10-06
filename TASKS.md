@@ -74,6 +74,12 @@ max_active: 1
 
 # Rendering and storage
 
+- [x] Simplify shared preview and geometry ownership
+  - [x] Move the shared preview script to `Globals/Rendering/VoxelPreview.gd`
+  - [x] Use one mesh builder for editor surfaces, previews, and export
+  - [x] Verify the full behavior suite
+  - The full suite passes all 98 behavior tests with Godot 4.7.2.
+
 - [x] Keep the grid readable when zoomed out
   - [x] Draw the grid on one plane with anti-aliased shader lines
   - [x] Blend from voxel cells to larger divisions as the view changes
@@ -320,6 +326,12 @@ max_active: 1
 
 
 # Animation Tags
+- [x] Extract shared animation playback
+  - [x] Move playback timing, boundaries, and repeat rules out of State
+  - [x] Use the shared controller in the editor and export preview
+  - [x] Verify playback behavior and the full suite
+  - The focused playback tests and the final suite pass. The final suite passes all 98 behavior tests.
+
 - [x] Snap playback to the selected tag bounds
   - [x] Start forward and reverse playback at the correct boundary
   - [x] Resnap when the selected tag changes during playback

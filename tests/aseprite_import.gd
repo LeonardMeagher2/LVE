@@ -53,11 +53,11 @@ func _run() -> void:
 		State.active_tag = 1
 		State.is_playing = true
 		expect(State.current_frame == 1, "reverse ping-pong starts at the final frame")
-		State._advance_playback()
+		State.playback.advance()
 		expect(State.current_frame == 0, "reverse ping-pong first moves backward")
-		State._advance_playback()
+		State.playback.advance()
 		expect(State.current_frame == 1, "reverse ping-pong returns to its starting frame")
-		State._advance_playback()
+		State.playback.advance()
 		expect(not State.is_playing, "the finite reverse ping-pong tag stops after its cycle")
 	)
 	step("When the same sprite sheet is written with array-format metadata", func():

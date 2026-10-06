@@ -68,7 +68,7 @@ class PreviewJob extends VoxelFrame.EditJob:
 		for chunk_location: Vector3i in frame.chunks:
 			if not checkpoint(completed):
 				return
-			var job := VoxelRenderer.MeshJob.new()
+			var job := VoxelMeshBuilder.new()
 			job.source_frame = frame
 			job.chunk_location = chunk_location
 			job.run()

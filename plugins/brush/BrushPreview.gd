@@ -1,4 +1,4 @@
-extends "res://plugins/selection/SelectionPreview.gd"
+extends "res://Globals/Rendering/VoxelPreview.gd"
 
 @export var apply_edit_symmetry := false
 var _mirrors: Array[MeshInstance3D] = []

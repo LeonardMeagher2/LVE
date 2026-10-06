@@ -56,32 +56,26 @@ class EraseJob extends VoxelFrame.EditJob:
 		changed_chunks = edited_frame.set_cells(changes, self)
 
 
+var playback := AnimationPlayback.new()
 var document: VoxiDocument : set=set_document
 
-var current_frame := 0:
+var current_frame: int:
+	get:
+		return playback.current_frame
 	set(value):
-		value = clampi(value, 0, document.frames.size() - 1)
-		if value == current_frame:
-			return
-		edit_context_changing.emit()
-		current_frame = value
-		frame_changed.emit()
-		
-var is_playing:bool = false: set=set_is_playing
+		playback.current_frame = value
 
-var active_tag := 0:
+var is_playing: bool:
+	get:
+		return playback.is_playing
 	set(value):
-		var new_value := clampi(value, -1, document.tags.size() - 1)
-		if new_value == active_tag:
-			return
-		active_tag = new_value
-		if is_playing:
-			_init_playback()
-		tag_changed.emit()
+		playback.is_playing = value
 
-var _play_dir := 1
-var _play_passes := 0
-var _play_elapsed := 0.0
+var active_tag: int:
+	get:
+		return playback.active_tag
+	set(value):
+		playback.active_tag = value
 
 var floor_axis:Vector3.Axis = Vector3.Axis.AXIS_Y:
 	set(value):
@@ -123,6 +117,10 @@ var _stroke_edit_context: VoxelFrame.EditContext
 
 
 func _init() -> void:
+	playback.frame_changing.connect(edit_context_changing.emit)
+	playback.frame_changed.connect(frame_changed.emit)
+	playback.is_playing_toggled.connect(is_playing_toggled.emit)
+	playback.tag_changed.connect(tag_changed.emit)
 	document = VoxiDocument.new()
 
 func _ready() -> void:
@@ -168,6 +166,7 @@ func set_document(value:VoxiDocument) -> void:
 		_apply_color(default_palette[0])
 	if document.tags.is_empty():
 		document.add_tag("Default", 0, document.frames.size() - 1)
+	playback.document = document
 	active_tag = 0
 		
 	document_changed.emit()
@@ -350,14 +349,6 @@ func _restore_chunks(edited_frame: VoxelFrame, chunk_snapshot: Dictionary, selec
 func has_cell(position: Vector3i) -> bool:
 	return document.has_cell(current_frame, position)
 
-func set_is_playing(value:bool) -> void:
-	if value == is_playing:
-		return
-	is_playing = value
-	if is_playing:
-		_init_playback()
-	is_playing_toggled.emit(is_playing)
-
 func play():
 	is_playing = true
 
@@ -380,115 +371,7 @@ func _process(delta: float) -> void:
 		var operation: Operation = _operations[operation_id]
 		if operation.owner_ref and operation.owner_ref.get_ref() == null:
 			finish_operation(operation_id)
-	if not is_playing:
-		return
-	_play_elapsed += delta
-	if _play_elapsed >= _current_delay():
-		_play_elapsed = 0.0
-		_advance_playback()
-
-
-func _init_playback() -> void:
-	_play_elapsed = 0.0
-	_play_passes = 0
-	_play_dir = 1
-	current_frame = _play_hi() if _play_mode() in [AnimationTag.LoopMode.REVERSE, AnimationTag.LoopMode.PING_PONG_REVERSE] else _play_lo()
-	if _play_mode() == AnimationTag.LoopMode.PING_PONG_REVERSE:
-		_play_dir = -1
-
-
-func _play_lo() -> int:
-	var tag := get_active_tag()
-	if tag:
-		return clampi(mini(tag.from, tag.to), 0, document.frames.size() - 1)
-	return 0
-
-
-func _play_hi() -> int:
-	var tag := get_active_tag()
-	if tag:
-		return clampi(maxi(tag.from, tag.to), 0, document.frames.size() - 1)
-	return document.frames.size() - 1
-
-
-func _play_mode() -> AnimationTag.LoopMode:
-	var tag := get_active_tag()
-	if tag:
-		return tag.loop_mode
-	return AnimationTag.LoopMode.FORWARD
-
-
-func _play_repeats() -> int:
-	var tag := get_active_tag()
-	if tag:
-		return tag.repeats
-	return 0
-
-
-func _advance_playback() -> void:
-	if current_frame < _play_lo() or current_frame > _play_hi():
-		_init_playback()
-		return
-	if _play_lo() == _play_hi():
-		return
-	match _play_mode():
-		AnimationTag.LoopMode.FORWARD:
-			if current_frame == _play_hi():
-				_play_passes += 1
-				if _finished():
-					stop()
-					return
-				current_frame = _play_lo()
-			else:
-				current_frame += 1
-		AnimationTag.LoopMode.REVERSE:
-			if current_frame == _play_lo():
-				_play_passes += 1
-				if _finished():
-					stop()
-					return
-				current_frame = _play_hi()
-			else:
-				current_frame -= 1
-		_:
-			if _play_dir == 1:
-				if current_frame == _play_hi():
-					if _play_mode() == AnimationTag.LoopMode.PING_PONG_REVERSE:
-						_play_passes += 1
-						if _finished():
-							stop()
-							return
-					current_frame = _play_hi() - 1
-					_play_dir = -1
-				else:
-					current_frame += 1
-			else:
-				if current_frame == _play_lo():
-					if _play_mode() != AnimationTag.LoopMode.PING_PONG_REVERSE:
-						_play_passes += 1
-						if _finished():
-							stop()
-							return
-					current_frame = _play_lo() + 1
-					_play_dir = 1
-				else:
-					current_frame -= 1
-					
-	if current_frame >= document.frames.size():
-		current_frame = 0
-	elif current_frame < 0:
-		current_frame = document.frames.size() - 1
-
-
-func _finished() -> bool:
-	return _play_repeats() > 0 and _play_passes >= _play_repeats()
-
-
-func _current_delay() -> float:
-	var current_voxel_frame := get_current_voxel_frame()
-	if not current_voxel_frame:
-		return 1.0
-	return maxf(current_voxel_frame.delay_ms, 1.0) / 1000.0
+	playback.update(delta)
 
 func set_color(color: Color) -> void:
 	if color == current_color:
@@ -936,7 +819,7 @@ func _apply_tag_range(index: int, from: int, to: int) -> void:
 	tag.from = from
 	tag.to = to
 	if is_playing:
-		current_frame = clampi(current_frame, _play_lo(), _play_hi())
+		current_frame = clampi(current_frame, playback.first_frame(), playback.last_frame())
 	tag_changed.emit()
 
 

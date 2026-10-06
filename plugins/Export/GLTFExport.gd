@@ -35,7 +35,7 @@ class ExportJob extends VoxelFrame.EditJob:
 			for chunk_location: Vector3i in frame.chunks:
 				if not checkpoint(completed):
 					return
-				var mesh_job := VoxelRenderer.MeshJob.new()
+				var mesh_job := VoxelMeshBuilder.new()
 				mesh_job.source_frame = frame
 				mesh_job.chunk_location = chunk_location
 				mesh_job.run()

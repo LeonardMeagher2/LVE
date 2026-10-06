@@ -110,11 +110,11 @@ func _run() -> void:
 	)
 
 	step("Then playback uses the edited values", func():
-		State._advance_playback()
+		State.playback.advance()
 		expect(State.current_frame == 1, "playback steps forward")
-		State._advance_playback()
+		State.playback.advance()
 		expect(State.current_frame == 2, "playback reaches the ping-pong end")
-		State._advance_playback()
+		State.playback.advance()
 		expect(State.current_frame == 1, "playback bounces back")
 		State.stop()
 	)

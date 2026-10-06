@@ -22,11 +22,11 @@ func _run() -> void:
 
 	step("Then playback starts at the tag boundary and wraps", func():
 		expect(State.current_frame == 1, "playback starts at the tag start")
-		State._advance_playback()
+		State.playback.advance()
 		expect(State.current_frame == 2, "playback advances inside the tag")
-		State._advance_playback()
+		State.playback.advance()
 		expect(State.current_frame == 3, "frame advances to the tag end")
-		State._advance_playback()
+		State.playback.advance()
 		expect(State.current_frame == 1, "frame wraps to the tag start")
 		State.stop()
 	)
@@ -39,11 +39,11 @@ func _run() -> void:
 
 	step("Then the frames advance in reverse and wrap", func():
 		expect(State.current_frame == 2, "playback starts at the tag end")
-		State._advance_playback()
+		State.playback.advance()
 		expect(State.current_frame == 1, "frame advances down the tag")
-		State._advance_playback()
+		State.playback.advance()
 		expect(State.current_frame == 0, "frame advances to the tag start")
-		State._advance_playback()
+		State.playback.advance()
 		expect(State.current_frame == 2, "frame wraps to the tag end")
 		State.stop()
 	)
@@ -56,13 +56,13 @@ func _run() -> void:
 
 	step("Then the frames ping-pong within the tag", func():
 		expect(State.current_frame == 0, "playback starts at the tag start")
-		State._advance_playback()
+		State.playback.advance()
 		expect(State.current_frame == 1, "frame advances forward")
-		State._advance_playback()
+		State.playback.advance()
 		expect(State.current_frame == 2, "frame reaches the tag end")
-		State._advance_playback()
+		State.playback.advance()
 		expect(State.current_frame == 1, "frame bounces back down")
-		State._advance_playback()
+		State.playback.advance()
 		expect(State.current_frame == 0, "frame returns to the tag start")
 		State.stop()
 	)
@@ -74,10 +74,10 @@ func _run() -> void:
 	)
 
 	step("Then playback stops after the repeats", func():
-		State._advance_playback()
-		State._advance_playback()
-		State._advance_playback()
-		State._advance_playback()
+		State.playback.advance()
+		State.playback.advance()
+		State.playback.advance()
+		State.playback.advance()
 		expect(not State.is_playing, "playback stops after the repeats")
 		expect(State.current_frame == 1, "playback rests on the final frame")
 	)
@@ -89,9 +89,9 @@ func _run() -> void:
 	)
 
 	step("Then playback keeps looping", func():
-		State._advance_playback()
-		State._advance_playback()
-		State._advance_playback()
+		State.playback.advance()
+		State.playback.advance()
+		State.playback.advance()
 		expect(State.is_playing, "playback keeps running")
 		State.stop()
 	)
@@ -104,7 +104,7 @@ func _run() -> void:
 		expect(State.current_frame == 0, "switching tags starts at the new tag boundary")
 		var bounded := true
 		for _tick in 8:
-			State._advance_playback()
+			State.playback.advance()
 			bounded = bounded and State.current_frame >= 0 and State.current_frame <= 1
 		expect(bounded, "playback stays inside the selected tag")
 		State.stop()
@@ -113,7 +113,7 @@ func _run() -> void:
 		var index := State.document.add_tag("Single", 2, 2)
 		State.play_tag(1)
 		State.active_tag = index
-		State._advance_playback()
+		State.playback.advance()
 	)
 	step("Then the selected single frame is displayed", func():
 		expect(State.current_frame == 2, "the single-frame tag snaps to its only frame")
@@ -126,7 +126,7 @@ func _run() -> void:
 	step("Then playback exposes only valid frames", func():
 		var valid := true
 		for _tick in 8:
-			State._advance_playback()
+			State.playback.advance()
 			valid = valid and State.get_current_voxel_frame() != null
 		expect(valid, "every displayed playback frame exists")
 		State.stop()

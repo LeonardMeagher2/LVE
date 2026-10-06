@@ -129,7 +129,7 @@ func _run() -> void:
 	step("Then preview playback advances without changing the editor frame", func():
 		expect(State.current_frame == 0, "preview playback leaves the editor frame in place")
 		expect(complete_frames, "playback keeps a complete model visible while frames change")
-		expect(exporter._model_state.get_script() == State.get_script(), "preview playback uses the editor state implementation")
+		expect(exporter._model_playback.get_script() == State.playback.get_script(), "preview and editor use the same playback controller")
 		exporter._model.get_node("AnimationRow/Play").button_pressed = false
 	)
 	step("When the user selects the Second tag", func():
@@ -160,10 +160,10 @@ func _run() -> void:
 	await get_tree().process_frame
 	step("Then reverse playback uses the editor tag boundaries and repeat rules", func():
 		exporter._model.get_node("AnimationRow/Play").button_pressed = true
-		expect(exporter._model_state.current_frame == 1, "reverse playback starts at the tag end")
-		exporter._model_state._advance_playback()
-		expect(exporter._model_state.current_frame == 0, "reverse playback moves to the tag start")
-		exporter._model_state._advance_playback()
+		expect(exporter._model_playback.current_frame == 1, "reverse playback starts at the tag end")
+		exporter._model_playback.advance()
+		expect(exporter._model_playback.current_frame == 0, "reverse playback moves to the tag start")
+		exporter._model_playback.advance()
 		expect(not exporter._model.get_node("AnimationRow/Play").button_pressed, "finite preview playback clears the Play toggle")
 		var selector: OptionButton = exporter._model.get_node("AnimationRow/Tags")
 		selector.select(0)

@@ -52,9 +52,9 @@ func _run() -> void:
 	)
 
 	step("Then playback wraps within the shorter tag", func():
-		State._advance_playback()
+		State.playback.advance()
 		expect(State.current_frame == 2, "playback reaches the new end")
-		State._advance_playback()
+		State.playback.advance()
 		expect(State.current_frame == 1, "playback wraps to the new start")
 		State.stop()
 	)

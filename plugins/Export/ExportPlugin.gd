@@ -28,7 +28,7 @@ var _model_viewport: SubViewport
 var _model_renderer: VoxelRenderer
 var _model_back_renderer: VoxelRenderer
 var _model_pending_frame := -1
-var _model_state: Node
+var _model_playback := AnimationPlayback.new()
 var _model_camera: EditorCameraRig
 var _selected_tag: AnimationTag
 var _sheet_tag: AnimationTag
@@ -51,9 +51,8 @@ func _ready() -> void:
 	_model_back_renderer.source_frame = VoxelFrame.new()
 	_model_back_renderer.visible = false
 	_model_viewport.get_node("ViewportScene").add_child(_model_back_renderer)
-	_model_state = State.get_script().new()
-	_model_state.frame_changed.connect(_show_model_frame)
-	_model_state.is_playing_toggled.connect(_on_model_playing_changed)
+	_model_playback.frame_changed.connect(_show_model_frame)
+	_model_playback.is_playing_toggled.connect(_on_model_playing_changed)
 	_model_camera = _model_viewport.get_node("ViewportScene/CameraRig")
 	_model_camera.bounds_provider = _model_bounds
 	var view_group: ButtonGroup = _model.get_node("Viewport/ControlBar/PanToggle").button_group.duplicate()
@@ -132,8 +131,6 @@ func _notification(what: int) -> void:
 			_workspace.free()
 		if is_instance_valid(_menu_item):
 			_menu_item.free()
-		if is_instance_valid(_model_state):
-			_model_state.free()
 
 
 func _on_export_toggled(pressed: bool) -> void:
@@ -168,8 +165,8 @@ func _source_changed() -> void:
 func _on_document_changed() -> void:
 	_automatic_sprite_size = true
 	_model_frames.clear()
-	_model_state.stop()
-	_model_state.document = VoxiDocument.new()
+	_model_playback.is_playing = false
+	_model_playback.document = VoxiDocument.new()
 	_model_renderer.source_frame = VoxelFrame.new()
 	_model_back_renderer.source_frame = VoxelFrame.new()
 	_model_pending_frame = -1
@@ -308,7 +305,7 @@ func _refresh_model() -> void:
 	_model_renderer.transform = _model_transform()
 	_model_back_renderer.transform = _model_renderer.transform
 	var playing: bool = _model.get_node("AnimationRow/Play").button_pressed
-	_model_state.stop()
+	_model_playback.is_playing = false
 	var preview_document := VoxiDocument.new()
 	preview_document.frames.assign(_model_frames)
 	preview_document.tags.clear()
@@ -317,11 +314,11 @@ func _refresh_model() -> void:
 		tag.from -= range.x
 		tag.to -= range.x
 		preview_document.tags.append(tag)
-	_model_state.document = preview_document
-	_model_state.active_tag = 0 if _selected_tag else -1
-	_model_state.current_frame = clampi(State.current_frame - range.x, 0, _model_frames.size() - 1)
+	_model_playback.document = preview_document
+	_model_playback.active_tag = 0 if _selected_tag else -1
+	_model_playback.current_frame = clampi(State.current_frame - range.x, 0, _model_frames.size() - 1)
 	if playing:
-		_model_state.play()
+		_model_playback.is_playing = true
 	_show_model_frame()
 	_model_camera.center_active()
 	_model_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
@@ -330,7 +327,7 @@ func _refresh_model() -> void:
 func _show_model_frame() -> void:
 	if _model_frames.is_empty() or _model_dirty:
 		return
-	_model_step = _model_state.current_frame
+	_model_step = _model_playback.current_frame
 	_model_pending_frame = _model_step
 	_model_back_renderer.source_frame = _model_frames[_model_step]
 	_refresh_export_status()
@@ -348,7 +345,7 @@ func _present_model_frame() -> void:
 
 
 func _on_play_toggled(pressed: bool) -> void:
-	_model_state.is_playing = pressed
+	_model_playback.is_playing = pressed
 
 
 func _on_model_playing_changed(playing: bool) -> void:
@@ -409,7 +406,7 @@ func _process(delta: float) -> void:
 		_refresh_model()
 	_present_model_frame()
 	if _model_pending_frame < 0:
-		_model_state._process(delta)
+		_model_playback.update(delta)
 	if not _preview_running and _preview_due_ms >= 0 and Time.get_ticks_msec() >= _preview_due_ms:
 		_update_sheet_preview()
 
