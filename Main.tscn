@@ -5,7 +5,7 @@
 [ext_resource type="PackedScene" uid="uid://be1jmiunnaoho" path="res://ui/Viewport/Viewport.tscn" id="3_lgr22"]
 [ext_resource type="PackedScene" uid="uid://8g827rqodt23" path="res://ui/AnimationTimeline/AnimationTimeline.tscn" id="4_trn2v"]
 [ext_resource type="PackedScene" uid="uid://dnkuglr7qodru" path="res://ui/StatusBar/status_bar.tscn" id="5_03owx"]
-[ext_resource type="Script" path="res://Main.gd" id="6_main"]
+[ext_resource type="Script" uid="uid://c7rjw02xdf5ji" path="res://Main.gd" id="6_main"]
 
 [node name="Main" type="Control" unique_id=692378193]
 layout_mode = 3
