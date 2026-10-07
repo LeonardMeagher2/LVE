@@ -166,6 +166,41 @@ max_active: 1
   - [x] Run the full behavior suite
 
 # Export/Import
+- [x] Use shared projected bounds for automatic sprite frame spacing
+  - [x] Project each frame's bounds through the selected camera and turntable views
+  - [x] Keep one rectangular frame size and placement offset across the sheet
+  - [x] Align the shared frame rectangle to pixel edges
+  - [x] Preserve animation offsets and empty frames
+  - [x] Use the same rectangle in previews, PNG output, and JSON metadata
+  - [x] Show frame dimensions in the tooltip and reuse suitable existing icons
+  - [x] Arrange all sprite sheets with the automatic column layout
+  - [x] Leave one transparent pixel between sprite cells in PNG output and metadata
+  - The user requested no tests.
+- [x] Add light direction controls and sprite sheet lighting settings
+  - [x] Show a draggable light ball with a viewport bar toggle
+  - [x] Use a light bulb icon and show an arrow in the light direction
+  - [x] Match the light ball and direction arrow to the light color
+  - [x] Disable voxel drawing while the light ball is visible
+  - [x] Group Light, Pan, and Rotate as separate viewport modes
+  - [x] Use trackball motion to adjust the light direction
+  - [x] Start light drags anywhere without moving the light on press
+  - [x] Keep the ball size stable during zoom and projection changes
+  - [x] Restore the light direction with Escape during a drag
+  - [x] Add light color, strength, ambient light, shading, and shadow controls
+  - [x] Use the same lighting in the 3D preview, sheet preview, and PNG export
+  - [x] Restore the default lighting with one button
+  - [x] Use color alpha for light and ambient strength
+  - [x] Put colors and Shadows in one row with a light toggle for shaded output
+  - [x] Disable color controls and Shadows when lighting is disabled
+  - [x] Use toggle buttons for icon-only boolean controls
+  - [x] Keep lighting controls visible in compact horizontal rows
+  - [x] Arrange export settings in two columns and combine model playback controls
+  - [x] Add view-locked lighting for sprite sheet previews and turntable exports
+  - [x] Save editor light direction and colors in the document
+  - [x] Save export settings, lighting, tag choices, and camera framing in the document
+  - [x] Keep export settings separate from the editor view
+  - [x] Add a Shadows view option without saving editor shading or shadow choices
+  - The user requested no tests.
 - [x] Combine the exporters in one Export workspace
   - [x] Add plugin helpers to add, remove, and show tabs
   - [x] Toggle the Export workspace with the existing export icon

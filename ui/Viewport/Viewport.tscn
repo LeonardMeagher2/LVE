@@ -14,11 +14,29 @@
 [ext_resource type="Texture2D" uid="uid://mglj26s40ce4" path="res://icons/center.svg" id="15_0hwp6"]
 [ext_resource type="Texture2D" uid="uid://bhg85sqfio31d" path="res://icons/grid.svg" id="16_x0727"]
 [ext_resource type="Shader" path="res://ui/Viewport/Grid.gdshader" id="17_grid"]
+[ext_resource type="Texture2D" path="res://icons/light.svg" id="18_light"]
+[ext_resource type="Material" path="res://plugins/cursor_material.tres" id="19_handle"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_grid"]
 resource_local_to_scene = true
 render_priority = -1
 shader = ExtResource("17_grid")
+
+[sub_resource type="SphereMesh" id="SphereMesh_light"]
+radial_segments = 24
+rings = 12
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_light_shaft"]
+top_radius = 0.07
+bottom_radius = 0.07
+height = 0.9
+radial_segments = 12
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_light_tip"]
+top_radius = 0.0
+bottom_radius = 0.2
+height = 0.6
+radial_segments = 12
 
 [node name="Viewport" type="VBoxContainer" unique_id=159467693]
 anchors_preset = 15
@@ -71,6 +89,31 @@ transform = Transform3D(0.9426414, -0.23603694, 0.23603693, 0, 0.7071067, 0.7071
 light_bake_mode = 0
 shadow_enabled = true
 
+[node name="LightHandle" type="MeshInstance3D" parent="PanelContainer/SubViewportContainer/Viewport/ViewportScene"]
+unique_name_in_owner = true
+visible = false
+cast_shadow = 0
+mesh = SubResource("SphereMesh_light")
+material_override = ExtResource("19_handle")
+
+[node name="LightDirection" type="Node3D" parent="PanelContainer/SubViewportContainer/Viewport/ViewportScene"]
+unique_name_in_owner = true
+visible = false
+
+[node name="Shaft" type="MeshInstance3D" parent="PanelContainer/SubViewportContainer/Viewport/ViewportScene/LightDirection"]
+position = Vector3(0, 0, -0.9)
+rotation_degrees = Vector3(-90, 0, 0)
+cast_shadow = 0
+mesh = SubResource("CylinderMesh_light_shaft")
+material_override = ExtResource("19_handle")
+
+[node name="Tip" type="MeshInstance3D" parent="PanelContainer/SubViewportContainer/Viewport/ViewportScene/LightDirection"]
+position = Vector3(0, 0, -1.55)
+rotation_degrees = Vector3(-90, 0, 0)
+cast_shadow = 0
+mesh = SubResource("CylinderMesh_light_tip")
+material_override = ExtResource("19_handle")
+
 [node name="Grid" type="MeshInstance3D" parent="PanelContainer/SubViewportContainer/Viewport/ViewportScene" unique_id=1484635508]
 unique_name_in_owner = true
 sorting_offset = -0.1
@@ -98,7 +141,7 @@ focus_mode = 2
 icon = ExtResource("11_jtuva")
 flat = false
 icon_alignment = 1
-item_count = 11
+item_count = 12
 popup/item_0/text = "Top"
 popup/item_0/id = 0
 popup/item_1/text = "Bottom"
@@ -118,12 +161,24 @@ popup/item_7/separator = true
 popup/item_8/text = "Orthographic"
 popup/item_8/checkable = 1
 popup/item_8/id = 8
-popup/item_9/text = "Unshaded"
-popup/item_9/checkable = 2
-popup/item_9/id = 9
-popup/item_10/text = "Wireframe"
+popup/item_9/text = "Shadows"
+popup/item_9/checkable = 1
+popup/item_9/checked = true
+popup/item_9/id = 12
+popup/item_10/text = "Unshaded"
 popup/item_10/checkable = 2
-popup/item_10/id = 10
+popup/item_10/id = 9
+popup/item_11/text = "Wireframe"
+popup/item_11/checkable = 2
+popup/item_11/id = 10
+
+[node name="LightToggle" type="Button" parent="ControlBar"]
+layout_mode = 2
+tooltip_text = "Light mode: drag anywhere to adjust the direction with trackball motion"
+toggle_mode = true
+button_group = ExtResource("12_gu70n")
+icon = ExtResource("18_light")
+icon_alignment = 1
 
 [node name="PanToggle" type="Button" parent="ControlBar" unique_id=1802399301]
 layout_mode = 2
@@ -183,3 +238,4 @@ icon_alignment = 1
 [connection signal="pressed" from="ControlBar/ZoomOne" to="PanelContainer/SubViewportContainer/Viewport/ViewportScene" method="_on_zoom_one_pressed"]
 [connection signal="pressed" from="ControlBar/CenterBtn" to="PanelContainer/SubViewportContainer/Viewport/ViewportScene" method="_on_center_btn_pressed"]
 [connection signal="toggled" from="ControlBar/GridToggle" to="PanelContainer/SubViewportContainer/Viewport/ViewportScene" method="_on_grid_toggle_toggled"]
+[connection signal="toggled" from="ControlBar/LightToggle" to="PanelContainer/SubViewportContainer/Viewport/ViewportScene" method="_on_light_toggle_toggled"]

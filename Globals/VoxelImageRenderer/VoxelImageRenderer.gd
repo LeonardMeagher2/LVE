@@ -119,3 +119,12 @@ static func frame_camera(camera: Camera3D, document_bounds: AABB, yaw: float, pi
 	camera.look_at(content_center, Vector3.FORWARD if absf(pitch) >= 89.9 else Vector3.UP)
 	if use_orthographic:
 		camera.size = 2.0 * camera_distance * tan(deg_to_rad(camera.fov) / 2.0)
+
+
+static func apply_lighting(light: DirectionalLight3D, environment: Environment, settings: Dictionary) -> void:
+	light.basis = settings.basis
+	light.light_color = settings.color
+	light.light_energy = settings.energy
+	light.shadow_enabled = settings.shadows
+	environment.ambient_light_color = settings.ambient_color
+	environment.ambient_light_energy = settings.ambient_energy

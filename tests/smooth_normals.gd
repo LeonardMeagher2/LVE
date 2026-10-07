@@ -212,7 +212,7 @@ func _expect_seam_normal(expected: Vector3, expected_chunks: int = 4) -> void:
 
 
 func _check_sheet_shading() -> void:
-	export_error = await exporter.export_sprite_sheet(SHEET_PATH, 0, 0, 64, 1, 1, false)
+	export_error = await exporter.export_sprite_sheet(SHEET_PATH, 0, 0, 64, 1, false)
 	step("Given a sprite sheet with smooth shading", func():
 		expect(export_error == OK, "the smooth sprite sheet exports")
 		var image := Image.new()
@@ -222,7 +222,7 @@ func _check_sheet_shading() -> void:
 	step("When the user switches to flat shading", func():
 		settings.id_pressed.emit(0)
 	)
-	export_error = await exporter.export_sprite_sheet(SHEET_PATH, 0, 0, 64, 1, 1, false)
+	export_error = await exporter.export_sprite_sheet(SHEET_PATH, 0, 0, 64, 1, false)
 	step("Then sprite export follows the document's shading choice", func():
 		expect(export_error == OK, "the flat sprite sheet exports")
 		var image := Image.new()

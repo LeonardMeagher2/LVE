@@ -21,7 +21,38 @@ to = 1
 
 [resource]
 script = ExtResource("2_1nepm")
-title = "Flamingo"
 palette = Array[Color]([Color(0, 0, 0, 1), Color(0.5019608, 0.5019608, 0.5019608, 1), Color(1, 1, 1, 1), Color(1, 0, 0, 1), Color(1, 0.5019608, 0, 1), Color(1, 1, 0, 1), Color(0.5019608, 1, 0, 1), Color(0, 1, 0, 1), Color(0, 1, 0.5019608, 1), Color(0, 1, 1, 1), Color(0, 0.5019608, 1, 1), Color(0, 0, 1, 1), Color(0.5019608, 0, 1, 1), Color(1, 0, 1, 1), Color(1, 0, 0.5019608, 1), Color(0.5019608, 0, 0.1254902, 1), Color(0.3764706, 0.5019608, 0, 1), Color(0, 0.5019608, 0.1254902, 1), Color(0, 0.3764706, 0.5019608, 1), Color(0.1254902, 0, 0.5019608, 1), Color(0.3764706, 0, 0.5019608, 1), Color(1, 0.7019608, 0.6, 1), Color(1, 0.9843137, 0.9372549, 1), Color(0.7490196, 1, 0.6666667, 1), Color(0.7019608, 1, 0.9254902, 1), Color(0.7019608, 0.7764706, 1, 1), Color(1, 0.7019608, 0.9254902, 1)])
 frames = Array[ExtResource("1_p7nc4")]([SubResource("Resource_bpi0g"), SubResource("Resource_p7nc4")])
 tags = Array[ExtResource("3_xdfdh")]([SubResource("Resource_1nepm")])
+smooth_normals = true
+export_settings = {
+"automatic_size": true,
+"camera": {
+"distance": 20.0,
+"fov": 45.0,
+"initial_distance": 20.0,
+"orthographic": false,
+"pitch": 0.5953981633974481,
+"target": Vector3(0, 0, 0),
+"yaw": -0.8100000000000003
+},
+"center": true,
+"frame_size": 10.0,
+"lighting": {
+"ambient_color": Color(0.54901963, 0.5686275, 0.61960787, 1),
+"ambient_energy": 1.0,
+"basis": Basis(0.9426414, -0.23603694, 0.23603693, 0, 0.7071067, 0.7071067, -0.3338066, -0.6665482, 0.6665482),
+"color": Color(1, 1, 1, 1),
+"energy": 1.0,
+"shaded": true,
+"shadows": true,
+&"view_basis": Basis(0.9426414, -0.23603694, 0.23603693, 0.23603693, 0.97132075, 0.028679192, -0.23603693, 0.028679192, 0.97132075),
+&"view_locked": false
+},
+"metadata": true,
+"model_tag": -1,
+"sheet_tag": -1,
+"turntable": true,
+"view": 2,
+"views": 8.0
+}

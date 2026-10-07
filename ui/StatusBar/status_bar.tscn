@@ -16,55 +16,56 @@ label_settings = SubResource("LabelSettings_denks")
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="Activity" type="HBoxContainer" parent="."]
+[node name="Activity" type="HBoxContainer" parent="." unique_id=1873723029]
 visible = false
 layout_mode = 2
 
-[node name="ActivityLabel" type="Label" parent="Activity"]
+[node name="ActivityLabel" type="Label" parent="Activity" unique_id=321452622]
 layout_mode = 2
 label_settings = SubResource("LabelSettings_denks")
 
-[node name="ActivityProgress" type="ProgressBar" parent="Activity"]
+[node name="ActivityProgress" type="ProgressBar" parent="Activity" unique_id=791790755]
 custom_minimum_size = Vector2(100, 12)
 layout_mode = 2
 size_flags_vertical = 4
 show_percentage = false
 
-[node name="StatusRight" type="Label" parent="." unique_id=424105243]
-layout_mode = 2
-label_settings = SubResource("LabelSettings_denks")
-
-[node name="Cancel" type="Button" parent="Activity"]
+[node name="Cancel" type="Button" parent="Activity" unique_id=1138013306]
 visible = false
 layout_mode = 2
 text = "Cancel"
 
-[node name="UIScale" type="OptionButton" parent="."]
+[node name="StatusRight" type="Label" parent="." unique_id=424105243]
+layout_mode = 2
+label_settings = SubResource("LabelSettings_denks")
+
+[node name="UIScale" type="OptionButton" parent="." unique_id=144040754]
 unique_name_in_owner = true
 layout_mode = 2
 tooltip_text = "UI scale. Auto follows the display scale."
 theme_override_colors/font_color = Color(1, 1, 1, 0.3372549)
 theme_override_colors/font_hover_color = Color(1, 1, 1, 0.7)
 flat = true
+alignment = 1
 selected = 0
 item_count = 9
-popup/item_0/text = "UI: Auto"
+popup/item_0/text = "Auto"
 popup/item_0/id = 0
-popup/item_1/text = "UI: 100%"
+popup/item_1/text = "100%"
 popup/item_1/id = 100
-popup/item_2/text = "UI: 125%"
+popup/item_2/text = "125%"
 popup/item_2/id = 125
-popup/item_3/text = "UI: 150%"
+popup/item_3/text = "150%"
 popup/item_3/id = 150
-popup/item_4/text = "UI: 175%"
+popup/item_4/text = "175%"
 popup/item_4/id = 175
-popup/item_5/text = "UI: 200%"
+popup/item_5/text = "200%"
 popup/item_5/id = 200
-popup/item_6/text = "UI: 225%"
+popup/item_6/text = "225%"
 popup/item_6/id = 225
-popup/item_7/text = "UI: 250%"
+popup/item_7/text = "250%"
 popup/item_7/id = 250
-popup/item_8/text = "UI: 300%"
+popup/item_8/text = "300%"
 popup/item_8/id = 300
 
 [connection signal="item_selected" from="UIScale" to="." method="_on_ui_scale_item_selected"]
