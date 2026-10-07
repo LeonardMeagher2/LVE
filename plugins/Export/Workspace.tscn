@@ -6,6 +6,10 @@
 [ext_resource type="Texture2D" path="res://icons/zoom.svg" id="4_zoom"]
 [ext_resource type="Texture2D" path="res://icons/center.svg" id="5_center"]
 [ext_resource type="Texture2D" path="res://icons/undo.svg" id="6_reset"]
+[ext_resource type="Texture2D" path="res://icons/camera.svg" id="7_view"]
+[ext_resource type="Texture2D" path="res://icons/light.svg" id="11_light"]
+[ext_resource type="Texture2D" path="res://icons/play.svg" id="12_play"]
+[ext_resource type="Texture2D" path="res://icons/uniform.svg" id="14_lock"]
 
 [node name="Export" type="VBoxContainer"]
 layout_mode = 2
@@ -43,24 +47,26 @@ layout_mode = 2
 [node name="Play" type="Button" parent="Panels/ModelPanel/Margin/Model/AnimationRow"]
 layout_mode = 2
 toggle_mode = true
-text = "Play"
+tooltip_text = "Play or pause the model preview"
+icon = ExtResource("12_play")
+icon_alignment = 1
 
 [node name="Tags" type="OptionButton" parent="Panels/ModelPanel/Margin/Model/AnimationRow"]
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="OriginRow" type="HBoxContainer" parent="Panels/ModelPanel/Margin/Model"]
+[node name="Center" type="Button" parent="Panels/ModelPanel/Margin/Model/AnimationRow"]
 layout_mode = 2
-
-[node name="Center" type="CheckBox" parent="Panels/ModelPanel/Margin/Model/OriginRow"]
-layout_mode = 2
+toggle_mode = true
 button_pressed = true
-text = "Center"
+icon = ExtResource("5_center")
+icon_alignment = 1
 tooltip_text = "Center the exported model. Disable this to preserve the document origin."
 
 [node name="Export" type="Button" parent="Panels/ModelPanel/Margin/Model"]
 layout_mode = 2
-text = "Export glTF / GLB..."
+text = "glTF / GLB"
+tooltip_text = "Export the model and animation as glTF or GLB"
 
 [node name="SheetPanel" type="PanelContainer" parent="Panels"]
 layout_mode = 2
@@ -123,84 +129,130 @@ tooltip_text = "Center and fit the sheet in the view"
 icon = ExtResource("5_center")
 icon_alignment = 1
 
-[node name="FrameRow" type="HBoxContainer" parent="Panels/SheetPanel/Margin/Sheet"]
+[node name="Settings" type="GridContainer" parent="Panels/SheetPanel/Margin/Sheet"]
 layout_mode = 2
+columns = 2
+theme_override_constants/h_separation = 12
 
-[node name="Label" type="Label" parent="Panels/SheetPanel/Margin/Sheet/FrameRow"]
+[node name="FrameRow" type="HBoxContainer" parent="Panels/SheetPanel/Margin/Sheet/Settings"]
 layout_mode = 2
 size_flags_horizontal = 3
-text = "Tags"
 
-[node name="Frames" type="OptionButton" parent="Panels/SheetPanel/Margin/Sheet/FrameRow"]
+[node name="Label" type="TextureRect" parent="Panels/SheetPanel/Margin/Sheet/Settings/FrameRow"]
 layout_mode = 2
+size_flags_vertical = 4
+texture = ExtResource("12_play")
+tooltip_text = "Animation tags to export"
 
-[node name="ViewRow" type="HBoxContainer" parent="Panels/SheetPanel/Margin/Sheet"]
-layout_mode = 2
-
-[node name="Label" type="Label" parent="Panels/SheetPanel/Margin/Sheet/ViewRow"]
-layout_mode = 2
-size_flags_horizontal = 3
-text = "View"
-
-[node name="View" type="OptionButton" parent="Panels/SheetPanel/Margin/Sheet/ViewRow"]
-layout_mode = 2
-
-[node name="SizeRow" type="HBoxContainer" parent="Panels/SheetPanel/Margin/Sheet"]
-layout_mode = 2
-
-[node name="Label" type="Label" parent="Panels/SheetPanel/Margin/Sheet/SizeRow"]
+[node name="Frames" type="OptionButton" parent="Panels/SheetPanel/Margin/Sheet/Settings/FrameRow"]
 layout_mode = 2
 size_flags_horizontal = 3
-text = "Frame size"
 
-[node name="Size" type="SpinBox" parent="Panels/SheetPanel/Margin/Sheet/SizeRow"]
+[node name="ViewRow" type="HBoxContainer" parent="Panels/SheetPanel/Margin/Sheet/Settings"]
 layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="Label" type="TextureRect" parent="Panels/SheetPanel/Margin/Sheet/Settings/ViewRow"]
+layout_mode = 2
+size_flags_vertical = 4
+texture = ExtResource("7_view")
+tooltip_text = "Sprite view"
+
+[node name="View" type="OptionButton" parent="Panels/SheetPanel/Margin/Sheet/Settings/ViewRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="SizeRow" type="HBoxContainer" parent="Panels/SheetPanel/Margin/Sheet/Settings"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="Label" type="Label" parent="Panels/SheetPanel/Margin/Sheet/Settings/SizeRow"]
+layout_mode = 2
+text = "Size"
+
+[node name="Size" type="SpinBox" parent="Panels/SheetPanel/Margin/Sheet/Settings/SizeRow"]
+layout_mode = 2
+size_flags_horizontal = 3
 min_value = 1.0
 max_value = 2048.0
 value = 1.0
 suffix = "px"
-tooltip_text = "The default fits the voxel bounds at one pixel per voxel."
+tooltip_text = "Auto uses shared projected bounds. Changing the value sets a square frame size."
 
-[node name="Reset" type="Button" parent="Panels/SheetPanel/Margin/Sheet/SizeRow"]
+[node name="Reset" type="Button" parent="Panels/SheetPanel/Margin/Sheet/Settings/SizeRow"]
 layout_mode = 2
-tooltip_text = "Reset the frame size from the bounds and camera framing"
+tooltip_text = "Use the shared projected bounds for automatic frame spacing"
 icon = ExtResource("6_reset")
 icon_alignment = 1
 
-[node name="ColumnsRow" type="HBoxContainer" parent="Panels/SheetPanel/Margin/Sheet"]
-layout_mode = 2
-
-[node name="Label" type="Label" parent="Panels/SheetPanel/Margin/Sheet/ColumnsRow"]
+[node name="TurntableRow" type="HBoxContainer" parent="Panels/SheetPanel/Margin/Sheet/Settings"]
 layout_mode = 2
 size_flags_horizontal = 3
-text = "Columns (0 = auto)"
 
-[node name="Columns" type="SpinBox" parent="Panels/SheetPanel/Margin/Sheet/ColumnsRow"]
-layout_mode = 2
-max_value = 256.0
-
-[node name="TurntableRow" type="HBoxContainer" parent="Panels/SheetPanel/Margin/Sheet"]
-layout_mode = 2
-
-[node name="Turntable" type="CheckBox" parent="Panels/SheetPanel/Margin/Sheet/TurntableRow"]
+[node name="Turntable" type="CheckBox" parent="Panels/SheetPanel/Margin/Sheet/Settings/TurntableRow"]
 layout_mode = 2
 size_flags_horizontal = 3
+button_pressed = true
 text = "Turntable"
 tooltip_text = "Export each frame from evenly spaced views around the Y axis."
 
-[node name="Views" type="SpinBox" parent="Panels/SheetPanel/Margin/Sheet/TurntableRow"]
+[node name="Views" type="SpinBox" parent="Panels/SheetPanel/Margin/Sheet/Settings/TurntableRow"]
 layout_mode = 2
 min_value = 2.0
 max_value = 64.0
 value = 8.0
 suffix = "views"
 
-[node name="Metadata" type="CheckBox" parent="Panels/SheetPanel/Margin/Sheet"]
+[node name="Metadata" type="CheckBox" parent="Panels/SheetPanel/Margin/Sheet/Settings/TurntableRow"]
 layout_mode = 2
 button_pressed = true
 text = "JSON"
 tooltip_text = "Include Aseprite-style frame rectangles, delays, and tags."
 
+[node name="LightingOptions" type="HBoxContainer" parent="Panels/SheetPanel/Margin/Sheet"]
+layout_mode = 2
+
+[node name="Enabled" type="Button" parent="Panels/SheetPanel/Margin/Sheet/LightingOptions"]
+layout_mode = 2
+toggle_mode = true
+button_pressed = true
+icon = ExtResource("11_light")
+icon_alignment = 1
+tooltip_text = "Enable lighting. Disable this to export without shading."
+
+[node name="LightColor" type="ColorPickerButton" parent="Panels/SheetPanel/Margin/Sheet/LightingOptions"]
+custom_minimum_size = Vector2(32, 24)
+layout_mode = 2
+size_flags_horizontal = 3
+color = Color(1, 1, 1, 1)
+tooltip_text = "Light color. Alpha controls the strength."
+
+[node name="AmbientColor" type="ColorPickerButton" parent="Panels/SheetPanel/Margin/Sheet/LightingOptions"]
+custom_minimum_size = Vector2(32, 24)
+layout_mode = 2
+size_flags_horizontal = 3
+color = Color(0.54901963, 0.5686275, 0.61960787, 1)
+tooltip_text = "Ambient color. Alpha controls the strength."
+
+[node name="Shadows" type="CheckBox" parent="Panels/SheetPanel/Margin/Sheet/LightingOptions"]
+layout_mode = 2
+button_pressed = true
+text = "Shadows"
+
+[node name="LockView" type="Button" parent="Panels/SheetPanel/Margin/Sheet/LightingOptions"]
+layout_mode = 2
+toggle_mode = true
+icon = ExtResource("14_lock")
+icon_alignment = 1
+tooltip_text = "Keep the light direction fixed relative to the view during rotation and turntable rendering."
+
+[node name="Reset" type="Button" parent="Panels/SheetPanel/Margin/Sheet/LightingOptions"]
+layout_mode = 2
+tooltip_text = "Restore the default lighting"
+icon = ExtResource("6_reset")
+icon_alignment = 1
+
 [node name="Export" type="Button" parent="Panels/SheetPanel/Margin/Sheet"]
 layout_mode = 2
-text = "Export PNG..."
+text = "PNG"
+tooltip_text = "Export the sprite sheet as a PNG image"

@@ -1,12 +1,21 @@
 class_name VoxiDocument
 extends Resource
 
-@export var title: String = "Untitled"
+signal file_path_changed()
+
 @export var palette: Array[Color] = []
 @export var frames: Array[VoxelFrame] = []
 @export var tags: Array[AnimationTag] = []
 @export var smooth_normals := false
+@export var lighting_settings: Dictionary = {}
+@export var export_settings: Dictionary = {}
 
+var file_path := "":
+	set(value):
+		if value == file_path:
+			return
+		file_path = value
+		file_path_changed.emit()
 var _bounds: AABB
 var _bounds_dirty := true
 
@@ -14,6 +23,16 @@ var _bounds_dirty := true
 func _init() -> void:
 	if frames.is_empty():
 		frames.append(VoxelFrame.new())
+
+
+func get_file_name() -> String:
+	var path := file_path if not file_path.is_empty() else resource_path
+	return path.get_file() if not path.is_empty() else "Untitled"
+
+
+func _set(property: StringName, _value: Variant) -> bool:
+	# Accept and discard the title field in older document files.
+	return property == &"title"
 
 
 func add_frame(from_frame: int = -1) -> VoxelFrame:

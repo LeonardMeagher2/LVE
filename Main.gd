@@ -3,6 +3,31 @@ extends Control
 const UI_SETTINGS_PATH := "user://interface.cfg"
 var _ui_scale := 0.0
 var _scale_check_elapsed := 0.0
+var _title_document: VoxiDocument
+
+
+func _enter_tree() -> void:
+	State.document_changed.connect(_on_document_changed)
+	_on_document_changed()
+
+
+func _exit_tree() -> void:
+	State.document_changed.disconnect(_on_document_changed)
+	if _title_document:
+		_title_document.file_path_changed.disconnect(_update_window_title)
+	_title_document = null
+
+
+func _on_document_changed() -> void:
+	if _title_document:
+		_title_document.file_path_changed.disconnect(_update_window_title)
+	_title_document = State.document
+	_title_document.file_path_changed.connect(_update_window_title)
+	_update_window_title()
+
+
+func _update_window_title() -> void:
+	get_window().title = "%s - Voxi" % State.document.get_file_name()
 
 
 func _ready() -> void:

@@ -2,6 +2,7 @@ extends "res://tests/test.gd"
 
 var exporter: Node
 var controls: Node
+var settings: Node
 var sheet_path := ""
 var tag_path := ""
 var cancel_path := ""
@@ -23,7 +24,9 @@ func _run() -> void:
 	step("Given a red frame, a blue frame, and an empty frame", func():
 		exporter = plugin("ExportPlugin")
 		controls = exporter._controls
+		settings = exporter._sheet_settings
 		State.document = VoxiDocument.new()
+		settings.get_node("TurntableRow/Turntable").button_pressed = false
 		State.get_current_voxel_frame().set_cell(Vector3i(-1, 0, 0), Color.RED)
 		State.document.add_frame()
 		State.get_voxel_frame(1).set_cell(Vector3i(1, 0, 0), Color.BLUE)
@@ -42,9 +45,8 @@ func _run() -> void:
 		renderer_count = VoxelRenderer._active_renderer_count
 	)
 	step("Then the controls use simple defaults and describe the output size", func():
-		expect(controls.get_node("SizeRow/Size").value == 3, "the default sprite size fits the projected voxel bounds")
-		expect(controls.get_node("ColumnsRow/Columns").value == 0, "the default layout arranges columns automatically")
-		var frames: OptionButton = controls.get_node("FrameRow/Frames")
+		expect(settings.get_node("SizeRow/Size").value == 3, "the default sprite size fits the projected voxel bounds")
+		var frames: OptionButton = settings.get_node("FrameRow/Frames")
 		frames.select(2)
 		frames.item_selected.emit(2)
 		expect(exporter._selected_frames() == Vector2i(1, 1), "the selected Blue tag contains only its frame")
@@ -61,26 +63,26 @@ func _run() -> void:
 	await RenderingServer.frame_post_draw
 	step("Then the export controls are visible before choosing a file", func():
 		expect(exporter._workspace.visible, "the export button opens the sprite sheet workspace")
-		expect(controls.get_node("Export").text == "Export PNG...", "the settings provide the PNG export action")
-		expect(main.get_node("%StatusBar").get_node("StatusLeft").text.contains("6 × 6"), "the bottom status bar describes the sheet dimensions")
+		expect(controls.get_node("Export").text == "PNG", "the settings provide the PNG export action")
+		expect(main.get_node("%StatusBar").get_node("StatusLeft").text.contains("7 × 7"), "the bottom status bar describes the sheet dimensions")
 		exporter.show_editor_tab()
 	)
 	step("When the user chooses a nine-unit orthographic camera view", func():
 		exporter._model_camera.set_view("front")
 		exporter._model_camera.is_orthogonal = true
 		exporter._model_camera.size = 9.0
-		controls.get_node("ViewRow/View").select(0)
-		controls.get_node("ViewRow/View").item_selected.emit(0)
+		settings.get_node("ViewRow/View").select(0)
+		settings.get_node("ViewRow/View").item_selected.emit(0)
 	)
 	step("Then the default sprite size includes the camera framing", func():
-		expect(controls.get_node("SizeRow/Size").value == 9, "the camera's nine-unit span sets a nine-pixel sprite")
+		expect(settings.get_node("SizeRow/Size").value == 9, "the camera's nine-unit span sets a nine-pixel sprite")
 	)
-	var camera_error: Error = await exporter.export_sprite_sheet(camera_size_path, 0, 2, -1, 3, 0, false)
+	var camera_error: Error = await exporter.export_sprite_sheet(camera_size_path, 0, 2, -1, 0, false)
 	step("Then the camera-framed PNG retains one pixel per voxel", func():
 		var image := Image.new()
 		image.load(camera_size_path)
-		expect(camera_error == OK and image.get_size() == Vector2i(27, 9), "the sheet uses the inherited camera's nine-pixel tiles")
-		expect(_visible_pixels(image, Rect2i(0, 0, 9, 9)) == 1, "camera framing preserves one visible pixel for one voxel")
+		expect(camera_error == OK and image.get_size() == Vector2i(7, 3), "the layout separates the projected cells with one pixel")
+		expect(_visible_pixels(image, Rect2i(0, 0, 3, 1)) == 1, "camera framing preserves one visible pixel for one voxel")
 	)
 	step("When the user chooses a perspective camera ten units from the bounds center", func():
 		exporter._model_camera.is_orthogonal = false
@@ -89,34 +91,35 @@ func _run() -> void:
 		exporter._model_camera.view_changed.emit()
 	)
 	step("Then the default sprite size includes the field of view and camera distance", func():
-		expect(controls.get_node("SizeRow/Size").value == 20, "the ninety-degree view spans twenty units at the bounds center")
-		controls.get_node("ViewRow/View").select(1)
-		controls.get_node("ViewRow/View").item_selected.emit(1)
+		expect(settings.get_node("SizeRow/Size").value == 20, "the ninety-degree view spans twenty units at the bounds center")
+		settings.get_node("ViewRow/View").select(1)
+		settings.get_node("ViewRow/View").item_selected.emit(1)
 	)
-	var error: Error = await exporter.export_sprite_sheet(sheet_path, 0, 2, 32, 2, 2)
+	var error: Error = await exporter.export_sprite_sheet(sheet_path, 0, 2, 32, 2)
 	step("Then the PNG contains all frames in row order with transparent unused space", func():
 		expect(error == OK, "the sprite sheet export completes")
 		var image := Image.new()
 		expect(image.load(sheet_path) == OK, "the sprite sheet is a readable PNG")
-		expect(image.get_size() == Vector2i(64, 64), "the sheet contains four thirty-two-pixel tiles")
+		expect(image.get_size() == Vector2i(65, 65), "the sheet contains four tiles with one-pixel gaps")
 		expect(_visible_pixels(image, Rect2i(0, 0, 32, 32)) > 0, "the first tile contains the red frame")
-		expect(_visible_pixels(image, Rect2i(32, 0, 32, 32)) > 0, "the second tile contains the blue frame")
-		expect(_visible_pixels(image, Rect2i(0, 32, 64, 32)) == 0, "the empty frame and unused tile remain transparent")
+		expect(_visible_pixels(image, Rect2i(33, 0, 32, 32)) > 0, "the second tile contains the blue frame")
+		expect(_visible_pixels(image, Rect2i(0, 33, 65, 32)) == 0, "the empty frame and unused tile remain transparent")
+		expect(_visible_pixels(image, Rect2i(32, 0, 1, 65)) == 0 and _visible_pixels(image, Rect2i(0, 32, 65, 1)) == 0, "the row and column gaps stay transparent")
 		var red := _color_pixel(image, Rect2i(0, 0, 32, 32))
-		var blue := _color_pixel(image, Rect2i(32, 0, 32, 32))
+		var blue := _color_pixel(image, Rect2i(33, 0, 32, 32))
 		expect(red.r > red.b and blue.b > blue.r, "the frame tiles retain their distinct voxel colors")
-		expect(_center_x(image, Rect2i(0, 0, 32, 32)) < _center_x(image, Rect2i(32, 0, 32, 32)), "shared framing preserves the left and right frame positions")
+		expect(_center_x(image, Rect2i(0, 0, 32, 32)) < _center_x(image, Rect2i(33, 0, 32, 32)), "shared framing preserves the left and right frame positions")
 		expect(State.document == original_document and State.current_frame == 0, "export preserves the active document and frame")
 		expect(VoxelRenderer._active_renderer_count == renderer_count, "export releases its temporary renderer")
 		expect(not State.edit_busy(), "export releases editing")
 		var data: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(sheet_path.get_basename() + ".json"))
 		expect(data.frames.size() == 3, "the JSON includes the empty frame without the unused tile")
 		expect(data.frames[1].duration == 250, "the JSON preserves the blue frame delay")
-		expect(data.frames[1].frame.x == 32 and data.frames[2].frame.y == 32, "the JSON rectangles follow PNG row order")
-		expect(data.meta.image == sheet_path.get_file() and data.meta.size.w == 64, "the JSON identifies the PNG and its dimensions")
+		expect(data.frames[1].frame.x == 33 and data.frames[2].frame.y == 33, "the JSON rectangles include the sprite gaps")
+		expect(data.meta.image == sheet_path.get_file() and data.meta.size.w == 65, "the JSON identifies the PNG and its dimensions")
 		expect(not data.frames[0].trimmed and not data.frames[0].rotated, "the JSON describes untrimmed and unrotated frames")
 	)
-	error = await exporter.export_sprite_sheet(tag_path, 1, 1, 32, 0, 6)
+	error = await exporter.export_sprite_sheet(tag_path, 1, 1, 32, 6)
 	step("Then a single-frame range exports from another view", func():
 		expect(error == OK, "the top-view frame export completes")
 		var image := Image.new()
@@ -147,25 +150,25 @@ func _run() -> void:
 		expect(VoxelRenderer._active_renderer_count == renderer_count, "cancellation releases its temporary renderer")
 		exporter.show_editor_tab()
 	)
-	error = await exporter.export_sprite_sheet(voxel_size_path, 0, 2, -1, 3, 2, false)
+	error = await exporter.export_sprite_sheet(voxel_size_path, 0, 2, -1, 2, false)
 	step("Then the default front view uses one pixel per voxel", func():
 		var image := Image.new()
 		image.load(voxel_size_path)
-		expect(error == OK and image.get_size() == Vector2i(9, 3), "voxel bounds set the default three-pixel tiles")
-		expect(_visible_pixels(image, Rect2i(0, 0, 3, 3)) == 1, "one voxel occupies one visible pixel in the default front view")
+		expect(error == OK and image.get_size() == Vector2i(7, 3), "the front-view layout separates the shared projected bounds")
+		expect(_visible_pixels(image, Rect2i(0, 0, 3, 1)) == 1, "one voxel occupies one visible pixel in the default front view")
 	)
-	error = await exporter.export_sprite_sheet(turntable_path, 0, 0, 16, 4, 2, true, 8)
+	error = await exporter.export_sprite_sheet(turntable_path, 0, 0, 16, 2, true, 8)
 	step("Then a turntable exports eight distinct view positions", func():
 		var image := Image.new()
 		image.load(turntable_path)
-		expect(error == OK and image.get_size() == Vector2i(64, 32), "the turntable contains eight sixteen-pixel sprites")
+		expect(error == OK and image.get_size() == Vector2i(50, 50), "the turntable arranges its eight sprites with one-pixel gaps")
 		var all_views_visible := true
 		for index in 8:
-			all_views_visible = all_views_visible and _visible_pixels(image, Rect2i(Vector2i(index % 4, index / 4) * 16, Vector2i.ONE * 16)) > 0
+			all_views_visible = all_views_visible and _visible_pixels(image, Rect2i(Vector2i(index % 3, index / 3) * 17, Vector2i.ONE * 16)) > 0
 		expect(all_views_visible, "each turntable view contains the model")
-		expect(image.get_region(Rect2i(0, 0, 16, 16)).get_data() != image.get_region(Rect2i(16, 0, 16, 16)).get_data(), "the first two turntable sprites use different camera angles")
+		expect(image.get_region(Rect2i(0, 0, 16, 16)).get_data() != image.get_region(Rect2i(17, 0, 16, 16)).get_data(), "the first two turntable sprites use different camera angles")
 		var data: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(turntable_path.get_basename() + ".json"))
-		expect(data.frames.size() == 8 and data.frames[4].frame.y == 16, "turntable metadata identifies all view tiles")
+		expect(data.frames.size() == 8 and data.frames[4].frame.y == 17, "turntable metadata identifies all view tiles and gaps")
 		expect(data.frames[0].filename != data.frames[1].filename, "each turntable view has a distinct frame name")
 	)
 	var import_error: Error = await plugin("ImageImportPlugin").import_image(sheet_path)
@@ -185,7 +188,7 @@ func _run() -> void:
 
 
 func _start_cancelled_export() -> void:
-	cancelled_result = await exporter.export_sprite_sheet(cancel_path, 0, 2, 64, 0, 1)
+	cancelled_result = await exporter.export_sprite_sheet(cancel_path, 0, 2, 64, 1)
 	cancelled_done = true
 
 

@@ -82,7 +82,7 @@ func _run() -> void:
 		expect(not State.undo_redo.has_undo(), "export preview input adds no editor undo action")
 	)
 	step("When the user preserves the document origin", func():
-		exporter._model.get_node("OriginRow/Center").button_pressed = false
+		exporter._model.get_node("AnimationRow/Center").button_pressed = false
 	)
 	await get_tree().process_frame
 	await get_tree().process_frame
@@ -100,7 +100,7 @@ func _run() -> void:
 		expect(state.get_animations().size() == State.document.tags.size(), "the export retains the named animation clips")
 	)
 	step("When the user centers the exported content", func():
-		exporter._model.get_node("OriginRow/Center").button_pressed = true
+		exporter._model.get_node("AnimationRow/Center").button_pressed = true
 	)
 	await get_tree().process_frame
 	error = await exporter.export_gltf(MODEL_PATH)
@@ -181,7 +181,7 @@ func _run() -> void:
 		expect(State.document == original_document and State.current_frame == 0, "preview preserves the editor document and frame")
 		expect(State.selection.capture() == original_selection, "preview preserves the editor selection")
 		expect(camera_rig().transform == original_camera, "preview controls preserve the editor camera")
-		expect(exporter._model.get_node("OriginRow/Center").button_pressed, "export settings survive workspace switching")
+		expect(exporter._model.get_node("AnimationRow/Center").button_pressed, "export settings survive workspace switching")
 		expect(not exporter._menu_item.get_node("ExportBtn").button_pressed, "the export toggle clears when the editor is active")
 	)
 	step("When the user loads a model while Export is active", func():
@@ -213,15 +213,16 @@ func _run() -> void:
 
 func _preview_behavior() -> void:
 	step("When the user changes the sheet layout several times", func():
-		exporter._controls.get_node("SizeRow/Size").value = 32
-		exporter._controls.get_node("ColumnsRow/Columns").value = 2
-		exporter._controls.get_node("ColumnsRow/Columns").value = 1
-		exporter._controls.get_node("ViewRow/View").select(2)
-		exporter._controls.get_node("ViewRow/View").item_selected.emit(2)
+		exporter._sheet_settings.get_node("TurntableRow/Turntable").button_pressed = false
+		exporter._sheet_settings.get_node("SizeRow/Size").value = 32
+		exporter._sheet_settings.get_node("SizeRow/Size").value = 64
+		exporter._sheet_settings.get_node("SizeRow/Size").value = 32
+		exporter._sheet_settings.get_node("ViewRow/View").select(2)
+		exporter._sheet_settings.get_node("ViewRow/View").item_selected.emit(2)
 	)
 	await _wait_preview()
 	step("Then the live preview uses the latest settings", func():
-		expect(exporter._preview_image != null and exporter._preview_image.get_size() == Vector2i(32, 64), "the live preview uses one column of thirty-two-pixel sprites")
+		expect(exporter._preview_image != null and exporter._preview_image.get_size() == Vector2i(65, 32), "the live preview separates the two sprites with one pixel")
 	)
 	step("When the user changes only the model tag", func():
 		saved_revision = exporter._preview_revision
@@ -240,10 +241,10 @@ func _preview_behavior() -> void:
 	)
 	await get_tree().process_frame
 	step("When the user resets a manually changed sprite size", func():
-		exporter._controls.get_node("SizeRow/Size").value = 99
-		exporter._controls.get_node("SizeRow/Reset").pressed.emit()
-		expect(exporter._controls.get_node("SizeRow/Size").value == 2, "reset calculates the front-view size from the voxel bounds")
-		exporter._controls.get_node("SizeRow/Size").value = 32
+		exporter._sheet_settings.get_node("SizeRow/Size").value = 99
+		exporter._sheet_settings.get_node("SizeRow/Reset").pressed.emit()
+		expect(exporter._sheet_settings.get_node("SizeRow/Size").value == 2, "reset calculates the front-view size from the voxel bounds")
+		exporter._sheet_settings.get_node("SizeRow/Size").value = 32
 	)
 	await _wait_preview()
 	step("When the user sets the sheet zoom to one-to-one and pans", func():
@@ -260,7 +261,7 @@ func _preview_behavior() -> void:
 		exporter._controls.get_node("ControlBar/CenterBtn").pressed.emit()
 		expect(exporter._controls.get_node("Preview")._pan == Vector2.ZERO, "the center button restores the sheet position")
 	)
-	error = await exporter.export_sprite_sheet(SHEET_PATH, 0, 1, 32, 1, 2, false)
+	error = await exporter.export_sprite_sheet(SHEET_PATH, 0, 1, 32, 2, false)
 	step("Then the saved PNG matches the sheet preview", func():
 		var image := Image.new()
 		image.load(SHEET_PATH)
@@ -276,8 +277,8 @@ func _preview_behavior() -> void:
 		expect(exporter._model_camera._yaw != yaw, "left-drag orbits the model preview by default")
 		main.get_node("%Viewport").get_node("ControlBar/PanToggle").button_pressed = true
 		exporter._model.get_node("Viewport/ControlBar/RotateToggle").button_pressed = true
-		exporter._controls.get_node("ViewRow/View").select(0)
-		exporter._controls.get_node("ViewRow/View").item_selected.emit(0)
+		exporter._sheet_settings.get_node("ViewRow/View").select(0)
+		exporter._sheet_settings.get_node("ViewRow/View").item_selected.emit(0)
 		exporter._model_camera.set_view("top")
 		exporter._model_camera.zoom(0.5)
 	)
@@ -288,17 +289,17 @@ func _preview_behavior() -> void:
 		expect(main.get_node("%Viewport").get_node("ControlBar/PanToggle").button_pressed, "preview camera modes preserve the editor camera mode")
 	)
 	step("When the user changes turntable settings during a preview render", func():
-		exporter._controls.get_node("TurntableRow/Views").value = 4
-		exporter._controls.get_node("TurntableRow/Turntable").button_pressed = true
+		exporter._sheet_settings.get_node("TurntableRow/Views").value = 4
+		exporter._sheet_settings.get_node("TurntableRow/Turntable").button_pressed = true
 	)
 	while not exporter._preview_running:
 		await get_tree().process_frame
 	step("When the user changes the turntable to eight views", func():
-		exporter._controls.get_node("TurntableRow/Views").value = 8
+		exporter._sheet_settings.get_node("TurntableRow/Views").value = 8
 	)
 	await _wait_preview()
 	step("Then the live turntable uses only the latest view count", func():
-		expect(exporter._preview_image.get_size() == Vector2i(32, 512), "the preview contains two frames from each of eight views")
+		expect(exporter._preview_image.get_size() == Vector2i(131, 131), "the preview arranges every view with one-pixel gaps")
 		expect(exporter._preview_viewport == null, "the completed preview releases its temporary viewport")
 	)
 	await RenderingServer.frame_post_draw

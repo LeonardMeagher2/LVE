@@ -41,7 +41,7 @@ func _run() -> void:
 	step("Then Open replaces the document directly", func():
 		expect(State.document != previous_document, "the PNG is a new document")
 		expect(State.document.frames.size() == 1, "the PNG opens as one frame")
-		expect(State.document.title == image_path.get_file().get_basename(), "the document uses the image filename")
+		expect(State.document.get_file_name() == image_path.get_file(), "the document uses the image filename")
 		expect(not clipboard._paste_tool._active, "opening the PNG creates no paste preview")
 		expect(not State.edit_busy(), "opening the PNG completes without a placement step")
 		expect(State.selection.is_empty(), "the new document has no old selection")

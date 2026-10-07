@@ -28,12 +28,15 @@ func _on_model_setting_selected(id: int) -> void:
 func save_doc(path:String) -> void:
 	if State.edit_busy():
 		return
-	current_save_path = path
 	var err := ResourceSaver.save(State.document, path)
 	if err != OK:
 		push_error("Voxi: save failed: %s" % error_string(err))
+		return
+	current_save_path = path
+	State.document.file_path = path
 
 func _on_new_btn_pressed() -> void:
+	current_save_path = ""
 	State.document = null
 
 func _on_open_btn_pressed() -> void:
@@ -56,6 +59,7 @@ func _on_file_opened(path: String) -> void:
 		return
 	var res: Resource = ResourceLoader.load(path)
 	if res is VoxiDocument:
+		res.file_path = path
 		State.document = res as VoxiDocument
 		current_save_path = path
 	else:
@@ -70,6 +74,7 @@ func _on_save_btn_pressed() -> void:
 
 func _on_save_as_btn_pressed() -> void:
 	%FileDialog.file_mode = FileDialog.FILE_MODE_SAVE_FILE
+	%FileDialog.current_file = State.document.get_file_name().get_basename() + ".tres"
 	%FileDialog.clear_filters()
 	%FileDialog.add_filter("*.tres ; Voxel animation")
 	%FileDialog.file_selected.connect(save_doc, CONNECT_ONE_SHOT)

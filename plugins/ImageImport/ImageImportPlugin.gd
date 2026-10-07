@@ -19,7 +19,7 @@ class ImportJob extends VoxelFrame.EditJob:
 		error = State.load_image(path, image)
 		if error != OK or not checkpoint(0):
 			return
-		imported_document.title = path.get_file().get_basename()
+		imported_document.file_path = path
 		imported_document.frames.clear()
 		var descriptors: Array = []
 		var metadata := {}
