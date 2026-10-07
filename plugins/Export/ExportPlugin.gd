@@ -689,7 +689,8 @@ func export_gltf(path: String) -> Error:
 func _on_sheet_file_selected(path: String) -> void:
 	var range := _selected_frames()
 	var resolution := int(_sheet_settings.get_node("SizeRow/Size").value)
-	_report_result(await export_sprite_sheet(path, range.x, range.y, resolution, _sheet_settings.get_node("ViewRow/View").selected, _sheet_settings.get_node("TurntableRow/Metadata").button_pressed, _view_count(), _automatic_sprite_size), path)
+	var tag_name: String = _sheet_tag.name if _sheet_tag else ""
+	_report_result(await export_sprite_sheet(path, range.x, range.y, resolution, _sheet_settings.get_node("ViewRow/View").selected, _sheet_settings.get_node("TurntableRow/Metadata").button_pressed, _view_count(), _automatic_sprite_size, tag_name), path)
 
 
 func _report_result(error: Error, path: String) -> void:
@@ -815,7 +816,7 @@ func _update_sheet_preview() -> void:
 		_controls.get_node("Preview").texture = ImageTexture.create_from_image(image)
 
 
-func export_sprite_sheet(path: String, first_frame := 0, last_frame := -1, tile_size := -1, view := 1, include_json := true, views := 1, crop_to_bounds := false) -> Error:
+func export_sprite_sheet(path: String, first_frame := 0, last_frame := -1, tile_size := -1, view := 1, include_json := true, views := 1, crop_to_bounds := false, tag_name := "") -> Error:
 	if _exporting or State.edit_busy():
 		return ERR_BUSY
 	if DisplayServer.get_name() == "headless":
@@ -844,7 +845,7 @@ func export_sprite_sheet(path: String, first_frame := 0, last_frame := -1, tile_
 		return ERR_INVALID_PARAMETER
 	if path.get_extension().to_lower() != "png":
 		path += ".png"
-	var metadata := sheet_metadata(path, first_frame, last_frame, frame_rect.size, views)
+	var metadata := sheet_metadata(path, first_frame, last_frame, frame_rect.size, views, tag_name)
 	var source_document := State.document
 	State.stop()
 	_exporting = true
@@ -867,17 +868,18 @@ func export_sprite_sheet(path: String, first_frame := 0, last_frame := -1, tile_
 	return error
 
 
-func sheet_metadata(path: String, first: int, last: int, tile_size: Variant, views := 1) -> Dictionary:
+func sheet_metadata(path: String, first: int, last: int, tile_size: Variant, views := 1, tag_name := "") -> Dictionary:
 	var count := last - first + 1
 	var layout := sheet_layout(count * views, tile_size)
 	var dimensions: Vector2i = layout.tile_size
 	var stride: Vector2i = layout.stride
+	var label: String = tag_name if not tag_name.is_empty() else path.get_file().get_basename()
 	var frames := []
 	for index in count * views:
 		var source_index := first + index % count
-		var filename := "%s %d" % [path.get_file().get_basename(), source_index]
+		var filename := "%s_%d" % [label, source_index]
 		if views > 1:
-			filename += " view %d" % (index / count)
+			filename += "_%d" % (index / count)
 		var tile := Vector2i(index % int(layout.columns) * stride.x, index / int(layout.columns) * stride.y)
 		frames.append({"filename": filename, "frame": {"x": tile.x, "y": tile.y, "w": dimensions.x, "h": dimensions.y}, "rotated": false, "trimmed": false, "spriteSourceSize": {"x": 0, "y": 0, "w": dimensions.x, "h": dimensions.y}, "sourceSize": {"w": dimensions.x, "h": dimensions.y}, "duration": maxi(1, State.get_voxel_frame(source_index).delay_ms)})
 	var tags := []
@@ -885,8 +887,8 @@ func sheet_metadata(path: String, first: int, last: int, tile_size: Variant, vie
 		for tag in State.document.tags:
 			if tag.to < first or tag.from > last:
 				continue
-			var tag_name := tag.name if views == 1 else "%s view %d" % [tag.name, view_index]
-			tags.append({"name": tag_name, "from": maxi(tag.from, first) - first + view_index * count, "to": mini(tag.to, last) - first + view_index * count, "direction": ["forward", "reverse", "pingpong", "pingpong_reverse"][tag.loop_mode], "repeat": str(tag.repeats)})
+			var tag_label := tag.name if views == 1 else "%s_%d" % [tag.name, view_index]
+			tags.append({"name": tag_label, "from": maxi(tag.from, first) - first + view_index * count, "to": mini(tag.to, last) - first + view_index * count, "direction": ["forward", "reverse", "pingpong", "pingpong_reverse"][tag.loop_mode], "repeat": str(tag.repeats)})
 	return {"frames": frames, "meta": {"app": "Voxi", "image": path.get_file(), "format": "RGBA8888", "size": {"w": layout.size.x, "h": layout.size.y}, "scale": "1", "frameTags": tags}}
 
 

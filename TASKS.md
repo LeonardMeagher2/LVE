@@ -228,6 +228,7 @@ max_active: 1
   - [x] Preserve preset sheet previews when only the model tag changes
   - [x] Render turntable views around the Y axis with one center and scale
   - [x] Write optional Aseprite JSON with frame rectangles, delays, and tags
+  - [x] Name each JSON frame with the exported tag, the frame index, and the view index
   - [x] Verify PNG and JSON import through the Image importer
   - [x] Keep one camera scale and center across the exported frames
   - [x] Render frame snapshots in a separate viewport

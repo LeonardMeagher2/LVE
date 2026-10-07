@@ -118,8 +118,9 @@ func _run() -> void:
 		expect(data.frames[1].frame.x == 33 and data.frames[2].frame.y == 33, "the JSON rectangles include the sprite gaps")
 		expect(data.meta.image == sheet_path.get_file() and data.meta.size.w == 65, "the JSON identifies the PNG and its dimensions")
 		expect(not data.frames[0].trimmed and not data.frames[0].rotated, "the JSON describes untrimmed and unrotated frames")
+		expect(data.frames[0].filename == "%s_0" % sheet_path.get_file().get_basename(), "the JSON joins the sheet label and frame index with an underscore")
 	)
-	error = await exporter.export_sprite_sheet(tag_path, 1, 1, 32, 6)
+	error = await exporter.export_sprite_sheet(tag_path, 1, 1, 32, 6, true, 1, false, "Blue")
 	step("Then a single-frame range exports from another view", func():
 		expect(error == OK, "the top-view frame export completes")
 		var image := Image.new()
@@ -133,6 +134,7 @@ func _run() -> void:
 				blue_tag = tag
 		expect(blue_tag.from == 0 and blue_tag.to == 0, "tag indices are relative to the exported frame range")
 		expect(blue_tag.direction == "reverse" and blue_tag.repeat == "2", "the JSON uses Aseprite tag directions and string repeat counts")
+		expect(data.frames[0].filename == "Blue_1", "a tagged export names the frame after the exported tag and frame index")
 	)
 	step("When the user cancels another export", func():
 		exporter._menu_item.get_node("ExportBtn").button_pressed = true
