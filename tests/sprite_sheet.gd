@@ -54,6 +54,35 @@ func _run() -> void:
 		frames.item_selected.emit(0)
 		expect(exporter._selected_frames() == Vector2i(0, 2), "the all-frames range includes the empty frame")
 	)
+	step("When the user disables Ortho for a preset view", func():
+		settings.get_node("ViewRow/Ortho").button_pressed = false
+	)
+	step("Then the preset uses perspective projection and perspective framing", func():
+		var camera_settings: Dictionary = exporter._sheet_camera(1)
+		expect(camera_settings.projection == Camera3D.PROJECTION_PERSPECTIVE, "the preset uses perspective projection")
+		var sample := VoxelFrame.new()
+		sample.set_cell(Vector3i.ZERO, Color.RED)
+		var frames: Array[VoxelFrame] = [sample]
+		var bounds := sample.get_bounds()
+		camera_settings.angles = Vector2.ZERO
+		camera_settings.fov = 90.0
+		var layout: Dictionary = exporter._projected_sprite_layout(frames, bounds, 128, camera_settings, 1)
+		camera_settings.projection = Camera3D.PROJECTION_ORTHOGONAL
+		var ortho_layout: Dictionary = exporter._projected_sprite_layout(frames, bounds, 128, camera_settings, 1)
+		expect(layout.rect != ortho_layout.rect, "perspective and orthographic views use distinct projected bounds")
+		settings.get_node("ViewRow/Ortho").button_pressed = true
+	)
+	step("Then Ortho overrides the 3D preview projection without changing its camera", func():
+		var original_projection: int = exporter._model_camera.projection
+		var ortho_settings: Dictionary = exporter._sheet_camera(0)
+		expect(ortho_settings.projection == Camera3D.PROJECTION_ORTHOGONAL, "the 3D preview sprite uses orthographic projection")
+		settings.get_node("ViewRow/Ortho").button_pressed = false
+		var perspective_settings: Dictionary = exporter._sheet_camera(0)
+		expect(perspective_settings.projection == Camera3D.PROJECTION_PERSPECTIVE, "the 3D preview sprite uses perspective projection")
+		expect(ortho_settings.transform == perspective_settings.transform, "both projections retain the same camera pose")
+		expect(exporter._model_camera.projection == original_projection, "the model camera retains its projection")
+		settings.get_node("ViewRow/Ortho").button_pressed = true
+	)
 	if DisplayServer.get_name() == "headless":
 		return
 	step("When the user opens sprite sheet settings", func():
@@ -85,6 +114,7 @@ func _run() -> void:
 		expect(_visible_pixels(image, Rect2i(0, 0, 3, 1)) == 1, "camera framing preserves one visible pixel for one voxel")
 	)
 	step("When the user chooses a perspective camera ten units from the bounds center", func():
+		settings.get_node("ViewRow/Ortho").button_pressed = false
 		exporter._model_camera.is_orthogonal = false
 		exporter._model_camera.fov = 90.0
 		exporter._model_camera.transform = Transform3D(Basis.IDENTITY, Vector3(0, 0, 10))
@@ -94,6 +124,7 @@ func _run() -> void:
 		expect(settings.get_node("SizeRow/Size").value == 20, "the ninety-degree view spans twenty units at the bounds center")
 		settings.get_node("ViewRow/View").select(1)
 		settings.get_node("ViewRow/View").item_selected.emit(1)
+		settings.get_node("ViewRow/Ortho").button_pressed = true
 	)
 	var error: Error = await exporter.export_sprite_sheet(sheet_path, 0, 2, 32, 2)
 	step("Then the PNG contains all frames in row order with transparent unused space", func():

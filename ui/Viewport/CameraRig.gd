@@ -128,9 +128,14 @@ func _update() -> void:
 	) * _dist
 	position = _target + off
 	look_at(_target, Vector3.UP)
+	var bounds: AABB = bounds_provider.call() if bounds_provider.is_valid() else State.document.bounds()
+	var max_radius := maxf(bounds.size.length() * 0.5, 1.0)
 	if is_orthogonal:
 		projection = Camera3D.PROJECTION_ORTHOGONAL
 		size = 2.0 * _dist * tan(deg_to_rad(fov) / 2.0)
+		# Godot derives the directional shadow depth range from the camera far plane in orthographic projection.
+		far = maxf(2.0, _dist + max_radius)
 	else:
 		projection = Camera3D.PROJECTION_PERSPECTIVE
+		far = 4000.0
 	view_changed.emit()

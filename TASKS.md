@@ -74,6 +74,25 @@ max_active: 1
 
 # Rendering and storage
 
+- [x] Fix the three test failures from the shadow task
+  - [x] Send brush shape and toolbar clicks in viewport coordinates
+  - [x] Use a dedicated legacy document fixture without the shading option
+  - [x] Replace the rotation test's sample document dependency with a fixed model fixture
+  - [x] Run only `brush_shapes`, `tool_select`, and `smooth_normals` in windowed mode
+  - [x] Run the targeted model rotation test in windowed mode
+  - All 112 checks pass across the four targeted tests.
+
+- [x] Fix sprite sheet shadows and projection changes
+  - [x] Add the saved Ortho control for all sprite views
+  - [x] Override the sheet projection when the 3D preview view is selected
+  - [x] Fit orthographic camera depth and synchronize directional shadow modes
+  - [x] Render each sprite twice before capture
+  - [x] Use perspective bounds when Ortho is disabled
+  - [x] Verify exported shadow pixels, silhouettes, and projection changes
+  - [x] Run the full behavior suite and the final suite
+  - The sprite sheet, shadow, camera, export workspace, and thumbnail tests pass.
+  - Both suite runs report failures in `brush_shapes`, `smooth_normals`, and `tool_select`.
+
 - [x] Add document smooth normals
   - [x] Add a document settings dropdown after Save As
   - [x] Use the document icon with a gear badge at the bottom right

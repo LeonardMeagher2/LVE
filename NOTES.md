@@ -4,6 +4,7 @@ This file records confirmed, non-obvious facts learned while working on Voxi. Re
 
 ## Godot API changes
 
+- 2026-10-07: In Godot 4.7.2 Mobile, a new sheet viewport needs two renders before capture includes directional shadows.
 - 2026-10-06: Godot 4.7.2 on Windows returns scale 1.0 and DPI 192 for this 200% display.
 - 2026-10-06: DPITexture imports retain SVG dimensions and rasterize icons at the viewport scale.
 - 2026-10-06: A disabled workspace stops renderer processing unless the renderer uses `PROCESS_MODE_ALWAYS`.
@@ -105,6 +106,7 @@ This file records confirmed, non-obvious facts learned while working on Voxi. Re
 
 ## Workflow
 
+- 2026-10-07: For test clicks in viewport coordinates, pass `true` to `push_input()` to prevent display-scale coordinate conversion.
 - 2026-09-07: The tool selection API is gone. `State.tools`, `set_tool`, `set_tool_option`, `get_tool_option`, and `State.tool` are removed. Tools are plugins under `/root`. A test activates a tool by setting the plugin toolbar button's `button_pressed`. It sets options by pressing the option-bar button (`press_option(tooltip)`).
 - 2026-09-07: `State.NONE` is gone. Use `VoxelPicking.NONE`.
 - 2026-09-07: The test harness adds Main in `_enter_tree`. Tests override only `_ready`. A base-class `_ready` would not run unless the subclass calls `super()`, so `_enter_tree` is the safe hook. Main is added with `call_deferred`.

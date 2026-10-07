@@ -5,25 +5,25 @@ var _source: VoxelFrame
 
 
 func _ready() -> void:
-	test("rotating the Flamingo asset 90 degrees on any axis never loses or duplicates a voxel", _run)
+	test("rotating an irregular model 90 degrees preserves every voxel on each axis", _run)
 
 
 func _run() -> void:
-	step("Given the Flamingo's first frame selected with the rotate tool active", func():
+	step("Given an irregular model fixture and the active Rotate tool", func():
 		viewport = editor_viewport()
 		var container := viewport.get_parent()
 		container.stretch = false
 		viewport.size = Vector2i(800, 500)
-		var doc: VoxiDocument = load("res://Flamingo.tres")
-		_source = doc.frames[0].copy_frame()
-		expect(_source.count() > 0, "the Flamingo asset loaded a non-empty first frame")
+		var fixture: VoxelFrame = load("res://tests/fixtures/rotation_model.tres")
+		_source = fixture.copy_frame()
+		expect(_source.count() > 0, "the model fixture contains voxels")
 		State.undo_redo.clear_history()
 		activate_tool("transform")
 		select_toolbar_item("transform", "Rotate")
 	)
 
 	for axis_name in ["front", "right", "top"]:
-		step("When the user rotates the Flamingo 90 degrees viewed from %s" % axis_name, func():
+		step("When the user rotates the model 90 degrees viewed from %s" % axis_name, func():
 			State.selection.clear()
 			_frame().restore(_source.capture())
 			_select_all(_source)
@@ -32,8 +32,8 @@ func _run() -> void:
 			_press_option("Commit")
 		)
 
-		step("Then the rotated Flamingo (%s) keeps every voxel, with no holes or duplicates" % axis_name, func():
-			expect(_frame().count() == _source.count(), "the rotated Flamingo still holds %d voxels" % _source.count())
+		step("Then the rotated model preserves every voxel in the %s view" % axis_name, func():
+			expect(_frame().count() == _source.count(), "the rotated model contains %d voxels" % _source.count())
 		)
 
 

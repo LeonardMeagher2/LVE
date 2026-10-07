@@ -23,11 +23,13 @@ var _light_trackball_start := Vector3.BACK
 var _light_trackball_rotation := Quaternion.IDENTITY
 var _default_lighting := {}
 var _loading_document_lighting := false
+var _camera_shadow_projection := Camera3D.PROJECTION_PERSPECTIVE
 const LIGHT_HANDLE_RADIUS := 12.0
 
 func _ready() -> void:
 	%CameraMenu.get_popup().index_pressed.connect(_on_camera_index_pressed)
 	%CameraRig.zoom_changed.connect(%ZoomSlider.set_value_no_signal)
+	%CameraRig.view_changed.connect(_on_camera_projection_changed)
 	$WorldEnvironment.environment = $WorldEnvironment.environment.duplicate()
 	var material: StandardMaterial3D = %LightHandle.material_override.duplicate()
 	material.albedo_color = $Light.light_color
@@ -71,6 +73,13 @@ func _restore_document_lighting() -> void:
 	_loading_document_lighting = true
 	set_lighting_settings(settings)
 	_loading_document_lighting = false
+
+func _on_camera_projection_changed() -> void:
+	if %CameraRig.projection == _camera_shadow_projection:
+		return
+	_camera_shadow_projection = %CameraRig.projection
+	VoxelImageRenderer.apply_directional_shadow($Light, %CameraRig)
+
 
 func _on_camera_index_pressed(index:int) -> void:
 	var popup:PopupMenu = %CameraMenu.get_popup()

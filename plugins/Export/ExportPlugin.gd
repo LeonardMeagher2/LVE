@@ -104,6 +104,7 @@ func _ready() -> void:
 	sheet_bar.get_node("CenterBtn").pressed.connect(sheet_preview.fit)
 	_sheet_settings.get_node("FrameRow/Frames").item_selected.connect(_on_sheet_tag_selected)
 	_sheet_settings.get_node("ViewRow/View").item_selected.connect(_sheet_settings_changed.unbind(1))
+	_sheet_settings.get_node("ViewRow/Ortho").toggled.connect(_sheet_settings_changed.unbind(1))
 	_sheet_settings.get_node("TurntableRow/Views").value_changed.connect(_sheet_settings_changed.unbind(1))
 	_sheet_settings.get_node("SizeRow/Size").value_changed.connect(_on_sprite_size_changed.unbind(1))
 	_sheet_settings.get_node("SizeRow/Reset").pressed.connect(_reset_sprite_size)
@@ -136,6 +137,7 @@ func _save_export_settings() -> void:
 		return
 	State.document.export_settings = {
 		"view": _sheet_settings.get_node("ViewRow/View").selected,
+		"sprite_ortho": _sheet_settings.get_node("ViewRow/Ortho").button_pressed,
 		"automatic_size": _automatic_sprite_size,
 		"frame_size": _sheet_settings.get_node("SizeRow/Size").value,
 		"turntable": _sheet_settings.get_node("TurntableRow/Turntable").button_pressed,
@@ -160,6 +162,7 @@ func _restore_export_settings() -> void:
 	_sync_tags()
 	_automatic_sprite_size = bool(saved.get("automatic_size", true))
 	_sheet_settings.get_node("ViewRow/View").select(clampi(int(saved.get("view", 1)), 0, VIEWS.size() - 1))
+	_sheet_settings.get_node("ViewRow/Ortho").set_pressed_no_signal(saved.get("sprite_ortho", true))
 	_sheet_settings.get_node("SizeRow/Size").set_value_no_signal(saved.get("frame_size", 1))
 	_sheet_settings.get_node("TurntableRow/Turntable").set_pressed_no_signal(saved.get("turntable", true))
 	_sheet_settings.get_node("TurntableRow/Views").set_value_no_signal(saved.get("views", 8))
@@ -311,7 +314,7 @@ static func _projected_sprite_layout(frames: Array[VoxelFrame], bounds: AABB, re
 		if box.has_volume():
 			frame_bounds.append(box)
 	var initial_transform := _sprite_camera_transform(bounds, settings)
-	var orthographic: bool = settings.has("angles") or settings.projection == Camera3D.PROJECTION_ORTHOGONAL
+	var orthographic: bool = settings.get("projection", Camera3D.PROJECTION_ORTHOGONAL) == Camera3D.PROJECTION_ORTHOGONAL
 	var span: float = _sprite_span(bounds, settings, views) if settings.has("angles") else settings.size
 	var pixels_per_unit := resolution / maxf(span, 0.00001)
 	if not orthographic:
@@ -363,9 +366,13 @@ static func _sprite_span(bounds: AABB, settings: Dictionary, views: int) -> int:
 			var distance := (transform.origin - bounds.get_center()).dot(transform.basis.z)
 			camera_span = 2.0 * distance * tan(deg_to_rad(settings.fov) * 0.5)
 		return maxi(1, ceili(camera_span - 0.00001))
+	var angles: Vector2 = settings.angles
+	if settings.get("projection", Camera3D.PROJECTION_ORTHOGONAL) == Camera3D.PROJECTION_PERSPECTIVE:
+		var transform := _sprite_camera_transform(bounds, settings)
+		var distance := (transform.origin - bounds.get_center()).dot(transform.basis.z)
+		return maxi(1, ceili(2.0 * distance * tan(deg_to_rad(settings.fov) * 0.5) - 0.00001))
 	var right: Vector3
 	var up: Vector3
-	var angles: Vector2 = settings.angles
 	var yaw := deg_to_rad(angles.x)
 	var pitch := deg_to_rad(angles.y)
 	right = Vector3(cos(yaw), 0, -sin(yaw))
@@ -613,7 +620,7 @@ func _sync() -> void:
 	_menu_item.get_node("ExportBtn").disabled = busy
 	_model.get_node("Export").disabled = busy
 	_controls.get_node("Export").disabled = busy or layout.size.x > Image.MAX_WIDTH or layout.size.y > Image.MAX_HEIGHT
-	for path in ["FrameRow/Frames", "ViewRow/View"]:
+	for path in ["FrameRow/Frames", "ViewRow/View", "ViewRow/Ortho"]:
 		_sheet_settings.get_node(path).disabled = busy
 	_sheet_settings.get_node("SizeRow/Size").editable = not busy
 	_sheet_settings.get_node("TurntableRow/Metadata").disabled = busy
@@ -707,12 +714,25 @@ static func sheet_layout(frame_count: int, tile_size: Variant) -> Dictionary:
 
 
 func _sheet_camera(view: int) -> Dictionary:
+	var orthographic: bool = _sheet_settings.get_node("ViewRow/Ortho").button_pressed
 	if view == 0:
 		var inverse := _model_transform().affine_inverse()
 		var transform := _model_camera.transform
 		transform.origin = inverse * transform.origin
-		return {"transform": transform, "projection": _model_camera.projection, "size": _model_camera.size, "fov": _model_camera.fov, "near": _model_camera.near, "far": _model_camera.far}
-	return {"angles": ANGLES[view]}
+		var projection := Camera3D.PROJECTION_ORTHOGONAL if orthographic else Camera3D.PROJECTION_PERSPECTIVE
+		var span: float = _model_camera.size
+		if orthographic and _model_camera.projection != Camera3D.PROJECTION_ORTHOGONAL:
+			var range := _selected_frames()
+			var distance := (transform.origin - _bounds(range.x, range.y).get_center()).dot(transform.basis.z)
+			span = maxf(0.001, 2.0 * distance * tan(deg_to_rad(_model_camera.fov) * 0.5))
+		return {"transform": transform, "projection": projection, "size": span, "fov": _model_camera.fov, "near": _model_camera.near, "far": _model_camera.far}
+	var settings := {"angles": ANGLES[view]}
+	if not orthographic:
+		settings.projection = Camera3D.PROJECTION_PERSPECTIVE
+		settings.fov = _model_camera.fov
+		settings.near = _model_camera.near
+		settings.far = _model_camera.far
+	return settings
 
 
 func _render_current(document: VoxiDocument, revision: int) -> bool:
@@ -743,11 +763,19 @@ func _render_sheet(frames: Array[VoxelFrame], bounds: AABB, tile_size: int, came
 	var camera: Camera3D = viewport.get_node("Node3D/Camera3D")
 	if camera_settings.has("angles"):
 		var angles: Vector2 = camera_settings.angles
-		VoxelImageRenderer.frame_camera(camera, bounds, angles.x, angles.y, true)
-		camera.size = _sprite_span(bounds, camera_settings, views)
+		var use_orthographic: bool = camera_settings.get("projection", Camera3D.PROJECTION_ORTHOGONAL) == Camera3D.PROJECTION_ORTHOGONAL
+		VoxelImageRenderer.frame_camera(camera, bounds, angles.x, angles.y, use_orthographic)
+		if use_orthographic:
+			camera.size = _sprite_span(bounds, camera_settings, views)
+		else:
+			camera.fov = camera_settings.fov
 	else:
 		for property in camera_settings:
 			camera.set(property, camera_settings[property])
+	if camera.projection == Camera3D.PROJECTION_ORTHOGONAL:
+		var depth := (camera.position - bounds.get_center()).dot(camera.basis.z)
+		camera.far = maxf(camera.near + 1.0, depth + bounds.size.length() * 0.5)
+	VoxelImageRenderer.apply_directional_shadow(light, camera)
 	var initial_transform := camera.transform
 	if camera.projection != Camera3D.PROJECTION_ORTHOGONAL and (absf(screen_offset.x) > 0.00001 or absf(screen_offset.y) > 0.00001):
 		var near_span := 2.0 * camera.near * tan(deg_to_rad(camera.fov) * 0.5)
@@ -771,12 +799,14 @@ func _render_sheet(frames: Array[VoxelFrame], bounds: AABB, tile_size: int, came
 				if is_instance_valid(viewport):
 					viewport.free()
 				return null
-		viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
-		await RenderingServer.frame_post_draw
-		if not _render_current(document, revision):
-			if is_instance_valid(viewport):
-				viewport.free()
-			return null
+		# Render the changed geometry and camera before capturing the shadowed image.
+		for draw in 2:
+			viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
+			await RenderingServer.frame_post_draw
+			if not _render_current(document, revision):
+				if is_instance_valid(viewport):
+					viewport.free()
+				return null
 		var image := viewport.get_texture().get_image()
 		image.convert(Image.FORMAT_RGBA8)
 		var stride: Vector2i = layout.stride

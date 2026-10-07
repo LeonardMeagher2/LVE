@@ -155,7 +155,7 @@ func _run() -> void:
 	if DisplayServer.get_name() != "headless":
 		await _check_sheet_shading()
 	step("When the user opens a document that predates the shading option", func():
-		State.document = load("res://Flamingo.tres")
+		State.document = load("res://tests/fixtures/legacy_document.tres")
 	)
 	step("Then the existing document uses flat shading", func():
 		expect(not State.document.smooth_normals and not settings.is_item_checked(0), "existing documents default to flat shading")

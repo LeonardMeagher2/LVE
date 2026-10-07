@@ -49,6 +49,6 @@ func _click(button: Control) -> void:
 	click.button_index = MOUSE_BUTTON_LEFT
 	click.position = button.get_global_rect().get_center()
 	click.pressed = true
-	get_tree().root.push_input(click)
+	get_tree().root.push_input(click, true)
 	click.pressed = false
-	get_tree().root.push_input(click)
+	get_tree().root.push_input(click, true)

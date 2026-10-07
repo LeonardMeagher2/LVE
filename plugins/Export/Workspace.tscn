@@ -162,6 +162,12 @@ tooltip_text = "Sprite view"
 layout_mode = 2
 size_flags_horizontal = 3
 
+[node name="Ortho" type="CheckBox" parent="Panels/SheetPanel/Margin/Sheet/Settings/ViewRow"]
+layout_mode = 2
+button_pressed = true
+text = "Ortho"
+tooltip_text = "Use orthographic projection for the sprites. Disable this to use perspective projection."
+
 [node name="SizeRow" type="HBoxContainer" parent="Panels/SheetPanel/Margin/Sheet/Settings"]
 layout_mode = 2
 size_flags_horizontal = 3

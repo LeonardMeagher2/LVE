@@ -50,17 +50,21 @@ func _run() -> void:
 	step("When the user picks Orthographic in the camera menu", func():
 		_pick("orthographic")
 	)
-	step("Then the camera turns orthographic and the item shows checked", func():
+	step("Then the camera turns orthographic and the light uses orthogonal shadow mapping", func():
 		expect(camera_rig().is_orthogonal, "the camera uses orthogonal projection")
 		expect(_popup().is_item_checked(_index_of("orthographic")), "the Orthographic item shows checked")
+		var light := viewport_scene().get_node("Light")
+		expect(light.directional_shadow_mode == DirectionalLight3D.SHADOW_ORTHOGONAL, "the light uses orthogonal shadow mapping")
 	)
 
 	step("When the user picks Orthographic again", func():
 		_pick("orthographic")
 	)
-	step("Then the camera returns to perspective", func():
+	step("Then the camera returns to perspective and the light returns to split shadow mapping", func():
 		expect(not camera_rig().is_orthogonal, "the camera uses perspective projection")
 		expect(not _popup().is_item_checked(_index_of("orthographic")), "the Orthographic item shows unchecked")
+		var light := viewport_scene().get_node("Light")
+		expect(light.directional_shadow_mode == DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS, "the light uses split shadow mapping")
 	)
 
 	step("When the user picks Unshaded in the camera menu", func():

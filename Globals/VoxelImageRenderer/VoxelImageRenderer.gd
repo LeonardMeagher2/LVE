@@ -88,8 +88,9 @@ func _render_frame(frame_index: int) -> ImageTexture:
 	while not _thumbnail_renderer.is_settled():
 		await get_tree().process_frame
 	_frame_camera(State.document.bounds())
-	_thumbnail_viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
-	await RenderingServer.frame_post_draw
+	for draw in 2:
+		_thumbnail_viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
+		await RenderingServer.frame_post_draw
 	var thumbnail_image: Image = _thumbnail_viewport.get_texture().get_image()
 	_thumbnail_viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
 	return ImageTexture.create_from_image(thumbnail_image)
@@ -101,6 +102,13 @@ func _frame_camera(document_bounds: AABB) -> void:
 		_thumbnail_camera.transform = parked_transform
 		return
 	frame_camera(_thumbnail_camera, document_bounds, yaw_degrees, pitch_degrees, orthographic)
+	apply_directional_shadow(_thumbnail_viewport.get_node("Node3D/Light"), _thumbnail_camera)
+
+
+# In orthographic projection, Godot derives the directional shadow depth range from the camera far plane.
+# Keep the far plane just past the content so orthographic shadows stay crisp.
+static func apply_directional_shadow(light: DirectionalLight3D, camera: Camera3D) -> void:
+	light.directional_shadow_mode = DirectionalLight3D.SHADOW_ORTHOGONAL if camera.projection == Camera3D.PROJECTION_ORTHOGONAL else DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS
 
 
 static func frame_camera(camera: Camera3D, document_bounds: AABB, yaw: float, pitch: float, use_orthographic: bool) -> void:
@@ -109,7 +117,7 @@ static func frame_camera(camera: Camera3D, document_bounds: AABB, yaw: float, pi
 		document_bounds = AABB(Vector3.ONE * -0.5, Vector3.ONE)
 	var content_center: Vector3 = document_bounds.get_center()
 	var camera_distance: float = document_bounds.size.length() * 1.25
-	camera.far = maxf(1000.0, camera_distance * 3.0)
+	camera.far = maxf(2.0, camera_distance * 1.6) if use_orthographic else maxf(1000.0, camera_distance * 3.0)
 	var camera_offset: Vector3 = Vector3(
 		sin(deg_to_rad(yaw)) * cos(deg_to_rad(pitch)),
 		sin(deg_to_rad(pitch)),

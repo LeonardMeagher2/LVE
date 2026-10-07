@@ -206,6 +206,6 @@ func _click_shape(shape_name: String) -> void:
 	event.button_index = MOUSE_BUTTON_LEFT
 	event.position = button.get_global_rect().get_center()
 	event.pressed = true
-	get_tree().root.push_input(event)
+	get_tree().root.push_input(event, true)
 	event.pressed = false
-	get_tree().root.push_input(event)
+	get_tree().root.push_input(event, true)
