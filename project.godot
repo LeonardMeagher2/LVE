@@ -11,7 +11,7 @@ config_version=5
 [application]
 
 config/name="Leonard's Voxel Editor"
-config/description="Made with LVE. Create voxel art and animation with Leonard the flamingo."
+config/description="Made with LVE. Create voxel art and animation."
 run/main_scene="res://Main.tscn"
 config/features=PackedStringArray("4.7")
 config/icon="res://icon.svg"

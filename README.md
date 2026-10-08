@@ -2,7 +2,7 @@
 
 **Made with LVE.**
 
-Create voxel art and animation with Leonard the flamingo.
+Create voxel art and animation.
 
 ## Document files
 
@@ -25,5 +25,4 @@ Godot is the only toolchain.
 
 ## Icon
 
-Leonard is the flamingo in `icon.svg`.
-The vector icon preserves the source image's pixel edges, colors, and transparency.
+The vector icon in `icon.svg` preserves the source image's pixel edges, colors, and transparency.

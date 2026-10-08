@@ -33,7 +33,7 @@ func _run() -> void:
 		source.palette.assign([Color.BLACK, Color.RED, Color(0.25, 0.5, 0.75, 0.5)])
 		source.tags.clear()
 		for mode in 4:
-			source.add_tag("Leonard %s 🦩" % mode, 0, 2, mode, mode)
+			source.add_tag("Tag %s 🦩" % mode, 0, 2, mode, mode)
 		source.smooth_normals = true
 		source.lighting_settings = {"basis": Basis(Vector3.UP, 0.5), "color": Color(1, 0.5, 0.25, 0.75), "ambient_color": Color(0.2, 0.3, 0.4, 0.5)}
 		source.export_settings = {"view": 7, "sprite_ortho": false, "automatic_size": false, "frame_size": 64.0, "turntable": false, "views": 12.0, "metadata": true, "center": false, "model_tag": 1, "sheet_tag": 2,
@@ -50,10 +50,10 @@ func _run() -> void:
 		expect(source.save_file(_path(".lve")) == OK, "the binary document saves")
 		expect(source.save_file(_path(".lve.png"), preview) == OK, "the PNG document saves")
 	)
-	step("Then the application uses Leonard's flamingo SVG", func():
+	step("Then the application uses the flamingo SVG", func():
 		var vector := Image.new()
 		expect(vector.load_svg_from_string(FileAccess.get_file_as_string("res://icon.svg")) == OK, "the flamingo SVG loads")
-		expect(vector.get_size() == Vector2i(128, 128) and not vector.is_invisible(), "the vector icon contains Leonard on its original canvas")
+		expect(vector.get_size() == Vector2i(128, 128) and not vector.is_invisible(), "the vector icon renders on its original canvas")
 		expect(ProjectSettings.get_setting("application/config/icon") == "res://icon.svg", "the application uses the flamingo SVG as its icon")
 		expect(ProjectSettings.get_setting("application/config/name") == VoxelDocument.APP_NAME, "the project uses Leonard's Voxel Editor branding")
 	)
