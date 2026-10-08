@@ -12,7 +12,7 @@ func _ready() -> void:
 	_settle(10)
 	_shot("01_empty")
 
-	var d: VoxiDocument = State.document
+	var d: VoxelDocument = State.document
 	d.paint(0, Vector3i(6, 4, 7), Color.from_rgba8(200, 60, 50))
 	d.paint(0, Vector3i(7, 4, 7), Color.from_rgba8(200, 60, 50))
 	d.paint(0, Vector3i(6, 5, 7), Color.from_rgba8(200, 60, 50))

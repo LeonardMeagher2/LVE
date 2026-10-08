@@ -42,7 +42,7 @@ func _run() -> void:
 		expect(State.selection.is_empty(), "redo clears the cut selection")
 	)
 	step("When the user pastes the cut voxels into another document", func():
-		State.document = VoxiDocument.new()
+		State.document = VoxelDocument.new()
 		frame = State.get_current_voxel_frame()
 		camera_rig().set_view("top")
 		camera_rig().is_orthogonal = true
@@ -89,7 +89,7 @@ func _run() -> void:
 
 
 func _setup() -> void:
-	State.document = VoxiDocument.new()
+	State.document = VoxelDocument.new()
 	frame = State.get_current_voxel_frame()
 	State.document.palette.assign([Color.MAGENTA])
 	frame.set_cell(Vector3i.ZERO, Color.RED)

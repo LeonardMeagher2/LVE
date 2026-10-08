@@ -20,7 +20,7 @@ func _run() -> void:
 		expect(State.symmetry_origin == Vector3(-0.5, -0.5, -0.5), "the default origin places all planes between voxel cells")
 		brush = plugin("BrushPlugin")
 		settings = brush._settings
-		State.document = VoxiDocument.new()
+		State.document = VoxelDocument.new()
 		State.symmetry_axes = 0
 		State.symmetry_origin = Vector3.ZERO
 		activate_tool("Symmetry")
@@ -132,7 +132,7 @@ func _run() -> void:
 		expect(frame.count() == 0, "Eraser removes the original and mirrored voxels")
 	)
 	step("Given two symmetry axes and a selected drawing region", func():
-		State.document = VoxiDocument.new()
+		State.document = VoxelDocument.new()
 		State.symmetry_origin = Vector3.ZERO
 		State.symmetry_axes = 5
 		State.selection.add(Vector3i(2, 0, 3))
@@ -150,7 +150,7 @@ func _run() -> void:
 		expect(not frame.has(Vector3i(-8, 0, -8)), "raw frame storage writes only the requested voxel")
 	)
 	step("Given all three axes and a voxel on the symmetry origin", func():
-		State.document = VoxiDocument.new()
+		State.document = VoxelDocument.new()
 		State.symmetry_axes = 7
 		State.begin_stroke()
 		State.paint(Vector3i.ZERO, Color.RED)
@@ -160,7 +160,7 @@ func _run() -> void:
 		expect(State.get_current_voxel_frame().count() == 1, "reflection duplicates on the origin are removed")
 	)
 	step("Given an asymmetric colored voxel brush", func():
-		State.document = VoxiDocument.new()
+		State.document = VoxelDocument.new()
 		State.symmetry_axes = 1
 		settings.use_selection({Vector3i(-1, 0, 0): Color.RED, Vector3i(1, 0, 0): Color.BLUE})
 		select_toolbar_item("Toolbar", "Pencil")
@@ -173,7 +173,7 @@ func _run() -> void:
 		expect(frame.get_color(Vector3i.LEFT) == Color.RED and frame.get_color(Vector3i.RIGHT) == Color.BLUE, "the original colored pattern wins at overlapping positions")
 	)
 	step("Given the Line tool and a symmetric drawing plane", func():
-		State.document = VoxiDocument.new()
+		State.document = VoxelDocument.new()
 		settings.shape = settings.BrushShape.CUBE
 		settings.diameter = 1
 		State.symmetry_axes = 1
@@ -190,7 +190,7 @@ func _run() -> void:
 		expect(frame.count() == 0, "one undo removes both lines")
 	)
 	step("Given two matching regions for Fill", func():
-		State.document = VoxiDocument.new()
+		State.document = VoxelDocument.new()
 		frame = State.get_current_voxel_frame()
 		frame.set_cells({Vector3i(2, 0, 2): Color.RED, Vector3i(2, 0, 3): Color.RED, Vector3i(-2, 0, 2): Color.RED, Vector3i(-2, 0, 3): Color.GREEN})
 		activate_tool("fill")

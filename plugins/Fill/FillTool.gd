@@ -1,7 +1,7 @@
 extends VoxelTool
 
 var _settings := preload("./settings.tres")
-var _source_document: VoxiDocument
+var _source_document: VoxelDocument
 var _source_frame: VoxelFrame
 var _replacement_color := Color.TRANSPARENT
 var _pending_seeds: Array[Vector3i] = []

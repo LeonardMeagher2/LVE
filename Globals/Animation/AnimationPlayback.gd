@@ -6,7 +6,7 @@ signal frame_changed()
 signal is_playing_toggled(playing: bool)
 signal tag_changed()
 
-var document := VoxiDocument.new()
+var document := VoxelDocument.new()
 
 var current_frame := 0:
 	set(value):

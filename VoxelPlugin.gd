@@ -1,4 +1,4 @@
-class_name VoxiPlugin extends Node
+class_name VoxelPlugin extends Node
 
 func _safe_add(parent:Node, child:Node) -> void:
 	if child.get_parent():

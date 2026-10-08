@@ -1,4 +1,4 @@
-extends VoxiPlugin
+extends VoxelPlugin
 
 const GLTF_EXPORT := preload("./GLTFExport.gd")
 const VIEWS := ["3D preview", "Isometric", "Front", "Back", "Left", "Right", "Top", "Bottom"]
@@ -36,7 +36,7 @@ var _model_camera: EditorCameraRig
 var _model_scene
 var _default_lighting := {}
 var _default_camera := {}
-var _settings_document: VoxiDocument
+var _settings_document: VoxelDocument
 var _restoring_export_settings := false
 var _pending_export_camera := {}
 var _syncing_lighting := false
@@ -247,7 +247,7 @@ func _source_changed() -> void:
 func _on_document_changed() -> void:
 	_model_frames.clear()
 	_model_playback.is_playing = false
-	_model_playback.document = VoxiDocument.new()
+	_model_playback.document = VoxelDocument.new()
 	_model_renderer.source_frame = VoxelFrame.new()
 	_model_back_renderer.source_frame = VoxelFrame.new()
 	_model_pending_frame = -1
@@ -550,7 +550,7 @@ func _refresh_model() -> void:
 	_model_back_renderer.transform = _model_renderer.transform
 	var playing: bool = _model.get_node("AnimationRow/Play").button_pressed
 	_model_playback.is_playing = false
-	var preview_document := VoxiDocument.new()
+	var preview_document := VoxelDocument.new()
 	preview_document.frames.assign(_model_frames)
 	preview_document.tags.clear()
 	if _selected_tag:
@@ -735,7 +735,7 @@ func _sheet_camera(view: int) -> Dictionary:
 	return settings
 
 
-func _render_current(document: VoxiDocument, revision: int) -> bool:
+func _render_current(document: VoxelDocument, revision: int) -> bool:
 	if not is_inside_tree() or State.document != document:
 		return false
 	if revision >= 0:
@@ -743,7 +743,7 @@ func _render_current(document: VoxiDocument, revision: int) -> bool:
 	return not _cancel_requested and State.has_operation(_operation_id)
 
 
-func _render_sheet(frames: Array[VoxelFrame], bounds: AABB, tile_size: int, camera_settings: Dictionary, document: VoxiDocument, revision := -1, views := 1, frame_rect := Rect2i(), screen_offset := Vector2.ZERO) -> Image:
+func _render_sheet(frames: Array[VoxelFrame], bounds: AABB, tile_size: int, camera_settings: Dictionary, document: VoxelDocument, revision := -1, views := 1, frame_rect := Rect2i(), screen_offset := Vector2.ZERO) -> Image:
 	if frame_rect.size.x <= 0 or frame_rect.size.y <= 0:
 		frame_rect = Rect2i(Vector2i.ZERO, Vector2i.ONE * tile_size)
 	var lighting_settings := _sheet_lighting()
@@ -919,7 +919,7 @@ func sheet_metadata(path: String, first: int, last: int, tile_size: Variant, vie
 				continue
 			var tag_label := tag.name if views == 1 else "%s_%d" % [tag.name, view_index]
 			tags.append({"name": tag_label, "from": maxi(tag.from, first) - first + view_index * count, "to": mini(tag.to, last) - first + view_index * count, "direction": ["forward", "reverse", "pingpong", "pingpong_reverse"][tag.loop_mode], "repeat": str(tag.repeats)})
-	return {"frames": frames, "meta": {"app": "Voxi", "image": path.get_file(), "format": "RGBA8888", "size": {"w": layout.size.x, "h": layout.size.y}, "scale": "1", "frameTags": tags}}
+	return {"frames": frames, "meta": {"app": VoxelDocument.APP_NAME, "image": path.get_file(), "format": "RGBA8888", "size": {"w": layout.size.x, "h": layout.size.y}, "scale": "1", "frameTags": tags}}
 
 
 func _cancel_export() -> void:

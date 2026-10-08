@@ -1,4 +1,4 @@
-extends VoxiPlugin
+extends VoxelPlugin
 
 const ALPHA_CLIP := 0.5
 
@@ -8,7 +8,7 @@ class ImportJob extends VoxelFrame.EditJob:
 	var path := ""
 	var plane_axis := Vector3.Axis.AXIS_Y
 	var error: Error = OK
-	var imported_document := VoxiDocument.new()
+	var imported_document := VoxelDocument.new()
 	var _patterns: Array[Dictionary] = []
 	var _occupied_bounds := AABB()
 	var _palette_colors := {}

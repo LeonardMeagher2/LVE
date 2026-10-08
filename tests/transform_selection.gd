@@ -96,7 +96,7 @@ func _run() -> void:
 
 
 func _setup(last_corner: Vector3i) -> void:
-	State.document = VoxiDocument.new()
+	State.document = VoxelDocument.new()
 	frame = State.get_current_voxel_frame()
 	frame.set_cell(Vector3i.ZERO, Color.RED)
 	State.selection.from_box(Vector3i.ZERO, last_corner)

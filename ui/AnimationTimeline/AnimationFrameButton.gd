@@ -1,6 +1,6 @@
 extends Button
 
-const DRAG_TYPE := "voxi_frame"
+const DRAG_TYPE := "voxel_frame"
 
 
 func _get_drag_data(_at_position: Vector2) -> Variant:

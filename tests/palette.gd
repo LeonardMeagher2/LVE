@@ -19,7 +19,7 @@ func _run() -> void:
 		panel = main.find_child("PalettePanel", true, false)
 		grid = panel.get_node("%SwatchGrid")
 		default_color = State.current_color
-		State.document = VoxiDocument.new()
+		State.document = VoxelDocument.new()
 		State.document.add_color(Color.RED)
 		panel._rebuild_swatches()
 	)

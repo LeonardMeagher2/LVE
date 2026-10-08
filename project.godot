@@ -10,7 +10,8 @@ config_version=5
 
 [application]
 
-config/name="Voxi"
+config/name="Leonard's Voxel Editor"
+config/description="Made with LVE. Create voxel art and animation with Leonard the flamingo."
 run/main_scene="res://Main.tscn"
 config/features=PackedStringArray("4.7")
 config/icon="res://icon.svg"

@@ -1,6 +1,6 @@
 extends Button
 
-const DRAG_TYPE := "voxi_palette_color"
+const DRAG_TYPE := "voxel_palette_color"
 
 @export var color:Color :
 	set(value):

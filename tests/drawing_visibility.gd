@@ -10,7 +10,7 @@ func _ready() -> void:
 
 func _run() -> void:
 	step("Given painted voxels on both sides of a chunk boundary", func():
-		State.document = VoxiDocument.new()
+		State.document = VoxelDocument.new()
 		State.paint(Vector3i(14, 0, 0), Color.RED)
 		State.paint(Vector3i(17, 0, 0), Color.RED)
 		renderer = load("res://ui/Viewport/VoxelRenderer.tscn").instantiate()

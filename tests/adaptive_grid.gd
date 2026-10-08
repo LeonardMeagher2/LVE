@@ -20,7 +20,7 @@ func _run() -> void:
 		viewport.get_parent().stretch = false
 		viewport.size = Vector2i(800, 500)
 		grid = viewport.get_node("ViewportScene/Grid")
-		State.document = VoxiDocument.new()
+		State.document = VoxelDocument.new()
 		State.paint(Vector3i(-128, 0, -128), Color.RED)
 		State.paint(Vector3i(128, 0, 128), Color.RED)
 		State.floor_axis = Vector3.Axis.AXIS_Y

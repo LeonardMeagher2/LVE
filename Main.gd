@@ -3,7 +3,7 @@ extends Control
 const UI_SETTINGS_PATH := "user://interface.cfg"
 var _ui_scale := 0.0
 var _scale_check_elapsed := 0.0
-var _title_document: VoxiDocument
+var _title_document: VoxelDocument
 
 
 func _enter_tree() -> void:
@@ -27,7 +27,7 @@ func _on_document_changed() -> void:
 
 
 func _update_window_title() -> void:
-	get_window().title = "%s - Voxi" % State.document.get_file_name()
+	get_window().title = "%s - %s" % [State.document.get_file_name(), VoxelDocument.APP_NAME]
 
 
 func _ready() -> void:

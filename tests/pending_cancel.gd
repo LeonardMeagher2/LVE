@@ -19,10 +19,10 @@ func _run() -> void:
 		viewport.get_parent().stretch = false
 		viewport.size = Vector2i(800, 500)
 		clipboard = plugin("ClipboardPlugin")
-		State.document = VoxiDocument.new()
+		State.document = VoxelDocument.new()
 		State.get_current_voxel_frame().set_cell(Vector3i.ZERO, Color.RED)
 		clipboard.copy_voxels()
-		State.document = VoxiDocument.new()
+		State.document = VoxelDocument.new()
 		frame = State.get_current_voxel_frame()
 		frame.set_cell(Vector3i(-8, 0, 0), Color.GREEN)
 		State.selection.add(Vector3i(-6, 0, 0))
@@ -63,7 +63,7 @@ func _run() -> void:
 	await get_tree().process_frame
 	step("Then cancelled clipboard work cannot start a new paste", _expect_cancelled_paste)
 	step("Given the Line tool with an empty document", func():
-		State.document = VoxiDocument.new()
+		State.document = VoxelDocument.new()
 		select_toolbar_item("Toolbar", "Line")
 		camera_rig().set_view("top")
 	)
@@ -84,7 +84,7 @@ func _run() -> void:
 	)
 	for tool_name in ["Move", "Rotate", "Scale"]:
 		step("Given a selected shape and the %s tool" % tool_name, func():
-			State.document = VoxiDocument.new()
+			State.document = VoxelDocument.new()
 			frame = State.get_current_voxel_frame()
 			frame.set_cell(Vector3i.ZERO, Color.RED)
 			State.selection.from_box(Vector3i.ZERO, Vector3i(2, 1, 0))

@@ -1,6 +1,6 @@
-extends VoxiPlugin
+extends VoxelPlugin
 
-const CLIPBOARD_PREFIX := '{"voxi_voxels":'
+const CLIPBOARD_PREFIX := '{"voxel_voxels":'
 
 @onready var _options := preload("./Options.tscn").instantiate()
 @onready var _paste_tool := preload("./PasteTool.tscn").instantiate()
@@ -40,7 +40,7 @@ class ClipboardCopyJob extends BrushToolSettings.CopyJob:
 			selected_records.append([offset.x, offset.y, offset.z])
 			if selected_records.size() % 4096 == 0 and not checkpoint(selected_records.size()):
 				return
-		text = JSON.stringify({"voxi_voxels": records, "voxi_selection": selected_records}, "", false, true)
+		text = JSON.stringify({"voxel_voxels": records, "voxel_selection": selected_records}, "", false, true)
 		if cut_source and checkpoint(0):
 			stage("Cutting voxels", _colors.size())
 			var changes := {}
@@ -58,11 +58,11 @@ class ClipboardImportJob extends VoxelFrame.EditJob:
 	func run() -> void:
 		stage("Reading voxel clipboard", -1)
 		var data = JSON.parse_string(text)
-		if not data is Dictionary or not data.get("voxi_voxels") is Array:
+		if not data is Dictionary or not data.get("voxel_voxels") is Array:
 			return
-		stage("Reading voxel clipboard", data.voxi_voxels.size())
+		stage("Reading voxel clipboard", data.voxel_voxels.size())
 		var completed := 0
-		for record in data.voxi_voxels:
+		for record in data.voxel_voxels:
 			if not record is Array or record.size() != 7:
 				pattern = {}
 				return
@@ -75,7 +75,7 @@ class ClipboardImportJob extends VoxelFrame.EditJob:
 			completed += 1
 			if completed % 4096 == 0 and not checkpoint(completed):
 				return
-		var selected_records = data.get("voxi_selection", [])
+		var selected_records = data.get("voxel_selection", [])
 		if not selected_records is Array:
 			pattern = {}
 			return

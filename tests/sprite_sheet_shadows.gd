@@ -21,7 +21,7 @@ func _run() -> void:
 		exporter = plugin("ExportPlugin")
 		settings = exporter._sheet_settings
 		lighting = exporter._controls.get_node("LightingOptions")
-		State.document = VoxiDocument.new()
+		State.document = VoxelDocument.new()
 		var frame := State.get_current_voxel_frame()
 		for x in range(-3, 4):
 			for z in range(-3, 4):
@@ -36,7 +36,7 @@ func _run() -> void:
 		exporter._model_camera.set_view("isometric")
 		lighting.get_node("Enabled").button_pressed = true
 		lighting.get_node("LockView").button_pressed = false
-		prefix = "user://voxi_shadow_%s" % Time.get_ticks_usec()
+		prefix = "user://voxel_shadow_%s" % Time.get_ticks_usec()
 	)
 	for camera_case in [{"view": 1, "ortho": true}, {"view": 1, "ortho": false}, {"view": 0, "ortho": true}, {"view": 0, "ortho": false}]:
 		var orthographic: bool = camera_case.ortho

@@ -1,6 +1,6 @@
 # NOTES.md
 
-This file records confirmed, non-obvious facts learned while working on Voxi. Record a new learning during the task that finds it. Use one bullet per learning. Start the bullet with the date. Keep the sentence short and in STE.
+This file records confirmed facts about Leonard's Voxel Editor. Record each learning during the task that finds it. Use one dated bullet per learning. Keep each sentence short and in STE.
 
 ## Godot API changes
 
@@ -54,7 +54,7 @@ This file records confirmed, non-obvious facts learned while working on Voxi. Re
 - 2026-08-19: `UndoRedo.commit_action(false)` registers the action without running the do methods. Use it when the do state already exists.
 - 2026-08-19: `MultiMesh.transform_format` defaults to `TRANSFORM_2D` (=0). Use `TRANSFORM_3D` (=1) for 3D instances. The scene saver drops properties equal to the default, so write the non-default value in `.tscn`.
 - 2026-08-19: `AABB` has `has_volume()` and `has_surface()`, not `has_area()`. An empty `AABB` has a zero `size`.
-- 2026-08-19: The document canvas is unbounded. `VoxiDocument.bounds()` returns an `AABB` over all frames. `grid_size` and `in_bounds` are removed.
+- 2026-08-19: The document canvas is unbounded. `VoxelDocument.bounds()` returns an `AABB` over all frames. `grid_size` and `in_bounds` are removed.
 - 2026-08-20: `ResourceSaver` persists only `@export` properties. A plain `var` is dropped from the saved `.tres`. `VoxelFrame.cells` is now `@export`.
 - 2026-08-20: This Steam build writes `unique_id` on every node and resolves `parent=` as the full path from the scene root. Hand-editing a node with a short relative parent path breaks instantiation. The node and its subtree are skipped. Re-save the scene in the editor to regenerate the full path and `unique_id`.
 - 2026-08-21: An `AnimationPlayer` property track resolves its node path relative to `root_node`. A player nested under the node that owns the animated property needs `root_node = NodePath("../..")` to target it.

@@ -13,7 +13,7 @@ func _ready() -> void:
 
 func _run() -> void:
 	step("Given a selected red block and a distant red voxel", func():
-		State.document = VoxiDocument.new()
+		State.document = VoxelDocument.new()
 		source_frame = State.get_current_voxel_frame()
 		for z in 20:
 			for y in 20:
@@ -95,7 +95,7 @@ func _run() -> void:
 		activate_tool("fill")
 		State.current_color = Color.GREEN
 		_fill()
-		State.document = VoxiDocument.new()
+		State.document = VoxelDocument.new()
 	)
 	await _settle_fill()
 	step("Then the replacement document receives no old fill", func():

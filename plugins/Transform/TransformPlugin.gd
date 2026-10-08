@@ -1,4 +1,4 @@
-extends VoxiPlugin
+extends VoxelPlugin
 
 var _settings := preload("./settings.tres")
 

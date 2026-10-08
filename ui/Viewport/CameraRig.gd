@@ -58,11 +58,11 @@ func center_active() -> void:
 		bounds = State.document.bounds()
 	center_on(bounds)
 
-func _frame_distance(d: VoxiDocument) -> float:
+func _frame_distance(d: VoxelDocument) -> float:
 	return max(d.bounds().size.length(), 16.0) * 1.25
 
 
-func _frame_target(d: VoxiDocument) -> Vector3:
+func _frame_target(d: VoxelDocument) -> Vector3:
 	return d.bounds().get_center()
 
 

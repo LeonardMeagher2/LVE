@@ -2,7 +2,7 @@ extends "./SelectTool.gd"
 
 const FillTool := preload("res://plugins/Fill/FillTool.gd")
 
-var _source_document: VoxiDocument
+var _source_document: VoxelDocument
 var _source_frame: VoxelFrame
 var _job: WandJob
 var _operation_id := 0

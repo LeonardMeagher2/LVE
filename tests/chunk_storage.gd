@@ -15,7 +15,7 @@ func _ready() -> void:
 
 func _run() -> void:
 	step("Given a solid chunk and a separate negative-coordinate voxel", func():
-		State.document = VoxiDocument.new()
+		State.document = VoxelDocument.new()
 		original = State.get_current_voxel_frame()
 		for z in 16:
 			for y in 16:
@@ -51,14 +51,17 @@ func _run() -> void:
 		State.undo_redo.redo()
 		redo_us = Time.get_ticks_usec() - started
 		data = duplicate.voxel_data
-		var error := ResourceSaver.save(duplicate, "user://chunk_storage_test.tres")
-		expect(error == OK, "the chunk resource saves")
-		restored = ResourceLoader.load("user://chunk_storage_test.tres", "", ResourceLoader.CACHE_MODE_IGNORE)
-		DirAccess.remove_absolute("user://chunk_storage_test.tres")
+		var document := VoxelDocument.new()
+		document.frames.assign([duplicate])
+		var error := document.save_file("user://chunk_storage_test.lve")
+		expect(error == OK, "the compact document saves")
+		var loaded := VoxelDocument.load_file("user://chunk_storage_test.lve")
+		restored = loaded.frames[0] if loaded else null
+		DirAccess.remove_absolute("user://chunk_storage_test.lve")
 	)
 	step("Then the compact file preserves every voxel and color", func():
 		expect(data.size() < 2048, "the uniform chunk uses less than two kilobytes")
-		expect(restored != null, "the chunk resource loads")
+		expect(restored != null, "the compact document loads")
 		if restored:
 			expect(restored.count() == 4097, "the file restores all occupied cells")
 			expect(restored.get_color(Vector3i(15, 15, 15)) == Color.BLUE, "the solid region keeps its blue color")

@@ -1,6 +1,6 @@
-[gd_resource type="Resource" script_class="VoxiDocument" format=4]
+[gd_resource type="Resource" script_class="VoxelDocument" format=4]
 
-[ext_resource type="Script" path="res://Globals/State/Document/VoxiDocument.gd" id="1"]
+[ext_resource type="Script" path="res://Globals/State/Document/VoxelDocument.gd" id="1"]
 
 [resource]
 script = ExtResource("1")

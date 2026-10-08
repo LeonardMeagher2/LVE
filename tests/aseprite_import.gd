@@ -17,7 +17,7 @@ func _run() -> void:
 		var image := Image.create(2, 1, false, Image.FORMAT_RGBA8)
 		image.set_pixel(0, 0, Color.RED)
 		image.set_pixel(1, 0, Color.BLUE)
-		png_path = "user://voxi_aseprite_%s.png" % Time.get_ticks_usec()
+		png_path = "user://voxel_aseprite_%s.png" % Time.get_ticks_usec()
 		json_path = png_path.get_basename() + ".json"
 		expect(image.save_png(png_path) == OK, "the trimmed PNG fixture is saved")
 		var data := {

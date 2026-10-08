@@ -1,4 +1,4 @@
-extends VoxiPlugin
+extends VoxelPlugin
 
 @onready var _toolbar := preload("./Toolbar.tscn").instantiate()
 @onready var _tool := preload("./EyedropperTool.tscn").instantiate()

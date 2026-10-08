@@ -66,6 +66,10 @@ icon_alignment = 1
 [node name="FileDialog" type="FileDialog" parent="." unique_id=2039805265]
 unique_name_in_owner = true
 
+[node name="FileError" type="AcceptDialog" parent="."]
+unique_name_in_owner = true
+title = "Leonard's Voxel Editor"
+
 [connection signal="pressed" from="NewBtn" to="." method="_on_new_btn_pressed"]
 [connection signal="pressed" from="OpenBtn" to="." method="_on_open_btn_pressed"]
 [connection signal="pressed" from="SaveBtn" to="." method="_on_save_btn_pressed"]

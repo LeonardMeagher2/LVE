@@ -85,7 +85,7 @@ func _run() -> void:
 		activate_tool("transform")
 		select_toolbar_item("transform", "Scale")
 		_press()
-		State.document = VoxiDocument.new()
+		State.document = VoxelDocument.new()
 	)
 	await _settle()
 	step("Then the replacement document stays empty", func():
@@ -95,7 +95,7 @@ func _run() -> void:
 
 
 func _setup() -> void:
-	State.document = VoxiDocument.new()
+	State.document = VoxelDocument.new()
 	source_frame = State.get_current_voxel_frame()
 	for z in 20:
 		for y in 20:

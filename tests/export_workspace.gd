@@ -4,14 +4,14 @@ var exporter: Node
 var tabs: TabContainer
 var original_camera: Transform3D
 var original_selection: Dictionary
-var original_document: VoxiDocument
+var original_document: VoxelDocument
 var extra_tab: Control
 var error: Error
 var saved_revision := 0
 var saved_preview: Image
 var complete_frames := true
-const MODEL_PATH := "user://voxi_workspace_model.glb"
-const SHEET_PATH := "user://voxi_workspace_sheet.png"
+const MODEL_PATH := "user://voxel_workspace_model.glb"
+const SHEET_PATH := "user://voxel_workspace_sheet.png"
 
 
 func _ready() -> void:
@@ -23,7 +23,7 @@ func _run() -> void:
 	step("Given two colored frames and an editor selection", func():
 		exporter = plugin("ExportPlugin")
 		tabs = main.get_node("%TabContainer")
-		State.document = VoxiDocument.new()
+		State.document = VoxelDocument.new()
 		State.get_voxel_frame(0).set_cell(Vector3i(4, 2, 1), Color.RED)
 		State.document.add_frame()
 		State.get_voxel_frame(1).set_cell(Vector3i(5, 2, 1), Color.BLUE)
@@ -189,7 +189,7 @@ func _run() -> void:
 		var selector: OptionButton = exporter._model.get_node("AnimationRow/Tags")
 		selector.select(2)
 		selector.item_selected.emit(2)
-		var loaded := VoxiDocument.new()
+		var loaded := VoxelDocument.new()
 		loaded.frames[0].set_cells({Vector3i.ZERO: Color.GREEN, Vector3i(17, 0, 0): Color.BLUE})
 		State.document = loaded
 	)

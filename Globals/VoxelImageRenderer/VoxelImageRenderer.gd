@@ -136,3 +136,44 @@ static func apply_lighting(light: DirectionalLight3D, environment: Environment, 
 	light.shadow_enabled = settings.shadows
 	environment.ambient_light_color = settings.ambient_color
 	environment.ambient_light_energy = settings.ambient_energy
+
+
+func render_document_preview(document: VoxelDocument) -> Image:
+	if DisplayServer.get_name() == "headless":
+		return null
+	var viewport: SubViewport = VIEWPORT_SCENE.instantiate()
+	viewport.size = Vector2i(256, 256)
+	add_child(viewport)
+	var renderer: VoxelRenderer = viewport.get_node("%VoxelRenderer")
+	renderer.source_frame = document.frames[0].copy_frame()
+	var camera: Camera3D = viewport.get_node("Node3D/Camera3D")
+	var light: DirectionalLight3D = viewport.get_node("Node3D/Light")
+	var environment_node: WorldEnvironment = viewport.get_node("Node3D/WorldEnvironment")
+	environment_node.environment = environment_node.environment.duplicate()
+	var environment := environment_node.environment
+	light.basis = document.lighting_settings.get("basis", light.basis)
+	var color: Color = document.lighting_settings.get("color", light.light_color)
+	light.light_energy = color.a
+	color.a = 1.0
+	light.light_color = color
+	color = document.lighting_settings.get("ambient_color", environment.ambient_light_color)
+	environment.ambient_light_energy = color.a
+	color.a = 1.0
+	environment.ambient_light_color = color
+	frame_camera(camera, renderer.source_frame.get_bounds(), yaw_degrees, pitch_degrees, true)
+	apply_directional_shadow(light, camera)
+	while not renderer.is_settled():
+		await get_tree().process_frame
+		if document != State.document:
+			viewport.free()
+			return null
+	for draw in 2:
+		viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
+		await RenderingServer.frame_post_draw
+		if document != State.document:
+			viewport.free()
+			return null
+	var image := viewport.get_texture().get_image()
+	image.convert(Image.FORMAT_RGBA8)
+	viewport.free()
+	return image

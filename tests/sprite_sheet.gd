@@ -9,7 +9,7 @@ var cancel_path := ""
 var turntable_path := ""
 var voxel_size_path := ""
 var camera_size_path := ""
-var original_document: VoxiDocument
+var original_document: VoxelDocument
 var renderer_count := 0
 var cancelled_result: Error = OK
 var cancelled_done := false
@@ -25,7 +25,7 @@ func _run() -> void:
 		exporter = plugin("ExportPlugin")
 		controls = exporter._controls
 		settings = exporter._sheet_settings
-		State.document = VoxiDocument.new()
+		State.document = VoxelDocument.new()
 		settings.get_node("TurntableRow/Turntable").button_pressed = false
 		State.get_current_voxel_frame().set_cell(Vector3i(-1, 0, 0), Color.RED)
 		State.document.add_frame()
@@ -35,7 +35,7 @@ func _run() -> void:
 		State.frames_changed.emit()
 		State.active_tag = State.document.add_tag("Blue", 1, 1, AnimationTag.LoopMode.REVERSE, 2)
 		original_document = State.document
-		var prefix := "user://voxi_sprite_sheet_%s" % Time.get_ticks_usec()
+		var prefix := "user://voxel_sprite_sheet_%s" % Time.get_ticks_usec()
 		sheet_path = prefix + ".png"
 		tag_path = prefix + "_tag.png"
 		cancel_path = prefix + "_cancel.png"

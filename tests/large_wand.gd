@@ -13,7 +13,7 @@ func _ready() -> void:
 
 func _run() -> void:
 	step("Given a large red block, a distant red voxel, and a blue marker", func():
-		State.document = VoxiDocument.new()
+		State.document = VoxelDocument.new()
 		source = State.get_current_voxel_frame()
 		for x in 18:
 			for y in 18:

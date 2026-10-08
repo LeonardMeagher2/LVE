@@ -146,7 +146,7 @@ func _run() -> void:
 
 
 func _empty() -> void:
-	State.document = VoxiDocument.new()
+	State.document = VoxelDocument.new()
 	frame = State.get_current_voxel_frame()
 	State.floor_axis = Vector3.Axis.AXIS_Y
 	camera_rig().set_view("top")

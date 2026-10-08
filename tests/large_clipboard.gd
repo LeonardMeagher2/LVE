@@ -16,7 +16,7 @@ func _ready() -> void:
 func _run() -> void:
 	step("Given a selected colored volume and an unselected marker", func():
 		clipboard = plugin("ClipboardPlugin")
-		State.document = VoxiDocument.new()
+		State.document = VoxelDocument.new()
 		source = State.get_current_voxel_frame()
 		for x in 18:
 			for y in 18:
@@ -90,7 +90,7 @@ func _run() -> void:
 		expect(not State.undo_redo.has_undo(), "the cancelled paste adds no history action")
 	)
 	step("Given another copy of the selected source volume", func():
-		var document := VoxiDocument.new()
+		var document := VoxelDocument.new()
 		document.frames[0] = source.copy_frame()
 		State.document = document
 		target = State.get_current_voxel_frame()
@@ -118,7 +118,7 @@ func _run() -> void:
 
 
 func _empty_target() -> void:
-	State.document = VoxiDocument.new()
+	State.document = VoxelDocument.new()
 	target = State.get_current_voxel_frame()
 	State.floor_axis = Vector3.Axis.AXIS_Y
 	camera_rig().set_view("top")

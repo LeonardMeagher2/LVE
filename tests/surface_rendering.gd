@@ -12,7 +12,7 @@ func _ready() -> void:
 
 func _run() -> void:
 	step("Given a solid red chunk and the surface renderer", func():
-		State.document = VoxiDocument.new()
+		State.document = VoxelDocument.new()
 		for z in 16:
 			for y in 16:
 				for x in 16:

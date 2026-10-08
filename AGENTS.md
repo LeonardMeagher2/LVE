@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Voxi is a Godot voxel-animation editor. Godot is the only toolchain. [TASKS.md](TASKS.md) tracks the roadmap. Work on one active task at a time.
+Leonard's Voxel Editor is a Godot voxel-animation editor. Godot is the only toolchain. [TASKS.md](TASKS.md) tracks the roadmap. Work on one active task at a time.
 
 ## Coding standards
 

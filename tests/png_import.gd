@@ -4,7 +4,7 @@ var importer: Node
 var clipboard: Node
 var image_path := ""
 var transparent_path := ""
-var previous_document: VoxiDocument
+var previous_document: VoxelDocument
 var marker := Vector3i(24, 0, 0)
 
 
@@ -25,9 +25,9 @@ func _run() -> void:
 		image.set_pixel(0, 1, Color.YELLOW)
 		image.set_pixel(2, 1, Color(1, 0, 0, 192.0 / 255.0))
 		image.set_pixel(3, 1, Color.BLACK)
-		image_path = "user://voxi_png_test_%s.png" % Time.get_ticks_usec()
+		image_path = "user://voxel_png_test_%s.png" % Time.get_ticks_usec()
 		expect(image.save_png(image_path) == OK, "the PNG fixture is saved")
-		State.document = VoxiDocument.new()
+		State.document = VoxelDocument.new()
 		previous_document = State.document
 		State.get_current_voxel_frame().set_cell(marker, Color.GREEN)
 		State.document.palette.assign([Color.GREEN])
@@ -74,7 +74,7 @@ func _run() -> void:
 	step("Given a fully transparent PNG", func():
 		var image := Image.create(2, 2, false, Image.FORMAT_RGBA8)
 		image.fill(Color.TRANSPARENT)
-		transparent_path = "user://voxi_png_empty_%s.png" % Time.get_ticks_usec()
+		transparent_path = "user://voxel_png_empty_%s.png" % Time.get_ticks_usec()
 		expect(image.save_png(transparent_path) == OK, "the transparent fixture is saved")
 	)
 	var error: Error = await importer.import_image(transparent_path)

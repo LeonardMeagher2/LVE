@@ -58,7 +58,7 @@ class EraseJob extends VoxelFrame.EditJob:
 
 
 var playback := AnimationPlayback.new()
-var document: VoxiDocument : set=set_document
+var document: VoxelDocument : set=set_document
 
 var current_frame: int:
 	get:
@@ -122,7 +122,7 @@ func _init() -> void:
 	playback.frame_changed.connect(frame_changed.emit)
 	playback.is_playing_toggled.connect(is_playing_toggled.emit)
 	playback.tag_changed.connect(tag_changed.emit)
-	document = VoxiDocument.new()
+	document = VoxelDocument.new()
 
 func _ready() -> void:
 	load_default_palette()
@@ -145,7 +145,7 @@ func _ready() -> void:
 	
 
 
-func set_document(value:VoxiDocument) -> void:
+func set_document(value:VoxelDocument) -> void:
 	if value == document:
 		return
 	edit_context_changing.emit()
@@ -159,10 +159,10 @@ func set_document(value:VoxiDocument) -> void:
 	selection.clear()
 	selection_changed.emit()
 	undo_redo.clear_history()
-	if value is VoxiDocument:
+	if value is VoxelDocument:
 		document = value
 	else:
-		document = VoxiDocument.new()
+		document = VoxelDocument.new()
 		document.palette.assign(default_palette)
 		_apply_color(default_palette[0])
 	if document.tags.is_empty():
@@ -176,10 +176,10 @@ func set_document(value:VoxiDocument) -> void:
 	current_frame = 0
 
 
-func add_plugin(plugin: VoxiPlugin) -> void:
+func add_plugin(plugin: VoxelPlugin) -> void:
 	get_node("/root").add_child.call_deferred(plugin, true)
 	
-func remove_plugin(plugin: VoxiPlugin) -> void:
+func remove_plugin(plugin: VoxelPlugin) -> void:
 	get_node("/root").remove_child(plugin)
 	plugin.queue_free()
 

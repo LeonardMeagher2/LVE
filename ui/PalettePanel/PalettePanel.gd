@@ -136,13 +136,13 @@ func _on_export_btn_pressed() -> void:
 func _on_import_file_selected(path: String) -> void:
 	var error := await import_palette(path)
 	if error != OK and error != ERR_BUSY:
-		push_error("Voxi: palette import failed: %s" % error_string(error))
+		push_error("LVE: palette import failed: %s" % error_string(error))
 
 
 func _on_export_file_selected(path: String) -> void:
 	var error := export_palette(path)
 	if error != OK and error != ERR_BUSY:
-		push_error("Voxi: palette export failed: %s" % error_string(error))
+		push_error("LVE: palette export failed: %s" % error_string(error))
 
 
 func _on_palette_action(id: int) -> void:
@@ -155,7 +155,7 @@ func _on_palette_action(id: int) -> void:
 		PaletteAction.RESET_DEFAULT:
 			error = State.reset_default_palette()
 	if error != OK and error != ERR_BUSY:
-		push_error("Voxi: default palette change failed: %s" % error_string(error))
+		push_error("LVE: default palette change failed: %s" % error_string(error))
 
 
 func import_palette(path: String) -> Error:

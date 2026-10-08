@@ -24,7 +24,7 @@ func _process(_delta: float) -> void:
 
 func _run() -> void:
 	step("Given a selected solid block with 32768 voxels", func():
-		State.document = VoxiDocument.new()
+		State.document = VoxelDocument.new()
 		var frame := State.get_current_voxel_frame()
 		for z in 32:
 			for y in 32:

@@ -18,14 +18,14 @@ func _ready() -> void:
 
 func _run() -> void:
 	step("Given a document with undo history", func():
-		State.document = VoxiDocument.new()
+		State.document = VoxelDocument.new()
 		document_ref = weakref(State.document)
 		State.begin_stroke()
 		State.paint(Vector3i.ZERO, Color.RED)
 		State.end_stroke("Paint")
 	)
 	step("When the user starts another document", func():
-		State.document = VoxiDocument.new()
+		State.document = VoxelDocument.new()
 	)
 	await get_tree().process_frame
 	await get_tree().process_frame
@@ -42,7 +42,7 @@ func _run() -> void:
 	step("When the view is detached and the document changes", func():
 		detached_frame = State.get_current_voxel_frame()
 		main.remove_child(renderer)
-		State.document = VoxiDocument.new()
+		State.document = VoxelDocument.new()
 	)
 	step("Then the detached view stops following document changes", func():
 		expect(renderer._displayed_frame == detached_frame, "the detached view starts no document rebuild")
@@ -74,7 +74,7 @@ func _run() -> void:
 		expect(not is_instance_valid(temporary_history), "deleting State frees its UndoRedo object")
 	)
 	step("Given a brush source worker preparing a large voxel pattern", func():
-		State.document = VoxiDocument.new()
+		State.document = VoxelDocument.new()
 		var colors := {}
 		for x in 32:
 			for y in 32:
@@ -96,7 +96,7 @@ func _run() -> void:
 	step("Then the source worker and its captured frame are released", func():
 		expect(source_job_ref != null and source_job_ref.get_ref() == null, "the cancelled brush source job is released")
 		expect(not State.edit_busy(), "deleting brush controls releases the foreground operation")
-		State.document = VoxiDocument.new()
+		State.document = VoxelDocument.new()
 	)
 	if DisplayServer.get_name() != "headless":
 		step("When the user opens Export before unloading its live preview", func():

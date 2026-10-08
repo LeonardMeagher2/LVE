@@ -19,9 +19,9 @@ func _run() -> void:
 		clipboard = plugin("ClipboardPlugin")
 		var image := Image.create(128, 128, false, Image.FORMAT_RGBA8)
 		image.fill(Color.RED)
-		image_path = "user://voxi_png_large_%s.png" % Time.get_ticks_usec()
+		image_path = "user://voxel_png_large_%s.png" % Time.get_ticks_usec()
 		expect(image.save_png(image_path) == OK, "the large PNG fixture is saved")
-		State.document = VoxiDocument.new()
+		State.document = VoxelDocument.new()
 		frame = State.get_current_voxel_frame()
 		State.floor_axis = Vector3.Axis.AXIS_Y
 		camera_rig().set_view("top")
@@ -41,7 +41,7 @@ func _run() -> void:
 	step("When the user changes documents while another PNG is loading", func():
 		_start_cancelled_import()
 		expect(State.edit_busy(), "PNG loading reports foreground work")
-		State.document = VoxiDocument.new()
+		State.document = VoxelDocument.new()
 	)
 	while not cancelled_done:
 		await get_tree().process_frame

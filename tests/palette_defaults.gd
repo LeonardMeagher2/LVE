@@ -18,7 +18,7 @@ func _run() -> void:
 		expect(not State.get_palette().is_empty(), "the startup palette contains colors")
 		expect(State.current_color == State.get_palette()[0], "startup selects the first palette color")
 		expect(not State.undo_redo.has_undo(), "the startup palette adds no undo action")
-		settings_path = "user://voxi_palette_default_%s.cfg" % Time.get_ticks_usec()
+		settings_path = "user://voxel_palette_default_%s.cfg" % Time.get_ticks_usec()
 	)
 	step("When no saved default palette exists", func():
 		State.load_default_palette(settings_path)
@@ -85,7 +85,7 @@ func _run() -> void:
 		expect(not State.undo_redo.has_undo(), "the new document starts with an empty undo history")
 	)
 	step("When the user opens a document with a different palette", func():
-		var document := VoxiDocument.new()
+		var document := VoxelDocument.new()
 		document.palette.assign([Color.BLUE, Color.RED])
 		State.document = document
 	)

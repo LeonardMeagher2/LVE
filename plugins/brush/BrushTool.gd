@@ -5,7 +5,7 @@ const BrushSettings := preload("./BrushToolSettings.gd")
 
 var _settings := preload("./settings.tres")
 var _filter := PixelPerfectStroke.new()
-var _source_document: VoxiDocument
+var _source_document: VoxelDocument
 var _source_frame: VoxelFrame
 var _stroke_open := false
 var _end_requested := false

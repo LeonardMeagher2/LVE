@@ -11,7 +11,7 @@ func _ready() -> void:
 
 
 func _run() -> void:
-	State.document = VoxiDocument.new()
+	State.document = VoxelDocument.new()
 	while State.get_activity() != null:
 		await get_tree().process_frame
 	step("Given the status bar and a short operation", func():
@@ -68,7 +68,7 @@ func _run() -> void:
 	)
 	step("When the document changes during an operation", func():
 		State.begin_operation("Old document", -1, true, self)
-		State.document = VoxiDocument.new()
+		State.document = VoxelDocument.new()
 	)
 	step("Then the new document has no old activity", func():
 		expect(State.get_activity() == null, "document replacement clears the old activity")

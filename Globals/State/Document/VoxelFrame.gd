@@ -294,6 +294,10 @@ func get_bounds() -> AABB:
 
 
 func _encode() -> PackedByteArray:
+	return var_to_bytes(storage_data())
+
+
+func storage_data() -> Array:
 	var serialized_chunks: Array = []
 	for chunk_location in chunks:
 		var chunk: Chunk = chunks[chunk_location]
@@ -313,7 +317,7 @@ func _encode() -> PackedByteArray:
 			_encode_region(cell_color_ids, Vector3i.ZERO, CHUNK_SIZE, octree_nodes)
 			chunk.serialized_record = [chunk_location, color_table, octree_nodes]
 		serialized_chunks.append(chunk.serialized_record)
-	return var_to_bytes([1, serialized_chunks])
+	return [1, serialized_chunks]
 
 
 static func _encode_region(cell_color_ids: PackedInt32Array, region_origin: Vector3i, region_size: int, octree_nodes: PackedInt32Array) -> void:
@@ -337,10 +341,15 @@ static func _encode_region(cell_color_ids: PackedInt32Array, region_origin: Vect
 
 
 func _decode(encoded_voxels: PackedByteArray) -> void:
-	var serialized_frame: Array = bytes_to_var(encoded_voxels)
-	if serialized_frame.size() != 2 or serialized_frame[0] != 1:
-		push_error("Unsupported voxel storage version")
+	var serialized_frame: Variant = bytes_to_var(encoded_voxels)
+	if validate_storage(serialized_frame) < 0:
+		push_error("Invalid voxel storage")
 		return
+	restore_storage(serialized_frame)
+
+
+# Call only after validate_storage succeeds for the complete document.
+func restore_storage(serialized_frame: Array) -> void:
 	var restored_chunks := {}
 	for serialized_chunk in serialized_frame[1]:
 		var chunk_location: Vector3i = serialized_chunk[0]
@@ -350,6 +359,63 @@ func _decode(encoded_voxels: PackedByteArray) -> void:
 		chunk.serialized_record = serialized_chunk
 		restored_chunks[chunk_location] = chunk
 	restore(restored_chunks)
+
+
+const MAX_STORED_VOXELS := 4 * 1024 * 1024
+const MAX_STORED_CHUNKS := 65536
+const MAX_CHUNK_COORDINATE := 65535
+
+
+# Count occupied leaves before expanding any chunk into voxel dictionaries.
+static func validate_storage(data: Variant, voxel_limit := MAX_STORED_VOXELS) -> int:
+	if not data is Array or data.size() != 2 or not data[0] is int or data[0] != 1 or not data[1] is Array:
+		return -1
+	if data[1].size() > MAX_STORED_CHUNKS:
+		return -1
+	var locations := {}
+	var occupied := 0
+	for record in data[1]:
+		if not record is Array or record.size() != 3 or not record[0] is Vector3i or not record[1] is PackedColorArray or not record[2] is PackedInt32Array:
+			return -1
+		var location: Vector3i = record[0]
+		if absi(location.x) > MAX_CHUNK_COORDINATE or absi(location.y) > MAX_CHUNK_COORDINATE or absi(location.z) > MAX_CHUNK_COORDINATE or locations.has(location):
+			return -1
+		locations[location] = true
+		var colors: PackedColorArray = record[1]
+		var nodes: PackedInt32Array = record[2]
+		if colors.is_empty() or colors.size() > 4097 or colors[0] != Color.TRANSPARENT or nodes.is_empty() or nodes.size() > 4681:
+			return -1
+		for color in colors:
+			if not is_finite(color.r) or not is_finite(color.g) or not is_finite(color.b) or not is_finite(color.a):
+				return -1
+			if color.r < 0.0 or color.r > 1.0 or color.g < 0.0 or color.g > 1.0 or color.b < 0.0 or color.b > 1.0 or color.a < 0.0 or color.a > 1.0:
+				return -1
+		var cursor := [0]
+		var chunk_count := _validate_region(nodes, cursor, colors.size(), CHUNK_SIZE)
+		if chunk_count < 0 or cursor[0] != nodes.size():
+			return -1
+		occupied += chunk_count
+		if occupied > voxel_limit:
+			return -1
+	return occupied
+
+
+static func _validate_region(nodes: PackedInt32Array, cursor: Array, color_count: int, size: int) -> int:
+	if cursor[0] >= nodes.size():
+		return -1
+	var color_id := nodes[cursor[0]]
+	cursor[0] += 1
+	if color_id >= 0:
+		return (0 if color_id == 0 else size * size * size) if color_id < color_count else -1
+	if color_id != -1 or size == 1:
+		return -1
+	var occupied := 0
+	for child in 8:
+		var child_count := _validate_region(nodes, cursor, color_count, size >> 1)
+		if child_count < 0:
+			return -1
+		occupied += child_count
+	return occupied
 
 
 static func _decode_region(octree_nodes: PackedInt32Array, node_cursor: Array, color_table: PackedColorArray, region_origin: Vector3i, region_size: int, restored_colors: Dictionary) -> void:

@@ -13,7 +13,7 @@ func _ready() -> void:
 
 func _run() -> void:
 	step("Given a solid block with a fully enclosed center chunk", func():
-		State.document = VoxiDocument.new()
+		State.document = VoxelDocument.new()
 		for z in 48:
 			for y in 48:
 				for x in 48:
@@ -71,7 +71,7 @@ func _run() -> void:
 		expect(scene_renderer._displayed_surface_keys.has(enclosed_chunk), "the enclosed chunk has its current display record")
 	)
 	step("When the user starts a new document", func():
-		State.document = VoxiDocument.new()
+		State.document = VoxelDocument.new()
 	)
 	step("Then the new document has no display records from the previous document", func():
 		expect(scene_renderer._displayed_surface_keys.is_empty(), "the new document has no stale display records")

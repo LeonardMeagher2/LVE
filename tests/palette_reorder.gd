@@ -12,7 +12,7 @@ func _ready() -> void:
 func _run() -> void:
 	step("Given three swatches with blue as the working color", func():
 		grid = main.find_child("PalettePanel", true, false).get_node("%SwatchGrid")
-		State.document = VoxiDocument.new()
+		State.document = VoxelDocument.new()
 		frame = State.get_current_voxel_frame()
 		frame.set_cell(Vector3i.ZERO, Color.MAGENTA)
 		State.document.palette.assign([Color.RED, Color.GREEN, Color.BLUE])
@@ -60,11 +60,11 @@ func _run() -> void:
 	step("Then the palette keeps its order and history", func():
 		expect(State.get_palette() == PackedColorArray([Color.RED, Color.GREEN, Color.BLUE]), "dropping onto the same swatch preserves the order")
 		expect(not State.undo_redo.has_undo(), "dropping onto the same swatch adds no undo action")
-		expect(not grid.get_child(0)._can_drop_data(Vector2.ZERO, {"type": "voxi_frame", "from": 1}), "palette swatches reject animation frame drags")
+		expect(not grid.get_child(0)._can_drop_data(Vector2.ZERO, {"type": "voxel_frame", "from": 1}), "palette swatches reject animation frame drags")
 	)
 	step("When the user opens another document during a palette drag", func():
 		drag_data = grid.get_child(2)._get_drag_data(Vector2.ZERO)
-		State.document = VoxiDocument.new()
+		State.document = VoxelDocument.new()
 		State.document.palette.assign([Color.RED, Color.GREEN, Color.BLUE])
 		State.palette_changed.emit()
 		grid.get_child(0)._drop_data(Vector2.ZERO, drag_data)

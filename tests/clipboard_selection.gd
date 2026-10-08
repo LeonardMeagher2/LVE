@@ -25,7 +25,7 @@ func _run() -> void:
 		expect(frame.count() == 2, "Copy preserves both source voxels")
 		clipboard._pattern = {}
 		clipboard._selection_pattern = {}
-		State.document = VoxiDocument.new()
+		State.document = VoxelDocument.new()
 		frame = State.get_current_voxel_frame()
 		State.selection.add(Vector3i(-20, 0, 0))
 		State.selection_changed.emit()
@@ -61,7 +61,7 @@ func _run() -> void:
 		expect(State.selection.capture() == source_selection, "undo restores the exact cut selection")
 		State.undo_redo.redo()
 		expect(State.selection.is_empty(), "redo clears the cut selection")
-		State.document = VoxiDocument.new()
+		State.document = VoxelDocument.new()
 		frame = State.get_current_voxel_frame()
 	)
 	step("When the user pastes the cut voxels", func():
@@ -86,7 +86,7 @@ func _run() -> void:
 
 
 func _setup() -> void:
-	State.document = VoxiDocument.new()
+	State.document = VoxelDocument.new()
 	frame = State.get_current_voxel_frame()
 	frame.set_cell(Vector3i(2, 0, 0), Color.RED)
 	frame.set_cell(Vector3i(4, 0, 0), Color.BLUE)

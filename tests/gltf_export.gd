@@ -5,10 +5,10 @@ var exporter: Node
 var imported_scene: Node
 var player: AnimationPlayer
 var export_error := OK
-var source_document: VoxiDocument
+var source_document: VoxelDocument
 var json_data := {}
-const JSON_PATH := "user://voxi_export_test.gltf"
-const BINARY_PATH := "user://voxi_export_test.glb"
+const JSON_PATH := "user://voxel_export_test.gltf"
+const BINARY_PATH := "user://voxel_export_test.glb"
 const SOURCE_COLOR := Color(0.5, 0.25, 0.75, 0.5)
 
 
@@ -19,7 +19,7 @@ func _ready() -> void:
 
 func _run() -> void:
 	step("Given three frames with different geometry and animation tags", func():
-		State.document = VoxiDocument.new()
+		State.document = VoxelDocument.new()
 		source_document = State.document
 		source_document.frames[0].set_cell(Vector3i(-17, 3, -1), SOURCE_COLOR)
 		source_document.frames[0].delay_ms = 100
@@ -73,7 +73,7 @@ func _run() -> void:
 		expect(json_data.get("extensionsUsed", []).is_empty(), "the export uses only core glTF features")
 		var model_root := -1
 		for node_index in json_data.nodes.size():
-			if json_data.nodes[node_index].name == "Voxi":
+			if json_data.nodes[node_index].name == "LVE":
 				model_root = node_index
 		for node_index in json_data.nodes.size():
 			var node: Dictionary = json_data.nodes[node_index]

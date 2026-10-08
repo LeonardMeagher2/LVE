@@ -74,6 +74,23 @@ max_active: 1
 
 # Rendering and storage
 
+- [x] Build data-only documents and rebrand the editor as Leonard's Voxel Editor
+  - [x] Add versioned `.lve` files and document PNG chunks
+  - [x] Validate document data before voxel expansion
+  - [x] Add both Save As formats and PNG image fallback
+  - [x] Convert the flamingo PNG to the application SVG icon
+  - [x] Update application names and export metadata
+  - [x] Rename internal document and plugin types from Voxi to Voxel
+  - 2026-10-07: Godot's FileDialog changes only the final extension when a file filter changes.
+  - 2026-10-07: Dictionary property assignments can add StringName keys to dictionaries that contain string keys.
+  - [x] Document the format and verify the behavior tests
+  - [x] Run the full behavior suite and the final suite
+  - The focused storage, document-name, shading, clipboard, and windowed format tests pass with Godot 4.7.2.
+  - The full behavior suite passes after the internal rename corrections.
+  - The final full suite passes with Godot 4.7.2.
+  - An earlier final run reached the runner deadline after `selection_modes` reported a pass.
+  - The targeted selection test and the final suite retry pass.
+
 - [x] Fix the three test failures from the shadow task
   - [x] Send brush shape and toolbar clicks in viewport coordinates
   - [x] Use a dedicated legacy document fixture without the shading option

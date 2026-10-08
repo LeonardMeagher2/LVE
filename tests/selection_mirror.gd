@@ -15,7 +15,7 @@ func _run() -> void:
 		viewport = editor_viewport()
 		viewport.get_parent().stretch = false
 		viewport.size = Vector2i(800, 500)
-		State.document = VoxiDocument.new()
+		State.document = VoxelDocument.new()
 		State.symmetry_axes = 1
 		State.symmetry_origin = State.DEFAULT_SYMMETRY_ORIGIN
 		selection_plugin = plugin("SelectionPlugin")
@@ -67,7 +67,7 @@ func _run() -> void:
 		expect(frame.count() == 2 and frame.get_color(Vector3i(-3, 0, 2)) == Color.RED, "the selection permits the reflected brush edit")
 	)
 	step("When the user selects a cell with Lasso", func():
-		State.document = VoxiDocument.new()
+		State.document = VoxelDocument.new()
 		select_toolbar_item("selection", "Lasso")
 		selection_plugin._settings.mode = selection_plugin._settings.SelectMode.REPLACE
 		_click(Vector3(3, -0.5, 3))
@@ -76,7 +76,7 @@ func _run() -> void:
 		expect(State.selection.count() == 2 and State.selection.contains(Vector3i(-4, 0, 3)), "Lasso selects both sides of the mirror plane")
 	)
 	step("Given matching voxels for Wand selection", func():
-		State.document = VoxiDocument.new()
+		State.document = VoxelDocument.new()
 		frame = State.get_current_voxel_frame()
 		frame.set_cells({Vector3i(2, 0, 2): Color.RED, Vector3i(2, 0, 3): Color.RED})
 		select_toolbar_item("selection", "Wand")
@@ -91,7 +91,7 @@ func _run() -> void:
 		expect(State.selection.is_empty(), "one undo clears the symmetric Wand selection")
 	)
 	step("When the user selects a large region and changes symmetry during worker processing", func():
-		State.document = VoxiDocument.new()
+		State.document = VoxelDocument.new()
 		frame = State.get_current_voxel_frame()
 		var colors := {}
 		for x in range(1, 33):

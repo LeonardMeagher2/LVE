@@ -1,9 +1,9 @@
 extends "res://tests/test.gd"
 
-const OUTPUT := "user://voxi_simplification_test.glb"
+const OUTPUT := "user://voxel_simplification_test.glb"
 const CAVITY := Vector3i(0, 32, 32)
 var imported_scene: Node
-var source_document: VoxiDocument
+var source_document: VoxelDocument
 var raw_meshes: Array[ImporterMesh] = []
 var export_error := OK
 
@@ -15,7 +15,7 @@ func _ready() -> void:
 
 func _run() -> void:
 	step("Given a solid cube, a two-color cube, a cube with a cavity, and distant voxels", func():
-		State.document = VoxiDocument.new()
+		State.document = VoxelDocument.new()
 		source_document = State.document
 		var cells := {}
 		for z in 64:

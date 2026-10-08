@@ -5,7 +5,7 @@ const FORMATS := ["jpg", "jpeg", "webp", "svg", "exr", "dds"]
 var bar: Node
 var panel: PalettePanel
 var paths := {}
-var previous_document: VoxiDocument
+var previous_document: VoxelDocument
 
 
 func _ready() -> void:
@@ -20,7 +20,7 @@ func _run() -> void:
 		State.floor_axis = Vector3.Axis.AXIS_Y
 		var image := Image.create(4, 4, false, Image.FORMAT_RGBA8)
 		image.fill(Color.RED)
-		var prefix := "user://voxi_image_formats_%s" % Time.get_ticks_usec()
+		var prefix := "user://voxel_image_formats_%s" % Time.get_ticks_usec()
 		for extension in FORMATS:
 			var path: String = prefix + "." + ("SVG" if extension == "svg" else extension)
 			paths[extension] = path
@@ -40,7 +40,7 @@ func _run() -> void:
 	)
 	for extension in FORMATS:
 		step("Given a document before opening the %s image" % extension, func():
-			State.document = VoxiDocument.new()
+			State.document = VoxelDocument.new()
 			previous_document = State.document
 			State.get_current_voxel_frame().set_cell(Vector3i(30, 0, 0), Color.GREEN)
 			bar.current_save_path = "previous.tres"

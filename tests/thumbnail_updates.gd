@@ -9,7 +9,7 @@ func _ready() -> void:
 
 
 func _run() -> void:
-	State.document = VoxiDocument.new()
+	State.document = VoxelDocument.new()
 	watched = State.get_current_voxel_frame()
 	VoxelImageRenderer.frame_rendered.connect(_rendered)
 	step("When the user repeatedly edits one frame", func():

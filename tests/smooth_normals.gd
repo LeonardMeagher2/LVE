@@ -1,6 +1,6 @@
 extends "res://tests/test.gd"
 
-const DOCUMENT_PATH := "user://smooth_normals_test.tres"
+const DOCUMENT_PATH := "user://smooth_normals_test.lve"
 const MODEL_PATH := "user://smooth_normals_test.glb"
 const SHEET_PATH := "user://smooth_normals_test.png"
 const SEAM_CORNER := Vector3(15.5, 15.5, -0.5)
@@ -12,7 +12,7 @@ var preview: MeshInstance3D
 var source_colors := {}
 var flat_mesh: Mesh
 var smooth_mesh: Mesh
-var loaded: VoxiDocument
+var loaded: VoxelDocument
 var exporter: Node
 var export_error := OK
 var sheet_pixels := PackedByteArray()
@@ -25,7 +25,7 @@ func _ready() -> void:
 
 func _run() -> void:
 	step("Given a two-color model across four chunks", func():
-		State.document = VoxiDocument.new()
+		State.document = VoxelDocument.new()
 		for y in range(14, 18):
 			for x in range(14, 18):
 				source_colors[Vector3i(x, y, 0)] = Color.RED if x < 16 else Color.BLUE
@@ -115,7 +115,7 @@ func _run() -> void:
 	)
 	step("When the user saves the document and opens a new document", func():
 		bar.save_doc(DOCUMENT_PATH)
-		loaded = ResourceLoader.load(DOCUMENT_PATH, "", ResourceLoader.CACHE_MODE_IGNORE)
+		loaded = VoxelDocument.load_file(DOCUMENT_PATH)
 		bar.get_node("NewBtn").pressed.emit()
 		expect(not settings.is_item_checked(0), "a new document resets the menu item to flat shading")
 	)

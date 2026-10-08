@@ -280,7 +280,7 @@ func _run() -> void:
 
 
 func _empty() -> void:
-	State.document = VoxiDocument.new()
+	State.document = VoxelDocument.new()
 	State.floor_axis = Vector3.Axis.AXIS_Y
 	camera_rig().set_view("top")
 	camera_rig().is_orthogonal = true

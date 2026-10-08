@@ -14,7 +14,7 @@ var _dest_cells: Array[Vector3i] = []
 var _dest_colors := {}
 var _destination_bounds := AABB()
 var _covered := {}
-var _source_document: VoxiDocument
+var _source_document: VoxelDocument
 var _source_frame: VoxelFrame
 var _preview_revision := 0
 var _preview_running := false

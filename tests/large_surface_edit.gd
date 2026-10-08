@@ -16,7 +16,7 @@ func _ready() -> void:
 
 func _run() -> void:
 	step("Given a quarter-million-voxel frame", func():
-		State.document = VoxiDocument.new()
+		State.document = VoxelDocument.new()
 		State.paint(Vector3i.ZERO, Color.RED)
 		State.begin_stroke()
 		var colors := {}

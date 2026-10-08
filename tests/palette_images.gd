@@ -19,7 +19,7 @@ func _ready() -> void:
 func _run() -> void:
 	step("Given an image with repeated colors and transparent pixels", func():
 		panel = main.find_child("PalettePanel", true, false)
-		State.document = VoxiDocument.new()
+		State.document = VoxelDocument.new()
 		frame = State.get_current_voxel_frame()
 		frame.set_cell(Vector3i.ZERO, Color.MAGENTA)
 		State.selection.add(Vector3i.ONE)
@@ -27,7 +27,7 @@ func _run() -> void:
 		State.palette_changed.emit()
 		State.set_color(Color.MAGENTA)
 		State.undo_redo.clear_history()
-		var prefix := "user://voxi_palette_%s" % Time.get_ticks_usec()
+		var prefix := "user://voxel_palette_%s" % Time.get_ticks_usec()
 		image_path = prefix + "_source.png"
 		export_path = prefix + "_export.png"
 		transparent_path = prefix + "_transparent.png"
@@ -97,7 +97,7 @@ func _run() -> void:
 		expect(image.save_png(large_path) == OK, "the large palette image is saved")
 		_start_cancelled_import()
 		expect(State.edit_busy(), "the palette import reports foreground work")
-		State.document = VoxiDocument.new()
+		State.document = VoxelDocument.new()
 		State.document.palette.assign([Color.GREEN])
 		State.palette_changed.emit()
 	)

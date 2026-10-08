@@ -288,7 +288,7 @@ func export_gltf(path: String, center_origin := true, tag_index := -1) -> Error:
 		_finish_export()
 		return ERR_UNAVAILABLE
 	_export_root = Node3D.new()
-	_export_root.name = "Voxi"
+	_export_root.name = "LVE"
 	var material: StandardMaterial3D = preload("res://VoxelMaterial.tres").duplicate()
 	material.vertex_color_is_srgb = false
 	if job.has_transparency:
@@ -342,7 +342,7 @@ func export_gltf(path: String, center_origin := true, tag_index := -1) -> Error:
 		error = gltf_document.write_to_filesystem(gltf_state, path)
 	_finish_export()
 	if error != OK:
-		push_error("Voxi: glTF export failed: %s" % error_string(error))
+		push_error("LVE: glTF export failed: %s" % error_string(error))
 	return error
 
 

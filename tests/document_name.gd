@@ -4,7 +4,6 @@ var menu: Node
 var exporter: Node
 var first_path := ""
 var renamed_path := ""
-var legacy_path := ""
 var light_basis := Basis(Vector3.UP, PI / 3.0)
 
 
@@ -16,12 +15,11 @@ func _run() -> void:
 	step("Given a new document", func():
 		menu = main.get_node("%MenuBar")
 		exporter = plugin("ExportPlugin")
-		var prefix := "user://voxi_document_name_%s" % Time.get_ticks_usec()
-		first_path = prefix + ".tres"
-		renamed_path = prefix + "_renamed.tres"
-		legacy_path = prefix + "_legacy.tres"
+		var prefix := "user://voxel_document_name_%s" % Time.get_ticks_usec()
+		first_path = prefix + ".lve"
+		renamed_path = prefix + "_renamed.lve"
 		menu._on_new_btn_pressed()
-		expect(get_window().title == "Untitled - Voxi", "the new document has an untitled app window")
+		expect(get_window().title == "Untitled - " + VoxelDocument.APP_NAME, "the new document has an untitled app window")
 	)
 	step("When the user changes lighting and export settings", func():
 		var scene := viewport_scene()
@@ -41,14 +39,14 @@ func _run() -> void:
 		exporter._controls.get_node("LightingOptions/LightColor").color = Color(0, 0, 1, 0.5)
 		exporter._on_sheet_lighting_changed()
 		exporter._controls.get_node("LightingOptions/Shadows").button_pressed = false
-		menu.save_doc(first_path)
+		expect(menu.save_doc(first_path) == OK, "the document saves with the current settings")
 	)
 	step("Then the saved document uses its filename", func():
 		expect(FileAccess.file_exists(first_path), "the document file exists")
 		expect(State.document.get_file_name() == first_path.get_file(), "the document name is the file name")
-		expect(get_window().title == first_path.get_file() + " - Voxi", "the app title follows the saved file name")
-		var text := FileAccess.get_file_as_string(first_path)
-		expect(not text.contains("\ntitle =") and not text.contains("\nfile_path ="), "the file stores no title or source path")
+		expect(get_window().title == first_path.get_file() + " - " + VoxelDocument.APP_NAME, "the app title follows the saved file name")
+		var data := VoxelDocument.load_file(first_path).document_data()
+		expect(not data.has("title") and not data.has("file_path"), "the file stores no title or source path")
 		expect(not State.document.lighting_settings.has("shaded") and not State.document.lighting_settings.has("shadows"), "editor view options stay outside saved lighting")
 		expect(State.document.lighting_settings.color == Color.RED, "export color changes preserve the editor light color")
 	)
@@ -56,7 +54,7 @@ func _run() -> void:
 		menu.save_doc(renamed_path)
 	)
 	step("Then the app title follows the new filename", func():
-		expect(get_window().title == renamed_path.get_file() + " - Voxi", "Save As changes the app title")
+		expect(get_window().title == renamed_path.get_file() + " - " + VoxelDocument.APP_NAME, "Save As changes the app title")
 	)
 	step("When the user starts a new document and opens the saved file", func():
 		menu._on_new_btn_pressed()
@@ -64,7 +62,7 @@ func _run() -> void:
 		menu._on_file_opened(renamed_path)
 	)
 	step("Then saved settings return without changing editor view options", func():
-		expect(get_window().title == renamed_path.get_file() + " - Voxi", "opening a document changes the app title")
+		expect(get_window().title == renamed_path.get_file() + " - " + VoxelDocument.APP_NAME, "opening a document changes the app title")
 		expect(viewport_scene().get_lighting_settings().basis.is_equal_approx(light_basis), "the editor light direction is restored")
 		expect(not viewport_scene().get_lighting_settings().shadows, "the editor keeps its current Shadows view option")
 		expect(exporter._sheet_settings.get_node("SizeRow/Size").value == 24, "the manual frame size is restored")
@@ -73,15 +71,14 @@ func _run() -> void:
 		expect(not exporter._sheet_settings.get_node("TurntableRow/Metadata").button_pressed, "the saved metadata choice is restored")
 		expect(exporter._controls.get_node("LightingOptions/LightColor").color == Color(0, 0, 1, 0.5), "the export color and alpha strength are restored")
 	)
-	step("When the user opens an older document with a stored title", func():
-		var file := FileAccess.open(legacy_path, FileAccess.WRITE)
-		file.store_string(FileAccess.get_file_as_string(renamed_path) + "\ntitle = \"Old name\"\n")
-		file.close()
-		menu._on_file_opened(legacy_path)
+	step("When the user edits the document and opens the same file again", func():
+		State.paint(Vector3i(100, 100, 100), Color.RED)
+		menu._on_file_opened(renamed_path)
 	)
-	step("Then the older title is ignored", func():
-		expect(get_window().title == legacy_path.get_file() + " - Voxi", "the filename controls the app title for older files")
+	step("Then the file contents replace the unsaved edit", func():
+		expect(not State.document.has_cell(0, Vector3i(100, 100, 100)), "opening the same path restores the saved contents")
+		expect(get_window().title == renamed_path.get_file() + " - " + VoxelDocument.APP_NAME, "the filename controls the app title")
 	)
-	for path in [first_path, renamed_path, legacy_path]:
+	for path in [first_path, renamed_path]:
 		if FileAccess.file_exists(path):
 			DirAccess.remove_absolute(path)
