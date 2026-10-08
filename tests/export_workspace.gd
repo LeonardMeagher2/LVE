@@ -24,9 +24,9 @@ func _run() -> void:
 		exporter = plugin("ExportPlugin")
 		tabs = main.get_node("%TabContainer")
 		State.document = VoxelDocument.new()
-		State.get_voxel_frame(0).set_cell(Vector3i(4, 2, 1), Color.RED)
+		State.document.set_cell(0, Vector3i(4, 2, 1), Color.RED)
 		State.document.add_frame()
-		State.get_voxel_frame(1).set_cell(Vector3i(5, 2, 1), Color.BLUE)
+		State.document.set_cell(1, Vector3i(5, 2, 1), Color.BLUE)
 		State.frames_changed.emit()
 		State.active_tag = State.document.add_tag("Second", 1, 1)
 		State.selection.from_box(Vector3i(4, 2, 1), Vector3i(5, 2, 1))
@@ -243,7 +243,7 @@ func _preview_behavior() -> void:
 	step("When the user resets a manually changed sprite size", func():
 		exporter._sheet_settings.get_node("SizeRow/Size").value = 99
 		exporter._sheet_settings.get_node("SizeRow/Reset").pressed.emit()
-		expect(exporter._sheet_settings.get_node("SizeRow/Size").value == 2, "reset calculates the front-view size from the voxel bounds")
+		expect(exporter._sheet_settings.get_node("SizeRow/Size").value == 2, "Reset calculates the front-view size from the voxel bounds")
 		exporter._sheet_settings.get_node("SizeRow/Size").value = 32
 	)
 	await _wait_preview()
@@ -285,6 +285,7 @@ func _preview_behavior() -> void:
 	await _wait_preview()
 	step("Then the sheet preview follows the shared camera controls", func():
 		expect(exporter._preview_image != null, "the shared preview view renders a sheet")
+		expect(exporter._sheet_settings.get_node("SizeRow/Size").value == 32, "camera changes retain the explicit thirty-two-pixel frame size")
 		expect(camera_rig().transform == original_camera, "the preview camera controls leave the editor camera in place")
 		expect(main.get_node("%Viewport").get_node("ControlBar/PanToggle").button_pressed, "preview camera modes preserve the editor camera mode")
 	)

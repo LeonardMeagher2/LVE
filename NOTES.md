@@ -4,6 +4,7 @@ This file records confirmed facts about Leonard's Voxel Editor. Record each lear
 
 ## Godot API changes
 
+- 2026-10-08: `AABB.get_support(direction)` returns the corner farthest in that direction. The sprite far plane uses the worst turntable-view extreme plus one voxel.
 - 2026-10-07: In Godot 4.7.2 Mobile, a new sheet viewport needs two renders before capture includes directional shadows.
 - 2026-10-06: Godot 4.7.2 on Windows returns scale 1.0 and DPI 192 for this 200% display.
 - 2026-10-06: DPITexture imports retain SVG dimensions and rasterize icons at the viewport scale.

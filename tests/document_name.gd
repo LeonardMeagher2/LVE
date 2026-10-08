@@ -5,6 +5,7 @@ var exporter: Node
 var first_path := ""
 var renamed_path := ""
 var light_basis := Basis(Vector3.UP, PI / 3.0)
+var export_light_basis := Basis(Vector3.RIGHT, -PI / 4.0)
 
 
 func _ready() -> void:
@@ -38,6 +39,9 @@ func _run() -> void:
 		exporter._sheet_settings.get_node("TurntableRow/Metadata").button_pressed = false
 		exporter._controls.get_node("LightingOptions/LightColor").color = Color(0, 0, 1, 0.5)
 		exporter._on_sheet_lighting_changed()
+		var export_lighting: Dictionary = exporter._model_scene.get_lighting_settings()
+		export_lighting.basis = export_light_basis
+		exporter._model_scene.set_lighting_settings(export_lighting)
 		exporter._controls.get_node("LightingOptions/Shadows").button_pressed = false
 		expect(menu.save_doc(first_path) == OK, "the document saves with the current settings")
 	)
@@ -49,6 +53,8 @@ func _run() -> void:
 		expect(not data.has("title") and not data.has("file_path"), "the file stores no title or source path")
 		expect(not State.document.lighting_settings.has("shaded") and not State.document.lighting_settings.has("shadows"), "editor view options stay outside saved lighting")
 		expect(State.document.lighting_settings.color == Color.RED, "export color changes preserve the editor light color")
+		expect(State.document.lighting_settings.basis.is_equal_approx(light_basis), "the document stores the editor light direction")
+		expect(State.document.export_settings.lighting.basis.is_equal_approx(export_light_basis), "the document stores the independent export light direction")
 	)
 	step("When the user saves under another file name", func():
 		menu.save_doc(renamed_path)
@@ -64,6 +70,7 @@ func _run() -> void:
 	step("Then saved settings return without changing editor view options", func():
 		expect(get_window().title == renamed_path.get_file() + " - " + VoxelDocument.APP_NAME, "opening a document changes the app title")
 		expect(viewport_scene().get_lighting_settings().basis.is_equal_approx(light_basis), "the editor light direction is restored")
+		expect(exporter._model_scene.get_lighting_settings().basis.is_equal_approx(export_light_basis), "the export light direction is restored")
 		expect(not viewport_scene().get_lighting_settings().shadows, "the editor keeps its current Shadows view option")
 		expect(exporter._sheet_settings.get_node("SizeRow/Size").value == 24, "the manual frame size is restored")
 		expect(exporter._sheet_settings.get_node("ViewRow/View").selected == 2, "the selected sprite view is restored")

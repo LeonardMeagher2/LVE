@@ -350,7 +350,7 @@ static func _valid_lighting(data: Variant, exported: bool) -> bool:
 
 
 static func _valid_export(data: Variant, tag_count: int) -> bool:
-	if not data is Dictionary or not _keys_allowed(data, ["view", "sprite_ortho", "automatic_size", "frame_size", "turntable", "views", "metadata", "center", "model_tag", "sheet_tag", "lighting", "camera"]):
+	if not data is Dictionary or not _keys_allowed(data, ["view", "sprite_ortho", "sprite_center", "automatic_size", "frame_size", "turntable", "views", "metadata", "center", "model_tag", "sheet_tag", "lighting", "camera"]):
 		return false
 	for key in data:
 		match key:

@@ -22,15 +22,13 @@ func _run() -> void:
 		settings = exporter._sheet_settings
 		lighting = exporter._controls.get_node("LightingOptions")
 		State.document = VoxelDocument.new()
-		var frame := State.get_current_voxel_frame()
 		for x in range(-3, 4):
 			for z in range(-3, 4):
-				frame.set_cell(Vector3i(x, 0, z), Color.from_rgba8(120, 120, 120))
-		var second := frame.copy_frame()
+				State.document.set_cell(0, Vector3i(x, 0, z), Color.from_rgba8(120, 120, 120))
+		State.document.frames.append(State.get_current_voxel_frame().copy_frame())
 		for y in range(1, 7):
-			frame.set_cell(Vector3i(-2, y, 2), Color.RED)
-			second.set_cell(Vector3i(2, y, -2), Color.BLUE)
-		State.document.frames.append(second)
+			State.document.set_cell(0, Vector3i(-2, y, 2), Color.RED)
+			State.document.set_cell(1, Vector3i(2, y, -2), Color.BLUE)
 		State.frames_changed.emit()
 		exporter._model_camera.center_active()
 		exporter._model_camera.set_view("isometric")

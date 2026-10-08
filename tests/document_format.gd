@@ -36,7 +36,7 @@ func _run() -> void:
 			source.add_tag("Tag %s 🦩" % mode, 0, 2, mode, mode)
 		source.smooth_normals = true
 		source.lighting_settings = {"basis": Basis(Vector3.UP, 0.5), "color": Color(1, 0.5, 0.25, 0.75), "ambient_color": Color(0.2, 0.3, 0.4, 0.5)}
-		source.export_settings = {"view": 7, "sprite_ortho": false, "automatic_size": false, "frame_size": 64.0, "turntable": false, "views": 12.0, "metadata": true, "center": false, "model_tag": 1, "sheet_tag": 2,
+		source.export_settings = {"view": 7, "sprite_ortho": false, "sprite_center": false, "automatic_size": true, "frame_size": 64.0, "turntable": false, "views": 12.0, "metadata": true, "center": false, "model_tag": 1, "sheet_tag": 2,
 			"lighting": {"basis": Basis.IDENTITY, "color": Color.WHITE, "ambient_color": Color.BLUE, "energy": 0.5, "ambient_energy": 0.25, "shadows": false, "shaded": true, "view_locked": true, "view_basis": Basis.IDENTITY},
 			"camera": {"yaw": 0.5, "pitch": 0.25, "distance": 10.0, "initial_distance": 12.0, "target": Vector3(1, 2, 3), "orthographic": true, "fov": 45.0}}
 		preview = Image.create(2, 2, false, Image.FORMAT_RGBA8)
@@ -63,6 +63,8 @@ func _run() -> void:
 			expect(loaded != null, "the %s document loads" % suffix)
 			if loaded:
 				expect(loaded.document_data() == source.document_data(), "the %s file preserves every document field" % suffix)
+				expect(not loaded.export_settings.sprite_center, "the file preserves the sprite Center choice")
+				expect(loaded.export_settings.automatic_size, "the file retains compatible legacy export settings")
 				expect(loaded.frames[1].count() == 0, "the empty frame retains its position")
 				expect(loaded.frames[0].count() == 4097, "the document restores every occupied voxel")
 				loaded.frames[2].set_cell(Vector3i.ZERO, Color.BLUE)

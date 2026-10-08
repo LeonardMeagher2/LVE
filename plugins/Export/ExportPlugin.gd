@@ -46,8 +46,6 @@ var _selected_tag: AnimationTag
 var _sheet_tag: AnimationTag
 var _model_frames: Array[VoxelFrame] = []
 var _model_step := 0
-var _automatic_sprite_size := true
-var _sprite_layout := {}
 var _result_message := ""
 
 
@@ -104,9 +102,10 @@ func _ready() -> void:
 	sheet_bar.get_node("CenterBtn").pressed.connect(sheet_preview.fit)
 	_sheet_settings.get_node("FrameRow/Frames").item_selected.connect(_on_sheet_tag_selected)
 	_sheet_settings.get_node("ViewRow/View").item_selected.connect(_sheet_settings_changed.unbind(1))
-	_sheet_settings.get_node("ViewRow/Ortho").toggled.connect(_sheet_settings_changed.unbind(1))
+	_sheet_settings.get_node("ViewRow/Ortho").toggled.connect(_reset_sprite_size.unbind(1))
+	_sheet_settings.get_node("ViewRow/Center").toggled.connect(_sheet_settings_changed.unbind(1))
 	_sheet_settings.get_node("TurntableRow/Views").value_changed.connect(_sheet_settings_changed.unbind(1))
-	_sheet_settings.get_node("SizeRow/Size").value_changed.connect(_on_sprite_size_changed.unbind(1))
+	_sheet_settings.get_node("SizeRow/Size").value_changed.connect(_sheet_settings_changed.unbind(1))
 	_sheet_settings.get_node("SizeRow/Reset").pressed.connect(_reset_sprite_size)
 	_sheet_settings.get_node("TurntableRow/Turntable").toggled.connect(_sheet_settings_changed.unbind(1))
 	_sheet_settings.get_node("TurntableRow/Metadata").toggled.connect(_save_export_settings.unbind(1))
@@ -138,7 +137,7 @@ func _save_export_settings() -> void:
 	State.document.export_settings = {
 		"view": _sheet_settings.get_node("ViewRow/View").selected,
 		"sprite_ortho": _sheet_settings.get_node("ViewRow/Ortho").button_pressed,
-		"automatic_size": _automatic_sprite_size,
+		"sprite_center": _sheet_settings.get_node("ViewRow/Center").button_pressed,
 		"frame_size": _sheet_settings.get_node("SizeRow/Size").value,
 		"turntable": _sheet_settings.get_node("TurntableRow/Turntable").button_pressed,
 		"views": _sheet_settings.get_node("TurntableRow/Views").value,
@@ -153,17 +152,16 @@ func _save_export_settings() -> void:
 
 func _restore_export_settings() -> void:
 	_restoring_export_settings = true
-	_sprite_layout = {}
 	_model_camera_needs_center = true
 	_settings_document = State.document
 	var saved := State.document.export_settings
 	_selected_tag = State.document.get_tag(int(saved.get("model_tag", -1)))
 	_sheet_tag = State.document.get_tag(int(saved.get("sheet_tag", -1)))
 	_sync_tags()
-	_automatic_sprite_size = bool(saved.get("automatic_size", true))
 	_sheet_settings.get_node("ViewRow/View").select(clampi(int(saved.get("view", 1)), 0, VIEWS.size() - 1))
 	_sheet_settings.get_node("ViewRow/Ortho").set_pressed_no_signal(saved.get("sprite_ortho", true))
-	_sheet_settings.get_node("SizeRow/Size").set_value_no_signal(saved.get("frame_size", 1))
+	_sheet_settings.get_node("ViewRow/Center").set_pressed_no_signal(saved.get("sprite_center", true))
+	_sheet_settings.get_node("SizeRow/Size").set_value_no_signal(saved.get("frame_size", 64))
 	_sheet_settings.get_node("TurntableRow/Turntable").set_pressed_no_signal(saved.get("turntable", true))
 	_sheet_settings.get_node("TurntableRow/Views").set_value_no_signal(saved.get("views", 8))
 	_sheet_settings.get_node("TurntableRow/Metadata").set_pressed_no_signal(saved.get("metadata", true))
@@ -180,7 +178,6 @@ func _restore_export_settings() -> void:
 	_model_camera._pitch = _pending_export_camera.get("pitch", _default_camera.pitch)
 	_model_camera.fov = _pending_export_camera.get("fov", _default_camera.fov)
 	_model_camera.is_orthogonal = _pending_export_camera.get("orthographic", _default_camera.orthographic)
-	_update_default_sprite_size()
 	_restoring_export_settings = false
 
 
@@ -255,13 +252,9 @@ func _on_document_changed() -> void:
 	_source_changed()
 
 
-func _on_sprite_size_changed() -> void:
-	_automatic_sprite_size = false
-	_sheet_settings_changed()
-
-
 func _reset_sprite_size() -> void:
-	_automatic_sprite_size = true
+	var span := _sprite_span(State.document.bounds(), _sheet_camera(_sheet_settings.get_node("ViewRow/View").selected, _view_count()))
+	_sheet_settings.get_node("SizeRow/Size").set_value_no_signal(span)
 	_sheet_settings_changed()
 
 
@@ -269,120 +262,13 @@ func _view_count() -> int:
 	return int(_sheet_settings.get_node("TurntableRow/Views").value) if _sheet_settings.get_node("TurntableRow/Turntable").button_pressed else 1
 
 
-func _update_default_sprite_size() -> void:
-	if not _automatic_sprite_size:
-		return
-	var range := _selected_frames()
-	var span := _sprite_span(_bounds(range.x, range.y), _sheet_camera(_sheet_settings.get_node("ViewRow/View").selected), _view_count())
-	_sheet_settings.get_node("SizeRow/Size").set_value_no_signal(span)
-	_sprite_layout = {}
-
-
-func _current_sprite_layout() -> Dictionary:
-	if _sprite_layout.is_empty():
-		var range := _selected_frames()
-		var resolution := int(_sheet_settings.get_node("SizeRow/Size").value)
-		var frame_rect := Rect2i(Vector2i.ZERO, Vector2i.ONE * resolution)
-		_sprite_layout = {"rect": frame_rect, "tile_size": frame_rect.size, "offset": Vector2.ZERO}
-		if _automatic_sprite_size:
-			var frames: Array[VoxelFrame] = []
-			for index in range(range.x, range.y + 1):
-				frames.append(State.get_voxel_frame(index))
-			_sprite_layout = _projected_sprite_layout(frames, _bounds(range.x, range.y), resolution, _sheet_camera(_sheet_settings.get_node("ViewRow/View").selected), _view_count())
-	return _sprite_layout
-
-
-static func _sprite_camera_transform(bounds: AABB, settings: Dictionary) -> Transform3D:
-	if not settings.has("angles"):
-		return settings.transform
-	if not bounds.has_volume():
-		bounds = AABB(Vector3.ONE * -0.5, Vector3.ONE)
-	var angles: Vector2 = settings.angles
-	var yaw := deg_to_rad(angles.x)
-	var pitch := deg_to_rad(angles.y)
-	var direction := Vector3(sin(yaw) * cos(pitch), sin(pitch), cos(yaw) * cos(pitch))
-	var up := Vector3.FORWARD if absf(angles.y) >= 89.9 else Vector3.UP
-	return Transform3D(Basis.looking_at(-direction, up), bounds.get_center() + direction * bounds.size.length() * 1.25)
-
-
-static func _projected_sprite_layout(frames: Array[VoxelFrame], bounds: AABB, resolution: int, settings: Dictionary, views: int) -> Dictionary:
-	var full_rect := Rect2i(Vector2i.ZERO, Vector2i.ONE * resolution)
-	var full_layout := {"rect": full_rect, "tile_size": full_rect.size, "offset": Vector2.ZERO}
-	var frame_bounds: Array[AABB] = []
-	for frame in frames:
-		var box := frame.get_bounds()
-		if box.has_volume():
-			frame_bounds.append(box)
-	var initial_transform := _sprite_camera_transform(bounds, settings)
-	var orthographic: bool = settings.get("projection", Camera3D.PROJECTION_ORTHOGONAL) == Camera3D.PROJECTION_ORTHOGONAL
-	var span: float = _sprite_span(bounds, settings, views) if settings.has("angles") else settings.size
-	var pixels_per_unit := resolution / maxf(span, 0.00001)
-	if not orthographic:
-		pixels_per_unit = resolution / (2.0 * tan(deg_to_rad(settings.fov) * 0.5))
-	var near_plane: float = settings.get("near", 0.05)
-	var canvas_center := Vector2.ONE * resolution * 0.5
-	var minimum := Vector2(INF, INF)
-	var maximum := Vector2(-INF, -INF)
-	for view_index in views:
-		var turn := Basis(Vector3.UP, TAU * view_index / views)
-		var camera_transform := Transform3D(turn * initial_transform.basis, bounds.get_center() + turn * (initial_transform.origin - bounds.get_center()))
-		var inverse := camera_transform.affine_inverse()
-		for box in frame_bounds:
-			var visible_corner := false
-			var clipped_corner := false
-			for corner_index in 8:
-				var point: Vector3 = inverse * box.get_endpoint(corner_index)
-				var depth := -point.z
-				if depth <= near_plane:
-					clipped_corner = true
-					continue
-				visible_corner = true
-				var scale := pixels_per_unit if orthographic else pixels_per_unit / depth
-				var projected := canvas_center + Vector2(point.x, -point.y) * scale
-				minimum = Vector2(minf(minimum.x, projected.x), minf(minimum.y, projected.y))
-				maximum = Vector2(maxf(maximum.x, projected.x), maxf(maximum.y, projected.y))
-			# A box that crosses the near plane can cover the entire render canvas.
-			if visible_corner and clipped_corner:
-				return full_layout
-	if minimum.x == INF:
-		return {"rect": Rect2i(Vector2i(resolution / 2, resolution / 2), Vector2i.ONE), "tile_size": Vector2i.ONE, "offset": Vector2.ZERO}
-	var first := Vector2i(clampi(floori(minimum.x + 0.00001), 0, resolution - 1), clampi(floori(minimum.y + 0.00001), 0, resolution - 1))
-	var last := Vector2i(clampi(ceili(maximum.x - 0.00001), first.x + 1, resolution), clampi(ceili(maximum.y - 0.00001), first.y + 1, resolution))
-	var dimensions := last - first
-	var offset := Vector2.ZERO
-	if minimum.x >= -0.00001 and minimum.y >= -0.00001 and maximum.x <= resolution + 0.00001 and maximum.y <= resolution + 0.00001:
-		var extent := maximum - minimum
-		dimensions = Vector2i(maxi(1, ceili(extent.x - 0.00001)), maxi(1, ceili(extent.y - 0.00001)))
-		# Align the common rectangle to pixel edges without changing the voxel scale.
-		offset = Vector2(first) + (Vector2(dimensions) - extent) * 0.5 - minimum
-	return {"rect": Rect2i(first, dimensions), "tile_size": dimensions, "offset": offset}
-
-
-static func _sprite_span(bounds: AABB, settings: Dictionary, views: int) -> int:
-	if not settings.has("angles"):
-		var camera_span: float = settings.size
-		if settings.projection == Camera3D.PROJECTION_PERSPECTIVE:
-			var transform: Transform3D = settings.transform
-			var distance := (transform.origin - bounds.get_center()).dot(transform.basis.z)
-			camera_span = 2.0 * distance * tan(deg_to_rad(settings.fov) * 0.5)
-		return maxi(1, ceili(camera_span - 0.00001))
-	var angles: Vector2 = settings.angles
-	if settings.get("projection", Camera3D.PROJECTION_ORTHOGONAL) == Camera3D.PROJECTION_PERSPECTIVE:
-		var transform := _sprite_camera_transform(bounds, settings)
+static func _sprite_span(bounds: AABB, settings: Dictionary) -> int:
+	var span: float = settings.size
+	if settings.projection == Camera3D.PROJECTION_PERSPECTIVE:
+		var transform: Transform3D = settings.transforms[0]
 		var distance := (transform.origin - bounds.get_center()).dot(transform.basis.z)
-		return maxi(1, ceili(2.0 * distance * tan(deg_to_rad(settings.fov) * 0.5) - 0.00001))
-	var right: Vector3
-	var up: Vector3
-	var yaw := deg_to_rad(angles.x)
-	var pitch := deg_to_rad(angles.y)
-	right = Vector3(cos(yaw), 0, -sin(yaw))
-	up = Vector3(-sin(yaw) * sin(pitch), cos(pitch), -cos(yaw) * sin(pitch))
-	var span := 1.0
-	for index in views:
-		var rotation := Basis(Vector3.UP, TAU * index / views)
-		span = maxf(span, (rotation * right).abs().dot(bounds.size))
-		span = maxf(span, (rotation * up).abs().dot(bounds.size))
-	return ceili(span - 0.00001)
+		span = 2.0 * distance * tan(deg_to_rad(settings.fov) * 0.5)
+	return maxi(1, ceili(span - 0.00001))
 
 
 func _sync_tags() -> void:
@@ -426,9 +312,7 @@ func _model_range() -> Vector2i:
 func _sheet_settings_changed() -> void:
 	if _restoring_export_settings:
 		return
-	_sprite_layout = {}
 	_result_message = ""
-	_update_default_sprite_size()
 	_preview_revision += 1
 	_preview_due_ms = Time.get_ticks_msec() + PREVIEW_DELAY_MS
 	_preview_image = null
@@ -520,24 +404,13 @@ func _selected_frames() -> Vector2i:
 	return Vector2i(0, State.get_frame_count() - 1)
 
 
-func _bounds(first: int, last: int) -> AABB:
-	var bounds := AABB()
-	for index in range(first, last + 1):
-		var box := State.get_voxel_frame(index).get_bounds()
-		if box.has_volume():
-			bounds = bounds.merge(box) if bounds.has_volume() else box
-	return bounds
-
-
 func _model_transform() -> Transform3D:
-	var range := _model_range()
-	var center := _bounds(range.x, range.y).get_center() if _model.get_node("AnimationRow/Center").button_pressed else Vector3.ZERO
+	var center := State.document.bounds().get_center() if _model.get_node("AnimationRow/Center").button_pressed else Vector3.ZERO
 	return Transform3D(Basis.IDENTITY, -center)
 
 
 func _model_bounds() -> AABB:
-	var range := _model_range()
-	return _model_transform() * _bounds(range.x, range.y)
+	return _model_transform() * State.document.bounds()
 
 
 func _refresh_model() -> void:
@@ -614,13 +487,13 @@ func _sync() -> void:
 	var range := _selected_frames()
 	var count := range.y - range.x + 1
 	var views := _view_count()
-	var tile_size: Vector2i = _current_sprite_layout().tile_size
-	_sheet_settings.get_node("SizeRow/Size").tooltip_text = "Frame spacing: %d × %d px. Use Reset for shared projected bounds." % [tile_size.x, tile_size.y]
+	var tile_size := int(_sheet_settings.get_node("SizeRow/Size").value)
+	_sheet_settings.get_node("SizeRow/Size").tooltip_text = "Frame size: %d × %d px. Use Reset for the camera framing." % [tile_size, tile_size]
 	var layout := sheet_layout(count * views, tile_size)
 	_menu_item.get_node("ExportBtn").disabled = busy
 	_model.get_node("Export").disabled = busy
 	_controls.get_node("Export").disabled = busy or layout.size.x > Image.MAX_WIDTH or layout.size.y > Image.MAX_HEIGHT
-	for path in ["FrameRow/Frames", "ViewRow/View", "ViewRow/Ortho"]:
+	for path in ["FrameRow/Frames", "ViewRow/View", "ViewRow/Ortho", "ViewRow/Center"]:
 		_sheet_settings.get_node(path).disabled = busy
 	_sheet_settings.get_node("SizeRow/Size").editable = not busy
 	_sheet_settings.get_node("TurntableRow/Metadata").disabled = busy
@@ -641,7 +514,7 @@ func _sync() -> void:
 func _export_status() -> Dictionary:
 	var range := _selected_frames()
 	var count := range.y - range.x + 1
-	var layout := sheet_layout(count * _view_count(), _current_sprite_layout().tile_size)
+	var layout := sheet_layout(count * _view_count(), int(_sheet_settings.get_node("SizeRow/Size").value))
 	return {"left": _result_message if not _result_message.is_empty() else "%d × %d pixels · %d frames × %d views" % [layout.size.x, layout.size.y, count, _view_count()], "right": "Frame %d/%d   %d%%" % [_model_step + 1, maxi(1, _model_frames.size()), roundi(_model_camera.zoom_percent())]}
 
 
@@ -697,7 +570,7 @@ func _on_sheet_file_selected(path: String) -> void:
 	var range := _selected_frames()
 	var resolution := int(_sheet_settings.get_node("SizeRow/Size").value)
 	var tag_name: String = _sheet_tag.name if _sheet_tag else ""
-	_report_result(await export_sprite_sheet(path, range.x, range.y, resolution, _sheet_settings.get_node("ViewRow/View").selected, _sheet_settings.get_node("TurntableRow/Metadata").button_pressed, _view_count(), _automatic_sprite_size, tag_name), path)
+	_report_result(await export_sprite_sheet(path, range.x, range.y, resolution, _sheet_settings.get_node("ViewRow/View").selected, _sheet_settings.get_node("TurntableRow/Metadata").button_pressed, _view_count(), tag_name), path)
 
 
 func _report_result(error: Error, path: String) -> void:
@@ -705,33 +578,71 @@ func _report_result(error: Error, path: String) -> void:
 	_refresh_export_status()
 
 
-static func sheet_layout(frame_count: int, tile_size: Variant) -> Dictionary:
-	var dimensions: Vector2i = tile_size if tile_size is Vector2i else Vector2i.ONE * int(tile_size)
+static func sheet_layout(frame_count: int, tile_size: int) -> Dictionary:
+	var dimensions := Vector2i.ONE * tile_size
 	var actual_columns := maxi(1, ceili(sqrt(float(frame_count))))
 	var rows := ceili(frame_count / float(actual_columns))
 	var size := Vector2i(actual_columns * dimensions.x + (actual_columns - 1) * SPRITE_GAP, rows * dimensions.y + (rows - 1) * SPRITE_GAP)
-	return {"columns": actual_columns, "size": size, "tile_size": dimensions, "stride": dimensions + Vector2i.ONE * SPRITE_GAP}
+	var stride := dimensions + Vector2i.ONE * SPRITE_GAP
+	var rects: Array[Rect2i] = []
+	for index in frame_count:
+		var position := Vector2i(index % actual_columns, index / actual_columns) * stride
+		rects.append(Rect2i(position, dimensions))
+	return {"size": size, "tile_size": dimensions, "rects": rects}
 
 
-func _sheet_camera(view: int) -> Dictionary:
+func _sheet_camera(view: int, views := 1) -> Dictionary:
 	var orthographic: bool = _sheet_settings.get_node("ViewRow/Ortho").button_pressed
+	var bounds := State.document.bounds()
+	var transform: Transform3D
+	var size: float = _model_camera.size
+	var near_plane: float = _model_camera.near
 	if view == 0:
 		var inverse := _model_transform().affine_inverse()
-		var transform := _model_camera.transform
+		transform = _model_camera.transform
 		transform.origin = inverse * transform.origin
-		var projection := Camera3D.PROJECTION_ORTHOGONAL if orthographic else Camera3D.PROJECTION_PERSPECTIVE
-		var span: float = _model_camera.size
 		if orthographic and _model_camera.projection != Camera3D.PROJECTION_ORTHOGONAL:
-			var range := _selected_frames()
-			var distance := (transform.origin - _bounds(range.x, range.y).get_center()).dot(transform.basis.z)
-			span = maxf(0.001, 2.0 * distance * tan(deg_to_rad(_model_camera.fov) * 0.5))
-		return {"transform": transform, "projection": projection, "size": span, "fov": _model_camera.fov, "near": _model_camera.near, "far": _model_camera.far}
-	var settings := {"angles": ANGLES[view]}
-	if not orthographic:
-		settings.projection = Camera3D.PROJECTION_PERSPECTIVE
-		settings.fov = _model_camera.fov
-		settings.near = _model_camera.near
-		settings.far = _model_camera.far
+			var distance := (transform.origin - bounds.get_center()).dot(transform.basis.z)
+			size = maxf(0.001, 2.0 * distance * tan(deg_to_rad(_model_camera.fov) * 0.5))
+	else:
+		var camera := Camera3D.new()
+		add_child(camera)
+		var angles: Vector2 = ANGLES[view]
+		VoxelImageRenderer.frame_camera(camera, bounds, angles.x, angles.y, orthographic)
+		transform = camera.transform
+		near_plane = camera.near
+		camera.free()
+	var transforms: Array[Transform3D] = []
+	for view_index in views:
+		var turn := Basis(Vector3.UP, TAU * view_index / views)
+		transforms.append(Transform3D(turn * transform.basis, bounds.get_center() + turn * (transform.origin - bounds.get_center())))
+	if view > 0 and orthographic:
+		size = 1.0
+		for pose in transforms:
+			size = maxf(size, pose.basis.x.abs().dot(bounds.size))
+			size = maxf(size, pose.basis.y.abs().dot(bounds.size))
+		size = ceili(size - 0.00001)
+	return {"transforms": transforms, "projection": Camera3D.PROJECTION_ORTHOGONAL if orthographic else Camera3D.PROJECTION_PERSPECTIVE, "size": size, "fov": _model_camera.fov, "near": near_plane}
+
+
+func _sheet_render_settings(view: int, views: int) -> Dictionary:
+	var settings := _sheet_camera(view, views)
+	var bounds := State.document.bounds()
+	var model_transform := Transform3D(Basis.IDENTITY, -bounds.get_center() if _sheet_settings.get_node("ViewRow/Center").button_pressed else Vector3.ZERO)
+	for index in settings.transforms.size():
+		settings.transforms[index] = model_transform * settings.transforms[index]
+	settings.model_transform = model_transform
+	settings.lighting = _sheet_lighting()
+	var render_bounds := model_transform * bounds
+	var near_depth := INF
+	var far_depth := -INF
+	for pose: Transform3D in settings.transforms:
+		var forward := -pose.basis.z
+		near_depth = minf(near_depth, (render_bounds.get_support(-forward) - pose.origin).dot(forward))
+		far_depth = maxf(far_depth, (render_bounds.get_support(forward) - pose.origin).dot(forward))
+	# Use the same clipping planes for every frame and turntable view.
+	settings.near = maxf(0.05, minf(settings.near, near_depth - 1.0))
+	settings.far = maxf(settings.near + 1.0, far_depth + 1.0) * 2.0
 	return settings
 
 
@@ -743,12 +654,12 @@ func _render_current(document: VoxelDocument, revision: int) -> bool:
 	return not _cancel_requested and State.has_operation(_operation_id)
 
 
-func _render_sheet(frames: Array[VoxelFrame], bounds: AABB, tile_size: int, camera_settings: Dictionary, document: VoxelDocument, revision := -1, views := 1, frame_rect := Rect2i(), screen_offset := Vector2.ZERO) -> Image:
-	if frame_rect.size.x <= 0 or frame_rect.size.y <= 0:
-		frame_rect = Rect2i(Vector2i.ZERO, Vector2i.ONE * tile_size)
-	var lighting_settings := _sheet_lighting()
+func _render_sheet(frames: Array[VoxelFrame], settings: Dictionary, document: VoxelDocument, revision := -1) -> Image:
+	var lighting_settings: Dictionary = settings.lighting
+	var transforms: Array[Transform3D] = settings.transforms
+	var layout: Dictionary = settings.layout
 	var viewport: SubViewport = VoxelImageRenderer.VIEWPORT_SCENE.instantiate()
-	viewport.size = Vector2i.ONE * tile_size
+	viewport.size = layout.tile_size * 2
 	if revision >= 0:
 		_preview_viewport = viewport
 	else:
@@ -760,60 +671,54 @@ func _render_sheet(frames: Array[VoxelFrame], bounds: AABB, tile_size: int, came
 	VoxelImageRenderer.apply_lighting(light, environment_node.environment, lighting_settings)
 	viewport.debug_draw = Viewport.DEBUG_DRAW_DISABLED if lighting_settings.shaded else Viewport.DEBUG_DRAW_UNSHADED
 	var renderer: VoxelRenderer = viewport.get_node("%VoxelRenderer")
+	renderer.transform = settings.model_transform
 	var camera: Camera3D = viewport.get_node("Node3D/Camera3D")
-	if camera_settings.has("angles"):
-		var angles: Vector2 = camera_settings.angles
-		var use_orthographic: bool = camera_settings.get("projection", Camera3D.PROJECTION_ORTHOGONAL) == Camera3D.PROJECTION_ORTHOGONAL
-		VoxelImageRenderer.frame_camera(camera, bounds, angles.x, angles.y, use_orthographic)
-		if use_orthographic:
-			camera.size = _sprite_span(bounds, camera_settings, views)
-		else:
-			camera.fov = camera_settings.fov
-	else:
-		for property in camera_settings:
-			camera.set(property, camera_settings[property])
-	if camera.projection == Camera3D.PROJECTION_ORTHOGONAL:
-		var depth := (camera.position - bounds.get_center()).dot(camera.basis.z)
-		camera.far = maxf(camera.near + 1.0, depth + bounds.size.length() * 0.5)
+	camera.transform = transforms[0]
+	camera.projection = settings.projection
+	camera.size = settings.size
+	camera.fov = settings.fov
+	camera.near = settings.near
+	camera.far = settings.far
 	VoxelImageRenderer.apply_directional_shadow(light, camera)
-	var initial_transform := camera.transform
-	if camera.projection != Camera3D.PROJECTION_ORTHOGONAL and (absf(screen_offset.x) > 0.00001 or absf(screen_offset.y) > 0.00001):
-		var near_span := 2.0 * camera.near * tan(deg_to_rad(camera.fov) * 0.5)
-		camera.set_frustum(near_span, Vector2(-screen_offset.x, screen_offset.y) * near_span / tile_size, camera.near, camera.far)
-	var layout := sheet_layout(frames.size() * views, frame_rect.size)
+	var count: int = layout.rects.size()
 	var sheet := Image.create(layout.size.x, layout.size.y, false, Image.FORMAT_RGBA8)
 	sheet.fill(Color.TRANSPARENT)
-	for index in frames.size() * views:
-		State.update_operation(_preview_operation_id if revision >= 0 else _operation_id, index, frames.size() * views, "Rendering sheet preview" if revision >= 0 else "Rendering sprite %d" % (index + 1))
-		var angle := TAU * (index / frames.size()) / views
-		var rotation := Basis(Vector3.UP, angle)
-		camera.transform = Transform3D(rotation * initial_transform.basis, bounds.get_center() + rotation * (initial_transform.origin - bounds.get_center()))
-		if camera.projection == Camera3D.PROJECTION_ORTHOGONAL:
-			camera.position += (-camera.basis.x * screen_offset.x + camera.basis.y * screen_offset.y) * camera.size / tile_size
+	var index := 0
+	for pose in transforms:
+		if not _render_current(document, revision):
+			break
+		camera.transform = pose
 		if lighting_settings.view_locked:
 			light.basis = camera.basis * lighting_settings.view_basis
-		renderer.source_frame = frames[index % frames.size()]
-		while not renderer.is_settled():
-			await get_tree().process_frame
+		for frame in frames:
+			State.update_operation(_preview_operation_id if revision >= 0 else _operation_id, index, count, "Rendering sheet preview" if revision >= 0 else "Rendering sprite %d" % (index + 1))
+			renderer.source_frame = frame
+			while _render_current(document, revision) and not renderer.is_settled():
+				await get_tree().process_frame
 			if not _render_current(document, revision):
-				if is_instance_valid(viewport):
-					viewport.free()
-				return null
-		# Render the changed geometry and camera before capturing the shadowed image.
-		for draw in 2:
+				break
+			# Render the changed geometry and camera before capturing the shadowed image.
 			viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
 			await RenderingServer.frame_post_draw
 			if not _render_current(document, revision):
-				if is_instance_valid(viewport):
-					viewport.free()
-				return null
-		var image := viewport.get_texture().get_image()
-		image.convert(Image.FORMAT_RGBA8)
-		var stride: Vector2i = layout.stride
-		var tile := Vector2i(index % int(layout.columns) * stride.x, index / int(layout.columns) * stride.y)
-		sheet.blit_rect(image, frame_rect, tile)
-	viewport.free()
-	return sheet
+				break
+			viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
+			await RenderingServer.frame_post_draw
+			if not _render_current(document, revision):
+				break
+			var image := viewport.get_texture().get_image()
+			image.convert(Image.FORMAT_RGBA8)
+			var rect: Rect2i = layout.rects[index]
+			image.resize(rect.size.x, rect.size.y, Image.INTERPOLATE_NEAREST)
+			sheet.blit_rect(image, Rect2i(Vector2i.ZERO, rect.size), rect.position)
+			index += 1
+	if is_instance_valid(viewport):
+		viewport.free()
+	if revision >= 0:
+		_preview_viewport = null
+	else:
+		_export_viewport = null
+	return sheet if index == count else null
 
 
 func _update_sheet_preview() -> void:
@@ -826,17 +731,11 @@ func _update_sheet_preview() -> void:
 	var frames: Array[VoxelFrame] = []
 	for index in range(range.x, range.y + 1):
 		frames.append(State.get_voxel_frame(index).copy_frame())
-	_preview_operation_id = State.begin_operation("Rendering sheet preview", frames.size() * _view_count(), false, self)
-	var bounds := _bounds(range.x, range.y)
 	var resolution := int(_sheet_settings.get_node("SizeRow/Size").value)
-	var camera_settings := _sheet_camera(_sheet_settings.get_node("ViewRow/View").selected)
-	var frame_rect := Rect2i(Vector2i.ZERO, Vector2i.ONE * resolution)
-	var screen_offset := Vector2.ZERO
-	if _automatic_sprite_size:
-		var projected := _projected_sprite_layout(frames, bounds, resolution, camera_settings, _view_count())
-		frame_rect = projected.rect
-		screen_offset = projected.offset
-	var image := await _render_sheet(frames, bounds, resolution, camera_settings, State.document, revision, _view_count(), frame_rect, screen_offset)
+	var settings := _sheet_render_settings(_sheet_settings.get_node("ViewRow/View").selected, _view_count())
+	settings.layout = sheet_layout(frames.size() * settings.transforms.size(), resolution)
+	_preview_operation_id = State.begin_operation("Rendering sheet preview", frames.size() * settings.transforms.size(), false, self)
+	var image := await _render_sheet(frames, settings, State.document, revision)
 	_preview_running = false
 	State.finish_operation(_preview_operation_id)
 	_preview_operation_id = 0
@@ -846,7 +745,7 @@ func _update_sheet_preview() -> void:
 		_controls.get_node("Preview").texture = ImageTexture.create_from_image(image)
 
 
-func export_sprite_sheet(path: String, first_frame := 0, last_frame := -1, tile_size := -1, view := 1, include_json := true, views := 1, crop_to_bounds := false, tag_name := "") -> Error:
+func export_sprite_sheet(path: String, first_frame := 0, last_frame := -1, tile_size := -1, view := 1, include_json := true, views := 1, tag_name := "") -> Error:
 	if _exporting or State.edit_busy():
 		return ERR_BUSY
 	if DisplayServer.get_name() == "headless":
@@ -854,35 +753,28 @@ func export_sprite_sheet(path: String, first_frame := 0, last_frame := -1, tile_
 	last_frame = State.get_frame_count() - 1 if last_frame < 0 else last_frame
 	if first_frame < 0 or last_frame < first_frame or last_frame >= State.get_frame_count() or view < 0 or view >= VIEWS.size() or views < 1:
 		return ERR_INVALID_PARAMETER
-	var bounds := _bounds(first_frame, last_frame)
-	var camera_settings := _sheet_camera(view)
-	crop_to_bounds = crop_to_bounds or tile_size < 0
+	var settings := _sheet_render_settings(view, views)
 	if tile_size < 0:
-		tile_size = mini(_sprite_span(bounds, camera_settings, views), int(_sheet_settings.get_node("SizeRow/Size").max_value))
+		tile_size = int(_sheet_settings.get_node("SizeRow/Size").value)
 	if tile_size < 1:
 		return ERR_INVALID_PARAMETER
 	var frames: Array[VoxelFrame] = []
 	for index in range(first_frame, last_frame + 1):
 		frames.append(State.get_voxel_frame(index).copy_frame())
-	var frame_rect := Rect2i(Vector2i.ZERO, Vector2i.ONE * tile_size)
-	var screen_offset := Vector2.ZERO
-	if crop_to_bounds:
-		var projected := _projected_sprite_layout(frames, bounds, tile_size, camera_settings, views)
-		frame_rect = projected.rect
-		screen_offset = projected.offset
-	var layout := sheet_layout(frames.size() * views, frame_rect.size)
+	var layout := sheet_layout(frames.size() * views, tile_size)
 	if layout.size.x > Image.MAX_WIDTH or layout.size.y > Image.MAX_HEIGHT:
 		return ERR_INVALID_PARAMETER
+	settings.layout = layout
 	if path.get_extension().to_lower() != "png":
 		path += ".png"
-	var metadata := sheet_metadata(path, first_frame, last_frame, frame_rect.size, views, tag_name)
+	var metadata := sheet_metadata(path, first_frame, last_frame, layout, views, tag_name)
 	var source_document := State.document
 	State.stop()
 	_exporting = true
 	_cancel_requested = false
 	_preview_revision += 1
 	_operation_id = State.begin_operation("Exporting sprite sheet", frames.size() * views, true, self)
-	var image := await _render_sheet(frames, bounds, tile_size, camera_settings, source_document, -1, views, frame_rect, screen_offset)
+	var image := await _render_sheet(frames, settings, source_document)
 	if image == null:
 		_finish_export()
 		return ERR_BUSY
@@ -898,11 +790,9 @@ func export_sprite_sheet(path: String, first_frame := 0, last_frame := -1, tile_
 	return error
 
 
-func sheet_metadata(path: String, first: int, last: int, tile_size: Variant, views := 1, tag_name := "") -> Dictionary:
+func sheet_metadata(path: String, first: int, last: int, layout: Dictionary, views := 1, tag_name := "") -> Dictionary:
 	var count := last - first + 1
-	var layout := sheet_layout(count * views, tile_size)
 	var dimensions: Vector2i = layout.tile_size
-	var stride: Vector2i = layout.stride
 	var label: String = tag_name if not tag_name.is_empty() else path.get_file().get_basename()
 	var frames := []
 	for index in count * views:
@@ -910,8 +800,8 @@ func sheet_metadata(path: String, first: int, last: int, tile_size: Variant, vie
 		var filename := "%s_%d" % [label, source_index]
 		if views > 1:
 			filename += "_%d" % (index / count)
-		var tile := Vector2i(index % int(layout.columns) * stride.x, index / int(layout.columns) * stride.y)
-		frames.append({"filename": filename, "frame": {"x": tile.x, "y": tile.y, "w": dimensions.x, "h": dimensions.y}, "rotated": false, "trimmed": false, "spriteSourceSize": {"x": 0, "y": 0, "w": dimensions.x, "h": dimensions.y}, "sourceSize": {"w": dimensions.x, "h": dimensions.y}, "duration": maxi(1, State.get_voxel_frame(source_index).delay_ms)})
+		var rect: Rect2i = layout.rects[index]
+		frames.append({"filename": filename, "frame": {"x": rect.position.x, "y": rect.position.y, "w": rect.size.x, "h": rect.size.y}, "rotated": false, "trimmed": false, "spriteSourceSize": {"x": 0, "y": 0, "w": dimensions.x, "h": dimensions.y}, "sourceSize": {"w": dimensions.x, "h": dimensions.y}, "duration": maxi(1, State.get_voxel_frame(source_index).delay_ms)})
 	var tags := []
 	for view_index in views:
 		for tag in State.document.tags:

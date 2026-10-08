@@ -27,9 +27,9 @@ func _run() -> void:
 		settings = exporter._sheet_settings
 		State.document = VoxelDocument.new()
 		settings.get_node("TurntableRow/Turntable").button_pressed = false
-		State.get_current_voxel_frame().set_cell(Vector3i(-1, 0, 0), Color.RED)
+		State.document.set_cell(0, Vector3i(-1, 0, 0), Color.RED)
 		State.document.add_frame()
-		State.get_voxel_frame(1).set_cell(Vector3i(1, 0, 0), Color.BLUE)
+		State.document.set_cell(1, Vector3i(1, 0, 0), Color.BLUE)
 		State.get_voxel_frame(1).delay_ms = 250
 		State.document.add_frame()
 		State.frames_changed.emit()
@@ -45,31 +45,36 @@ func _run() -> void:
 		renderer_count = VoxelRenderer._active_renderer_count
 	)
 	step("Then the controls use simple defaults and describe the output size", func():
-		expect(settings.get_node("SizeRow/Size").value == 3, "the default sprite size fits the projected voxel bounds")
+		expect(settings.get_node("SizeRow/Size").value == 64, "new documents start with a fixed sixty-four-pixel frame size")
+		var document_size: float = settings.get_node("SizeRow/Size").value
 		var frames: OptionButton = settings.get_node("FrameRow/Frames")
 		frames.select(2)
 		frames.item_selected.emit(2)
 		expect(exporter._selected_frames() == Vector2i(1, 1), "the selected Blue tag contains only its frame")
+		expect(settings.get_node("SizeRow/Size").value == document_size, "the selected tag retains the document framing")
 		frames.select(0)
 		frames.item_selected.emit(0)
 		expect(exporter._selected_frames() == Vector2i(0, 2), "the all-frames range includes the empty frame")
 	)
+	step("When the user resets the sprite size", func():
+		settings.get_node("SizeRow/Reset").pressed.emit()
+	)
+	step("Then Reset calculates the frame size from the document framing", func():
+		expect(settings.get_node("SizeRow/Size").value == 3, "Reset fits the document with a three-pixel square frame")
+	)
 	step("When the user disables Ortho for a preset view", func():
 		settings.get_node("ViewRow/Ortho").button_pressed = false
 	)
-	step("Then the preset uses perspective projection and perspective framing", func():
+	step("Then the preset resets the size for perspective framing", func():
 		var camera_settings: Dictionary = exporter._sheet_camera(1)
 		expect(camera_settings.projection == Camera3D.PROJECTION_PERSPECTIVE, "the preset uses perspective projection")
-		var sample := VoxelFrame.new()
-		sample.set_cell(Vector3i.ZERO, Color.RED)
-		var frames: Array[VoxelFrame] = [sample]
-		var bounds := sample.get_bounds()
-		camera_settings.angles = Vector2.ZERO
-		camera_settings.fov = 90.0
-		var layout: Dictionary = exporter._projected_sprite_layout(frames, bounds, 128, camera_settings, 1)
-		camera_settings.projection = Camera3D.PROJECTION_ORTHOGONAL
-		var ortho_layout: Dictionary = exporter._projected_sprite_layout(frames, bounds, 128, camera_settings, 1)
-		expect(layout.rect != ortho_layout.rect, "perspective and orthographic views use distinct projected bounds")
+		var bounds := State.document.bounds()
+		var perspective_span: int = exporter._sprite_span(bounds, camera_settings)
+		expect(settings.get_node("SizeRow/Size").value == perspective_span, "switching to perspective resets the frame size")
+		settings.get_node("ViewRow/Ortho").button_pressed = true
+		var orthographic_span: int = exporter._sprite_span(bounds, exporter._sheet_camera(1))
+		expect(settings.get_node("SizeRow/Size").value == orthographic_span, "switching to orthographic resets the frame size")
+		expect(perspective_span != orthographic_span, "the frame size follows the selected camera framing")
 		settings.get_node("ViewRow/Ortho").button_pressed = true
 	)
 	step("Then Ortho overrides the 3D preview projection without changing its camera", func():
@@ -79,7 +84,7 @@ func _run() -> void:
 		settings.get_node("ViewRow/Ortho").button_pressed = false
 		var perspective_settings: Dictionary = exporter._sheet_camera(0)
 		expect(perspective_settings.projection == Camera3D.PROJECTION_PERSPECTIVE, "the 3D preview sprite uses perspective projection")
-		expect(ortho_settings.transform == perspective_settings.transform, "both projections retain the same camera pose")
+		expect(ortho_settings.transforms == perspective_settings.transforms, "both projections retain the same camera pose")
 		expect(exporter._model_camera.projection == original_projection, "the model camera retains its projection")
 		settings.get_node("ViewRow/Ortho").button_pressed = true
 	)
@@ -103,24 +108,30 @@ func _run() -> void:
 		settings.get_node("ViewRow/View").select(0)
 		settings.get_node("ViewRow/View").item_selected.emit(0)
 	)
-	step("Then the default sprite size includes the camera framing", func():
+	step("Then the camera change retains the explicit sprite size", func():
+		expect(settings.get_node("SizeRow/Size").value == 3, "changing the view retains the three-pixel frame size")
+	)
+	step("When the user resets the size for the camera view", func():
+		settings.get_node("SizeRow/Reset").pressed.emit()
+	)
+	step("Then Reset uses the camera framing", func():
 		expect(settings.get_node("SizeRow/Size").value == 9, "the camera's nine-unit span sets a nine-pixel sprite")
 	)
 	var camera_error: Error = await exporter.export_sprite_sheet(camera_size_path, 0, 2, -1, 0, false)
 	step("Then the camera-framed PNG retains one pixel per voxel", func():
 		var image := Image.new()
 		image.load(camera_size_path)
-		expect(camera_error == OK and image.get_size() == Vector2i(7, 3), "the layout separates the projected cells with one pixel")
-		expect(_visible_pixels(image, Rect2i(0, 0, 3, 1)) == 1, "camera framing preserves one visible pixel for one voxel")
+		expect(camera_error == OK and image.get_size() == Vector2i(19, 19), "the layout retains full nine-pixel square tiles with one-pixel gaps")
+		expect(_visible_pixels(image, Rect2i(0, 0, 9, 9)) == 1, "camera framing preserves one visible pixel for one voxel")
 	)
 	step("When the user chooses a perspective camera ten units from the bounds center", func():
-		settings.get_node("ViewRow/Ortho").button_pressed = false
 		exporter._model_camera.is_orthogonal = false
 		exporter._model_camera.fov = 90.0
 		exporter._model_camera.transform = Transform3D(Basis.IDENTITY, Vector3(0, 0, 10))
 		exporter._model_camera.view_changed.emit()
+		settings.get_node("ViewRow/Ortho").button_pressed = false
 	)
-	step("Then the default sprite size includes the field of view and camera distance", func():
+	step("Then the projection switch resets the size for the new camera", func():
 		expect(settings.get_node("SizeRow/Size").value == 20, "the ninety-degree view spans twenty units at the bounds center")
 		settings.get_node("ViewRow/View").select(1)
 		settings.get_node("ViewRow/View").item_selected.emit(1)
@@ -151,7 +162,7 @@ func _run() -> void:
 		expect(not data.frames[0].trimmed and not data.frames[0].rotated, "the JSON describes untrimmed and unrotated frames")
 		expect(data.frames[0].filename == "%s_0" % sheet_path.get_file().get_basename(), "the JSON joins the sheet label and frame index with an underscore")
 	)
-	error = await exporter.export_sprite_sheet(tag_path, 1, 1, 32, 6, true, 1, false, "Blue")
+	error = await exporter.export_sprite_sheet(tag_path, 1, 1, 32, 6, true, 1, "Blue")
 	step("Then a single-frame range exports from another view", func():
 		expect(error == OK, "the top-view frame export completes")
 		var image := Image.new()
@@ -181,14 +192,20 @@ func _run() -> void:
 		expect(not FileAccess.file_exists(cancel_path.get_basename() + ".json"), "the cancelled export writes no JSON sidecar")
 		expect(not State.edit_busy(), "cancellation releases editing")
 		expect(VoxelRenderer._active_renderer_count == renderer_count, "cancellation releases its temporary renderer")
+		expect(exporter._export_viewport == null, "cancellation releases the render viewport reference")
 		exporter.show_editor_tab()
 	)
+	step("When the user resets the size for the front view", func():
+		settings.get_node("ViewRow/View").select(2)
+		settings.get_node("ViewRow/View").item_selected.emit(2)
+		settings.get_node("SizeRow/Reset").pressed.emit()
+	)
 	error = await exporter.export_sprite_sheet(voxel_size_path, 0, 2, -1, 2, false)
-	step("Then the default front view uses one pixel per voxel", func():
+	step("Then the reset front view uses one pixel per voxel", func():
 		var image := Image.new()
 		image.load(voxel_size_path)
-		expect(error == OK and image.get_size() == Vector2i(7, 3), "the front-view layout separates the shared projected bounds")
-		expect(_visible_pixels(image, Rect2i(0, 0, 3, 1)) == 1, "one voxel occupies one visible pixel in the default front view")
+		expect(error == OK and image.get_size() == Vector2i(7, 7), "the front-view layout retains full three-pixel square tiles")
+		expect(_visible_pixels(image, Rect2i(0, 0, 3, 3)) == 1, "one voxel occupies one visible pixel in the reset front view")
 	)
 	error = await exporter.export_sprite_sheet(turntable_path, 0, 0, 16, 2, true, 8)
 	step("Then a turntable exports eight distinct view positions", func():
@@ -203,6 +220,35 @@ func _run() -> void:
 		var data: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(turntable_path.get_basename() + ".json"))
 		expect(data.frames.size() == 8 and data.frames[4].frame.y == 17, "turntable metadata identifies all view tiles and gaps")
 		expect(data.frames[0].filename != data.frames[1].filename, "each turntable view has a distinct frame name")
+	)
+	error = await exporter.export_sprite_sheet(turntable_path, 0, 2, 16, 2, true, 4)
+	step("Then each turntable view retains the animation frame order", func():
+		var image := Image.new()
+		image.load(turntable_path)
+		expect(error == OK and image.get_size() == Vector2i(67, 50), "the turntable contains four complete three-frame animations")
+		var data: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(turntable_path.get_basename() + ".json"))
+		for view_index in 4:
+			var colors: Array[Color] = []
+			for frame_index in 3:
+				var index := view_index * 3 + frame_index
+				var tile: Dictionary = data.frames[index].frame
+				var rect := Rect2i(tile.x, tile.y, tile.w, tile.h)
+				colors.append(_color_pixel(image, rect))
+				expect(data.frames[index].filename == "%s_%d_%d" % [turntable_path.get_file().get_basename(), frame_index, view_index], "the tile name identifies its animation frame and view")
+			expect(colors[0].a > 0.9 and colors[0].r > colors[0].b, "the view starts with the red frame")
+			expect(colors[1].a > 0.9 and colors[1].b > colors[1].r, "the view continues with the blue frame")
+			expect(colors[2].a == 0.0, "the view ends with the empty frame")
+	)
+	step("When older export settings are restored", func():
+		State.document.export_settings.automatic_size = true
+		exporter._restore_export_settings()
+	)
+	step("Then the saved frame size stays fixed", func():
+		expect(settings.get_node("SizeRow/Size").value == 3, "legacy automatic sizing retains the saved three-pixel frame size")
+		settings.get_node("SizeRow/Size").value = 37
+		exporter._restore_export_settings()
+		expect(settings.get_node("SizeRow/Size").value == 37, "restoring settings retains the explicit frame size")
+		expect(not State.document.export_settings.has("automatic_size"), "new export settings store the explicit frame size")
 	)
 	var import_error: Error = await plugin("ImageImportPlugin").import_image(sheet_path)
 	step("Then the PNG and JSON import as the same animation", func():
