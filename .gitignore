@@ -4,3 +4,6 @@
 
 # Test failure artifacts
 /tests/artifacts/
+
+# Export output
+/dist/
