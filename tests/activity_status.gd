@@ -36,6 +36,7 @@ func _run() -> void:
 		expect(status.get_node("Activity/ActivityProgress").indeterminate, "unknown work uses animated progress")
 		expect(status.get_node("StatusLeft").text == "#" + State.current_color.to_html(false), "the color status stays visible")
 		expect(status.get_node("StatusRight").text.contains("Frame 1/1"), "the frame status stays visible")
+		expect(status.get_node("StatusRight").text.contains("0×0×0"), "the empty document shows zero dimensions")
 	)
 	step("When a measured edit overlaps the background work", func():
 		foreground_id = State.begin_operation("Scaling", 100, true, self)

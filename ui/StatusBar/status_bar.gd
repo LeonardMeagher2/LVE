@@ -41,8 +41,13 @@ func _refresh_status() -> void:
 		_left.text = status.left
 		_right.text = status.right
 		return
+	var size := State.document.bounds().size
 	var zoom_percent := roundi(_editor_camera.zoom_percent()) if _editor_camera else 100
-	set_status(State.current_color.to_html(false), State.current_frame, State.document.frames.size(), zoom_percent)
+	_left.text = "#%s" % State.current_color.to_html(false)
+	_right.text = "%d×%d×%d   Frame %d/%d   %d%%" % [
+		roundi(size.x), roundi(size.y), roundi(size.z),
+		State.current_frame + 1, State.document.frames.size(), zoom_percent,
+	]
 
 
 func _refresh_activity() -> void:
@@ -60,11 +65,6 @@ func _refresh_activity() -> void:
 		_activity_label.text = "%s…" % operation.label
 		if not operation.detail.is_empty():
 			_activity_label.text += " " + operation.detail
-
-
-func set_status(color_html: String, frame: int, frame_count: int, zoom: int) -> void:
-	_left.text = "#%s" % [color_html]
-	_right.text = "Frame %d/%d   %d%%" % [frame + 1, frame_count, zoom]
 
 
 func _on_ui_scale_item_selected(index: int) -> void:
