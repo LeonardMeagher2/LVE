@@ -120,7 +120,7 @@ size_flags_horizontal = 3
 size_flags_vertical = 4
 tooltip_text = "Zoom"
 min_value = 1.0
-max_value = 3200.0
+max_value = 400.0
 value = 100.0
 allow_greater = true
 
