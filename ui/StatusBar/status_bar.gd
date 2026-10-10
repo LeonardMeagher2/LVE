@@ -18,6 +18,8 @@ func _ready() -> void:
 	State.frame_changed.connect(_refresh_status)
 	State.frames_changed.connect(_refresh_status)
 	State.document_changed.connect(_refresh_status)
+	State.cells_changed.connect(_refresh_status.unbind(2))
+	State.chunks_changed.connect(_refresh_status.unbind(2))
 	State.activity_changed.connect(_refresh_activity)
 	if owner and owner.has_node("%Viewport"):
 		_editor_camera = owner.get_node("%Viewport").get_node("%CameraRig")
