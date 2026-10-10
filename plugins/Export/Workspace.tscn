@@ -169,11 +169,11 @@ texture = ExtResource("7_view")
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="Ortho" type="Button" parent="Panels/SheetPanel/Margin/Sheet/Settings/ViewRow" unique_id=756504249]
+[node name="Perspective" type="Button" parent="Panels/SheetPanel/Margin/Sheet/Settings/ViewRow" unique_id=756504249]
 layout_mode = 2
-tooltip_text = "Use orthographic projection for the sprites. Changing projection resets the frame size."
+tooltip_text = "Use perspective projection for the sprites. Turn this off to use orthographic projection. Changing projection resets the frame size."
 toggle_mode = true
-button_pressed = true
+button_pressed = false
 icon = ExtResource("21_ortho")
 icon_alignment = 1
 

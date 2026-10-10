@@ -102,7 +102,7 @@ func _ready() -> void:
 	sheet_bar.get_node("CenterBtn").pressed.connect(sheet_preview.fit)
 	_sheet_settings.get_node("FrameRow/Frames").item_selected.connect(_on_sheet_tag_selected)
 	_sheet_settings.get_node("ViewRow/View").item_selected.connect(_sheet_settings_changed.unbind(1))
-	_sheet_settings.get_node("ViewRow/Ortho").toggled.connect(_reset_sprite_size.unbind(1))
+	_sheet_settings.get_node("ViewRow/Perspective").toggled.connect(_reset_sprite_size.unbind(1))
 	_sheet_settings.get_node("ViewRow/Center").toggled.connect(_sheet_settings_changed.unbind(1))
 	_sheet_settings.get_node("TurntableRow/Views").value_changed.connect(_sheet_settings_changed.unbind(1))
 	_sheet_settings.get_node("SizeRow/Size").value_changed.connect(_sheet_settings_changed.unbind(1))
@@ -136,7 +136,7 @@ func _save_export_settings() -> void:
 		return
 	State.document.export_settings = {
 		"view": _sheet_settings.get_node("ViewRow/View").selected,
-		"sprite_ortho": _sheet_settings.get_node("ViewRow/Ortho").button_pressed,
+		"sprite_ortho": not _sheet_settings.get_node("ViewRow/Perspective").button_pressed,
 		"sprite_center": _sheet_settings.get_node("ViewRow/Center").button_pressed,
 		"frame_size": _sheet_settings.get_node("SizeRow/Size").value,
 		"turntable": _sheet_settings.get_node("TurntableRow/Turntable").button_pressed,
@@ -159,7 +159,7 @@ func _restore_export_settings() -> void:
 	_sheet_tag = State.document.get_tag(int(saved.get("sheet_tag", -1)))
 	_sync_tags()
 	_sheet_settings.get_node("ViewRow/View").select(clampi(int(saved.get("view", 1)), 0, VIEWS.size() - 1))
-	_sheet_settings.get_node("ViewRow/Ortho").set_pressed_no_signal(saved.get("sprite_ortho", true))
+	_sheet_settings.get_node("ViewRow/Perspective").set_pressed_no_signal(not saved.get("sprite_ortho", true))
 	_sheet_settings.get_node("ViewRow/Center").set_pressed_no_signal(saved.get("sprite_center", true))
 	_sheet_settings.get_node("SizeRow/Size").set_value_no_signal(saved.get("frame_size", 64))
 	_sheet_settings.get_node("TurntableRow/Turntable").set_pressed_no_signal(saved.get("turntable", true))
@@ -493,7 +493,7 @@ func _sync() -> void:
 	_menu_item.get_node("ExportBtn").disabled = busy
 	_model.get_node("Export").disabled = busy
 	_controls.get_node("Export").disabled = busy or layout.size.x > Image.MAX_WIDTH or layout.size.y > Image.MAX_HEIGHT
-	for path in ["FrameRow/Frames", "ViewRow/View", "ViewRow/Ortho", "ViewRow/Center"]:
+	for path in ["FrameRow/Frames", "ViewRow/View", "ViewRow/Perspective", "ViewRow/Center"]:
 		_sheet_settings.get_node(path).disabled = busy
 	_sheet_settings.get_node("SizeRow/Size").editable = not busy
 	_sheet_settings.get_node("TurntableRow/Metadata").disabled = busy
@@ -592,7 +592,7 @@ static func sheet_layout(frame_count: int, tile_size: int) -> Dictionary:
 
 
 func _sheet_camera(view: int, views := 1) -> Dictionary:
-	var orthographic: bool = _sheet_settings.get_node("ViewRow/Ortho").button_pressed
+	var orthographic: bool = not _sheet_settings.get_node("ViewRow/Perspective").button_pressed
 	var bounds := State.document.bounds()
 	var transform: Transform3D
 	var size: float = _model_camera.size

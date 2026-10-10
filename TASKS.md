@@ -202,6 +202,13 @@ max_active: 1
   - [x] Run the full behavior suite
 
 # Export/Import
+- [x] Flip the sprite projection toggle to perspective
+  - [x] Rename the exporter button to Perspective
+  - [x] Press the button for perspective and release it for orthographic
+  - [x] Keep `sprite_ortho` in the document and store its inverse
+  - [x] Update the affected sprite tests
+  - The projection, sampling, sheet, shadows, and center tests pass.
+  - The full behavior suite passes with Godot 4.7.2.
 - [x] Use shared projected bounds for automatic sprite frame spacing
   - [x] Project each frame's bounds through the selected camera and turntable views
   - [x] Keep one rectangular frame size and placement offset across the sheet
@@ -435,6 +442,23 @@ max_active: 1
 
 # Responsive UI
 - [ ] Detect narrow layouts and adapt the layout, so the editor can run on a phone
+
+# Keyboard shortcuts
+- [ ] Add keyboard shortcuts to the main editor controls
+  - [ ] Add the new input actions to `project.godot`
+  - [ ] Add Ctrl+Shift+Z to the redo action
+  - [ ] Attach action shortcuts to the File and Undo/Redo buttons
+  - [ ] Attach action shortcuts to the view bar and the camera menu
+  - [ ] Attach action shortcuts to the animation timeline buttons
+  - [ ] Select the tool from each shortcut
+  - [ ] Select the brush modes: pencil, paint, line, eraser
+  - [ ] Select the selection modes: box, wand, lasso
+  - [ ] Select the transform modes: move, rotate, scale
+  - [ ] Select the Fill, Plane, and Symmetry tools
+  - [ ] Attach the Delete shortcut to the shared editing controls
+  - [ ] Show the shortcut key in each button tooltip
+  - [ ] Verify the toolbar, timeline, and clipboard behavior tests
+  - [ ] Run the full behavior suite
 
 # Test harness
 - [x] Review the recent merge to main

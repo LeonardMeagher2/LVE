@@ -40,7 +40,7 @@ func _run() -> void:
 		var orthographic: bool = camera_case.ortho
 		var view: int = camera_case.view
 		step("When the user exports with shadows disabled", func():
-			settings.get_node("ViewRow/Ortho").button_pressed = orthographic
+			settings.get_node("ViewRow/Perspective").button_pressed = not orthographic
 			lighting.get_node("Shadows").button_pressed = false
 		)
 		var error: Error = await exporter.export_sprite_sheet(prefix + "_off.png", 0, 1, 128, view, false, 2)
@@ -50,7 +50,7 @@ func _run() -> void:
 		if orthographic:
 			orthographic_image = baseline
 		else:
-			expect(baseline.get_data() != orthographic_image.get_data(), "the Ortho toggle changes the rendered projection")
+			expect(baseline.get_data() != orthographic_image.get_data(), "the projection toggle changes the rendered projection")
 		step("When the user exports with shadows enabled", func():
 			lighting.get_node("Shadows").button_pressed = true
 		)

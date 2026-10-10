@@ -24,7 +24,7 @@ func _run() -> void:
 	)
 	for orthographic in [true, false]:
 		step("When the user exports six-pixel square frames with orthographic=%s" % orthographic, func():
-			exporter._sheet_settings.get_node("ViewRow/Ortho").button_pressed = orthographic
+			exporter._sheet_settings.get_node("ViewRow/Perspective").button_pressed = not orthographic
 			exporter._model_camera.is_orthogonal = orthographic
 			exporter._model_camera.size = 4.0
 			exporter._model_camera.fov = 90.0

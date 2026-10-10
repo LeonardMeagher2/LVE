@@ -29,7 +29,7 @@ func _run() -> void:
 		exporter._model_camera.size = 9.0
 		exporter._model_camera.fov = 90.0
 		exporter._model_camera.transform = Transform3D(Basis.IDENTITY, Vector3(0, 0, 10))
-		exporter._sheet_settings.get_node("ViewRow/Ortho").button_pressed = false
+		exporter._sheet_settings.get_node("ViewRow/Perspective").button_pressed = true
 		path = "user://sprite_projection_%s.png" % Time.get_ticks_usec()
 	)
 	for view in [2, 0]:
@@ -40,7 +40,7 @@ func _run() -> void:
 			exporter._sheet_settings.get_node("SizeRow/Size").value = 99
 		)
 		step("When the user exports an orthographic sprite from view %s" % view, func():
-			exporter._sheet_settings.get_node("ViewRow/Ortho").button_pressed = true
+			exporter._sheet_settings.get_node("ViewRow/Perspective").button_pressed = false
 		)
 		var ortho_size := 17 if view == 2 else 9
 		expect(exporter._sheet_settings.get_node("SizeRow/Size").value == ortho_size, "switching to orthographic resets the manual frame size")
@@ -49,7 +49,7 @@ func _run() -> void:
 		orthographic.load(path)
 		expect(error == OK, "the orthographic sprite exports")
 		step("When the user switches the sprite to perspective", func():
-			exporter._sheet_settings.get_node("ViewRow/Ortho").button_pressed = false
+			exporter._sheet_settings.get_node("ViewRow/Perspective").button_pressed = true
 		)
 		var perspective_size := 74 if view == 2 else 20
 		expect(exporter._sheet_settings.get_node("SizeRow/Size").value == perspective_size, "switching to perspective resets the frame size for the field of view")

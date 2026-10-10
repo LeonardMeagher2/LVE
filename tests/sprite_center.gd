@@ -54,7 +54,7 @@ func _run() -> void:
 	for view in [1, 0]:
 		for orthographic in [true, false]:
 			step("When the user exports centered sprites", func():
-				settings.get_node("ViewRow/Ortho").button_pressed = orthographic
+				settings.get_node("ViewRow/Perspective").button_pressed = not orthographic
 				settings.get_node("ViewRow/Center").button_pressed = true
 				captured = false
 				planes_stable = true
