@@ -57,6 +57,8 @@ func save_doc(path: String) -> Error:
 		return err
 	current_save_path = path
 	document.file_path = path
+	if State.is_app_session():
+		State.remember_document(path)
 	return OK
 
 
@@ -76,6 +78,8 @@ func _on_new_btn_pressed() -> void:
 		return
 	current_save_path = ""
 	State.document = null
+	if State.is_app_session():
+		State.forget_document()
 
 func _on_open_btn_pressed() -> void:
 	if State.edit_busy():
@@ -87,15 +91,23 @@ func _on_open_btn_pressed() -> void:
 	%FileDialog.add_filter(State.get_image_file_filter())
 	%FileDialog.popup_centered()
 
+func open_document(path: String, saved: bool = true) -> bool:
+	var document := VoxelDocument.load_file(path)
+	if document == null:
+		return false
+	State.document = document
+	if saved:
+		current_save_path = path
+		if State.is_app_session():
+			State.remember_document(path)
+	return true
+
 func _on_file_opened(path: String) -> void:
 	if State.edit_busy():
 		return
 	var extension := path.get_extension().to_lower()
 	if extension in ["lve", "png"]:
-		var document := VoxelDocument.load_file(path)
-		if document:
-			State.document = document
-			current_save_path = path
+		if open_document(path):
 			return
 		if extension == "lve":
 			_show_file_error("Cannot open the document. The file is invalid or its version is unsupported.")

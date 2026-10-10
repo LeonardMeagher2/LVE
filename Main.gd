@@ -1,6 +1,7 @@
 extends Control
 
 const UI_SETTINGS_PATH := "user://interface.cfg"
+const STARTUP_DOCUMENT := "res://Flamingo.lve"
 var _ui_scale := 0.0
 var _scale_check_elapsed := 0.0
 var _title_document: VoxelDocument
@@ -44,6 +45,19 @@ func _ready() -> void:
 		window.move_to_center()
 	%TabContainer.tab_changed.connect(_on_tab_changed)
 	_on_tab_changed(%TabContainer.current_tab)
+	_restore_startup_document.call_deferred()
+
+
+func _restore_startup_document(force: bool = false, session_path: String = "") -> void:
+	if not force and not State.is_app_session():
+		return
+	if session_path.is_empty():
+		session_path = State.SESSION_PATH
+	var last := State.last_document_path(session_path)
+	if not last.is_empty() and FileAccess.file_exists(last) and %MenuBar.open_document(last, true):
+		return
+	if FileAccess.file_exists(STARTUP_DOCUMENT):
+		%MenuBar.open_document(STARTUP_DOCUMENT, false)
 
 
 func set_ui_scale(value: float, save: bool = true) -> void:

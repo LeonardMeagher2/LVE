@@ -19,6 +19,7 @@ signal model_settings_changed()
 
 const WORK_SLICE_US := 3000
 const DEFAULT_PALETTE_PATH := "user://default_palette.cfg"
+const SESSION_PATH := "user://session.cfg"
 const DEFAULT_SYMMETRY_ORIGIN := Vector3(-0.5, -0.5, -0.5)
 const IMAGE_EXTENSIONS := ["bmp", "dds", "exr", "hdr", "jpg", "jpeg", "ktx", "ktx2", "png", "svg", "tga", "webp"]
 
@@ -504,6 +505,34 @@ func reset_default_palette(path: String = DEFAULT_PALETTE_PATH) -> Error:
 	default_palette = get_builtin_palette()
 	default_palette_changed.emit()
 	return OK
+
+
+func remember_document(path: String, config_path: String = SESSION_PATH) -> void:
+	var config := ConfigFile.new()
+	config.load(config_path)
+	config.set_value("files", "last_document", path)
+	config.save(config_path)
+
+
+func forget_document(config_path: String = SESSION_PATH) -> void:
+	var config := ConfigFile.new()
+	if config.load(config_path) != OK:
+		return
+	config.erase_section_key("files", "last_document")
+	config.save(config_path)
+
+
+func last_document_path(config_path: String = SESSION_PATH) -> String:
+	var config := ConfigFile.new()
+	if config.load(config_path) != OK:
+		return ""
+	var path: Variant = config.get_value("files", "last_document", "")
+	return path if path is String else ""
+
+
+func is_app_session() -> bool:
+	var tree := get_tree()
+	return tree != null and tree.current_scene == tree.root.get_node_or_null("Main")
 
 
 static func get_image_file_filter() -> String:
