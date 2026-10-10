@@ -270,7 +270,7 @@ static func _variant_end(data: PackedByteArray, offset: int, depth: int, budget:
 
 
 static func _valid_document_data(data: Variant) -> bool:
-	if not data is Dictionary or not _keys_allowed(data, ["palette", "frames", "tags", "smooth_normals", "lighting", "export"]):
+	if not data is Dictionary:
 		return false
 	if not data.get("palette") is PackedColorArray or data.palette.size() > MAX_PALETTE_COLORS:
 		return false
@@ -281,7 +281,7 @@ static func _valid_document_data(data: Variant) -> bool:
 		return false
 	var occupied := 0
 	for frame in data.frames:
-		if not frame is Dictionary or not _keys_allowed(frame, ["delay_ms", "voxels"]) or not _integer_in(frame.get("delay_ms"), 1, 86400000):
+		if not frame is Dictionary or not _integer_in(frame.get("delay_ms"), 1, 86400000):
 			return false
 		var count := VoxelFrame.validate_storage(frame.get("voxels"), VoxelFrame.MAX_STORED_VOXELS - occupied)
 		if count < 0:
@@ -290,7 +290,7 @@ static func _valid_document_data(data: Variant) -> bool:
 	if not data.get("tags") is Array or data.tags.size() > MAX_TAGS:
 		return false
 	for tag in data.tags:
-		if not tag is Dictionary or not _keys_allowed(tag, ["name", "from", "to", "loop_mode", "repeats"]):
+		if not tag is Dictionary:
 			return false
 		if not tag.get("name") is String or tag.name.length() > 1024:
 			return false
@@ -299,13 +299,6 @@ static func _valid_document_data(data: Variant) -> bool:
 		if not _integer_in(tag.get("loop_mode"), 0, 3) or not _integer_in(tag.get("repeats"), 0, 1000000):
 			return false
 	return data.get("smooth_normals") is bool and _valid_lighting(data.get("lighting"), false) and _valid_export(data.get("export"), data.tags.size())
-
-
-static func _keys_allowed(data: Dictionary, names: Array) -> bool:
-	for key in data:
-		if not key is String or key not in names:
-			return false
-	return true
 
 
 static func _integer_in(value: Variant, low: int, high: int) -> bool:
@@ -327,15 +320,11 @@ static func _valid_basis(value: Variant) -> bool:
 static func _valid_lighting(data: Variant, exported: bool) -> bool:
 	if not data is Dictionary:
 		return false
-	var keys := ["basis", "color", "ambient_color"]
 	if exported:
-		keys.append_array(["energy", "ambient_energy", "shadows", "shaded", "view_locked", "view_basis"])
 		# These fields are read directly by the export workspace.
 		for key in ["basis", "color", "ambient_color", "energy", "ambient_energy", "shadows", "shaded"]:
 			if not data.has(key):
 				return false
-	if not _keys_allowed(data, keys):
-		return false
 	for key in data:
 		match key:
 			"basis", "view_basis":
@@ -344,13 +333,13 @@ static func _valid_lighting(data: Variant, exported: bool) -> bool:
 				if not _valid_color(data[key], 16.0): return false
 			"energy", "ambient_energy":
 				if not _number_in(data[key], 0, 16): return false
-			_:
+			"shadows", "shaded", "view_locked":
 				if not data[key] is bool: return false
 	return true
 
 
 static func _valid_export(data: Variant, tag_count: int) -> bool:
-	if not data is Dictionary or not _keys_allowed(data, ["view", "sprite_ortho", "sprite_center", "automatic_size", "frame_size", "turntable", "views", "metadata", "center", "model_tag", "sheet_tag", "lighting", "camera"]):
+	if not data is Dictionary:
 		return false
 	for key in data:
 		match key:
@@ -366,13 +355,13 @@ static func _valid_export(data: Variant, tag_count: int) -> bool:
 				if not _valid_lighting(data[key], true): return false
 			"camera":
 				if not _valid_camera(data[key]): return false
-			_:
+			"sprite_ortho", "sprite_center", "automatic_size", "turntable", "metadata", "center":
 				if not data[key] is bool: return false
 	return true
 
 
 static func _valid_camera(data: Variant) -> bool:
-	if not data is Dictionary or not _keys_allowed(data, ["yaw", "pitch", "distance", "initial_distance", "target", "orthographic", "fov"]):
+	if not data is Dictionary:
 		return false
 	for key in data:
 		match key:
@@ -384,7 +373,7 @@ static func _valid_camera(data: Variant) -> bool:
 				if not _number_in(data[key], 1, 179): return false
 			"distance", "initial_distance":
 				if not _number_in(data[key], 0.001, 10000000): return false
-			_:
+			"yaw", "pitch":
 				if not _number_in(data[key], -1000000, 1000000): return false
 	return true
 
