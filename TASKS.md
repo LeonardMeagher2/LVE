@@ -443,22 +443,32 @@ max_active: 1
 # Responsive UI
 - [ ] Detect narrow layouts and adapt the layout, so the editor can run on a phone
 
+# Viewport navigation
+- [x] Drag the view with modifier keys in any tool mode
+  - [x] Orbit with Alt+left-drag
+  - [x] Pan with Shift+left-drag
+  - [x] Latch the drag mode on press, so the tool does not edit
+  - [x] Show the active drag mode on the Pan and Rotate buttons
+  - [x] Snap the view with the number row keys 1 through 7
+  - [x] Verify the pan, rotate, view preset, and export preview tests
+  - [x] Run the full behavior suite
+
 # Keyboard shortcuts
-- [ ] Add keyboard shortcuts to the main editor controls
-  - [ ] Add the new input actions to `project.godot`
-  - [ ] Add Ctrl+Shift+Z to the redo action
-  - [ ] Attach action shortcuts to the File and Undo/Redo buttons
-  - [ ] Attach action shortcuts to the view bar and the camera menu
-  - [ ] Attach action shortcuts to the animation timeline buttons
-  - [ ] Select the tool from each shortcut
-  - [ ] Select the brush modes: pencil, paint, line, eraser
-  - [ ] Select the selection modes: box, wand, lasso
-  - [ ] Select the transform modes: move, rotate, scale
-  - [ ] Select the Fill, Plane, and Symmetry tools
-  - [ ] Attach the Delete shortcut to the shared editing controls
-  - [ ] Show the shortcut key in each button tooltip
-  - [ ] Verify the toolbar, timeline, and clipboard behavior tests
-  - [ ] Run the full behavior suite
+- [x] Add keyboard shortcuts to the main editor controls
+  - [x] Add the new input actions to `project.godot`
+  - [x] Add Ctrl+Shift+Z to the redo action
+  - [x] Attach action shortcuts to the File and Undo/Redo buttons
+  - [x] Attach action shortcuts to the view bar and the camera menu
+  - [x] Attach action shortcuts to the animation timeline buttons
+  - [x] Select the tool from each shortcut
+  - [x] Select the brush modes: pencil, paint, line, eraser
+  - [x] Select the selection modes: box, wand, lasso
+  - [x] Select the transform modes: move, rotate, scale
+  - [x] Select the Fill, Plane, and Symmetry tools
+  - [x] Attach the Delete shortcut to the shared editing controls
+  - [x] Show the shortcut key in each button tooltip
+  - [x] Verify the toolbar, timeline, and clipboard behavior tests
+  - [x] Run the full behavior suite
 
 # Test harness
 - [x] Review the recent merge to main

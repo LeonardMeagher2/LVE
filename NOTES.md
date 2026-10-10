@@ -137,6 +137,7 @@ This file records confirmed facts about Leonard's Voxel Editor. Record each lear
 - 2026-08-24: Every headless test run prints a stray GDScript backtrace at `_ready` plus RID-leak errors at exit. They appear on untouched tests too. They are noise, not failures.
 - 2026-09-07: A test `_run` that ends directly with a step-lambda can fail to parse with 'Expected end of file'. The failure depends on the lambda body and the prior statements. Keep a trailing statement after the final step to parse reliably.
 - 2026-10-06: The sprite sheet JSON names each frame `<tag>_<frame>`. A multi-view export appends `_<view>` to frames and tag names. A tag name keeps its own spaces.
+- 2026-10-10: A `Button` `Shortcut` handles its key in `_shortcut_input` and calls `accept_event()`. This runs before `_unhandled_input`. A tool that reads option keys in `_unhandled_input` never sees a key that a toolbar shortcut already consumed. Do not overlap tool-option keys with tool-selection shortcuts.
 
 ## Regressions found in the plugin migration
 

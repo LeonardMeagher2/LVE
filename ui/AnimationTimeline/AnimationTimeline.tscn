@@ -30,6 +30,70 @@ _data = {
 &"Preview": SubResource("Animation_kqkb2")
 }
 
+[sub_resource type="InputEventAction" id="InputEventAction_frame_to_start"]
+action = &"frame_to_start"
+pressed = true
+
+[sub_resource type="Shortcut" id="Shortcut_frame_to_start"]
+resource_name = "Step to start"
+events = [SubResource("InputEventAction_frame_to_start")]
+
+[sub_resource type="InputEventAction" id="InputEventAction_frame_prev"]
+action = &"frame_prev"
+pressed = true
+
+[sub_resource type="Shortcut" id="Shortcut_frame_prev"]
+resource_name = "Step back"
+events = [SubResource("InputEventAction_frame_prev")]
+
+[sub_resource type="InputEventAction" id="InputEventAction_play_pause"]
+action = &"play_pause"
+pressed = true
+
+[sub_resource type="Shortcut" id="Shortcut_play_pause"]
+resource_name = "Play"
+events = [SubResource("InputEventAction_play_pause")]
+
+[sub_resource type="InputEventAction" id="InputEventAction_frame_next"]
+action = &"frame_next"
+pressed = true
+
+[sub_resource type="Shortcut" id="Shortcut_frame_next"]
+resource_name = "Step forward"
+events = [SubResource("InputEventAction_frame_next")]
+
+[sub_resource type="InputEventAction" id="InputEventAction_frame_to_end"]
+action = &"frame_to_end"
+pressed = true
+
+[sub_resource type="Shortcut" id="Shortcut_frame_to_end"]
+resource_name = "Step to end"
+events = [SubResource("InputEventAction_frame_to_end")]
+
+[sub_resource type="InputEventAction" id="InputEventAction_frame_add"]
+action = &"frame_add"
+pressed = true
+
+[sub_resource type="Shortcut" id="Shortcut_frame_add"]
+resource_name = "Add frame"
+events = [SubResource("InputEventAction_frame_add")]
+
+[sub_resource type="InputEventAction" id="InputEventAction_frame_duplicate"]
+action = &"frame_duplicate"
+pressed = true
+
+[sub_resource type="Shortcut" id="Shortcut_frame_duplicate"]
+resource_name = "Duplicate frame"
+events = [SubResource("InputEventAction_frame_duplicate")]
+
+[sub_resource type="InputEventAction" id="InputEventAction_frame_delete"]
+action = &"frame_delete"
+pressed = true
+
+[sub_resource type="Shortcut" id="Shortcut_frame_delete"]
+resource_name = "Delete frame"
+events = [SubResource("InputEventAction_frame_delete")]
+
 [node name="AnimationTimeline" type="VBoxContainer" unique_id=106212846]
 anchors_preset = 15
 anchor_right = 1.0
@@ -50,12 +114,14 @@ layout_mode = 2
 [node name="ToStart" type="Button" parent="HBoxContainer/Playback" unique_id=1508834326]
 layout_mode = 2
 tooltip_text = "Step to start"
+shortcut = SubResource("Shortcut_frame_to_start")
 icon = ExtResource("2_3c7d8")
 icon_alignment = 1
 
 [node name="Prev" type="Button" parent="HBoxContainer/Playback" unique_id=1849203195]
 layout_mode = 2
 tooltip_text = "Step back"
+shortcut = SubResource("Shortcut_frame_prev")
 icon = ExtResource("3_ad7bi")
 icon_alignment = 1
 
@@ -63,6 +129,7 @@ icon_alignment = 1
 unique_name_in_owner = true
 layout_mode = 2
 tooltip_text = "Play"
+shortcut = SubResource("Shortcut_play_pause")
 toggle_mode = true
 icon = ExtResource("4_vr210")
 icon_alignment = 1
@@ -70,12 +137,14 @@ icon_alignment = 1
 [node name="Next" type="Button" parent="HBoxContainer/Playback" unique_id=1342544756]
 layout_mode = 2
 tooltip_text = "Step forward"
+shortcut = SubResource("Shortcut_frame_next")
 icon = ExtResource("5_sm24x")
 icon_alignment = 1
 
 [node name="ToEnd" type="Button" parent="HBoxContainer/Playback" unique_id=1180906050]
 layout_mode = 2
 tooltip_text = "Step to end"
+shortcut = SubResource("Shortcut_frame_to_end")
 icon = ExtResource("6_5wbnp")
 icon_alignment = 1
 
@@ -91,6 +160,7 @@ size_flags_horizontal = 0
 layout_mode = 2
 size_flags_vertical = 4
 tooltip_text = "Add frame"
+shortcut = SubResource("Shortcut_frame_add")
 icon = ExtResource("7_j1idt")
 icon_alignment = 1
 
@@ -98,6 +168,7 @@ icon_alignment = 1
 layout_mode = 2
 size_flags_vertical = 4
 tooltip_text = "Duplicate frame"
+shortcut = SubResource("Shortcut_frame_duplicate")
 icon = ExtResource("8_whytp")
 icon_alignment = 1
 
@@ -105,6 +176,7 @@ icon_alignment = 1
 layout_mode = 2
 size_flags_vertical = 4
 tooltip_text = "Delete frame"
+shortcut = SubResource("Shortcut_frame_delete")
 icon = ExtResource("9_tjres")
 icon_alignment = 1
 

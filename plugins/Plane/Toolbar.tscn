@@ -3,9 +3,18 @@
 [ext_resource type="ButtonGroup" uid="uid://tm4elm05vye0" path="res://plugins/ToolBarButtonGroup.tres" id="1_s6403"]
 [ext_resource type="Texture2D" uid="uid://bhg85sqfio31d" path="res://icons/grid.svg" id="2_icon"]
 
+[sub_resource type="InputEventAction" id="InputEventAction_plane"]
+action = &"tool_plane"
+pressed = true
+
+[sub_resource type="Shortcut" id="Shortcut_plane"]
+resource_name = "Plane"
+events = [SubResource("InputEventAction_plane")]
+
 [node name="plane" type="Button" unique_id=659208998]
 tooltip_text = "Move the floor plane"
 toggle_mode = true
 button_group = ExtResource("1_s6403")
+shortcut = SubResource("Shortcut_plane")
 icon = ExtResource("2_icon")
 icon_alignment = 1

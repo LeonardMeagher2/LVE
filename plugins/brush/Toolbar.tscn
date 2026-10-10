@@ -7,19 +7,11 @@
 [ext_resource type="Texture2D" path="res://icons/line.svg" id="5_line"]
 [ext_resource type="Texture2D" path="res://icons/eraser.svg" id="6_eraser"]
 
-[sub_resource type="InputEventAction" id="InputEventAction_pencil"]
-action = &"tool_pencil"
-pressed = true
-
-[sub_resource type="Shortcut" id="Shortcut_pencil"]
-events = [SubResource("InputEventAction_pencil")]
-
 [node name="Toolbar" type="MenuButton" unique_id=321580023]
 offset_right = 26.0
 offset_bottom = 26.0
 tooltip_text = "Brush tools"
 button_group = ExtResource("1_o5fq1")
-shortcut = SubResource("Shortcut_pencil")
 icon = ExtResource("2_ccmv0")
 flat = false
 icon_alignment = 1

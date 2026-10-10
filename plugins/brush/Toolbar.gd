@@ -15,8 +15,16 @@ func _on_index_pressed(index: int) -> void:
 
 
 func _shortcut_input(event: InputEvent) -> void:
-	if not disabled and is_visible_in_tree() and event.is_action_pressed("tool_eraser") and not event.is_echo():
-		_on_index_pressed(_settings.BrushMode.ERASER)
-		accept_event()
+	if disabled or not is_visible_in_tree() or event.is_echo():
 		return
+	for binding in [
+		[&"tool_pencil", _settings.BrushMode.PENCIL],
+		[&"tool_paint", _settings.BrushMode.PAINT],
+		[&"tool_line", _settings.BrushMode.LINE],
+		[&"tool_eraser", _settings.BrushMode.ERASER],
+	]:
+		if event.is_action_pressed(binding[0], false, true):
+			_on_index_pressed(binding[1])
+			accept_event()
+			return
 	super._shortcut_input(event)

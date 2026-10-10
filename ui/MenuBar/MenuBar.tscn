@@ -9,30 +9,82 @@
 [ext_resource type="Texture2D" uid="uid://b4jrotar1sqwf" path="res://icons/redo.svg" id="7_redo"]
 [ext_resource type="Texture2D" path="res://icons/settings.svg" id="8_settings"]
 
+[sub_resource type="InputEventAction" id="InputEventAction_new"]
+action = &"new_file"
+pressed = true
+
+[sub_resource type="Shortcut" id="Shortcut_new"]
+resource_name = "New"
+events = [SubResource("InputEventAction_new")]
+
+[sub_resource type="InputEventAction" id="InputEventAction_open"]
+action = &"open_file"
+pressed = true
+
+[sub_resource type="Shortcut" id="Shortcut_open"]
+resource_name = "Open"
+events = [SubResource("InputEventAction_open")]
+
+[sub_resource type="InputEventAction" id="InputEventAction_save"]
+action = &"save_file"
+pressed = true
+
+[sub_resource type="Shortcut" id="Shortcut_save"]
+resource_name = "Save"
+events = [SubResource("InputEventAction_save")]
+
+[sub_resource type="InputEventAction" id="InputEventAction_save_as"]
+action = &"save_file_as"
+pressed = true
+
+[sub_resource type="Shortcut" id="Shortcut_save_as"]
+resource_name = "Save As"
+events = [SubResource("InputEventAction_save_as")]
+
+[sub_resource type="InputEventAction" id="InputEventAction_undo"]
+action = &"undo"
+pressed = true
+
+[sub_resource type="Shortcut" id="Shortcut_undo"]
+resource_name = "Undo"
+events = [SubResource("InputEventAction_undo")]
+
+[sub_resource type="InputEventAction" id="InputEventAction_redo"]
+action = &"redo"
+pressed = true
+
+[sub_resource type="Shortcut" id="Shortcut_redo"]
+resource_name = "Redo"
+events = [SubResource("InputEventAction_redo")]
+
 [node name="MenuBar" type="HBoxContainer" unique_id=1142549001]
 script = ExtResource("1_toolbar")
 
 [node name="NewBtn" type="Button" parent="." unique_id=584283784]
 layout_mode = 2
-tooltip_text = "New (Ctrl+N)"
+tooltip_text = "New"
+shortcut = SubResource("Shortcut_new")
 icon = ExtResource("2_new")
 icon_alignment = 1
 
 [node name="OpenBtn" type="Button" parent="." unique_id=1673490502]
 layout_mode = 2
-tooltip_text = "Open (Ctrl+O)"
+tooltip_text = "Open"
+shortcut = SubResource("Shortcut_open")
 icon = ExtResource("3_open")
 icon_alignment = 1
 
 [node name="SaveBtn" type="Button" parent="." unique_id=404607315]
 layout_mode = 2
-tooltip_text = "Save (Ctrl+S)"
+tooltip_text = "Save"
+shortcut = SubResource("Shortcut_save")
 icon = ExtResource("4_save")
 icon_alignment = 1
 
 [node name="SaveAsBtn" type="Button" parent="." unique_id=789123456]
 layout_mode = 2
-tooltip_text = "Save As (Ctrl+Shift+S)"
+tooltip_text = "Save As"
+shortcut = SubResource("Shortcut_save_as")
 icon = ExtResource("5_save_as")
 icon_alignment = 1
 
@@ -53,13 +105,15 @@ layout_mode = 2
 
 [node name="UndoBtn" type="Button" parent="." unique_id=234567890]
 layout_mode = 2
-tooltip_text = "Undo (Ctrl+Z)"
+tooltip_text = "Undo"
+shortcut = SubResource("Shortcut_undo")
 icon = ExtResource("6_undo")
 icon_alignment = 1
 
 [node name="RedoBtn" type="Button" parent="." unique_id=345678901]
 layout_mode = 2
-tooltip_text = "Redo (Ctrl+Y)"
+tooltip_text = "Redo"
+shortcut = SubResource("Shortcut_redo")
 icon = ExtResource("7_redo")
 icon_alignment = 1
 

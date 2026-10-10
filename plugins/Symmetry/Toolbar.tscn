@@ -3,9 +3,18 @@
 [ext_resource type="ButtonGroup" path="res://plugins/ToolBarButtonGroup.tres" id="1_group"]
 [ext_resource type="Texture2D" path="res://icons/symmetry.svg" id="2_icon"]
 
+[sub_resource type="InputEventAction" id="InputEventAction_symmetry"]
+action = &"tool_symmetry"
+pressed = true
+
+[sub_resource type="Shortcut" id="Shortcut_symmetry"]
+resource_name = "Symmetry"
+events = [SubResource("InputEventAction_symmetry")]
+
 [node name="Symmetry" type="Button"]
 tooltip_text = "Configure symmetry planes. Drag anywhere to move their origin."
 toggle_mode = true
 button_group = ExtResource("1_group")
+shortcut = SubResource("Shortcut_symmetry")
 icon = ExtResource("2_icon")
 icon_alignment = 1

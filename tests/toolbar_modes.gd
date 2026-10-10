@@ -58,3 +58,24 @@ func _run() -> void:
 	step("Then the eraser shortcut selects the eraser brush mode", func():
 		expect(brush_button.icon == brush_button.get_popup().get_item_icon(3), "the eraser shortcut shows the eraser icon")
 	)
+	step("When the user selects Pencil and presses the paint shortcut", func():
+		brush_button.get_popup().index_pressed.emit(0)
+		var event := InputEventKey.new()
+		event.physical_keycode = KEY_P
+		event.pressed = true
+		brush_button._shortcut_input(event)
+	)
+	step("Then the paint shortcut selects the paint brush mode", func():
+		expect(brush_button.icon == brush_button.get_popup().get_item_icon(1), "the paint shortcut shows the paint icon")
+	)
+	step("When the user selects Pencil and presses the line shortcut", func():
+		brush_button.get_popup().index_pressed.emit(0)
+		var event := InputEventKey.new()
+		event.physical_keycode = KEY_L
+		event.pressed = true
+		brush_button._shortcut_input(event)
+	)
+	step("Then the line shortcut selects the line brush mode", func():
+		expect(brush_button.icon == brush_button.get_popup().get_item_icon(2), "the line shortcut shows the line icon")
+		expect(plugin("BrushPlugin")._tool.name == "LineTool", "the line shortcut activates the line tool")
+	)

@@ -232,9 +232,6 @@ func _unhandled_key_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel") and cancel_paste():
 		get_viewport().set_input_as_handled()
 		return
-	if event.is_action_pressed("delete") and not event.is_echo():
-		delete_voxels()
-		get_viewport().set_input_as_handled()
 
 
 func cancel_paste() -> bool:

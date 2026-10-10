@@ -11,6 +11,7 @@ ctrl_pressed = true
 keycode = 88
 
 [sub_resource type="Shortcut" id="CutShortcut"]
+resource_name = "Cut"
 events = [SubResource("CutKey")]
 
 [sub_resource type="InputEventKey" id="CopyKey"]
@@ -18,6 +19,7 @@ ctrl_pressed = true
 keycode = 67
 
 [sub_resource type="Shortcut" id="CopyShortcut"]
+resource_name = "Copy"
 events = [SubResource("CopyKey")]
 
 [sub_resource type="InputEventKey" id="PasteKey"]
@@ -25,7 +27,16 @@ ctrl_pressed = true
 keycode = 86
 
 [sub_resource type="Shortcut" id="PasteShortcut"]
+resource_name = "Paste"
 events = [SubResource("PasteKey")]
+
+[sub_resource type="InputEventAction" id="InputEventAction_delete"]
+action = &"delete"
+pressed = true
+
+[sub_resource type="Shortcut" id="Shortcut_delete"]
+resource_name = "Delete"
+events = [SubResource("InputEventAction_delete")]
 
 [node name="ClipboardOptions" type="HBoxContainer" unique_id=751721785]
 
@@ -34,28 +45,29 @@ layout_mode = 2
 
 [node name="Cut" type="Button" parent="." unique_id=276397830]
 layout_mode = 2
-tooltip_text = "Cut selected voxels, or all frame voxels (Ctrl+X)"
+tooltip_text = "Cut selected voxels, or all frame voxels"
 shortcut = SubResource("CutShortcut")
 icon = ExtResource("3_cut")
 icon_alignment = 1
 
 [node name="Copy" type="Button" parent="." unique_id=1337126303]
 layout_mode = 2
-tooltip_text = "Copy selected voxels, or all frame voxels (Ctrl+C)"
+tooltip_text = "Copy selected voxels, or all frame voxels"
 shortcut = SubResource("CopyShortcut")
 icon = ExtResource("1_copy")
 icon_alignment = 1
 
 [node name="Paste" type="Button" parent="." unique_id=1792386152]
 layout_mode = 2
-tooltip_text = "Paste voxels at the cursor (Ctrl+V). Click to place. Cancel Paste or Escape cancels."
+tooltip_text = "Paste voxels at the cursor. Click to place. Cancel Paste or Escape cancels."
 shortcut = SubResource("PasteShortcut")
 icon = ExtResource("2_paste")
 icon_alignment = 1
 
 [node name="Delete" type="Button" parent="." unique_id=1944084030]
 layout_mode = 2
-tooltip_text = "Delete selected voxels (Delete)"
+tooltip_text = "Delete selected voxels"
+shortcut = SubResource("Shortcut_delete")
 icon = ExtResource("4_delete")
 icon_alignment = 1
 
