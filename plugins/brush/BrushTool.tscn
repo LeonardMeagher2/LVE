@@ -1,8 +1,8 @@
 [gd_scene format=3 uid="uid://cfh7uu135xto5"]
 
 [ext_resource type="Script" uid="uid://dt6jni4oe4jda" path="res://plugins/brush/BrushTool.gd" id="1_vbqos"]
-[ext_resource type="Material" path="res://plugins/cursor_material.tres" id="2_gb8al"]
-[ext_resource type="Script" path="res://plugins/brush/BrushPreview.gd" id="3_preview"]
+[ext_resource type="Material" uid="uid://dv7wwwbfihlej" path="res://plugins/cursor_material.tres" id="2_gb8al"]
+[ext_resource type="Script" uid="uid://dkv0y2ogaf0tm" path="res://plugins/brush/BrushPreview.gd" id="3_preview"]
 
 [node name="BrushTool" type="Node3D" unique_id=965280581]
 script = ExtResource("1_vbqos")

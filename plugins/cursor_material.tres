@@ -3,3 +3,5 @@
 [resource]
 render_priority = 1
 shading_mode = 0
+diffuse_mode = 1
+specular_mode = 2
