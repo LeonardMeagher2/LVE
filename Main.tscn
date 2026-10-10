@@ -64,7 +64,7 @@ size_flags_horizontal = 3
 
 [node name="OptionBar" type="HBoxContainer" parent="Content/VBoxContainer/TabContainer/Editor/Body/Panel/MarginContainer/VBoxContainer" unique_id=1775805641]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 28)
+custom_minimum_size = Vector2(0, 31)
 layout_mode = 2
 
 [node name="HBoxContainer" type="HBoxContainer" parent="Content/VBoxContainer/TabContainer/Editor/Body/Panel/MarginContainer/VBoxContainer" unique_id=716075585]

@@ -7,18 +7,21 @@
 script = ExtResource("1_script")
 
 [node name="X" type="Button" parent="."]
+custom_minimum_size = Vector2(24, 0)
 layout_mode = 2
 tooltip_text = "Mirror drawing across the X plane (X)"
 toggle_mode = true
 text = "X"
 
 [node name="Y" type="Button" parent="."]
+custom_minimum_size = Vector2(24, 0)
 layout_mode = 2
 tooltip_text = "Mirror drawing across the Y plane (Y)"
 toggle_mode = true
 text = "Y"
 
 [node name="Z" type="Button" parent="."]
+custom_minimum_size = Vector2(24, 0)
 layout_mode = 2
 tooltip_text = "Mirror drawing across the Z plane (Z)"
 toggle_mode = true
