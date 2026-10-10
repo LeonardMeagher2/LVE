@@ -12,6 +12,7 @@ enum ViewMode {
 }
 
 var view_mode:ViewMode = ViewMode.NONE
+var _drag_mode:ViewMode = ViewMode.NONE
 var _light_dragging := false
 var _light_start_basis := Basis.IDENTITY
 var _light_center := Vector3.ZERO
@@ -252,6 +253,44 @@ func _on_zoom_slider_value_changed(value: float) -> void:
 	%CameraRig.set_zoom_percent(value)
 
 
+func _show_view_mode(mode: ViewMode) -> void:
+	%ControlBar.get_node("PanToggle").set_pressed_no_signal(mode == ViewMode.PAN)
+	%ControlBar.get_node("RotateToggle").set_pressed_no_signal(mode == ViewMode.ROTATE)
+
+
+func _restore_view_toggles() -> void:
+	%ControlBar.get_node("PanToggle").set_pressed_no_signal(view_mode == ViewMode.PAN)
+	%ControlBar.get_node("RotateToggle").set_pressed_no_signal(view_mode == ViewMode.ROTATE)
+
+
+func _view_drag_mode(mb: InputEventMouseButton) -> ViewMode:
+	if not mb.pressed:
+		return ViewMode.NONE
+	if mb.alt_pressed:
+		return ViewMode.ROTATE
+	if mb.shift_pressed:
+		return ViewMode.PAN
+	if view_mode == ViewMode.PAN or view_mode == ViewMode.ROTATE:
+		return view_mode
+	return ViewMode.NONE
+
+
+func _unhandled_key_input(event: InputEvent) -> void:
+	for binding in [
+		[&"view_top", "top"],
+		[&"view_bottom", "bottom"],
+		[&"view_front", "front"],
+		[&"view_back", "back"],
+		[&"view_left", "left"],
+		[&"view_right", "right"],
+		[&"view_isometric", "isometric"],
+	]:
+		if event.is_action_pressed(binding[0], false, true):
+			%CameraRig.set_view(binding[1])
+			get_viewport().set_input_as_handled()
+			return
+
+
 func _input(event: InputEvent) -> void:
 	if _handle_light_input(event):
 		get_viewport().set_input_as_handled()
@@ -259,9 +298,16 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
 		
-		if view_mode in [ViewMode.PAN, ViewMode.ROTATE] and mb.button_index == MOUSE_BUTTON_LEFT:
-			get_viewport().set_input_as_handled()
-			return
+		if mb.button_index == MOUSE_BUTTON_LEFT:
+			var mode := _view_drag_mode(mb)
+			if mode != ViewMode.NONE or _drag_mode != ViewMode.NONE:
+				_drag_mode = mode
+				if mode == ViewMode.NONE:
+					_restore_view_toggles()
+				else:
+					_show_view_mode(mode)
+				get_viewport().set_input_as_handled()
+				return
 		
 		match mb.button_index:
 			MOUSE_BUTTON_RIGHT:
@@ -277,8 +323,11 @@ func _input(event: InputEvent) -> void:
 	elif event is InputEventMouseMotion:
 		var mm := event as InputEventMouseMotion
 		var mask := mm.button_mask
-		if mask & MOUSE_BUTTON_MASK_LEFT and view_mode in [ViewMode.PAN, ViewMode.ROTATE]:
-			if view_mode == ViewMode.PAN:
+		var active := _drag_mode
+		if active == ViewMode.NONE and view_mode in [ViewMode.PAN, ViewMode.ROTATE]:
+			active = view_mode
+		if active != ViewMode.NONE and mask & MOUSE_BUTTON_MASK_LEFT:
+			if active == ViewMode.PAN:
 				%CameraRig.pan(mm.relative)
 			else:
 				%CameraRig.orbit(mm.relative)

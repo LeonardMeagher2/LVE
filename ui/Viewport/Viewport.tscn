@@ -13,14 +13,9 @@
 [ext_resource type="Texture2D" uid="uid://djnb7oucoqdu8" path="res://icons/zoom.svg" id="14_jua01"]
 [ext_resource type="Texture2D" uid="uid://mglj26s40ce4" path="res://icons/center.svg" id="15_0hwp6"]
 [ext_resource type="Texture2D" uid="uid://bhg85sqfio31d" path="res://icons/grid.svg" id="16_x0727"]
-[ext_resource type="Shader" path="res://ui/Viewport/Grid.gdshader" id="17_grid"]
-[ext_resource type="Texture2D" path="res://icons/light.svg" id="18_light"]
-[ext_resource type="Material" path="res://plugins/cursor_material.tres" id="19_handle"]
-
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_grid"]
-resource_local_to_scene = true
-render_priority = -1
-shader = ExtResource("17_grid")
+[ext_resource type="Shader" uid="uid://darib2qppk3b3" path="res://ui/Viewport/Grid.gdshader" id="17_grid"]
+[ext_resource type="Texture2D" uid="uid://denrh23gr1h18" path="res://icons/light.svg" id="18_light"]
+[ext_resource type="Material" uid="uid://dv7wwwbfihlej" path="res://plugins/cursor_material.tres" id="19_handle"]
 
 [sub_resource type="SphereMesh" id="SphereMesh_light"]
 radial_segments = 24
@@ -37,6 +32,45 @@ top_radius = 0.0
 bottom_radius = 0.2
 height = 0.6
 radial_segments = 12
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_grid"]
+resource_local_to_scene = true
+render_priority = -1
+shader = ExtResource("17_grid")
+shader_parameter/line_color = Color(0.65, 0.65, 0.65, 0.8)
+shader_parameter/floor_axis = 1
+
+[sub_resource type="InputEventAction" id="InputEventAction_view_menu"]
+action = &"view_menu"
+pressed = true
+
+[sub_resource type="Shortcut" id="Shortcut_view_menu"]
+resource_name = "View"
+events = [SubResource("InputEventAction_view_menu")]
+
+[sub_resource type="InputEventAction" id="InputEventAction_view_zoom_one"]
+action = &"view_zoom_one"
+pressed = true
+
+[sub_resource type="Shortcut" id="Shortcut_view_zoom_one"]
+resource_name = "Zoom 1:1"
+events = [SubResource("InputEventAction_view_zoom_one")]
+
+[sub_resource type="InputEventAction" id="InputEventAction_view_center"]
+action = &"view_center"
+pressed = true
+
+[sub_resource type="Shortcut" id="Shortcut_view_center"]
+resource_name = "Center"
+events = [SubResource("InputEventAction_view_center")]
+
+[sub_resource type="InputEventAction" id="InputEventAction_view_grid"]
+action = &"view_grid"
+pressed = true
+
+[sub_resource type="Shortcut" id="Shortcut_view_grid"]
+resource_name = "Grid"
+events = [SubResource("InputEventAction_view_grid")]
 
 [node name="Viewport" type="VBoxContainer" unique_id=159467693]
 anchors_preset = 15
@@ -61,7 +95,7 @@ stretch = true
 [node name="Viewport" type="SubViewport" parent="PanelContainer/SubViewportContainer" unique_id=542066251]
 unique_name_in_owner = true
 handle_input_locally = false
-size = Vector2i(1278, 766)
+size = Vector2i(998, 766)
 render_target_update_mode = 4
 
 [node name="CanvasLayer" type="CanvasLayer" parent="PanelContainer/SubViewportContainer/Viewport" unique_id=1632289809]
@@ -89,30 +123,28 @@ transform = Transform3D(0.9426414, -0.23603694, 0.23603693, 0, 0.7071067, 0.7071
 light_bake_mode = 0
 shadow_enabled = true
 
-[node name="LightHandle" type="MeshInstance3D" parent="PanelContainer/SubViewportContainer/Viewport/ViewportScene"]
+[node name="LightHandle" type="MeshInstance3D" parent="PanelContainer/SubViewportContainer/Viewport/ViewportScene" unique_id=1042121424]
 unique_name_in_owner = true
 visible = false
+material_override = ExtResource("19_handle")
 cast_shadow = 0
 mesh = SubResource("SphereMesh_light")
-material_override = ExtResource("19_handle")
 
-[node name="LightDirection" type="Node3D" parent="PanelContainer/SubViewportContainer/Viewport/ViewportScene"]
+[node name="LightDirection" type="Node3D" parent="PanelContainer/SubViewportContainer/Viewport/ViewportScene" unique_id=180490054]
 unique_name_in_owner = true
 visible = false
 
-[node name="Shaft" type="MeshInstance3D" parent="PanelContainer/SubViewportContainer/Viewport/ViewportScene/LightDirection"]
-position = Vector3(0, 0, -0.9)
-rotation_degrees = Vector3(-90, 0, 0)
+[node name="Shaft" type="MeshInstance3D" parent="PanelContainer/SubViewportContainer/Viewport/ViewportScene/LightDirection" unique_id=1384193788]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, 1, 0, -1, -4.371139e-08, 0, 0, -0.9)
+material_override = ExtResource("19_handle")
 cast_shadow = 0
 mesh = SubResource("CylinderMesh_light_shaft")
-material_override = ExtResource("19_handle")
 
-[node name="Tip" type="MeshInstance3D" parent="PanelContainer/SubViewportContainer/Viewport/ViewportScene/LightDirection"]
-position = Vector3(0, 0, -1.55)
-rotation_degrees = Vector3(-90, 0, 0)
+[node name="Tip" type="MeshInstance3D" parent="PanelContainer/SubViewportContainer/Viewport/ViewportScene/LightDirection" unique_id=2046523063]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, 1, 0, -1, -4.371139e-08, 0, 0, -1.55)
+material_override = ExtResource("19_handle")
 cast_shadow = 0
 mesh = SubResource("CylinderMesh_light_tip")
-material_override = ExtResource("19_handle")
 
 [node name="Grid" type="MeshInstance3D" parent="PanelContainer/SubViewportContainer/Viewport/ViewportScene" unique_id=1484635508]
 unique_name_in_owner = true
@@ -138,6 +170,7 @@ unique_name_in_owner = true
 layout_mode = 2
 tooltip_text = "View"
 focus_mode = 2
+shortcut = SubResource("Shortcut_view_menu")
 icon = ExtResource("11_jtuva")
 flat = false
 icon_alignment = 1
@@ -172,7 +205,7 @@ popup/item_11/text = "Wireframe"
 popup/item_11/checkable = 2
 popup/item_11/id = 10
 
-[node name="LightToggle" type="Button" parent="ControlBar"]
+[node name="LightToggle" type="Button" parent="ControlBar" unique_id=9854677]
 layout_mode = 2
 tooltip_text = "Light mode: drag anywhere to adjust the direction with trackball motion"
 toggle_mode = true
@@ -215,12 +248,14 @@ value = 100.0
 [node name="ZoomOne" type="Button" parent="ControlBar" unique_id=954156555]
 layout_mode = 2
 tooltip_text = "Return the zoom to 100 percent"
+shortcut = SubResource("Shortcut_view_zoom_one")
 text = "1:1"
 icon_alignment = 1
 
 [node name="CenterBtn" type="Button" parent="ControlBar" unique_id=567890123]
 layout_mode = 2
 tooltip_text = "Center the selection, or the whole model, in the view"
+shortcut = SubResource("Shortcut_view_center")
 icon = ExtResource("15_0hwp6")
 icon_alignment = 1
 
@@ -229,13 +264,14 @@ layout_mode = 2
 tooltip_text = "Toggle the grid"
 toggle_mode = true
 button_pressed = true
+shortcut = SubResource("Shortcut_view_grid")
 icon = ExtResource("16_x0727")
 icon_alignment = 1
 
+[connection signal="toggled" from="ControlBar/LightToggle" to="PanelContainer/SubViewportContainer/Viewport/ViewportScene" method="_on_light_toggle_toggled"]
 [connection signal="toggled" from="ControlBar/PanToggle" to="PanelContainer/SubViewportContainer/Viewport/ViewportScene" method="_on_pan_toggle_toggled"]
 [connection signal="toggled" from="ControlBar/RotateToggle" to="PanelContainer/SubViewportContainer/Viewport/ViewportScene" method="_on_rotate_toggle_toggled"]
 [connection signal="value_changed" from="ControlBar/ZoomSlider" to="PanelContainer/SubViewportContainer/Viewport/ViewportScene" method="_on_zoom_slider_value_changed"]
 [connection signal="pressed" from="ControlBar/ZoomOne" to="PanelContainer/SubViewportContainer/Viewport/ViewportScene" method="_on_zoom_one_pressed"]
 [connection signal="pressed" from="ControlBar/CenterBtn" to="PanelContainer/SubViewportContainer/Viewport/ViewportScene" method="_on_center_btn_pressed"]
 [connection signal="toggled" from="ControlBar/GridToggle" to="PanelContainer/SubViewportContainer/Viewport/ViewportScene" method="_on_grid_toggle_toggled"]
-[connection signal="toggled" from="ControlBar/LightToggle" to="PanelContainer/SubViewportContainer/Viewport/ViewportScene" method="_on_light_toggle_toggled"]

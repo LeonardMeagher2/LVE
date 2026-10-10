@@ -1,6 +1,18 @@
 extends "res://tests/test.gd"
 
 var rig: EditorCameraRig
+var viewport: SubViewport
+var _measured: Array = []
+
+const VIEW_KEYS := [
+	[KEY_1, "top", 0.0, 89.0],
+	[KEY_2, "bottom", 0.0, -89.0],
+	[KEY_3, "front", 0.0, 0.0],
+	[KEY_4, "back", 180.0, 0.0],
+	[KEY_5, "left", -90.0, 0.0],
+	[KEY_6, "right", 90.0, 0.0],
+	[KEY_7, "isometric", -45.0, 45.0],
+]
 
 
 func _ready() -> void:
@@ -10,6 +22,14 @@ func _ready() -> void:
 func _angles_match(yaw_deg: float, pitch_deg: float) -> bool:
 	return is_equal_approx(rig._yaw, deg_to_rad(yaw_deg)) \
 		and is_equal_approx(rig._pitch, deg_to_rad(pitch_deg))
+
+
+func _key(code: Key) -> void:
+	var ev := InputEventKey.new()
+	ev.keycode = code
+	ev.physical_keycode = code
+	ev.pressed = true
+	viewport.push_input(ev)
 
 
 func _run() -> void:
@@ -50,6 +70,23 @@ func _run() -> void:
 	)
 	step("Then the camera still looks from the right side", func():
 		expect(_angles_match(90.0, 0.0), "side stays an alias of right")
+	)
+
+	step("When the user presses every number row view key", func():
+		viewport = editor_viewport()
+		_measured = []
+		for entry in VIEW_KEYS:
+			_key(entry[0])
+			_measured.append([rig._yaw, rig._pitch])
+	)
+	step("Then each key snaps the camera to its view", func():
+		var i := 0
+		for entry in VIEW_KEYS:
+			var angles: Array = _measured[i]
+			expect(is_equal_approx(angles[0], deg_to_rad(entry[2])) \
+				and is_equal_approx(angles[1], deg_to_rad(entry[3])),
+				"%s selects the %s view" % [OS.get_keycode_string(entry[0]), entry[1]])
+			i += 1
 	)
 
 	step("When the user switches to orthographic projection", func():

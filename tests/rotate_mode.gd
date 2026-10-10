@@ -16,11 +16,12 @@ func _frame() -> VoxelFrame:
 	return State.document.frames[0]
 
 
-func _left_drag(from: Vector2, rel: Vector2) -> void:
+func _left_drag(from: Vector2, rel: Vector2, alt := false) -> void:
 	var press := InputEventMouseButton.new()
 	press.button_index = MOUSE_BUTTON_LEFT
 	press.pressed = true
 	press.position = from
+	press.alt_pressed = alt
 	viewport.push_input(press)
 	var motion := InputEventMouseMotion.new()
 	motion.position = from + rel
@@ -31,6 +32,23 @@ func _left_drag(from: Vector2, rel: Vector2) -> void:
 	release.button_index = MOUSE_BUTTON_LEFT
 	release.pressed = false
 	release.position = from + rel
+	viewport.push_input(release)
+
+
+func _press(from: Vector2, alt := false) -> void:
+	var press := InputEventMouseButton.new()
+	press.button_index = MOUSE_BUTTON_LEFT
+	press.pressed = true
+	press.position = from
+	press.alt_pressed = alt
+	viewport.push_input(press)
+
+
+func _release(from: Vector2) -> void:
+	var release := InputEventMouseButton.new()
+	release.button_index = MOUSE_BUTTON_LEFT
+	release.pressed = false
+	release.position = from
 	viewport.push_input(release)
 
 
@@ -106,4 +124,34 @@ func _run() -> void:
 
 	step("Then painting works again", func():
 		expect(_frame().count() > count_before, "left-drag paints voxels again")
+	)
+
+	step("When the user alt-left-drags with no view mode active", func():
+		expect(viewport_scene().view_mode == viewport_scene().ViewMode.NONE, "no view mode is active")
+		yaw_before = camera_rig()._yaw
+		pitch_before = camera_rig()._pitch
+		target_before = camera_rig()._target
+		count_before = _frame().count()
+		_left_drag(center, Vector2(45.0, 25.0), true)
+	)
+
+	step("Then the view orbits and no voxel is painted", func():
+		expect(camera_rig()._yaw != yaw_before, "alt-left-drag changes the camera yaw")
+		expect(camera_rig()._pitch != pitch_before, "alt-left-drag changes the camera pitch")
+		expect(camera_rig()._target == target_before, "orbiting leaves the camera target alone")
+		expect(_frame().count() == count_before, "alt-left-drag paints nothing")
+	)
+
+	step("When the user holds alt and presses the left button", func():
+		_press(center, true)
+	)
+	step("Then the viewport shows the rotate mode on its button", func():
+		expect(_rotate_toggle().button_pressed, "the rotate toggle shows the active drag mode")
+		expect(not _pan_toggle().button_pressed, "the pan toggle stays clear")
+	)
+	step("When the user releases the mouse", func():
+		_release(center)
+	)
+	step("Then the viewport button returns to normal", func():
+		expect(not _rotate_toggle().button_pressed, "the rotate toggle clears after the drag")
 	)
