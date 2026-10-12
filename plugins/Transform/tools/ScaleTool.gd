@@ -1,5 +1,7 @@
 extends "./TransformTool.gd"
 
+const DIALOG_SCENE := preload("./ScaleDialog.tscn")
+
 var _axis := 1
 var _p := 0
 var _q := 2
@@ -10,6 +12,19 @@ var _ref_dir := Vector2.RIGHT
 var _ref_dist := 1.0
 var _scale_p := 1.0
 var _scale_q := 1.0
+var _world_scale := Vector3.ONE
+var _use_world_scale := false
+var _dialog = null
+var _was_pending := false
+var _has_base := false
+var _base_cells: Array[Vector3i] = []
+var _base_colors := {}
+var _base_bounds := AABB()
+var _total_world_scale := Vector3.ONE
+var _gesture_base_total := Vector3.ONE
+var _dialog_open_values := Vector3.ONE
+var _dialog_open_had_pending := false
+var _dialog_dirty := false
 
 const MIN_REF := 0.5
 const MIN_SCALE := 0.05
@@ -22,11 +37,15 @@ class ScaleJob extends TransformJob:
 	var scale_p := 1.0
 	var scale_q := 1.0
 	var uniform := true
+	var world_scale := Vector3.ONE
+	var use_world_scale := false
 	var _candidate_total := 0
 	var _candidate_completed := 0
 	var _source_selection := {}
 
 	func estimated_work() -> int:
+		if use_world_scale:
+			return maxi(source_positions.size(), ceili((source_bounds.size.x * absf(world_scale.x) + 2) * (source_bounds.size.y * absf(world_scale.y) + 2) * (source_bounds.size.z * absf(world_scale.z) + 2)))
 		var depth := absf(scale_p) if uniform else 1.0
 		return maxi(source_positions.size(), ceili((source_bounds.size[p] * absf(scale_p) + 2) * (source_bounds.size[q] * absf(scale_q) + 2) * (source_bounds.size[axis] * depth + 2)))
 
@@ -40,15 +59,19 @@ class ScaleJob extends TransformJob:
 				if _source_selection.size() % 4096 == 0 and not checkpoint(_source_selection.size()):
 					return
 		var scale3 := Vector3.ONE
-		scale3[p] = scale_p
-		scale3[q] = scale_q
-		scale3[axis] = scale_p if uniform else 1.0
+		if use_world_scale:
+			scale3 = world_scale
+		else:
+			scale3[p] = scale_p
+			scale3[q] = scale_q
+			scale3[axis] = scale_p if uniform else 1.0
+		var is_3d := true if use_world_scale else uniform
 		var regions: Array[AABB] = [source_bounds]
 		var source_volume := source_bounds.size.x * source_bounds.size.y * source_bounds.size.z
 		if source_volume > source_positions.size() * 4:
 			regions = _occupied_regions()
 		var layers := {}
-		if not uniform:
+		if not is_3d:
 			for cell_position in source_positions:
 				layers[cell_position[axis]] = true
 		var candidate_ranges := []
@@ -57,7 +80,7 @@ class ScaleJob extends TransformJob:
 			var min_d: Vector3i = destination_range[0]
 			var max_d: Vector3i = destination_range[1]
 			var region_layers := {}
-			if uniform:
+			if is_3d:
 				_candidate_total += (max_d.x - min_d.x + 1) * (max_d.y - min_d.y + 1) * (max_d.z - min_d.z + 1)
 			else:
 				for layer in layers:
@@ -69,7 +92,7 @@ class ScaleJob extends TransformJob:
 		for candidate_range in candidate_ranges:
 			if not checkpoint(_candidate_completed):
 				return
-			if uniform:
+			if is_3d:
 				_compute_3d(candidate_range[0], candidate_range[1], scale3)
 			else:
 				_compute_2d(candidate_range[0], candidate_range[1], candidate_range[2])
@@ -160,6 +183,9 @@ class ScaleJob extends TransformJob:
 
 
 func _begin_grab(origin: Vector3, dir: Vector3) -> void:
+	_was_pending = _pending
+	if _was_pending:
+		_gesture_base_total = _total_world_scale
 	_pivot = _source_bbox().get_center()
 	_axis = _view_axis()
 	_p = (_axis + 1) % 3
@@ -179,6 +205,16 @@ func _begin_grab(origin: Vector3, dir: Vector3) -> void:
 
 	_scale_p = 1.0
 	_scale_q = 1.0
+	_use_world_scale = false
+	_world_scale = Vector3.ONE
+	_hide_dialog()
+	if not _was_pending:
+		_base_cells.assign(_cells)
+		_base_colors = _colors.duplicate()
+		_base_bounds = _source_bounds
+		_has_base = true
+		_total_world_scale = Vector3.ONE
+		_gesture_base_total = Vector3.ONE
 
 
 func _update_params(origin: Vector3, dir: Vector3) -> bool:
@@ -202,7 +238,17 @@ func _update_params(origin: Vector3, dir: Vector3) -> bool:
 		return false
 	_scale_p = sp
 	_scale_q = sq
+	_use_world_scale = false
+	_total_world_scale = _gesture_base_total * _drag_world(sp, sq)
 	return true
+
+
+func _drag_world(sp: float, sq: float) -> Vector3:
+	var world := Vector3.ONE
+	world[_p] = _safe_scale(sp)
+	world[_q] = _safe_scale(sq)
+	world[_axis] = _safe_scale(sp) if _settings.uniform else 1.0
+	return world
 
 
 func _cursor_vec_pq(origin: Vector3, dir: Vector3) -> Vector2:
@@ -231,4 +277,103 @@ func _make_job() -> TransformJob:
 	job.scale_p = _safe_scale(_scale_p)
 	job.scale_q = _safe_scale(_scale_q)
 	job.uniform = _settings.uniform
+	if _use_world_scale:
+		job.use_world_scale = true
+		job.world_scale = Vector3(_safe_scale(_world_scale.x), _safe_scale(_world_scale.y), _safe_scale(_world_scale.z))
 	return job
+
+
+func _on_click_without_drag() -> bool:
+	if _grab_waiting or _preview_running:
+		return false
+	if _was_pending and _has_base:
+		_restore_pending_dialog()
+		return true
+	if _cells.is_empty():
+		return false
+	_pending = true
+	_use_world_scale = false
+	_world_scale = Vector3.ONE
+	_open_dialog_with_values(Vector3.ONE)
+	return true
+
+
+func _restore_pending_dialog() -> void:
+	var pending_dest_cells: Array[Vector3i] = []
+	pending_dest_cells.assign(_cells)
+	var pending_dest_colors := _colors.duplicate()
+	_cells.assign(_base_cells)
+	_colors = _base_colors.duplicate()
+	_source_bounds = _base_bounds
+	_dest_cells.assign(pending_dest_cells)
+	_dest_colors = pending_dest_colors
+	_pivot = _source_bounds.get_center()
+	_world_scale = Vector3(_safe_scale(_total_world_scale.x), _safe_scale(_total_world_scale.y), _safe_scale(_total_world_scale.z))
+	_use_world_scale = false
+	_pending = true
+	_open_dialog_with_values(_world_scale)
+
+
+func _clear_grab() -> void:
+	_hide_dialog()
+	_use_world_scale = false
+	_world_scale = Vector3.ONE
+	_was_pending = false
+	_has_base = false
+	_base_cells.clear()
+	_base_colors.clear()
+	_total_world_scale = Vector3.ONE
+	_gesture_base_total = Vector3.ONE
+	_dialog_open_values = Vector3.ONE
+	_dialog_open_had_pending = false
+	_dialog_dirty = false
+	super._clear_grab()
+
+
+func _open_dialog_with_values(value: Vector3) -> void:
+	if _dialog == null or not is_instance_valid(_dialog):
+		_dialog = DIALOG_SCENE.instantiate()
+		add_child(_dialog)
+		_dialog.connect("scale_changed", _on_dialog_scale)
+		_dialog.connect("confirmed", _on_dialog_confirmed)
+		_dialog.connect("canceled", _on_dialog_canceled)
+	_dialog.open_with_values(value)
+	_dialog.popup_centered()
+	_dialog_open_values = value
+	_dialog_open_had_pending = _was_pending
+	_dialog_dirty = false
+
+
+func _hide_dialog() -> void:
+	if _dialog != null and is_instance_valid(_dialog):
+		_dialog.hide()
+
+
+func _on_dialog_scale(value: Vector3) -> void:
+	var safe := Vector3(_safe_scale(value.x), _safe_scale(value.y), _safe_scale(value.z))
+	if _use_world_scale and safe.is_equal_approx(_world_scale):
+		return
+	_world_scale = safe
+	_total_world_scale = safe
+	_use_world_scale = true
+	_dialog_dirty = true
+	_apply_preview()
+
+
+func _on_dialog_confirmed() -> void:
+	if not _use_world_scale and not _dragged and not _was_pending:
+		_cancel()
+
+
+func _on_dialog_canceled() -> void:
+	if _dialog_open_had_pending:
+		if _dialog_dirty:
+			_dialog_dirty = false
+			var open := Vector3(_safe_scale(_dialog_open_values.x), _safe_scale(_dialog_open_values.y), _safe_scale(_dialog_open_values.z))
+			if not (_use_world_scale and open.is_equal_approx(_world_scale)):
+				_world_scale = open
+				_total_world_scale = open
+				_use_world_scale = true
+				_apply_preview()
+		return
+	_cancel()

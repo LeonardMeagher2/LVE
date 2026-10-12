@@ -1,11 +1,13 @@
 extends VoxelTool
 
 const INLINE_EDIT_LIMIT := 4096
+const CLICK_SLOP_PX := 4.0
 
 var _settings := preload("../settings.tres")
 var _dragging := false
 var _pending := false
 var _dragged := false
+var _press_pos := Vector2.ZERO
 var _track_selection := false
 var _cells: Array[Vector3i] = []
 var _colors := {}
@@ -173,6 +175,7 @@ func _on_mouse_button(event: InputEventMouseButton, pos: Vector2) -> bool:
 		return false
 	_mouse_down = event.pressed
 	if event.pressed:
+		_press_pos = pos
 		if not _grab_waiting:
 			var ray := _ray(pos)
 			_press(ray[0], ray[1])
@@ -183,9 +186,13 @@ func _on_mouse_button(event: InputEventMouseButton, pos: Vector2) -> bool:
 
 func _on_mouse_motion(event: InputEventMouseMotion, pos: Vector2) -> bool:
 	if _grab_waiting and event.button_mask & MOUSE_BUTTON_MASK_LEFT:
+		if (pos - _press_pos).length() < CLICK_SLOP_PX:
+			return true
 		_queued_drag_ray = _ray(pos)
 		return true
 	if _dragging and event.button_mask & MOUSE_BUTTON_MASK_LEFT:
+		if not _dragged and (pos - _press_pos).length() < CLICK_SLOP_PX:
+			return true
 		var ray := _ray(pos)
 		if _update_params(ray[0], ray[1]):
 			_apply_preview()
@@ -288,10 +295,16 @@ func _release() -> void:
 	_dragging = false
 	if _dragged:
 		_pending = true
+	elif _on_click_without_drag():
+		return
 	elif not _pending:
 		_clear_grab()
 		_settings.transforming = false
 		_end()
+
+
+func _on_click_without_drag() -> bool:
+	return false
 
 
 func _apply_preview() -> void:
