@@ -214,6 +214,32 @@ max_active: 1
   - [x] Evict empty surface entries and clear stale display records
   - [x] Verify repeated enclosed-voxel edits and frame switching
   - [x] Run the full behavior suite
+- [ ] Store per-voxel emission, metallic, and roughness
+  - 2026-10-10: The user chose per-voxel storage, a live editor display, and an emission color.
+  - 2026-10-10: The cell value holds the color, the emission color, the metallic, and the roughness.
+  - 2026-10-10: The emission color RGB holds the color and the strength. Its alpha stays zero.
+  - [ ] Store the emission, metallic, and roughness in the chunk cell value
+  - [ ] Change the chunk color table to a cell value table
+  - [ ] Keep the octree over the cell value IDs
+  - [ ] Bump the document format version to 2
+  - [ ] Read version 1 documents with default material values
+  - [ ] Validate the new cell values in the storage checks
+  - [ ] Keep the frame color helpers for the existing callers
+  - [ ] Copy the full cell value in transforms, clipboard, and paint edits
+  - [ ] Keep undo and redo on the cell value snapshots
+  - [ ] Add material controls for the selected voxels
+  - [ ] Apply emission, metallic, and roughness changes with one undo action
+  - [ ] Use the color and material as the face key in the mesh builder
+  - [ ] Emit one surface per material signature in the chunk mesh
+  - [ ] Cache one material per signature from the shared voxel material
+  - [ ] Keep the outline, box, and preview meshes on the shared material
+  - [ ] Group export surfaces by material signature
+  - [ ] Export one glTF material per signature
+  - [ ] Keep the vertex colors for the base color
+  - [ ] Weld and merge faces without crossing a material boundary
+  - [ ] Update the glTF export notes
+  - [ ] Verify storage, editing, rendering, and export with targeted tests
+  - [ ] Run the full behavior suite
 
 # Export/Import
 - [x] Flip the sprite projection toggle to perspective
