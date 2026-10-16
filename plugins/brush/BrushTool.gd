@@ -29,6 +29,8 @@ var _hover_operation_id := 0
 class BrushJob extends VoxelFrame.EditJob:
 	var centers: Array[Vector3i] = []
 	var pattern := {}
+	var material_pattern := {}
+	var replace_materials := false
 	var diameter := 1
 	var shape := 0
 	var color := Color.WHITE
@@ -37,6 +39,7 @@ class BrushJob extends VoxelFrame.EditJob:
 	var selection_mask := {}
 	var edited_frame: VoxelFrame
 	var cell_colors := {}
+	var cell_materials := {}
 	var changed_chunks: Array[Vector3i] = []
 	var revision := 0
 
@@ -53,12 +56,21 @@ class BrushJob extends VoxelFrame.EditJob:
 				if edit_context or ((selection_mask.is_empty() or selection_mask.has(cell_position)) and (not paint_existing or edited_frame.has(cell_position))):
 					var source_color: Color = pattern[offset]
 					cell_colors[cell_position] = Color.TRANSPARENT if erase_existing else (color if source_color == Color.TRANSPARENT else source_color)
+					if replace_materials:
+						cell_materials[cell_position] = material_pattern.get(offset, VoxelFrame.DEFAULT_MATERIAL)
 				completed += 1
 				if completed % 4096 == 0 and not checkpoint(completed):
 					return
 		stage("Applying brush", cell_colors.size())
 		changed_chunks = apply_cells(edited_frame, cell_colors, paint_existing)
 		cell_colors = applied_cell_colors
+		if replace_materials:
+			apply_materials()
+
+	# The material pattern replaces the material of every applied cell.
+	func apply_materials() -> void:
+		var applied_materials: Dictionary = edit_context.expand(cell_materials, edited_frame, paint_existing, null, self) if edit_context else cell_materials
+		edited_frame.set_materials(applied_materials, self)
 
 
 func _enter_tree() -> void:

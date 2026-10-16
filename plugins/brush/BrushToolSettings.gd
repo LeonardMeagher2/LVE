@@ -42,8 +42,10 @@ class CopyJob extends VoxelFrame.EditJob:
 	var source_frame: VoxelFrame
 	var selection_mask := {}
 	var pattern := {}
+	var pattern_materials := {}
 	var center := Vector3i.ZERO
 	var _colors := {}
+	var _materials := {}
 	var _bounds := AABB()
 
 	func run() -> void:
@@ -52,13 +54,13 @@ class CopyJob extends VoxelFrame.EditJob:
 		if selection_mask.is_empty():
 			for chunk in source_frame.chunks.values():
 				for cell_position: Vector3i in chunk.cell_colors:
-					_include(cell_position, chunk.cell_colors[cell_position])
+					_include(cell_position, chunk.cell_colors[cell_position], chunk.cell_materials.get(cell_position, VoxelFrame.DEFAULT_MATERIAL))
 					completed += 1
 					if completed % 4096 == 0 and not checkpoint(completed):
 						return
 		else:
 			for cell_position: Vector3i in selection_mask:
-				_include(cell_position, source_frame.get_color(cell_position))
+				_include(cell_position, source_frame.get_color(cell_position), source_frame.get_material(cell_position))
 				completed += 1
 				if completed % 4096 == 0 and not checkpoint(completed):
 					return
@@ -67,14 +69,18 @@ class CopyJob extends VoxelFrame.EditJob:
 		completed = 0
 		for cell_position: Vector3i in _colors:
 			pattern[cell_position - center] = _colors[cell_position]
+			if _materials.has(cell_position):
+				pattern_materials[cell_position - center] = _materials[cell_position]
 			completed += 1
 			if completed % 4096 == 0 and not checkpoint(completed):
 				return
 
-	func _include(cell_position: Vector3i, color: Color) -> void:
+	func _include(cell_position: Vector3i, color: Color, material: Dictionary) -> void:
 		if color == Color.TRANSPARENT:
 			return
 		_colors[cell_position] = color
+		if material != VoxelFrame.DEFAULT_MATERIAL:
+			_materials[cell_position] = material
 		var cell_bounds := AABB(Vector3(cell_position) - Vector3.ONE * 0.5, Vector3.ONE)
 		_bounds = _bounds.merge(cell_bounds) if _bounds.has_volume() else cell_bounds
 

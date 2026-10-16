@@ -7,6 +7,7 @@ const CLIPBOARD_PREFIX := '{"voxel_voxels":'
 var _button_group := preload("res://plugins/ToolBarButtonGroup.tres")
 var _pattern := {}
 var _selection_pattern := {}
+var _material_pattern := {}
 var _center := Vector3i.ZERO
 var _clipboard_text := ""
 var _copy_job: ClipboardCopyJob
@@ -40,7 +41,15 @@ class ClipboardCopyJob extends BrushToolSettings.CopyJob:
 			selected_records.append([offset.x, offset.y, offset.z])
 			if selected_records.size() % 4096 == 0 and not checkpoint(selected_records.size()):
 				return
-		text = JSON.stringify({"voxel_voxels": records, "voxel_selection": selected_records}, "", false, true)
+		stage("Writing clipboard materials", pattern_materials.size())
+		var material_records := []
+		for offset: Vector3i in pattern_materials:
+			var material: Dictionary = pattern_materials[offset]
+			var emission: Color = material.emission
+			material_records.append([offset.x, offset.y, offset.z, emission.r, emission.g, emission.b, material.metallic, material.roughness])
+			if material_records.size() % 4096 == 0 and not checkpoint(material_records.size()):
+				return
+		text = JSON.stringify({"voxel_voxels": records, "voxel_selection": selected_records, "voxel_materials": material_records}, "", false, true)
 		if cut_source and checkpoint(0):
 			stage("Cutting voxels", _colors.size())
 			var changes := {}
@@ -53,6 +62,7 @@ class ClipboardCopyJob extends BrushToolSettings.CopyJob:
 class ClipboardImportJob extends VoxelFrame.EditJob:
 	var text := ""
 	var pattern := {}
+	var pattern_materials := {}
 	var selection_pattern := {}
 
 	func run() -> void:
@@ -90,6 +100,31 @@ class ClipboardImportJob extends VoxelFrame.EditJob:
 					pattern = {}
 					return
 			selection_pattern[Vector3i(int(record[0]), int(record[1]), int(record[2]))] = true
+			completed += 1
+			if completed % 4096 == 0 and not checkpoint(completed):
+				return
+		var material_records = data.get("voxel_materials", [])
+		if not material_records is Array:
+			pattern = {}
+			return
+		stage("Reading clipboard materials", material_records.size())
+		completed = 0
+		for record in material_records:
+			if not record is Array or record.size() != 8:
+				pattern = {}
+				pattern_materials = {}
+				return
+			for value in record:
+				if not (value is float or value is int):
+					pattern = {}
+					pattern_materials = {}
+					return
+			if record[3] < 0.0 or record[3] > 1.0 or record[4] < 0.0 or record[4] > 1.0 or record[5] < 0.0 or record[5] > 1.0 or record[6] < 0.0 or record[6] > 1.0 or record[7] < 0.0 or record[7] > 1.0:
+				pattern = {}
+				pattern_materials = {}
+				return
+			var offset := Vector3i(int(record[0]), int(record[1]), int(record[2]))
+			pattern_materials[offset] = {"emission": Color(float(record[3]), float(record[4]), float(record[5])), "metallic": float(record[6]), "roughness": float(record[7])}
 			completed += 1
 			if completed % 4096 == 0 and not checkpoint(completed):
 				return
@@ -204,6 +239,8 @@ func _copy_voxels(cut_source: bool) -> void:
 		_pattern = job.pattern
 		_pattern.make_read_only()
 		_selection_pattern = job.selection_pattern
+		_material_pattern = job.pattern_materials
+		_material_pattern.make_read_only()
 		_center = job.center
 		_clipboard_text = job.text
 		_has_clipboard_voxels = true
@@ -273,10 +310,12 @@ func paste_voxels() -> void:
 		_pattern = job.pattern
 		_pattern.make_read_only()
 		_selection_pattern = job.selection_pattern
+		_material_pattern = job.pattern_materials
+		_material_pattern.make_read_only()
 		_center = Vector3i.ZERO
 		_clipboard_text = text
 	add_editor_node(_paste_tool)
-	_paste_tool.begin_paste(_pattern, _selection_pattern, _center)
+	_paste_tool.begin_paste(_pattern, _selection_pattern, _center, _material_pattern)
 
 
 func _report_job(operation_id: int, job: VoxelFrame.EditJob) -> void:

@@ -330,7 +330,9 @@ func _chunks_equal(first_chunks: Dictionary, second_chunks: Dictionary) -> bool:
 	for chunk_location in first_chunks:
 		if not second_chunks.has(chunk_location):
 			return false
-		if first_chunks[chunk_location] != second_chunks[chunk_location] and first_chunks[chunk_location].cell_colors != second_chunks[chunk_location].cell_colors:
+		var first_chunk: VoxelFrame.Chunk = first_chunks[chunk_location]
+		var second_chunk: VoxelFrame.Chunk = second_chunks[chunk_location]
+		if first_chunk != second_chunk and (first_chunk.cell_colors != second_chunk.cell_colors or first_chunk.cell_materials != second_chunk.cell_materials):
 			return false
 	return true
 

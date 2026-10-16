@@ -233,23 +233,52 @@ max_active: 1
   - [x] Verify the storage with `chunk_materials` and the format tests
   - [x] Run the full behavior suite
   - Stage 2 copies the cell value through every edit path.
-  - [ ] Compare the cell materials in the undo checks
-  - [ ] Refresh the view after a material-only undo
-  - [ ] Copy the full cell value in transforms, clipboard, and paint edits
+  - 2026-10-16: A material-only edit needs the material comparison in `State._chunks_equal`. The view refresh already works because the chunk object changes.
+  - 2026-10-16: The clipboard carries the material in a `voxel_materials` record. A paste replaces the material of every pasted cell.
+  - 2026-10-16: Paint keeps the material of the destination cell. Only an erase clears it.
+  - [x] Compare the cell materials in the undo checks
+  - [x] Refresh the view after a material-only undo
+  - [x] Copy the full cell value in the clipboard
+  - [x] Keep the destination material in the paint edits
+  - [ ] Copy the full cell value in the transform and the symmetry mirror
   - Stage 3 adds the material controls and one undo action per change.
   - [ ] Add material controls for the selected voxels
   - [ ] Apply emission, metallic, and roughness changes with one undo action
-  - Stage 4 renders one surface per material signature.
-  - [ ] Use the color and material as the face key in the mesh builder
-  - [ ] Emit one surface per material signature in the chunk mesh
-  - [ ] Cache one material per signature from the shared voxel material
+  - Stage 4 shows the materials in the editor. The atlas task bakes the channels into textures.
+  - 2026-10-16: The editor keeps one surface per chunk. Drop the per-signature surface split. The atlas task bakes the material channels.
+  - [ ] Keep one surface per chunk in the editor mesh
+  - [ ] Cache the chunk material on the shared voxel material
   - [ ] Keep the outline, box, and preview meshes on the shared material
-  - Stage 5 exports one glTF material per signature.
-  - [ ] Group export surfaces by material signature
-  - [ ] Export one glTF material per signature
   - [ ] Keep the vertex colors for the base color
-  - [ ] Weld and merge faces without crossing a material boundary
-  - [ ] Update the glTF export notes
+  - [ ] Verify the material edit paths with targeted tests
+  - [ ] Run the full behavior suite
+- [ ] Bake voxel materials into UV-island texture atlases
+  - 2026-10-16: A voxel face is an axis-aligned rectangle. A UV island is a rectangle. Rectangle packing replaces mesh unwrapping.
+  - 2026-10-16: `ImageTexture.update` re-uploads the whole image. One small atlas per chunk keeps each edit upload cheap.
+  - 2026-10-16: The editor uses one 2D atlas per chunk with `StandardMaterial3D`. This keeps rim and stencil outline with no custom shader.
+  - 2026-10-16: The exporter packs the merged mesh into one atlas with one material. glTF carries 2D textures and UVs.
+  - One shared packer and baker serve the editor and the exporter.
+  - Stage 1 builds the color islands in the editor.
+  - [ ] Merge document surfaces on the exposure mask in place of the face color
+  - [ ] Keep the color merge for previews so their vertex colors stay correct
+  - [ ] Emit a UV per quad and report the quad footprint and its voxel colors
+  - [ ] Pack each chunk's quad rectangles into a per-chunk atlas
+  - [ ] Deduplicate equal islands to bound the atlas size
+  - [ ] Bake a 2-texel gutter around each island, then generate mipmaps
+  - [ ] Inset the UVs to texel centers
+  - [ ] Give each chunk a `StandardMaterial3D` with its atlas bound
+  - [ ] Build the atlas images on the worker and create the textures on the main thread
+  - [ ] Verify the bake, the seams, the island orientation, and the previews
+  - Stage 2 bakes the per-voxel PBR channels. It needs the material edit paths from the material task.
+  - [ ] Bake the roughness and metallic atlas
+  - [ ] Bake the emission atlas
+  - [ ] Bind the ORM and emission textures in the chunk material
+  - Stage 3 packs one atlas and one material for export.
+  - [ ] Pack the merged export mesh into one atlas
+  - [ ] Bake one albedo, ORM, and emission set
+  - [ ] Emit one material and the UVs in the glTF export
+  - [ ] Settle the animation atlas layout
+  - The editor keeps one surface per chunk. Drop the per-signature surface split for the editor in the material task.
 
 # Export/Import
 - [x] Flip the sprite projection toggle to perspective
