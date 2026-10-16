@@ -257,7 +257,7 @@ static func _variant_end(data: PackedByteArray, offset: int, depth: int, budget:
 				return -1
 			if type == TYPE_DICTIONARY:
 				count *= 2
-			if count > budget[0] or count > (data.size() - offset) / 4:
+			if count > budget[0] or count * 4 > data.size() - offset:
 				return -1
 			for index in count:
 				offset = _variant_end(data, offset, depth + 1, budget)

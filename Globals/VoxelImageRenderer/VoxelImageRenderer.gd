@@ -107,11 +107,11 @@ func _frame_camera(document_bounds: AABB) -> void:
 
 # In orthographic projection, Godot derives the directional shadow depth range from the camera far plane.
 # Keep the far plane just past the content so orthographic shadows stay crisp.
-static func apply_directional_shadow(light: DirectionalLight3D, camera: Camera3D) -> void:
+func apply_directional_shadow(light: DirectionalLight3D, camera: Camera3D) -> void:
 	light.directional_shadow_mode = DirectionalLight3D.SHADOW_ORTHOGONAL if camera.projection == Camera3D.PROJECTION_ORTHOGONAL else DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS
 
 
-static func frame_camera(camera: Camera3D, document_bounds: AABB, yaw: float, pitch: float, use_orthographic: bool) -> void:
+func frame_camera(camera: Camera3D, document_bounds: AABB, yaw: float, pitch: float, use_orthographic: bool) -> void:
 	camera.projection = Camera3D.PROJECTION_ORTHOGONAL if use_orthographic else Camera3D.PROJECTION_PERSPECTIVE
 	if not document_bounds.has_volume():
 		document_bounds = AABB(Vector3.ONE * -0.5, Vector3.ONE)
@@ -129,7 +129,7 @@ static func frame_camera(camera: Camera3D, document_bounds: AABB, yaw: float, pi
 		camera.size = 2.0 * camera_distance * tan(deg_to_rad(camera.fov) / 2.0)
 
 
-static func apply_lighting(light: DirectionalLight3D, environment: Environment, settings: Dictionary) -> void:
+func apply_lighting(light: DirectionalLight3D, environment: Environment, settings: Dictionary) -> void:
 	light.basis = settings.basis
 	light.light_color = settings.color
 	light.light_energy = settings.energy

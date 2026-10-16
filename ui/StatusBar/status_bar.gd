@@ -43,11 +43,11 @@ func _refresh_status() -> void:
 		_left.text = status.left
 		_right.text = status.right
 		return
-	var size := State.document.bounds().size
+	var bounds_size := State.document.bounds().size
 	var zoom_percent := roundi(_editor_camera.zoom_percent()) if _editor_camera else 100
 	_left.text = "#%s" % State.current_color.to_html(false)
 	_right.text = "%d×%d×%d   Frame %d/%d   %d%%" % [
-		roundi(size.x), roundi(size.y), roundi(size.z),
+		roundi(bounds_size.x), roundi(bounds_size.y), roundi(bounds_size.z),
 		State.current_frame + 1, State.document.frames.size(), zoom_percent,
 	]
 

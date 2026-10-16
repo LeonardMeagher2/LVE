@@ -211,26 +211,26 @@ func set_cells(cell_colors: Dictionary, edit_job: EditJob = null) -> Array[Vecto
 			return []
 		var chunk: Chunk = chunks.get(chunk_location)
 		var chunk_changes: Dictionary = changes_by_chunk[chunk_location]
-		var changed := false
+		var has_changed := false
 		for cell_position in chunk_changes:
 			var color: Color = chunk_changes[cell_position]
 			var previous_color: Color = chunk.cell_colors.get(cell_position, Color.TRANSPARENT) if chunk else Color.TRANSPARENT
 			if previous_color == color:
 				continue
-			if not changed:
+			if not has_changed:
 				if chunk == null:
 					chunk = Chunk.new()
 				elif _shared_chunks.has(chunk_location):
 					chunk = chunk.copy()
 				chunks[chunk_location] = chunk
 				_shared_chunks.erase(chunk_location)
-				changed = true
+				has_changed = true
 			if color == Color.TRANSPARENT:
 				chunk.cell_colors.erase(cell_position)
 			else:
 				chunk.cell_colors[cell_position] = color
 		completed += chunk_changes.size()
-		if not changed:
+		if not has_changed:
 			continue
 		chunk.voxel_revision += 1
 		chunk.serialized_record.clear()

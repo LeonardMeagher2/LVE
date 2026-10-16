@@ -47,10 +47,10 @@ class PreviewJob extends VoxelFrame.EditJob:
 			var selection := VoxelSelection.new()
 			selection.restore(cells)
 			stage("Building preview outline", cells.size())
-			var vertices: PackedVector3Array = outline_builder.call(selection, self)
+			var outline_vertices: PackedVector3Array = outline_builder.call(selection, self)
 			arrays.resize(Mesh.ARRAY_MAX)
-			arrays[Mesh.ARRAY_VERTEX] = vertices
-			geometry_bytes = vertices.size() * 12
+			arrays[Mesh.ARRAY_VERTEX] = outline_vertices
+			geometry_bytes = outline_vertices.size() * 12
 			return
 		stage("Preparing solid preview", cells.size())
 		var colors := {}

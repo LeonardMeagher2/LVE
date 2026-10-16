@@ -33,7 +33,7 @@ func _exit_tree() -> void:
 	State.chunks_changed.disconnect(_on_cells_changed)
 
 
-func _on_cells_changed(_frame: int, _affected: Array[Vector3i]) -> void:
+func _on_cells_changed(_frame: int, _cells: Array[Vector3i]) -> void:
 	_rebuild()
 
 

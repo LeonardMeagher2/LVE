@@ -415,9 +415,9 @@ func _model_bounds() -> AABB:
 
 func _refresh_model() -> void:
 	_model_dirty = false
-	var range := _model_range()
+	var frame_range := _model_range()
 	_model_frames.clear()
-	for index in range(range.x, range.y + 1):
+	for index in range(frame_range.x, frame_range.y + 1):
 		_model_frames.append(State.get_voxel_frame(index).copy_frame())
 	_model_renderer.transform = _model_transform()
 	_model_back_renderer.transform = _model_renderer.transform
@@ -428,12 +428,12 @@ func _refresh_model() -> void:
 	preview_document.tags.clear()
 	if _selected_tag:
 		var tag: AnimationTag = _selected_tag.duplicate()
-		tag.from -= range.x
-		tag.to -= range.x
+		tag.from -= frame_range.x
+		tag.to -= frame_range.x
 		preview_document.tags.append(tag)
 	_model_playback.document = preview_document
 	_model_playback.active_tag = 0 if _selected_tag else -1
-	_model_playback.current_frame = clampi(State.current_frame - range.x, 0, _model_frames.size() - 1)
+	_model_playback.current_frame = clampi(State.current_frame - frame_range.x, 0, _model_frames.size() - 1)
 	if playing:
 		_model_playback.is_playing = true
 	_show_model_frame()
@@ -484,8 +484,8 @@ func _on_model_playing_changed(playing: bool) -> void:
 
 func _sync() -> void:
 	var busy := State.edit_busy()
-	var range := _selected_frames()
-	var count := range.y - range.x + 1
+	var frame_range := _selected_frames()
+	var count := frame_range.y - frame_range.x + 1
 	var views := _view_count()
 	var tile_size := int(_sheet_settings.get_node("SizeRow/Size").value)
 	_sheet_settings.get_node("SizeRow/Size").tooltip_text = "Frame size: %d × %d px. Use Reset for the camera framing." % [tile_size, tile_size]
@@ -512,8 +512,8 @@ func _sync() -> void:
 
 
 func _export_status() -> Dictionary:
-	var range := _selected_frames()
-	var count := range.y - range.x + 1
+	var frame_range := _selected_frames()
+	var count := frame_range.y - frame_range.x + 1
 	var layout := sheet_layout(count * _view_count(), int(_sheet_settings.get_node("SizeRow/Size").value))
 	return {"left": _result_message if not _result_message.is_empty() else "%d × %d pixels · %d frames × %d views" % [layout.size.x, layout.size.y, count, _view_count()], "right": "Frame %d/%d   %d%%" % [_model_step + 1, maxi(1, _model_frames.size()), roundi(_model_camera.zoom_percent())]}
 
@@ -567,10 +567,10 @@ func export_gltf(path: String) -> Error:
 
 
 func _on_sheet_file_selected(path: String) -> void:
-	var range := _selected_frames()
+	var frame_range := _selected_frames()
 	var resolution := int(_sheet_settings.get_node("SizeRow/Size").value)
 	var tag_name: String = _sheet_tag.name if _sheet_tag else ""
-	_report_result(await export_sprite_sheet(path, range.x, range.y, resolution, _sheet_settings.get_node("ViewRow/View").selected, _sheet_settings.get_node("TurntableRow/Metadata").button_pressed, _view_count(), tag_name), path)
+	_report_result(await export_sprite_sheet(path, frame_range.x, frame_range.y, resolution, _sheet_settings.get_node("ViewRow/View").selected, _sheet_settings.get_node("TurntableRow/Metadata").button_pressed, _view_count(), tag_name), path)
 
 
 func _report_result(error: Error, path: String) -> void:
@@ -586,7 +586,7 @@ static func sheet_layout(frame_count: int, tile_size: int) -> Dictionary:
 	var stride := dimensions + Vector2i.ONE * SPRITE_GAP
 	var rects: Array[Rect2i] = []
 	for index in frame_count:
-		var position := Vector2i(index % actual_columns, index / actual_columns) * stride
+		var position := Vector2i(index % actual_columns, floori(index / float(actual_columns))) * stride
 		rects.append(Rect2i(position, dimensions))
 	return {"size": size, "tile_size": dimensions, "rects": rects}
 
@@ -727,9 +727,9 @@ func _update_sheet_preview() -> void:
 		return
 	_preview_running = true
 	var revision := _preview_revision
-	var range := _selected_frames()
+	var frame_range := _selected_frames()
 	var frames: Array[VoxelFrame] = []
-	for index in range(range.x, range.y + 1):
+	for index in range(frame_range.x, frame_range.y + 1):
 		frames.append(State.get_voxel_frame(index).copy_frame())
 	var resolution := int(_sheet_settings.get_node("SizeRow/Size").value)
 	var settings := _sheet_render_settings(_sheet_settings.get_node("ViewRow/View").selected, _view_count())
@@ -799,7 +799,7 @@ func sheet_metadata(path: String, first: int, last: int, layout: Dictionary, vie
 		var source_index := first + index % count
 		var filename := "%s_%d" % [label, source_index]
 		if views > 1:
-			filename += "_%d" % (index / count)
+			filename += "_%d" % floori(index / float(count))
 		var rect: Rect2i = layout.rects[index]
 		frames.append({"filename": filename, "frame": {"x": rect.position.x, "y": rect.position.y, "w": rect.size.x, "h": rect.size.y}, "rotated": false, "trimmed": false, "spriteSourceSize": {"x": 0, "y": 0, "w": dimensions.x, "h": dimensions.y}, "sourceSize": {"w": dimensions.x, "h": dimensions.y}, "duration": maxi(1, State.get_voxel_frame(source_index).delay_ms)})
 	var tags := []

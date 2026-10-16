@@ -233,7 +233,7 @@ func _cancel_edit() -> void:
 	super._cancel_edit()
 
 
-func _on_cells_changed(_frame: int, _affected: Array[Vector3i]) -> void:
+func _on_cells_changed(_frame: int, _cells: Array[Vector3i]) -> void:
 	if _anchor != VoxelPicking.NONE:
 		_cancel_edit()
 

@@ -72,10 +72,10 @@ func set_ui_scale(value: float, save: bool = true) -> void:
 func _automatic_ui_scale() -> float:
 	if DisplayServer.get_name() == "headless":
 		return 1.0
-	var scale := DisplayServer.screen_get_scale(DisplayServer.SCREEN_OF_MAIN_WINDOW)
-	if OS.get_name() == "Windows" and scale == 1.0:
-		scale = DisplayServer.screen_get_dpi(DisplayServer.SCREEN_OF_MAIN_WINDOW) / 96.0
-	return clampf(scale, 1.0, 3.0)
+	var screen_scale := DisplayServer.screen_get_scale(DisplayServer.SCREEN_OF_MAIN_WINDOW)
+	if OS.get_name() == "Windows" and screen_scale == 1.0:
+		screen_scale = DisplayServer.screen_get_dpi(DisplayServer.SCREEN_OF_MAIN_WINDOW) / 96.0
+	return clampf(screen_scale, 1.0, 3.0)
 
 
 func _apply_ui_scale() -> void:

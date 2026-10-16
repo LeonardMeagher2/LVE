@@ -66,9 +66,8 @@ func _frame_target(d: VoxelDocument) -> Vector3:
 	return d.bounds().get_center()
 
 
-@warning_ignore("shadowed_variable_base_class")
-func set_view(name: String) -> void:
-	match name:
+func set_view(view_name: String) -> void:
+	match view_name:
 		"default":
 			_set_angles(deg_to_rad(0.0), deg_to_rad(45.0))
 		"top":

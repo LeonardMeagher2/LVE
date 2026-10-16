@@ -196,8 +196,8 @@ func export_palette(path: String) -> Error:
 	var image := Image.create(columns * SWATCH_SIZE, rows * SWATCH_SIZE, false, Image.FORMAT_RGBA8)
 	image.fill(Color.TRANSPARENT)
 	for index in colors.size():
-		var position := Vector2i(index % columns, index / columns) * SWATCH_SIZE
-		image.fill_rect(Rect2i(position, Vector2i.ONE * SWATCH_SIZE), colors[index])
+		var cell_position := Vector2i(index % columns, floori(index / float(columns))) * SWATCH_SIZE
+		image.fill_rect(Rect2i(cell_position, Vector2i.ONE * SWATCH_SIZE), colors[index])
 	if path.get_extension().to_lower() != "png":
 		path += ".png"
 	return image.save_png(path)

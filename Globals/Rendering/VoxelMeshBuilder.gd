@@ -97,9 +97,9 @@ func run() -> void:
 	geometry_bytes = vertex_positions.size() * 40 + triangle_indices.size() * 4
 
 
-static func neighbor_offsets(smooth_normals: bool) -> Array[Vector3i]:
+static func neighbor_offsets(use_smooth_normals: bool) -> Array[Vector3i]:
 	var offsets: Array[Vector3i] = [Vector3i.ZERO]
-	if not smooth_normals:
+	if not use_smooth_normals:
 		offsets.append_array(VoxelFrame.DIRECTIONS)
 		return offsets
 	for z in range(-1, 2):
@@ -122,13 +122,13 @@ static func _corner_normal(corner: Vector3i, padded_cell_colors: PackedColorArra
 	return normal.normalized()
 
 
-static func _snapshot(source_frame: VoxelFrame, chunk_location: Vector3i, smooth_normals: bool) -> PackedColorArray:
+static func _snapshot(frame: VoxelFrame, location: Vector3i, use_smooth_normals: bool) -> PackedColorArray:
 	var padded_cell_colors := PackedColorArray()
 	padded_cell_colors.resize(PADDED_CHUNK_SIZE * PADDED_CHUNK_SIZE * PADDED_CHUNK_SIZE)
 	padded_cell_colors.fill(Color.TRANSPARENT)
-	var padded_origin := chunk_location * CHUNK_SIZE - Vector3i.ONE
-	for offset in neighbor_offsets(smooth_normals):
-		var chunk: VoxelFrame.Chunk = source_frame.chunks.get(chunk_location + offset)
+	var padded_origin := location * CHUNK_SIZE - Vector3i.ONE
+	for offset in neighbor_offsets(use_smooth_normals):
+		var chunk: VoxelFrame.Chunk = frame.chunks.get(location + offset)
 		if chunk == null:
 			continue
 		for cell_position in chunk.cell_colors:

@@ -129,13 +129,13 @@ class RotateJob extends TransformJob:
 		var widths := max_c - min_c + Vector3i.ONE
 		var basis := Basis(Vector3.RIGHT, euler.x) * Basis(Vector3.UP, euler.y) * Basis(Vector3.BACK, euler.z)
 		var perm := Vector3i(-1, -1, -1)
-		var sign := Vector3i(1, 1, 1)
+		var axis_signs := Vector3i(1, 1, 1)
 		for source_axis in 3:
 			var image: Vector3 = basis[source_axis]
 			for dest_axis in 3:
 				if absf(image[dest_axis]) > 0.5:
 					perm[dest_axis] = source_axis
-					sign[dest_axis] = 1 if image[dest_axis] > 0.0 else -1
+					axis_signs[dest_axis] = 1 if image[dest_axis] > 0.0 else -1
 		stage("Calculating rotation", source_positions.size())
 		var completed := 0
 		for source in source_positions:
@@ -143,7 +143,7 @@ class RotateJob extends TransformJob:
 			var mapped := Vector3i.ZERO
 			for dest_axis in 3:
 				var source_axis: int = perm[dest_axis]
-				if sign[dest_axis] > 0:
+				if axis_signs[dest_axis] > 0:
 					mapped[dest_axis] = local[source_axis]
 				else:
 					mapped[dest_axis] = (widths[source_axis] - 1) - local[source_axis]

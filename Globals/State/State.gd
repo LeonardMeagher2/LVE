@@ -206,7 +206,7 @@ func drawing_context() -> VoxelFrame.EditContext:
 	return context
 
 
-static func symmetry_transform(mask: int, origin: Vector3) -> Transform3D:
+func symmetry_transform(mask: int, origin: Vector3) -> Transform3D:
 	var reflection := Vector3.ONE
 	for axis in 3:
 		if mask & (1 << axis):
@@ -271,7 +271,7 @@ func has_operation(operation_id: int) -> bool:
 
 
 func get_activity() -> Operation:
-	var background_operation: Operation
+	var background_operation: Operation = null
 	for operation in _operations.values():
 		if operation.foreground:
 			return operation
@@ -459,7 +459,7 @@ func move_palette_color(from_index: int, to_index: int) -> void:
 	set_palette(colors, "Move Palette Color")
 
 
-static func get_builtin_palette() -> PackedColorArray:
+func get_builtin_palette() -> PackedColorArray:
 	# Keep grayscale first, then vivid hues, cooler shadows, and warmer highlights.
 	return PackedColorArray([
 		Color.BLACK, Color("808080"), Color.WHITE,
@@ -518,7 +518,8 @@ func forget_document(config_path: String = SESSION_PATH) -> void:
 	var config := ConfigFile.new()
 	if config.load(config_path) != OK:
 		return
-	config.erase_section_key("files", "last_document")
+	if config.has_section_key("files", "last_document"):
+		config.erase_section_key("files", "last_document")
 	config.save(config_path)
 
 
@@ -535,14 +536,14 @@ func is_app_session() -> bool:
 	return tree != null and tree.current_scene == tree.root.get_node_or_null("Main")
 
 
-static func get_image_file_filter() -> String:
+func get_image_file_filter() -> String:
 	var patterns := PackedStringArray()
 	for extension in IMAGE_EXTENSIONS:
 		patterns.append("*." + extension)
 	return ", ".join(patterns) + " ; Images"
 
 
-static func load_image(path: String, image: Image) -> Error:
+func load_image(path: String, image: Image) -> Error:
 	var extension := path.get_extension().to_lower()
 	var error: Error = OK
 	if extension in ["dds", "ktx", "ktx2"]:
@@ -732,9 +733,8 @@ func _frame_snapshot() -> Dictionary:
 	}
 
 
-@warning_ignore("shadowed_variable_base_class")
-func _record_frame_action(name: String, before: Dictionary, after: Dictionary) -> void:
-	undo_redo.create_action(name)
+func _record_frame_action(action_name: String, before: Dictionary, after: Dictionary) -> void:
+	undo_redo.create_action(action_name)
 	undo_redo.add_undo_method(_restore_frame_layout.bind(before["frames"], before["ranges"], before["current"]))
 	undo_redo.add_do_method(_restore_frame_layout.bind(after["frames"], after["ranges"], after["current"]))
 	undo_redo.commit_action(false)
@@ -784,14 +784,13 @@ func _apply_frame_delay(index: int, ms: int) -> void:
 	frame_changed.emit()
 
 
-@warning_ignore("shadowed_variable_base_class")
-func add_tag(name: String, from: int = 0, to: int = -1) -> void:
+func add_tag(tag_name: String, from: int = 0, to: int = -1) -> void:
 	var end := to
 	if to < 0:
 		end = document.frames.size() - 1
 	var index := document.tags.size()
 	var tag := AnimationTag.new()
-	tag.name = name
+	tag.name = tag_name
 	tag.from = clampi(from, 0, document.frames.size() - 1)
 	tag.to = clampi(end, tag.from, document.frames.size() - 1)
 	var prev_active := active_tag
@@ -884,8 +883,7 @@ func _apply_tag_loop_mode(index: int, mode: int) -> void:
 	var tag := document.get_tag(index)
 	if tag == null:
 		return
-	@warning_ignore("int_as_enum_without_cast")
-	tag.loop_mode = mode
+	tag.loop_mode = mode as AnimationTag.LoopMode
 	tag_changed.emit()
 
 
@@ -908,24 +906,22 @@ func _apply_tag_repeats(index: int, value: int) -> void:
 	tag_changed.emit()
 
 
-@warning_ignore("shadowed_variable_base_class")
-func set_tag_name(index: int, name: String) -> void:
+func set_tag_name(index: int, tag_name: String) -> void:
 	var tag := document.get_tag(index)
-	if tag == null or tag.name == name:
+	if tag == null or tag.name == tag_name:
 		return
 	undo_redo.create_action("Set Tag Name")
 	undo_redo.add_undo_method(_apply_tag_name.bind(index, tag.name))
-	undo_redo.add_do_method(_apply_tag_name.bind(index, name))
+	undo_redo.add_do_method(_apply_tag_name.bind(index, tag_name))
 	undo_redo.commit_action(false)
-	_apply_tag_name(index, name)
+	_apply_tag_name(index, tag_name)
 
 
-@warning_ignore("shadowed_variable_base_class")
-func _apply_tag_name(index: int, name: String) -> void:
+func _apply_tag_name(index: int, tag_name: String) -> void:
 	var tag := document.get_tag(index)
 	if tag == null:
 		return
-	tag.name = name
+	tag.name = tag_name
 	tag_changed.emit()
 
 

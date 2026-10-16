@@ -101,8 +101,8 @@ class ExportJob extends VoxelFrame.EditJob:
 		var positions := PackedVector3Array()
 		var normals := PackedVector3Array()
 		var colors := PackedColorArray()
-		var remap := PackedInt32Array()
-		remap.resize(source_positions.size())
+		var vertex_map := PackedInt32Array()
+		vertex_map.resize(source_positions.size())
 		var buckets := {}
 		stage("Welding frame %d/%d vertices" % [frame_index + 1, frames.size()], source_positions.size())
 		for vertex_index in source_positions.size():
@@ -132,11 +132,11 @@ class ExportJob extends VoxelFrame.EditJob:
 				if not buckets.has(bucket):
 					buckets[bucket] = []
 				buckets[bucket].append(match_index)
-			remap[vertex_index] = match_index
+			vertex_map[vertex_index] = match_index
 		var indices := PackedInt32Array()
 		indices.resize(source_indices.size())
 		for index in source_indices.size():
-			indices[index] = remap[source_indices[index]]
+			indices[index] = vertex_map[source_indices[index]]
 		var welded := arrays.duplicate()
 		welded[Mesh.ARRAY_VERTEX] = positions
 		welded[Mesh.ARRAY_NORMAL] = normals
@@ -303,7 +303,7 @@ func export_gltf(path: String, center_origin := true, tag_index := -1) -> Error:
 			# Godot 4.7 reads the first primitive's colors after it configures the material.
 			# Two real surfaces enable vertex colors on their shared material during import.
 			var quad_count: int = arrays[Mesh.ARRAY_INDEX].size() / 6
-			var split_quad: int = quad_count / 2
+			var split_quad: int = floori(quad_count / 2.0)
 			for quad_range in [Vector2i(0, split_quad), Vector2i(split_quad, quad_count)]:
 				var surface_arrays := _surface_slice(arrays, quad_range)
 				frame_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, surface_arrays)
@@ -351,15 +351,15 @@ func _surface_slice(arrays: Array, quad_range: Vector2i) -> Array:
 	var normals := PackedVector3Array()
 	var colors := PackedColorArray()
 	var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX].slice(quad_range.x * 6, quad_range.y * 6)
-	var remap := {}
+	var index_map := {}
 	for index in indices.size():
 		var source_index := indices[index]
-		if not remap.has(source_index):
-			remap[source_index] = positions.size()
+		if not index_map.has(source_index):
+			index_map[source_index] = positions.size()
 			positions.append(arrays[Mesh.ARRAY_VERTEX][source_index])
 			normals.append(arrays[Mesh.ARRAY_NORMAL][source_index])
 			colors.append(arrays[Mesh.ARRAY_COLOR][source_index])
-		indices[index] = remap[source_index]
+		indices[index] = index_map[source_index]
 	var surface_arrays := arrays.duplicate()
 	surface_arrays[Mesh.ARRAY_VERTEX] = positions
 	surface_arrays[Mesh.ARRAY_NORMAL] = normals

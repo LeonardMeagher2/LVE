@@ -64,7 +64,7 @@ func _preview_centers() -> Array[Vector3i]:
 	return [_endpoint]
 
 
-func _show_preview(_job: BrushJob) -> void:
+func _show_preview(_built_job: BrushJob) -> void:
 	position = Vector3(_endpoint)
 	$Cursor.show_voxels(_stroke_pattern, Color.WHITE)
 

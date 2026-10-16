@@ -95,8 +95,6 @@ stretch = true
 [node name="Viewport" type="SubViewport" parent="PanelContainer/SubViewportContainer" unique_id=542066251]
 unique_name_in_owner = true
 handle_input_locally = false
-msaa_2d = 1
-msaa_3d = 1
 screen_space_aa = 1
 use_debanding = true
 size = Vector2i(998, 766)
