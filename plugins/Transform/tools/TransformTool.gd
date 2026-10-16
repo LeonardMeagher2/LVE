@@ -575,15 +575,7 @@ func _plane_point(origin: Vector3, dir: Vector3) -> Vector3:
 
 
 func _view_axis() -> int:
-	var toward := -_grab_forward
-	var fx: float = absf(toward.x)
-	var fy: float = absf(toward.y)
-	var fz: float = absf(toward.z)
-	if fy >= fx and fy >= fz:
-		return 1
-	elif fz >= fx:
-		return 2
-	return 0
+	return VoxelPicking.view_axis(_grab_forward)
 
 
 func _view_axis_sign() -> float:
@@ -593,14 +585,7 @@ func _view_axis_sign() -> float:
 
 
 func _view_plane_through(point: Vector3) -> StrokePlane:
-	var p := StrokePlane.new()
-	p.axis = _view_axis()
-	p.idx = 0
-	p.point = point
-	var n := Vector3.ZERO
-	n[p.axis] = 1.0
-	p.normal = n
-	return p
+	return VoxelPicking.view_plane_through(point, _grab_forward)
 
 
 func _source_bbox() -> AABB:

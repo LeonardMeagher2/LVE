@@ -29,13 +29,21 @@ static func drag_pick(origin: Vector3, dir: Vector3, frame: VoxelFrame, plane: S
 	return res
 
 
+static func view_axis(forward: Vector3) -> int:
+	# The axis that faces the viewer. The press plane of a pick uses it.
+	var toward: Vector3 = -forward
+	var x := absf(toward.x)
+	var y := absf(toward.y)
+	var z := absf(toward.z)
+	if y >= x and y >= z:
+		return 1
+	if z >= x:
+		return 2
+	return 0
+
+
 static func view_plane(target: Vector3i, origin: Vector3, forward: Vector3) -> StrokePlane:
-	var f: Vector3 = -forward
-	var axis := 0
-	if absf(f.y) >= absf(f.x) and absf(f.y) >= absf(f.z):
-		axis = 1
-	elif absf(f.z) >= absf(f.x):
-		axis = 2
+	var axis := view_axis(forward)
 	var side := 1.0 if origin[axis] >= float(target[axis]) else -1.0
 	var p := StrokePlane.new()
 	p.axis = axis
@@ -45,6 +53,18 @@ static func view_plane(target: Vector3i, origin: Vector3, forward: Vector3) -> S
 	p.point = pt
 	var n := Vector3.ZERO
 	n[axis] = 1.0
+	p.normal = n
+	return p
+
+
+static func view_plane_through(point: Vector3, forward: Vector3) -> StrokePlane:
+	# A plane through the point that faces the viewer. Drags map onto it.
+	var p := StrokePlane.new()
+	p.axis = view_axis(forward)
+	p.idx = 0
+	p.point = point
+	var n := Vector3.ZERO
+	n[p.axis] = 1.0
 	p.normal = n
 	return p
 

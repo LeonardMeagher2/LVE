@@ -107,6 +107,10 @@ This file records confirmed facts about Leonard's Voxel Editor. Record each lear
 
 ## Workflow
 
+- 2026-10-15: `--headless --import` imports a new SVG icon as a `CompressedTexture2D`. Write `importer="svg"` and `type="DPITexture"` into the `.import` file, then import again, to get a `DPITexture` like the other icons.
+- 2026-10-15: `VoxelTool.end_stroke()` takes no action name and reports the undo action as "Stroke". Override `end_stroke()` in the tool to set the action name.
+- 2026-10-16: A child process blocks when its stdout pipe buffer is full. `OS.create_process` gives the child no inherited handles, and `--log-file <path>` writes the engine output and error log to that file. A test runner can read that file in place of a pipe.
+- 2026-10-16: `OS.is_process_running(pid)` is unreliable after Windows recycles a process ID. Godot keys its process map by pid, and a new process overwrites the entry. Read a finished child's own output in place of its pid.
 - 2026-10-07: For test clicks in viewport coordinates, pass `true` to `push_input()` to prevent display-scale coordinate conversion.
 - 2026-09-07: The tool selection API is gone. `State.tools`, `set_tool`, `set_tool_option`, `get_tool_option`, and `State.tool` are removed. Tools are plugins under `/root`. A test activates a tool by setting the plugin toolbar button's `button_pressed`. It sets options by pressing the option-bar button (`press_option(tooltip)`).
 - 2026-09-07: `State.NONE` is gone. Use `VoxelPicking.NONE`.
