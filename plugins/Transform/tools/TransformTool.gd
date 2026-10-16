@@ -31,6 +31,8 @@ var _grab_forward := Vector3.FORWARD
 var _grab_camera_right := Vector3.RIGHT
 var _jobs: Array[VoxelFrame.EditJob] = []
 var _active_preview_job: TransformJob
+var _symmetry_axes := 0
+var _symmetry_origin_twice := Vector3i.ZERO
 
 class SourceJob extends VoxelFrame.EditJob:
 	var source_frame: VoxelFrame
@@ -79,12 +81,18 @@ class TransformJob extends VoxelFrame.EditJob:
 	var covered := {}
 	var changed_chunks: Array[Vector3i] = []
 	var offset := Vector3i.ZERO
+	var symmetry_axes := 0
+	var symmetry_origin_twice := Vector3i.ZERO
 
 	func estimated_work() -> int:
 		return source_positions.size()
 
 	func run() -> void:
+		_reduce_to_fundamental_domain()
 		compute_destination()
+		if not checkpoint(0):
+			return
+		_mirror_destination()
 		if not checkpoint(0):
 			return
 		stage("Preparing transform", old_positions.size() + destination_colors.size())
@@ -132,6 +140,51 @@ class TransformJob extends VoxelFrame.EditJob:
 			completed += 1
 			if completed % 4096 == 0 and not checkpoint(completed):
 				return
+
+	func _symmetry_context() -> VoxelFrame.EditContext:
+		var context := VoxelFrame.EditContext.new()
+		context.axes = symmetry_axes
+		context.origin_twice = symmetry_origin_twice
+		return context
+
+	# Keep one representative per symmetry orbit. Transform that, then mirror the result.
+	# The model stays symmetric and a rotation does not add extra reflected copies.
+	func _reduce_to_fundamental_domain() -> void:
+		if symmetry_axes == 0:
+			return
+		var context := _symmetry_context()
+		var reduced_positions: Array[Vector3i] = []
+		var reduced_colors := {}
+		var seen := {}
+		for cell_position in source_positions:
+			var canonical := context.reflect(cell_position, _canonical_mask(cell_position))
+			if seen.has(canonical):
+				continue
+			seen[canonical] = true
+			reduced_positions.append(canonical)
+			if source_colors.has(cell_position):
+				reduced_colors[canonical] = source_colors[cell_position]
+		for canonical: Vector3i in reduced_colors:
+			if source_colors.has(canonical):
+				reduced_colors[canonical] = source_colors[canonical]
+		source_positions = reduced_positions
+		source_colors = reduced_colors
+
+	func _canonical_mask(cell_position: Vector3i) -> int:
+		var mask := 0
+		for axis in 3:
+			if symmetry_axes & (1 << axis) and cell_position[axis] * 2 <= symmetry_origin_twice[axis]:
+				mask |= 1 << axis
+		return mask
+
+	func _mirror_destination() -> void:
+		if symmetry_axes == 0:
+			return
+		stage("Mirroring transform", destination_colors.size() * 2)
+		var context := _symmetry_context()
+		destination_colors = context.expand(destination_colors, edited_frame, false, null, self)
+		if track_selection:
+			destination_selection = context.expand(destination_selection, edited_frame, false, null, self)
 
 
 func handle_input(event: InputEvent, pos: Vector2) -> bool:
@@ -233,6 +286,9 @@ func _press(origin: Vector3, dir: Vector3) -> void:
 			return
 		_track_selection = not State.selection.is_empty()
 		begin_stroke()
+		var symmetry := State.selection_context()
+		_symmetry_axes = symmetry.axes
+		_symmetry_origin_twice = symmetry.origin_twice
 		_source_document = State.document
 		_source_frame = frame
 		_dragging = true
@@ -322,6 +378,8 @@ func _apply_preview() -> void:
 		_preview_requested = false
 		var revision := _preview_revision
 		var job := _make_job()
+		job.symmetry_axes = _symmetry_axes
+		job.symmetry_origin_twice = _symmetry_origin_twice
 		job.source_positions = _cells
 		job.source_colors = _colors
 		job.source_bounds = _source_bounds
