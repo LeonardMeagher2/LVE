@@ -177,7 +177,8 @@ func _check_invalid_documents() -> void:
 	_reject(invalid, "payload corruption is rejected")
 	for nodes in [PackedInt32Array([-2]), PackedInt32Array([-1]), PackedInt32Array([100]), PackedInt32Array([1, 0])]:
 		var fields := source.document_data().duplicate(true)
-		fields.frames[0].voxels[1][0][2] = nodes
+		var record: Array = fields.frames[0].voxels[1][0]
+		record[record.size() - 1] = nodes
 		_reject(_wrap(var_to_bytes(fields)), "invalid octree nodes are rejected")
 	var fields := source.document_data().duplicate(true)
 	fields.frames[0].voxels[1].append(fields.frames[0].voxels[1][0])
@@ -205,7 +206,7 @@ func _check_invalid_documents() -> void:
 	_reject(_wrap(var_to_bytes(deep)), "excessive nesting is rejected before decoding")
 	var full_chunks := []
 	for index in 1025:
-		full_chunks.append([Vector3i(index, 0, 0), PackedColorArray([Color.TRANSPARENT, Color.RED]), PackedInt32Array([1])])
+		full_chunks.append([Vector3i(index, 0, 0), PackedColorArray([Color.TRANSPARENT, Color.RED]), PackedColorArray(), PackedColorArray(), PackedInt32Array([1])])
 	fields = source.document_data().duplicate(true)
 	fields.frames[0].voxels = [1, full_chunks]
 	_reject(_wrap(var_to_bytes(fields)), "excessive voxel expansion is rejected before allocation")
@@ -251,7 +252,7 @@ func _check_rendered_save() -> void:
 func _wrap(payload: PackedByteArray) -> PackedByteArray:
 	var result := PackedByteArray(VoxelDocument.FILE_SIGNATURE)
 	result.resize(16)
-	result.encode_u32(4, 1)
+	result.encode_u32(4, VoxelDocument.FORMAT_VERSION)
 	result.encode_u32(8, payload.size())
 	result.encode_u32(12, VoxelDocument._crc32(payload))
 	result.append_array(payload)

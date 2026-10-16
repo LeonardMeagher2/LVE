@@ -218,28 +218,38 @@ max_active: 1
   - 2026-10-10: The user chose per-voxel storage, a live editor display, and an emission color.
   - 2026-10-10: The cell value holds the color, the emission color, the metallic, and the roughness.
   - 2026-10-10: The emission color RGB holds the color and the strength. Its alpha stays zero.
-  - [ ] Store the emission, metallic, and roughness in the chunk cell value
-  - [ ] Change the chunk color table to a cell value table
-  - [ ] Keep the octree over the cell value IDs
-  - [ ] Bump the document format version to 2
-  - [ ] Read version 1 documents with default material values
-  - [ ] Validate the new cell values in the storage checks
-  - [ ] Keep the frame color helpers for the existing callers
+  - 2026-10-16: A version 2 chunk record holds the location, the color table, the emission table, the finish table, and the octree. The finish table stores metallic in red and roughness in green. A cell value id is the color id times the material count plus the material id.
+  - 2026-10-16: A chunk stores one material dictionary per occupied cell. Absent cells use the default material. The default is black emission, metallic 0, and roughness 1.
+  - 2026-10-16: `State._chunks_equal` compares `cell_colors` only. A material-only edit creates no undo action and no view refresh. Fix this in stage 2.
+  - Stage 1 stores the cell value and the version 2 format. Nothing visible changes.
+  - [x] Store the emission, metallic, and roughness in the chunk cell value
+  - [x] Change the chunk color table to a cell value table
+  - [x] Keep the octree over the cell value IDs
+  - [x] Bump the document format version to 2
+  - [x] Read version 1 documents with default material values
+  - [x] Validate the new cell values in the storage checks
+  - [x] Keep the frame color helpers for the existing callers
+  - [x] Add the frame material getter and the batch material setter
+  - [x] Verify the storage with `chunk_materials` and the format tests
+  - [x] Run the full behavior suite
+  - Stage 2 copies the cell value through every edit path.
+  - [ ] Compare the cell materials in the undo checks
+  - [ ] Refresh the view after a material-only undo
   - [ ] Copy the full cell value in transforms, clipboard, and paint edits
-  - [ ] Keep undo and redo on the cell value snapshots
+  - Stage 3 adds the material controls and one undo action per change.
   - [ ] Add material controls for the selected voxels
   - [ ] Apply emission, metallic, and roughness changes with one undo action
+  - Stage 4 renders one surface per material signature.
   - [ ] Use the color and material as the face key in the mesh builder
   - [ ] Emit one surface per material signature in the chunk mesh
   - [ ] Cache one material per signature from the shared voxel material
   - [ ] Keep the outline, box, and preview meshes on the shared material
+  - Stage 5 exports one glTF material per signature.
   - [ ] Group export surfaces by material signature
   - [ ] Export one glTF material per signature
   - [ ] Keep the vertex colors for the base color
   - [ ] Weld and merge faces without crossing a material boundary
   - [ ] Update the glTF export notes
-  - [ ] Verify storage, editing, rendering, and export with targeted tests
-  - [ ] Run the full behavior suite
 
 # Export/Import
 - [x] Flip the sprite projection toggle to perspective

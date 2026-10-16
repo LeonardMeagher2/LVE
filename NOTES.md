@@ -4,6 +4,7 @@ This file records confirmed facts about Leonard's Voxel Editor. Record each lear
 
 ## Godot API changes
 
+- 2026-10-16: A `Dictionary` compares by content with `==` and works as a key in another `Dictionary`. `Vector2` and `PackedFloat32Array` keys also compare by content.
 - 2026-10-08: `AABB.get_support(direction)` returns the corner farthest in that direction. The sprite far plane uses the worst turntable-view extreme plus one voxel.
 - 2026-10-07: In Godot 4.7.2 Mobile, a new sheet viewport needs two renders before capture includes directional shadows.
 - 2026-10-06: Godot 4.7.2 on Windows returns scale 1.0 and DPI 192 for this 200% display.
@@ -112,6 +113,7 @@ This file records confirmed facts about Leonard's Voxel Editor. Record each lear
 - 2026-10-16: A child process blocks when its stdout pipe buffer is full. `OS.create_process` gives the child no inherited handles, and `--log-file <path>` writes the engine output and error log to that file. A test runner can read that file in place of a pipe.
 - 2026-10-16: `OS.is_process_running(pid)` is unreliable after Windows recycles a process ID. Godot keys its process map by pid, and a new process overwrites the entry. Read a finished child's own output in place of its pid.
 - 2026-10-16: A headless run does not print GDScript warnings. To find them, set `debug/gdscript/warnings/<name>=2` in `project.godot`. The warning then fails the script load with a parse error.
+- 2026-10-16: A test run loads `Main.tscn`, so the startup restore opens the remembered document. `MenuBar.open_document()` sets `current_save_path` to that file. A test that saves writes over the user's document. Back up the document before a test run.
 - 2026-10-07: For test clicks in viewport coordinates, pass `true` to `push_input()` to prevent display-scale coordinate conversion.
 - 2026-09-07: The tool selection API is gone. `State.tools`, `set_tool`, `set_tool_option`, `get_tool_option`, and `State.tool` are removed. Tools are plugins under `/root`. A test activates a tool by setting the plugin toolbar button's `button_pressed`. It sets options by pressing the option-bar button (`press_option(tooltip)`).
 - 2026-09-07: `State.NONE` is gone. Use `VoxelPicking.NONE`.

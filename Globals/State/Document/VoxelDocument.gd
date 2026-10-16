@@ -5,7 +5,7 @@ signal file_path_changed()
 
 const APP_NAME := "Leonard's Voxel Editor"
 const FILE_SIGNATURE := [76, 86, 69, 0]
-const FORMAT_VERSION := 1
+const FORMAT_VERSION := 2
 const MAX_FILE_BYTES := 64 * 1024 * 1024
 const MAX_FRAMES := 10000
 const MAX_TAGS := 10000
@@ -120,7 +120,8 @@ static func load_file(path: String) -> VoxelDocument:
 static func decode_document(data: PackedByteArray) -> VoxelDocument:
 	if data.size() < 16 or data.size() > MAX_FILE_BYTES or data.slice(0, 4) != PackedByteArray(FILE_SIGNATURE):
 		return null
-	if data.decode_u32(4) != FORMAT_VERSION or data.decode_u32(8) != data.size() - 16:
+	var version := data.decode_u32(4)
+	if version < 1 or version > FORMAT_VERSION or data.decode_u32(8) != data.size() - 16:
 		return null
 	var payload := data.slice(16)
 	if _crc32(payload) != data.decode_u32(12):
@@ -210,7 +211,7 @@ static func _crc32(data: PackedByteArray) -> int:
 	return crc ^ 0xffffffff
 
 
-# Version 1 permits only the Variant types that the document schema uses.
+# The document permits only the Variant types that its schema uses.
 static func _variant_end(data: PackedByteArray, offset: int, depth: int, budget: Array) -> int:
 	if depth > 16 or offset < 0 or offset + 4 > data.size() or budget[0] <= 0:
 		return -1
