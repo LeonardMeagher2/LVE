@@ -2,6 +2,7 @@ extends VoxelTool
 
 const INLINE_EDIT_LIMIT := 4096
 const CLICK_SLOP_PX := 4.0
+const TOOL_DIALOG_SCENE := preload("./TransformDialog.tscn")
 
 var _settings := preload("../settings.tres")
 var _dragging := false
@@ -27,6 +28,15 @@ var _input_revision := 0
 var _grab_waiting := false
 var _mouse_down := false
 var _queued_drag_ray: Array = []
+var _was_pending := false
+var _has_base := false
+var _base_cells: Array[Vector3i] = []
+var _base_colors := {}
+var _base_bounds := AABB()
+var _dialog = null
+var _dialog_open_values := {}
+var _dialog_open_had_pending := false
+var _dialog_dirty := false
 var _grab_forward := Vector3.FORWARD
 var _grab_camera_right := Vector3.RIGHT
 var _jobs: Array[VoxelFrame.EditJob] = []
@@ -315,6 +325,9 @@ func _press(origin: Vector3, dir: Vector3) -> void:
 		_cells = job.cell_positions
 		_colors = job.cell_colors
 		_source_bounds = job.bounds
+	_was_pending = _pending
+	if not _was_pending:
+		_stash_grab_baseline()
 	_grab_waiting = false
 	_begin_grab(origin, dir)
 	_dragging = true
@@ -487,6 +500,7 @@ func _cancel() -> void:
 
 
 func _clear_grab() -> void:
+	_hide_tool_dialog()
 	_cells = []
 	_colors = {}
 	_dest_cells = []
@@ -494,6 +508,58 @@ func _clear_grab() -> void:
 	_covered = {}
 	_source_document = null
 	_source_frame = null
+	_was_pending = false
+	_has_base = false
+	_base_cells.clear()
+	_base_colors.clear()
+	_dialog_open_values = {}
+	_dialog_open_had_pending = false
+	_dialog_dirty = false
+
+
+func _stash_grab_baseline() -> void:
+	_base_cells.assign(_cells)
+	_base_colors = _colors.duplicate()
+	_base_bounds = _source_bounds
+	_has_base = true
+
+
+func _restore_grab_baseline() -> void:
+	var pending_dest_cells: Array[Vector3i] = []
+	pending_dest_cells.assign(_cells)
+	var pending_dest_colors := _colors.duplicate()
+	_cells.assign(_base_cells)
+	_colors = _base_colors.duplicate()
+	_source_bounds = _base_bounds
+	_dest_cells.assign(pending_dest_cells)
+	_dest_colors = pending_dest_colors
+	_did_restore_baseline()
+
+
+func _did_restore_baseline() -> void:
+	pass
+
+
+func _ensure_tool_dialog() -> void:
+	if _dialog == null or not is_instance_valid(_dialog):
+		_dialog = TOOL_DIALOG_SCENE.instantiate()
+		add_child(_dialog)
+		_connect_tool_dialog()
+
+
+func _connect_tool_dialog() -> void:
+	pass
+
+
+func _hide_tool_dialog() -> void:
+	if _dialog != null and is_instance_valid(_dialog):
+		_dialog.hide()
+
+
+func _record_dialog_open(open_values: Dictionary) -> void:
+	_dialog_open_values = open_values
+	_dialog_open_had_pending = _was_pending
+	_dialog_dirty = false
 
 
 func _plane_point(origin: Vector3, dir: Vector3) -> Vector3:

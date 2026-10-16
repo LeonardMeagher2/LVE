@@ -1,5 +1,7 @@
 extends "./TransformTool.gd"
 
+const TransformDialog := preload("./TransformDialog.gd")
+
 const QUARTER := PI / 2.0
 const DEGREE := PI / 180.0
 const MAGNETIC_PULL := DEGREE * 2.0
@@ -9,26 +11,150 @@ var _axis_sign := 1.0
 var _pivot := Vector3.ZERO
 var _v0 := Vector3.ZERO
 var _angle := 0.0
+var _euler := Vector3.ZERO
+var _gesture_base_euler := Vector3.ZERO
+var _job_euler := Vector3.ZERO
 
 class RotateJob extends TransformJob:
 	var axis := 1
 	var axis_sign := 1.0
 	var pivot := Vector3.ZERO
 	var angle := 0.0
+	# Total rotation as XYZ Euler angles in radians. Applies Z first, then Y, then X.
+	var euler := Vector3.ZERO
+	var _candidate_total := 0
+	var _candidate_completed := 0
 
 	func estimated_work() -> int:
-		if is_equal_approx(angle / QUARTER, roundf(angle / QUARTER)):
+		var single := _euler_single()
+		if not single[0]:
+			if _is_cardinal():
+				return source_positions.size()
+			var extent := source_bounds.size.x + source_bounds.size.y + source_bounds.size.z + 6.0
+			return maxi(source_positions.size(), ceili(extent * extent * extent))
+		return _single_estimated_work(single[1], single[2])
+
+	# True when every Euler component is a whole quarter turn.
+	func _is_cardinal() -> bool:
+		for i in 3:
+			var turns: float = euler[i] / QUARTER
+			if not is_equal_approx(turns, roundf(turns)):
+				return false
+		return true
+
+	func _single_estimated_work(single_angle: float, single_axis: int) -> int:
+		if is_equal_approx(single_angle / QUARTER, roundf(single_angle / QUARTER)):
 			return source_positions.size()
-		var p := (axis + 1) % 3
-		var q := (axis + 2) % 3
+		var p := (single_axis + 1) % 3
+		var q := (single_axis + 2) % 3
 		var span := source_bounds.size[p] + source_bounds.size[q] + 4
-		return maxi(source_positions.size(), ceili(span * span * source_bounds.size[axis]))
+		return maxi(source_positions.size(), ceili(span * span * source_bounds.size[single_axis]))
+
+	# Splits the Euler triple into one single-axis rotation when only one
+	# component turns. Returns [is_single, angle, axis, axis_sign].
+	func _euler_single() -> Array:
+		var count := 0
+		var index := 0
+		for i in 3:
+			if absf(euler[i]) > 0.000000001:
+				count += 1
+				index = i
+		if count > 1:
+			return [false, 0.0, 0, 1.0]
+		if count == 0:
+			return [true, 0.0, axis, 1.0]
+		var component: float = euler[index]
+		return [true, absf(component), index, signf(component)]
 
 	func compute_destination() -> void:
+		if source_positions.is_empty():
+			return
+		var single := _euler_single()
+		if not single[0]:
+			_compute_euler_3d()
+			return
+		angle = single[1]
+		axis = single[2]
+		axis_sign = single[3]
 		if is_equal_approx(angle / QUARTER, roundf(angle / QUARTER)):
 			_compute_exact()
 		else:
 			_compute_smooth()
+
+	func _compute_euler_3d() -> void:
+		if _is_cardinal():
+			_compute_euler_cardinal()
+			return
+		var selected := {}
+		if track_selection:
+			stage("Preparing rotation selection", source_positions.size())
+			for cell_position in source_positions:
+				selected[cell_position] = true
+		var basis := Basis(Vector3.RIGHT, euler.x) * Basis(Vector3.UP, euler.y) * Basis(Vector3.BACK, euler.z)
+		var inverse := basis.inverse()
+		var lo := Vector3(INF, INF, INF)
+		var hi := Vector3(-INF, -INF, -INF)
+		for i in 8:
+			var corner := Vector3(
+				source_bounds.position.x if i & 1 == 0 else source_bounds.end.x,
+				source_bounds.position.y if i & 2 == 0 else source_bounds.end.y,
+				source_bounds.position.z if i & 4 == 0 else source_bounds.end.z)
+			var rotated := pivot + basis * (corner - pivot)
+			lo = lo.min(rotated)
+			hi = hi.max(rotated)
+		var min_d := Vector3i(ceili(lo.x - 0.5), ceili(lo.y - 0.5), ceili(lo.z - 0.5))
+		var max_d := Vector3i(floori(hi.x + 0.5), floori(hi.y + 0.5), floori(hi.z + 0.5))
+		_candidate_total = (max_d.x - min_d.x + 1) * (max_d.y - min_d.y + 1) * (max_d.z - min_d.z + 1)
+		stage("Calculating rotation", _candidate_total)
+		for dz in range(min_d.z, max_d.z + 1):
+			for dy in range(min_d.y, max_d.y + 1):
+				for dx in range(min_d.x, max_d.x + 1):
+					var destination := Vector3i(dx, dy, dz)
+					var source_point := inverse * (Vector3(destination) - pivot) + pivot
+					var source := Vector3i(roundi(source_point.x), roundi(source_point.y), roundi(source_point.z))
+					var color: Color = source_colors.get(source, Color.TRANSPARENT)
+					if color != Color.TRANSPARENT:
+						destination_colors[destination] = color
+					if track_selection and selected.has(source):
+						destination_selection[destination] = true
+					_candidate_completed += 1
+					if _candidate_completed % 4096 == 0 and not checkpoint(_candidate_completed):
+						return
+
+	# Cardinal multi-axis rotation. The rotation matrix rounds to a signed
+	# permutation, so cells permute within the source box. No voxel is lost.
+	func _compute_euler_cardinal() -> void:
+		var min_c := Vector3i(source_bounds.position + Vector3.ONE * 0.5)
+		var max_c := Vector3i(source_bounds.end - Vector3.ONE * 0.5)
+		var widths := max_c - min_c + Vector3i.ONE
+		var basis := Basis(Vector3.RIGHT, euler.x) * Basis(Vector3.UP, euler.y) * Basis(Vector3.BACK, euler.z)
+		var perm := Vector3i(-1, -1, -1)
+		var sign := Vector3i(1, 1, 1)
+		for source_axis in 3:
+			var image: Vector3 = basis[source_axis]
+			for dest_axis in 3:
+				if absf(image[dest_axis]) > 0.5:
+					perm[dest_axis] = source_axis
+					sign[dest_axis] = 1 if image[dest_axis] > 0.0 else -1
+		stage("Calculating rotation", source_positions.size())
+		var completed := 0
+		for source in source_positions:
+			var local := source - min_c
+			var mapped := Vector3i.ZERO
+			for dest_axis in 3:
+				var source_axis: int = perm[dest_axis]
+				if sign[dest_axis] > 0:
+					mapped[dest_axis] = local[source_axis]
+				else:
+					mapped[dest_axis] = (widths[source_axis] - 1) - local[source_axis]
+			var destination := min_c + mapped
+			if source_colors.has(source):
+				destination_colors[destination] = source_colors[source]
+			if track_selection:
+				destination_selection[destination] = true
+			completed += 1
+			if completed % 4096 == 0 and not checkpoint(completed):
+				return
 
 	func _axis_vector() -> Vector3:
 		var vector := Vector3.ZERO
@@ -171,6 +297,12 @@ func _begin_grab(origin: Vector3, dir: Vector3) -> void:
 		v = _fallback_vec()
 	_v0 = v.normalized()
 	_angle = 0.0
+	_job_euler = Vector3.ZERO
+	if _was_pending:
+		_gesture_base_euler = _euler
+	else:
+		_euler = Vector3.ZERO
+		_gesture_base_euler = Vector3.ZERO
 
 
 func _update_params(origin: Vector3, dir: Vector3) -> bool:
@@ -188,16 +320,102 @@ func _update_params(origin: Vector3, dir: Vector3) -> bool:
 	if is_equal_approx(total, _angle):
 		return false
 	_angle = total
+	var single := Vector3.ZERO
+	single[_axis] = _axis_sign * _angle
+	# The gesture turns the cells as they are now, so the job uses one axis only.
+	_job_euler = single
+	# The dialog reports a running total. It adds up while the view axis stays the same.
+	if _base_matches_axis(_gesture_base_euler, _axis):
+		var running := _gesture_base_euler
+		running[_axis] = _gesture_base_euler[_axis] + _axis_sign * _angle
+		_euler = running
+	else:
+		_euler = single
+	return true
+
+
+# True when the base rotation is zero or turns about this axis alone.
+func _base_matches_axis(base: Vector3, axis: int) -> bool:
+	for i in 3:
+		if i != axis and absf(base[i]) > 0.000000001:
+			return false
 	return true
 
 
 func _make_job() -> TransformJob:
 	var job := RotateJob.new()
-	job.axis = _axis
-	job.axis_sign = _axis_sign
 	job.pivot = _pivot
-	job.angle = _angle
+	job.euler = _job_euler
 	return job
+
+
+func _on_click_without_drag() -> bool:
+	if _grab_waiting or _preview_running:
+		return false
+	if _was_pending and _has_base:
+		_restore_grab_baseline()
+		_pending = true
+		_job_euler = _euler
+		_open_rotate_dialog(_euler_degrees())
+		return true
+	if _cells.is_empty():
+		return false
+	_pending = true
+	_euler = Vector3.ZERO
+	_job_euler = Vector3.ZERO
+	_open_rotate_dialog(Vector3.ZERO)
+	return true
+
+
+func _euler_degrees() -> Vector3:
+	return Vector3(rad_to_deg(_euler.x), rad_to_deg(_euler.y), rad_to_deg(_euler.z))
+
+
+func _did_restore_baseline() -> void:
+	_pivot = _source_bbox().get_center()
+
+
+func _connect_tool_dialog() -> void:
+	_dialog.connect("values_changed", _on_dialog_values)
+	_dialog.connect("confirmed", _on_dialog_confirmed)
+	_dialog.connect("canceled", _on_dialog_canceled)
+
+
+func _open_rotate_dialog(angles_deg: Vector3) -> void:
+	_ensure_tool_dialog()
+	_dialog.open_for_rotate(angles_deg)
+	_dialog.popup_centered()
+	_record_dialog_open({TransformDialog.KEY_VALUES: angles_deg, TransformDialog.KEY_AXIS: -1, TransformDialog.KEY_UNIFORM: false})
+
+
+func _on_dialog_values(state: Dictionary) -> void:
+	var raw: Vector3 = state[TransformDialog.KEY_VALUES]
+	var angles := Vector3(deg_to_rad(raw.x), deg_to_rad(raw.y), deg_to_rad(raw.z))
+	if angles.is_equal_approx(_euler):
+		return
+	_euler = angles
+	_job_euler = angles
+	_dialog_dirty = true
+	_apply_preview()
+
+
+func _on_dialog_confirmed() -> void:
+	if _euler.is_zero_approx() and not _dragged and not _was_pending:
+		_cancel()
+
+
+func _on_dialog_canceled() -> void:
+	if _dialog_open_had_pending:
+		if _dialog_dirty:
+			_dialog_dirty = false
+			var raw: Vector3 = _dialog_open_values[TransformDialog.KEY_VALUES]
+			var open := Vector3(deg_to_rad(raw.x), deg_to_rad(raw.y), deg_to_rad(raw.z))
+			if not open.is_equal_approx(_euler):
+				_euler = open
+				_job_euler = open
+				_apply_preview()
+		return
+	_cancel()
 
 
 func _axis_vec() -> Vector3:

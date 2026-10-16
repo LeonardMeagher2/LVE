@@ -1,0 +1,168 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://plugins/Transform/tools/TransformDialog.gd" id="1_dialog"]
+[ext_resource type="Texture2D" path="res://icons/uniform.svg" id="2_uniform"]
+
+[node name="TransformDialog" type="ConfirmationDialog"]
+script = ExtResource("1_dialog")
+title = "Scale"
+size = Vector2i(360, 84)
+
+[node name="MarginContainer" type="MarginContainer" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="ScaleRow" type="HBoxContainer" parent="MarginContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 4
+alignment = 1
+
+[node name="ScaleX" type="SpinBox" parent="MarginContainer/ScaleRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "Scale X factor"
+min_value = -10.0
+max_value = 10.0
+step = 0.05
+value = 1.0
+allow_greater = true
+allow_lesser = true
+prefix = "X"
+select_all_on_focus = true
+
+[node name="ScaleY" type="SpinBox" parent="MarginContainer/ScaleRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "Scale Y factor"
+min_value = -10.0
+max_value = 10.0
+step = 0.05
+value = 1.0
+allow_greater = true
+allow_lesser = true
+prefix = "Y"
+select_all_on_focus = true
+
+[node name="ScaleZ" type="SpinBox" parent="MarginContainer/ScaleRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "Scale Z factor"
+min_value = -10.0
+max_value = 10.0
+step = 0.05
+value = 1.0
+allow_greater = true
+allow_lesser = true
+prefix = "Z"
+select_all_on_focus = true
+
+[node name="Uniform" type="Button" parent="MarginContainer/ScaleRow"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Scale uniformly"
+toggle_mode = true
+button_pressed = true
+icon = ExtResource("2_uniform")
+icon_alignment = 1
+
+[node name="MoveRow" type="HBoxContainer" parent="MarginContainer"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 4
+alignment = 1
+
+[node name="MoveX" type="SpinBox" parent="MarginContainer/MoveRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "Move X cells"
+min_value = -128.0
+max_value = 128.0
+step = 1.0
+allow_greater = true
+allow_lesser = true
+prefix = "X"
+select_all_on_focus = true
+
+[node name="MoveY" type="SpinBox" parent="MarginContainer/MoveRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "Move Y cells"
+min_value = -128.0
+max_value = 128.0
+step = 1.0
+allow_greater = true
+allow_lesser = true
+prefix = "Y"
+select_all_on_focus = true
+
+[node name="MoveZ" type="SpinBox" parent="MarginContainer/MoveRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "Move Z cells"
+min_value = -128.0
+max_value = 128.0
+step = 1.0
+allow_greater = true
+allow_lesser = true
+prefix = "Z"
+select_all_on_focus = true
+
+[node name="RotateRow" type="HBoxContainer" parent="MarginContainer"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 4
+alignment = 1
+
+[node name="AngleX" type="SpinBox" parent="MarginContainer/RotateRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "Rotation about X in degrees"
+min_value = -360.0
+max_value = 360.0
+step = 5.0
+allow_greater = true
+allow_lesser = true
+prefix = "X"
+suffix = "°"
+select_all_on_focus = true
+
+[node name="AngleY" type="SpinBox" parent="MarginContainer/RotateRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "Rotation about Y in degrees"
+min_value = -360.0
+max_value = 360.0
+step = 5.0
+allow_greater = true
+allow_lesser = true
+prefix = "Y"
+suffix = "°"
+select_all_on_focus = true
+
+[node name="AngleZ" type="SpinBox" parent="MarginContainer/RotateRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "Rotation about Z in degrees"
+min_value = -360.0
+max_value = 360.0
+step = 5.0
+allow_greater = true
+allow_lesser = true
+prefix = "Z"
+suffix = "°"
+select_all_on_focus = true

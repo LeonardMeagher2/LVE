@@ -1,6 +1,6 @@
 extends "./TransformTool.gd"
 
-const DIALOG_SCENE := preload("./ScaleDialog.tscn")
+const TransformDialog := preload("./TransformDialog.gd")
 
 var _axis := 1
 var _p := 0
@@ -14,17 +14,8 @@ var _scale_p := 1.0
 var _scale_q := 1.0
 var _world_scale := Vector3.ONE
 var _use_world_scale := false
-var _dialog = null
-var _was_pending := false
-var _has_base := false
-var _base_cells: Array[Vector3i] = []
-var _base_colors := {}
-var _base_bounds := AABB()
 var _total_world_scale := Vector3.ONE
 var _gesture_base_total := Vector3.ONE
-var _dialog_open_values := Vector3.ONE
-var _dialog_open_had_pending := false
-var _dialog_dirty := false
 
 const MIN_REF := 0.5
 const MIN_SCALE := 0.05
@@ -183,7 +174,6 @@ class ScaleJob extends TransformJob:
 
 
 func _begin_grab(origin: Vector3, dir: Vector3) -> void:
-	_was_pending = _pending
 	if _was_pending:
 		_gesture_base_total = _total_world_scale
 	_pivot = _source_bbox().get_center()
@@ -207,12 +197,8 @@ func _begin_grab(origin: Vector3, dir: Vector3) -> void:
 	_scale_q = 1.0
 	_use_world_scale = false
 	_world_scale = Vector3.ONE
-	_hide_dialog()
+	_hide_tool_dialog()
 	if not _was_pending:
-		_base_cells.assign(_cells)
-		_base_colors = _colors.duplicate()
-		_base_bounds = _source_bounds
-		_has_base = true
 		_total_world_scale = Vector3.ONE
 		_gesture_base_total = Vector3.ONE
 
@@ -287,70 +273,49 @@ func _on_click_without_drag() -> bool:
 	if _grab_waiting or _preview_running:
 		return false
 	if _was_pending and _has_base:
-		_restore_pending_dialog()
+		_restore_grab_baseline()
+		_world_scale = Vector3(_safe_scale(_total_world_scale.x), _safe_scale(_total_world_scale.y), _safe_scale(_total_world_scale.z))
+		_use_world_scale = false
+		_pending = true
+		_open_scale_dialog(_world_scale)
 		return true
 	if _cells.is_empty():
 		return false
 	_pending = true
 	_use_world_scale = false
 	_world_scale = Vector3.ONE
-	_open_dialog_with_values(Vector3.ONE)
+	_open_scale_dialog(Vector3.ONE)
 	return true
 
 
-func _restore_pending_dialog() -> void:
-	var pending_dest_cells: Array[Vector3i] = []
-	pending_dest_cells.assign(_cells)
-	var pending_dest_colors := _colors.duplicate()
-	_cells.assign(_base_cells)
-	_colors = _base_colors.duplicate()
-	_source_bounds = _base_bounds
-	_dest_cells.assign(pending_dest_cells)
-	_dest_colors = pending_dest_colors
-	_pivot = _source_bounds.get_center()
-	_world_scale = Vector3(_safe_scale(_total_world_scale.x), _safe_scale(_total_world_scale.y), _safe_scale(_total_world_scale.z))
-	_use_world_scale = false
-	_pending = true
-	_open_dialog_with_values(_world_scale)
+func _did_restore_baseline() -> void:
+	_pivot = _source_bbox().get_center()
 
 
 func _clear_grab() -> void:
-	_hide_dialog()
 	_use_world_scale = false
 	_world_scale = Vector3.ONE
-	_was_pending = false
-	_has_base = false
-	_base_cells.clear()
-	_base_colors.clear()
 	_total_world_scale = Vector3.ONE
 	_gesture_base_total = Vector3.ONE
-	_dialog_open_values = Vector3.ONE
-	_dialog_open_had_pending = false
-	_dialog_dirty = false
 	super._clear_grab()
 
 
-func _open_dialog_with_values(value: Vector3) -> void:
-	if _dialog == null or not is_instance_valid(_dialog):
-		_dialog = DIALOG_SCENE.instantiate()
-		add_child(_dialog)
-		_dialog.connect("scale_changed", _on_dialog_scale)
-		_dialog.connect("confirmed", _on_dialog_confirmed)
-		_dialog.connect("canceled", _on_dialog_canceled)
-	_dialog.open_with_values(value)
+func _connect_tool_dialog() -> void:
+	_dialog.connect("values_changed", _on_dialog_values)
+	_dialog.connect("confirmed", _on_dialog_confirmed)
+	_dialog.connect("canceled", _on_dialog_canceled)
+
+
+func _open_scale_dialog(value: Vector3) -> void:
+	_ensure_tool_dialog()
+	_dialog.open_for_scale(value)
 	_dialog.popup_centered()
-	_dialog_open_values = value
-	_dialog_open_had_pending = _was_pending
-	_dialog_dirty = false
+	_record_dialog_open({TransformDialog.KEY_VALUES: value, TransformDialog.KEY_AXIS: -1, TransformDialog.KEY_UNIFORM: _settings.uniform})
 
 
-func _hide_dialog() -> void:
-	if _dialog != null and is_instance_valid(_dialog):
-		_dialog.hide()
-
-
-func _on_dialog_scale(value: Vector3) -> void:
-	var safe := Vector3(_safe_scale(value.x), _safe_scale(value.y), _safe_scale(value.z))
+func _on_dialog_values(state: Dictionary) -> void:
+	var raw: Vector3 = state[TransformDialog.KEY_VALUES]
+	var safe := Vector3(_safe_scale(raw.x), _safe_scale(raw.y), _safe_scale(raw.z))
 	if _use_world_scale and safe.is_equal_approx(_world_scale):
 		return
 	_world_scale = safe
@@ -369,7 +334,8 @@ func _on_dialog_canceled() -> void:
 	if _dialog_open_had_pending:
 		if _dialog_dirty:
 			_dialog_dirty = false
-			var open := Vector3(_safe_scale(_dialog_open_values.x), _safe_scale(_dialog_open_values.y), _safe_scale(_dialog_open_values.z))
+			var raw: Vector3 = _dialog_open_values[TransformDialog.KEY_VALUES]
+			var open := Vector3(_safe_scale(raw.x), _safe_scale(raw.y), _safe_scale(raw.z))
 			if not (_use_world_scale and open.is_equal_approx(_world_scale)):
 				_world_scale = open
 				_total_world_scale = open

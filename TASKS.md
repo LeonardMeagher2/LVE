@@ -66,6 +66,20 @@ max_active: 1
   - [x] Add a "commit" button to the scale tool, so that the user can scale voxels and then commit or cancel the scale
   - [x] Switching to another tool while scaling voxels should commit the scale
   - [x] Add a "uniform scale" option to the scale tool, so that the user can scale voxels uniformly in all directions
+- [x] Numeric transform dialog on a single click
+  - [x] Open one shared dialog for Move, Rotate, and Scale
+  - [x] Show X, Y, and Z number fields for each tool
+  - [x] Add an X, Y, and Z angle row for Rotate
+  - [x] Preview the dialog values in the viewport before commit
+  - [x] Keep the transform pending on OK and end one undo step with Commit
+  - [x] Restore the pre-click values on dialog Cancel
+  - [x] Show the current total when the dialog reopens while pending
+  - [x] Keep a single click separate from a drag with a small move threshold
+  - [x] Verify the move, rotate, and scale dialog tests and the transform suite
+  - 2026-10-15: A 90-degree rotation maps integer cells to integer cells. Rotate
+    the cell indices to keep every voxel. Nearest-cell resampling loses a voxel
+    when the pivot sits on a half-cell.
+  - The move, rotate, and scale dialog tests pass. The transform suite passes.
 
 - [x] Fix the missing lasso endpoint in `selection_modes`
   - [x] Include the mouse-release position when the pointer moved

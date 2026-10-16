@@ -30,7 +30,7 @@ func _run() -> void:
 	step("Then the scale dialog opens with X Y Z and a uniform lock in one row", func():
 		expect(is_instance_valid(dialog), "the scale dialog exists")
 		expect(dialog.visible, "the scale dialog is visible")
-		var inputs := dialog.get_node("MarginContainer/Inputs")
+		var inputs := dialog.get_node("MarginContainer/ScaleRow")
 		expect(inputs is HBoxContainer, "the dialog inputs sit in one row")
 		expect(inputs.get_node("ScaleX") is SpinBox, "the dialog has an X factor")
 		expect(inputs.get_node("ScaleY") is SpinBox, "the dialog has a Y factor")
@@ -40,12 +40,12 @@ func _run() -> void:
 	)
 
 	step("Given uniform scale off", func():
-		dialog.get_node("MarginContainer/Inputs/Uniform").button_pressed = false
+		dialog.get_node("MarginContainer/ScaleRow/Uniform").button_pressed = false
 	)
 	await get_tree().process_frame
 
 	step("When the user types 2 for X only", func():
-		dialog.get_node("MarginContainer/Inputs/ScaleX").value = 2.0
+		dialog.get_node("MarginContainer/ScaleRow/ScaleX").value = 2.0
 	)
 	await get_tree().process_frame
 	await get_tree().process_frame
@@ -79,7 +79,7 @@ func _run() -> void:
 	await get_tree().process_frame
 	await get_tree().process_frame
 	step("When the user types 2 for X and accepts the dialog while pending", func():
-		dialog.get_node("MarginContainer/Inputs/ScaleX").value = 2.0
+		dialog.get_node("MarginContainer/ScaleRow/ScaleX").value = 2.0
 	)
 	await get_tree().process_frame
 	await get_tree().process_frame
@@ -98,13 +98,13 @@ func _run() -> void:
 
 	step("Then the dialog reopens showing the current 2x value", func():
 		expect(dialog.visible, "the dialog reopens on a pending click")
-		expect(dialog.get_node("MarginContainer/Inputs/ScaleX").value == 2.0, "the dialog shows the current X factor")
-		expect(dialog.get_node("MarginContainer/Inputs/ScaleY").value == 1.0, "the dialog shows the current Y factor")
+		expect(dialog.get_node("MarginContainer/ScaleRow/ScaleX").value == 2.0, "the dialog shows the current X factor")
+		expect(dialog.get_node("MarginContainer/ScaleRow/ScaleY").value == 1.0, "the dialog shows the current Y factor")
 		expect(_frame().count() == 32, "the pending preview is kept")
 	)
 
 	step("When the user changes X to 3 and commits", func():
-		dialog.get_node("MarginContainer/Inputs/ScaleX").value = 3.0
+		dialog.get_node("MarginContainer/ScaleRow/ScaleX").value = 3.0
 	)
 	await get_tree().process_frame
 	await get_tree().process_frame
@@ -131,7 +131,7 @@ func _run() -> void:
 	await get_tree().process_frame
 	await get_tree().process_frame
 	step("When the user types 2 for X then cancels the dialog", func():
-		dialog.get_node("MarginContainer/Inputs/ScaleX").value = 2.0
+		dialog.get_node("MarginContainer/ScaleRow/ScaleX").value = 2.0
 	)
 	await get_tree().process_frame
 	await get_tree().process_frame
@@ -154,7 +154,7 @@ func _run() -> void:
 	await get_tree().process_frame
 	await get_tree().process_frame
 	step("When the user types 2 for X and accepts to stay pending", func():
-		dialog.get_node("MarginContainer/Inputs/ScaleX").value = 2.0
+		dialog.get_node("MarginContainer/ScaleRow/ScaleX").value = 2.0
 	)
 	await get_tree().process_frame
 	await get_tree().process_frame
@@ -171,7 +171,7 @@ func _run() -> void:
 	await get_tree().process_frame
 	await get_tree().process_frame
 	step("And the user cancels the 5x edit", func():
-		dialog.get_node("MarginContainer/Inputs/ScaleX").value = 5.0
+		dialog.get_node("MarginContainer/ScaleRow/ScaleX").value = 5.0
 	)
 	await get_tree().process_frame
 	await get_tree().process_frame
@@ -205,7 +205,7 @@ func _run() -> void:
 	await get_tree().process_frame
 	await get_tree().process_frame
 	step("When the user types 2 for X and accepts to stay pending", func():
-		dialog.get_node("MarginContainer/Inputs/ScaleX").value = 2.0
+		dialog.get_node("MarginContainer/ScaleRow/ScaleX").value = 2.0
 	)
 	await get_tree().process_frame
 	await get_tree().process_frame
@@ -235,8 +235,8 @@ func _run() -> void:
 
 	step("Then the dialog shows the compounded total of 3", func():
 		expect(dialog.visible, "the dialog reopens after the drag")
-		expect(dialog.get_node("MarginContainer/Inputs/ScaleX").value == 3.0, "the dialog shows the total X factor")
-		expect(dialog.get_node("MarginContainer/Inputs/ScaleY").value == 1.0, "the dialog shows the total Y factor")
+		expect(dialog.get_node("MarginContainer/ScaleRow/ScaleX").value == 3.0, "the dialog shows the total X factor")
+		expect(dialog.get_node("MarginContainer/ScaleRow/ScaleY").value == 1.0, "the dialog shows the total Y factor")
 	)
 	step("When the user commits the total", func():
 		dialog.confirmed.emit()
@@ -258,7 +258,7 @@ func _run() -> void:
 	await get_tree().process_frame
 
 	step("Given uniform scale back on and a fresh 2x drag left pending", func():
-		dialog.get_node("MarginContainer/Inputs/Uniform").button_pressed = true
+		dialog.get_node("MarginContainer/ScaleRow/Uniform").button_pressed = true
 		_paint_block(4)
 	)
 	await get_tree().process_frame
@@ -280,7 +280,7 @@ func _run() -> void:
 
 	step("Then the dialog opens and the wobble never becomes a degenerate drag", func():
 		expect(dialog.visible, "the dialog opens despite the 1px wobble")
-		expect(dialog.get_node("MarginContainer/Inputs/ScaleX").value == 2.0, "the dialog shows the drag X factor")
+		expect(dialog.get_node("MarginContainer/ScaleRow/ScaleX").value == 2.0, "the dialog shows the drag X factor")
 		expect(_frame().count() == 128, "the preview keeps 128 voxels (has %d)" % _frame().count())
 	)
 	State.undo_redo.clear_history()
