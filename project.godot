@@ -250,4 +250,5 @@ pointing/android/enable_pan_and_scale_gestures=true
 
 renderer/rendering_method="mobile"
 textures/vram_compression/import_etc2_astc=true
+anti_aliasing/quality/use_debanding=true
 environment/defaults/default_clear_color=Color(0.118, 0.122, 0.133, 1)
