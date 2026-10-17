@@ -1,8 +1,13 @@
 extends "res://tests/test.gd"
 
+# Selection tools include enabled symmetry reflections without extra controls.
+
 var viewport: SubViewport
 var selection_plugin: Node
 var frame: VoxelFrame
+var near_cell := Vector3i(0, 0, 0)
+var far_cell := Vector3i(3, 0, 0)
+var middle_cell := Vector3i(1, 0, 0)
 
 
 func _ready() -> void:
@@ -23,57 +28,65 @@ func _run() -> void:
 		selection_plugin._settings.mode = selection_plugin._settings.SelectMode.REPLACE
 		camera_rig().is_orthogonal = true
 		camera_rig().set_view("top")
-		camera_rig().center_on(AABB(Vector3(-10, -1, -10), Vector3(20, 2, 20)))
+		camera_rig().center_on(AABB(Vector3(-6, -1, -6), Vector3(12, 2, 12)))
+		frame = State.get_current_voxel_frame()
+		var material := VoxelFrame.material(Color.RED)
+		frame.set_cell(near_cell, material)
+		frame.set_cell(far_cell, material)
 	)
-	step("When the user drags a box on one side of the symmetry plane", func():
-		_button(Vector3(1, -0.5, 1), true)
-		var motion := InputEventMouseMotion.new()
-		motion.button_mask = MOUSE_BUTTON_MASK_LEFT
-		motion.position = camera_rig().unproject_position(Vector3(2, -0.5, 2))
-		viewport.push_input(motion)
+	step("Then the empty cell option is on by default", func():
+		expect(_empty_button().button_pressed, "the empty cell option shows as pressed")
 	)
-	step("Then the preview includes the original and reflected boxes", func():
-		var preview: Node = selection_plugin._box.get_node("SelectionPreview")
-		expect(preview._requested_cells.size() == 8, "the selection preview contains both four-cell boxes")
-		_button(Vector3(2, -0.5, 2), false)
+	step("When the user drags a box across both voxels", func():
+		_drag_box(near_cell, far_cell)
 	)
-	step("Then both boxes are selected with one undo action", func():
-		expect(State.selection.count() == 8, "Box selects the original and reflected regions")
-		expect(State.selection.contains(Vector3i(-3, 0, 2)), "the reflected region uses the half-voxel origin")
-		expect(State.get_current_voxel_frame().count() == 0, "selection includes empty cells without creating voxels")
+	step("Then both voxels, the empty cell, and both reflections are selected", func():
+		expect(State.selection.contains(middle_cell), "the empty cell between the voxels is selected")
+		expect(State.selection.contains(_mirror(middle_cell)), "the reflected empty cell is selected")
+		expect(State.selection.count() == 8, "the default selects both sides of the mirror plane with the empty cells")
+		expect(frame.count() == 2, "selection adds no voxels")
+	)
+	step("When the user undoes and redoes the symmetric selection", func():
 		State.undo_redo.undo()
-		expect(State.selection.is_empty(), "one undo clears both selected boxes")
+	)
+	step("Then one undo clears both sides", func():
+		expect(State.selection.is_empty(), "one undo clears the symmetric selection")
 		State.undo_redo.redo()
-		expect(State.selection.count() == 8, "redo restores both selected boxes")
-	)
-	step("When the user adds and subtracts individual cells", func():
-		selection_plugin._settings.mode = selection_plugin._settings.SelectMode.ADD
-		_click(Vector3(4, -0.5, 1))
-		expect(State.selection.count() == 10 and State.selection.contains(Vector3i(-5, 0, 1)), "Add includes the reflected cell")
-		selection_plugin._settings.mode = selection_plugin._settings.SelectMode.SUBTRACT
-		_click(Vector3(1, -0.5, 1))
-	)
-	step("Then Subtract removes both sides of the selected cell", func():
-		expect(State.selection.count() == 8, "Subtract removes the original and reflected cells")
-		expect(not State.selection.contains(Vector3i(-2, 0, 1)), "the subtracted reflection is excluded from the selection")
+		expect(State.selection.count() == 8, "redo restores the symmetric selection")
 	)
 	step("When the user paints inside the symmetric selection", func():
 		State.begin_stroke()
-		State.paint(Vector3i(2, 0, 2), VoxelFrame.material(Color.RED))
+		State.paint(middle_cell, VoxelFrame.material(Color.BLUE))
 		State.end_stroke()
 	)
 	step("Then drawing respects both selected regions", func():
 		frame = State.get_current_voxel_frame()
-		expect(frame.count() == 2 and frame.get_color(Vector3i(-3, 0, 2)) == Color.RED, "the selection permits the reflected brush edit")
+		expect(frame.count() == 4 and frame.get_color(_mirror(middle_cell)) == Color.BLUE, "the selection permits the reflected brush edit")
 	)
-	step("When the user selects a cell with Lasso", func():
+	step("Given the empty cell option off", func():
+		_empty_button().button_pressed = false
+		expect(not _empty_button().button_pressed, "the empty cell option shows as released")
+	)
+	step("When the user drags the same box again", func():
+		_drag_box(near_cell, far_cell)
+	)
+	step("Then the occupied voxels and their reflections are selected", func():
+		_expect_cells([
+			near_cell, middle_cell, far_cell,
+			_mirror(near_cell), _mirror(middle_cell), _mirror(far_cell),
+		], "the released option selects the three voxels and their reflections")
+	)
+	step("When the user selects a voxel with Lasso", func():
 		State.document = VoxelDocument.new()
+		frame = State.get_current_voxel_frame()
+		frame.set_cell(near_cell, VoxelFrame.material(Color.RED))
 		select_toolbar_item("selection", "Lasso")
+		_empty_button().button_pressed = false
 		selection_plugin._settings.mode = selection_plugin._settings.SelectMode.REPLACE
-		_click(Vector3(3, -0.5, 3))
+		_lasso_around(near_cell)
 	)
-	step("Then Lasso includes the reflected empty cell", func():
-		expect(State.selection.count() == 2 and State.selection.contains(Vector3i(-4, 0, 3)), "Lasso selects both sides of the mirror plane")
+	step("Then Lasso includes the reflected voxel", func():
+		_expect_cells([near_cell, _mirror(near_cell)], "Lasso selects both sides of the mirror plane")
 	)
 	step("Given matching voxels for Wand selection", func():
 		State.document = VoxelDocument.new()
@@ -115,17 +128,87 @@ func _run() -> void:
 	State.symmetry_origin = State.DEFAULT_SYMMETRY_ORIGIN
 
 
-func _button(world: Vector3, pressed: bool) -> void:
+func _mirror(cell: Vector3i) -> Vector3i:
+	return Vector3i(-1 - cell.x, cell.y, cell.z)
+
+
+func _expect_cells(cells: Array, message: String) -> void:
+	expect(State.selection.count() == cells.size(), message)
+	for cell in cells:
+		expect(State.selection.contains(cell), message)
+
+
+func _screen_of(cell: Vector3i) -> Vector2:
+	return camera_rig().unproject_position(Vector3(cell))
+
+
+func _screen_bounds(first: Vector3i, second: Vector3i) -> Array:
+	var a := _screen_of(first)
+	var b := _screen_of(second)
+	var low := Vector2(minf(a.x, b.x), minf(a.y, b.y)) - Vector2(8, 8)
+	var high := Vector2(maxf(a.x, b.x), maxf(a.y, b.y)) + Vector2(8, 8)
+	return [low, high]
+
+
+func _drag_box(first: Vector3i, second: Vector3i) -> void:
+	var bounds := _screen_bounds(first, second)
+	_press(bounds[0])
+	_move_to(bounds[1])
+	_release(bounds[1])
+
+
+func _lasso_around(cell: Vector3i) -> void:
+	var point := _screen_of(cell)
+	var low := point - Vector2(9, 9)
+	var high := point + Vector2(9, 9)
+	_press(low)
+	for corner in [Vector2(high.x, low.y), high, Vector2(low.x, high.y)]:
+		_move_to(corner)
+	_release(low)
+
+
+func _press(pos: Vector2) -> void:
 	var event := InputEventMouseButton.new()
 	event.button_index = MOUSE_BUTTON_LEFT
-	event.pressed = pressed
-	event.position = camera_rig().unproject_position(world)
+	event.pressed = true
+	event.position = pos
 	viewport.push_input(event)
 
 
+func _move_to(pos: Vector2) -> void:
+	var event := InputEventMouseMotion.new()
+	event.position = pos
+	event.button_mask = MOUSE_BUTTON_MASK_LEFT
+	viewport.push_input(event)
+
+
+func _release(pos: Vector2) -> void:
+	var event := InputEventMouseButton.new()
+	event.button_index = MOUSE_BUTTON_LEFT
+	event.pressed = false
+	event.position = pos
+	viewport.push_input(event)
+
+
+func _empty_button() -> Button:
+	var option_bar := main.get_node("%OptionBar")
+	for container in option_bar.get_children():
+		if container.name == "Options":
+			return container.get_node("empty") as Button
+	return null
+
+
 func _click(world: Vector3) -> void:
-	_button(world, true)
-	_button(world, false)
+	var event := InputEventMouseButton.new()
+	event.button_index = MOUSE_BUTTON_LEFT
+	event.pressed = true
+	event.position = camera_rig().unproject_position(world)
+	viewport.push_input(event)
+	event = InputEventMouseButton.new()
+	event.button_index = MOUSE_BUTTON_LEFT
+	event.pressed = false
+	event.position = camera_rig().unproject_position(world)
+	viewport.push_input(event)
 
 
 func _settle() -> void:

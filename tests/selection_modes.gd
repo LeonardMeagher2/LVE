@@ -115,12 +115,12 @@ func _run() -> void:
 		press_option("Add")
 	)
 
-	step("When the user single clicks an empty cell", func():
-		_click_cell(seed + Vector3i(0, 0, 2))
+	step("When the user single clicks the second voxel", func():
+		_click_cell(pair_b[0])
 	)
 
-	step("Then the empty cell joins the selection", func():
-		_expect_exact([pair_a[0], seed + Vector3i(0, 0, 2)], "the empty cell joined the selection")
+	step("Then the second voxel joins the selection", func():
+		_expect_exact([pair_a[0], pair_b[0]], "the second voxel joined the selection")
 	)
 
 	step("Given the lasso tool with an empty selection", func():
@@ -200,11 +200,7 @@ func _click_clear() -> void:
 
 
 func _click_cell(cell: Vector3i) -> void:
-	var pos := _screen_pos_of(cell)
-	if pos == Vector2.INF:
-		expect(false, "the click cell is visible on screen")
-		return
-	_click(pos)
+	_click(camera_rig().unproject_position(Vector3(cell)))
 
 
 func _click(pos: Vector2) -> void:
@@ -232,47 +228,30 @@ func _expect_exact(cells: Array, msg: String) -> void:
 		expect(State.selection.contains(c), msg)
 
 
+# Draw a lasso around both cells. A straight path would collapse the polygon.
 func _drag_cells(a: Vector3i, b: Vector3i, with_shift: bool) -> void:
-	var pa := _screen_pos_of(a)
-	var pb := _screen_pos_of(b)
-	if pa == Vector2.INF or pb == Vector2.INF:
-		expect(false, "both drag cells are visible on screen")
-		return
+	var pa := camera_rig().unproject_position(Vector3(a))
+	var pb := camera_rig().unproject_position(Vector3(b))
+	var low := Vector2(minf(pa.x, pb.x), minf(pa.y, pb.y)) - Vector2(8, 8)
+	var high := Vector2(maxf(pa.x, pb.x), maxf(pa.y, pb.y)) + Vector2(8, 8)
 	var press := InputEventMouseButton.new()
 	press.button_index = MOUSE_BUTTON_LEFT
 	press.pressed = true
-	press.position = pa
+	press.position = low
 	press.shift_pressed = with_shift
 	viewport.push_input(press)
-	for i in range(1, 8):
-		var mm := InputEventMouseMotion.new()
-		mm.position = pa.lerp(pb, float(i) / 8.0)
-		mm.shift_pressed = with_shift
-		mm.button_mask = MOUSE_BUTTON_MASK_LEFT
-		viewport.push_input(mm)
-	var rel := InputEventMouseButton.new()
-	rel.button_index = MOUSE_BUTTON_LEFT
-	rel.pressed = false
-	rel.position = pb
-	rel.shift_pressed = with_shift
-	viewport.push_input(rel)
-
-
-func _screen_pos_of(cell: Vector3i) -> Vector2:
-	for step in [10, 4]:
-		var pos := _scan_for(cell, step)
-		if pos != Vector2.INF:
-			return pos
-	return Vector2.INF
-
-
-func _scan_for(cell: Vector3i, grid: int) -> Vector2:
-	for dy in range(0, int(viewport.size.y), grid):
-		for dx in range(0, int(viewport.size.x), grid):
-			var pos := Vector2(dx, dy)
-			if aim(pos).target == cell:
-				return pos
-	return Vector2.INF
+	for corner in [Vector2(high.x, low.y), high, Vector2(low.x, high.y)]:
+		var motion := InputEventMouseMotion.new()
+		motion.position = corner
+		motion.shift_pressed = with_shift
+		motion.button_mask = MOUSE_BUTTON_MASK_LEFT
+		viewport.push_input(motion)
+	var release := InputEventMouseButton.new()
+	release.button_index = MOUSE_BUTTON_LEFT
+	release.pressed = false
+	release.position = low
+	release.shift_pressed = with_shift
+	viewport.push_input(release)
 
 
 func _options_box() -> HBoxContainer:

@@ -4,6 +4,13 @@ This file records confirmed facts about Leonard's Voxel Editor. Record each lear
 
 ## Godot API changes
 
+- 2026-10-17: `Camera3D.get_camera_projection()` holds the projection alone. Multiply it by the camera's inverted transform to project a world point. Divide the clip vector by w. Map x to `(x * 0.5 + 0.5) * width` and y to `(-y * 0.5 + 0.5) * height`.
+- 2026-10-17: A world point sits behind the camera when its camera-space z is above zero.
+- 2026-10-17: The editor picks the plain texture importer for a new SVG file. Write the `.import` with `importer="svg"` and `type="DPITexture"` before the first import. The editor then reimports the file with that importer. The hash in `dest_files` is the MD5 of the `res://` source path.
+- 2026-10-17: A `Control` below a `Node3D` draws over the 3D content of its viewport. A `CanvasLayer` with layer -1 draws behind it.
+- 2026-10-17: `String.capitalize()` title-cases every word. "Include empty cells" becomes "Include Empty Cells".
+- 2026-10-17: The test harness `press_option()` compares the raw tooltip text. A sentence case tooltip needs the same text in the call.
+
 - 2026-10-17: `Geometry2D.triangulate_polygon` emits counterclockwise triangles. Reverse positive-axis face indices for Godot's clockwise 3D winding.
 
 - 2026-10-16: glTF emission multiplies its factor and texture. Export white emission with multiply mode, not black with add mode.
@@ -122,6 +129,7 @@ This file records confirmed facts about Leonard's Voxel Editor. Record each lear
 
 ## Workflow
 
+- 2026-10-17: While another Godot instance runs this project, a suite pass fails `shared_editing` and `smooth_normals`. Windows refuses the clipboard and the model settings popup stays hidden. Both tests pass alone.
 - 2026-10-15: `--headless --import` imports a new SVG icon as a `CompressedTexture2D`. Write `importer="svg"` and `type="DPITexture"` into the `.import` file, then import again, to get a `DPITexture` like the other icons.
 - 2026-10-15: `VoxelTool.end_stroke()` takes no action name and reports the undo action as "Stroke". Override `end_stroke()` in the tool to set the action name.
 - 2026-10-16: A child process blocks when its stdout pipe buffer is full. `OS.create_process` gives the child no inherited handles, and `--log-file <path>` writes the engine output and error log to that file. A test runner can read that file in place of a pipe.

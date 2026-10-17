@@ -35,3 +35,11 @@ enum SelectMode {
 			return
 		connected = value
 		emit_changed()
+
+# Keep empty grid cells inside the frame bounds in the selection.
+@export var include_empty: bool = true :
+	set(value):
+		if value == include_empty:
+			return
+		include_empty = value
+		emit_changed()

@@ -6,6 +6,7 @@
 [ext_resource type="Texture2D" uid="uid://bybkl6ufhl76i" path="res://icons/mode_subtract.svg" id="4_sub"]
 [ext_resource type="Texture2D" uid="uid://ck36gifdqlmx7" path="res://icons/clear.svg" id="5_clear"]
 [ext_resource type="Texture2D" uid="uid://dkpjood1t6s8x" path="res://icons/connected.svg" id="6_connected"]
+[ext_resource type="Texture2D" path="res://icons/empty_cells.svg" id="7_empty"]
 
 [sub_resource type="ButtonGroup" id="ButtonGroup_j1b3m"]
 
@@ -53,8 +54,20 @@ toggle_mode = true
 icon = ExtResource("6_connected")
 icon_alignment = 1
 
+[node name="EmptySep" type="VSeparator" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="empty" type="Button" parent="."]
+layout_mode = 2
+tooltip_text = "Include empty cells"
+toggle_mode = true
+icon = ExtResource("7_empty")
+icon_alignment = 1
+
 [connection signal="toggled" from="replace" to="." method="_on_replace_toggled"]
 [connection signal="toggled" from="add" to="." method="_on_add_toggled"]
 [connection signal="toggled" from="subtract" to="." method="_on_subtract_toggled"]
 [connection signal="pressed" from="clear" to="." method="_on_clear_pressed"]
 [connection signal="toggled" from="Connected" to="." method="_on_connected_toggled"]
+[connection signal="toggled" from="empty" to="." method="_on_empty_toggled"]

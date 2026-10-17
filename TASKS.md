@@ -513,6 +513,9 @@ max_active: 1
   - [x] Record one undo action for each control gesture
   - [x] Show two decimal places in each swatch tooltip
   - [x] Verify the picker, swatch, drag, typed value, and tooltip tests
+  - 2026-10-17: Twenty-two targeted tests pass headless. Two windowed tests pass, and each writes its screenshots.
+  - 2026-10-17: A suite pass reports two environmental failures only. Windows refuses the clipboard in `shared_editing`. The model settings popup stays hidden in `smooth_normals`. Both tests pass alone.
+  - 2026-10-17: A second suite pass ended early with exit -1. Repeat it when no other Godot instance runs.
   - [ ] Run the full behavior suite and the final full suite
 - [x] Image palettes and startup defaults
   - [x] Add image import and PNG export to the palette panel
@@ -571,6 +574,22 @@ max_active: 1
     - The full run reported 73 passes and the known `selection_modes` failure.
     - The surface-cache test used a scene changed during the run. Its focused rerun passes.
     - The windowed paste, Cut, and Delete tests pass.
+- [x] Select through the volume from the view
+  - [x] Replace the plane selection with a screen projection in the Box and Lasso tools
+  - [x] Test each projected cell center against the screen rectangle or lasso
+  - [x] Include the voxels hidden behind the front one
+  - [x] Add an Include empty cells option. The frame bounds limit the empty cells.
+  - [x] Include the empty cells by default
+  - [x] Draw the option icon as a dashed cell with a plus at the open corner
+  - [x] Keep Subtract able to remove selected empty cells without the option
+  - [x] Keep Replace, Add, symmetry, and one undo action per gesture
+  - [x] Draw the drag shape over the viewport
+  - [x] Project large frames on a worker with progress and cancellation
+  - [x] Verify perspective, orthogonal, and angled views, clicks, empty cells, and the band
+  - The `screen_select`, `selection`, `selection_click`, `selection_modes`, and `selection_mirror` tests pass.
+  - 2026-10-17: The select tools work on the screen only. The volume behind the shape joins the selection.
+  - 2026-10-17: An empty frame bounds no empty cells, so its selection stays empty.
+  - 2026-10-17: The empty cell pass has no cap. The frame bounds limit it. Escape cancels a long projection.
 - [ ] First mode: select a flat section on the press plane
 - [ ] After the section is set, expand the volume along the 3rd axis by dragging the mouse. The 3rd axis is along the normal of the press plane. The drag distance sets the depth of the volume.
 - [ ] Visual feedback for both phases
