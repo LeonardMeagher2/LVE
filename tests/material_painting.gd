@@ -110,18 +110,19 @@ func _run() -> void:
 		_click(Vector3(0, 0.5, 0))
 	)
 	await _settle()
-	step("Then Fill replaces full materials and still matches regions by color", func():
+	step("Then Fill replaces full materials and stops at a different material", func():
 		expect(frame.count() == 4, "Fill preserves the voxel count")
 		expect(_same_material(Vector3i.ZERO, metal), "Fill replaces the seed metallic when its color matches")
-		expect(_same_material(Vector3i.RIGHT, metal), "Fill includes a connected voxel with different material values")
+		expect(_same_material(Vector3i.RIGHT, unsaved), "Fill excludes a connected voxel with different material values")
 		expect(_same_material(Vector3i(4, 0, 0), matte), "connected Fill preserves the separate region")
 		expect(_same_material(Vector3i(2, 0, 0), blue), "Fill preserves a different color")
 		State.undo_redo.undo()
 		expect(_same_material(Vector3i.ZERO, matte), "undo restores the seed material")
-		expect(_same_material(Vector3i.RIGHT, unsaved), "undo restores the neighbor material")
+		expect(_same_material(Vector3i.RIGHT, unsaved), "undo preserves the neighbor material")
 		expect(not State.undo_redo.has_undo(), "the connected fill creates one undo action")
 		State.undo_redo.redo()
-		expect(_same_material(Vector3i.RIGHT, metal), "redo restores the connected fill material")
+		expect(_same_material(Vector3i.ZERO, metal), "redo restores the filled seed material")
+		expect(_same_material(Vector3i.RIGHT, unsaved), "redo preserves the excluded neighbor material")
 	)
 	step("When the user fills the separate region with connected disabled", func():
 		plugin("FillPlugin")._tool._settings.connected = false

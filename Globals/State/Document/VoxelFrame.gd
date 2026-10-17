@@ -46,8 +46,8 @@ class EditContext extends RefCounted:
 	var origin_twice := Vector3i.ZERO
 	var selection := {}
 
-	func expand(changes: Dictionary, frame: VoxelFrame, existing_only: bool, matching_color: Variant, job: EditJob = null) -> Dictionary:
-		if axes == 0 and selection.is_empty() and not existing_only and matching_color == null:
+	func expand(changes: Dictionary, frame: VoxelFrame, existing_only: bool, matching_material: Variant, job: EditJob = null) -> Dictionary:
+		if axes == 0 and selection.is_empty() and not existing_only and matching_material == null:
 			return changes
 		var expanded := {}
 		var masks: Array[int] = []
@@ -58,7 +58,7 @@ class EditContext extends RefCounted:
 		for cell: Vector3i in changes:
 			for mask in masks:
 				var destination := reflect(cell, mask)
-				if _allows(destination, frame, existing_only, matching_color):
+				if _allows(destination, frame, existing_only, matching_material):
 					expanded[destination] = changes[cell]
 				completed += 1
 				if job and completed % 4096 == 0 and not job.checkpoint(completed):
@@ -67,7 +67,7 @@ class EditContext extends RefCounted:
 			return expanded
 		# Preserve original colors where the original and reflected patterns overlap.
 		for cell: Vector3i in changes:
-			if _allows(cell, frame, existing_only, matching_color):
+			if _allows(cell, frame, existing_only, matching_material):
 				expanded[cell] = changes[cell]
 			completed += 1
 			if job and completed % 4096 == 0 and not job.checkpoint(completed):
@@ -81,8 +81,9 @@ class EditContext extends RefCounted:
 				destination[axis] = origin_twice[axis] - cell[axis]
 		return destination
 
-	func _allows(cell: Vector3i, frame: VoxelFrame, existing_only: bool, matching_color: Variant) -> bool:
-		return (selection.is_empty() or selection.has(cell)) and (not existing_only or frame.has(cell)) and (matching_color == null or frame.get_color(cell) == matching_color)
+	# The reflected destination must hold the same full material as the source cell.
+	func _allows(cell: Vector3i, frame: VoxelFrame, existing_only: bool, matching_material: Variant) -> bool:
+		return (selection.is_empty() or selection.has(cell)) and (not existing_only or frame.has(cell)) and (matching_material == null or frame.matches(cell, matching_material))
 
 class EditJob extends RefCounted:
 	var worker_task_id := -1
@@ -119,8 +120,8 @@ class EditJob extends RefCounted:
 		_cancel_requested = true
 		_progress_lock.unlock()
 
-	func apply_cells(frame: VoxelFrame, changes: Dictionary, existing_only := false, matching_color: Variant = null) -> Array[Vector3i]:
-		applied_cells = edit_context.expand(changes, frame, existing_only, matching_color, self) if edit_context else changes
+	func apply_cells(frame: VoxelFrame, changes: Dictionary, existing_only := false, matching_material: Variant = null) -> Array[Vector3i]:
+		applied_cells = edit_context.expand(changes, frame, existing_only, matching_material, self) if edit_context else changes
 		if not checkpoint(0):
 			return []
 		return frame.set_cells(applied_cells, self)
@@ -232,6 +233,12 @@ class Chunk extends RefCounted:
 		var slot: int = cells.get(cell_position, -1)
 		return materials[slot * MATERIAL_STRIDE + MATERIAL_ROUGHNESS] if slot >= 0 else DEFAULT_ROUGHNESS
 
+	func get_material(cell_position: Vector3i) -> PackedFloat32Array:
+		var slot: int = cells.get(cell_position, -1)
+		if slot < 0:
+			return VoxelFrame.material(Color.TRANSPARENT)
+		return materials.slice(slot * MATERIAL_STRIDE, (slot + 1) * MATERIAL_STRIDE)
+
 	func get_bounds() -> AABB:
 		if bounds_dirty:
 			occupied_bounds = AABB()
@@ -286,6 +293,17 @@ func get_roughness(cell_position: Vector3i) -> float:
 	return chunk.get_roughness(cell_position) if chunk else DEFAULT_ROUGHNESS
 
 
+func get_material(cell_position: Vector3i) -> PackedFloat32Array:
+	var chunk: Chunk = chunks.get(chunk_position(cell_position))
+	return chunk.get_material(cell_position) if chunk else material(Color.TRANSPARENT)
+
+
+# Compare the whole stored material. One voxel holds the color, the emission, the metallic, and the roughness.
+func matches(cell_position: Vector3i, cell_material: PackedFloat32Array) -> bool:
+	var chunk: Chunk = chunks.get(chunk_position(cell_position))
+	return chunk != null and chunk.matches(cell_position, cell_material)
+
+
 # One write supplies the whole material. A transparent color erases the voxel.
 func set_cell(cell_position: Vector3i, cell_material: PackedFloat32Array) -> void:
 	var chunk_location := chunk_position(cell_position)
@@ -322,7 +340,10 @@ func set_cell(cell_position: Vector3i, cell_material: PackedFloat32Array) -> voi
 		chunks.erase(chunk_location)
 
 
-# Batch writes copy and invalidate each changed chunk once. Return changed chunk positions.
+# Batch writes copy and invalidate each changed chunk once.
+# The result lists every chunk that needs a new surface: each changed chunk and
+# each neighbor that meshes across the changed faces. A mesher reads one cell
+# beyond its chunk, so only cells on a chunk face affect a neighbor.
 func set_cells(cell_materials: Dictionary, edit_job: EditJob = null) -> Array[Vector3i]:
 	var changes_by_chunk := {}
 	var completed := 0
@@ -342,6 +363,8 @@ func set_cells(cell_materials: Dictionary, edit_job: EditJob = null) -> Array[Ve
 		var chunk: Chunk = chunks.get(chunk_location)
 		var chunk_changes: Dictionary = changes_by_chunk[chunk_location]
 		var has_changed := false
+		var face_bits := 0
+		var chunk_origin := chunk_location * CHUNK_SIZE
 		for cell_position in chunk_changes:
 			var cell_material: PackedFloat32Array = chunk_changes[cell_position]
 			var erased := is_empty(cell_material)
@@ -362,6 +385,7 @@ func set_cells(cell_materials: Dictionary, edit_job: EditJob = null) -> Array[Ve
 				chunk.erase(cell_position)
 			else:
 				chunk.store(cell_position, cell_material)
+			face_bits |= _face_bits(cell_position - chunk_origin)
 		completed += chunk_changes.size()
 		if not has_changed:
 			continue
@@ -374,9 +398,61 @@ func set_cells(cell_materials: Dictionary, edit_job: EditJob = null) -> Array[Ve
 		else:
 			chunk.get_bounds()
 		changed_chunks.append(chunk_location)
+		for offset in _touched_neighbors(face_bits):
+			changed_chunks.append(chunk_location + offset)
 	if edit_job:
 		edit_job.checkpoint(completed)
 	return changed_chunks
+
+
+# One bit per chunk face: negative then positive for each axis.
+static func _face_bits(local_cell: Vector3i) -> int:
+	var bits := 0
+	for axis in 3:
+		if local_cell[axis] == 0:
+			bits |= 1 << (axis * 2)
+		if local_cell[axis] == CHUNK_SIZE - 1:
+			bits |= 1 << (axis * 2 + 1)
+	return bits
+
+
+# Chunk offsets relative to the cell's own chunk whose mesher reads this cell.
+# A mesher reads one cell beyond its chunk, so only face and corner cells cross over.
+static func crosstalk_chunks(cell_position: Vector3i) -> Array[Vector3i]:
+	var local_cell := cell_position - chunk_position(cell_position) * CHUNK_SIZE
+	return _touched_neighbors(_face_bits(local_cell))
+
+
+# A neighbor is affected when every crossing axis of its offset touches a changed face.
+static func _touched_neighbors(face_bits: int) -> Array[Vector3i]:
+	var touched: Array[Vector3i] = []
+	if face_bits == 0:
+		return touched
+	for offset in _crosstalk_offsets():
+		var crosses_changed_face := true
+		for axis in 3:
+			var direction: int = offset[axis]
+			if direction != 0 and (face_bits & (1 << (axis * 2 + (1 if direction > 0 else 0)))) == 0:
+				crosses_changed_face = false
+				break
+		if crosses_changed_face:
+			touched.append(offset)
+	return touched
+
+
+static var _crosstalk_offsets_cache: Array[Vector3i] = []
+
+
+# Every chunk offset a mesher can read across, including diagonal corners.
+static func _crosstalk_offsets() -> Array[Vector3i]:
+	if _crosstalk_offsets_cache.is_empty():
+		for z in range(-1, 2):
+			for y in range(-1, 2):
+				for x in range(-1, 2):
+					var offset := Vector3i(x, y, z)
+					if offset != Vector3i.ZERO:
+						_crosstalk_offsets_cache.append(offset)
+	return _crosstalk_offsets_cache
 
 
 func capture() -> Dictionary:

@@ -15,7 +15,7 @@ class FillJob extends VoxelFrame.EditJob:
 	var source_frame: VoxelFrame
 	var selection_mask: Dictionary = {}
 	var seed_cell := Vector3i.ZERO
-	var target_color := Color.TRANSPARENT
+	var target_material := VoxelFrame.material(Color.TRANSPARENT)
 	var connected := true
 	var replacement_material := VoxelFrame.material(Color.TRANSPARENT)
 	var changed_chunks: Array[Vector3i] = []
@@ -30,7 +30,7 @@ class FillJob extends VoxelFrame.EditJob:
 			var examined := 0
 			for chunk in source_frame.chunks.values():
 				for cell_position in chunk.cells:
-					if chunk.get_color(cell_position) == target_color and (selection_mask.is_empty() or selection_mask.has(cell_position)):
+					if chunk.matches(cell_position, target_material) and (selection_mask.is_empty() or selection_mask.has(cell_position)):
 						changes[cell_position] = replacement
 					examined += 1
 					if examined % 4096 == 0 and not checkpoint(examined):
@@ -46,7 +46,7 @@ class FillJob extends VoxelFrame.EditJob:
 					var neighbor: Vector3i = cell_position + direction
 					if changes.has(neighbor) or (not selection_mask.is_empty() and not selection_mask.has(neighbor)):
 						continue
-					if source_frame.get_color(neighbor) == target_color:
+					if source_frame.matches(neighbor, target_material):
 						changes[neighbor] = replacement
 						pending.append(neighbor)
 				examined += 1
@@ -55,7 +55,7 @@ class FillJob extends VoxelFrame.EditJob:
 		matching_cells = changes
 		if apply_changes:
 			stage("Applying fill", changes.size())
-			changed_chunks = apply_cells(source_frame, changes, true, target_color)
+			changed_chunks = apply_cells(source_frame, changes, true, target_material)
 
 
 func _enter_tree() -> void:
@@ -149,7 +149,7 @@ func _process_seeds() -> void:
 		search_job.edit_context = State.drawing_context()
 		search_job.selection_mask = State.selection.capture()
 		search_job.seed_cell = seed_cell
-		search_job.target_color = _source_frame.get_color(seed_cell)
+		search_job.target_material = _source_frame.get_material(seed_cell)
 		search_job.connected = _settings.connected
 		search_job.replacement_material = _replacement_material
 		if search_job.estimate_work(search_job.source_frame.count()) <= 4096:
