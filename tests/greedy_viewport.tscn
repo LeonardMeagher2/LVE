@@ -1,0 +1,6 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://tests/greedy_viewport.gd" id="1"]
+
+[node name="GreedyViewport" type="Node"]
+script = ExtResource("1")

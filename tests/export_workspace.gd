@@ -24,9 +24,9 @@ func _run() -> void:
 		exporter = plugin("ExportPlugin")
 		tabs = main.get_node("%TabContainer")
 		State.document = VoxelDocument.new()
-		State.document.set_cell(0, Vector3i(4, 2, 1), Color.RED)
+		State.document.set_cell(0, Vector3i(4, 2, 1), VoxelFrame.material(Color.RED))
 		State.document.add_frame()
-		State.document.set_cell(1, Vector3i(5, 2, 1), Color.BLUE)
+		State.document.set_cell(1, Vector3i(5, 2, 1), VoxelFrame.material(Color.BLUE))
 		State.frames_changed.emit()
 		State.active_tag = State.document.add_tag("Second", 1, 1)
 		State.selection.from_box(Vector3i(4, 2, 1), Vector3i(5, 2, 1))
@@ -190,7 +190,7 @@ func _run() -> void:
 		selector.select(2)
 		selector.item_selected.emit(2)
 		var loaded := VoxelDocument.new()
-		loaded.frames[0].set_cells({Vector3i.ZERO: Color.GREEN, Vector3i(17, 0, 0): Color.BLUE})
+		loaded.frames[0].set_cells({Vector3i.ZERO: VoxelFrame.material(Color.GREEN), Vector3i(17, 0, 0): VoxelFrame.material(Color.BLUE)})
 		State.document = loaded
 	)
 	await get_tree().process_frame
