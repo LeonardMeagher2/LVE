@@ -29,9 +29,17 @@ static func triangulate(cells: Dictionary, protected: Dictionary = {}, checkpoin
 			return []
 		if loops.is_empty():
 			return _unit_faces(cells, check)
+		# An outline that pinches at a corner visits that corner twice. Split it
+		# there so every piece is a simple polygon. A hole that touches the
+		# outline at a corner becomes a negative piece, and opens below.
+		var parts: Array[PackedVector2Array] = []
+		for loop in loops:
+			parts.append_array(_split_loops(loop))
+		if parts.is_empty():
+			return _unit_faces(cells, check)
 		var cut := 0
 		var has_hole := false
-		for loop in loops:
+		for loop in parts:
 			if _twice_area(loop) < 0:
 				var bottom := int(loop[0].y)
 				var top := bottom
@@ -58,15 +66,10 @@ static func triangulate(cells: Dictionary, protected: Dictionary = {}, checkpoin
 			queue.append(above)
 			continue
 		# Collect every cut corner before simplifying either side of a cut.
-		for loop in loops:
-			var seen := {}
-			for point in loop:
-				if seen.has(point):
-					return _unit_faces(cells, check)
-				seen[point] = true
+		for loop in parts:
 			for point in _simplify(loop, {}):
 				retained[Vector2i(point)] = true
-		leaves.append_array(loops)
+		leaves.append_array(parts)
 	var result := []
 	var area := 0.0
 	for loop in leaves:
@@ -82,6 +85,40 @@ static func triangulate(cells: Dictionary, protected: Dictionary = {}, checkpoin
 		result.append({"points": points, "indices": indices})
 	if area != cells.size() * 2.0:
 		return _unit_faces(cells, check)
+	return result
+
+
+# A region whose outline pinches at a corner returns one loop that visits that
+# corner twice. Split it there so every piece is a simple polygon. The pinch
+# contributes no area, so the pieces still cover the occupied cells exactly.
+static func _split_loops(loop: PackedVector2Array) -> Array[PackedVector2Array]:
+	var result: Array[PackedVector2Array] = []
+	var pending: Array[PackedVector2Array] = [loop]
+	while not pending.is_empty():
+		var current: PackedVector2Array = pending.pop_back()
+		var first_index := {}
+		var repeated_at := -1
+		for index in current.size():
+			var point := current[index]
+			if first_index.has(point):
+				repeated_at = index
+				break
+			first_index[point] = index
+		if repeated_at < 0:
+			if current.size() >= 3:
+				result.append(current)
+			continue
+		var start: int = first_index[current[repeated_at]]
+		var head := PackedVector2Array()
+		for index in range(start, repeated_at):
+			head.append(current[index])
+		var tail := PackedVector2Array()
+		for index in range(repeated_at, current.size()):
+			tail.append(current[index])
+		for index in range(0, start):
+			tail.append(current[index])
+		pending.append(head)
+		pending.append(tail)
 	return result
 
 
