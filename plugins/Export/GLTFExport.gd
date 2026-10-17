@@ -72,7 +72,7 @@ class ExportJob extends VoxelFrame.EditJob:
 				return
 			stage("Preparing frame %d/%d surfaces" % [frame_index + 1, frames.size()], -1)
 			var surface := SURFACE.new()
-			surface.run(welded, frames[frame_index], Vector3.ZERO, checkpoint)
+			surface.run(welded, frames[frame_index], Vector3.ZERO, checkpoint, smooth_normals)
 			error = surface.error
 			if error != OK:
 				return

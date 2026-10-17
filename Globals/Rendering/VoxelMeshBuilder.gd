@@ -25,6 +25,9 @@ func run() -> void:
 	var padded_cell_colors: PackedColorArray = snapshot[0]
 	var padded_cell_materials: PackedInt32Array = snapshot[1]
 	var materials: PackedFloat32Array = snapshot[2]
+	# One bit per padded plane. Only the chunk's own cells emit faces, so a plane
+	# with no occupied voxel skips its whole 16 by 16 scan.
+	var occupied_planes: PackedInt32Array = snapshot[3]
 	source_frame = null
 	var vertex_positions := PackedVector3Array()
 	var vertex_normals := PackedVector3Array()
@@ -40,6 +43,8 @@ func run() -> void:
 			var face_normal := Vector3.ZERO
 			face_normal[face_axis] = face_sign
 			for layer_index in CHUNK_SIZE:
+				if occupied_planes[face_axis] & (1 << (layer_index + 1)) == 0:
+					continue
 				for row in CHUNK_SIZE:
 					for column in CHUNK_SIZE:
 						var sample_position := Vector3i.ONE
@@ -60,11 +65,11 @@ func run() -> void:
 							column += 1
 							continue
 						var quad_width := 1
-						while not smooth_normals and column + quad_width < CHUNK_SIZE and face_materials[column + quad_width + CHUNK_SIZE * row] == material_id:
+						while column + quad_width < CHUNK_SIZE and face_materials[column + quad_width + CHUNK_SIZE * row] == material_id:
 							quad_width += 1
 						var quad_height := 1
 						var row_matches := true
-						while not smooth_normals and row + quad_height < CHUNK_SIZE and row_matches:
+						while row + quad_height < CHUNK_SIZE and row_matches:
 							for column_offset in quad_width:
 								var next_material := face_materials[column + column_offset + CHUNK_SIZE * (row + quad_height)]
 								if next_material != material_id:
@@ -113,7 +118,7 @@ func run() -> void:
 	if texture_materials:
 		# Use the same seam-bounded planar cleanup and bake as the full-frame exporter.
 		var surface := SURFACE.new()
-		surface.run(surface_arrays, frame, Vector3(chunk_location * CHUNK_SIZE))
+		surface.run(surface_arrays, frame, Vector3(chunk_location * CHUNK_SIZE), Callable(), smooth_normals)
 		surface_arrays = surface.arrays
 		atlas = surface.atlas
 		atlas_size = atlas.size
@@ -157,6 +162,7 @@ static func _snapshot(frame: VoxelFrame, location: Vector3i, use_smooth_normals:
 	padded_cell_materials.resize(padded_cell_colors.size())
 	var materials := VoxelFrame.material(Color.TRANSPARENT)
 	var material_ids := {}
+	var occupied_planes := PackedInt32Array([0, 0, 0])
 	var padded_origin := location * CHUNK_SIZE - Vector3i.ONE
 	for offset in neighbor_offsets(use_smooth_normals):
 		var neighbor: VoxelFrame.Chunk = frame.chunks.get(location + offset)
@@ -171,6 +177,9 @@ static func _snapshot(frame: VoxelFrame, location: Vector3i, use_smooth_normals:
 				padded_cell_colors[sample_index] = Color(neighbor.materials[base], neighbor.materials[base + 1], neighbor.materials[base + 2], neighbor.materials[base + 3])
 				if offset != Vector3i.ZERO:
 					continue
+				occupied_planes[0] |= 1 << sample_position.x
+				occupied_planes[1] |= 1 << sample_position.y
+				occupied_planes[2] |= 1 << sample_position.z
 				var cell_material := neighbor.materials.slice(base, base + VoxelFrame.MATERIAL_STRIDE)
 				var material_id: int = material_ids.get(cell_material, -1)
 				if material_id < 0:
@@ -178,4 +187,4 @@ static func _snapshot(frame: VoxelFrame, location: Vector3i, use_smooth_normals:
 					material_ids[cell_material] = material_id
 					materials.append_array(cell_material)
 				padded_cell_materials[sample_index] = material_id
-	return [padded_cell_colors, padded_cell_materials, materials]
+	return [padded_cell_colors, padded_cell_materials, materials, occupied_planes]

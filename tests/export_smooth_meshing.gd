@@ -33,7 +33,7 @@ func _run() -> void:
 		var arrays: Array = job.frame_surfaces[0]
 		var old_triangles: int = reference[Mesh.ARRAY_INDEX].size() / 3
 		var triangles: int = arrays[Mesh.ARRAY_INDEX].size() / 3
-		expect(old_triangles == 768, "the source has two triangles per exposed voxel face")
+		expect(old_triangles == 48, "the source already merges the cube's faces")
 		expect(triangles == 12, "the smooth cube dissolves each planar side into two triangles")
 		print("Smooth cube: %d source triangles become %d export triangles" % [old_triangles, triangles])
 		_expect_topology_and_area(arrays, 384.0)
@@ -137,23 +137,28 @@ func _build_reference() -> void:
 func _expect_normals(arrays: Array, normal_tolerance := 0.0001) -> void:
 	var positions: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
 	var normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
-	var source_positions: PackedVector3Array = reference[Mesh.ARRAY_VERTEX]
-	var source_normals: PackedVector3Array = reference[Mesh.ARRAY_NORMAL]
 	var matches := true
 	var unit_normals := normals.size() == positions.size()
 	var non_axis := false
 	for index in normals.size():
 		unit_normals = unit_normals and absf(normals[index].length() - 1.0) < 0.0001
 		non_axis = non_axis or absf(normals[index].x) + absf(normals[index].y) + absf(normals[index].z) > 1.001
-		var found := false
-		for source_index in source_positions.size():
-			if positions[index].distance_to(source_positions[source_index]) < 0.0001 and normals[index].distance_to(source_normals[source_index]) < normal_tolerance:
-				found = true
-				break
-		matches = matches and found
+		matches = matches and normals[index].distance_to(_corner_normal(positions[index])) < normal_tolerance
 	expect(unit_normals, "every retained vertex has a unit normal")
 	expect(non_axis, "smooth shading retains non-axis corner normals")
-	expect(matches, "every retained corner keeps a source normal at the same position")
+	expect(matches, "every retained corner keeps the normal of its voxel corner")
+
+
+# A smooth normal averages the occupied cells that meet at one voxel corner.
+func _corner_normal(world_position: Vector3) -> Vector3:
+	var base := Vector3i(world_position.floor())
+	var normal := Vector3.ZERO
+	for z in 2:
+		for y in 2:
+			for x in 2:
+				if frame.has(base + Vector3i(x, y, z)):
+					normal += Vector3(0.5 - x, 0.5 - y, 0.5 - z)
+	return normal.normalized()
 
 
 func _expect_topology_and_area(arrays: Array, expected_area: float) -> void:

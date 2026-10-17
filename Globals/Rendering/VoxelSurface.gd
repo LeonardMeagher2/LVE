@@ -7,11 +7,11 @@ var atlas: RefCounted
 var error: Error = OK
 
 
-func run(source_arrays: Array, frame: VoxelFrame, origin := Vector3.ZERO, checkpoint := Callable()) -> void:
+func run(source_arrays: Array, frame: VoxelFrame, origin := Vector3.ZERO, checkpoint := Callable(), smooth_normals := false) -> void:
 	atlas = ATLAS.new()
 	error = OK
 	checkpoint = _latched_checkpoint(checkpoint)
-	arrays = _build(source_arrays, frame, origin, atlas, checkpoint)
+	arrays = _build(source_arrays, frame, origin, atlas, checkpoint, smooth_normals)
 	if arrays.is_empty():
 		error = ERR_UNAVAILABLE
 		return
@@ -24,7 +24,7 @@ func run(source_arrays: Array, frame: VoxelFrame, origin := Vector3.ZERO, checkp
 static func merge(source_arrays: Array, checkpoint := Callable()) -> Array:
 	checkpoint = _latched_checkpoint(checkpoint)
 	var bake := ATLAS.new()
-	var result := _build(source_arrays, null, Vector3.ZERO, bake, checkpoint)
+	var result := _build(source_arrays, null, Vector3.ZERO, bake, checkpoint, false)
 	if result.is_empty() or bake.bake(checkpoint) != OK:
 		return []
 	if not _finish_uvs(result, bake, checkpoint):
@@ -40,9 +40,12 @@ static func _latched_checkpoint(checkpoint: Callable) -> Callable:
 		return not state.cancelled
 
 
-static func _build(source_arrays: Array, frame: VoxelFrame, world_origin: Vector3, bake: RefCounted, checkpoint: Callable) -> Array:
+static func _build(source_arrays: Array, frame: VoxelFrame, world_origin: Vector3, bake: RefCounted, checkpoint: Callable, smooth_normals: bool) -> Array:
 	if not checkpoint.call(0):
 		return []
+	# A smooth normal depends only on the corner of the voxel lattice, so the
+	# cleanup reads it from the frame instead of a merged quad's interpolation.
+	var use_corner_normals := smooth_normals and frame != null
 	var result := []
 	result.resize(Mesh.ARRAY_MAX)
 	var positions := PackedVector3Array()
@@ -97,10 +100,11 @@ static func _build(source_arrays: Array, frame: VoxelFrame, world_origin: Vector
 						groups[key] = {"plane": plane, "material": material, "cells": {}, "normals": {}}
 					var group: Dictionary = groups[key]
 					group.cells[point] = true
-					for corner in 4:
-						var corner_offset := Vector2i(1 if corner in [1, 2] else 0, 1 if corner in [2, 3] else 0)
-						var uv := Vector2(Vector2i(x, y) + corner_offset) / Vector2(width, height)
-						group.normals[point + corner_offset] = _interpolate_normal(face_normals, uv)
+					if not use_corner_normals:
+						for corner in 4:
+							var corner_offset := Vector2i(1 if corner in [1, 2] else 0, 1 if corner in [2, 3] else 0)
+							var uv := Vector2(Vector2i(x, y) + corner_offset) / Vector2(width, height)
+							group.normals[point + corner_offset] = _interpolate_normal(face_normals, uv)
 	# Keep turns from every material and plane on all incident polygon boundaries.
 	# This prevents a dissolved edge from skipping a seam junction on another face.
 	var protected_positions := {}
@@ -146,7 +150,7 @@ static func _build(source_arrays: Array, frame: VoxelFrame, world_origin: Vector
 			var vertex_map := PackedInt32Array()
 			for point: Vector2 in polygon.points:
 				var position := _position(plane, point)
-				var normal: Vector3 = group.normals.get(Vector2i(point), fallback_normal)
+				var normal: Vector3 = _vertex_normal(group, frame, use_corner_normals, point, position + world_origin, fallback_normal)
 				var key := [Vector3i((position * 2).round()), normal, patch]
 				if not vertices.has(key):
 					vertices[key] = positions.size()
@@ -164,6 +168,29 @@ static func _build(source_arrays: Array, frame: VoxelFrame, world_origin: Vector
 	# Replace the temporary patch ids with UV coordinates after atlas packing.
 	result[Mesh.ARRAY_TEX_UV] = patch_ids
 	return result
+
+
+# Read or compute the normal at one polygon vertex. Flat shading keeps the face
+# normal. Smooth shading reads the shared voxel corner from the frame once.
+static func _vertex_normal(group: Dictionary, frame: VoxelFrame, use_corner_normals: bool, point: Vector2, world_position: Vector3, fallback_normal: Vector3) -> Vector3:
+	var corner := Vector2i(point)
+	if use_corner_normals and not group.normals.has(corner):
+		group.normals[corner] = _corner_normal(frame, world_position)
+	var normal: Vector3 = group.normals.get(corner, fallback_normal)
+	return fallback_normal if normal.is_zero_approx() else normal
+
+
+# Average the occupied cells that meet at one voxel corner. A corner normal
+# depends only on the lattice corner, so every face that meets there shares it.
+static func _corner_normal(frame: VoxelFrame, world_position: Vector3) -> Vector3:
+	var base := Vector3i(world_position.floor())
+	var normal := Vector3.ZERO
+	for z in 2:
+		for y in 2:
+			for x in 2:
+				if frame.has(base + Vector3i(x, y, z)):
+					normal += Vector3(0.5 - x, 0.5 - y, 0.5 - z)
+	return normal.normalized()
 
 
 static func _protect(positions: Dictionary, planes: Dictionary) -> void:
