@@ -29,8 +29,8 @@ func _run() -> void:
 		expect(image.save_png(image_path) == OK, "the PNG fixture is saved")
 		State.document = VoxelDocument.new()
 		previous_document = State.document
-		State.get_current_voxel_frame().set_cell(marker, Color.GREEN)
-		State.document.palette.assign([Color.GREEN])
+		State.get_current_voxel_frame().set_cell(marker, VoxelFrame.material(Color.GREEN))
+		State.document.palette.assign([VoxelFrame.material(Color.GREEN)])
 		State.palette_changed.emit()
 		State.selection.add(marker)
 		State.selection_changed.emit()
@@ -63,13 +63,13 @@ func _run() -> void:
 		expect(previous_document.frames[0].get_color(marker) == Color.GREEN, "the previous document resource remains unchanged")
 	)
 	step("Then the palette contains each retained image color once", func():
-		expect(State.document.palette == [Color.RED, Color.BLUE, Color.YELLOW, Color.BLACK], "the palette contains only distinct retained PNG colors")
+		expect(State.document.palette == [VoxelFrame.material(Color.RED), VoxelFrame.material(Color.BLUE), VoxelFrame.material(Color.YELLOW), VoxelFrame.material(Color.BLACK)], "the palette contains only distinct retained PNG colors")
 		var grid := main.find_child("PalettePanel", true, false).get_node("%SwatchGrid")
 		expect(grid.get_child_count() == 4, "the palette displays all four image colors")
 		var black_swatch := grid.get_child(3) as Button
-		expect(black_swatch.get_theme_stylebox("normal").bg_color == Color.BLACK, "the black swatch has a black background")
-		expect(black_swatch.get_theme_stylebox("pressed").bg_color == Color.BLACK, "the selected black swatch has a black background")
-		expect(black_swatch.tooltip_text == "000000ff", "the black swatch tooltip shows its color")
+		expect(black_swatch.color == Color.BLACK, "the black swatch displays the imported color")
+		expect(black_swatch.cell_material == VoxelFrame.material(Color.BLACK) and black_swatch.palette_index == 3, "the black swatch retains its complete material and index")
+		expect(black_swatch.tooltip_text.contains("Color: #000000ff") and black_swatch.tooltip_text.contains("RGBA: 0.00, 0.00, 0.00, 1.00") and black_swatch.tooltip_text.contains("Emission RGB: 0.00, 0.00, 0.00") and black_swatch.tooltip_text.contains("Metallic: 0.00") and black_swatch.tooltip_text.contains("Roughness: 1.00"), "the black swatch tooltip shows its color and material values with two decimal places")
 	)
 	step("Given a fully transparent PNG", func():
 		var image := Image.create(2, 2, false, Image.FORMAT_RGBA8)

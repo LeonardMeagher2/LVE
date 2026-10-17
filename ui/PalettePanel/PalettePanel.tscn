@@ -4,18 +4,26 @@
 [ext_resource type="Script" uid="uid://cs8h0occl2amh" path="res://ui/PalettePanel/ColorPickerButton.gd" id="2_8seap"]
 [ext_resource type="Texture2D" uid="uid://di606d0g4f27a" path="res://icons/add.svg" id="3_add"]
 [ext_resource type="Texture2D" uid="uid://cv15qg24amrlt" path="res://icons/remove.svg" id="5_remove"]
-[ext_resource type="Texture2D" path="res://icons/open.svg" id="6_import"]
-[ext_resource type="Texture2D" path="res://icons/save_as.svg" id="7_export"]
-[ext_resource type="Texture2D" path="res://icons/more.svg" id="8_menu"]
+[ext_resource type="Texture2D" uid="uid://k4mp2te5yq4y" path="res://icons/open.svg" id="6_import"]
+[ext_resource type="Texture2D" uid="uid://bsdc6hsaxlttw" path="res://icons/save_as.svg" id="7_export"]
+[ext_resource type="Texture2D" uid="uid://dw0wg8jnwe0x0" path="res://icons/more.svg" id="8_menu"]
+[ext_resource type="PackedScene" path="res://ui/PalettePanel/MaterialThumbnails.tscn" id="10_thumbnails"]
+[ext_resource type="Texture2D" uid="uid://denrh23gr1h18" path="res://icons/light.svg" id="11_emission"]
+[ext_resource type="Texture2D" uid="uid://daustgyl361sn" path="res://icons/metallic.svg" id="12_metallic"]
+[ext_resource type="Texture2D" uid="uid://ci3taagaxm7e" path="res://icons/roughness.svg" id="13_roughness"]
+[ext_resource type="PackedScene" uid="uid://kxi223occ3vl" path="res://ui/PalettePanel/MaterialValue.tscn" id="14_value"]
 
 [node name="PalettePanel" type="VBoxContainer" unique_id=920144879]
 custom_maximum_size = Vector2(512, -1)
-anchors_preset = 15
-anchor_right = 1.0
+anchors_preset = 9
 anchor_bottom = 1.0
-grow_horizontal = 2
+offset_right = 300.0
 grow_vertical = 2
+size_flags_horizontal = 0
 script = ExtResource("1_palette")
+
+[node name="MaterialThumbnails" parent="." unique_id=1893039527 instance=ExtResource("10_thumbnails")]
+unique_name_in_owner = true
 
 [node name="PanelContainer" type="PanelContainer" parent="." unique_id=1050465130]
 layout_mode = 2
@@ -37,35 +45,35 @@ size_flags_horizontal = 3
 [node name="AddBtn" type="Button" parent="PanelContainer/MarginContainer/VBoxContainer/Toolbar" unique_id=345678901]
 unique_name_in_owner = true
 layout_mode = 2
-tooltip_text = "Add current color to palette"
+tooltip_text = "Save the current settings as a swatch"
 icon = ExtResource("3_add")
 icon_alignment = 1
 
 [node name="RemoveBtn" type="Button" parent="PanelContainer/MarginContainer/VBoxContainer/Toolbar" unique_id=345678903]
 unique_name_in_owner = true
 layout_mode = 2
-tooltip_text = "Remove selected color"
+tooltip_text = "Remove selected material swatch"
 icon = ExtResource("5_remove")
 icon_alignment = 1
 
-[node name="Separator" type="VSeparator" parent="PanelContainer/MarginContainer/VBoxContainer/Toolbar"]
+[node name="Separator" type="VSeparator" parent="PanelContainer/MarginContainer/VBoxContainer/Toolbar" unique_id=1084463421]
 layout_mode = 2
 
-[node name="ImportBtn" type="Button" parent="PanelContainer/MarginContainer/VBoxContainer/Toolbar"]
+[node name="ImportBtn" type="Button" parent="PanelContainer/MarginContainer/VBoxContainer/Toolbar" unique_id=2125986125]
 unique_name_in_owner = true
 layout_mode = 2
 tooltip_text = "Import palette from an image"
 icon = ExtResource("6_import")
 icon_alignment = 1
 
-[node name="ExportBtn" type="Button" parent="PanelContainer/MarginContainer/VBoxContainer/Toolbar"]
+[node name="ExportBtn" type="Button" parent="PanelContainer/MarginContainer/VBoxContainer/Toolbar" unique_id=387409363]
 unique_name_in_owner = true
 layout_mode = 2
-tooltip_text = "Save palette as a PNG image"
+tooltip_text = "Save palette colors as PNG. Material settings are lost. Same-color variants combine on import."
 icon = ExtResource("7_export")
 icon_alignment = 1
 
-[node name="PaletteMenu" type="MenuButton" parent="PanelContainer/MarginContainer/VBoxContainer/Toolbar"]
+[node name="PaletteMenu" type="MenuButton" parent="PanelContainer/MarginContainer/VBoxContainer/Toolbar" unique_id=648815929]
 unique_name_in_owner = true
 layout_mode = 2
 tooltip_text = "Default palette options"
@@ -78,6 +86,7 @@ size_flags_vertical = 3
 
 [node name="Scroll" type="ScrollContainer" parent="PanelContainer/MarginContainer/VBoxContainer/PanelContainer" unique_id=1639396239]
 unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 72)
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
@@ -107,6 +116,7 @@ layout_mode = 2
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 3
+theme_override_constants/sv_height = 144
 alignment = 1
 edit_alpha = false
 edit_intensity = false
@@ -125,18 +135,42 @@ edit_alpha = false
 edit_intensity = false
 script = ExtResource("2_8seap")
 
-[node name="ImportDialog" type="FileDialog" parent="."]
+[node name="MaterialControls" type="HBoxContainer" parent="PanelContainer2/MarginContainer/VBoxContainer" unique_id=972577938]
+layout_mode = 2
+
+[node name="EmissionStrength" parent="PanelContainer2/MarginContainer/VBoxContainer/MaterialControls" unique_id=1825920245 instance=ExtResource("14_value")]
 unique_name_in_owner = true
-title = "Import Palette"
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "Emission strength, from 0 to 1. Uses the voxel color. Drag left/right to adjust. Click to type."
+icon = ExtResource("11_emission")
+
+[node name="Metallic" parent="PanelContainer2/MarginContainer/VBoxContainer/MaterialControls" unique_id=1765045883 instance=ExtResource("14_value")]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "Metallic, from 0 to 1. Drag left/right to adjust. Click to type."
+icon = ExtResource("12_metallic")
+
+[node name="Roughness" parent="PanelContainer2/MarginContainer/VBoxContainer/MaterialControls" unique_id=383713020 instance=ExtResource("14_value")]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "Roughness, from 0 to 1. Drag left/right to adjust. Click to type."
+icon = ExtResource("13_roughness")
+value = 1.0
+
+[node name="ImportDialog" type="FileDialog" parent="." unique_id=1008399592]
+unique_name_in_owner = true
+title = "Open a File"
 file_mode = 0
 access = 2
 
-[node name="ExportDialog" type="FileDialog" parent="."]
+[node name="ExportDialog" type="FileDialog" parent="." unique_id=118221127]
 unique_name_in_owner = true
 title = "Save Palette"
 access = 2
 filters = PackedStringArray("*.png ; PNG palette")
-current_file = "palette.png"
 
 [connection signal="pressed" from="PanelContainer/MarginContainer/VBoxContainer/Toolbar/AddBtn" to="." method="_on_add_btn_pressed"]
 [connection signal="pressed" from="PanelContainer/MarginContainer/VBoxContainer/Toolbar/RemoveBtn" to="." method="_on_remove_btn_pressed"]
@@ -144,5 +178,8 @@ current_file = "palette.png"
 [connection signal="pressed" from="PanelContainer/MarginContainer/VBoxContainer/Toolbar/ExportBtn" to="." method="_on_export_btn_pressed"]
 [connection signal="color_changed" from="PanelContainer2/MarginContainer/VBoxContainer/ColorPicker" to="." method="_on_picker_color_changed"]
 [connection signal="color_changed" from="PanelContainer2/MarginContainer/VBoxContainer/ColorPickerButton" to="." method="_on_picker_color_changed"]
+[connection signal="value_changed" from="PanelContainer2/MarginContainer/VBoxContainer/MaterialControls/EmissionStrength" to="." method="_on_emission_strength_changed"]
+[connection signal="value_changed" from="PanelContainer2/MarginContainer/VBoxContainer/MaterialControls/Metallic" to="." method="_on_metallic_changed"]
+[connection signal="value_changed" from="PanelContainer2/MarginContainer/VBoxContainer/MaterialControls/Roughness" to="." method="_on_roughness_changed"]
 [connection signal="file_selected" from="ImportDialog" to="." method="_on_import_file_selected"]
 [connection signal="file_selected" from="ExportDialog" to="." method="_on_export_file_selected"]
