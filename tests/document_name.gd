@@ -79,7 +79,7 @@ func _run() -> void:
 		expect(exporter._controls.get_node("LightingOptions/LightColor").color == Color(0, 0, 1, 0.5), "the export color and alpha strength are restored")
 	)
 	step("When the user edits the document and opens the same file again", func():
-		State.paint(Vector3i(100, 100, 100), Color.RED)
+		State.paint(Vector3i(100, 100, 100), VoxelFrame.material(Color.RED))
 		menu._on_file_opened(renamed_path)
 	)
 	step("Then the file contents replace the unsaved edit", func():

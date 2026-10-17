@@ -20,8 +20,8 @@ func _run() -> void:
 		for z in 16:
 			for y in 16:
 				for x in 16:
-					State.paint(Vector3i(x, y, z), Color.RED)
-		State.paint(Vector3i(-17, 3, -1), Color(0.25, 0.5, 0.75, 0.5))
+					State.paint(Vector3i(x, y, z), VoxelFrame.material(Color.RED))
+		State.paint(Vector3i(-17, 3, -1), VoxelFrame.material(Color(0.25, 0.5, 0.75, 0.5)))
 		data = original.voxel_data
 		State.duplicate_frame()
 		duplicate = State.get_current_voxel_frame()
@@ -33,7 +33,7 @@ func _run() -> void:
 		for z in 16:
 			for y in 16:
 				for x in 16:
-					replacement_colors[Vector3i(x, y, z)] = Color.BLUE
+					replacement_colors[Vector3i(x, y, z)] = VoxelFrame.material(Color.BLUE)
 		duplicate.set_cells(replacement_colors)
 		State.end_stroke()
 		State.current_frame = 0
@@ -72,14 +72,14 @@ func _run() -> void:
 	step("When the user paints a transparent color and cancels", func():
 		State.current_frame = 1
 		State.begin_stroke()
-		State.paint(Vector3i.ZERO, Color.TRANSPARENT)
+		State.paint(Vector3i.ZERO, VoxelFrame.material(Color.TRANSPARENT))
 		expect(not duplicate.has(Vector3i.ZERO), "transparent paint erases the voxel")
 		State.cancel_stroke()
 		expect(duplicate.get_color(Vector3i.ZERO) == Color.BLUE, "cancel restores the blue voxel")
 	)
 	step("When the user erases voxels across chunk boundaries and cancels", func():
 		State.begin_stroke()
-		duplicate.set_cells({Vector3i.ZERO: Color.TRANSPARENT, Vector3i(-17, 3, -1): Color.TRANSPARENT})
+		duplicate.set_cells({Vector3i.ZERO: VoxelFrame.material(Color.TRANSPARENT), Vector3i(-17, 3, -1): VoxelFrame.material(Color.TRANSPARENT)})
 		expect(duplicate.count() == 4095, "the batch erases both occupied voxels")
 		expect(duplicate.get_bounds() == AABB(Vector3.ONE * -0.5, Vector3.ONE * 16), "the batch updates the occupied bounds")
 		State.cancel_stroke()

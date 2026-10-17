@@ -76,7 +76,7 @@ func _on_selection_pressed() -> void:
 		_source_job = null
 		_operation_id = 0
 	if is_inside_tree() and State.document == document and State.get_current_voxel_frame() == frame and job.checkpoint(job.pattern.size()):
-		_settings.use_selection(job.pattern)
+		_settings.use_selection(job.pattern, job.pattern_materials)
 	if is_inside_tree():
 		_sync()
 

@@ -17,7 +17,7 @@ func _run() -> void:
 		for z in 48:
 			for y in 48:
 				for x in 48:
-					State.paint(Vector3i(x, y, z), Color.RED)
+					State.paint(Vector3i(x, y, z), VoxelFrame.material(Color.RED))
 		scene_renderer = load("res://ui/Viewport/VoxelRenderer.tscn").instantiate()
 		main.add_child(scene_renderer)
 	)
@@ -31,7 +31,7 @@ func _run() -> void:
 	step("Given more empty history results than the cache can retain", func():
 		# Seed completed empty results without generating thousands of redundant meshes.
 		for history_index in range(VoxelRenderer.SURFACE_CACHE_LIMIT_ENTRIES + 1):
-			VoxelRenderer._cache_surface("enclosed-history-%s" % history_index, null, 0)
+			VoxelRenderer._cache_surface("enclosed-history-%s" % history_index, null, 0, null)
 	)
 	step("Then empty results evict old entries without hiding active surfaces", func():
 		expect(VoxelRenderer._surface_cache.size() == VoxelRenderer.SURFACE_CACHE_LIMIT_ENTRIES, "empty results stay within the entry limit")
@@ -44,7 +44,7 @@ func _run() -> void:
 		State.begin_stroke()
 	)
 	for color in [Color.BLUE, Color.GREEN, Color.YELLOW]:
-		State.paint(enclosed_voxel, color)
+		State.paint(enclosed_voxel, VoxelFrame.material(color))
 		var affected_cells: Array[Vector3i] = [enclosed_voxel]
 		State.cells_changed.emit(0, affected_cells)
 		await _settle()

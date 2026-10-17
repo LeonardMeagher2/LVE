@@ -9,7 +9,7 @@ func _ready() -> void:
 
 func _run() -> void:
 	step("When the user paints a cell beyond the original 16x16 extent", func():
-		State.document.paint(0, Vector3i(20, 0, 20), State.current_color)
+		State.document.paint(0, Vector3i(20, 0, 20), VoxelFrame.material(State.current_color))
 	)
 
 	step("Then the cell persists and the bounds expand", func():

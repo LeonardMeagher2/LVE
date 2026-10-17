@@ -1,6 +1,8 @@
 extends VoxelPlugin
 
 const CLIPBOARD_PREFIX := '{"voxel_voxels":'
+# One clipboard record holds the cell and its nine material floats.
+const VOXEL_RECORD_SIZE := 3 + VoxelFrame.MATERIAL_STRIDE
 
 @onready var _options := preload("./Options.tscn").instantiate()
 @onready var _paste_tool := preload("./PasteTool.tscn").instantiate()
@@ -29,8 +31,11 @@ class ClipboardCopyJob extends BrushToolSettings.CopyJob:
 		stage("Writing voxel clipboard", pattern.size())
 		var records := []
 		for cell_position: Vector3i in pattern:
-			var color: Color = pattern[cell_position]
-			records.append([cell_position.x, cell_position.y, cell_position.z, color.r, color.g, color.b, color.a])
+			var cell_material: PackedFloat32Array = pattern_materials[cell_position]
+			var record := [cell_position.x, cell_position.y, cell_position.z]
+			for value in cell_material:
+				record.append(value)
+			records.append(record)
 			if records.size() % 4096 == 0 and not checkpoint(records.size()):
 				return
 		stage("Writing clipboard selection", selection_mask.size())
@@ -41,20 +46,12 @@ class ClipboardCopyJob extends BrushToolSettings.CopyJob:
 			selected_records.append([offset.x, offset.y, offset.z])
 			if selected_records.size() % 4096 == 0 and not checkpoint(selected_records.size()):
 				return
-		stage("Writing clipboard materials", pattern_materials.size())
-		var material_records := []
-		for offset: Vector3i in pattern_materials:
-			var material: Dictionary = pattern_materials[offset]
-			var emission: Color = material.emission
-			material_records.append([offset.x, offset.y, offset.z, emission.r, emission.g, emission.b, material.metallic, material.roughness])
-			if material_records.size() % 4096 == 0 and not checkpoint(material_records.size()):
-				return
-		text = JSON.stringify({"voxel_voxels": records, "voxel_selection": selected_records, "voxel_materials": material_records}, "", false, true)
+		text = JSON.stringify({"voxel_voxels": records, "voxel_selection": selected_records}, "", false, true)
 		if cut_source and checkpoint(0):
 			stage("Cutting voxels", _colors.size())
 			var changes := {}
 			for cell_position in _colors:
-				changes[cell_position] = Color.TRANSPARENT
+				changes[cell_position] = VoxelFrame.material(Color.TRANSPARENT)
 				if changes.size() % 4096 == 0 and not checkpoint(changes.size()):
 					return
 			changed_chunks = source_frame.set_cells(changes, self)
@@ -73,15 +70,26 @@ class ClipboardImportJob extends VoxelFrame.EditJob:
 		stage("Reading voxel clipboard", data.voxel_voxels.size())
 		var completed := 0
 		for record in data.voxel_voxels:
-			if not record is Array or record.size() != 7:
+			if not record is Array or record.size() != VOXEL_RECORD_SIZE:
 				pattern = {}
+				pattern_materials = {}
 				return
 			for value in record:
 				if not (value is float or value is int):
 					pattern = {}
+					pattern_materials = {}
 					return
 			var cell_position := Vector3i(int(record[0]), int(record[1]), int(record[2]))
-			pattern[cell_position] = Color(record[3], record[4], record[5], record[6])
+			var cell_material := PackedFloat32Array()
+			for index in range(3, VOXEL_RECORD_SIZE):
+				var value := float(record[index])
+				if value < 0.0 or value > 1.0:
+					pattern = {}
+					pattern_materials = {}
+					return
+				cell_material.append(value)
+			pattern[cell_position] = VoxelFrame.material_color(cell_material)
+			pattern_materials[cell_position] = cell_material
 			completed += 1
 			if completed % 4096 == 0 and not checkpoint(completed):
 				return
@@ -100,31 +108,6 @@ class ClipboardImportJob extends VoxelFrame.EditJob:
 					pattern = {}
 					return
 			selection_pattern[Vector3i(int(record[0]), int(record[1]), int(record[2]))] = true
-			completed += 1
-			if completed % 4096 == 0 and not checkpoint(completed):
-				return
-		var material_records = data.get("voxel_materials", [])
-		if not material_records is Array:
-			pattern = {}
-			return
-		stage("Reading clipboard materials", material_records.size())
-		completed = 0
-		for record in material_records:
-			if not record is Array or record.size() != 8:
-				pattern = {}
-				pattern_materials = {}
-				return
-			for value in record:
-				if not (value is float or value is int):
-					pattern = {}
-					pattern_materials = {}
-					return
-			if record[3] < 0.0 or record[3] > 1.0 or record[4] < 0.0 or record[4] > 1.0 or record[5] < 0.0 or record[5] > 1.0 or record[6] < 0.0 or record[6] > 1.0 or record[7] < 0.0 or record[7] > 1.0:
-				pattern = {}
-				pattern_materials = {}
-				return
-			var offset := Vector3i(int(record[0]), int(record[1]), int(record[2]))
-			pattern_materials[offset] = {"emission": Color(float(record[3]), float(record[4]), float(record[5])), "metallic": float(record[6]), "roughness": float(record[7])}
 			completed += 1
 			if completed % 4096 == 0 and not checkpoint(completed):
 				return

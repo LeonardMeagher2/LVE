@@ -76,7 +76,7 @@ func _run() -> void:
 func _paint_bar() -> void:
 	var frame := State.document.frames[0]
 	for i in 3:
-		frame.set_cell(Vector3i(i, 0, 0), Color.from_rgba8(200, 60, 60))
+		frame.set_cell(Vector3i(i, 0, 0), VoxelFrame.material(Color.from_rgba8(200, 60, 60)))
 
 
 func _select_bar() -> void:

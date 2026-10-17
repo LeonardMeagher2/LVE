@@ -15,7 +15,7 @@ func _run() -> void:
 	step("Given a voxel with fractional pixel alignment and an empty animation frame", func():
 		exporter = plugin("ExportPlugin")
 		State.document = VoxelDocument.new()
-		State.document.set_cell(0, Vector3i.ZERO, Color.RED)
+		State.document.set_cell(0, Vector3i.ZERO, VoxelFrame.material(Color.RED))
 		State.document.add_frame()
 		State.frames_changed.emit()
 		exporter._refresh_model()

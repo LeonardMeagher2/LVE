@@ -166,7 +166,7 @@ func _paint_l() -> void:
 	State.selection.clear()
 	_frame().clear()
 	for c in [Vector3i(0, 0, 0), Vector3i(1, 0, 0), Vector3i(2, 0, 0), Vector3i(0, 1, 0)]:
-		_frame().set_cell(c, Color.from_rgba8(60, 60, 200))
+		_frame().set_cell(c, VoxelFrame.material(Color.from_rgba8(60, 60, 200)))
 		State.selection.add(c)
 	State.selection_changed.emit()
 

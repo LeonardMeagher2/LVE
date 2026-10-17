@@ -5,7 +5,7 @@ signal file_path_changed()
 
 const APP_NAME := "Leonard's Voxel Editor"
 const FILE_SIGNATURE := [76, 86, 69, 0]
-const FORMAT_VERSION := 2
+const FORMAT_VERSION := 3
 const MAX_FILE_BYTES := 64 * 1024 * 1024
 const MAX_FRAMES := 10000
 const MAX_TAGS := 10000
@@ -14,7 +14,7 @@ const PNG_SIGNATURE := [137, 80, 78, 71, 13, 10, 26, 10]
 const PNG_DOCUMENT_CHUNK := "lvED"
 static var _crc_table := PackedInt64Array()
 
-@export var palette: Array[Color] = []
+@export var palette: Array[PackedFloat32Array] = []
 @export var frames: Array[VoxelFrame] = []
 @export var tags: Array[AnimationTag] = []
 @export var smooth_normals := false
@@ -42,13 +42,17 @@ func get_file_name() -> String:
 
 
 func document_data() -> Dictionary:
+	# Use an untyped container for the document's restricted Variant decoder.
+	var palette_data := []
+	for entry in palette:
+		palette_data.append(entry.duplicate())
 	var frame_data := []
 	for frame in frames:
 		frame_data.append({"delay_ms": frame.delay_ms, "voxels": frame.storage_data()})
 	var tag_data := []
 	for tag in tags:
 		tag_data.append({"name": tag.name, "from": tag.from, "to": tag.to, "loop_mode": tag.loop_mode, "repeats": tag.repeats})
-	return {"palette": PackedColorArray(palette), "frames": frame_data, "tags": tag_data, "smooth_normals": smooth_normals, "lighting": _storage_settings(lighting_settings), "export": _storage_settings(export_settings)}
+	return {"palette": palette_data, "frames": frame_data, "tags": tag_data, "smooth_normals": smooth_normals, "lighting": _storage_settings(lighting_settings), "export": _storage_settings(export_settings)}
 
 
 static func _storage_settings(settings: Dictionary) -> Dictionary:
@@ -130,10 +134,21 @@ static func decode_document(data: PackedByteArray) -> VoxelDocument:
 	if _variant_end(payload, 0, 0, [1000000]) != payload.size():
 		return null
 	var fields: Variant = bytes_to_var(payload)
+	if version < 3:
+		if not fields is Dictionary or not fields.get("palette") is PackedColorArray:
+			return null
+		var materials: Array = []
+		if fields.palette.size() > MAX_PALETTE_COLORS:
+			return null
+		for color in fields.palette:
+			if not _valid_color(color, 1.0):
+				return null
+			materials.append(VoxelFrame.material(color))
+		fields.palette = materials
 	if not _valid_document_data(fields):
 		return null
 	var document := VoxelDocument.new()
-	document.palette.assign(Array(fields.palette))
+	document.palette = unique_palette(fields.palette)
 	document.frames.clear()
 	for frame_data in fields.frames:
 		var frame := VoxelFrame.new()
@@ -238,7 +253,7 @@ static func _variant_end(data: PackedByteArray, offset: int, depth: int, budget:
 			if flags != 0:
 				return -1
 			size = 12 if type == TYPE_VECTOR3I else 16
-		TYPE_STRING, TYPE_PACKED_INT32_ARRAY, TYPE_PACKED_COLOR_ARRAY:
+		TYPE_STRING, TYPE_PACKED_INT32_ARRAY, TYPE_PACKED_FLOAT32_ARRAY, TYPE_PACKED_COLOR_ARRAY:
 			if flags != 0 or offset + 4 > data.size():
 				return -1
 			var count := data.decode_u32(offset)
@@ -248,6 +263,7 @@ static func _variant_end(data: PackedByteArray, offset: int, depth: int, budget:
 			match type:
 				TYPE_STRING: size = (count + 3) & ~3
 				TYPE_PACKED_INT32_ARRAY: size = count * 4
+				TYPE_PACKED_FLOAT32_ARRAY: size = count * 4
 				TYPE_PACKED_COLOR_ARRAY: size = count * 16
 		TYPE_ARRAY, TYPE_DICTIONARY:
 			if flags != 0 or offset + 4 > data.size():
@@ -273,11 +289,8 @@ static func _variant_end(data: PackedByteArray, offset: int, depth: int, budget:
 static func _valid_document_data(data: Variant) -> bool:
 	if not data is Dictionary:
 		return false
-	if not data.get("palette") is PackedColorArray or data.palette.size() > MAX_PALETTE_COLORS:
+	if not valid_palette(data.get("palette")):
 		return false
-	for color in data.palette:
-		if not _valid_color(color, 1.0):
-			return false
 	if not data.get("frames") is Array or data.frames.is_empty() or data.frames.size() > MAX_FRAMES:
 		return false
 	var occupied := 0
@@ -300,6 +313,34 @@ static func _valid_document_data(data: Variant) -> bool:
 		if not _integer_in(tag.get("loop_mode"), 0, 3) or not _integer_in(tag.get("repeats"), 0, 1000000):
 			return false
 	return data.get("smooth_normals") is bool and _valid_lighting(data.get("lighting"), false) and _valid_export(data.get("export"), data.tags.size())
+
+
+static func unique_palette(materials: Array) -> Array[PackedFloat32Array]:
+	var result: Array[PackedFloat32Array] = []
+	var seen := {}
+	for material: PackedFloat32Array in materials:
+		if not seen.has(material):
+			seen[material] = true
+			result.append(material.duplicate())
+	return result
+
+
+static func valid_palette(value: Variant) -> bool:
+	if not value is Array or value.size() > MAX_PALETTE_COLORS:
+		return false
+	for entry in value:
+		if not valid_material(entry):
+			return false
+	return true
+
+
+static func valid_material(value: Variant) -> bool:
+	if not value is PackedFloat32Array or value.size() != VoxelFrame.MATERIAL_STRIDE:
+		return false
+	for component in value:
+		if not _number_in(component, 0.0, 1.0):
+			return false
+	return true
 
 
 static func _integer_in(value: Variant, low: int, high: int) -> bool:
@@ -500,22 +541,22 @@ func _may_shrink_bounds(_frame: int, cell: Vector3i) -> void:
 		_bounds_dirty = true
 
 
-func paint(frame: int, cell: Vector3i, color: Color) -> void:
-	set_cell(frame, cell, color)
+func paint(frame: int, cell: Vector3i, cell_material: PackedFloat32Array) -> void:
+	set_cell(frame, cell, cell_material)
 
 
-func set_cell(frame: int, cell: Vector3i, color: Color) -> void:
-	if color == Color.TRANSPARENT:
+func set_cell(frame: int, cell: Vector3i, cell_material: PackedFloat32Array) -> void:
+	if VoxelFrame.is_empty(cell_material):
 		erase(frame, cell)
 		return
-	frames[frame].set_cell(cell, color)
+	frames[frame].set_cell(cell, cell_material)
 	_grow_bounds(cell)
 
 
 func erase(frame: int, cell: Vector3i) -> void:
 	if not frames[frame].has(cell):
 		return
-	frames[frame].set_cell(cell, Color.TRANSPARENT)
+	frames[frame].set_cell(cell, VoxelFrame.material(Color.TRANSPARENT))
 	_may_shrink_bounds(frame, cell)
 
 
@@ -527,22 +568,7 @@ func has_cell(frame: int, cell: Vector3i) -> bool:
 	return frames[frame].has(cell)
 
 
-func add_color(color: Color) -> bool:
-	if palette.has(color):
-		return false
-	palette.append(color)
-	return true
-
-
 func get_color(index: int) -> Color:
 	if index >= 0 and index < palette.size():
-		return palette[index]
+		return VoxelFrame.material_color(palette[index])
 	return Color.MAGENTA
-
-
-func remove_color(color: Color) -> bool:
-	var index = palette.find(color)
-	if index == -1:
-		return false
-	palette.remove_at(index)
-	return true

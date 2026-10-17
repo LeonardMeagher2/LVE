@@ -106,7 +106,7 @@ func _run() -> void:
 		_frame().clear()
 		State.selection.clear()
 		for c in [Vector3i(1, 1, 0), Vector3i(-2, 1, 0), Vector3i(1, -2, 0), Vector3i(-2, -2, 0)]:
-			_frame().set_cell(c, Color.from_rgba8(200, 60, 60))
+			_frame().set_cell(c, VoxelFrame.material(Color.from_rgba8(200, 60, 60)))
 			State.selection.add(c)
 		State.selection_changed.emit()
 		activate_tool("transform")
@@ -163,7 +163,7 @@ func _paint_symmetric_bar() -> void:
 	_frame().clear()
 	State.selection.clear()
 	for c in _bar_cells(Vector3i.ZERO):
-		_frame().set_cell(c, Color.from_rgba8(200, 60, 60))
+		_frame().set_cell(c, VoxelFrame.material(Color.from_rgba8(200, 60, 60)))
 
 
 func _select_bar() -> void:

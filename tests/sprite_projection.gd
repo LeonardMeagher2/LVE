@@ -15,11 +15,11 @@ func _run() -> void:
 	step("Given a center voxel and an animation with wide document bounds", func():
 		exporter = plugin("ExportPlugin")
 		State.document = VoxelDocument.new()
-		State.document.set_cell(0, Vector3i.ZERO, Color.RED)
+		State.document.set_cell(0, Vector3i.ZERO, VoxelFrame.material(Color.RED))
 		State.document.add_frame()
-		State.document.set_cell(1, Vector3i(-8, -8, -8), Color.BLUE)
+		State.document.set_cell(1, Vector3i(-8, -8, -8), VoxelFrame.material(Color.BLUE))
 		State.document.add_frame()
-		State.document.set_cell(2, Vector3i(8, 8, 8), Color.BLUE)
+		State.document.set_cell(2, Vector3i(8, 8, 8), VoxelFrame.material(Color.BLUE))
 		State.frames_changed.emit()
 		exporter._refresh_model()
 		exporter._controls.get_node("LightingOptions/Enabled").button_pressed = false

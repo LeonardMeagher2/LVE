@@ -33,10 +33,10 @@ func _run() -> void:
 		var red_c := Color.from_rgba8(200, 60, 60)
 		var f: VoxelFrame = State.document.frames[State.current_frame]
 		for c in blob_a:
-			f.set_cell(c, gray)
+			f.set_cell(c, VoxelFrame.material(gray))
 		for c in blob_b:
-			f.set_cell(c, gray)
-		f.set_cell(red, red_c)
+			f.set_cell(c, VoxelFrame.material(gray))
+		f.set_cell(red, VoxelFrame.material(red_c))
 	)
 
 	step("When the user clicks one gray voxel of the first blob", func():

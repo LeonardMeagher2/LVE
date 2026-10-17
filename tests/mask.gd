@@ -40,8 +40,8 @@ func _run() -> void:
 
 	step("Given paint mode with voxels inside and outside the selection", func():
 		State.document.frames[0].clear()
-		State.document.set_cell(0, inside, Color.from_rgba8(150, 150, 150))
-		State.document.set_cell(0, outside, Color.from_rgba8(150, 150, 150))
+		State.document.set_cell(0, inside, VoxelFrame.material(Color.from_rgba8(150, 150, 150)))
+		State.document.set_cell(0, outside, VoxelFrame.material(Color.from_rgba8(150, 150, 150)))
 		select_toolbar_item("Toolbar", "Paint")
 		State.current_color = Color.from_rgba8(200, 60, 60)
 	)
@@ -76,9 +76,9 @@ func _run() -> void:
 		State.document.frames[0].clear()
 		State.selection.from_box(inside, inside + Vector3i(0, 0, 1))
 		State.selection_changed.emit()
-		State.document.set_cell(0, inside, Color.from_rgba8(150, 150, 150))
-		State.document.set_cell(0, inside + Vector3i(0, 0, 1), Color.from_rgba8(150, 150, 150))
-		State.document.set_cell(0, inside + Vector3i(0, 0, 2), Color.from_rgba8(150, 150, 150))
+		State.document.set_cell(0, inside, VoxelFrame.material(Color.from_rgba8(150, 150, 150)))
+		State.document.set_cell(0, inside + Vector3i(0, 0, 1), VoxelFrame.material(Color.from_rgba8(150, 150, 150)))
+		State.document.set_cell(0, inside + Vector3i(0, 0, 2), VoxelFrame.material(Color.from_rgba8(150, 150, 150)))
 		activate_tool("fill")
 		State.current_color = Color.from_rgba8(200, 60, 60)
 	)

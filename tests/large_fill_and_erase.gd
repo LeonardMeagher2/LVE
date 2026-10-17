@@ -19,9 +19,9 @@ func _run() -> void:
 			for y in 20:
 				for x in 20:
 					var cell_position := Vector3i(x, y, z)
-					source_frame.set_cell(cell_position, Color.RED)
+					source_frame.set_cell(cell_position, VoxelFrame.material(Color.RED))
 					State.selection.add(cell_position)
-		source_frame.set_cell(DISTANT, Color.RED)
+		source_frame.set_cell(DISTANT, VoxelFrame.material(Color.RED))
 		activate_tool("fill")
 		tool = plugin("FillPlugin")._tool
 		State.current_color = Color.BLUE

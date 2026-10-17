@@ -20,17 +20,17 @@ func _run() -> void:
 		prefix = "user://lve_format_%s" % Time.get_ticks_usec()
 		source = VoxelDocument.new()
 		State.document = source
-		source.frames[0].set_cell(Vector3i(-17, 3, -1), Color(0.25, 0.5, 0.75, 0.5))
+		source.frames[0].set_cell(Vector3i(-17, 3, -1), VoxelFrame.material(Color(0.25, 0.5, 0.75, 0.5)))
 		var solid := {}
 		for z in 16:
 			for y in 16:
 				for x in 16:
-					solid[Vector3i(x, y, z)] = Color.RED
+					solid[Vector3i(x, y, z)] = VoxelFrame.material(Color.RED)
 		source.frames[0].set_cells(solid)
 		source.frames[0].delay_ms = 123
 		source.add_frame().delay_ms = 250
 		source.add_frame(0).delay_ms = 400
-		source.palette.assign([Color.BLACK, Color.RED, Color(0.25, 0.5, 0.75, 0.5)])
+		source.palette.assign([VoxelFrame.material(Color.BLACK), VoxelFrame.material(Color.RED, Color(0.5, 0.25, 0.125), 0.75, 0.25), VoxelFrame.material(Color(0.25, 0.5, 0.75, 0.5))])
 		source.tags.clear()
 		for mode in 4:
 			source.add_tag("Tag %s 🦩" % mode, 0, 2, mode, mode)
@@ -44,6 +44,7 @@ func _run() -> void:
 		preview.set_pixel(0, 0, Color.RED)
 		encoded = source.encode_document()
 		expect(not encoded.is_empty(), "the animation has a data-only encoding")
+		expect(encoded.decode_u32(4) == 3, "material palettes use document version 3")
 		expect(encoded.size() < 8192, "uniform voxel regions keep the document compact")
 	)
 	step("When the user saves both document formats", func():
@@ -67,7 +68,7 @@ func _run() -> void:
 				expect(loaded.export_settings.automatic_size, "the file retains compatible legacy export settings")
 				expect(loaded.frames[1].count() == 0, "the empty frame retains its position")
 				expect(loaded.frames[0].count() == 4097, "the document restores every occupied voxel")
-				loaded.frames[2].set_cell(Vector3i.ZERO, Color.BLUE)
+				loaded.frames[2].set_cell(Vector3i.ZERO, VoxelFrame.material(Color.BLUE))
 				expect(loaded.frames[0].get_color(Vector3i.ZERO) == Color.RED, "loaded frames can be edited independently")
 		var visible := Image.new()
 		expect(visible.load_png_from_buffer(FileAccess.get_file_as_bytes(prefix + ".lve.png")) == OK, "standard PNG decoding reads the preview")
@@ -98,7 +99,7 @@ func _run() -> void:
 		dialog.hide()
 	)
 	step("When the user saves changes over an existing binary document", func():
-		State.document.frames[0].set_cell(Vector3i.ZERO, Color.BLUE)
+		State.document.frames[0].set_cell(Vector3i.ZERO, VoxelFrame.material(Color.BLUE))
 		expect(menu.save_doc(prefix + ".lve") == OK, "the edited document saves")
 		saved = FileAccess.get_file_as_bytes(prefix + ".lve")
 	)
@@ -121,7 +122,7 @@ func _run() -> void:
 	step("Then failed document opening preserves the current document and undo history", func():
 		var previous := State.document
 		State.begin_stroke()
-		State.paint(Vector3i(100, 0, 0), Color.GREEN)
+		State.paint(Vector3i(100, 0, 0), VoxelFrame.material(Color.GREEN))
 		State.end_stroke()
 		menu._on_file_opened(prefix + "_invalid.lve")
 		menu.get_node("FileError").hide()
@@ -226,7 +227,7 @@ func _check_rendered_save() -> void:
 		expect(menu.current_save_path == prefix + "_rendered.lve.png", "Save retains the preview format")
 		expect(State.current_frame == 1, "rendering the first frame preserves the editor's selected frame")
 	)
-	source.frames[0].set_cell(Vector3i.ZERO, Color.GREEN)
+	source.frames[0].set_cell(Vector3i.ZERO, VoxelFrame.material(Color.GREEN))
 	step("When the user presses Save for the same PNG", func():
 		menu.get_node("SaveBtn").pressed.emit()
 	)

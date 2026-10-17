@@ -41,9 +41,9 @@ func _run() -> void:
 		exporter = plugin("ExportPlugin")
 		settings = exporter._sheet_settings
 		State.document = VoxelDocument.new()
-		State.document.set_cell(0, Vector3i(30, 20, -10), Color.RED)
+		State.document.set_cell(0, Vector3i(30, 20, -10), VoxelFrame.material(Color.RED))
 		State.document.add_frame()
-		State.document.set_cell(1, Vector3i(32, 20, -10), Color.BLUE)
+		State.document.set_cell(1, Vector3i(32, 20, -10), VoxelFrame.material(Color.BLUE))
 		State.frames_changed.emit()
 		exporter._refresh_model()
 		bounds = State.document.bounds()

@@ -21,9 +21,9 @@ func _run() -> void:
 		clipboard = plugin("ClipboardPlugin")
 		options = plugin("BrushPlugin")._options
 		_empty()
-		frame.set_cell(Vector3i.ZERO, Color.RED)
-		frame.set_cell(Vector3i.RIGHT, Color.BLUE)
-		frame.set_cell(Vector3i.UP, Color.GREEN)
+		frame.set_cell(Vector3i.ZERO, VoxelFrame.material(Color.RED))
+		frame.set_cell(Vector3i.RIGHT, VoxelFrame.material(Color.BLUE))
+		frame.set_cell(Vector3i.UP, VoxelFrame.material(Color.GREEN))
 	)
 	step("When the user chooses the voxel brush", func():
 		options.get_node("Shape/Selection").pressed.emit()
@@ -50,14 +50,14 @@ func _run() -> void:
 		expect(not frame.has(Vector3i.UP), "the unselected green voxel is absent")
 	)
 	step("When the user copies all frame voxels through the shared controls", func():
-		State.document.palette.assign([Color.GREEN])
+		State.document.palette.assign([VoxelFrame.material(Color.GREEN)])
 		State.palette_changed.emit()
 		options.get_node("Shape/Cube").pressed.emit()
 		clipboard._options.get_node("Copy").pressed.emit()
 		expect(options.get_node("Shape/Cube").button_pressed, "copying leaves the brush shape unchanged")
 		expect(frame.count() == 2, "copying preserves the source frame")
 		expect(clipboard._pattern.size() == 2, "copying without a selection captures the whole frame")
-		expect(State.document.palette == [Color.GREEN], "Copy preserves the existing palette")
+		expect(State.document.palette == [VoxelFrame.material(Color.GREEN)], "Copy preserves the existing palette")
 		activate_tool("selection")
 	)
 	await get_tree().process_frame
@@ -101,7 +101,7 @@ func _run() -> void:
 		expect(frame.get_color(Vector3i(9, 0, 0)) == Color.BLUE, "the pasted blue voxel preserves its relative position")
 		expect(State.selection.is_empty(), "Paste restores the copied empty selection")
 		expect(not State.edit_busy(), "paste placement releases editing")
-		expect(State.document.palette == [Color.GREEN], "Paste preserves the existing palette")
+		expect(State.document.palette == [VoxelFrame.material(Color.GREEN)], "Paste preserves the existing palette")
 		State.undo_redo.undo()
 		expect(frame.count() == 2, "one undo removes only the pasted voxels")
 		expect(State.selection.contains(Vector3i.ZERO) and State.selection.count() == 1, "undo preserves the existing selection")
@@ -140,7 +140,7 @@ func _run() -> void:
 		for x in range(-2, 3):
 			for y in range(-2, 3):
 				for z in range(-2, 3):
-					frame.set_cell(Vector3i(x, y, z), Color.BLUE)
+					frame.set_cell(Vector3i(x, y, z), VoxelFrame.material(Color.BLUE))
 		select_toolbar_item("Toolbar", "Eraser")
 	)
 	step("When the user erases one cube stamp", func():

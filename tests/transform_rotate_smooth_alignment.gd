@@ -62,7 +62,7 @@ func _paint_shape() -> void:
 	State.selection.clear()
 	_frame().clear()
 	for c in SHAPE:
-		_frame().set_cell(c, Color.from_rgba8(200, 60, 60))
+		_frame().set_cell(c, VoxelFrame.material(Color.from_rgba8(200, 60, 60)))
 		State.selection.add(c)
 	State.selection_changed.emit()
 

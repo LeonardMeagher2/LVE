@@ -3,7 +3,7 @@ extends Resource
 
 @export var delay_ms := 100
 
-# Version 2 stores sparse chunk roots, color tables, material tables, and flattened octree nodes.
+# Version 3 stores sparse chunk roots, one material table per chunk, and flattened octree nodes.
 @export_storage var voxel_data: PackedByteArray:
 	get:
 		return _encode()
@@ -12,12 +12,34 @@ extends Resource
 			_decode(value)
 
 const CHUNK_SIZE := 16
-const STORAGE_VERSION := 2
-const STORAGE_RECORD_SIZE := 5
+const STORAGE_VERSION := 3
+const STORAGE_RECORD_SIZE := 3
+const VERSION_2_RECORD_SIZE := 5
 const VERSION_1_RECORD_SIZE := 3
-# The default material keeps no per-cell data. Version 1 content uses it.
-const DEFAULT_MATERIAL := {"emission": Color.BLACK, "metallic": 0.0, "roughness": 1.0}
+# One material holds nine floats. The color alpha stays live for the mesher and the export.
+const MATERIAL_STRIDE := 9
+const MATERIAL_COLOR := 0
+const MATERIAL_EMISSION := 4
+const MATERIAL_METALLIC := 7
+const MATERIAL_ROUGHNESS := 8
+const DEFAULT_EMISSION := Color.BLACK
+const DEFAULT_METALLIC := 0.0
+const DEFAULT_ROUGHNESS := 1.0
 const DIRECTIONS := [Vector3i.RIGHT, Vector3i.LEFT, Vector3i.UP, Vector3i.DOWN, Vector3i.BACK, Vector3i.FORWARD]
+
+
+# Build one material. A transparent color erases the voxel.
+static func material(color: Color, emission: Color = DEFAULT_EMISSION, metallic: float = DEFAULT_METALLIC, roughness: float = DEFAULT_ROUGHNESS) -> PackedFloat32Array:
+	return PackedFloat32Array([color.r, color.g, color.b, color.a, emission.r, emission.g, emission.b, metallic, roughness])
+
+
+static func is_empty(cell_material: PackedFloat32Array) -> bool:
+	return material_color(cell_material) == Color.TRANSPARENT
+
+
+static func material_color(cell_material: PackedFloat32Array) -> Color:
+	return Color(cell_material[MATERIAL_COLOR], cell_material[MATERIAL_COLOR + 1], cell_material[MATERIAL_COLOR + 2], cell_material[MATERIAL_COLOR + 3])
+
 
 class EditContext extends RefCounted:
 	var axes := 0
@@ -65,7 +87,7 @@ class EditContext extends RefCounted:
 class EditJob extends RefCounted:
 	var worker_task_id := -1
 	var edit_context: EditContext
-	var applied_cell_colors := {}
+	var applied_cells := {}
 	var _label := "Preparing edit"
 	var _completed := 0
 	var _total := -1
@@ -98,10 +120,10 @@ class EditJob extends RefCounted:
 		_progress_lock.unlock()
 
 	func apply_cells(frame: VoxelFrame, changes: Dictionary, existing_only := false, matching_color: Variant = null) -> Array[Vector3i]:
-		applied_cell_colors = edit_context.expand(changes, frame, existing_only, matching_color, self) if edit_context else changes
+		applied_cells = edit_context.expand(changes, frame, existing_only, matching_color, self) if edit_context else changes
 		if not checkpoint(0):
 			return []
-		return frame.set_cells(applied_cell_colors, self)
+		return frame.set_cells(applied_cells, self)
 
 	func estimate_work(original_work: int) -> int:
 		var work := original_work
@@ -112,9 +134,9 @@ class EditJob extends RefCounted:
 		return work
 
 class Chunk extends RefCounted:
-	var cell_colors: Dictionary = {}
-	# Only occupied cells with a non-default material appear here.
-	var cell_materials: Dictionary = {}
+	# One slot holds one voxel material. An erase leaves a hole that compaction removes.
+	var cells: Dictionary = {}
+	var materials := PackedFloat32Array()
 	var voxel_revision := 0
 	var occupied_bounds := AABB()
 	var bounds_dirty := false
@@ -123,17 +145,97 @@ class Chunk extends RefCounted:
 
 	func copy() -> Chunk:
 		var chunk_copy := Chunk.new()
-		chunk_copy.cell_colors = cell_colors.duplicate()
-		chunk_copy.cell_materials = cell_materials.duplicate()
+		chunk_copy.cells = cells.duplicate()
+		chunk_copy.materials = materials.duplicate()
 		chunk_copy.voxel_revision = voxel_revision
 		chunk_copy.occupied_bounds = occupied_bounds
 		chunk_copy.bounds_dirty = bounds_dirty
 		return chunk_copy
 
+	func matches(cell_position: Vector3i, cell_material: PackedFloat32Array) -> bool:
+		var slot: int = cells.get(cell_position, -1)
+		if slot < 0:
+			return false
+		var base := slot * MATERIAL_STRIDE
+		for offset in MATERIAL_STRIDE:
+			if materials[base + offset] != cell_material[offset]:
+				return false
+		return true
+
+	# Compare by content. Two equal chunks can number their slots differently.
+	func equals(other: Chunk) -> bool:
+		if cells.size() != other.cells.size():
+			return false
+		for cell_position in cells:
+			var other_slot: int = other.cells.get(cell_position, -1)
+			if other_slot < 0:
+				return false
+			var slot: int = cells[cell_position]
+			var base := slot * MATERIAL_STRIDE
+			var other_base := other_slot * MATERIAL_STRIDE
+			for offset in MATERIAL_STRIDE:
+				if materials[base + offset] != other.materials[other_base + offset]:
+					return false
+		return true
+
+	func store(cell_position: Vector3i, cell_material: PackedFloat32Array) -> void:
+		var slot: int = cells.get(cell_position, -1)
+		if slot < 0:
+			cells[cell_position] = materials.size() / MATERIAL_STRIDE
+			materials.append_array(cell_material)
+			return
+		var base := slot * MATERIAL_STRIDE
+		for offset in MATERIAL_STRIDE:
+			materials[base + offset] = cell_material[offset]
+
+	func erase(cell_position: Vector3i) -> void:
+		var slot: int = cells.get(cell_position, -1)
+		if slot < 0:
+			return
+		cells.erase(cell_position)
+		if materials.size() > cells.size() * MATERIAL_STRIDE * 2:
+			_compact()
+
+	# Drop the holes left by erases. The slot map is rebuilt in place.
+	func _compact() -> void:
+		var compacted := PackedFloat32Array()
+		compacted.resize(cells.size() * MATERIAL_STRIDE)
+		var next_slot := 0
+		for cell_position in cells.keys():
+			var slot: int = cells[cell_position]
+			var base := slot * MATERIAL_STRIDE
+			for offset in MATERIAL_STRIDE:
+				compacted[next_slot * MATERIAL_STRIDE + offset] = materials[base + offset]
+			cells[cell_position] = next_slot
+			next_slot += 1
+		materials = compacted
+
+	func get_color(cell_position: Vector3i) -> Color:
+		var slot: int = cells.get(cell_position, -1)
+		if slot < 0:
+			return Color.TRANSPARENT
+		var base := slot * MATERIAL_STRIDE
+		return Color(materials[base], materials[base + 1], materials[base + 2], materials[base + 3])
+
+	func get_emission(cell_position: Vector3i) -> Color:
+		var slot: int = cells.get(cell_position, -1)
+		if slot < 0:
+			return DEFAULT_EMISSION
+		var base := slot * MATERIAL_STRIDE + MATERIAL_EMISSION
+		return Color(materials[base], materials[base + 1], materials[base + 2])
+
+	func get_metallic(cell_position: Vector3i) -> float:
+		var slot: int = cells.get(cell_position, -1)
+		return materials[slot * MATERIAL_STRIDE + MATERIAL_METALLIC] if slot >= 0 else DEFAULT_METALLIC
+
+	func get_roughness(cell_position: Vector3i) -> float:
+		var slot: int = cells.get(cell_position, -1)
+		return materials[slot * MATERIAL_STRIDE + MATERIAL_ROUGHNESS] if slot >= 0 else DEFAULT_ROUGHNESS
+
 	func get_bounds() -> AABB:
 		if bounds_dirty:
 			occupied_bounds = AABB()
-			for cell_position in cell_colors:
+			for cell_position in cells:
 				var cell_bounds := AABB(Vector3(cell_position) - Vector3.ONE * 0.5, Vector3.ONE)
 				occupied_bounds = occupied_bounds.merge(cell_bounds) if occupied_bounds.has_volume() else cell_bounds
 			bounds_dirty = false
@@ -146,7 +248,7 @@ var _shared_chunks: Dictionary = {}
 func count() -> int:
 	var cell_count := 0
 	for chunk in chunks.values():
-		cell_count += chunk.cell_colors.size()
+		cell_count += chunk.cells.size()
 	return cell_count
 
 
@@ -161,24 +263,39 @@ func clear() -> void:
 
 func has(cell_position: Vector3i) -> bool:
 	var chunk: Chunk = chunks.get(chunk_position(cell_position))
-	return chunk != null and chunk.cell_colors.has(cell_position)
+	return chunk != null and chunk.cells.has(cell_position)
 
 
 func get_color(cell_position: Vector3i) -> Color:
 	var chunk: Chunk = chunks.get(chunk_position(cell_position))
-	return chunk.cell_colors.get(cell_position, Color.TRANSPARENT) if chunk else Color.TRANSPARENT
+	return chunk.get_color(cell_position) if chunk else Color.TRANSPARENT
 
 
-func get_material(cell_position: Vector3i) -> Dictionary:
+func get_emission(cell_position: Vector3i) -> Color:
 	var chunk: Chunk = chunks.get(chunk_position(cell_position))
-	return chunk.cell_materials.get(cell_position, DEFAULT_MATERIAL) if chunk else DEFAULT_MATERIAL
+	return chunk.get_emission(cell_position) if chunk else DEFAULT_EMISSION
 
 
-func set_cell(cell_position: Vector3i, color: Color) -> void:
+func get_metallic(cell_position: Vector3i) -> float:
+	var chunk: Chunk = chunks.get(chunk_position(cell_position))
+	return chunk.get_metallic(cell_position) if chunk else DEFAULT_METALLIC
+
+
+func get_roughness(cell_position: Vector3i) -> float:
+	var chunk: Chunk = chunks.get(chunk_position(cell_position))
+	return chunk.get_roughness(cell_position) if chunk else DEFAULT_ROUGHNESS
+
+
+# One write supplies the whole material. A transparent color erases the voxel.
+func set_cell(cell_position: Vector3i, cell_material: PackedFloat32Array) -> void:
 	var chunk_location := chunk_position(cell_position)
 	var chunk: Chunk = chunks.get(chunk_location)
-	var previous_color: Color = chunk.cell_colors.get(cell_position, Color.TRANSPARENT) if chunk else Color.TRANSPARENT
-	if previous_color == color:
+	var erased := is_empty(cell_material)
+	var slot: int = chunk.cells.get(cell_position, -1) if chunk else -1
+	if erased:
+		if slot < 0:
+			return
+	elif slot >= 0 and chunk.matches(cell_position, cell_material):
 		return
 	if chunk == null:
 		chunk = Chunk.new()
@@ -187,82 +304,26 @@ func set_cell(cell_position: Vector3i, color: Color) -> void:
 		chunk = chunk.copy()
 		chunks[chunk_location] = chunk
 		_shared_chunks.erase(chunk_location)
-	if color == Color.TRANSPARENT:
-		chunk.cell_colors.erase(cell_position)
-		chunk.cell_materials.erase(cell_position)
+	if erased:
+		chunk.erase(cell_position)
 		var min_cell := Vector3i(chunk.occupied_bounds.position + Vector3.ONE * 0.5)
 		var max_cell := Vector3i(chunk.occupied_bounds.end - Vector3.ONE * 0.5)
 		if cell_position.x == min_cell.x or cell_position.y == min_cell.y or cell_position.z == min_cell.z or cell_position.x == max_cell.x or cell_position.y == max_cell.y or cell_position.z == max_cell.z:
 			chunk.bounds_dirty = true
 	else:
-		chunk.cell_colors[cell_position] = color
+		chunk.store(cell_position, cell_material)
 		if not chunk.bounds_dirty:
 			var cell_bounds := AABB(Vector3(cell_position) - Vector3.ONE * 0.5, Vector3.ONE)
 			chunk.occupied_bounds = chunk.occupied_bounds.merge(cell_bounds) if chunk.occupied_bounds.has_volume() else cell_bounds
 	chunk.voxel_revision += 1
 	chunk.serialized_record.clear()
 	chunk.positions_by_color.clear()
-	if chunk.cell_colors.is_empty():
+	if chunk.cells.is_empty():
 		chunks.erase(chunk_location)
 
 
 # Batch writes copy and invalidate each changed chunk once. Return changed chunk positions.
-func set_cells(cell_colors: Dictionary, edit_job: EditJob = null) -> Array[Vector3i]:
-	var changes_by_chunk := {}
-	var completed := 0
-	for cell_position: Vector3i in cell_colors:
-		var chunk_location := chunk_position(cell_position)
-		if not changes_by_chunk.has(chunk_location):
-			changes_by_chunk[chunk_location] = {}
-		changes_by_chunk[chunk_location][cell_position] = cell_colors[cell_position]
-		completed += 1
-		if edit_job and completed % 4096 == 0 and not edit_job.checkpoint(0):
-			return []
-	var changed_chunks: Array[Vector3i] = []
-	completed = 0
-	for chunk_location: Vector3i in changes_by_chunk:
-		if edit_job and not edit_job.checkpoint(completed):
-			return []
-		var chunk: Chunk = chunks.get(chunk_location)
-		var chunk_changes: Dictionary = changes_by_chunk[chunk_location]
-		var has_changed := false
-		for cell_position in chunk_changes:
-			var color: Color = chunk_changes[cell_position]
-			var previous_color: Color = chunk.cell_colors.get(cell_position, Color.TRANSPARENT) if chunk else Color.TRANSPARENT
-			if previous_color == color:
-				continue
-			if not has_changed:
-				if chunk == null:
-					chunk = Chunk.new()
-				elif _shared_chunks.has(chunk_location):
-					chunk = chunk.copy()
-				chunks[chunk_location] = chunk
-				_shared_chunks.erase(chunk_location)
-				has_changed = true
-			if color == Color.TRANSPARENT:
-				chunk.cell_colors.erase(cell_position)
-				chunk.cell_materials.erase(cell_position)
-			else:
-				chunk.cell_colors[cell_position] = color
-		completed += chunk_changes.size()
-		if not has_changed:
-			continue
-		chunk.voxel_revision += 1
-		chunk.serialized_record.clear()
-		chunk.positions_by_color.clear()
-		chunk.bounds_dirty = true
-		if chunk.cell_colors.is_empty():
-			chunks.erase(chunk_location)
-		else:
-			chunk.get_bounds()
-		changed_chunks.append(chunk_location)
-	if edit_job:
-		edit_job.checkpoint(completed)
-	return changed_chunks
-
-
-# Batch material writes apply to occupied cells only. Return changed chunk positions.
-func set_materials(cell_materials: Dictionary, edit_job: EditJob = null) -> Array[Vector3i]:
+func set_cells(cell_materials: Dictionary, edit_job: EditJob = null) -> Array[Vector3i]:
 	var changes_by_chunk := {}
 	var completed := 0
 	for cell_position: Vector3i in cell_materials:
@@ -282,27 +343,36 @@ func set_materials(cell_materials: Dictionary, edit_job: EditJob = null) -> Arra
 		var chunk_changes: Dictionary = changes_by_chunk[chunk_location]
 		var has_changed := false
 		for cell_position in chunk_changes:
-			if chunk == null or not chunk.cell_colors.has(cell_position):
+			var cell_material: PackedFloat32Array = chunk_changes[cell_position]
+			var erased := is_empty(cell_material)
+			var slot: int = chunk.cells.get(cell_position, -1) if chunk else -1
+			if erased and slot < 0:
 				continue
-			var material: Dictionary = chunk_changes[cell_position]
-			var previous_material: Dictionary = chunk.cell_materials.get(cell_position, DEFAULT_MATERIAL)
-			if previous_material == material:
+			if not erased and slot >= 0 and chunk.matches(cell_position, cell_material):
 				continue
 			if not has_changed:
-				if _shared_chunks.has(chunk_location):
+				if chunk == null:
+					chunk = Chunk.new()
+				elif _shared_chunks.has(chunk_location):
 					chunk = chunk.copy()
 				chunks[chunk_location] = chunk
 				_shared_chunks.erase(chunk_location)
 				has_changed = true
-			if material == DEFAULT_MATERIAL:
-				chunk.cell_materials.erase(cell_position)
+			if erased:
+				chunk.erase(cell_position)
 			else:
-				chunk.cell_materials[cell_position] = material
+				chunk.store(cell_position, cell_material)
 		completed += chunk_changes.size()
 		if not has_changed:
 			continue
 		chunk.voxel_revision += 1
 		chunk.serialized_record.clear()
+		chunk.positions_by_color.clear()
+		chunk.bounds_dirty = true
+		if chunk.cells.is_empty():
+			chunks.erase(chunk_location)
+		else:
+			chunk.get_bounds()
 		changed_chunks.append(chunk_location)
 	if edit_job:
 		edit_job.checkpoint(completed)
@@ -329,7 +399,7 @@ func copy_frame() -> VoxelFrame:
 func positions() -> Array[Vector3i]:
 	var cell_positions: Array[Vector3i] = []
 	for chunk in chunks.values():
-		for cell_position in chunk.cell_colors:
+		for cell_position in chunk.cells:
 			cell_positions.append(cell_position)
 	return cell_positions
 
@@ -338,8 +408,8 @@ func cells_with_color(color: Color) -> Array[Vector3i]:
 	var matching_positions: Array[Vector3i] = []
 	for chunk in chunks.values():
 		if chunk.positions_by_color.is_empty():
-			for cell_position in chunk.cell_colors:
-				var cell_color: Color = chunk.cell_colors[cell_position]
+			for cell_position in chunk.cells:
+				var cell_color: Color = chunk.get_color(cell_position)
 				if not chunk.positions_by_color.has(cell_color):
 					chunk.positions_by_color[cell_color] = []
 				chunk.positions_by_color[cell_color].append(cell_position)
@@ -370,37 +440,26 @@ func storage_data() -> Array:
 	return [STORAGE_VERSION, serialized_chunks]
 
 
-# A record holds the color table, the material tables, and one octree of combined cell value ids.
+# A record holds one material table and one octree of material ids. Id 0 is empty.
 static func _encode_chunk(chunk: Chunk, chunk_location: Vector3i) -> Array:
-	var color_table := PackedColorArray([Color.TRANSPARENT])
-	var color_ids := {Color.TRANSPARENT: 0}
-	var emission_table := PackedColorArray()
-	var finish_table := PackedColorArray()
+	var material_table := material(Color.TRANSPARENT)
 	var material_ids := {}
-	for cell_position in chunk.cell_materials:
-		var material: Dictionary = chunk.cell_materials[cell_position]
-		if material_ids.has(material):
-			continue
-		material_ids[material] = material_ids.size() + 1
-		emission_table.append(material.emission)
-		finish_table.append(Color(material.metallic, material.roughness, 0.0, 0.0))
-	# The default material holds id 0. A chunk without materials stores color ids alone.
-	var material_count := material_ids.size() + 1
-	var cell_value_ids := PackedInt32Array()
-	cell_value_ids.resize(CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE)
-	for cell_position in chunk.cell_colors:
-		var cell_color: Color = chunk.cell_colors[cell_position]
-		if not color_ids.has(cell_color):
-			color_ids[cell_color] = color_table.size()
-			color_table.append(cell_color)
-		var material_id := 0
-		if chunk.cell_materials.has(cell_position):
-			material_id = material_ids[chunk.cell_materials[cell_position]]
+	material_ids[material_table.slice(0, MATERIAL_STRIDE)] = 0
+	var cell_ids := PackedInt32Array()
+	cell_ids.resize(CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE)
+	for cell_position in chunk.cells:
+		var slot: int = chunk.cells[cell_position]
+		var cell_material := chunk.materials.slice(slot * MATERIAL_STRIDE, (slot + 1) * MATERIAL_STRIDE)
+		var material_id: int = material_ids.get(cell_material, -1)
+		if material_id < 0:
+			material_id = material_table.size() / MATERIAL_STRIDE
+			material_ids[cell_material] = material_id
+			material_table.append_array(cell_material)
 		var local_cell: Vector3i = cell_position - chunk_location * CHUNK_SIZE
-		cell_value_ids[local_cell.x + CHUNK_SIZE * (local_cell.y + CHUNK_SIZE * local_cell.z)] = color_ids[cell_color] * material_count + material_id
+		cell_ids[local_cell.x + CHUNK_SIZE * (local_cell.y + CHUNK_SIZE * local_cell.z)] = material_id
 	var octree_nodes := PackedInt32Array()
-	_encode_region(cell_value_ids, Vector3i.ZERO, CHUNK_SIZE, octree_nodes)
-	return [chunk_location, color_table, emission_table, finish_table, octree_nodes]
+	_encode_region(cell_ids, Vector3i.ZERO, CHUNK_SIZE, octree_nodes)
+	return [chunk_location, material_table, octree_nodes]
 
 
 static func _encode_region(cell_value_ids: PackedInt32Array, region_origin: Vector3i, region_size: int, octree_nodes: PackedInt32Array) -> void:
@@ -433,18 +492,25 @@ func _decode(encoded_voxels: PackedByteArray) -> void:
 
 # Call only after validate_storage succeeds for the complete document.
 func restore_storage(serialized_frame: Array) -> void:
+	var version: int = serialized_frame[0]
 	var restored_chunks := {}
 	for serialized_chunk in serialized_frame[1]:
 		var chunk_location: Vector3i = serialized_chunk[0]
 		var chunk := Chunk.new()
-		var emission_table := PackedColorArray()
-		var finish_table := PackedColorArray()
-		if serialized_chunk.size() == STORAGE_RECORD_SIZE:
-			emission_table = serialized_chunk[2]
-			finish_table = serialized_chunk[3]
-		_decode_region(serialized_chunk[serialized_chunk.size() - 1], [0], serialized_chunk[1], emission_table, finish_table, chunk_location * CHUNK_SIZE, CHUNK_SIZE, chunk.cell_colors, chunk.cell_materials)
+		var chunk_origin := chunk_location * CHUNK_SIZE
+		var octree_nodes: PackedInt32Array = serialized_chunk[serialized_chunk.size() - 1]
+		if version == STORAGE_VERSION:
+			_decode_materials(octree_nodes, [0], serialized_chunk[1], chunk_origin, CHUNK_SIZE, chunk)
+		else:
+			var emission_table := PackedColorArray()
+			var finish_table := PackedColorArray()
+			if version == 2:
+				emission_table = serialized_chunk[2]
+				finish_table = serialized_chunk[3]
+			_decode_region(octree_nodes, [0], serialized_chunk[1], emission_table, finish_table, chunk_origin, CHUNK_SIZE, chunk)
 		chunk.bounds_dirty = true
-		chunk.serialized_record = serialized_chunk
+		if version == STORAGE_VERSION:
+			chunk.serialized_record = serialized_chunk
 		restored_chunks[chunk_location] = chunk
 	restore(restored_chunks)
 
@@ -460,34 +526,39 @@ static func validate_storage(data: Variant, voxel_limit := MAX_STORED_VOXELS) ->
 		return -1
 	if data[1].size() > MAX_STORED_CHUNKS:
 		return -1
-	var record_size := VERSION_1_RECORD_SIZE if data[0] == 1 else STORAGE_RECORD_SIZE
+	var version: int = data[0]
 	var locations := {}
 	var occupied := 0
 	for record in data[1]:
-		if not _valid_record(record, record_size):
+		if not _valid_record(record, version):
 			return -1
 		var location: Vector3i = record[0]
 		if absi(location.x) > MAX_CHUNK_COORDINATE or absi(location.y) > MAX_CHUNK_COORDINATE or absi(location.z) > MAX_CHUNK_COORDINATE or locations.has(location):
 			return -1
 		locations[location] = true
-		var colors: PackedColorArray = record[1]
-		var emissions := PackedColorArray()
-		var finishes := PackedColorArray()
-		if record_size == STORAGE_RECORD_SIZE:
-			emissions = record[2]
-			finishes = record[3]
-		var nodes: PackedInt32Array = record[record_size - 1]
-		if colors.is_empty() or colors.size() > 4097 or colors[0] != Color.TRANSPARENT or nodes.is_empty() or nodes.size() > 4681:
-			return -1
-		for color in colors:
-			if not is_finite(color.r) or not is_finite(color.g) or not is_finite(color.b) or not is_finite(color.a):
+		var value_count := -1
+		if version == STORAGE_VERSION:
+			var material_table: PackedFloat32Array = record[1]
+			if not _valid_material_values(material_table):
 				return -1
-			if color.r < 0.0 or color.r > 1.0 or color.g < 0.0 or color.g > 1.0 or color.b < 0.0 or color.b > 1.0 or color.a < 0.0 or color.a > 1.0:
+			value_count = material_table.size() / MATERIAL_STRIDE
+		else:
+			var color_table: PackedColorArray = record[1]
+			if not _valid_colors(color_table):
 				return -1
-		if not _valid_material_table(emissions, finishes):
+			var emission_table := PackedColorArray()
+			var finish_table := PackedColorArray()
+			if version == 2:
+				emission_table = record[2]
+				finish_table = record[3]
+				if not _valid_material_table(emission_table, finish_table):
+					return -1
+			value_count = color_table.size() * (emission_table.size() + 1)
+		var nodes: PackedInt32Array = record[record.size() - 1]
+		if nodes.is_empty() or nodes.size() > 4681:
 			return -1
 		var cursor := [0]
-		var chunk_count := _validate_region(nodes, cursor, colors.size() * (emissions.size() + 1), CHUNK_SIZE)
+		var chunk_count := _validate_region(nodes, cursor, value_count, CHUNK_SIZE)
 		if chunk_count < 0 or cursor[0] != nodes.size():
 			return -1
 		occupied += chunk_count
@@ -496,21 +567,48 @@ static func validate_storage(data: Variant, voxel_limit := MAX_STORED_VOXELS) ->
 	return occupied
 
 
-static func _valid_record(record: Variant, record_size: int) -> bool:
-	if not record is Array or record.size() != record_size or not record[0] is Vector3i or not record[1] is PackedColorArray:
+static func _valid_record(record: Variant, version: int) -> bool:
+	var record_size := STORAGE_RECORD_SIZE if version == STORAGE_VERSION else (VERSION_2_RECORD_SIZE if version == 2 else VERSION_1_RECORD_SIZE)
+	if not record is Array or record.size() != record_size or not record[0] is Vector3i:
 		return false
-	if record_size == VERSION_1_RECORD_SIZE:
-		return record[2] is PackedInt32Array
-	return record[2] is PackedColorArray and record[3] is PackedColorArray and record[4] is PackedInt32Array
+	if version == STORAGE_VERSION:
+		return record[1] is PackedFloat32Array and record[2] is PackedInt32Array
+	if version == 2:
+		return record[1] is PackedColorArray and record[2] is PackedColorArray and record[3] is PackedColorArray and record[4] is PackedInt32Array
+	return record[1] is PackedColorArray and record[2] is PackedInt32Array
+
+
+# The empty entry holds id 0. Every other entry holds a color.
+static func _valid_colors(color_table: PackedColorArray) -> bool:
+	if color_table.is_empty() or color_table.size() > 4097 or color_table[0] != Color.TRANSPARENT:
+		return false
+	for color in color_table:
+		if not is_finite(color.r) or not is_finite(color.g) or not is_finite(color.b) or not is_finite(color.a):
+			return false
+		if color.r < 0.0 or color.r > 1.0 or color.g < 0.0 or color.g > 1.0 or color.b < 0.0 or color.b > 1.0 or color.a < 0.0 or color.a > 1.0:
+			return false
+	return true
+
+
+# The empty entry holds id 0. Every other entry holds nine floats in 0 through 1.
+static func _valid_material_values(material_table: PackedFloat32Array) -> bool:
+	if material_table.size() < MATERIAL_STRIDE or material_table.size() > 4097 * MATERIAL_STRIDE or material_table.size() % MATERIAL_STRIDE != 0:
+		return false
+	if not is_empty(material_table.slice(0, MATERIAL_STRIDE)):
+		return false
+	for value in material_table:
+		if not is_finite(value) or value < 0.0 or value > 1.0:
+			return false
+	return true
 
 
 # Emission stores the glow color. Finish stores metallic and roughness. Alpha is unused.
-static func _valid_material_table(emissions: PackedColorArray, finishes: PackedColorArray) -> bool:
-	if emissions.size() != finishes.size() or emissions.size() > 4096:
+static func _valid_material_table(emission_table: PackedColorArray, finish_table: PackedColorArray) -> bool:
+	if emission_table.size() != finish_table.size() or emission_table.size() > 4096:
 		return false
-	for index in emissions.size():
-		var emission: Color = emissions[index]
-		var finish: Color = finishes[index]
+	for index in emission_table.size():
+		var emission: Color = emission_table[index]
+		var finish: Color = finish_table[index]
 		for value in [emission.r, emission.g, emission.b, finish.r, finish.g]:
 			if not is_finite(value) or value < 0.0 or value > 1.0:
 				return false
@@ -535,28 +633,45 @@ static func _validate_region(nodes: PackedInt32Array, cursor: Array, value_count
 	return occupied
 
 
-static func _decode_region(octree_nodes: PackedInt32Array, node_cursor: Array, color_table: PackedColorArray, emission_table: PackedColorArray, finish_table: PackedColorArray, region_origin: Vector3i, region_size: int, restored_colors: Dictionary, restored_materials: Dictionary) -> void:
+# Version 1 stores color ids alone. Version 2 packs a color id and a material id.
+static func _decode_region(octree_nodes: PackedInt32Array, node_cursor: Array, color_table: PackedColorArray, emission_table: PackedColorArray, finish_table: PackedColorArray, region_origin: Vector3i, region_size: int, chunk: Chunk) -> void:
 	var cell_value_id := octree_nodes[node_cursor[0]]
 	node_cursor[0] += 1
 	if cell_value_id == 0:
 		return
-	var material_count := emission_table.size() + 1
 	if cell_value_id > 0:
+		var material_count := emission_table.size() + 1
 		var cell_color: Color = color_table[floori(cell_value_id / float(material_count))]
 		var material_id := cell_value_id % material_count
-		var material := {}
+		var cell_material := material(cell_color)
 		if material_id != 0:
 			var finish: Color = finish_table[material_id - 1]
-			material = {"emission": emission_table[material_id - 1], "metallic": finish.r, "roughness": finish.g}
+			cell_material = material(cell_color, emission_table[material_id - 1], finish.r, finish.g)
 		for z in range(region_origin.z, region_origin.z + region_size):
 			for y in range(region_origin.y, region_origin.y + region_size):
 				for x in range(region_origin.x, region_origin.x + region_size):
-					var cell := Vector3i(x, y, z)
-					restored_colors[cell] = cell_color
-					if material_id != 0:
-						restored_materials[cell] = material
+					chunk.store(Vector3i(x, y, z), cell_material)
 		return
 	var child_size := region_size >> 1
 	for child_index in 8:
 		var child_offset := Vector3i(child_index & 1, (child_index >> 1) & 1, (child_index >> 2) & 1) * child_size
-		_decode_region(octree_nodes, node_cursor, color_table, emission_table, finish_table, region_origin + child_offset, child_size, restored_colors, restored_materials)
+		_decode_region(octree_nodes, node_cursor, color_table, emission_table, finish_table, region_origin + child_offset, child_size, chunk)
+
+
+# Version 3 stores one material id per cell.
+static func _decode_materials(octree_nodes: PackedInt32Array, node_cursor: Array, material_table: PackedFloat32Array, region_origin: Vector3i, region_size: int, chunk: Chunk) -> void:
+	var material_id := octree_nodes[node_cursor[0]]
+	node_cursor[0] += 1
+	if material_id == 0:
+		return
+	if material_id > 0:
+		var cell_material := material_table.slice(material_id * MATERIAL_STRIDE, (material_id + 1) * MATERIAL_STRIDE)
+		for z in range(region_origin.z, region_origin.z + region_size):
+			for y in range(region_origin.y, region_origin.y + region_size):
+				for x in range(region_origin.x, region_origin.x + region_size):
+					chunk.store(Vector3i(x, y, z), cell_material)
+		return
+	var child_size := region_size >> 1
+	for child_index in 8:
+		var child_offset := Vector3i(child_index & 1, (child_index >> 1) & 1, (child_index >> 2) & 1) * child_size
+		_decode_materials(octree_nodes, node_cursor, material_table, region_origin + child_offset, child_size, chunk)

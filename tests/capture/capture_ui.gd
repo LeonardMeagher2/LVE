@@ -13,14 +13,14 @@ func _ready() -> void:
 	_shot("01_empty")
 
 	var d: VoxelDocument = State.document
-	d.paint(0, Vector3i(6, 4, 7), Color.from_rgba8(200, 60, 50))
-	d.paint(0, Vector3i(7, 4, 7), Color.from_rgba8(200, 60, 50))
-	d.paint(0, Vector3i(6, 5, 7), Color.from_rgba8(200, 60, 50))
-	d.paint(0, Vector3i(7, 5, 7), Color.from_rgba8(200, 60, 50))
-	d.paint(0, Vector3i(6, 6, 7), Color.from_rgba8(70, 110, 200))
-	d.paint(0, Vector3i(7, 6, 7), Color.from_rgba8(70, 110, 200))
-	d.paint(0, Vector3i(6, 4, 8), Color.from_rgba8(90, 170, 90))
-	d.paint(0, Vector3i(7, 4, 8), Color.from_rgba8(90, 170, 90))
+	d.paint(0, Vector3i(6, 4, 7), VoxelFrame.material(Color.from_rgba8(200, 60, 50)))
+	d.paint(0, Vector3i(7, 4, 7), VoxelFrame.material(Color.from_rgba8(200, 60, 50)))
+	d.paint(0, Vector3i(6, 5, 7), VoxelFrame.material(Color.from_rgba8(200, 60, 50)))
+	d.paint(0, Vector3i(7, 5, 7), VoxelFrame.material(Color.from_rgba8(200, 60, 50)))
+	d.paint(0, Vector3i(6, 6, 7), VoxelFrame.material(Color.from_rgba8(70, 110, 200)))
+	d.paint(0, Vector3i(7, 6, 7), VoxelFrame.material(Color.from_rgba8(70, 110, 200)))
+	d.paint(0, Vector3i(6, 4, 8), VoxelFrame.material(Color.from_rgba8(90, 170, 90)))
+	d.paint(0, Vector3i(7, 4, 8), VoxelFrame.material(Color.from_rgba8(90, 170, 90)))
 	_remember(Color.from_rgba8(200, 60, 50))
 	_remember(Color.from_rgba8(70, 110, 200))
 	_remember(Color.from_rgba8(90, 170, 90))
@@ -30,10 +30,10 @@ func _ready() -> void:
 
 	State.playback.add_frame()
 	d = State.document
-	d.paint(1, Vector3i(6, 5, 7), Color.from_rgba8(230, 200, 70))
-	d.paint(1, Vector3i(7, 5, 7), Color.from_rgba8(230, 200, 70))
-	d.paint(1, Vector3i(6, 6, 7), Color.from_rgba8(230, 200, 70))
-	d.paint(1, Vector3i(7, 6, 7), Color.from_rgba8(230, 200, 70))
+	d.paint(1, Vector3i(6, 5, 7), VoxelFrame.material(Color.from_rgba8(230, 200, 70)))
+	d.paint(1, Vector3i(7, 5, 7), VoxelFrame.material(Color.from_rgba8(230, 200, 70)))
+	d.paint(1, Vector3i(6, 6, 7), VoxelFrame.material(Color.from_rgba8(230, 200, 70)))
+	d.paint(1, Vector3i(7, 6, 7), VoxelFrame.material(Color.from_rgba8(230, 200, 70)))
 	_remember(Color.from_rgba8(230, 200, 70))
 	State.cells_changed.emit()
 	await _settle(6)
@@ -45,7 +45,7 @@ func _ready() -> void:
 	d.frames[2].delay_ms = 200
 	d.frames[3].delay_ms = 50
 	d.frames[4].delay_ms = 100
-	d.paint(2, Vector3i(7, 3, 7), Color.from_rgba8(150, 90, 190))
+	d.paint(2, Vector3i(7, 3, 7), VoxelFrame.material(Color.from_rgba8(150, 90, 190)))
 	_remember(Color.from_rgba8(150, 90, 190))
 	State.cells_changed.emit()
 	State.playback.select_frame(2)

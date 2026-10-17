@@ -18,7 +18,7 @@ func _run() -> void:
 			for y in SIZE:
 				for z in SIZE:
 					var c := Vector3i(x, y, z)
-					_frame().set_cell(c, Color.from_rgba8(200, 60, 60))
+					_frame().set_cell(c, VoxelFrame.material(Color.from_rgba8(200, 60, 60)))
 					State.selection.add(c)
 		State.selection_changed.emit()
 		activate_tool("transform")

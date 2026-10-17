@@ -16,11 +16,10 @@ func _run() -> void:
 	step("Given a plain voxel and a glowing metal voxel", func():
 		State.document = VoxelDocument.new()
 		frame = State.get_current_voxel_frame()
-		frame.set_cell(Vector3i.ZERO, Color.RED)
-		frame.set_cell(Vector3i(3, 0, 0), Color.BLUE)
-		frame.set_materials({Vector3i(3, 0, 0): {"emission": Color(1, 0.5, 0.25), "metallic": 1.0, "roughness": 0.25}})
-		expect(frame.get_material(Vector3i(3, 0, 0)).metallic == 1.0, "the metal voxel stores its metallic")
-		expect(not frame.chunks[Vector3i.ZERO].cell_materials.has(Vector3i.ZERO), "the plain voxel stores no material")
+		frame.set_cell(Vector3i.ZERO, VoxelFrame.material(Color.RED))
+		frame.set_cell(Vector3i(3, 0, 0), VoxelFrame.material(Color.BLUE, Color(1, 0.5, 0.25), 1.0, 0.25))
+		expect(frame.get_metallic(Vector3i(3, 0, 0)) == 1.0, "the metal voxel stores its metallic")
+		expect(frame.chunks[Vector3i.ZERO].materials.size() == 2 * VoxelFrame.MATERIAL_STRIDE, "each voxel stores nine material values")
 	)
 	step("When the document saves and loads", func():
 		var document := VoxelDocument.new()
@@ -32,23 +31,21 @@ func _run() -> void:
 	)
 	step("Then every voxel keeps its color and material", func():
 		expect(loaded.get_color(Vector3i(3, 0, 0)) == Color.BLUE, "the metal voxel keeps its color")
-		var material: Dictionary = loaded.get_material(Vector3i(3, 0, 0))
-		expect(material.emission == Color(1, 0.5, 0.25), "the metal voxel keeps its emission color")
-		expect(material.metallic == 1.0 and material.roughness == 0.25, "the metal voxel keeps its metallic and roughness")
+		expect(loaded.get_emission(Vector3i(3, 0, 0)) == Color(1, 0.5, 0.25), "the metal voxel keeps its emission color")
+		expect(loaded.get_metallic(Vector3i(3, 0, 0)) == 1.0 and loaded.get_roughness(Vector3i(3, 0, 0)) == 0.25, "the metal voxel keeps its metallic and roughness")
 		expect(loaded.get_color(Vector3i.ZERO) == Color.RED, "the plain voxel keeps its color")
-		expect(loaded.get_material(Vector3i.ZERO) == VoxelFrame.DEFAULT_MATERIAL, "the plain voxel uses the default material")
+		expect(loaded.get_emission(Vector3i.ZERO) == Color.BLACK and loaded.get_metallic(Vector3i.ZERO) == 0.0 and loaded.get_roughness(Vector3i.ZERO) == 1.0, "the plain voxel uses the default values")
 	)
-	step("Then the chunk stores one material table entry", func():
+	step("Then the chunk stores one table for all material values", func():
 		var record: Array = loaded.storage_data()[1][0]
-		var emissions: PackedColorArray = record[2]
-		var finishes: PackedColorArray = record[3]
+		var materials: PackedFloat32Array = record[1]
 		expect(loaded.storage_data()[0] == VoxelFrame.STORAGE_VERSION, "the storage uses the current version")
-		expect(emissions.size() == 1 and emissions[0] == Color(1, 0.5, 0.25), "the chunk stores the emission color once")
-		expect(finishes.size() == 1 and finishes[0] == Color(1.0, 0.25, 0.0, 0.0), "the chunk stores the metallic and roughness once")
+		expect(materials.size() == 3 * VoxelFrame.MATERIAL_STRIDE, "the table holds the empty material and both voxel materials")
+		expect(record.size() == 3 and record[2] is PackedInt32Array, "the chunk holds one material table and one octree")
 	)
 	step("When the user erases the metal voxel", func():
-		frame.set_cell(Vector3i(3, 0, 0), Color.TRANSPARENT)
-		expect(not frame.chunks[Vector3i.ZERO].cell_materials.has(Vector3i(3, 0, 0)), "erasing removes the stored material")
+		frame.set_cell(Vector3i(3, 0, 0), VoxelFrame.material(Color.TRANSPARENT))
+		expect(not frame.has(Vector3i(3, 0, 0)), "erasing removes the voxel")
 		expect(frame.get_color(Vector3i.ZERO) == Color.RED, "the plain voxel keeps its color")
 	)
 	step("Given a version 1 document with a solid red chunk", func():
@@ -59,12 +56,63 @@ func _run() -> void:
 		loaded = opened.frames[0] if opened else null
 		expect(loaded != null, "the version 1 document loads")
 		expect(loaded.get_color(Vector3i.ZERO) == Color.RED, "the version 1 voxel keeps its color")
-		expect(loaded.get_material(Vector3i.ZERO) == VoxelFrame.DEFAULT_MATERIAL, "the version 1 voxel uses the default material")
-		expect(loaded.chunks[Vector3i.ZERO].cell_materials.is_empty(), "the version 1 voxel stores no material entry")
+		expect(loaded.get_emission(Vector3i.ZERO) == Color.BLACK and loaded.get_metallic(Vector3i.ZERO) == 0.0 and loaded.get_roughness(Vector3i.ZERO) == 1.0, "the version 1 voxel uses the default values")
 	)
 	step("Then saving the version 1 frame writes the current version", func():
 		expect(loaded.storage_data()[0] == VoxelFrame.STORAGE_VERSION, "the upgraded storage uses the current version")
-		expect((loaded.storage_data()[1][0][2] as PackedColorArray).is_empty(), "the upgraded chunk stores no material table")
+		expect(VoxelFrame.validate_storage(loaded.storage_data()) == 4096, "the upgraded chunk stores all voxels in the current format")
+	)
+	step("Given a version 2 frame with a glowing metal chunk", func():
+		var chunks := [[Vector3i.ZERO, PackedColorArray([Color.TRANSPARENT, Color.BLUE]), PackedColorArray([Color.RED]), PackedColorArray([Color(0.5, 0.25, 0, 0)]), PackedInt32Array([3])]]
+		var storage := [2, chunks]
+		expect(VoxelFrame.validate_storage(storage) == 4096, "the version 2 storage is valid")
+		loaded = VoxelFrame.new()
+		loaded.restore_storage(storage)
+		expect(loaded.get_color(Vector3i.ZERO) == Color.BLUE, "the version 2 voxel keeps its color")
+		expect(loaded.get_emission(Vector3i.ZERO) == Color.RED and loaded.get_metallic(Vector3i.ZERO) == 0.5 and loaded.get_roughness(Vector3i.ZERO) == 0.25, "the version 2 voxel keeps its material values")
+		expect(VoxelFrame.validate_storage(loaded.storage_data()) == 4096, "the version 2 frame saves in the current format")
+	)
+	step("When erases compact a copied chunk", func():
+		frame = VoxelFrame.new()
+		for x in 10:
+			frame.set_cell(Vector3i(x, 0, 0), VoxelFrame.material(Color.BLUE, Color.RED, x / 10.0, 0.25))
+		var copy := frame.copy_frame()
+		for x in 7:
+			copy.set_cell(Vector3i(x, 0, 0), VoxelFrame.material(Color.TRANSPARENT))
+		expect(copy.count() == 3 and frame.count() == 10, "compaction preserves the source frame")
+		for x in range(7, 10):
+			expect(is_equal_approx(copy.get_metallic(Vector3i(x, 0, 0)), x / 10.0), "each remaining voxel keeps its metallic")
+		expect(copy.chunks[Vector3i.ZERO].materials.size() <= 6 * VoxelFrame.MATERIAL_STRIDE, "compaction bounds the unused material space")
+	)
+	step("When a stroke restores the same voxels with different slots", func():
+		State.document = VoxelDocument.new()
+		frame = State.get_current_voxel_frame()
+		var material := VoxelFrame.material(Color.RED, Color(0.2, 0.4, 0.6), 0.2, 0.4)
+		frame.set_cell(Vector3i.ZERO, material)
+		frame.set_cell(Vector3i.RIGHT, material)
+		State.undo_redo.clear_history()
+		State.begin_stroke()
+		frame.set_cell(Vector3i.ZERO, VoxelFrame.material(Color.TRANSPARENT))
+		frame.set_cell(Vector3i.ZERO, material)
+		State.end_stroke()
+		expect(not State.undo_redo.has_undo(), "equal voxel materials create no undo action")
+		var revision: int = frame.chunks[Vector3i.ZERO].voxel_revision
+		var changed := frame.set_cells({Vector3i.ZERO: material})
+		expect(changed.is_empty() and frame.chunks[Vector3i.ZERO].voxel_revision == revision, "a repeated material write preserves the chunk revision")
+		expect(is_equal_approx(frame.get_metallic(Vector3i.ZERO), 0.2), "the metallic retains float32 precision")
+	)
+	step("Then invalid material tables are rejected before loading", func():
+		var valid := VoxelFrame.material(Color.TRANSPARENT)
+		valid.append_array(VoxelFrame.material(Color.RED))
+		var nodes := PackedInt32Array([1])
+		var short := valid.slice(0, valid.size() - 1)
+		expect(VoxelFrame.validate_storage([3, [[Vector3i.ZERO, short, nodes]]]) == -1, "a material table must contain complete materials")
+		var invalid := valid.duplicate()
+		invalid[VoxelFrame.MATERIAL_STRIDE + VoxelFrame.MATERIAL_METALLIC] = NAN
+		expect(VoxelFrame.validate_storage([3, [[Vector3i.ZERO, invalid, nodes]]]) == -1, "all material values must be finite")
+		invalid[VoxelFrame.MATERIAL_STRIDE + VoxelFrame.MATERIAL_METALLIC] = 2.0
+		expect(VoxelFrame.validate_storage([3, [[Vector3i.ZERO, invalid, nodes]]]) == -1, "material values must stay within zero and one")
+		expect(VoxelFrame.validate_storage([3, [[Vector3i.ZERO, valid, PackedInt32Array([2])]]]) == -1, "every octree material id must exist")
 	)
 	DirAccess.remove_absolute(DOCUMENT_PATH)
 	DirAccess.remove_absolute(LEGACY_PATH)

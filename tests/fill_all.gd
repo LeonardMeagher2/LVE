@@ -30,10 +30,10 @@ func _run() -> void:
 		r3 = r1 + Vector3i(16, 0, 0)
 		control = r1 + Vector3i(0, 1, 0)
 		var f: VoxelFrame = State.document.frames[State.current_frame]
-		f.set_cell(r1, Color.RED)
-		f.set_cell(r2, Color.RED)
-		f.set_cell(r3, Color.RED)
-		f.set_cell(control, Color.GREEN)
+		f.set_cell(r1, VoxelFrame.material(Color.RED))
+		f.set_cell(r2, VoxelFrame.material(Color.RED))
+		f.set_cell(r3, VoxelFrame.material(Color.RED))
+		f.set_cell(control, VoxelFrame.material(Color.GREEN))
 	)
 
 	step("When the user hovers a voxel with Fill", func():

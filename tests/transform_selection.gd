@@ -17,7 +17,7 @@ func _run() -> void:
 		_setup(Vector3i(1, 1, 0))
 		State.selection.cells.erase(Vector3i(1, 1, 0))
 		source_selection = State.selection.capture()
-		frame.set_cell(Vector3i(4, 0, 0), Color.GREEN)
+		frame.set_cell(Vector3i(4, 0, 0), VoxelFrame.material(Color.GREEN))
 		select_toolbar_item("transform", "Move")
 	)
 	step("When the user moves the selection three cells right", func():
@@ -98,7 +98,7 @@ func _run() -> void:
 func _setup(last_corner: Vector3i) -> void:
 	State.document = VoxelDocument.new()
 	frame = State.get_current_voxel_frame()
-	frame.set_cell(Vector3i.ZERO, Color.RED)
+	frame.set_cell(Vector3i.ZERO, VoxelFrame.material(Color.RED))
 	State.selection.from_box(Vector3i.ZERO, last_corner)
 	State.selection_changed.emit()
 	source_selection = State.selection.capture()

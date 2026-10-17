@@ -29,6 +29,7 @@ var _box := BoxMesh.new()
 var _outline_material: Material
 var _solid_material := preload("res://VoxelMaterial.tres").duplicate()
 var _box_material := preload("res://VoxelMaterial.tres").duplicate()
+var _brush_material := VoxelFrame.material(Color.WHITE)
 
 class PreviewJob extends VoxelFrame.EditJob:
 	var cells := {}
@@ -39,6 +40,7 @@ class PreviewJob extends VoxelFrame.EditJob:
 	var revision := 0
 	var cache_key := ""
 	var arrays := []
+	var atlas_surfaces: Array[VoxelMeshBuilder] = []
 	var geometry_bytes := 0
 	var outline_builder: Callable
 
@@ -54,9 +56,15 @@ class PreviewJob extends VoxelFrame.EditJob:
 			return
 		stage("Preparing solid preview", cells.size())
 		var colors := {}
+		var use_material_atlas := false
 		for cell_position in cells:
-			var color: Color = cells[cell_position]
-			colors[cell_position] = (color_key if color == Color.TRANSPARENT else color) if use_voxel_colors else Color.WHITE
+			var value = cells[cell_position]
+			if use_voxel_colors and value is PackedFloat32Array:
+				colors[cell_position] = value
+				use_material_atlas = true
+			else:
+				var color: Color = value if value is Color else VoxelFrame.material_color(value)
+				colors[cell_position] = VoxelFrame.material((color_key if color == Color.TRANSPARENT else color) if use_voxel_colors else Color.WHITE)
 			if colors.size() % 4096 == 0 and not checkpoint(colors.size()):
 				return
 		var frame := VoxelFrame.new()
@@ -74,9 +82,22 @@ class PreviewJob extends VoxelFrame.EditJob:
 			job.source_frame = frame
 			job.chunk_location = chunk_location
 			job.smooth_normals = smooth_normals
+			job.texture_materials = use_material_atlas
 			job.run()
-			var vertex_offset := vertices.size()
+			if job.surface_arrays[Mesh.ARRAY_VERTEX].is_empty():
+				completed += 1
+				continue
 			var chunk_origin := Vector3(chunk_location * VoxelFrame.CHUNK_SIZE)
+			if job.atlas_size.x > 0:
+				var chunk_vertices: PackedVector3Array = job.surface_arrays[Mesh.ARRAY_VERTEX]
+				for index in chunk_vertices.size():
+					chunk_vertices[index] += chunk_origin
+				job.surface_arrays[Mesh.ARRAY_VERTEX] = chunk_vertices
+				atlas_surfaces.append(job)
+				geometry_bytes += job.geometry_bytes + job.atlas_albedo.size() + job.atlas_orm.size() + job.atlas_emission.size()
+				completed += 1
+				continue
+			var vertex_offset := vertices.size()
 			for vertex in job.surface_arrays[Mesh.ARRAY_VERTEX]:
 				vertices.append(vertex + chunk_origin)
 			normals.append_array(job.surface_arrays[Mesh.ARRAY_NORMAL])
@@ -89,7 +110,7 @@ class PreviewJob extends VoxelFrame.EditJob:
 		arrays[Mesh.ARRAY_NORMAL] = normals
 		arrays[Mesh.ARRAY_COLOR] = vertex_colors
 		arrays[Mesh.ARRAY_INDEX] = indices
-		geometry_bytes = vertices.size() * 40 + indices.size() * 4
+		geometry_bytes += vertices.size() * 40 + indices.size() * 4
 
 
 func _enter_tree() -> void:
@@ -110,9 +131,26 @@ func _ready() -> void:
 
 
 func set_brush_color(color: Color) -> void:
-	_box_material.albedo_color = color
+	set_brush_material(VoxelFrame.material(color))
+
+
+func set_brush_material(cell_material: PackedFloat32Array) -> void:
+	_brush_material = cell_material.duplicate()
+	_apply_material(_box_material, cell_material)
 	if not _requested_voxel_colors:
-		_solid_material.albedo_color = color
+		_apply_material(_solid_material, cell_material)
+
+
+static func _apply_material(target: StandardMaterial3D, cell_material: PackedFloat32Array) -> void:
+	target.albedo_color = VoxelFrame.material_color(cell_material)
+	var base := VoxelFrame.MATERIAL_EMISSION
+	target.emission = Color(cell_material[base], cell_material[base + 1], cell_material[base + 2])
+	target.emission_enabled = target.emission != Color.BLACK
+	target.emission_energy_multiplier = 1.0
+	target.metallic = cell_material[VoxelFrame.MATERIAL_METALLIC]
+	target.roughness = cell_material[VoxelFrame.MATERIAL_ROUGHNESS]
+	target.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
+	target.specular_mode = BaseMaterial3D.SPECULAR_SCHLICK_GGX
 
 
 func show_voxels(colors: Dictionary, color: Color, outline: bool = false, cube_diameter: int = 0, use_voxel_colors: bool = true) -> void:
@@ -132,8 +170,18 @@ func show_voxels(colors: Dictionary, color: Color, outline: bool = false, cube_d
 		position = Vector3.ONE * -0.5 if cube_diameter % 2 == 0 else Vector3.ZERO
 		visible = true
 		return
-	_solid_material.albedo_color = Color.WHITE if use_voxel_colors else color
+	if use_voxel_colors:
+		_apply_material(_solid_material, VoxelFrame.material(Color.WHITE))
+	else:
+		_apply_material(_solid_material, _brush_material)
+		_solid_material.albedo_color = color
+	# Full per-cell materials use the cached surfaces' atlas materials.
 	material_override = _solid_material
+	if use_voxel_colors:
+		for cell in colors:
+			if colors[cell] is PackedFloat32Array:
+				material_override = null
+				break
 	_request(colors, PreviewStyle.SOLID, use_voxel_colors, color if use_voxel_colors else Color.WHITE)
 
 
@@ -157,7 +205,7 @@ func _request(cells: Dictionary, style: PreviewStyle, use_voxel_colors: bool = f
 	_requested_voxel_colors = use_voxel_colors
 	_requested_smooth_normals = smooth_normals
 	_requested_color_key = color_key
-	_requested_cells = cells if cells.is_read_only() else cells.duplicate()
+	_requested_cells = cells if cells.is_read_only() else cells.duplicate(true)
 	_requested_cells.make_read_only()
 	_pending_cells = {}
 	var cache_key := _cache_key(_requested_cells, style, colored, color_key, smooth_normals)
@@ -294,11 +342,50 @@ func _finish_preview() -> void:
 	if not job.arrays[Mesh.ARRAY_VERTEX].is_empty():
 		var primitive := Mesh.PRIMITIVE_LINES if job.style == PreviewStyle.OUTLINE else Mesh.PRIMITIVE_TRIANGLES
 		surface.add_surface_from_arrays(primitive, job.arrays)
+		if job.style == PreviewStyle.SOLID:
+			surface.surface_set_material(0, _surface_material())
+	for chunk_job in job.atlas_surfaces:
+		surface.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, chunk_job.surface_arrays)
+		surface.surface_set_material(surface.get_surface_count() - 1, _atlas_material(chunk_job))
 	_cache_mesh(job, surface)
 	mesh = surface
 	position = Vector3.ZERO
 	visible = surface.get_surface_count() > 0
 	_finish_activity()
+
+
+static func _surface_material() -> StandardMaterial3D:
+	var material: StandardMaterial3D = preload("res://VoxelMaterial.tres").duplicate()
+	# Cached surfaces can also appear in reflected brush cursors.
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	return material
+
+
+static func _atlas_material(job: VoxelMeshBuilder) -> StandardMaterial3D:
+	var material := _surface_material()
+	if job.atlas:
+		return job.atlas.create_material(material)
+	material.vertex_color_use_as_albedo = false
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
+	material.specular_mode = BaseMaterial3D.SPECULAR_SCHLICK_GGX
+	material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	material.albedo_texture = _atlas_texture(job.atlas_size, job.atlas_albedo)
+	var material_texture := _atlas_texture(job.atlas_size, job.atlas_orm)
+	# StandardMaterial3D reads separate metallic and roughness texture slots.
+	material.metallic_texture = material_texture
+	material.metallic_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_BLUE
+	material.roughness_texture = material_texture
+	material.roughness_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_GREEN
+	material.metallic = 1.0
+	material.roughness = 1.0
+	material.emission_enabled = true
+	material.emission = Color.BLACK
+	material.emission_texture = _atlas_texture(job.atlas_size, job.atlas_emission)
+	return material
+
+
+static func _atlas_texture(size: Vector2i, data: PackedByteArray) -> ImageTexture:
+	return ImageTexture.create_from_image(Image.create_from_data(size.x, size.y, false, Image.FORMAT_RGB8, data))
 
 
 static func _cache_mesh(job: PreviewJob, surface: ArrayMesh) -> void:

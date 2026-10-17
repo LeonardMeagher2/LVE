@@ -24,11 +24,11 @@ func _run() -> void:
 		State.document = VoxelDocument.new()
 		for x in range(-3, 4):
 			for z in range(-3, 4):
-				State.document.set_cell(0, Vector3i(x, 0, z), Color.from_rgba8(120, 120, 120))
+				State.document.set_cell(0, Vector3i(x, 0, z), VoxelFrame.material(Color.from_rgba8(120, 120, 120)))
 		State.document.frames.append(State.get_current_voxel_frame().copy_frame())
 		for y in range(1, 7):
-			State.document.set_cell(0, Vector3i(-2, y, 2), Color.RED)
-			State.document.set_cell(1, Vector3i(2, y, -2), Color.BLUE)
+			State.document.set_cell(0, Vector3i(-2, y, 2), VoxelFrame.material(Color.RED))
+			State.document.set_cell(1, Vector3i(2, y, -2), VoxelFrame.material(Color.BLUE))
 		State.frames_changed.emit()
 		exporter._model_camera.center_active()
 		exporter._model_camera.set_view("isometric")

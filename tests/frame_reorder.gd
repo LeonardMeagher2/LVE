@@ -19,9 +19,9 @@ func _run() -> void:
 	step("Given three frames with distinct content", func():
 		State.add_frame()
 		State.add_frame()
-		State.document.set_cell(0, Vector3i(0, 0, 0), Color.RED)
-		State.document.set_cell(1, Vector3i(1, 0, 0), Color.GREEN)
-		State.document.set_cell(2, Vector3i(2, 0, 0), Color.BLUE)
+		State.document.set_cell(0, Vector3i(0, 0, 0), VoxelFrame.material(Color.RED))
+		State.document.set_cell(1, Vector3i(1, 0, 0), VoxelFrame.material(Color.GREEN))
+		State.document.set_cell(2, Vector3i(2, 0, 0), VoxelFrame.material(Color.BLUE))
 		_refresh_buttons()
 	)
 

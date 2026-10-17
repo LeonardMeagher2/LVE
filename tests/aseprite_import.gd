@@ -42,7 +42,7 @@ func _run() -> void:
 		expect(State.document.frames[0].get_color(Vector3i(-1, 0, -1)) == Color.RED, "the first trimmed frame keeps its source position")
 		expect(State.document.frames[1].get_color(Vector3i(1, 0, 0)) == Color.BLUE, "the second trimmed frame keeps its motion offset")
 		expect(State.document.frames[0].delay_ms == 90 and State.document.frames[1].delay_ms == 180, "hash frame order retains both durations")
-		expect(State.document.palette == [Color.RED, Color.BLUE], "the palette includes colors from both animation frames")
+		expect(State.document.palette == [VoxelFrame.material(Color.RED), VoxelFrame.material(Color.BLUE)], "the palette includes colors from both animation frames")
 		expect(State.document.tags[0].loop_mode == AnimationTag.LoopMode.REVERSE and State.document.tags[0].repeats == 2, "the reverse tag retains its direction and repeat count")
 		expect(State.document.tags[1].loop_mode == AnimationTag.LoopMode.PING_PONG_REVERSE, "reverse ping-pong is preserved")
 		expect(State.document.tags[2].loop_mode == AnimationTag.LoopMode.PING_PONG and State.document.tags[2].repeats == 1, "the custom no_loop marker creates a one-shot ping-pong tag")

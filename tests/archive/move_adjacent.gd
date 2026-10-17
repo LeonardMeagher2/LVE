@@ -29,9 +29,9 @@ func _run() -> void:
 		_b = drag(_vp, _center + Vector2(0.0, 20.0), start.plane).target
 		var obstacle := drag(_vp, _center + Vector2(0.0, 40.0), start.plane)
 		_obstacle = obstacle.target
-		State.document.set_cell(0, _a, State.current_color)
-		State.document.set_cell(0, _b, Color.from_rgba8(200, 60, 200))
-		State.document.set_cell(0, _obstacle, Color.from_rgba8(40, 120, 40))
+		State.document.set_cell(0, _a, VoxelFrame.material(State.current_color))
+		State.document.set_cell(0, _b, VoxelFrame.material(Color.from_rgba8(200, 60, 200)))
+		State.document.set_cell(0, _obstacle, VoxelFrame.material(Color.from_rgba8(40, 120, 40)))
 		State.selection.add(_a)
 		State.selection.add(_b)
 		_vp.sync_to(0)

@@ -59,7 +59,7 @@ func _run() -> void:
 	)
 	step("When the user paints inside the symmetric selection", func():
 		State.begin_stroke()
-		State.paint(Vector3i(2, 0, 2), Color.RED)
+		State.paint(Vector3i(2, 0, 2), VoxelFrame.material(Color.RED))
 		State.end_stroke()
 	)
 	step("Then drawing respects both selected regions", func():
@@ -78,7 +78,7 @@ func _run() -> void:
 	step("Given matching voxels for Wand selection", func():
 		State.document = VoxelDocument.new()
 		frame = State.get_current_voxel_frame()
-		frame.set_cells({Vector3i(2, 0, 2): Color.RED, Vector3i(2, 0, 3): Color.RED})
+		frame.set_cells({Vector3i(2, 0, 2): VoxelFrame.material(Color.RED), Vector3i(2, 0, 3): VoxelFrame.material(Color.RED)})
 		select_toolbar_item("selection", "Wand")
 		selection_plugin._settings.mode = selection_plugin._settings.SelectMode.REPLACE
 		_click(Vector3(2, 0.5, 2))
@@ -97,7 +97,7 @@ func _run() -> void:
 		for x in range(1, 33):
 			for y in range(1, 17):
 				for z in range(1, 17):
-					colors[Vector3i(x, y, z)] = Color.BLUE
+					colors[Vector3i(x, y, z)] = VoxelFrame.material(Color.BLUE)
 		frame.set_cells(colors)
 		State.symmetry_axes = 7
 		selection_plugin._wand._commit(Vector3i.ONE)

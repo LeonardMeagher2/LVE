@@ -139,21 +139,21 @@ func _run() -> void:
 		State.selection.add(Vector3i(-2, 0, 3))
 		State.selection_changed.emit()
 		State.begin_stroke()
-		State.paint(Vector3i(2, 0, 3), Color.GREEN)
+		State.paint(Vector3i(2, 0, 3), VoxelFrame.material(Color.GREEN))
 		State.end_stroke()
 	)
 	step("Then State applies symmetry within the selection", func():
 		frame = State.get_current_voxel_frame()
 		expect(frame.count() == 2, "the selection keeps only the allowed reflections")
 		expect(not frame.has(Vector3i(2, 0, -3)), "the excluded reflected position stays empty")
-		frame.set_cell(Vector3i(8, 0, 8), Color.YELLOW)
+		frame.set_cell(Vector3i(8, 0, 8), VoxelFrame.material(Color.YELLOW))
 		expect(not frame.has(Vector3i(-8, 0, -8)), "raw frame storage writes only the requested voxel")
 	)
 	step("Given all three axes and a voxel on the symmetry origin", func():
 		State.document = VoxelDocument.new()
 		State.symmetry_axes = 7
 		State.begin_stroke()
-		State.paint(Vector3i.ZERO, Color.RED)
+		State.paint(Vector3i.ZERO, VoxelFrame.material(Color.RED))
 		State.end_stroke()
 	)
 	step("Then coincident reflections create one voxel", func():
@@ -192,7 +192,7 @@ func _run() -> void:
 	step("Given two matching regions for Fill", func():
 		State.document = VoxelDocument.new()
 		frame = State.get_current_voxel_frame()
-		frame.set_cells({Vector3i(2, 0, 2): Color.RED, Vector3i(2, 0, 3): Color.RED, Vector3i(-2, 0, 2): Color.RED, Vector3i(-2, 0, 3): Color.GREEN})
+		frame.set_cells({Vector3i(2, 0, 2): VoxelFrame.material(Color.RED), Vector3i(2, 0, 3): VoxelFrame.material(Color.RED), Vector3i(-2, 0, 2): VoxelFrame.material(Color.RED), Vector3i(-2, 0, 3): VoxelFrame.material(Color.GREEN)})
 		activate_tool("fill")
 		State.set_color(Color.BLUE)
 		State.undo_redo.clear_history()

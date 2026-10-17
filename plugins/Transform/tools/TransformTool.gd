@@ -12,11 +12,14 @@ var _press_pos := Vector2.ZERO
 var _track_selection := false
 var _cells: Array[Vector3i] = []
 var _colors := {}
+var _materials := {}
 var _source_bounds := AABB()
 var _dest_cells: Array[Vector3i] = []
 var _dest_colors := {}
+var _dest_materials := {}
 var _destination_bounds := AABB()
 var _covered := {}
+var _covered_materials := {}
 var _source_document: VoxelDocument
 var _source_frame: VoxelFrame
 var _preview_revision := 0
@@ -32,6 +35,7 @@ var _was_pending := false
 var _has_base := false
 var _base_cells: Array[Vector3i] = []
 var _base_colors := {}
+var _base_materials := {}
 var _base_bounds := AABB()
 var _dialog = null
 var _dialog_open_values := {}
@@ -49,6 +53,7 @@ class SourceJob extends VoxelFrame.EditJob:
 	var selection_mask := {}
 	var cell_positions: Array[Vector3i] = []
 	var cell_colors := {}
+	var cell_materials := {}
 	var bounds := AABB()
 
 	func run() -> void:
@@ -59,15 +64,18 @@ class SourceJob extends VoxelFrame.EditJob:
 				var color := source_frame.get_color(cell_position)
 				if color != Color.TRANSPARENT:
 					cell_colors[cell_position] = color
+					cell_materials[cell_position] = VoxelFrame.material(color, source_frame.get_emission(cell_position), source_frame.get_metallic(cell_position), source_frame.get_roughness(cell_position))
 				_include_bounds(cell_position)
 				if cell_positions.size() % 4096 == 0 and not checkpoint(cell_positions.size()):
 					return
 		else:
 			stage("Preparing transform", source_frame.count())
 			for chunk in source_frame.chunks.values():
-				for cell_position: Vector3i in chunk.cell_colors:
+				for cell_position: Vector3i in chunk.cells:
 					cell_positions.append(cell_position)
-					cell_colors[cell_position] = chunk.cell_colors[cell_position]
+					var base: int = chunk.cells[cell_position] * VoxelFrame.MATERIAL_STRIDE
+					cell_colors[cell_position] = Color(chunk.materials[base], chunk.materials[base + 1], chunk.materials[base + 2], chunk.materials[base + 3])
+					cell_materials[cell_position] = chunk.materials.slice(base, base + VoxelFrame.MATERIAL_STRIDE)
 					_include_bounds(cell_position)
 				if not checkpoint(cell_positions.size()):
 					return
@@ -79,16 +87,20 @@ class SourceJob extends VoxelFrame.EditJob:
 class TransformJob extends VoxelFrame.EditJob:
 	var source_positions: Array[Vector3i] = []
 	var source_colors := {}
+	var source_materials := {}
 	var source_bounds := AABB()
 	var old_positions: Array[Vector3i] = []
 	var previous_covered := {}
+	var previous_covered_materials := {}
 	var edited_frame: VoxelFrame
 	var track_selection := false
 	var destination_colors := {}
+	var destination_materials := {}
 	var destination_positions: Array[Vector3i] = []
 	var destination_selection := {}
 	var destination_bounds := AABB()
 	var covered := {}
+	var covered_materials := {}
 	var changed_chunks: Array[Vector3i] = []
 	var offset := Vector3i.ZERO
 	var symmetry_axes := 0
@@ -107,13 +119,15 @@ class TransformJob extends VoxelFrame.EditJob:
 			return
 		stage("Preparing transform", old_positions.size() + destination_colors.size())
 		covered = previous_covered.duplicate()
+		covered_materials = previous_covered_materials.duplicate()
 		var old_shape := {}
 		var changes := {}
 		var completed := 0
 		for cell_position in old_positions:
 			old_shape[cell_position] = true
 			if not destination_colors.has(cell_position):
-				changes[cell_position] = covered.get(cell_position, Color.TRANSPARENT)
+				changes[cell_position] = covered_materials.get(cell_position, VoxelFrame.material(Color.TRANSPARENT))
+				covered_materials.erase(cell_position)
 				covered.erase(cell_position)
 			completed += 1
 			if completed % 4096 == 0 and not checkpoint(completed):
@@ -123,7 +137,8 @@ class TransformJob extends VoxelFrame.EditJob:
 				var previous_color := edited_frame.get_color(cell_position)
 				if previous_color != Color.TRANSPARENT:
 					covered[cell_position] = previous_color
-			changes[cell_position] = destination_colors[cell_position]
+					covered_materials[cell_position] = VoxelFrame.material(previous_color, edited_frame.get_emission(cell_position), edited_frame.get_metallic(cell_position), edited_frame.get_roughness(cell_position))
+			changes[cell_position] = destination_materials.get(cell_position, VoxelFrame.material(destination_colors[cell_position]))
 			completed += 1
 			if completed % 4096 == 0 and not checkpoint(completed):
 				return
@@ -147,6 +162,8 @@ class TransformJob extends VoxelFrame.EditJob:
 				destination_selection[cell_position + offset] = true
 			if source_colors.has(cell_position):
 				destination_colors[cell_position + offset] = source_colors[cell_position]
+				if source_materials.has(cell_position):
+					destination_materials[cell_position + offset] = source_materials[cell_position]
 			completed += 1
 			if completed % 4096 == 0 and not checkpoint(completed):
 				return
@@ -165,6 +182,7 @@ class TransformJob extends VoxelFrame.EditJob:
 		var context := _symmetry_context()
 		var reduced_positions: Array[Vector3i] = []
 		var reduced_colors := {}
+		var reduced_materials := {}
 		var seen := {}
 		for cell_position in source_positions:
 			var canonical := context.reflect(cell_position, _canonical_mask(cell_position))
@@ -174,11 +192,16 @@ class TransformJob extends VoxelFrame.EditJob:
 			reduced_positions.append(canonical)
 			if source_colors.has(cell_position):
 				reduced_colors[canonical] = source_colors[cell_position]
+				if source_materials.has(cell_position):
+					reduced_materials[canonical] = source_materials[cell_position]
 		for canonical: Vector3i in reduced_colors:
 			if source_colors.has(canonical):
 				reduced_colors[canonical] = source_colors[canonical]
+				if source_materials.has(canonical):
+					reduced_materials[canonical] = source_materials[canonical]
 		source_positions = reduced_positions
 		source_colors = reduced_colors
+		source_materials = reduced_materials
 
 	func _canonical_mask(cell_position: Vector3i) -> int:
 		var mask := 0
@@ -193,6 +216,7 @@ class TransformJob extends VoxelFrame.EditJob:
 		stage("Mirroring transform", destination_colors.size() * 2)
 		var context := _symmetry_context()
 		destination_colors = context.expand(destination_colors, edited_frame, false, null, self)
+		destination_materials = context.expand(destination_materials, edited_frame, false, null, self)
 		if track_selection:
 			destination_selection = context.expand(destination_selection, edited_frame, false, null, self)
 
@@ -324,6 +348,7 @@ func _press(origin: Vector3, dir: Vector3) -> void:
 			return
 		_cells = job.cell_positions
 		_colors = job.cell_colors
+		_materials = job.cell_materials
 		_source_bounds = job.bounds
 	_was_pending = _pending
 	if not _was_pending:
@@ -351,9 +376,11 @@ func _reanchor() -> void:
 		return
 	_cells = _dest_cells
 	_colors = _dest_colors
+	_materials = _dest_materials
 	_source_bounds = _destination_bounds
 	_dest_cells = []
 	_dest_colors = {}
+	_dest_materials = {}
 
 
 func _release() -> void:
@@ -395,9 +422,11 @@ func _apply_preview() -> void:
 		job.symmetry_origin_twice = _symmetry_origin_twice
 		job.source_positions = _cells
 		job.source_colors = _colors
+		job.source_materials = _materials
 		job.source_bounds = _source_bounds
 		job.old_positions.assign(_dest_colors.keys() if not _dest_cells.is_empty() else _colors.keys())
 		job.previous_covered = _covered
+		job.previous_covered_materials = _covered_materials
 		job.edited_frame = _source_frame.copy_frame()
 		job.track_selection = _track_selection
 		_active_preview_job = job
@@ -416,8 +445,10 @@ func _apply_preview() -> void:
 			continue
 		_source_frame.restore(job.edited_frame.capture())
 		_covered = job.covered
+		_covered_materials = job.covered_materials
 		_dest_cells = job.destination_positions
 		_dest_colors = job.destination_colors
+		_dest_materials = job.destination_materials
 		_destination_bounds = job.destination_bounds
 		if not job.changed_chunks.is_empty():
 			_source_document._bounds_dirty = true
@@ -503,15 +534,19 @@ func _clear_grab() -> void:
 	_hide_tool_dialog()
 	_cells = []
 	_colors = {}
+	_materials = {}
 	_dest_cells = []
 	_dest_colors = {}
+	_dest_materials = {}
 	_covered = {}
+	_covered_materials = {}
 	_source_document = null
 	_source_frame = null
 	_was_pending = false
 	_has_base = false
 	_base_cells.clear()
 	_base_colors.clear()
+	_base_materials.clear()
 	_dialog_open_values = {}
 	_dialog_open_had_pending = false
 	_dialog_dirty = false
@@ -520,6 +555,7 @@ func _clear_grab() -> void:
 func _stash_grab_baseline() -> void:
 	_base_cells.assign(_cells)
 	_base_colors = _colors.duplicate()
+	_base_materials = _materials.duplicate()
 	_base_bounds = _source_bounds
 	_has_base = true
 
@@ -528,11 +564,14 @@ func _restore_grab_baseline() -> void:
 	var pending_dest_cells: Array[Vector3i] = []
 	pending_dest_cells.assign(_cells)
 	var pending_dest_colors := _colors.duplicate()
+	var pending_dest_materials := _materials.duplicate()
 	_cells.assign(_base_cells)
 	_colors = _base_colors.duplicate()
+	_materials = _base_materials.duplicate()
 	_source_bounds = _base_bounds
 	_dest_cells.assign(pending_dest_cells)
 	_dest_colors = pending_dest_colors
+	_dest_materials = pending_dest_materials
 	_did_restore_baseline()
 
 

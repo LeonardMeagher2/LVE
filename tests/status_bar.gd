@@ -18,7 +18,7 @@ func _run() -> void:
 		expect(status.get_node("StatusRight").text.begins_with("0×0×0"), "the empty document shows zero dimensions")
 	)
 	step("When a voxel is painted", func():
-		State.document.set_cell(0, Vector3i.ZERO, Color.RED)
+		State.document.set_cell(0, Vector3i.ZERO, VoxelFrame.material(Color.RED))
 		var affected: Array[Vector3i] = []
 		State.cells_changed.emit(State.current_frame, affected)
 	)

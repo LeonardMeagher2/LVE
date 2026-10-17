@@ -22,8 +22,8 @@ func _run() -> void:
 		seed = aim(center).target
 		var gray := Color.from_rgba8(150, 150, 150)
 		var f: VoxelFrame = State.document.frames[State.current_frame]
-		f.set_cell(seed, gray)
-		f.set_cell(seed + Vector3i(12, 0, 0), gray)
+		f.set_cell(seed, VoxelFrame.material(gray))
+		f.set_cell(seed + Vector3i(12, 0, 0), VoxelFrame.material(gray))
 	)
 
 	step("When the user drags a box across the grid", func():

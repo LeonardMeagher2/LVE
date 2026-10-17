@@ -143,6 +143,8 @@ class ScaleJob extends TransformJob:
 					var color: Color = source_colors.get(source, Color.TRANSPARENT)
 					if color != Color.TRANSPARENT:
 						destination_colors[destination] = color
+						if source_materials.has(source):
+							destination_materials[destination] = source_materials[source]
 					if track_selection and _source_selection.has(source):
 						destination_selection[destination] = true
 					_candidate_completed += 1
@@ -166,6 +168,8 @@ class ScaleJob extends TransformJob:
 					destination[q] = dq
 					if color != Color.TRANSPARENT:
 						destination_colors[destination] = color
+						if source_materials.has(source):
+							destination_materials[destination] = source_materials[source]
 					if track_selection and _source_selection.has(source):
 						destination_selection[destination] = true
 					_candidate_completed += 1

@@ -28,6 +28,7 @@ enum BrushShape { CUBE, SPHERE, SELECTION }
 		emit_changed()
 
 var selection_pattern := {}
+var selection_material_pattern := {}
 var _cached_pattern := {}
 
 class PatternJob extends VoxelFrame.EditJob:
@@ -53,14 +54,15 @@ class CopyJob extends VoxelFrame.EditJob:
 		var completed := 0
 		if selection_mask.is_empty():
 			for chunk in source_frame.chunks.values():
-				for cell_position: Vector3i in chunk.cell_colors:
-					_include(cell_position, chunk.cell_colors[cell_position], chunk.cell_materials.get(cell_position, VoxelFrame.DEFAULT_MATERIAL))
+				for cell_position: Vector3i in chunk.cells:
+					var base: int = chunk.cells[cell_position] * VoxelFrame.MATERIAL_STRIDE
+					_include(cell_position, chunk.materials.slice(base, base + VoxelFrame.MATERIAL_STRIDE))
 					completed += 1
 					if completed % 4096 == 0 and not checkpoint(completed):
 						return
 		else:
 			for cell_position: Vector3i in selection_mask:
-				_include(cell_position, source_frame.get_color(cell_position), source_frame.get_material(cell_position))
+				_include(cell_position, VoxelFrame.material(source_frame.get_color(cell_position), source_frame.get_emission(cell_position), source_frame.get_metallic(cell_position), source_frame.get_roughness(cell_position)))
 				completed += 1
 				if completed % 4096 == 0 and not checkpoint(completed):
 					return
@@ -69,27 +71,28 @@ class CopyJob extends VoxelFrame.EditJob:
 		completed = 0
 		for cell_position: Vector3i in _colors:
 			pattern[cell_position - center] = _colors[cell_position]
-			if _materials.has(cell_position):
-				pattern_materials[cell_position - center] = _materials[cell_position]
+			pattern_materials[cell_position - center] = _materials[cell_position]
 			completed += 1
 			if completed % 4096 == 0 and not checkpoint(completed):
 				return
 
-	func _include(cell_position: Vector3i, color: Color, material: Dictionary) -> void:
-		if color == Color.TRANSPARENT:
+	func _include(cell_position: Vector3i, cell_material: PackedFloat32Array) -> void:
+		var cell_color := VoxelFrame.material_color(cell_material)
+		if cell_color == Color.TRANSPARENT:
 			return
-		_colors[cell_position] = color
-		if material != VoxelFrame.DEFAULT_MATERIAL:
-			_materials[cell_position] = material
+		_colors[cell_position] = cell_color
+		_materials[cell_position] = cell_material
 		var cell_bounds := AABB(Vector3(cell_position) - Vector3.ONE * 0.5, Vector3.ONE)
 		_bounds = _bounds.merge(cell_bounds) if _bounds.has_volume() else cell_bounds
 
 
-func use_selection(copied_pattern: Dictionary) -> void:
+func use_selection(copied_pattern: Dictionary, copied_material_pattern: Dictionary = {}) -> void:
 	if copied_pattern.is_empty():
 		return
 	selection_pattern = copied_pattern
 	selection_pattern.make_read_only()
+	selection_material_pattern = copied_material_pattern.duplicate(true)
+	selection_material_pattern.make_read_only()
 	shape = BrushShape.SELECTION
 	emit_changed()
 

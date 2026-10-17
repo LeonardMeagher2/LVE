@@ -20,7 +20,7 @@ func _run() -> void:
 		_frame().clear()
 		for x in SIZE:
 			for y in SIZE:
-				_frame().set_cell(Vector3i(x, y, 0), Color.from_rgba8(200, 60, 60))
+				_frame().set_cell(Vector3i(x, y, 0), VoxelFrame.material(Color.from_rgba8(200, 60, 60)))
 				State.selection.add(Vector3i(x, y, 0))
 		State.selection_changed.emit()
 		activate_tool("transform")

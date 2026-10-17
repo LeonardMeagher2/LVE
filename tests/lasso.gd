@@ -43,9 +43,9 @@ func _run() -> void:
 		far = seed + du * 12
 		var gray := Color.from_rgba8(150, 150, 150)
 		var f: VoxelFrame = State.document.frames[State.current_frame]
-		f.set_cell(seed, gray)
-		f.set_cell(near, gray)
-		f.set_cell(far, gray)
+		f.set_cell(seed, VoxelFrame.material(gray))
+		f.set_cell(near, VoxelFrame.material(gray))
+		f.set_cell(far, VoxelFrame.material(gray))
 	)
 
 	step("When the user drags across five tiles from the seeded voxel", func():
