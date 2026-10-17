@@ -2,9 +2,10 @@ class_name VoxelRenderer
 extends Node3D
 
 const CHUNK_SIZE := VoxelFrame.CHUNK_SIZE
-const MAX_SURFACE_JOBS := 2
 const SURFACE_CACHE_LIMIT_BYTES := 64 * 1024 * 1024
 const SURFACE_CACHE_LIMIT_ENTRIES := 1024
+const SURFACE_JOB_LIMIT_MIN := 2
+const SURFACE_JOB_LIMIT_MAX := 8
 
 # All viewports share meshes and jobs. Workers own their input and output arrays.
 static var _surface_cache: Dictionary = {}
@@ -12,6 +13,16 @@ static var _surface_use_order: Array[String] = []
 static var _surface_cache_bytes := 0
 static var _surface_jobs: Dictionary = {}
 static var _active_renderer_count := 0
+static var _surface_job_limit := 0
+
+
+# Chunk surfaces are independent. Run them on most of the worker threads and
+# leave room for brush, fill, and wand jobs.
+static func _job_limit() -> int:
+	if _surface_job_limit == 0:
+		_surface_job_limit = clampi(OS.get_processor_count() - 1, SURFACE_JOB_LIMIT_MIN, SURFACE_JOB_LIMIT_MAX)
+	return _surface_job_limit
+
 
 @export_range(-1, 100, 1, "or_greater") var frame: int = -1:
 	set(value):
@@ -116,11 +127,13 @@ func _update(updated_frame: int, affected_cells: Array[Vector3i]) -> void:
 		_rebuild()
 		return
 	var active_frame := _get_frame()
+	# A changed cell rebuilds its own chunk and each neighbor that reads it.
 	var affected_chunks := {}
-	var offsets := VoxelMeshBuilder.neighbor_offsets(State.document.smooth_normals)
 	for cell_position in affected_cells:
-		for offset in offsets:
-			affected_chunks[VoxelFrame.chunk_position(cell_position + offset)] = true
+		var chunk_location := VoxelFrame.chunk_position(cell_position)
+		affected_chunks[chunk_location] = true
+		for offset in VoxelFrame.crosstalk_chunks(cell_position):
+			affected_chunks[chunk_location + offset] = true
 	for chunk_location in affected_chunks:
 		_request(active_frame, chunk_location)
 	_report_activity()
@@ -141,16 +154,13 @@ func _request(active_frame: VoxelFrame, chunk_location: Vector3i) -> void:
 		# Keep the completed mesh visible until the replacement is ready.
 
 
+# The edit reports each changed chunk and each neighbor that meshes across a
+# changed face, so no neighbor expansion is needed here.
 func _update_chunks(updated_frame: int, chunk_positions: Array[Vector3i]) -> void:
 	if updated_frame != (frame if frame >= 0 else State.current_frame):
 		return
 	var active_frame := _get_frame()
-	var affected_chunks := {}
-	var offsets := VoxelMeshBuilder.neighbor_offsets(State.document.smooth_normals)
 	for chunk_location in chunk_positions:
-		for offset in offsets:
-			affected_chunks[chunk_location + offset] = true
-	for chunk_location in affected_chunks:
 		_request(active_frame, chunk_location)
 	_report_activity()
 
@@ -190,7 +200,7 @@ func _update_surfaces() -> void:
 			_pending_surface_keys.erase(chunk_location)
 			_surface_use_order.erase(surface_key)
 			_surface_use_order.append(surface_key)
-		elif not _surface_jobs.has(surface_key) and _surface_jobs.size() < MAX_SURFACE_JOBS:
+		elif not _surface_jobs.has(surface_key) and _surface_jobs.size() < _job_limit():
 			var surface_job := VoxelMeshBuilder.new()
 			surface_job.source_frame = active_frame.copy_frame()
 			surface_job.chunk_location = chunk_location
