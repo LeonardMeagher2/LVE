@@ -234,51 +234,110 @@ max_active: 1
   - [x] Run the full behavior suite
   - Stage 2 copies the cell value through every edit path.
   - 2026-10-16: A material-only edit needs the material comparison in `State._chunks_equal`. The view refresh already works because the chunk object changes.
-  - 2026-10-16: The clipboard carries the material in a `voxel_materials` record. A paste replaces the material of every pasted cell.
-  - 2026-10-16: Paint keeps the material of the destination cell. Only an erase clears it.
+  - 2026-10-16: The clipboard now stores nine material values with each cell position. A paste replaces all material values.
+  - 2026-10-16: The earlier color-only paint preserved the destination values. The flat material write replaces all values.
+  - 2026-10-16: The transform carries the material in a parallel table. A covered cell restores its material. An unsnapped rotation gives each cell the material of the nearest source cell.
+  - 2026-10-16: The transform and the paste add the material-only chunks to the redraw list.
   - [x] Compare the cell materials in the undo checks
   - [x] Refresh the view after a material-only undo
   - [x] Copy the full cell value in the clipboard
-  - [x] Keep the destination material in the paint edits
-  - [ ] Copy the full cell value in the transform and the symmetry mirror
-  - Stage 3 adds the material controls and one undo action per change.
-  - [ ] Add material controls for the selected voxels
-  - [ ] Apply emission, metallic, and roughness changes with one undo action
+  - [x] Replace all material values in each paint write
+  - [x] Copy the full cell value in the transform and the symmetry mirror
+  - Stage 3 uses the material swatch plan in the Palette section.
+  - [ ] Add material controls for the selected swatch instead of a separate Material tool
+  - [ ] Paint the selected swatch's color, emission, metallic, and roughness with one undo action per stroke
   - Stage 4 shows the materials in the editor. The atlas task bakes the channels into textures.
   - 2026-10-16: The editor keeps one surface per chunk. Drop the per-signature surface split. The atlas task bakes the material channels.
-  - [ ] Keep one surface per chunk in the editor mesh
-  - [ ] Cache the chunk material on the shared voxel material
-  - [ ] Keep the outline, box, and preview meshes on the shared material
-  - [ ] Keep the vertex colors for the base color
-  - [ ] Verify the material edit paths with targeted tests
-  - [ ] Run the full behavior suite
-- [ ] Bake voxel materials into UV-island texture atlases
+  - [x] Keep one surface per chunk in the editor mesh
+  - [x] Cache the chunk material on the shared voxel material
+  - [x] Keep the outline, box, and preview meshes on the shared material
+  - 2026-10-16: The atlas albedo replaces the vertex color. Chunks with default emission, metallic, and roughness use vertex colors.
+  - [x] Verify the material edit paths with targeted tests
+  - [x] Run the full behavior suite
+- [x] Consolidate the voxel material into one flat structure
+  - One voxel holds one material. A material holds the color, the emission, the metallic, and the roughness.
+  - 2026-10-16: A material holds nine floats. The layout is color rgba, emission rgb, metallic, roughness. Alpha stays live.
+  - 2026-10-16: A chunk holds a slot map and one packed array. `Chunk.cells` maps a cell to a slot. `Chunk.materials` holds nine floats per occupied voxel. No second table exists.
+  - 2026-10-16: An erase drops the map entry and leaves a hole. Compaction runs when the holes outnumber the live voxels. Compaction rebuilds the slot map in place.
+  - 2026-10-16: One write supplies all four values. `set_cells` keeps its name and replaces `set_materials`. `set_cell` takes one material.
+  - 2026-10-16: The frame reads one parameter at a time. `has`, `get_color`, `get_emission`, `get_metallic`, and `get_roughness` replace `get_material`. The write stays whole.
+  - 2026-10-16: A transparent color erases the voxel. `set_cell(cell, VoxelFrame.material(Color.TRANSPARENT))` keeps that meaning.
+  - 2026-10-16: A version 3 chunk record holds the location, one material table, and the octree. A cell value id is a material id. Id 0 is the empty material.
+  - 2026-10-16: The mesher and the transform fast path read the raw chunk arrays. The material layout lives in `VoxelFrame` and in those two loops.
+  - 2026-10-16: A `PackedFloat32Array` hashes and compares by content. The material table deduplicates with one dictionary.
+  - 2026-10-16: The default material values are constants. The emission is black, the metallic is 0, and the roughness is 1.
+  - 2026-10-16: The document and state paint methods take a material. A color-only write is not available.
+  - 2026-10-16: Version 1 and version 3 chunk arrays have the same size. Clear older serialized chunks before saving.
+  - 2026-10-16: `Color.TRANSPARENT` has white RGB values and zero alpha. Compare the color, not four zero values.
+  - This structure replaces the material dictionary and the color table. Stage 3 of the material task builds the panel on it.
+  - [x] Replace the chunk color and material tables with the slot map and the packed array
+  - [x] Add the material builder and the per-parameter getters
+  - [x] Replace `set_cell`, `set_cells`, and `set_materials` with the material writes
+  - [x] Bump the storage to version 3 and read version 1 and 2 into it
+  - [x] Carry the material through the state, the document, the tools, and the clipboard
+  - [x] Move the tests to the getters and the material writes
+  - [x] Verify the storage, the undo, the transform, and the atlas tests
+  - [x] Merge quads on the full material
+  - [x] Bake one atlas island per visible material
+  - [x] Run all 115 behavior tests headless twice
+  - [x] Get a clean windowed suite result
+- [x] Bake voxel materials into UV-island texture atlases
   - 2026-10-16: A voxel face is an axis-aligned rectangle. A UV island is a rectangle. Rectangle packing replaces mesh unwrapping.
   - 2026-10-16: `ImageTexture.update` re-uploads the whole image. One small atlas per chunk keeps each edit upload cheap.
   - 2026-10-16: The editor uses one 2D atlas per chunk with `StandardMaterial3D`. This keeps rim and stencil outline with no custom shader.
-  - 2026-10-16: The exporter packs the merged mesh into one atlas with one material. glTF carries 2D textures and UVs.
-  - One shared packer and baker serve the editor and the exporter.
+  - 2026-10-16: Export each frame with one material and its own atlas set. Merge faces across all material boundaries.
+  - Use the shared greedy merge and spatial atlas bake in the editor and the exporter.
   - Stage 1 builds the color islands in the editor.
-  - [ ] Merge document surfaces on the exposure mask in place of the face color
-  - [ ] Keep the color merge for previews so their vertex colors stay correct
-  - [ ] Emit a UV per quad and report the quad footprint and its voxel colors
-  - [ ] Pack each chunk's quad rectangles into a per-chunk atlas
-  - [ ] Deduplicate equal islands to bound the atlas size
-  - [ ] Bake a 2-texel gutter around each island, then generate mipmaps
-  - [ ] Inset the UVs to texel centers
-  - [ ] Give each chunk a `StandardMaterial3D` with its atlas bound
-  - [ ] Build the atlas images on the worker and create the textures on the main thread
-  - [ ] Verify the bake, the seams, the island orientation, and the previews
+  - 2026-10-16: The full material is the face merge key. Vertex colors remain available for previews and the current exporter.
+  - 2026-10-16: Each visible material uses one constant 2-by-2 block. The atlas uses nearest filtering without mipmaps.
+  - 2026-10-16: Face UVs stay within the block's texel centers. Equal materials share the block across all faces.
+  - [x] Keep the color merge for previews so their vertex colors stay correct
+  - [x] Emit UVs for each quad's material
+  - [x] Pack each chunk's materials into a per-chunk atlas
+  - [x] Give each chunk a `StandardMaterial3D` with its atlas bound
+  - [x] Build the atlas images on the worker and create the textures on the main thread
+  - [x] Verify the bake with the `chunk_atlas` test
+  - [x] Merge document surfaces on the full material
+  - [x] Deduplicate equal islands to bound the atlas size
+  - [x] Inset the UVs to texel centers
+  - [x] Verify the material samples, the seams, and the previews
   - Stage 2 bakes the per-voxel PBR channels. It needs the material edit paths from the material task.
-  - [ ] Bake the roughness and metallic atlas
-  - [ ] Bake the emission atlas
-  - [ ] Bind the ORM and emission textures in the chunk material
-  - Stage 3 packs one atlas and one material for export.
-  - [ ] Pack the merged export mesh into one atlas
-  - [ ] Bake one albedo, ORM, and emission set
-  - [ ] Emit one material and the UVs in the glTF export
-  - [ ] Settle the animation atlas layout
+  - 2026-10-16: The finish atlas holds AO 1 in red, roughness in green, and metallic in blue. The chunk material binds it to `metallic_texture` and `roughness_texture`, because a `StandardMaterial3D` ignores `orm_texture`. The emission color stays black, because the default add operator sums the color and the texture.
+  - [x] Bake the roughness and metallic atlas
+  - [x] Bake the emission atlas
+  - [x] Bind the ORM and emission textures in the chunk material
+  - Stage 3 packs one atlas set and one material per export frame.
+  - [x] Merge flat export faces across color and material boundaries
+  - [x] Pack each merged frame mesh into one atlas set
+  - [x] Bake the albedo, ORM, and emission textures
+  - [x] Emit one material and the UVs per frame in the glTF export
+  - [x] Embed the textures in GLB files
+  - [x] Use separate atlas sets for animation frames
+  - [x] Verify texture samples, triangle reductions, alpha, HDR emission, and animation timing
+  - [x] Merge smooth face interiors and edge strips without changing normal interpolation
+  - [x] Use the same meshing and atlas code for viewport chunks and export frames
+  - [x] Verify matching viewport and export geometry with `greedy_viewport`
+  - [x] Run the full behavior suite and the final suite for the textured exporter
+  - The first shared-meshing suite passes all 124 behavior tests.
+  - The final suite passes 123 tests. `material_edits` fails when Windows cannot open the clipboard.
+  - The windowed `material_edits` retry passes all ten checks.
   - The editor keeps one surface per chunk. Drop the per-signature surface split for the editor in the material task.
+
+- [ ] Match the Blender planar cleanup in the viewport and exporter
+  - 2026-10-17: Keep full-material seams. Use the same polygon cleanup for flat and smooth shading.
+  - [x] Group coplanar voxel faces by their full material
+  - [x] Dissolve internal edges without constraining normal interpolation
+  - [x] Preserve material seams, holes, and shared boundary corners
+  - [x] Triangulate polygon regions and weld matching indexed vertices
+  - [x] Share one atlas texel per full material
+  - [x] Verify matching flat and smooth triangle topology
+  - [x] Check all 511 nonempty three-by-three face masks
+  - [x] Verify a self-contained rendered silhouette and smooth shading comparison
+  - The initial Blender comparison uses 190 native triangles and 94 geometric positions. Blender uses 192 triangles and 94 positions.
+  - The user removed the OBJ reference. Skip that optional comparison when the file is absent.
+  - [x] Improve internal diagonals without adding vertices or triangles
+  - The quality fixture increases its minimum angle from 14 degrees to 18 degrees.
+  - [ ] Run the full behavior suite and the final suite
 
 # Export/Import
 - [x] Flip the sprite projection toggle to perspective
@@ -395,6 +454,66 @@ max_active: 1
 - [ ] Import native Aseprite files
 
 # Palette
+- [ ] Paint with material swatches
+  - 2026-10-16: Keep square swatches. Show a rendered material impression. Show exact values when the swatch is selected.
+  - Each entry holds a color, emission RGB, metallic, and roughness. Allow one color with different material settings.
+  - 2026-10-16: Swatches must differ in at least one material value. Add selects an existing exact match.
+  - 2026-10-16: Remove Duplicate. Expose emission strength only. Calculate emission RGB from the voxel color and strength.
+  - Keep voxel materials independent of palette entries. Editing a swatch will change future strokes, not existing voxels.
+  - Stage 1 stores material entries and selects them by index.
+  - [x] Reuse the existing flat voxel material layout for palette entries
+  - [x] Replace color-based selection, removal, and reorder with entry indices
+  - [x] Compare full materials when checking for duplicate entries
+  - [x] Remove Duplicate and reject edits that create exact duplicates
+  - [x] Save material entries in documents and custom startup palettes
+  - [x] Migrate older color palettes with black emission, metallic 0, and roughness 1
+  - [x] Update document validation and format versioning for material palettes
+  - [x] Keep image palette import and PNG export color-only
+  - [x] Combine exact matches when importing color-only palette images
+  - [x] Explain that PNG palette export loses material settings and combines same-color variants on import
+  - Stage 2 edits the selected swatch and uses its full material for painting.
+  - [x] Keep the color picker and add emission strength, metallic, and roughness controls below the grid
+  - [x] Allow continuous material values instead of requiring named presets
+  - [x] Store the voxel color multiplied by emission strength in emission RGB
+  - [x] Drag anywhere on each value button to adjust the parameter horizontally
+  - [x] Click a value button for inline number entry without arrow buttons
+  - [x] Confirm with Enter and restore the full original material with Escape
+  - [x] Group each control drag or color edit into one palette undo action
+  - [x] Scope deferred edit completion to its gesture and keep quick successive drags separate
+  - [x] Keep the material controls in one equal-width icon-and-value button row
+  - [x] Select the full material when the user picks a swatch
+  - [x] Apply the full material with Pencil, Paint, Line, and Fill on new and existing voxels
+  - [x] Preserve selection masks, symmetry, stroke undo, and copied voxel brush materials
+  - [x] Sample the full material with the Eyedropper
+  - [x] Select an exact matching swatch after sampling, or keep an unsaved current material without changing the palette
+  - [x] Preview every material parameter in the painting cursor
+  - Stage 3 shows square material thumbnails without changing the palette layout.
+  - [x] Render each swatch as a square material tile, not a sphere or a cube silhouette
+  - [x] Use fixed neutral lighting and reflections so thumbnails remain comparable across documents
+  - [x] Use a shallow surface curve or bevel to make roughness and metallic differences visible
+  - [x] Keep the thumbnail representative rather than a numerical readout
+  - [x] Show exact material values in the selected swatch controls
+  - [x] Preserve the original rounded borders and keep keyboard focus separate from the thumbnail
+  - [x] Reuse the thumbnail in the swatch drag preview
+  - [x] Cache thumbnail textures and refresh them only when their material or display scale changes
+  - [x] Avoid one continuously rendering viewport per swatch
+  - Stage 4 verifies the palette, painting, storage, and rendered result.
+  - [x] Test same-color variants, exact-duplicate rejection, selection, removal, reorder, and undo
+  - [x] Test document migration, save/load, custom defaults, and color-only image import/export
+  - [x] Test full-material painting, sampling, selection masks, symmetry, and stroke undo
+  - [x] Check square thumbnails, material differences, borders, and display scaling in a windowed run
+  - [ ] Run the full behavior suite and the final full suite
+- [x] Keep the color picker settings separate from the palette
+  - The picker holds the current paint settings. A swatch is a saved copy of those settings.
+  - [x] Change a picker control without writing a palette entry
+  - [x] Derive the selected swatch from a full material match
+  - [x] Allow same-color swatches that differ in emission, metallic, or roughness
+  - [x] Keep Add as the only path that saves the current settings
+  - [x] Reject an exact duplicate on Add and select the saved match
+  - [x] Record one undo action for each control gesture
+  - [x] Show two decimal places in each swatch tooltip
+  - [x] Verify the picker, swatch, drag, typed value, and tooltip tests
+  - [ ] Run the full behavior suite and the final full suite
 - [x] Image palettes and startup defaults
   - [x] Add image import and PNG export to the palette panel
   - [x] Preserve swatch order and support undo for palette replacement

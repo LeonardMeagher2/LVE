@@ -4,7 +4,18 @@ This file records confirmed facts about Leonard's Voxel Editor. Record each lear
 
 ## Godot API changes
 
+- 2026-10-17: `Geometry2D.triangulate_polygon` emits counterclockwise triangles. Reverse positive-axis face indices for Godot's clockwise 3D winding.
+
+- 2026-10-16: glTF emission multiplies its factor and texture. Export white emission with multiply mode, not black with add mode.
+- 2026-10-16: Godot 4.7.2 embeds atlas PNG images in GLB buffer views and exports HDR emission with `KHR_materials_emissive_strength`.
+- 2026-10-16: `Image.set_pixelv` can quantize one byte below a rounded value. Allow one byte of tolerance in texture checks.
+
+- 2026-10-16: Control dispatches GUI signals and script input before native handlers. `accept_event()` stops later native handling.
+- 2026-10-16: `SpinBox` supports vertical drags over its arrows. A previous field can lose focus after the next drag starts.
+- 2026-10-16: `SpinBox` applies submitted text through a deferred engine connection. Finish numeric undo groups after those updates.
+- 2026-10-16: `ConfigFile.get_value()` treats a null default as absent. Check `has_section_key()` before reading an optional null value.
 - 2026-10-16: A `Dictionary` compares by content with `==` and works as a key in another `Dictionary`. `Vector2` and `PackedFloat32Array` keys also compare by content.
+- 2026-10-16: `Color.TRANSPARENT` has white RGB values and zero alpha. Four zero values specify transparent black.
 - 2026-10-08: `AABB.get_support(direction)` returns the corner farthest in that direction. The sprite far plane uses the worst turntable-view extreme plus one voxel.
 - 2026-10-07: In Godot 4.7.2 Mobile, a new sheet viewport needs two renders before capture includes directional shadows.
 - 2026-10-06: Godot 4.7.2 on Windows returns scale 1.0 and DPI 192 for this 200% display.
@@ -77,6 +88,9 @@ This file records confirmed facts about Leonard's Voxel Editor. Record each lear
 - 2026-09-07: `OptionButton.item_selected` fires only when the user picks from the popup. `select()` and the `selected` property do not emit it. Drive the handler directly in tests.
 - 2026-09-07: `Control` drag-and-drop starts in `_get_drag_data`. The engine marks the viewport as dragging before it calls the method. `set_drag_preview` fails outside a drag. Guard it with `get_viewport().gui_is_dragging()`.
 - 2026-09-07: A `Button` consumes its press, so a draggable button needs a `Button` subclass. A parent control cannot start the drag through it.
+- 2026-10-16: `BaseMaterial3D.orm_texture` takes effect only on an `ORMMaterial3D`. A `StandardMaterial3D` ignores it and keeps `texture_metallic * metallic` and `texture_roughness * roughness`. To read one packed finish atlas from a `StandardMaterial3D`, bind the atlas to `metallic_texture` and `roughness_texture`. Set `metallic_texture_channel` to blue and `roughness_texture_channel` to green.
+- 2026-10-16: `BaseMaterial3D.emission_operator` defaults to `EMISSION_OP_ADD` (=0). The shader computes `EMISSION = (emission.rgb + emission_texture.rgb) * emission_energy`. Pair the default add operator with a black emission color, so the texture alone carries the emission. A white emission color with a black texture adds up to white.
+- 2026-10-16: `PackedColorArray` stores 32-bit floats. A material value that round-trips through the material tables returns at float32 precision. Compare such values with `is_equal_approx`, not `==`.
 
 ## Picking
 
@@ -162,6 +176,7 @@ This file records confirmed facts about Leonard's Voxel Editor. Record each lear
 
 ## Undo/redo
 
+- 2026-10-17: The palette derives its selected index from the current material. A guard that compares that index closes a value drag during its own edit. Without an "own edit" flag, 14 of the 54 `material_controls` checks fail.
 - 2026-09-09: `UndoRedo.MERGE_ENDS` merges a new action with the previous action of the same name. It keeps the first undo and the last do. Use it for drag edits that fire many motions, like tag-range grips.
 - 2026-09-09: An undo or redo callback must emit the state signals itself. The UI does not listen to `version_changed`. Emit `tag_changed`, `frames_changed`, or `frame_changed` to refresh the tag row, the range row, and the frame cells.
 - 2026-09-09: `Array[VoxelFrame].duplicate()` keeps the typed array type. Store it in a `Dictionary` and bind it back to a `Array[VoxelFrame]` parameter. Assigning a plain `Array` to `document.frames` errors at runtime.
