@@ -2,703 +2,109 @@
 max_active: 1
 ---
 
-# Tools
-- [x] Keep the Plane cursor rotation correct after tool switches
-  - [x] Reconnect and synchronize the cursor on each tree entry
-  - [x] Verify re-entry and later axis changes with the targeted floor-plane test
-- [x] Restore the Fill tool wire cube cursor
-  - [x] Reuse the shared outline mesh and cursor material
-  - [x] Match the picker cursor behavior over voxels and empty floor cells
-  - [x] Verify hover and Fill behavior with the targeted Fill test
-- [x] Match the brush toolbar filename to the PascalCase resource path
-  - [x] Verify brush loading without the case mismatch warning
-- [x] floor plane
-  - [x] Allow picking on any side of the "floor" plane, not just the top
-  - [x] Add option to change the floor plane to a different axis (X, Y, Z)
-  - [x] Add option to move the floor plane up and down along the axis
-- [ ] Migrate the Transform and Plane tools to plugins
-  - [x] Add the Fill plugin (button, connected option)
-  - [x] Add the Selection plugin (MenuButton: box, lasso, wand; mode picker, clear, connected)
-  - [x] Add the Transform plugin (MenuButton: move, rotate; snap, commit, cancel)
-  - [x] Add the Plane plugin (button, axis picker)
-  - [x] Register the plugins in the toolbar in order
-  - [x] Fix the eyedropper shortcut and tooltip
-  - [x] Delete the dead tool scripts, scenes, option widgets, and ToolInfo resources
+# Roadmap
+
+Keep one active task at a time. Keep all remaining features until the scope review.
+Use Git history for completed work. See [NOTES.md](NOTES.md) for verified engine and workflow facts.
+See [GLTF_EXPORT.md](GLTF_EXPORT.md) for the mesh export format and import settings.
+
+## Verification
+
+- [ ] Close the remaining implementation tasks
   - [ ] Ask the user to test the Transform and Plane tools manually
-- [x] Line tool and shared brush shapes
-  - [x] Add Line to the Pencil and Paint menu
-  - [x] Click to start, click to end, or click and drag to draw a line
-  - [x] Keep two-click lines on the starting plane unless the endpoint hits a voxel
-  - [x] Adjust the line plane to the view through the starting voxel
-  - [x] Keep dragged lines on that plane
-  - [x] Preview the line before committing one undo action
-  - [x] Cancel the preview with Escape or a tool change
-  - [x] Add a brush diameter option with a minimum of one
-  - [x] Add cube and sphere brush shapes
-  - [x] Copy a selection as a brush shape with its original colors
-  - [x] Use icons for the brush option controls
-  - [x] Select brush shapes with grouped icon buttons
-  - [x] Use selected voxels or all frame voxels for the voxel brush
-  - [x] Use the selection icon for the voxel brush
-  - [x] Add Eraser to the brush menu with the shared diameter and shapes
-  - [x] Keep solid Brush and Line previews and outline Eraser previews
-  - [x] Separate the shape, size, stroke, and clipboard controls
-  - [x] Prepare large brush shapes and strokes on workers
-  - [x] Verify volume brushes, selection masks, undo, cancellation, and frame changes
-  - [x] Run the full behavior suite
-    - 71 tests report a pass. `selection_modes` retains the six known failures.
-    - `tag_range` retains its existing grip-text errors.
-- [ ] Extrude tool
-  - [ ] Selection of voxels extruded along plane normal, with a drag to set the distance
-- [x] Move tool
-  - [x] Keep right-drag available for view rotation during pending transforms
-  - [x] Remove auto creation of voxel selection object when no voxels were in a selection
-  - [x] Add a "commit" button to the move tool, so that the user can move voxels and then commit or cancel the move
-  - [x] Switching to another tool while moving voxels should commit the move
-- [x] Rotate tool (group with move tool)
-  - [x] Preserve selected empty cells during Move, Rotate, Scale, and repeated drags
-    - All transform tests pass. The final full suite passes after the lasso release fix.
-  - [x] Selection of voxels rotated around the center of the selection, with a drag to set the angle
-  - [x] Add a "commit" button to the rotate tool, so that the user can rotate voxels and then commit or cancel the rotation
-  - [x] Switching to another tool while rotating voxels should commit the rotation
-- [x] Scale tool (group with move tool)
-  - [x] Selection of voxels scaled around the center of the selection, with a drag to set the scale
-  - [x] Add a "commit" button to the scale tool, so that the user can scale voxels and then commit or cancel the scale
-  - [x] Switching to another tool while scaling voxels should commit the scale
-  - [x] Add a "uniform scale" option to the scale tool, so that the user can scale voxels uniformly in all directions
-- [x] Numeric transform dialog on a single click
-  - [x] Open one shared dialog for Move, Rotate, and Scale
-  - [x] Show X, Y, and Z number fields for each tool
-  - [x] Add an X, Y, and Z angle row for Rotate
-  - [x] Preview the dialog values in the viewport before commit
-  - [x] Keep the transform pending on OK and end one undo step with Commit
-  - [x] Restore the pre-click values on dialog Cancel
-  - [x] Show the current total when the dialog reopens while pending
-  - [x] Keep a single click separate from a drag with a small move threshold
-  - [x] Verify the move, rotate, and scale dialog tests and the transform suite
-  - 2026-10-15: A 90-degree rotation maps integer cells to integer cells. Rotate
-    the cell indices to keep every voxel. Nearest-cell resampling loses a voxel
-    when the pivot sits on a half-cell.
-  - The move, rotate, and scale dialog tests pass. The transform suite passes.
+  - [ ] Run the full behavior suite and the final full suite for these changes:
+    - Per-voxel materials and material swatches
+    - Independent picker settings and palette entries
+    - Shared planar cleanup in the viewport and exporter
+  - Run the suites without another Godot instance using this project.
+  - Clipboard and model settings popup checks previously failed in a suite but passed alone.
+  - The latest recorded second suite run ended early with exit -1.
+  - Keep full-material seams and the same polygon cleanup for flat and smooth shading.
+  - Skip the optional Blender OBJ comparison when the reference file is absent.
 
-- [x] Fix the missing lasso endpoint in `selection_modes`
-  - [x] Include the mouse-release position when the pointer moved
-  - [x] Preserve single-click selection behavior
-  - [x] Verify the windowed mode test and the full behavior suite
+## Tools
 
-# Rendering and storage
+- [ ] Add the Extrude tool
+  - Extrude selected voxels along the plane normal.
+  - Set the distance with a drag.
 
-- [x] Build data-only documents and rebrand the editor as Leonard's Voxel Editor
-  - [x] Add versioned `.lve` files and document PNG chunks
-  - [x] Validate document data before voxel expansion
-  - [x] Add both Save As formats and PNG image fallback
-  - [x] Convert the flamingo PNG to the application SVG icon
-  - [x] Update application names and export metadata
-  - [x] Rename internal document and plugin types from Voxi to Voxel
-  - 2026-10-07: Godot's FileDialog changes only the final extension when a file filter changes.
-  - 2026-10-07: Dictionary property assignments can add StringName keys to dictionaries that contain string keys.
-  - [x] Document the format and verify the behavior tests
-  - [x] Run the full behavior suite and the final suite
-  - The focused storage, document-name, shading, clipboard, and windowed format tests pass with Godot 4.7.2.
-  - The full behavior suite passes after the internal rename corrections.
-  - The final full suite passes with Godot 4.7.2.
-  - An earlier final run reached the runner deadline after `selection_modes` reported a pass.
-  - The targeted selection test and the final suite retry pass.
+## Rendering and performance
 
-- [x] Fix the three test failures from the shadow task
-  - [x] Send brush shape and toolbar clicks in viewport coordinates
-  - [x] Use a dedicated legacy document fixture without the shading option
-  - [x] Replace the rotation test's sample document dependency with a fixed model fixture
-  - [x] Run only `brush_shapes`, `tool_select`, and `smooth_normals` in windowed mode
-  - [x] Run the targeted model rotation test in windowed mode
-  - All 112 checks pass across the four targeted tests.
+- [ ] Keep drawing responsive on large models
+  - Measure with `tests/draw_latency.tscn`. It prints one line per stage.
+  - The chunk surface build dominates drawing latency. The greedy mesh and the
+    planar cleanup with atlas bake each take about half of one chunk build.
+  - [x] Run chunk surface builds on most worker threads instead of two
+  - [x] Rebuild only the changed chunks and the neighbors that mesh across a changed face
+  - [x] Guard the rebuild scope with `tests/chunk_rebuild_scope.tscn`
+  - [x] Skip empty chunk layers in the greedy mesh
+  - [x] Guard the merged faces with `tests/planar_merge.tscn`
+  - [ ] Limit the mesher scan to each plane's occupied rectangle
+  - [ ] Sort planar region cells with a native sort instead of a script comparator
+  - [ ] Compute each region's contours once instead of once for protection and once for triangulation
+  - [ ] Reduce the triangle count around holes and notches
+  - [ ] Reuse completed chunk geometry during preview shape changes
+  - [ ] Divide large mesh installations across frames
+  - Measured on a 32-cube with a cube brush of nine:
+    - Visible latency per motion decreased from 420 ms to about 110 ms.
+    - The longest frame gap decreased from 61 ms to about 9 ms.
+    - A single-cell brush settles in about 6 ms per motion.
+  - Measured per chunk build:
+    - An empty chunk decreased from 7.5 ms to 0.06 ms.
+    - A one-layer plate decreased from 8.2 ms to 6.2 ms.
+    - A solid chunk stays at about 12.6 ms.
+  - The planar cleanup still costs most of a build with many small material groups.
+- [ ] Merge faces that the planar cleanup drops
+  - A region whose outline visits a corner twice caused a fallback to one quad per cell.
+  - A diagonal gap of cells produces that outline.
+  - [x] Split a self-touching outline into simple loops instead of one quad per cell
+  - A hole that touches the outline at a corner becomes a negative piece and opens below.
+  - No three-by-three mask falls back now. Four did before the fix.
+  - `tests/failed_greed.tscn` reports the effect on a reported document.
+  - A 5 by 5 slab with a three-cell diagonal gap decreased from 92 to 56 triangles.
+  - [ ] Reduce the triangle count around holes and notches
+  - A one-cell hole raises a 16 by 16 plate from twelve triangles to forty.
+  - `Geometry2D.triangulate_polygon()` fails on a unit square at 4096, so single
+    cells there keep the correct one-quad fallback.
+- [x] Mesh flat and smooth surfaces the same way
+  - The mesher merged only flat faces. Smooth faces became one quad per voxel face
+    and the cleanup merged them again.
+  - The mesher now merges both. A smooth normal comes from the voxel lattice
+    corner, read from the frame in the cleanup instead of interpolated per quad.
+  - A smooth chunk build decreased from 25.9 ms to 21.7 ms on a solid model.
+  - Material-heavy models are unchanged, because their faces cannot merge.
+  - The viewport and the exporter still produce the same vertices and normals.
+- [ ] Distribute expensive jobs across the available worker threads
+  - Use chunk work groups for independent matching and edit work.
+  - Preserve cancellation, bounded publication, and UI responsiveness.
 
-- [x] Fix sprite sheet shadows and projection changes
-  - [x] Add the saved Ortho control for all sprite views
-  - [x] Override the sheet projection when the 3D preview view is selected
-  - [x] Fit orthographic camera depth and synchronize directional shadow modes
-  - [x] Render each sprite twice before capture
-  - [x] Use perspective bounds when Ortho is disabled
-  - [x] Verify exported shadow pixels, silhouettes, and projection changes
-  - [x] Run the full behavior suite and the final suite
-  - The sprite sheet, shadow, camera, export workspace, and thumbnail tests pass.
-  - Both suite runs report failures in `brush_shapes`, `smooth_normals`, and `tool_select`.
+## Import
 
-- [x] Add document smooth normals
-  - [x] Add a document settings dropdown after Save As
-  - [x] Use the document icon with a gear badge at the bottom right
-  - [x] Save the smooth normals option and support undo
-  - [x] Use the option in editor surfaces, previews, thumbnails, and exports
-  - [x] Verify shading, chunk boundaries, save/load, undo, and export
-  - The windowed settings test passes. The full suite and the final suite pass all 99 behavior tests with Godot 4.7.2.
-
-- [x] Simplify shared preview and geometry ownership
-  - [x] Move the shared preview script to `Globals/Rendering/VoxelPreview.gd`
-  - [x] Use one mesh builder for editor surfaces, previews, and export
-  - [x] Verify the full behavior suite
-  - The full suite passes all 98 behavior tests with Godot 4.7.2.
-
-- [x] Keep the grid readable when zoomed out
-  - [x] Draw the grid on one plane with anti-aliased shader lines
-  - [x] Blend from voxel cells to larger divisions as the view changes
-  - [x] Preserve floor axes, layer positions, and the grid toggle
-  - [x] Verify grid geometry, floor behavior, camera behavior, and the rendered result with targeted tests
-  - The four targeted tests pass. The windowed grid test verifies the rendered line spacing.
-- [x] Review and fix memory cleanup
-  - [x] Free plugin-owned tools and controls, including detached nodes
-  - [x] Keep node cleanup explicit in each plugin
-  - [x] Delete plugins when they are unloaded
-  - [x] Free the State UndoRedo object when State is deleted
-  - [x] Pair renderer registration and signal connections across tree entry and exit
-  - [x] Collect cancelled brush-source worker tasks before deleting their controls
-  - [x] Verify document release, view re-entry, worker deletion, and plugin cleanup
-  - The nine targeted tests pass. The lifecycle test also passes with a window.
-  - Playback shutdown changed from 161 leaked objects and 48 retained resources to no leak reports.
-- [x] Share mesh caching and worker handling across voxel previews
-  - [x] Use one lifecycle for solid and outline previews
-  - [x] Cache completed geometry across brush, line, paste, and selection previews
-  - [x] Keep uniform display colors separate from geometry
-  - [x] Reuse local paste geometry when the placement position changes
-  - [x] Publish read-only brush and clipboard patterns
-  - [x] Bound the cache and share the main-thread mesh-install budget
-  - [x] Cancel old solid and outline jobs when a request changes
-  - [x] Verify colored previews, input snapshots, cancellation, and the full behavior suite
-  - The final full behavior suite passes.
-  - Headless benchmark: eight move/color updates for 32,768 voxels changed from 1.214 seconds to 0.090 seconds.
-- [ ] Rebuild only changed preview chunks
-  - [ ] Reuse completed chunk geometry during shape changes
-  - [ ] Reduce array copies and divide large mesh installations across frames
-- [ ] Distribute expensive jobs across the worker threads available on each system
-  - [ ] Use chunk work groups for independent matching and edit work
-  - [ ] Preserve cancellation, bounded publication, and UI responsiveness
-- [x] Group adjacent radio items in the camera menu
-- [x] Keep voxel edits fast and report long-running activity
-  - [x] Track overlapping foreground and background operations
-  - [x] Report surface generation and selection outlines
-  - [x] Prepare large transforms, fills, and selection erases on workers
-  - [x] Apply voxel changes by chunk and send one preview notification
-  - [x] Keep small edits immediate and use the latest drag input
-  - [x] Limit sparse scaling to occupied chunk regions
-  - [x] Verify completion, cancellation, and context changes
-  - [x] Review the full suite and run focused checks for final changes
-    - The full run passed 64 tests.
-    - The activity test used the wrong clock. The corrected test passes.
-    - `selection_modes` retains the six known failures.
-    - The new sparse-scale test and the final storage checks pass.
-  - Scale 32,768 voxels to 262,144 voxels at 60 FPS:
-    - The edit time decreased from 5.95 seconds to approximately 0.98 seconds.
-    - The longest edit-frame interval decreased from 57 milliseconds to approximately 31 milliseconds.
-    - The edit sends one notification instead of 256 notifications.
-    - A windowed run completed rendering in approximately 1.52 seconds.
-  - Scaling two distant voxels completed in approximately two milliseconds in a headless run.
-- [x] Build cached chunk surfaces and compact document storage
-  - [x] Store edits in copy-on-write chunks
-  - [x] Share selection snapshots until the next edit
-  - [x] Save empty and uniform regions as octree leaves
-  - [x] Generate greedy surfaces on worker threads
-  - [x] Keep completed surfaces visible during drawing
-  - [x] Generate large selection outlines on worker threads
-  - [x] Reuse cached surfaces across frames and thumbnails
-  - [x] Coalesce thumbnail requests after edit bursts
-  - [x] Run the full behavior suite
-    - 61 tests pass. `selection_modes` fails six checks on the unchanged project.
-- [x] Remove the flat-cell compatibility layer
-  - [x] Use the chunk API in all frame callers and tests
-  - [x] Remove the legacy resource fixture
-  - [x] Run the full behavior suite
-- [x] Review names in the storage and rendering code
-  - [x] Use names that show each variable's purpose or contents
-  - [x] Use a typed frame reference in picking requests
-  - [x] Run the full behavior suite
-- [x] Bound the surface cache when chunks have no visible faces
-  - [x] Evict empty surface entries and clear stale display records
-  - [x] Verify repeated enclosed-voxel edits and frame switching
-  - [x] Run the full behavior suite
-- [ ] Store per-voxel emission, metallic, and roughness
-  - 2026-10-10: The user chose per-voxel storage, a live editor display, and an emission color.
-  - 2026-10-10: The cell value holds the color, the emission color, the metallic, and the roughness.
-  - 2026-10-10: The emission color RGB holds the color and the strength. Its alpha stays zero.
-  - 2026-10-16: A version 2 chunk record holds the location, the color table, the emission table, the finish table, and the octree. The finish table stores metallic in red and roughness in green. A cell value id is the color id times the material count plus the material id.
-  - 2026-10-16: A chunk stores one material dictionary per occupied cell. Absent cells use the default material. The default is black emission, metallic 0, and roughness 1.
-  - 2026-10-16: `State._chunks_equal` compares `cell_colors` only. A material-only edit creates no undo action and no view refresh. Fix this in stage 2.
-  - Stage 1 stores the cell value and the version 2 format. Nothing visible changes.
-  - [x] Store the emission, metallic, and roughness in the chunk cell value
-  - [x] Change the chunk color table to a cell value table
-  - [x] Keep the octree over the cell value IDs
-  - [x] Bump the document format version to 2
-  - [x] Read version 1 documents with default material values
-  - [x] Validate the new cell values in the storage checks
-  - [x] Keep the frame color helpers for the existing callers
-  - [x] Add the frame material getter and the batch material setter
-  - [x] Verify the storage with `chunk_materials` and the format tests
-  - [x] Run the full behavior suite
-  - Stage 2 copies the cell value through every edit path.
-  - 2026-10-16: A material-only edit needs the material comparison in `State._chunks_equal`. The view refresh already works because the chunk object changes.
-  - 2026-10-16: The clipboard now stores nine material values with each cell position. A paste replaces all material values.
-  - 2026-10-16: The earlier color-only paint preserved the destination values. The flat material write replaces all values.
-  - 2026-10-16: The transform carries the material in a parallel table. A covered cell restores its material. An unsnapped rotation gives each cell the material of the nearest source cell.
-  - 2026-10-16: The transform and the paste add the material-only chunks to the redraw list.
-  - [x] Compare the cell materials in the undo checks
-  - [x] Refresh the view after a material-only undo
-  - [x] Copy the full cell value in the clipboard
-  - [x] Replace all material values in each paint write
-  - [x] Copy the full cell value in the transform and the symmetry mirror
-  - Stage 3 uses the material swatch plan in the Palette section.
-  - [ ] Add material controls for the selected swatch instead of a separate Material tool
-  - [ ] Paint the selected swatch's color, emission, metallic, and roughness with one undo action per stroke
-  - Stage 4 shows the materials in the editor. The atlas task bakes the channels into textures.
-  - 2026-10-16: The editor keeps one surface per chunk. Drop the per-signature surface split. The atlas task bakes the material channels.
-  - [x] Keep one surface per chunk in the editor mesh
-  - [x] Cache the chunk material on the shared voxel material
-  - [x] Keep the outline, box, and preview meshes on the shared material
-  - 2026-10-16: The atlas albedo replaces the vertex color. Chunks with default emission, metallic, and roughness use vertex colors.
-  - [x] Verify the material edit paths with targeted tests
-  - [x] Run the full behavior suite
-- [x] Consolidate the voxel material into one flat structure
-  - One voxel holds one material. A material holds the color, the emission, the metallic, and the roughness.
-  - 2026-10-16: A material holds nine floats. The layout is color rgba, emission rgb, metallic, roughness. Alpha stays live.
-  - 2026-10-16: A chunk holds a slot map and one packed array. `Chunk.cells` maps a cell to a slot. `Chunk.materials` holds nine floats per occupied voxel. No second table exists.
-  - 2026-10-16: An erase drops the map entry and leaves a hole. Compaction runs when the holes outnumber the live voxels. Compaction rebuilds the slot map in place.
-  - 2026-10-16: One write supplies all four values. `set_cells` keeps its name and replaces `set_materials`. `set_cell` takes one material.
-  - 2026-10-16: The frame reads one parameter at a time. `has`, `get_color`, `get_emission`, `get_metallic`, and `get_roughness` replace `get_material`. The write stays whole.
-  - 2026-10-16: A transparent color erases the voxel. `set_cell(cell, VoxelFrame.material(Color.TRANSPARENT))` keeps that meaning.
-  - 2026-10-16: A version 3 chunk record holds the location, one material table, and the octree. A cell value id is a material id. Id 0 is the empty material.
-  - 2026-10-16: The mesher and the transform fast path read the raw chunk arrays. The material layout lives in `VoxelFrame` and in those two loops.
-  - 2026-10-16: A `PackedFloat32Array` hashes and compares by content. The material table deduplicates with one dictionary.
-  - 2026-10-16: The default material values are constants. The emission is black, the metallic is 0, and the roughness is 1.
-  - 2026-10-16: The document and state paint methods take a material. A color-only write is not available.
-  - 2026-10-16: Version 1 and version 3 chunk arrays have the same size. Clear older serialized chunks before saving.
-  - 2026-10-16: `Color.TRANSPARENT` has white RGB values and zero alpha. Compare the color, not four zero values.
-  - This structure replaces the material dictionary and the color table. Stage 3 of the material task builds the panel on it.
-  - [x] Replace the chunk color and material tables with the slot map and the packed array
-  - [x] Add the material builder and the per-parameter getters
-  - [x] Replace `set_cell`, `set_cells`, and `set_materials` with the material writes
-  - [x] Bump the storage to version 3 and read version 1 and 2 into it
-  - [x] Carry the material through the state, the document, the tools, and the clipboard
-  - [x] Move the tests to the getters and the material writes
-  - [x] Verify the storage, the undo, the transform, and the atlas tests
-  - [x] Merge quads on the full material
-  - [x] Bake one atlas island per visible material
-  - [x] Run all 115 behavior tests headless twice
-  - [x] Get a clean windowed suite result
-- [x] Bake voxel materials into UV-island texture atlases
-  - 2026-10-16: A voxel face is an axis-aligned rectangle. A UV island is a rectangle. Rectangle packing replaces mesh unwrapping.
-  - 2026-10-16: `ImageTexture.update` re-uploads the whole image. One small atlas per chunk keeps each edit upload cheap.
-  - 2026-10-16: The editor uses one 2D atlas per chunk with `StandardMaterial3D`. This keeps rim and stencil outline with no custom shader.
-  - 2026-10-16: Export each frame with one material and its own atlas set. Merge faces across all material boundaries.
-  - Use the shared greedy merge and spatial atlas bake in the editor and the exporter.
-  - Stage 1 builds the color islands in the editor.
-  - 2026-10-16: The full material is the face merge key. Vertex colors remain available for previews and the current exporter.
-  - 2026-10-16: Each visible material uses one constant 2-by-2 block. The atlas uses nearest filtering without mipmaps.
-  - 2026-10-16: Face UVs stay within the block's texel centers. Equal materials share the block across all faces.
-  - [x] Keep the color merge for previews so their vertex colors stay correct
-  - [x] Emit UVs for each quad's material
-  - [x] Pack each chunk's materials into a per-chunk atlas
-  - [x] Give each chunk a `StandardMaterial3D` with its atlas bound
-  - [x] Build the atlas images on the worker and create the textures on the main thread
-  - [x] Verify the bake with the `chunk_atlas` test
-  - [x] Merge document surfaces on the full material
-  - [x] Deduplicate equal islands to bound the atlas size
-  - [x] Inset the UVs to texel centers
-  - [x] Verify the material samples, the seams, and the previews
-  - Stage 2 bakes the per-voxel PBR channels. It needs the material edit paths from the material task.
-  - 2026-10-16: The finish atlas holds AO 1 in red, roughness in green, and metallic in blue. The chunk material binds it to `metallic_texture` and `roughness_texture`, because a `StandardMaterial3D` ignores `orm_texture`. The emission color stays black, because the default add operator sums the color and the texture.
-  - [x] Bake the roughness and metallic atlas
-  - [x] Bake the emission atlas
-  - [x] Bind the ORM and emission textures in the chunk material
-  - Stage 3 packs one atlas set and one material per export frame.
-  - [x] Merge flat export faces across color and material boundaries
-  - [x] Pack each merged frame mesh into one atlas set
-  - [x] Bake the albedo, ORM, and emission textures
-  - [x] Emit one material and the UVs per frame in the glTF export
-  - [x] Embed the textures in GLB files
-  - [x] Use separate atlas sets for animation frames
-  - [x] Verify texture samples, triangle reductions, alpha, HDR emission, and animation timing
-  - [x] Merge smooth face interiors and edge strips without changing normal interpolation
-  - [x] Use the same meshing and atlas code for viewport chunks and export frames
-  - [x] Verify matching viewport and export geometry with `greedy_viewport`
-  - [x] Run the full behavior suite and the final suite for the textured exporter
-  - The first shared-meshing suite passes all 124 behavior tests.
-  - The final suite passes 123 tests. `material_edits` fails when Windows cannot open the clipboard.
-  - The windowed `material_edits` retry passes all ten checks.
-  - The editor keeps one surface per chunk. Drop the per-signature surface split for the editor in the material task.
-
-- [ ] Match the Blender planar cleanup in the viewport and exporter
-  - 2026-10-17: Keep full-material seams. Use the same polygon cleanup for flat and smooth shading.
-  - [x] Group coplanar voxel faces by their full material
-  - [x] Dissolve internal edges without constraining normal interpolation
-  - [x] Preserve material seams, holes, and shared boundary corners
-  - [x] Triangulate polygon regions and weld matching indexed vertices
-  - [x] Share one atlas texel per full material
-  - [x] Verify matching flat and smooth triangle topology
-  - [x] Check all 511 nonempty three-by-three face masks
-  - [x] Verify a self-contained rendered silhouette and smooth shading comparison
-  - The initial Blender comparison uses 190 native triangles and 94 geometric positions. Blender uses 192 triangles and 94 positions.
-  - The user removed the OBJ reference. Skip that optional comparison when the file is absent.
-  - [x] Improve internal diagonals without adding vertices or triangles
-  - The quality fixture increases its minimum angle from 14 degrees to 18 degrees.
-  - [ ] Run the full behavior suite and the final suite
-
-# Export/Import
-- [x] Flip the sprite projection toggle to perspective
-  - [x] Rename the exporter button to Perspective
-  - [x] Press the button for perspective and release it for orthographic
-  - [x] Keep `sprite_ortho` in the document and store its inverse
-  - [x] Update the affected sprite tests
-  - The projection, sampling, sheet, shadows, and center tests pass.
-  - The full behavior suite passes with Godot 4.7.2.
-- [x] Use shared projected bounds for automatic sprite frame spacing
-  - [x] Project each frame's bounds through the selected camera and turntable views
-  - [x] Keep one rectangular frame size and placement offset across the sheet
-  - [x] Align the shared frame rectangle to pixel edges
-  - [x] Preserve animation offsets and empty frames
-  - [x] Use the same rectangle in previews, PNG output, and JSON metadata
-  - [x] Show frame dimensions in the tooltip and reuse suitable existing icons
-  - [x] Arrange all sprite sheets with the automatic column layout
-  - [x] Leave one transparent pixel between sprite cells in PNG output and metadata
-  - The user requested no tests.
-- [x] Add light direction controls and sprite sheet lighting settings
-  - [x] Show a draggable light ball with a viewport bar toggle
-  - [x] Use a light bulb icon and show an arrow in the light direction
-  - [x] Match the light ball and direction arrow to the light color
-  - [x] Disable voxel drawing while the light ball is visible
-  - [x] Group Light, Pan, and Rotate as separate viewport modes
-  - [x] Use trackball motion to adjust the light direction
-  - [x] Start light drags anywhere without moving the light on press
-  - [x] Keep the ball size stable during zoom and projection changes
-  - [x] Restore the light direction with Escape during a drag
-  - [x] Add light color, strength, ambient light, shading, and shadow controls
-  - [x] Use the same lighting in the 3D preview, sheet preview, and PNG export
-  - [x] Restore the default lighting with one button
-  - [x] Use color alpha for light and ambient strength
-  - [x] Put colors and Shadows in one row with a light toggle for shaded output
-  - [x] Disable color controls and Shadows when lighting is disabled
-  - [x] Use toggle buttons for icon-only boolean controls
-  - [x] Keep lighting controls visible in compact horizontal rows
-  - [x] Arrange export settings in two columns and combine model playback controls
-  - [x] Add view-locked lighting for sprite sheet previews and turntable exports
-  - [x] Save editor light direction and colors in the document
-  - [x] Save export settings, lighting, tag choices, and camera framing in the document
-  - [x] Keep export settings separate from the editor view
-  - [x] Add a Shadows view option without saving editor shading or shadow choices
-  - The user requested no tests.
-- [x] Combine the exporters in one Export workspace
-  - [x] Add plugin helpers to add, remove, and show tabs
-  - [x] Toggle the Export workspace with the existing export icon
-  - [x] Use two fixed panels without preview headings
-  - [x] Reuse the 3D viewport and its camera controls
-  - [x] Reuse editor playback with a tag selector and a Center checkbox
-  - [x] Keep the current model visible until its replacement frame is ready
-  - [x] Use the bottom status bar for export progress, results, and cancellation
-  - [x] Default left-drag to model orbit and sheet pan
-  - [x] Export all tags or the selected tag without changing the editor frame
-  - [x] Keep preview camera modes separate from editor camera modes
-  - [x] Finish surface work when the editor workspace is hidden
-  - [x] Verify navigation, document loading, live previews, and plugin cleanup
-  - The workspace, sprite sheet, glTF, and cleanup tests pass with a window.
-  - The targeted camera, playback, mesh, and thumbnail tests pass headless.
-  - 2026-10-06: A disabled workspace stops renderer processing unless the renderer uses `PROCESS_MODE_ALWAYS`.
-- [x] Export animation frames as a PNG sprite sheet
-  - [x] Add controls for all tags or a selected tag, view, frame size, and columns
-  - [x] Use transparent output and automatic layout defaults
-  - [x] Set the default size from projected voxel bounds at one pixel per voxel
-  - [x] Include camera zoom, projection, distance, and field of view in the calculated size
-  - [x] Reset a manual frame size to the calculated size with one button
-  - [x] Update the sheet preview when settings change
-  - [x] Add pan, a zoom slider, one-to-one zoom, and a center control
-  - [x] Preserve preset sheet previews when only the model tag changes
-  - [x] Render turntable views around the Y axis with one center and scale
-  - [x] Write optional Aseprite JSON with frame rectangles, delays, and tags
-  - [x] Name each JSON frame with the exported tag, the frame index, and the view index
-  - [x] Verify PNG and JSON import through the Image importer
-  - [x] Keep one camera scale and center across the exported frames
-  - [x] Render frame snapshots in a separate viewport
-  - [x] Cancel rendering without writing a partial sheet
-  - [x] Verify PNG pixels, ranges, framing, controls, and cleanup with a windowed export test
-- [x] Export voxel meshes and animation clips as glTF and GLB
-  - [x] Add an export button with its own icon and file dialog
-  - [x] Reuse greedy meshing and build export meshes on a worker
-  - [x] Preserve frame delays, empty frames, colors, and tag names
-  - [x] Bake tag directions and finite repeats into stepped scale tracks
-  - [x] Verify glTF and GLB import with the focused export test
-  - [x] Verify imported vertex-color flags and shared materials across all surfaces
-  - [x] Center all frame meshes with one shared offset
-  - [x] Export only tag clips and preserve infinite looping on Godot import
-  - [x] Move the exporter and its MenuBar control into a dedicated plugin
-  - [x] Use core glTF scale animation with no animation-method selection
-  - [x] Verify frame switches, delays, and looping with scale tracks
-  - [x] Merge same-color coplanar export faces across chunk boundaries
-  - [x] Weld epsilon-close vertices before and after export simplification
-  - [x] Preserve sharp normals and color boundaries during welding
-  - [x] Verify color boundaries, cavities, sparse shapes, and triangle reductions
-  - See [GLTF_EXPORT.md](GLTF_EXPORT.md) for the format and import settings.
-- [x] Open PNG images as voxel documents
-  - [x] Clip pixels below 0.5 alpha and make retained pixels opaque
-  - [x] Fill the palette with distinct retained image colors
-  - [x] Center occupied content on the nearest origin-aligned voxel grid
-  - [x] Read matching Aseprite JSON sidecars in array and hash formats
-  - [x] Preserve frame timing, trim offsets, tag ranges, directions, and repeats
-  - [x] Honor the example's custom `no_loop` tag marker
-  - [x] Use one centering offset across animation frames
-  - [x] Prepare images and voxel frames on workers
-  - [x] Verify PNG loading, black swatches, cancellation, and the Dog example
-  - [x] Use a self-contained Aseprite fixture for the behavior test
-  - The final full run reported 79 passes and the six known windowed selection failures.
-  - The Dog fixture was removed during the run. The self-contained Aseprite rerun passes.
-- [x] Load Godot image formats for palettes and voxel documents
-  - [x] Rename the PNG importer to the Image importer
-  - [x] Share the image format list and file-dialog filter
-  - [x] Use Godot image decoding and decompression
-  - [x] Verify format routing, compressed textures, PNG, Aseprite sidecars, and cancellation with targeted tests
-  - The five targeted image-loading tests pass.
 - [ ] Import native Aseprite files
 
-# Palette
-- [ ] Paint with material swatches
-  - 2026-10-16: Keep square swatches. Show a rendered material impression. Show exact values when the swatch is selected.
-  - Each entry holds a color, emission RGB, metallic, and roughness. Allow one color with different material settings.
-  - 2026-10-16: Swatches must differ in at least one material value. Add selects an existing exact match.
-  - 2026-10-16: Remove Duplicate. Expose emission strength only. Calculate emission RGB from the voxel color and strength.
-  - Keep voxel materials independent of palette entries. Editing a swatch will change future strokes, not existing voxels.
-  - Stage 1 stores material entries and selects them by index.
-  - [x] Reuse the existing flat voxel material layout for palette entries
-  - [x] Replace color-based selection, removal, and reorder with entry indices
-  - [x] Compare full materials when checking for duplicate entries
-  - [x] Remove Duplicate and reject edits that create exact duplicates
-  - [x] Save material entries in documents and custom startup palettes
-  - [x] Migrate older color palettes with black emission, metallic 0, and roughness 1
-  - [x] Update document validation and format versioning for material palettes
-  - [x] Keep image palette import and PNG export color-only
-  - [x] Combine exact matches when importing color-only palette images
-  - [x] Explain that PNG palette export loses material settings and combines same-color variants on import
-  - Stage 2 edits the selected swatch and uses its full material for painting.
-  - [x] Keep the color picker and add emission strength, metallic, and roughness controls below the grid
-  - [x] Allow continuous material values instead of requiring named presets
-  - [x] Store the voxel color multiplied by emission strength in emission RGB
-  - [x] Drag anywhere on each value button to adjust the parameter horizontally
-  - [x] Click a value button for inline number entry without arrow buttons
-  - [x] Confirm with Enter and restore the full original material with Escape
-  - [x] Group each control drag or color edit into one palette undo action
-  - [x] Scope deferred edit completion to its gesture and keep quick successive drags separate
-  - [x] Keep the material controls in one equal-width icon-and-value button row
-  - [x] Select the full material when the user picks a swatch
-  - [x] Apply the full material with Pencil, Paint, Line, and Fill on new and existing voxels
-  - [x] Preserve selection masks, symmetry, stroke undo, and copied voxel brush materials
-  - [x] Sample the full material with the Eyedropper
-  - [x] Select an exact matching swatch after sampling, or keep an unsaved current material without changing the palette
-  - [x] Preview every material parameter in the painting cursor
-  - Stage 3 shows square material thumbnails without changing the palette layout.
-  - [x] Render each swatch as a square material tile, not a sphere or a cube silhouette
-  - [x] Use fixed neutral lighting and reflections so thumbnails remain comparable across documents
-  - [x] Use a shallow surface curve or bevel to make roughness and metallic differences visible
-  - [x] Keep the thumbnail representative rather than a numerical readout
-  - [x] Show exact material values in the selected swatch controls
-  - [x] Preserve the original rounded borders and keep keyboard focus separate from the thumbnail
-  - [x] Reuse the thumbnail in the swatch drag preview
-  - [x] Cache thumbnail textures and refresh them only when their material or display scale changes
-  - [x] Avoid one continuously rendering viewport per swatch
-  - Stage 4 verifies the palette, painting, storage, and rendered result.
-  - [x] Test same-color variants, exact-duplicate rejection, selection, removal, reorder, and undo
-  - [x] Test document migration, save/load, custom defaults, and color-only image import/export
-  - [x] Test full-material painting, sampling, selection masks, symmetry, and stroke undo
-  - [x] Check square thumbnails, material differences, borders, and display scaling in a windowed run
-  - [ ] Run the full behavior suite and the final full suite
-- [x] Keep the color picker settings separate from the palette
-  - The picker holds the current paint settings. A swatch is a saved copy of those settings.
-  - [x] Change a picker control without writing a palette entry
-  - [x] Derive the selected swatch from a full material match
-  - [x] Allow same-color swatches that differ in emission, metallic, or roughness
-  - [x] Keep Add as the only path that saves the current settings
-  - [x] Reject an exact duplicate on Add and select the saved match
-  - [x] Record one undo action for each control gesture
-  - [x] Show two decimal places in each swatch tooltip
-  - [x] Verify the picker, swatch, drag, typed value, and tooltip tests
-  - 2026-10-17: Twenty-two targeted tests pass headless. Two windowed tests pass, and each writes its screenshots.
-  - 2026-10-17: A suite pass reports two environmental failures only. Windows refuses the clipboard in `shared_editing`. The model settings popup stays hidden in `smooth_normals`. Both tests pass alone.
-  - 2026-10-17: A second suite pass ended early with exit -1. Repeat it when no other Godot instance runs.
-  - [ ] Run the full behavior suite and the final full suite
-- [x] Image palettes and startup defaults
-  - [x] Add image import and PNG export to the palette panel
-  - [x] Preserve swatch order and support undo for palette replacement
-  - [x] Add a built-in palette and a saved custom startup palette
-  - [x] Use a compact palette with 27 high-contrast colors
-  - [x] Put grayscale first, then saturated hues in rainbow order, shadows, and highlights
-  - [x] Keep main colors and shadows fully saturated and use warm tints for highlights
-  - [x] Select the first palette color at startup and in new documents
-  - [x] Reorder palette swatches by dragging with undo support
-  - [x] Show the restore option only for a changed startup default
-  - [x] Hide the More button when the current palette matches the built-in palette
-  - [x] Apply the default to new documents without changing opened documents
-  - [x] Verify palette behavior with targeted tests
-  - The four targeted palette tests pass.
-- [x] Initialize black swatch backgrounds and tooltips
-- [x] Support undo and redo for palette changes
-- [ ] Drag to select multiple swatches
-- [ ] Dragging a selection of swatches moves them to a new location in the palette
-- [ ] Palette toolbar
-  - [x] Add/Remove
-  - [x] Load/Save/Set default palette
-  - [ ] Sort
-	- [ ] reverse
-	- [ ] By hue, saturation, and brightness
-	- [ ] By Red, Green, Blue
-  - [ ] Create gradient between first and last selected swatches replacing the selected swatches between them
+## Palette
 
+- [ ] Select and move multiple swatches
+  - Select multiple swatches with a drag.
+  - Move the selected swatches to a new palette location with a drag.
+- [ ] Add palette sorting
+  - Reverse the swatch order.
+  - Sort by hue, saturation, and brightness.
+  - Sort by red, green, and blue.
+- [ ] Create a gradient across selected swatches
+  - Use the first and last selected swatches as the endpoints.
+  - Replace the selected swatches between the endpoints.
 
-# Selection
-- [x] Preselect mode buttons from the stored selection state
-  - [x] Keep the buttons synchronized when the tool or mode changes
-  - [x] Verify the selection mode state and behavior tests
-- [x] Prepare large wand selections as batched worker jobs
-  - [x] Reuse the fill matching and connected search
-  - [x] Publish one complete selection with undo and context cancellation
-- [x] Copy selected voxels or all frame voxels to the clipboard
-- [x] Paste voxels at an offset with a preview and one undo action
-  - [x] Share Copy and Paste controls across Brush, Selection, and Transform
-  - [x] Add Cut, Copy, Paste, and Delete controls to the shared editing plugin
-  - [x] Add Ctrl+X, Ctrl+C, Ctrl+V, and Delete shortcuts
-  - [x] Show Cancel Paste during clipboard reading and placement
-  - [x] Cancel Paste from its UI button or Escape
-  - [x] Verify view rotation during pending edits and UI cancellation during large paste work
-    - The windowed cancellation test and the full behavior suite pass.
-  - [x] Cut a selection or the whole frame with one undo action
-  - [x] Preserve the selection during Copy and clear it during Cut
-  - [x] Restore the exact clipboard selection at the paste offset, including empty cells
-  - [x] Delete selected voxels with the Delete key and one undo action
-  - [x] Preserve voxel colors and relative positions across documents
-  - [x] Prepare large copies and paste previews on workers
-  - [x] Cancel paste previews on tool and frame changes
-  - [x] Remove paste previews after the input event finishes
-  - [x] Retain the input viewport when a tool detaches during its input handler
-  - [x] Verify Cut, Delete, paste input, undo, cancellation, and large clipboard operations
-    - The full run reported 73 passes and the known `selection_modes` failure.
-    - The surface-cache test used a scene changed during the run. Its focused rerun passes.
-    - The windowed paste, Cut, and Delete tests pass.
-- [x] Select through the volume from the view
-  - [x] Replace the plane selection with a screen projection in the Box and Lasso tools
-  - [x] Test each projected cell center against the screen rectangle or lasso
-  - [x] Include the voxels hidden behind the front one
-  - [x] Add an Include empty cells option. The frame bounds limit the empty cells.
-  - [x] Include the empty cells by default
-  - [x] Draw the option icon as a dashed cell with a plus at the open corner
-  - [x] Keep Subtract able to remove selected empty cells without the option
-  - [x] Keep Replace, Add, symmetry, and one undo action per gesture
-  - [x] Draw the drag shape over the viewport
-  - [x] Project large frames on a worker with progress and cancellation
-  - [x] Verify perspective, orthogonal, and angled views, clicks, empty cells, and the band
-  - The `screen_select`, `selection`, `selection_click`, `selection_modes`, and `selection_mirror` tests pass.
-  - 2026-10-17: The select tools work on the screen only. The volume behind the shape joins the selection.
-  - 2026-10-17: An empty frame bounds no empty cells, so its selection stays empty.
-  - 2026-10-17: The empty cell pass has no cap. The frame bounds limit it. Escape cancels a long projection.
-- [ ] First mode: select a flat section on the press plane
-- [ ] After the section is set, expand the volume along the 3rd axis by dragging the mouse. The 3rd axis is along the normal of the press plane. The drag distance sets the depth of the volume.
-- [ ] Visual feedback for both phases
+## Primitives and stamps
 
-
-# Symmetry
-- [x] Symmetry drawing tool
-  - [x] Add independent X, Y, and Z plane controls
-  - [x] Set the origin with half-voxel controls and a viewport drag
-  - [x] Start relative drags anywhere without moving the origin on the initial click
-  - [x] Lock dragging to the dominant view-facing voxel plane
-  - [x] Leave Escape without an origin action
-  - [x] Default and reset the origin to (-0.5, -0.5, -0.5)
-  - [x] Keep enabled planes visible when another tool is active
-  - [x] Capture symmetry settings in the shared drawing edit context
-  - [x] Mirror Pencil, Paint, Eraser, Line, and Fill edits with one undo action
-  - [x] Keep selection limits, source colors, cancellation, and raw frame storage correct
-  - [x] Reuse brush preview geometry for mirrored cursor instances
-  - [x] Verify the drawing tools, controls, worker edits, and cleanup with targeted tests
-  - The thirteen targeted tests pass. The symmetry test also passes with a window.
-- [x] Apply enabled symmetry planes to selection tools
-  - [x] Include reflected regions in Box, Lasso, and Wand selection
-  - [x] Apply replace, add, and subtract modes to the complete symmetric region
-  - [x] Preserve selected empty cells, voxel contents, and undo
-  - [x] Capture symmetry settings for worker selections
-  - [x] Verify symmetric selection with targeted tests
-  - The Symmetry tool contains only plane and origin controls.
-
-
-# Primitives
-- [ ] Sphere, box, cylinder fill primitives in a tool menu
+- [ ] Add sphere, box, and cylinder fill primitives to a tool menu
 - [ ] Place a saved voxel file as a stamp
 
+## Onion skinning
 
-# Onion skinning
-- [ ] Ghost previous/next frames behind the current frame
-- [ ] toggle and strength control
+- [ ] Show previous and next frames as ghosts behind the current frame
+  - Add a toggle and a strength control.
 
+## Responsive UI
 
-# Animation Tags
-- [x] Extract shared animation playback
-  - [x] Move playback timing, boundaries, and repeat rules out of State
-  - [x] Use the shared controller in the editor and export preview
-  - [x] Verify playback behavior and the full suite
-  - The focused playback tests and the final suite pass. The final suite passes all 98 behavior tests.
-
-- [x] Snap playback to the selected tag bounds
-  - [x] Start forward and reverse playback at the correct boundary
-  - [x] Resnap when the selected tag changes during playback
-  - [x] Bound current frame indices and handle single-frame tags
-  - [x] Support reverse ping-pong playback and export
-- [x] UI for the existing tag data (create, select via dropdown, and delete named frame groups)
-- [x] Rename a tag in edit mode (dropdown becomes a name field)
-- [x] Change a tag's frame range with the timeline grab handles
-- [x] Loop-mode and repeat controls per tag
-- [x] Keep a default tag so the base animation has a loop mode
-- [x] Adjust tag ranges when frames are removed
-- [x] Always show the tag editing controls, drop the edit-mode toggle
-
-
-# Timeline
-- [x] Keep the Play button size stable when playback changes
-  - [x] Use the largest button state margins for layout
-  - [x] Verify playback, pause, and button size with the targeted playback test
-- [x] Drag frames on the timeline to reorder them
-
-
-# Responsive UI
-- [ ] Detect narrow layouts and adapt the layout, so the editor can run on a phone
-
-# Viewport navigation
-- [x] Drag the view with modifier keys in any tool mode
-  - [x] Orbit with Alt+left-drag
-  - [x] Pan with Shift+left-drag
-  - [x] Latch the drag mode on press, so the tool does not edit
-  - [x] Show the active drag mode on the Pan and Rotate buttons
-  - [x] Snap the view with the number row keys 1 through 7
-  - [x] Verify the pan, rotate, view preset, and export preview tests
-  - [x] Run the full behavior suite
-
-# Keyboard shortcuts
-- [x] Add keyboard shortcuts to the main editor controls
-  - [x] Add the new input actions to `project.godot`
-  - [x] Add Ctrl+Shift+Z to the redo action
-  - [x] Attach action shortcuts to the File and Undo/Redo buttons
-  - [x] Attach action shortcuts to the view bar and the camera menu
-  - [x] Attach action shortcuts to the animation timeline buttons
-  - [x] Select the tool from each shortcut
-  - [x] Select the brush modes: pencil, paint, line, eraser
-  - [x] Select the selection modes: box, wand, lasso
-  - [x] Select the transform modes: move, rotate, scale
-  - [x] Select the Fill, Plane, and Symmetry tools
-  - [x] Attach the Delete shortcut to the shared editing controls
-  - [x] Show the shortcut key in each button tooltip
-  - [x] Verify the toolbar, timeline, and clipboard behavior tests
-  - [x] Run the full behavior suite
-
-# Test harness
-- [x] Review the recent merge to main
-  - [x] Correct plugin resource paths to match the stored directory names
-  - [x] Keep each tag range drag in one separate undo action
-  - [x] Update the tag grip, large surface, and wand test setups
-  - [x] Add automatic HiDPI scaling and a saved UI Scale selector
-  - [x] Import all UI SVG icons as DPITexture resources
-  - [x] Put the UI Scale selector in the status bar
-  - The focused tests passed before the status bar change.
-  - The user stopped the full suite and requested no more tests.
-- [x] Include every step duration in logs and reports
-  - [x] Measure synchronous and awaited work with the wall clock
-  - [x] Include steps without checks and preserve callable results
-  - [x] Write reports for passing and failing tests
-  - [x] Verify timing and report contents with the targeted harness test
+- [ ] Adapt narrow layouts for phone use
