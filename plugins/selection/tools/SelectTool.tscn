@@ -2,16 +2,14 @@
 
 [ext_resource type="Script" uid="uid://dk4jhhhrqeexi" path="res://plugins/selection/tools/SelectTool.gd" id="1_cmmhg"]
 [ext_resource type="Script" path="res://plugins/selection/ScreenBand.gd" id="5_band"]
+[ext_resource type="Material" path="res://plugins/selection/ants_line_material.tres" id="6_ants"]
 
 [node name="SelectionTool" type="Node3D" unique_id=1152130835]
 script = ExtResource("1_cmmhg")
 
-[node name="ScreenBand" type="Control" parent="."]
+[node name="ScreenBand" type="Line2D" parent="."]
 visible = false
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-mouse_filter = 2
+material = ExtResource("6_ants")
+width = 1.0
+texture_mode = 1
 script = ExtResource("5_band")

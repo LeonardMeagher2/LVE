@@ -1,0 +1,11 @@
+[gd_resource type="ShaderMaterial" format=3 uid="uid://c5xq08lgrjd3u"]
+
+[ext_resource type="Shader" uid="uid://bd7hqyccccoy5" path="res://plugins/selection/ants_line.gdshader" id="1_ants"]
+
+[resource]
+shader = ExtResource("1_ants")
+shader_parameter/frame_color = Color(1, 1, 1, 1)
+shader_parameter/ant_color = Color(0.25, 0.25, 0.25, 1)
+shader_parameter/width_px = 1.0
+shader_parameter/dash_px = 5.0
+shader_parameter/speed_px = 20.0

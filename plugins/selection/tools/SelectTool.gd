@@ -152,6 +152,7 @@ func _commit_screen(rectangle: Rect2, polygon: PackedVector2Array) -> void:
 	_screen_job.rectangle = rectangle
 	_screen_job.polygon = polygon
 	_screen_job.mode = _settings.mode
+	_screen_job.depth_test = _settings.depth_test
 	_screen_job.previous_selection = State.selection.capture()
 	var bounds := frame.get_bounds()
 	# Empty cells need a finite volume. The frame bounds supply it.

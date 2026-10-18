@@ -199,7 +199,7 @@ func _press_mode(node_name: String) -> void:
 	button.button_pressed = true
 
 
-func _band() -> Control:
+func _band() -> Line2D:
 	var selection_plugin := plugin("SelectionPlugin")
 	if selection_plugin == null or selection_plugin._current_tool == null:
 		return null

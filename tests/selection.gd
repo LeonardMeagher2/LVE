@@ -2,6 +2,7 @@ extends "res://tests/test.gd"
 
 # A screen drag selects the volume behind the shape.
 # The empty cell option adds the empty grid cells inside the frame bounds.
+# The depth test keeps the voxels that the camera sees.
 
 const RAY_DEPTHS := [4.0, 7.0, 10.0]
 
@@ -11,7 +12,7 @@ var ray_cells: Array[Vector3i] = []
 
 
 func _ready() -> void:
-	test("a drag selects the volume behind the shape and the optional empty cells", _run)
+	test("a drag selects the volume behind the shape, the empty cells, and the depth test front layer", _run)
 
 
 func _run() -> void:
@@ -26,8 +27,14 @@ func _run() -> void:
 		ray_cells = _place_ray_voxels()
 	)
 
-	step("Then the empty cell option is on by default", func():
-		expect(_empty_button().button_pressed, "the empty cell option shows as pressed")
+	step("Then the depth test is on by default and the empty cells are off", func():
+		expect(_depth_button().button_pressed, "the depth test is on by default")
+		expect(not _empty_button().button_pressed, "the empty cells are off by default")
+	)
+
+	step("Given the depth test off and the empty cell option on", func():
+		_depth_button().button_pressed = false
+		_empty_button().button_pressed = true
 	)
 
 	step("When the user drags a rectangle around the projected voxels", func():
@@ -90,6 +97,44 @@ func _run() -> void:
 
 	step("Then the selection returns to the occupied voxels", func():
 		expect(State.selection.count() == ray_cells.size(), "undo restores the occupied voxels only")
+	)
+
+	step("Given the depth test on, the replace mode, and the empty option off", func():
+		_mode_button("replace").button_pressed = true
+		expect(not _empty_button().button_pressed, "the empty cell option stays off")
+		press_option("Depth test")
+		expect(_depth_button().button_pressed, "the depth test turns on")
+	)
+
+	step("When the user drags the same rectangle with the depth test", func():
+		_drag_rectangle(_drag_rectangle_of(ray_cells))
+	)
+
+	step("Then only the front voxel along the ray stays", func():
+		expect(State.selection.contains(ray_cells[0]), "the front voxel stays")
+		expect(not State.selection.contains(ray_cells[1]), "the voxel behind the front one drops out")
+		expect(not State.selection.contains(ray_cells[2]), "the far voxel drops out")
+		expect(State.selection.count() == 1, "the depth test keeps one voxel")
+	)
+
+	step("Given the depth test off again", func():
+		press_option("Depth test")
+		expect(not _depth_button().button_pressed, "the depth test turns off")
+	)
+
+	step("When the user drags the same rectangle once more", func():
+		_drag_rectangle(_drag_rectangle_of(ray_cells))
+	)
+
+	step("Then every voxel along the ray returns", func():
+		expect(State.selection.count() == ray_cells.size(), "the released depth test selects the volume again")
+	)
+
+	step("Then the depth test shows for the screen shapes only", func():
+		select_toolbar_item("selection", "Lasso")
+		expect(_depth_button().visible, "the lasso offers the depth test")
+		select_toolbar_item("selection", "Wand")
+		expect(not _depth_button().visible, "the wand has no depth test")
 	)
 
 
@@ -177,6 +222,10 @@ func _empty_button() -> Button:
 
 func _mode_button(node_name: String) -> Button:
 	return _options_box().get_node(node_name) as Button
+
+
+func _depth_button() -> Button:
+	return _options_box().get_node("Depth") as Button
 
 
 func _options_box() -> HBoxContainer:

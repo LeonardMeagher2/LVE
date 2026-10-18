@@ -41,11 +41,13 @@ func _run() -> void:
 	step("Then the option row shows the empty cell button", func():
 		expect(_empty_button() != null, "the option row holds an empty cell button")
 		expect(_empty_button().icon != null, "the empty cell button shows its icon")
-		expect(_empty_button().button_pressed, "the empty cell option is on by default")
+		expect(_depth_button().button_pressed, "the depth test is on by default")
+		expect(not _empty_button().button_pressed, "the empty cell option is off by default")
 		expect(ray_cells.size() == 3, "the view ray holds three voxels at different depths")
 	)
 
-	step("Given the empty cell option off", func():
+	step("Given the depth test off and the empty cell option off", func():
+		_depth_button().button_pressed = false
 		_empty_button().button_pressed = false
 	)
 
@@ -390,7 +392,7 @@ func _press_mode(node_name: String) -> void:
 	button.button_pressed = true
 
 
-func _band() -> Control:
+func _band() -> Line2D:
 	var selection_plugin := plugin("SelectionPlugin")
 	if selection_plugin == null or selection_plugin._current_tool == null:
 		return null
@@ -402,6 +404,13 @@ func _empty_button() -> Button:
 	if selection_plugin == null:
 		return null
 	return selection_plugin._options.get_node("empty") as Button
+
+
+func _depth_button() -> Button:
+	var selection_plugin := plugin("SelectionPlugin")
+	if selection_plugin == null:
+		return null
+	return selection_plugin._options.get_node("Depth") as Button
 
 
 func _options_box() -> HBoxContainer:

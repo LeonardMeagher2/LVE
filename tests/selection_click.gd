@@ -30,8 +30,14 @@ func _run() -> void:
 		_frame().set_cell(far_cell, material)
 	)
 
-	step("Then the empty cell option is on by default", func():
-		expect(_empty_button().button_pressed, "the empty cell option shows as pressed")
+	step("Then the depth test is on by default and the empty cells are off", func():
+		expect(_depth_button().button_pressed, "the depth test is on by default")
+		expect(not _empty_button().button_pressed, "the empty cells are off by default")
+	)
+
+	step("Given the depth test off and the empty cell option on", func():
+		_depth_button().button_pressed = false
+		_empty_button().button_pressed = true
 	)
 
 	step("When the user clicks the first voxel", func():
@@ -99,4 +105,12 @@ func _empty_button() -> Button:
 	for container in option_bar.get_children():
 		if container.name == "Options":
 			return container.get_node("empty") as Button
+	return null
+
+
+func _depth_button() -> Button:
+	var option_bar := main.get_node("%OptionBar")
+	for container in option_bar.get_children():
+		if container.name == "Options":
+			return container.get_node("Depth") as Button
 	return null

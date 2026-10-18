@@ -6,9 +6,12 @@ extends RefCounted
 # The frame bounds limit the empty cells. A subtract also tests the selected
 # cells, so empty selected cells can leave without the empty cell option.
 # The mode values match SelectionToolSettings.SelectMode.
+# The depth test keeps the cells that the camera sees a surface point of.
 
 const REPLACE_MODE := 0
 const SUBTRACT_MODE := 2
+# Aim inside the surface of a cell so the ray starts within the cell.
+const SURFACE_INSET := 0.48
 
 
 # The job captures the camera and the shape. It reads no scene node.
@@ -22,6 +25,7 @@ class Job extends VoxelFrame.EditJob:
 	var mode := REPLACE_MODE
 	var previous_selection := {}
 	var include_empty := false
+	var depth_test := false
 	var empty_min := Vector3i.ZERO
 	var empty_max := Vector3i(-1, -1, -1)
 	var result := {}
@@ -62,6 +66,7 @@ class Job extends VoxelFrame.EditJob:
 				completed += 1
 				if completed % 4096 == 0 and not checkpoint(completed):
 					return
+		region = _visible(region)
 		if edit_context:
 			region = edit_context.expand(region, source_frame, false, null, self)
 		if not checkpoint(completed):
@@ -77,6 +82,48 @@ class Job extends VoxelFrame.EditJob:
 			completed += 1
 			if completed % 4096 == 0 and not checkpoint(completed):
 				return
+
+	# Keep the cells that the camera reaches through an open side.
+	# A cell whose camera-facing sides are all occupied hides behind them.
+	func _visible(region: Dictionary) -> Dictionary:
+		if not depth_test or region.is_empty():
+			return region
+		stage("Testing camera visibility", region.size())
+		var origin: Vector3 = view_matrix.affine_inverse().origin
+		var visible := {}
+		var completed := 0
+		for cell_position in region:
+			if _front_cell(origin, cell_position):
+				visible[cell_position] = true
+			completed += 1
+			if completed % 1024 == 0 and not checkpoint(completed):
+				return {}
+		return visible
+
+	func _front_cell(origin: Vector3, cell_position: Vector3i) -> bool:
+		var center := Vector3(cell_position)
+		for axis in 3:
+			var side := 1.0 if origin[axis] >= center[axis] else -1.0
+			var neighbour := cell_position
+			neighbour[axis] += int(side)
+			if source_frame.has(neighbour):
+				continue
+			var sample := center
+			sample[axis] += side * SURFACE_INSET
+			if _reaches(origin, sample, cell_position):
+				return true
+		return false
+
+	# True when no occupied cell stands between the camera and the sample point.
+	func _reaches(origin: Vector3, sample: Vector3, cell_position: Vector3i) -> bool:
+		var to_sample := sample - origin
+		var distance := to_sample.length()
+		if distance <= 0.0:
+			return true
+		var hit := VoxelPicking.ray_voxel(origin, to_sample / distance, source_frame).hit
+		if hit == VoxelPicking.NONE:
+			return true
+		return hit == cell_position or (Vector3(hit) - origin).length() > distance
 
 	func _covers(cell_position: Vector3i) -> bool:
 		var screen_point := ScreenSelection.project(view_matrix, projection, viewport_size, Vector3(cell_position))
