@@ -29,7 +29,7 @@ class FillJob extends VoxelFrame.EditJob:
 			stage("Finding matching voxels", source_frame.count())
 			var examined := 0
 			for chunk in source_frame.chunks.values():
-				for cell_position in chunk.cells:
+				for cell_position in chunk.world_cells():
 					if chunk.matches(cell_position, target_material) and (selection_mask.is_empty() or selection_mask.has(cell_position)):
 						changes[cell_position] = replacement
 					examined += 1

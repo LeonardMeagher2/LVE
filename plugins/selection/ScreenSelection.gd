@@ -39,7 +39,7 @@ class Job extends VoxelFrame.EditJob:
 		var region := {}
 		var completed := 0
 		for chunk in source_frame.chunks.values():
-			for cell_position in chunk.cells:
+			for cell_position in chunk.world_cells():
 				if _covers(cell_position):
 					region[cell_position] = true
 				completed += 1

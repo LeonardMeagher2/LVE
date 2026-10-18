@@ -72,20 +72,61 @@ func bake(checkpoint: Callable) -> Error:
 	albedo = Image.create_empty(size.x, size.y, false, Image.FORMAT_RGBA8)
 	orm = Image.create_empty(size.x, size.y, false, Image.FORMAT_RGB8)
 	emission = Image.create_empty(size.x, size.y, false, Image.FORMAT_RGB8)
+	# Fill one byte buffer per image, then upload each image once. The gutter
+	# repeats content texels, so one packed value per content texel is enough.
+	var albedo_bytes := PackedByteArray()
+	albedo_bytes.resize(size.x * size.y * 4)
+	var finish_bytes := PackedByteArray()
+	finish_bytes.resize(size.x * size.y * 3)
+	var emission_bytes := PackedByteArray()
+	emission_bytes.resize(size.x * size.y * 3)
 	for patch_index in patches.size():
 		var patch := patches[patch_index]
 		var materials: PackedFloat32Array = patch.materials
-		for y in range(-1, patch.size.y + 1):
+		var patch_size: Vector2i = patch.size
+		var position: Vector2i = patch.position
+		var content := patch_size.x * patch_size.y
+		var albedo_texels := PackedInt32Array()
+		albedo_texels.resize(content)
+		var finish_texels := PackedInt32Array()
+		finish_texels.resize(content)
+		var emission_texels := PackedInt32Array()
+		emission_texels.resize(content)
+		for index in content:
+			# Image writes a color channel with uint8_t(clamp(value * 255.0, 0, 255)).
+			# Keep the quantization inline: a helper call costs more than the math.
+			var base := index * VoxelFrame.MATERIAL_STRIDE
+			var red := int(clampf(materials[base] * 255.0, 0.0, 255.0))
+			var green := int(clampf(materials[base + 1] * 255.0, 0.0, 255.0))
+			var blue := int(clampf(materials[base + 2] * 255.0, 0.0, 255.0))
+			var alpha := int(clampf(materials[base + 3] * 255.0, 0.0, 255.0))
+			albedo_texels[index] = red | (green << 8) | (blue << 16) | (alpha << 24)
+			finish_texels[index] = 255 | (int(clampf(materials[base + VoxelFrame.MATERIAL_ROUGHNESS] * 255.0, 0.0, 255.0)) << 8) | (int(clampf(materials[base + VoxelFrame.MATERIAL_METALLIC] * 255.0, 0.0, 255.0)) << 16)
+			var glow := (Color(materials[base + 4], materials[base + 5], materials[base + 6]) / emission_energy).linear_to_srgb()
+			emission_texels[index] = int(clampf(glow.r * 255.0, 0.0, 255.0)) | (int(clampf(glow.g * 255.0, 0.0, 255.0)) << 8) | (int(clampf(glow.b * 255.0, 0.0, 255.0)) << 16)
+		for y in range(-1, patch_size.y + 1):
 			if not checkpoint.call(patch_index):
 				return ERR_UNAVAILABLE
-			for x in range(-1, patch.size.x + 1):
+			var content_row := clampi(y, 0, patch_size.y - 1) * patch_size.x
+			var row_start := (position.y + y) * size.x + position.x
+			for x in range(-1, patch_size.x + 1):
 				# Duplicate edge texels into the gutter. Nearest sampling needs no mipmaps.
-				var base: int = (clampi(y, 0, patch.size.y - 1) * patch.size.x + clampi(x, 0, patch.size.x - 1)) * VoxelFrame.MATERIAL_STRIDE
-				var texel: Vector2i = patch.position + Vector2i(x, y)
-				albedo.set_pixelv(texel, Color(materials[base], materials[base + 1], materials[base + 2], materials[base + 3]))
-				orm.set_pixelv(texel, Color(1.0, materials[base + VoxelFrame.MATERIAL_ROUGHNESS], materials[base + VoxelFrame.MATERIAL_METALLIC]))
-				var glow := Color(materials[base + 4], materials[base + 5], materials[base + 6]) / emission_energy
-				emission.set_pixelv(texel, glow.linear_to_srgb())
+				var source := content_row + clampi(x, 0, patch_size.x - 1)
+				var texel := row_start + x
+				# encode_u32 writes little-endian, so the first byte is red.
+				albedo_bytes.encode_u32(texel * 4, albedo_texels[source])
+				var offset := texel * 3
+				var finish_texel := finish_texels[source]
+				var emission_texel := emission_texels[source]
+				finish_bytes[offset] = finish_texel & 0xFF
+				finish_bytes[offset + 1] = (finish_texel >> 8) & 0xFF
+				finish_bytes[offset + 2] = (finish_texel >> 16) & 0xFF
+				emission_bytes[offset] = emission_texel & 0xFF
+				emission_bytes[offset + 1] = (emission_texel >> 8) & 0xFF
+				emission_bytes[offset + 2] = (emission_texel >> 16) & 0xFF
+	albedo.set_data(size.x, size.y, false, Image.FORMAT_RGBA8, albedo_bytes)
+	orm.set_data(size.x, size.y, false, Image.FORMAT_RGB8, finish_bytes)
+	emission.set_data(size.x, size.y, false, Image.FORMAT_RGB8, emission_bytes)
 	return OK
 
 

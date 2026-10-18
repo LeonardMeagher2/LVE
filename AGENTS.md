@@ -86,6 +86,12 @@ Run the full suite:
 godot --headless --path . -s res://tests/run_all.gd
 ```
 
+Run only the named scenes, in the same one process:
+
+```text
+godot --headless --path . -s res://tests/run_all.gd -- paint line brush_modes
+```
+
 Reports are in `tests/artifacts/`. The runner exits non-zero on failure.
 For failure screenshots, remove `--headless`.
 

@@ -71,11 +71,11 @@ class SourceJob extends VoxelFrame.EditJob:
 		else:
 			stage("Preparing transform", source_frame.count())
 			for chunk in source_frame.chunks.values():
-				for cell_position: Vector3i in chunk.cells:
+				for cell_position: Vector3i in chunk.world_cells():
 					cell_positions.append(cell_position)
-					var base: int = chunk.cells[cell_position] * VoxelFrame.MATERIAL_STRIDE
-					cell_colors[cell_position] = Color(chunk.materials[base], chunk.materials[base + 1], chunk.materials[base + 2], chunk.materials[base + 3])
-					cell_materials[cell_position] = chunk.materials.slice(base, base + VoxelFrame.MATERIAL_STRIDE)
+					var cell_material: PackedFloat32Array = chunk.get_material(cell_position)
+					cell_colors[cell_position] = VoxelFrame.material_color(cell_material)
+					cell_materials[cell_position] = cell_material
 					_include_bounds(cell_position)
 				if not checkpoint(cell_positions.size()):
 					return

@@ -14,6 +14,12 @@ func _ready() -> void:
 
 
 func _run() -> void:
+	step("Given a chunk size that matches the chunk-position shift", func():
+		# `chunk_position` shifts instead of dividing, so the two constants must
+		# agree. This fails loudly if either one moves.
+		expect(VoxelFrame.CHUNK_SIZE == 1 << VoxelFrame.CHUNK_SHIFT, "the chunk shift is the base-two logarithm of the chunk size")
+		expect(VoxelFrame.chunk_position(Vector3i(-1, -17, 15)) == Vector3i(-1, -2, 0), "the chunk position floors toward negative infinity")
+	)
 	step("Given a solid chunk and a separate negative-coordinate voxel", func():
 		State.document = VoxelDocument.new()
 		original = State.get_current_voxel_frame()
@@ -85,4 +91,28 @@ func _run() -> void:
 		State.cancel_stroke()
 		expect(duplicate.count() == 4097, "cancel restores both erased voxels")
 		expect(duplicate.get_bounds() == original.get_bounds(), "cancel restores the original bounds")
+	)
+	step("When a chunk that one fill wrote is repainted cell by cell", func():
+		State.document = VoxelDocument.new()
+		var frame := State.get_current_voxel_frame()
+		var material := VoxelFrame.material(Color.RED)
+		var batch := {}
+		for z in 16:
+			for y in 16:
+				for x in 16:
+					batch[Vector3i(x, y, z)] = material
+		frame.set_cells(batch)
+		var filled: VoxelFrame.Chunk = frame.chunks[Vector3i.ZERO]
+		expect(filled.materials.size() / VoxelFrame.MATERIAL_STRIDE == 1, "the fill leaves one material entry for the whole chunk")
+		# A repaint gives each edited cell its own entry. A repaint-only workload
+		# never erases, so the reclamation has to run on the write path or the table
+		# grows with every edit.
+		var blue := VoxelFrame.material(Color.BLUE)
+		for index in 100:
+			var repaint := {}
+			for step in 100:
+				repaint[Vector3i((index * 100 + step) % 16, (index * 100 + step) / 16 % 16, index % 16)] = blue
+			frame.set_cells(repaint)
+		var repainted: VoxelFrame.Chunk = frame.chunks[Vector3i.ZERO]
+		expect(repainted.materials.size() / VoxelFrame.MATERIAL_STRIDE <= repainted.occupied_count * 2, "repeated repaints keep the material table bounded")
 	)

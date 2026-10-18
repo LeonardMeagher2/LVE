@@ -29,6 +29,24 @@ func run() -> void:
 	# with no occupied voxel skips its whole 16 by 16 scan.
 	var occupied_planes: PackedInt32Array = snapshot[3]
 	source_frame = null
+	if texture_materials and frame != null:
+		# Collect the exposed faces straight from the snapshot. The greedy pass
+		# would merge them only for the cleanup to split them into single cells.
+		var groups := _collect_groups(padded_cell_colors, padded_cell_materials, materials, occupied_planes)
+		var surface := SURFACE.new()
+		# The padded material map already holds occupancy for the chunk and its
+		# neighbor border, so the smooth corner normals read it there instead of
+		# hashing the frame once per corner.
+		surface.run_groups(groups, frame, Vector3(chunk_location * CHUNK_SIZE), Callable(), smooth_normals, padded_cell_materials)
+		surface_arrays = surface.arrays
+		atlas = surface.atlas
+		atlas_size = atlas.size
+		if atlas.albedo:
+			atlas_albedo = atlas.albedo.get_data()
+			atlas_orm = atlas.orm.get_data()
+			atlas_emission = atlas.emission.get_data()
+		geometry_bytes = surface_arrays[Mesh.ARRAY_VERTEX].size() * 32 + surface_arrays[Mesh.ARRAY_INDEX].size() * 4
+		return
 	var vertex_positions := PackedVector3Array()
 	var vertex_normals := PackedVector3Array()
 	var vertex_colors := PackedColorArray()
@@ -129,6 +147,51 @@ func run() -> void:
 		geometry_bytes = surface_arrays[Mesh.ARRAY_VERTEX].size() * 32 + surface_arrays[Mesh.ARRAY_INDEX].size() * 4
 
 
+# Collect the exposed faces of this chunk straight from the padded snapshot,
+# grouped by plane and material. The scan follows the greedy pass, so the
+# groups are created in the same order and the mesh matches vertex for vertex.
+func _collect_groups(padded_cell_colors: PackedColorArray, padded_cell_materials: PackedInt32Array, materials: PackedFloat32Array, occupied_planes: PackedInt32Array) -> Dictionary:
+	var groups := {}
+	var material_cache := {}
+	for face_axis in 3:
+		var column_axis := (face_axis + 1) % 3
+		var row_axis := (face_axis + 2) % 3
+		for face_sign: int in [-1, 1]:
+			for layer_index in CHUNK_SIZE:
+				if occupied_planes[face_axis] & (1 << (layer_index + 1)) == 0:
+					continue
+				for row in CHUNK_SIZE:
+					for column in CHUNK_SIZE:
+						var sample_position := Vector3i.ONE
+						sample_position[face_axis] += layer_index
+						sample_position[column_axis] += column
+						sample_position[row_axis] += row
+						var sample_index := sample_position.x + PADDED_CHUNK_SIZE * (sample_position.y + PADDED_CHUNK_SIZE * sample_position.z)
+						var voxel_color := padded_cell_colors[sample_index]
+						if voxel_color == Color.TRANSPARENT:
+							continue
+						var neighbor_position := sample_position
+						neighbor_position[face_axis] += face_sign
+						var neighbor_color := padded_cell_colors[neighbor_position.x + PADDED_CHUNK_SIZE * (neighbor_position.y + PADDED_CHUNK_SIZE * neighbor_position.z)]
+						# The greedy pass emits this face under the same rule.
+						if not (neighbor_color.a < 1.0 and neighbor_color != voxel_color):
+							continue
+						var material_id := padded_cell_materials[sample_index]
+						var material: PackedFloat32Array
+						if material_cache.has(material_id):
+							material = material_cache[material_id]
+						else:
+							material = materials.slice(material_id * VoxelFrame.MATERIAL_STRIDE, (material_id + 1) * VoxelFrame.MATERIAL_STRIDE)
+							material_cache[material_id] = material
+						var plane := Vector3i(face_axis, face_sign, 2 * layer_index + face_sign)
+						var key := [plane, material]
+						if not groups.has(key):
+							groups[key] = {"plane": plane, "material": material, "cells": {}, "normals": {}}
+						var group: Dictionary = groups[key]
+						group.cells[Vector2i(column, row)] = true
+	return groups
+
+
 static func neighbor_offsets(use_smooth_normals: bool) -> Array[Vector3i]:
 	var offsets: Array[Vector3i] = [Vector3i.ZERO]
 	if not use_smooth_normals:
@@ -154,6 +217,11 @@ static func _corner_normal(corner: Vector3i, padded_cell_colors: PackedColorArra
 	return normal.normalized()
 
 
+# Build the padded snapshot of one chunk plus its neighbor border. Returns
+# [padded colors, padded material ids, material table, occupied planes].
+# A nonzero padded material id marks an occupied cell for the whole padded
+# volume, including the border. The smooth corner normals read occupancy from
+# that map, so they match `VoxelFrame.has` for every stored voxel.
 static func _snapshot(frame: VoxelFrame, location: Vector3i, use_smooth_normals: bool) -> Array:
 	var padded_cell_colors := PackedColorArray()
 	padded_cell_colors.resize(PADDED_CHUNK_SIZE * PADDED_CHUNK_SIZE * PADDED_CHUNK_SIZE)
@@ -168,23 +236,42 @@ static func _snapshot(frame: VoxelFrame, location: Vector3i, use_smooth_normals:
 		var neighbor: VoxelFrame.Chunk = frame.chunks.get(location + offset)
 		if neighbor == null:
 			continue
-		for cell_position in neighbor.cells:
-			var sample_position: Vector3i = cell_position - padded_origin
-			if sample_position.x >= 0 and sample_position.y >= 0 and sample_position.z >= 0 and sample_position.x < PADDED_CHUNK_SIZE and sample_position.y < PADDED_CHUNK_SIZE and sample_position.z < PADDED_CHUNK_SIZE:
-				var sample_index := sample_position.x + PADDED_CHUNK_SIZE * (sample_position.y + PADDED_CHUNK_SIZE * sample_position.z)
-				var slot: int = neighbor.cells[cell_position]
-				var base := slot * VoxelFrame.MATERIAL_STRIDE
-				padded_cell_colors[sample_index] = Color(neighbor.materials[base], neighbor.materials[base + 1], neighbor.materials[base + 2], neighbor.materials[base + 3])
-				if offset != Vector3i.ZERO:
+		var grid := neighbor.grid
+		var neighbor_materials := neighbor.materials
+		var origin_delta := neighbor.location * CHUNK_SIZE - padded_origin
+		for local_z in CHUNK_SIZE:
+			var z_row := origin_delta.z + local_z
+			if z_row < 0 or z_row >= PADDED_CHUNK_SIZE:
+				continue
+			for local_y in CHUNK_SIZE:
+				var y_row := origin_delta.y + local_y
+				if y_row < 0 or y_row >= PADDED_CHUNK_SIZE:
 					continue
-				occupied_planes[0] |= 1 << sample_position.x
-				occupied_planes[1] |= 1 << sample_position.y
-				occupied_planes[2] |= 1 << sample_position.z
-				var cell_material := neighbor.materials.slice(base, base + VoxelFrame.MATERIAL_STRIDE)
-				var material_id: int = material_ids.get(cell_material, -1)
-				if material_id < 0:
-					material_id = materials.size() / VoxelFrame.MATERIAL_STRIDE
-					material_ids[cell_material] = material_id
-					materials.append_array(cell_material)
-				padded_cell_materials[sample_index] = material_id
+				var grid_row := local_y * CHUNK_SIZE + local_z * CHUNK_SIZE * CHUNK_SIZE
+				for local_x in CHUNK_SIZE:
+					var x_row := origin_delta.x + local_x
+					if x_row < 0 or x_row >= PADDED_CHUNK_SIZE:
+						continue
+					var id := grid[grid_row + local_x]
+					if id == 0:
+						continue
+					var sample_index := x_row + PADDED_CHUNK_SIZE * (y_row + PADDED_CHUNK_SIZE * z_row)
+					var base := (id - 1) * VoxelFrame.MATERIAL_STRIDE
+					padded_cell_colors[sample_index] = Color(neighbor_materials[base], neighbor_materials[base + 1], neighbor_materials[base + 2], neighbor_materials[base + 3])
+					if offset != Vector3i.ZERO:
+						# Only the chunk's own cells need a real material id. A
+						# border cell marks occupancy alone, which the smooth
+						# corner normals read as a nonzero slot.
+						padded_cell_materials[sample_index] = 1
+						continue
+					occupied_planes[0] |= 1 << (origin_delta.x + local_x)
+					occupied_planes[1] |= 1 << (origin_delta.y + local_y)
+					occupied_planes[2] |= 1 << (origin_delta.z + local_z)
+					var cell_material := neighbor_materials.slice(base, base + VoxelFrame.MATERIAL_STRIDE)
+					var material_id: int = material_ids.get(cell_material, -1)
+					if material_id < 0:
+						material_id = materials.size() / VoxelFrame.MATERIAL_STRIDE
+						material_ids[cell_material] = material_id
+						materials.append_array(cell_material)
+					padded_cell_materials[sample_index] = material_id
 	return [padded_cell_colors, padded_cell_materials, materials, occupied_planes]

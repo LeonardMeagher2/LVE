@@ -29,7 +29,7 @@ func _run() -> void:
 		var frame: VoxelFrame = document.frames[0]
 		var distinct := {}
 		for chunk: VoxelFrame.Chunk in frame.chunks.values():
-			for cell_position in chunk.cells:
+			for cell_position in chunk.world_cells():
 				distinct[frame.get_material(cell_position)] = true
 		print("MEASURE case: %d voxels, %d chunks, %d materials, bounds %s" % [
 			frame.count(), frame.chunks.size(), distinct.size(), str(frame.get_bounds()),

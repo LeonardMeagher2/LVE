@@ -17,6 +17,7 @@ signal tag_changed()
 signal activity_changed()
 signal edit_context_changing()
 signal model_settings_changed()
+signal history_changed()
 
 const WORK_SLICE_US := 3000
 const DEFAULT_PALETTE_PATH := "user://default_palette.cfg"
@@ -181,6 +182,7 @@ func set_document(value:VoxelDocument) -> void:
 	selection.clear()
 	selection_changed.emit()
 	undo_redo.clear_history()
+	history_changed.emit()
 	if value is VoxelDocument:
 		document = value
 	else:
@@ -197,6 +199,25 @@ func set_document(value:VoxelDocument) -> void:
 	palette_changed.emit()
 	frames_changed.emit()
 	current_frame = 0
+
+
+func _commit_history(execute: bool = true) -> void:
+	undo_redo.commit_action(execute)
+	history_changed.emit()
+
+
+func undo() -> bool:
+	var undone := undo_redo.undo()
+	if undone:
+		history_changed.emit()
+	return undone
+
+
+func redo() -> bool:
+	var redone := undo_redo.redo()
+	if redone:
+		history_changed.emit()
+	return redone
 
 
 func add_plugin(plugin: VoxelPlugin) -> void:
@@ -329,7 +350,7 @@ func end_stroke(action: String = "Stroke") -> void:
 		undo_redo.create_action(action)
 		undo_redo.add_undo_method(_restore_chunks.bind(_stroke_frame, _stroke_start_chunks, _stroke_start_selection))
 		undo_redo.add_do_method(_restore_chunks.bind(_stroke_frame, stroke_end_chunks, selection.capture()))
-		undo_redo.commit_action(false)
+		_commit_history(false)
 	_stroke_frame = null
 	_stroke_start_chunks = {}
 	_stroke_start_selection = {}
@@ -417,7 +438,7 @@ func set_material(material: PackedFloat32Array) -> void:
 	undo_redo.create_action("Set Material", UndoRedo.MERGE_ENDS)
 	undo_redo.add_undo_method(_apply_material.bind(current_material))
 	undo_redo.add_do_method(_apply_material.bind(material.duplicate()))
-	undo_redo.commit_action()
+	_commit_history()
 
 
 func _apply_material(material: PackedFloat32Array) -> void:
@@ -543,7 +564,7 @@ func _record_material_action(before: PackedFloat32Array) -> void:
 	undo_redo.create_action("Edit Material")
 	undo_redo.add_undo_method(_apply_material.bind(before))
 	undo_redo.add_do_method(_apply_material.bind(current_material))
-	undo_redo.commit_action(false)
+	_commit_history(false)
 
 
 func _copy_palette(materials: Array) -> Array[PackedFloat32Array]:
@@ -562,7 +583,7 @@ func _record_palette_action(action_name: String, before: Dictionary) -> void:
 	undo_redo.create_action(action_name)
 	undo_redo.add_undo_method(_restore_palette.bind(document, before))
 	undo_redo.add_do_method(_restore_palette.bind(document, after))
-	undo_redo.commit_action(false)
+	_commit_history(false)
 	palette_changed.emit()
 
 
@@ -783,7 +804,7 @@ func set_smooth_normals(value: bool) -> void:
 	undo_redo.create_action("Set Smooth Normals")
 	undo_redo.add_undo_method(_apply_smooth_normals.bind(document.smooth_normals))
 	undo_redo.add_do_method(_apply_smooth_normals.bind(value))
-	undo_redo.commit_action(false)
+	_commit_history(false)
 	_apply_smooth_normals(value)
 
 
@@ -862,7 +883,7 @@ func _record_frame_action(action_name: String, before: Dictionary, after: Dictio
 	undo_redo.create_action(action_name)
 	undo_redo.add_undo_method(_restore_frame_layout.bind(before["frames"], before["ranges"], before["current"]))
 	undo_redo.add_do_method(_restore_frame_layout.bind(after["frames"], after["ranges"], after["current"]))
-	undo_redo.commit_action(false)
+	_commit_history(false)
 	_restore_frame_layout(after["frames"], after["ranges"], after["current"])
 
 
@@ -898,7 +919,7 @@ func set_frame_delay(index: int, ms: int) -> void:
 	undo_redo.create_action("Set Frame Delay")
 	undo_redo.add_undo_method(_apply_frame_delay.bind(index, frame.delay_ms))
 	undo_redo.add_do_method(_apply_frame_delay.bind(index, ms))
-	undo_redo.commit_action(false)
+	_commit_history(false)
 	_apply_frame_delay(index, ms)
 
 
@@ -922,7 +943,7 @@ func add_tag(tag_name: String, from: int = 0, to: int = -1) -> void:
 	undo_redo.create_action("Add Tag")
 	undo_redo.add_undo_method(_apply_tag_removed.bind(index, prev_active))
 	undo_redo.add_do_method(_apply_tag_inserted.bind(index, tag, index))
-	undo_redo.commit_action(false)
+	_commit_history(false)
 	_apply_tag_inserted(index, tag, index)
 
 
@@ -953,7 +974,7 @@ func remove_tag() -> void:
 	undo_redo.create_action("Remove Tag")
 	undo_redo.add_undo_method(_apply_tag_inserted.bind(index, tag, index))
 	undo_redo.add_do_method(_apply_tag_removed.bind(index, new_active))
-	undo_redo.commit_action(false)
+	_commit_history(false)
 	_apply_tag_removed(index, new_active)
 
 func set_tag_range(from: int, to: int, record_history: bool = true) -> void:
@@ -979,7 +1000,7 @@ func commit_tag_range(index: int, previous_range: Vector2i) -> void:
 	undo_redo.create_action("Set Tag Range")
 	undo_redo.add_undo_method(_apply_tag_range.bind(index, previous_range.x, previous_range.y))
 	undo_redo.add_do_method(_apply_tag_range.bind(index, tag.from, tag.to))
-	undo_redo.commit_action(false)
+	_commit_history(false)
 
 
 func _apply_tag_range(index: int, from: int, to: int) -> void:
@@ -1000,7 +1021,7 @@ func set_tag_loop_mode(index: int, mode: int) -> void:
 	undo_redo.create_action("Set Loop Mode")
 	undo_redo.add_undo_method(_apply_tag_loop_mode.bind(index, tag.loop_mode))
 	undo_redo.add_do_method(_apply_tag_loop_mode.bind(index, mode))
-	undo_redo.commit_action(false)
+	_commit_history(false)
 	_apply_tag_loop_mode(index, mode)
 
 
@@ -1019,7 +1040,7 @@ func set_tag_repeats(index: int, value: int) -> void:
 	undo_redo.create_action("Set Repeats")
 	undo_redo.add_undo_method(_apply_tag_repeats.bind(index, tag.repeats))
 	undo_redo.add_do_method(_apply_tag_repeats.bind(index, value))
-	undo_redo.commit_action(false)
+	_commit_history(false)
 	_apply_tag_repeats(index, value)
 
 
@@ -1038,7 +1059,7 @@ func set_tag_name(index: int, tag_name: String) -> void:
 	undo_redo.create_action("Set Tag Name")
 	undo_redo.add_undo_method(_apply_tag_name.bind(index, tag.name))
 	undo_redo.add_do_method(_apply_tag_name.bind(index, tag_name))
-	undo_redo.commit_action(false)
+	_commit_history(false)
 	_apply_tag_name(index, tag_name)
 
 

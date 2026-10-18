@@ -22,6 +22,8 @@ Use Git history for old bug reports and removed designs.
 - 2026-08-23: Guard typed returns against null values. A `Variant` can contain an incompatible value.
 - 2026-08-16: `get_script()` returns the most-derived script. Use `get_base_script()` to reach its base script.
 - 2026-10-04: Inside a nested class, qualify outer static methods with the outer class name.
+- 2026-10-17: `PackedFloat32Array.resize()` fills new entries with zero. `append_array()` after `resize()` extends beyond those zeros. Use a write cursor to rebuild the array in place.
+- 2026-10-17: Dictionary iteration order is hash based. Sort the keys before remapping ids for deterministic serialization.
 
 ## UI and input
 
@@ -95,13 +97,46 @@ Use Git history for old bug reports and removed designs.
 - 2026-10-17: A chunk mesher scans all 16 rows and columns of each face axis, sign, and layer. An empty chunk costs as much as a full one unless the scan skips empty layers.
 - 2026-10-17: The mesher emits faces only for the chunk's own cells. Padded planes 1 through 16 hold exactly those cells, so their occupancy is known before the scan.
 - 2026-10-17: The planar cleanup falls back to one quad per cell for four of the 511 three-by-three masks. Those shapes have a self-touching outline.
+- 2026-10-17: The greedy pass merges every edge-adjacent face of one material. A cleanup region therefore holds cells that touch only at corners, and most loops are single cells.
+- 2026-10-17: `Geometry2D.triangulate_polygon()` fans a polygon from its last vertex. A four-point unit square gives `[3, 0, 1, 1, 2, 3]` for every rotation and offset.
+- 2026-10-17: A compact row-mask region only beats dictionary hashing when its rectangle is close to its cell count. At ten times more area than cells, the box scan loses.
+- 2026-10-18: Comparing packed arrays with `==` is far cheaper than looping over their elements. Use it as a sufficient equality check and fall back to the element compare.
+- 2026-10-18: Godot has no `PackedInt16Array`. Packed integer arrays use 32-bit or 64-bit entries.
+- 2026-10-18: A bounds rescan over a full 16-cube chunk costs about 0.8 ms. Grow bounds from the written cells instead, and mark them dirty only when an erase lands on a bound.
+- 2026-10-18: A seam protection pass and the triangulation that follows need the same region loops. Extract them once and pass them on.
+- 2026-10-18: The seam protection must protect turns only. Protecting collinear points adds vertices to the mesh.
 - 2026-10-17: A one-cell hole raises a 16 by 16 plate from twelve triangles to forty. A diagonal notch raises it to fifty-six.
 - 2026-10-17: The sample document uses four materials for 44 voxels. Material count alone does not prevent merging.
 - 2026-10-17: A smooth normal depends only on the voxel lattice corner. The mesher and the planar cleanup can both read it from the frame, so flat and smooth can share one merged topology.
+- 2026-10-18: Reuse padded material ids as occupancy for smooth normals. Mark occupied border cells with a nonzero sentinel.
+- 2026-10-18: Match `VoxelFrame.has()` with occupancy ids, not colors. Stored transparent cells still contribute to corner normals.
 - 2026-10-17: A region whose outline visits a corner twice falls back to one quad per cell. A diagonal gap of cells produces that outline.
 - 2026-10-17: The greedy mesh merges each plane on its own, so the planar cleanup can only add polygons. A chunk that gains triangles in the cleanup marks a merge failure.
 - 2026-10-17: `Geometry2D.triangulate_polygon()` returns an empty array for a unit square at 4096, but it returns both triangles for the same square at -4096. The region triangulator then falls back to one quad per cell, which keeps the correct shape.
 - 2026-10-17: An outline that pinches at a corner returns one loop that visits that corner twice. Splitting that loop at the repeated corner yields simple polygons, and a hole that touches the outline becomes a negative piece.
+- 2026-10-18: `Line2D` builds UVs only when `texture_mode` is not `LINE_TEXTURE_NONE`. With `LINE_TEXTURE_TILE` and no texture, `UV.x` is the distance along the line divided by the width, and `tile_aspect` is 1.
+- 2026-10-18: Under a perspective camera, two cells share a screen pixel only when they are collinear with the camera. A depth test cannot bucket the projected cell centers. Sample a point on the camera-facing surface of each cell instead. At a 45 degree view the cell center hides behind its own neighbour.
+- 2026-10-18: A prepared loop that is one counterclockwise unit square needs no split, hole cut, or simplification. All four points are turns, and the triangle fan is `[3, 0, 1, 1, 2, 3]`.
+- 2026-10-18: A prepared unit-square shortcut cut the `draw_latency` planar triangulate stage from 9845 to 3476 us.
+- 2026-10-18: The 32-cube, 64-material fixture formed 93 cleanup groups with 768 unit-square loops and no holes.
+- 2026-10-18: A frozen differential needs a copy of the region and of its caller. The caller supplies the prepared loops, so the two must stay in step.
+- 2026-10-18: Material-rich cleanup measured 24968 to 18496 us flat and 26547 to 19648 us smooth.
+- 2026-10-18: Complete material-rich surfaces measured 26384 to 19841 us flat and 27656 to 20807 us smooth.
+- 2026-10-18: These A/B medians used nine repeats, two warmups, alternating execution order, and independent group copies.
+- 2026-10-18: The unit-square shortcut repeated a 25 percent material-rich gain. Uniform, plate, and hole-heavy changes stayed within noise.
+- 2026-10-18: `planar_cleanup` matched frozen polygon points, indices, and order across 527 cases, including all 511 three-by-three masks.
+- 2026-10-18: The cleanup checks rejected changed geometry and verified cancellation at entry and during work.
+
+## Threading
+
+- 2026-10-18: Godot creates one global `WorkerThreadPool` at startup, sized to `OS.get_processor_count()`. The setting `threading/worker_pool/max_threads` defaults to -1, which means the core count.
+- 2026-10-18: All pool tasks share one FIFO queue. An idle worker takes the next task. There is no core affinity and no per-task assignment.
+- 2026-10-18: Low-priority tasks are limited to `threading/worker_pool/low_priority_thread_ratio` of the pool. The default is 0.3. High-priority tasks can use every thread.
+- 2026-10-18: The pool does not preempt a task and has no cancel call. A task runs to completion, so the caller sets its own cancel flag.
+- 2026-10-18: `wait_for_task_completion()` blocks the main thread on a semaphore. A pool thread that waits processes other tasks instead.
+- 2026-10-18: `add_group_task()` gives each call an index from an atomic counter. Workers pull the next index, so the work balances without a fixed split.
+- 2026-10-18: `WorkerThreadPool.get_thread_count()` is not bound to GDScript. Use `OS.get_processor_count()` as the proxy.
+- 2026-10-18: A low-priority task cannot use most of the threads. Surface builds that pass `high_priority = false` run on about 30 percent of the pool.
 
 ## Materials and export
 
@@ -110,6 +145,26 @@ Use Git history for old bug reports and removed designs.
 - 2026-10-16: For glTF emission, use white emission and multiply mode. glTF multiplies its emission factor and texture.
 - 2026-10-16: Godot 4.7.2 embeds atlas PNGs in GLB files. HDR emission uses `KHR_materials_emissive_strength`.
 - 2026-10-16: Allow one byte of error when checking Image texture samples.
+- 2026-10-18: `Image.set_data(width, height, use_mipmaps, format, data)` takes row-major bytes with pixel (0,0) first. Filling a buffer and calling it once matches `set_pixelv` byte for byte.
+- 2026-10-18: `set_pixelv` quantizes a channel by truncation, as `int(clampf(value * 255.0, 0.0, 255.0))`. `Color.to_rgba32()` is not equivalent: it packs another byte order and its low byte is alpha.
+- 2026-10-18: `PackedByteArray.encode_u32` writes little-endian, so the first byte of a packed RGBA value is red.
+- 2026-10-18: An atlas holds one patch per distinct material. `add_patch` deduplicates by material content and every caller passes a one-by-one patch.
+- 2026-10-18: A `-s` SceneTree script has no autoloads, so `State` and other singletons do not resolve. Only global `class_name` types do. Load such a script from a test scene instead.
+- 2026-10-18: This project treats the GDScript warning "type inferred from a Variant" as an error. Declare the type explicitly when a function returns Variant.
+- 2026-10-18: The greedy face rule is: the cell is occupied, and the neighbor has alpha below one or a different color. The merge itself does not change which cells are grouped.
+- 2026-10-18: A batch write that takes the chunk origin as an argument, compares the material once, and merges the bounds once per chunk cut the per-cell write from 3.7 to 2.60 us at diameter 64.
+- 2026-10-18: The sphere brush cursor at diameter 64 built a 137376-cell mesh in 1022824 us. Showing the box above 4096 pattern cells cut it to 49923 us, which is the one-time pattern build.
+- 2026-10-18: A frame-gap measurement must reset its frame mark when it starts. Otherwise the first measured frame counts the idle time since the last measured frame, and a slow setup step appears as a slow frame.
+- 2026-10-18: Record visible completion after the renderer settles. An edit-worker completion time excludes the remaining surface builds.
+- 2026-10-18: Holding a stamp while the viewport is behind does not help. It delays the work, which then lands in fewer and larger frames. The large-drag gap went from 8 to 16 ms and the small drag from 7 to 15 ms.
+- 2026-10-18: A maximum-diameter brush stroke costs about one second because it touches a quarter of a million cells. The stamp and the write are inherent to the footprint, so responsiveness must come from spreading the work, not from shortening it.
+- 2026-10-18: The number of in-flight surface jobs does not reliably change the settle time or the frame gap. Two sweeps of limits 2, 4, 6, and 8 disagreed on the sign of the gap effect, and the run to run spread was wider than the effect.
+- 2026-10-18: A vertex dedup key must match the shading. A flat normal depends on the plane, so faces meeting at a corner keep separate vertices. A smooth normal depends only on the lattice corner, so those faces share one vertex. Keying on the patch alone merges flat faces, and keying on the group alone splits smooth corners.
+- 2026-10-18: A chunk that holds one cell costs 18138 tracked bytes, 16384 of it the grid reservation. The cost is per chunk, not per cell.
+- 2026-10-18: A maximum-diameter brush drag is bounded by the write and the chunk rebuilds, not by the stamp loop. The stamp grows linearly with the center count, but `set_cells` already receives the deduped union.
+- 2026-10-18: A chunk holds one material table entry per occupied cell, so a write changes one cell. A bulk fill that points every cell at one entry is legal only with an explicit flag and a split before the next single-cell write. Without it, one voxel repaints the whole chunk.
+- 2026-10-18: Iterating an `Array` of keys is about twice as fast as iterating the `Dictionary` itself. When a loop needs the keys alone, take `keys()` once and iterate that array. The order is the insertion order, so the two agree.
+- 2026-10-18: Measure a job's own cost by running that job alone, not by reading a settle time. The maximum-diameter settle varied 0.90 to 1.23 s run to run, while the same job measured alone read 1.28 s and 1.02 s for its two variants.
 - 2026-10-16: Compare stored material floats with `is_equal_approx()`. Packed storage uses 32-bit float precision.
 - 2026-10-16: `Color.TRANSPARENT` has white RGB and zero alpha. Four zero values give transparent black.
 - 2026-10-04: Check exported geometry through ImporterMesh arrays. Runtime mesh compression changes positions and normals.
@@ -139,10 +194,12 @@ Use Git history for old bug reports and removed designs.
 - 2026-09-09: Use `UndoRedo.MERGE_ENDS` for repeated drag updates. It keeps the first undo and last redo.
 - 2026-08-19: Use `UndoRedo.commit_action(false)` when the change is already applied.
 - 2026-09-09: Emit state signals from undo callbacks. The UI does not observe `UndoRedo.version_changed`.
+- 2026-10-18: `UndoRedo` signals only `undo()` and `redo()` calls. Emit `State.history_changed` after every commit to refresh the history buttons.
 - 2026-09-07: Selection does not support Shift-to-add. The Clear button stays enabled for an empty selection.
 
 ## Tests and processes
 
+- 2026-10-18: Pass `--screen 1` to child tests to use the second monitor. Verified with `DisplayServer.window_get_current_screen()`.
 - 2026-09-07: The harness adds `Main.tscn` from `_enter_tree()` with a deferred call. Each test uses the full editor.
 - 2026-10-17: Normal behavior tests skip startup document restoration. `Main.gd` restores documents only for application sessions unless forced.
 - 2026-08-19: The harness waits two frames before each test body. Add other waits only where the test needs them.
@@ -151,6 +208,7 @@ Use Git history for old bug reports and removed designs.
 - 2026-10-17: Compare performance numbers inside one run. Repeat runs on a loaded machine differ by more than a factor of two.
 - 2026-08-21: A Timer continues while test code awaits. Use its timeout signal to fail stalled tests.
 - 2026-08-23: A parse error can prevent a test from exiting. The suite runner stops that child after 30 seconds.
+- 2026-10-17: `var x := <Variant expression>` does not compile. The value has no set type. Write an explicit type such as `var base: int`.
 - 2026-08-24: Check errors inside expectation expressions. An error before `expect()` runs can leave no failed check.
 - 2026-10-17: `press_option()` matches the raw tooltip text, including its letter case.
 - 2026-10-07: For viewport-coordinate clicks, pass `true` to `push_input()` to skip display-scale conversion.

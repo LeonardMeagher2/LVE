@@ -28,7 +28,7 @@ var _operation_id := 0
 var _box := BoxMesh.new()
 var _outline_material: Material
 var _solid_material := preload("res://VoxelMaterial.tres").duplicate()
-var _box_material := preload("res://VoxelMaterial.tres").duplicate()
+var _primitive_material := preload("res://VoxelMaterial.tres").duplicate()
 var _brush_material := VoxelFrame.material(Color.WHITE)
 
 class PreviewJob extends VoxelFrame.EditJob:
@@ -127,7 +127,7 @@ func _on_model_settings_changed() -> void:
 func _ready() -> void:
 	_outline_material = material_override
 	_solid_material.albedo_color = Color.WHITE
-	_box_material.vertex_color_use_as_albedo = false
+	_primitive_material.vertex_color_use_as_albedo = false
 
 
 func set_brush_color(color: Color) -> void:
@@ -136,7 +136,7 @@ func set_brush_color(color: Color) -> void:
 
 func set_brush_material(cell_material: PackedFloat32Array) -> void:
 	_brush_material = cell_material.duplicate()
-	_apply_material(_box_material, cell_material)
+	_apply_material(_primitive_material, cell_material)
 	if not _requested_voxel_colors:
 		_apply_material(_solid_material, cell_material)
 
@@ -161,11 +161,14 @@ func show_voxels(colors: Dictionary, color: Color, outline: bool = false, cube_d
 		material_override = _outline_material
 		_request(colors, PreviewStyle.OUTLINE)
 		return
+	# A cube's voxels have the same six faces as a box, so above the caller's limit
+	# the box is exact and costs nothing. A shape whose voxels are stepped has no
+	# exact primitive, so it stays per-cell.
 	if cube_diameter > 0:
 		_clear_request()
 		_box.size = Vector3.ONE * cube_diameter
-		_box_material.albedo_color = color
-		material_override = _box_material
+		_primitive_material.albedo_color = color
+		material_override = _primitive_material
 		mesh = _box
 		position = Vector3.ONE * -0.5 if cube_diameter % 2 == 0 else Vector3.ZERO
 		visible = true

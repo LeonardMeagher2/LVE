@@ -18,6 +18,15 @@ func _ready() -> void:
 	State.model_settings_changed.connect(_sync_model_settings)
 	State.activity_changed.connect(_sync_model_settings)
 	_sync_model_settings()
+	State.history_changed.connect(_sync_history_buttons)
+	State.activity_changed.connect(_sync_history_buttons)
+	_sync_history_buttons()
+
+
+func _sync_history_buttons() -> void:
+	var busy := State.edit_busy()
+	%UndoBtn.disabled = busy or not State.undo_redo.has_undo()
+	%RedoBtn.disabled = busy or not State.undo_redo.has_redo()
 
 
 func _sync_model_settings() -> void:
@@ -156,9 +165,9 @@ static func document_basename(file_name: String) -> String:
 
 func _on_undo_btn_pressed() -> void:
 	if not State.edit_busy():
-		State.undo_redo.undo()
+		State.undo()
 
 
 func _on_redo_btn_pressed() -> void:
 	if not State.edit_busy():
-		State.undo_redo.redo()
+		State.redo()

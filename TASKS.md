@@ -18,7 +18,9 @@ See [GLTF_EXPORT.md](GLTF_EXPORT.md) for the mesh export format and import setti
     - Shared planar cleanup in the viewport and exporter
   - Run the suites without another Godot instance using this project.
   - Clipboard and model settings popup checks previously failed in a suite but passed alone.
-  - The latest recorded second suite run ended early with exit -1.
+  - The last isolated cleanup suite passed 136 of 137 scenes. Only `hidpi` failed.
+  - The icon import is now fixed. Its targeted `hidpi` test passes.
+  - Do not treat that targeted pass as a new full-suite result.
   - Keep full-material seams and the same polygon cleanup for flat and smooth shading.
   - Skip the optional Blender OBJ comparison when the reference file is absent.
 
@@ -30,53 +32,89 @@ See [GLTF_EXPORT.md](GLTF_EXPORT.md) for the mesh export format and import setti
 
 ## Rendering and performance
 
-- [ ] Keep drawing responsive on large models
-  - Measure with `tests/draw_latency.tscn`. It prints one line per stage.
-  - The chunk surface build dominates drawing latency. The greedy mesh and the
-    planar cleanup with atlas bake each take about half of one chunk build.
-  - [x] Run chunk surface builds on most worker threads instead of two
-  - [x] Rebuild only the changed chunks and the neighbors that mesh across a changed face
-  - [x] Guard the rebuild scope with `tests/chunk_rebuild_scope.tscn`
-  - [x] Skip empty chunk layers in the greedy mesh
-  - [x] Guard the merged faces with `tests/planar_merge.tscn`
-  - [ ] Limit the mesher scan to each plane's occupied rectangle
-  - [ ] Sort planar region cells with a native sort instead of a script comparator
-  - [ ] Compute each region's contours once instead of once for protection and once for triangulation
-  - [ ] Reduce the triangle count around holes and notches
-  - [ ] Reuse completed chunk geometry during preview shape changes
-  - [ ] Divide large mesh installations across frames
-  - Measured on a 32-cube with a cube brush of nine:
-    - Visible latency per motion decreased from 420 ms to about 110 ms.
-    - The longest frame gap decreased from 61 ms to about 9 ms.
-    - A single-cell brush settles in about 6 ms per motion.
-  - Measured per chunk build:
-    - An empty chunk decreased from 7.5 ms to 0.06 ms.
-    - A one-layer plate decreased from 8.2 ms to 6.2 ms.
-    - A solid chunk stays at about 12.6 ms.
-  - The planar cleanup still costs most of a build with many small material groups.
-- [ ] Merge faces that the planar cleanup drops
-  - A region whose outline visits a corner twice caused a fallback to one quad per cell.
-  - A diagonal gap of cells produces that outline.
-  - [x] Split a self-touching outline into simple loops instead of one quad per cell
-  - A hole that touches the outline at a corner becomes a negative piece and opens below.
-  - No three-by-three mask falls back now. Four did before the fix.
-  - `tests/failed_greed.tscn` reports the effect on a reported document.
-  - A 5 by 5 slab with a three-cell diagonal gap decreased from 92 to 56 triangles.
-  - [ ] Reduce the triangle count around holes and notches
-  - A one-cell hole raises a 16 by 16 plate from twelve triangles to forty.
-  - `Geometry2D.triangulate_polygon()` fails on a unit square at 4096, so single
-    cells there keep the correct one-quad fallback.
-- [x] Mesh flat and smooth surfaces the same way
-  - The mesher merged only flat faces. Smooth faces became one quad per voxel face
-    and the cleanup merged them again.
-  - The mesher now merges both. A smooth normal comes from the voxel lattice
-    corner, read from the frame in the cleanup instead of interpolated per quad.
-  - A smooth chunk build decreased from 25.9 ms to 21.7 ms on a solid model.
-  - Material-heavy models are unchanged, because their faces cannot merge.
-  - The viewport and the exporter still produce the same vertices and normals.
+- [ ] Keep drawing responsive on large models (active)
+  - [ ] Profile maximum-diameter strokes with the real renderer before choosing the next change.
+    - Measure cube and sphere brushes at diameters 9, 32, and 64.
+    - Separate input handling, edit completion, surface completion, and the longest frame gap.
+    - Time chunk notifications, surface signatures, snapshot copies, mesh uploads, materials, and cache eviction.
+    - Check one viewport and multiple viewports. Headless timings exclude GPU upload costs.
+    - Count unique changed chunks separately from emitted chunk entries.
+  - [ ] Bound measured main-thread work across frames.
+    - Compare a shared per-frame installation budget against the current per-renderer budgets.
+    - If uploads dominate, divide large mesh installations across frames.
+    - Preserve the previous mesh until its replacement is ready.
+    - Measure continuous drags and queued motion bursts. Preserve every stroke cell and bounded cancellation.
+  - [ ] Complete the drawing acceptance measurements.
+    - Run `tests/draw_latency.tscn` after the cleanup changes. Compare every `MEASURE` line.
+    - Aim for maximum-diameter frame gaps near the existing 7 to 8 ms small-brush result.
+    - Require visible latency to follow the stroke footprint, not the queued motion count.
+    - Keep edit time, visible latency, and frame gaps from regressing at ordinary brush sizes.
+    - Verify geometry, material samples, sparse models, undo, and cancellation.
+    - Run affected tests and the required full suites when closing this implementation task.
+  - Use the 2026-10-18 pre-cleanup checkpoint only as context: 26 ms maximum gap and 0.828 s visible completion.
+  - At that checkpoint, diameter nine had 48 ms visible latency and an 8 ms gap.
+  - Preserve dense 16-cube chunks unless measurements support a storage change.
+  - Keep the exact stepped sphere preview. A box is exact only for cube brushes.
+
+Start the following tasks after the active drawing task. Measure one candidate at a time.
+
+- [ ] Reduce remaining planar cleanup costs
+  - Use `tests/planar_cleanup.tscn` for differential checks and in-process benchmarks. See `NOTES.md` for recorded measurements.
+  - Preserve the test-only frozen region and surface references. Do not update them to hide a regression.
+  - Re-profile protection, grouping, emission, and non-unit regions before selecting another change.
+  - Compare delayed cell-mask compaction when prepared loops need no hole cut.
+  - Compare a native cell sort against the script comparator on the sparse dictionary path.
+  - Reuse prepared region data only within one build. Define invalidation when seam protection changes.
+  - Preserve exact geometry, normal-dependent vertex sharing, protected seams, and cancellation.
+  - Guard parity with `planar_cleanup`, `planar_paths`, `planar_merge`, `failed_greed`, and `greedy_viewport`.
+  - Preserve `failed_greed` counts: 64 greedy triangles and 72 cleanup triangles.
+  - Preserve the solid chunk's twelve triangles, 24 flat vertices, and eight smooth corners.
+- [ ] Re-profile the greedy mesh scan
+  - Compare occupied plane rectangles only if scanning remains a measured cost.
+  - Keep the direct textured-face path. Do not add a greedy pass to that path.
+  - Do not repeat snapshot-loop clipping without new evidence. The earlier measurement rejected it.
+- [ ] Reduce large uniform brush write preparation
+  - Re-measure stamp generation, chunk bucketing, and storage separately.
+  - Compare chunk-local spans or ranges against per-cell dictionaries for uniform shape brushes.
+  - Preserve selection materials, write order, copy-on-write isolation, bounds, neighbor reports, undo, and cancellation.
+  - Compare the full edit cost. Reject gains that only move work into conversion or publication.
+- [ ] Reuse completed preview geometry across shape changes and application sessions
+  - Measure cold generation, memory-cache hits, and disk-cache loads before choosing persistence.
+  - Compare a versioned cache under `user://` with the existing bounded memory cache.
+  - Define keys for shape, diameter, shading, material inputs, and generator version.
+  - Bound disk storage. Reject corrupt or stale entries and regenerate them safely.
+  - Preserve exact voxel previews and cancellation during rapid shape changes.
+- [ ] Share an atlas set per frame
+  - Treat this as a memory and material task, not a proven drawing-latency fix.
+  - Keep albedo, finish, and emission textures separate.
+  - Deduplicate full material content or use stable frame-wide ids. Chunk-local ids are not globally unique.
+  - Define atlas lifetime, cache ownership, growth, UV stability, and frame-wide emission normalization.
+  - Avoid rebuilding every chunk when one material changes. Test multiple viewports and animation frames.
+  - Preserve the one-material 3x3 atlas and its gutter.
+- [ ] Reduce atlas packing cost for material-heavy models
+  - Re-measure the packing sort on thousands of unique patches.
+  - Compare native sortable keys against the script comparator. Preserve deterministic packing and material samples.
+- [ ] Measure sparse-model memory and edit costs
+  - Measure many one-cell chunks, not only dense blocks.
+  - The recorded one-cell chunk costs about 18 KB, including a 16 KB grid.
+  - If grid memory is material, compare byte-encoded 16-bit ids against the current grid.
+  - Include read, write, snapshot, and serialization costs. Godot has no `PackedInt16Array`.
+- [ ] Reduce the triangle count around holes and notches
+  - Keep this separate from geometry-preserving cleanup optimizations.
+  - A recorded one-cell hole raises a 16 by 16 plate from twelve triangles to forty.
+  - Preserve coverage, material boundaries, winding, and crack-free seams in viewport and export meshes.
+  - Test diagonal notches, touching holes, negative coordinates, and coordinates near 4096.
 - [ ] Distribute expensive jobs across the available worker threads
-  - Use chunk work groups for independent matching and edit work.
-  - Preserve cancellation, bounded publication, and UI responsiveness.
+  - Profile independent chunk work and single-job tools before changing worker allocation.
+  - Compare bounded chunk work groups with individual tasks. Include task and merge overhead.
+  - Preserve surface-signature caching and job deduplication across viewports.
+  - Keep a reserve for interaction, cancellation flags, deterministic merges, and a bounded in-flight window.
+  - Judge visible latency and frame gaps, not core utilization.
+  - Do not repeat rejected job-limit sweeps, stamp splits, or renderer-backlog holds without new evidence.
+
+For performance changes, compare warmed alternatives in one process with alternating execution order.
+Treat differences near five percent as noise. Reject synthetic-only gains and incomplete test reports.
+Keep known runner-startup errors separate from scene errors. Do not assume new failures are baseline failures.
 
 ## Import
 

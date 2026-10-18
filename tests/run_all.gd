@@ -3,6 +3,7 @@ extends SceneTree
 const TEST_TIMEOUT_S := 30.0
 const POLL_INTERVAL_S := 0.1
 const MAX_FAILURES := 3
+const TEST_SCREEN := 1
 
 var _failed := 0
 var _pending := {}
@@ -39,17 +40,33 @@ func _test_paths() -> Array[String]:
 	var dir := DirAccess.open(base)
 	if dir == null:
 		return out
+	var only := _requested()
 	for f in dir.get_files():
-		if f.ends_with(".tscn"):
-			out.append("%s/%s" % [base, f])
+		if not f.ends_with(".tscn"):
+			continue
+		if not only.is_empty() and not only.has(f.get_basename()):
+			continue
+		out.append("%s/%s" % [base, f])
 	out.sort()
 	return out
+
+
+# The test scenes named after `--`, or every scene when none are named. Name a
+# batch to run only those scenes, still in this one process:
+#
+#   godot --headless --path . -s res://tests/run_all.gd -- paint line brush_modes
+func _requested() -> Dictionary:
+	var names := {}
+	for argument in OS.get_cmdline_user_args():
+		names[argument] = true
+	return names
 
 
 func _run_one(path: String) -> Dictionary:
 	_saw_ok = false
 	_wipe_dir(_artifact_dir(path))
-	var args := PackedStringArray(["--path", ProjectSettings.globalize_path("res://"), path])
+	# Godot numbers screens from zero. Open test windows on the second screen.
+	var args := PackedStringArray(["--screen", str(TEST_SCREEN), "--path", ProjectSettings.globalize_path("res://"), path])
 	var proc := OS.execute_with_pipe(OS.get_executable_path(), args, false)
 	if proc.is_empty():
 		return {"code": 1, "note": "could not start"}

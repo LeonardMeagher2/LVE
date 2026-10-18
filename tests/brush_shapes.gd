@@ -176,6 +176,35 @@ func _run() -> void:
 	)
 
 
+	await get_tree().process_frame
+	step("When the user selects a sphere wider than the cursor limit", func():
+		_empty("top")
+		_click_shape("Sphere")
+		options.get_node("Diameter").value = 20
+		expect(tool._settings.shape == BrushToolSettings.BrushShape.SPHERE, "the sphere shape is active")
+		target = aim(_position(Vector3.ZERO)).target
+	)
+	# A diameter of twenty is the first sphere past the per-cell cursor limit. Its
+	# pattern is built on a worker, so the first call only starts that build. The
+	# second call sees the cached pattern and builds the real preview.
+	tool._cursor_axis = -1
+	tool._show_brush_shape(0)
+	var cursor: MeshInstance3D = tool.get_node("Cursor")
+	while tool._hover_job != null:
+		await get_tree().process_frame
+	tool._show_brush_shape(0)
+	while not cursor.is_settled():
+		await get_tree().process_frame
+	await get_tree().process_frame
+	step("Then the wide sphere preview keeps its voxel shape", func():
+		expect(cursor.mesh is ArrayMesh, "a wide sphere preview stays per-cell instead of becoming a box")
+		var surface: ArrayMesh = cursor.mesh
+		var vertices: PackedVector3Array = surface.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+		expect(vertices.size() > 0, "the sphere preview has voxel geometry")
+		expect(surface.get_aabb().size.is_equal_approx(Vector3.ONE * 20), "the sphere preview spans the brush width")
+	)
+
+
 func _empty(view: String) -> void:
 	State.document = VoxelDocument.new()
 	State.floor_axis = {"right": 0, "top": 1, "front": 2}[view]

@@ -32,6 +32,7 @@ func begin_paste(pattern: Dictionary, selection_pattern: Dictionary, center: Vec
 	_anchor = center
 	_endpoint = VoxelPicking.NONE
 	_stroke_pattern = pattern
+	_stroke_offsets = pattern.keys()
 	_selection_pattern = selection_pattern
 	_material_pattern = material_pattern
 	_preview_pattern = pattern

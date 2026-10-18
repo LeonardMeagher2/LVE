@@ -105,6 +105,7 @@ func _begin_line(pick: PickResult) -> void:
 	_endpoint = VoxelPicking.NONE
 	_dragged = false
 	_stroke_pattern = _settings.pattern()
+	_stroke_offsets = _settings.pattern_offsets()
 	_stroke_material_pattern = _settings.selection_material_pattern.duplicate(true) if _settings.shape == BrushSettings.BrushShape.SELECTION else {}
 	_stroke_diameter = _settings.diameter
 	_stroke_shape = _settings.shape
@@ -138,6 +139,7 @@ func _start_preview() -> void:
 	_job = _create_preview_job()
 	_job.centers = _preview_centers()
 	_job.pattern = _stroke_pattern
+	_job.offsets = _stroke_offsets
 	if not _job.replace_materials:
 		_job.material_pattern = _stroke_material_pattern
 	_job.diameter = _stroke_diameter
@@ -190,8 +192,9 @@ func _finish_preview() -> void:
 	if job.revision != _revision or _anchor == VoxelPicking.NONE:
 		return
 	_preview_result = job
-	_settings.cache_pattern(job.diameter, job.shape, job.pattern)
+	_settings.cache_pattern(job.diameter, job.shape, job.pattern, job.offsets)
 	_stroke_pattern = job.pattern
+	_stroke_offsets = job.offsets
 	_show_preview(job)
 	visible = not job.applied_cells.is_empty()
 
@@ -257,6 +260,7 @@ func _on_settings_changed() -> void:
 		super._on_settings_changed()
 	else:
 		_stroke_pattern = _settings.pattern()
+		_stroke_offsets = _settings.pattern_offsets()
 		_stroke_material_pattern = _settings.selection_material_pattern.duplicate(true) if _settings.shape == BrushSettings.BrushShape.SELECTION else {}
 		_stroke_diameter = _settings.diameter
 		_stroke_shape = _settings.shape

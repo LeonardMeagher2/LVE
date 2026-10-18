@@ -155,12 +155,17 @@ func _request(active_frame: VoxelFrame, chunk_location: Vector3i) -> void:
 
 
 # The edit reports each changed chunk and each neighbor that meshes across a
-# changed face, so no neighbor expansion is needed here.
+# changed face, so no neighbor expansion is needed here. A large edit lists a
+# shared neighbor once per changed chunk, so request each chunk once.
 func _update_chunks(updated_frame: int, chunk_positions: Array[Vector3i]) -> void:
 	if updated_frame != (frame if frame >= 0 else State.current_frame):
 		return
 	var active_frame := _get_frame()
+	var requested := {}
 	for chunk_location in chunk_positions:
+		if requested.has(chunk_location):
+			continue
+		requested[chunk_location] = true
 		_request(active_frame, chunk_location)
 	_report_activity()
 
