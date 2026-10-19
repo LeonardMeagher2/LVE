@@ -161,7 +161,7 @@ Use Git history for old bug reports and removed designs.
 - 2026-10-18: `set_pixelv` quantizes a channel by truncation, as `int(clampf(value * 255.0, 0.0, 255.0))`. `Color.to_rgba32()` is not equivalent: it packs another byte order and its low byte is alpha.
 - 2026-10-18: `PackedByteArray.encode_u32` writes little-endian, so the first byte of a packed RGBA value is red.
 - 2026-10-18: An atlas holds one patch per distinct material. `add_patch` deduplicates by material content and every caller passes a one-by-one patch.
-- 2026-10-18: A `-s` SceneTree script has no autoloads, so `State` and other singletons do not resolve. Only global `class_name` types do. Load such a script from a test scene instead.
+- 2026-10-18: A `-s` coordinator starts project autoloads without `Main`. Clear its autoload settings in `_init()` to prevent plugin startup errors.
 - 2026-10-18: This project treats the GDScript warning "type inferred from a Variant" as an error. Declare the type explicitly when a function returns Variant.
 - 2026-10-18: The greedy face rule is: the cell is occupied, and the neighbor has alpha below one or a different color. The merge itself does not change which cells are grouped.
 - 2026-10-18: A batch write that takes the chunk origin as an argument, compares the material once, and merges the bounds once per chunk cut the per-cell write from 3.7 to 2.60 us at diameter 64.
@@ -246,3 +246,11 @@ Use Git history for old bug reports and removed designs.
 - 2026-08-23: Use `OS.execute_with_pipe(..., false)` for nonblocking output capture and a process ID.
 - 2026-10-16: Drain child output pipes to prevent blocking. Alternatively, capture Godot output with `--log-file`.
 - 2026-10-16: Windows can reuse process IDs. Do not rely on a reused ID alone to identify a finished child.
+- 2026-10-18: `OS.get_cmdline_user_args()` returns the arguments after `--`. The suite runner passes test names to a multi-test child scene that way.
+- 2026-10-18: A test file can register several tests. Each test runs in turn with its own report section, checks, and timeout. An empty name request runs every test.
+- 2026-10-18: Merging the four tag and frame scenes into one multi-test file cut the windowed five-scene run from 33082 ms to 23435 ms.
+- 2026-10-18: Polling every 10 ms cut the tag-control run from 24.6 s to 7.1 s.
+- 2026-10-18: Emitting a `ConfirmationDialog` signal by hand does not hide the dialog. A multi-test file must hide it in cleanup.
+- 2026-10-18: A child can print `TEST OK` and exit zero after an engine error. Check its error output too.
+- 2026-10-18: Godot rejects property assignment through a constant Resource reference. Store a mutable reference in a variable.
+- 2026-10-18: Capture startup Resource values before fixture resets. Hard-coded resets can hide default-setting regressions.

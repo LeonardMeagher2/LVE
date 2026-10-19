@@ -77,7 +77,7 @@ Run commands from the project root.
 Run one behavior test:
 
 ```text
-godot --headless --path . res://tests/paint.tscn
+godot --headless --path . res://tests/paint_strokes.tscn -- paint
 ```
 
 Run the full suite:
@@ -86,21 +86,28 @@ Run the full suite:
 godot --headless --path . -s res://tests/run_all.gd
 ```
 
-Run only the named scenes, in the same one process:
+Run named scenes or legacy test names:
 
 ```text
 godot --headless --path . -s res://tests/run_all.gd -- paint line brush_modes
 ```
 
 Reports are in `tests/artifacts/`. The runner exits non-zero on failure.
-For failure screenshots, remove `--headless`.
+The runner opens each child scene on screen 1. Tests in one group share a child process.
+For headless checks, run a scene directly. For failure screenshots, remove `--headless` from that direct command.
+To select tests inside a scene, add their names after `--`. A scene name selects its entire group.
 
 ### Writing tests
 
 - Follow `tests/test.gd` and adjacent tests. Each test script needs a matching scene with that script on its root.
 - Extend `"res://tests/test.gd"` by path. The tests folder is excluded from the global class cache.
-- In `_ready()`, defer adding the tested scene to the tree. Register the behavior with `test(description, callable)`.
+- Register each behavior in `_ready()` with `test(description, callable, name)`. Use a unique name within the file.
+- Keep related tests in one file. Share fixtures and helpers without sharing execution state.
+- Override `_setup_test()` and `_cleanup_test()` to isolate each test. The harness awaits both hooks.
+- Keep each test selectable alone or in another order. Add legacy names to `GROUP_ALIASES` in `tests/run_all.gd`.
 - Use `step("Given ...", func)`, `step("When ...", func)`, and `step("Then ...", func)` for setup, actions, and checks.
 - Use `expect(condition, message)` with an affirmative description of the required state.
 - Put waits in the test body, not step lambdas. Use member variables for state shared between steps.
-- The harness waits two frames before each test. Override `timeout` in `_ready()` when the default 10 seconds is insufficient.
+- The harness waits two frames before each test. Its per-test watchdog covers setup, the test body, and cleanup.
+- Set `timeout` before each registration when the default 10 seconds is insufficient. Each test keeps its registered deadline.
+- Keep the separate scene deadline unchanged.

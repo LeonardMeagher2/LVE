@@ -66,7 +66,7 @@ See [GLTF_EXPORT.md](GLTF_EXPORT.md) for the mesh export format and import setti
 Start the following tasks after the active drawing task. Measure one candidate at a time.
 
 - [ ] Reduce remaining planar cleanup costs
-  - Use `tests/planar_cleanup.tscn` for differential checks and in-process benchmarks. See `NOTES.md` for recorded measurements.
+  - Run `tests/planar_geometry.tscn -- planar_cleanup` for differential checks and in-process benchmarks. See `NOTES.md` for measurements.
   - Preserve the test-only frozen region and surface references. Do not update them to hide a regression.
   - Re-profile protection, grouping, emission, and non-unit regions before selecting another change.
   - Compare delayed cell-mask compaction when prepared loops need no hole cut.

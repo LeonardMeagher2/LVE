@@ -14,6 +14,10 @@ var _current_step := -1
 var _snap_seq := 0
 var _snap_by_frame := {}
 var _finished := false
+var _tests: Array = []
+var _results: Array = []
+var _scheduled := false
+var _test_open := false
 
 
 func _init() -> void:
@@ -32,8 +36,14 @@ func add_main() -> Node:
 
 
 func _arm_deadman() -> void:
-	var t := get_tree().create_timer(timeout + 5.0)
+	var budget := timeout if _tests.is_empty() else 0.0
+	for entry in _tests:
+		budget += float(entry["timeout"])
+	var t := get_tree().create_timer(budget + 5.0)
 	t.timeout.connect(_deadman_fire)
+	if not _scheduled and not _finished:
+		_scheduled = true
+		_run_tests.call_deferred()
 
 
 func _deadman_fire() -> void:
@@ -46,6 +56,15 @@ func _fail_hard(msg: String) -> void:
 	_finished = true
 	if _name == "":
 		_name = get_script().resource_path.get_file().get_basename()
+	if not _test_open:
+		_checks = []
+		_steps = []
+		_results.append({
+			"name": _name,
+			"description": _desc,
+			"checks": _checks,
+			"steps": _steps,
+		})
 	_checks.append({
 		"loc": _test_loc,
 		"msg": msg,
@@ -62,40 +81,147 @@ func _fail_hard(msg: String) -> void:
 	get_tree().quit(1)
 
 
-func test(description: String, c: Callable) -> void:
+# Register one test. A file can register several tests. Each test runs in turn
+# with its own report section, timeout, and pass or fail result. The command
+# line user arguments after `--` name the tests to run. With no names, every
+# registered test runs.
+func test(description: String, c: Callable, test_name := "") -> void:
+	var name := test_name
+	if name.is_empty():
+		name = _method_name(c)
+	var loc := _caller_loc(_caller_frame(get_stack()))
+	for entry in _tests:
+		if entry["name"] == name:
+			_test_loc = loc
+			_fail_hard("duplicate test name: %s" % name)
+			return
+	_tests.append({"name": name, "description": description, "callable": c, "loc": loc, "timeout": timeout})
+	if not _scheduled:
+		_scheduled = true
+		_run_tests.call_deferred()
+
+
+func _method_name(c: Callable) -> String:
+	var method := c.get_method()
+	if method.is_empty() or method.begins_with("<"):
+		return "test"
+	return method.trim_prefix("_")
+
+
+# Select tests by name. An empty request selects every test. Unknown names are
+# reported, so a bad selection never runs silently.
+func select_tests(requested: Array, tests: Array) -> Dictionary:
+	if requested.is_empty():
+		return {"selected": tests.duplicate(), "unknown": []}
+	var selected: Array = []
+	var unknown: Array = []
+	for name in requested:
+		var found := false
+		for entry in tests:
+			if entry["name"] == name:
+				if not selected.has(entry):
+					selected.append(entry)
+				found = true
+				break
+		if not found and not unknown.has(name):
+			unknown.append(name)
+	return {"selected": selected, "unknown": unknown}
+
+
+func _run_tests() -> void:
+	if _finished:
+		return
+	if _tests.is_empty():
+		_fail_hard("no tests registered")
+		return
+	var requested: Array = []
+	for argument in OS.get_cmdline_user_args():
+		requested.append(argument)
+	var choice: Dictionary = select_tests(requested, _tests)
+	var unknown: Array = choice["unknown"]
+	if not unknown.is_empty():
+		var names := PackedStringArray()
+		for name in unknown:
+			names.append(str(name))
+		_fail_hard("unknown test: %s" % ", ".join(names))
+		return
+	var selected: Array = choice["selected"]
+	if selected.is_empty():
+		_fail_hard("no tests selected")
+		return
+	for entry in selected:
+		_begin_test(entry)
+		for i in 2:
+			await get_tree().process_frame
+			if _finished:
+				return
+		# The watchdog covers the fixture hooks and the test body. A fixture that
+		# hangs in setup or cleanup then fails with the test name.
+		var watchdog := _start_test_watchdog(entry)
+		await _setup_test()
+		if _finished:
+			return
+		var work: Callable = entry["callable"]
+		await work.call()
+		if _finished:
+			return
+		await _cleanup_test()
+		if _finished:
+			return
+		watchdog.stop()
+		watchdog.queue_free()
+		_test_open = false
+	_finish_all()
+
+
+# Start one test. The test owns its checks and steps, so its report section is
+# independent of the other tests in the file.
+func _begin_test(entry: Dictionary) -> void:
+	_checks = []
+	_steps = []
+	_current_step = -1
 	_name = get_script().resource_path.get_file().get_basename()
-	_desc = description
-	_test_loc = _caller_loc(_caller_frame(get_stack()))
-	print(description)
-	for i in 2:
-		await get_tree().process_frame
-	var watchdog := _start_watchdog()
-	await c.call()
-	watchdog.stop()
-	_finish()
+	_desc = str(entry["description"])
+	_test_loc = str(entry["loc"])
+	_results.append({
+		"name": str(entry["name"]),
+		"description": str(entry["description"]),
+		"checks": _checks,
+		"steps": _steps,
+	})
+	_test_open = true
+	print(_desc)
 
 
-func _start_watchdog() -> Timer:
+# Isolate the shared editor state around each test. A file overrides these to
+# reset the state its tests change.
+func _setup_test() -> void:
+	pass
+
+
+func _cleanup_test() -> void:
+	pass
+
+
+func _start_test_watchdog(entry: Dictionary) -> Timer:
+	var test_name := str(entry["name"])
+	var deadline := float(entry["timeout"])
 	var t := Timer.new()
 	t.one_shot = true
-	t.wait_time = timeout
-	t.timeout.connect(_fail_timeout)
+	t.wait_time = deadline
+	t.timeout.connect(func(): _fail_hard("test %s timed out after %.1f s" % [test_name, deadline]))
 	add_child(t)
 	t.start()
 	return t
 
 
-func _fail_timeout() -> void:
-	_fail_hard("timed out after %.1f s" % timeout)
-
-
-func _finish() -> void:
+func _finish_all() -> void:
 	_finished = true
-	var failed := _count_failed()
+	var failed := _count_all_failed()
 	_write_report()
 	if failed > 0:
 		print("TEST FAILED: %d/%d checks failed -> %s/report.md" % [
-			failed, _checks.size(), _dir()
+			failed, _count_all_checks(), _dir()
 		])
 		get_tree().quit(1)
 	else:
@@ -215,11 +341,27 @@ func active_tool_node(plugin_name: String) -> Node3D:
 		return null
 	return p._tool
 
-func _count_failed() -> int:
+func _failed_in(checks: Array) -> int:
 	var n := 0
-	for ch in _checks:
+	for ch in checks:
 		if not ch.ok:
 			n += 1
+	return n
+
+
+func _count_all_failed() -> int:
+	var n := 0
+	for result in _results:
+		var checks: Array = result["checks"]
+		n += _failed_in(checks)
+	return n
+
+
+func _count_all_checks() -> int:
+	var n := 0
+	for result in _results:
+		var checks: Array = result["checks"]
+		n += checks.size()
 	return n
 
 
@@ -242,25 +384,39 @@ func _write_report() -> void:
 	var lines := PackedStringArray()
 	lines.append("# Test: %s" % _name)
 	lines.append("")
-	lines.append("%s" % _desc)
-	lines.append("")
-	lines.append("**Ran:** %s · **Checks:** %d · **Failed:** %d" % [
-		Time.get_datetime_string_from_system(), _checks.size(), _count_failed()
-	])
-	lines.append("")
-	for step_id in range(-1, _steps.size()):
+	var multiple := _tests.size() > 1
+	for result in _results:
+		var checks: Array = result["checks"]
+		var steps: Array = result["steps"]
+		if multiple:
+			lines.append("## %s" % result["name"])
+			lines.append("")
+		lines.append("%s" % result["description"])
+		lines.append("")
+		lines.append("**Ran:** %s · **Checks:** %d · **Failed:** %d" % [
+			Time.get_datetime_string_from_system(), checks.size(), _failed_in(checks)
+		])
+		lines.append("")
+		_append_test_lines(lines, steps, checks)
+	_write_file(_dir() + "/report.md", "\n".join(lines) + "\n")
+
+
+func _append_test_lines(lines: PackedStringArray, steps: Array, checks: Array) -> void:
+	var intro_written := false
+	for step_id in range(-1, steps.size()):
 		if step_id >= 0:
-			var entry: Dictionary = _steps[step_id]
+			var entry: Dictionary = steps[step_id]
 			lines.append("### %s" % entry.desc)
 			lines.append("")
 			lines.append("**Time:** %.3f ms%s" % [_step_time(entry), " (interrupted)" if entry.elapsed_ms < 0.0 else ""])
 			lines.append("")
-		for ch in _checks:
+		for ch in checks:
 			if ch.step != step_id:
 				continue
-			if step_id == -1 and not lines.has("### Intro"):
+			if step_id == -1 and not intro_written:
 				lines.append("### Intro")
 				lines.append("")
+				intro_written = true
 			var label: String = ch.msg
 			if ch.ok:
 				lines.append("- ✅ %s: %s" % [label, _loc_link(ch.loc)])
@@ -273,7 +429,6 @@ func _write_report() -> void:
 				if ch.img != "":
 					lines.append("  ![screenshot](%s)" % ch.img)
 		lines.append("")
-	_write_file(_dir() + "/report.md", "\n".join(lines) + "\n")
 
 
 func _loc_link(loc: String) -> String:
