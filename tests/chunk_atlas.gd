@@ -126,7 +126,7 @@ func _settle() -> void:
 		await get_tree().process_frame
 
 
-func _displayed_key() -> String:
+func _displayed_key() -> PackedInt64Array:
 	return scene_renderer._displayed_surface_keys[chunk_position]
 
 

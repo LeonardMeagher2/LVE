@@ -24,6 +24,8 @@ Use Git history for old bug reports and removed designs.
 - 2026-10-04: Inside a nested class, qualify outer static methods with the outer class name.
 - 2026-10-17: `PackedFloat32Array.resize()` fills new entries with zero. `append_array()` after `resize()` extends beyond those zeros. Use a write cursor to rebuild the array in place.
 - 2026-10-17: Dictionary iteration order is hash based. Sort the keys before remapping ids for deterministic serialization.
+- 2026-10-18: A `PackedInt64Array` works as a Dictionary key with content equality and hashing. `Array[PackedInt64Array]` supports content `has()` and `erase()`.
+- 2026-10-18: A packed array passes by reference. An in-place write after a Dictionary holds it corrupts the key. Only a `duplicate()` may change.
 
 ## UI and input
 
@@ -126,6 +128,14 @@ Use Git history for old bug reports and removed designs.
 - 2026-10-18: The unit-square shortcut repeated a 25 percent material-rich gain. Uniform, plate, and hole-heavy changes stayed within noise.
 - 2026-10-18: `planar_cleanup` matched frozen polygon points, indices, and order across 527 cases, including all 511 three-by-three masks.
 - 2026-10-18: The cleanup checks rejected changed geometry and verified cancellation at entry and during work.
+- 2026-10-18: The default scene holds four `VoxelRenderer` instances: the editor viewport, the frame thumbnail, the export model, and the export back buffer. Each listens to `State.chunks_changed`.
+- 2026-10-18: Each renderer regenerates the surface signature for every changed chunk. The work repeats once per renderer.
+- 2026-10-18: The legacy String `VoxelRenderer._signature` costs about 7 us per chunk flat and 30 us smooth.
+- 2026-10-18: The packed-int64 surface key costs about 2.8 us per chunk flat and 11 us smooth. It cuts signature generation about three times.
+- 2026-10-18: At the maximum diameter in headless runs, the longest frame interval holds an edit publication. At diameter nine and thirty-two, and in windowed runs, the longest frame holds no publication.
+- 2026-10-18: `VoxelRenderer._process` averages about 0.2 ms per frame headless and about 1 ms windowed. It stays near the 3 ms budget.
+- 2026-10-18: A headless renderer frame excludes the GPU upload, so its install cost is far below the windowed cost.
+- 2026-10-18: A chunk build costs about 10 ms and a snapshot about 2 ms. The surface jobs set the visible completion, not the frame gap.
 
 ## Threading
 
@@ -200,6 +210,11 @@ Use Git history for old bug reports and removed designs.
 ## Tests and processes
 
 - 2026-10-18: Pass `--screen 1` to child tests to use the second monitor. Verified with `DisplayServer.window_get_current_screen()`.
+- 2026-10-18: Screen 1 runs at 60 Hz with vsync. Its idle frame interval is about 30 ms, not 16.7 ms.
+- 2026-10-18: A windowed Godot frame interval is about twice the nominal refresh on this machine, with a p95 jitter near 33 ms. External load drives the spread.
+- 2026-10-18: A headless main loop paces at about 6.9 ms per frame on this machine.
+- 2026-10-18: `tests/draw_profile.tscn` reads its configuration from environment variables and runs a fast default for the suite.
+- 2026-10-18: `draw_latency` runs visible maximum-diameter strokes and needs about 51 s on the second monitor under load. The suite runner gives it a named 125 s deadline. Every other scene keeps 30 s.
 - 2026-09-07: The harness adds `Main.tscn` from `_enter_tree()` with a deferred call. Each test uses the full editor.
 - 2026-10-17: Normal behavior tests skip startup document restoration. `Main.gd` restores documents only for application sessions unless forced.
 - 2026-08-19: The harness waits two frames before each test body. Add other waits only where the test needs them.

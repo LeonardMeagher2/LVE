@@ -18,9 +18,10 @@ See [GLTF_EXPORT.md](GLTF_EXPORT.md) for the mesh export format and import setti
     - Shared planar cleanup in the viewport and exporter
   - Run the suites without another Godot instance using this project.
   - Clipboard and model settings popup checks previously failed in a suite but passed alone.
-  - The last isolated cleanup suite passed 136 of 137 scenes. Only `hidpi` failed.
-  - The icon import is now fixed. Its targeted `hidpi` test passes.
-  - Do not treat that targeted pass as a new full-suite result.
+  - The latest closing suite passed 138 of 139 scenes. `hidpi` and `draw_latency` passed.
+  - `material_controls` failed five keyboard-entry checks in that suite, then passed four targeted reruns.
+  - [ ] Investigate the intermittent keyboard-focus failure in `material_controls`. Do not treat targeted reruns as a clean full suite.
+  - [ ] Check orthographic rays and long-distance occlusion in the selection depth test.
   - Keep full-material seams and the same polygon cleanup for flat and smooth shading.
   - Skip the optional Blender OBJ comparison when the reference file is absent.
 
@@ -33,7 +34,7 @@ See [GLTF_EXPORT.md](GLTF_EXPORT.md) for the mesh export format and import setti
 ## Rendering and performance
 
 - [ ] Keep drawing responsive on large models (active)
-  - [ ] Profile maximum-diameter strokes with the real renderer before choosing the next change.
+  - [x] Profile maximum-diameter strokes with the real renderer before choosing the next change.
     - Measure cube and sphere brushes at diameters 9, 32, and 64.
     - Separate input handling, edit completion, surface completion, and the longest frame gap.
     - Time chunk notifications, surface signatures, snapshot copies, mesh uploads, materials, and cache eviction.
@@ -44,13 +45,19 @@ See [GLTF_EXPORT.md](GLTF_EXPORT.md) for the mesh export format and import setti
     - If uploads dominate, divide large mesh installations across frames.
     - Preserve the previous mesh until its replacement is ready.
     - Measure continuous drags and queued motion bursts. Preserve every stroke cell and bounded cancellation.
+    - An exact packed-int64 surface key reduced signature generation to about one third in repeated in-process comparisons.
+    - Cross-run publication estimates fell 26 percent flat and 44 percent smooth. External load limits that comparison.
+    - The measured installation cost averages about 1 ms per frame. Do not prioritize shared installation budgets without new evidence.
   - [ ] Complete the drawing acceptance measurements.
     - Run `tests/draw_latency.tscn` after the cleanup changes. Compare every `MEASURE` line.
-    - Aim for maximum-diameter frame gaps near the existing 7 to 8 ms small-brush result.
+    - Compare maximum-diameter gaps with the idle and small-brush gaps under the same display settings and load.
+    - Keep the 7 to 8 ms headless result as a reference, not a 60 Hz windowed target.
     - Require visible latency to follow the stroke footprint, not the queued motion count.
     - Keep edit time, visible latency, and frame gaps from regressing at ordinary brush sizes.
     - Verify geometry, material samples, sparse models, undo, and cancellation.
     - Run affected tests and the required full suites when closing this implementation task.
+    - `draw_latency` runs visible strokes on the second monitor and needs about 51 s under load. It has a named 125 s suite deadline. Every other scene keeps the 30 s default.
+    - The closing suite passed 138 of 139 scenes. Keep the keyboard-focus failure open despite four passing targeted reruns.
   - Use the 2026-10-18 pre-cleanup checkpoint only as context: 26 ms maximum gap and 0.828 s visible completion.
   - At that checkpoint, diameter nine had 48 ms visible latency and an 8 ms gap.
   - Preserve dense 16-cube chunks unless measurements support a storage change.

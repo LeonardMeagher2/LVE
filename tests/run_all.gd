@@ -4,6 +4,10 @@ const TEST_TIMEOUT_S := 30.0
 const POLL_INTERVAL_S := 0.1
 const MAX_FAILURES := 3
 const TEST_SCREEN := 1
+# `draw_latency` runs visible maximum-diameter strokes on the second monitor, so
+# it needs its own deadline. Every other scene keeps the default.
+const DRAW_LATENCY_PATH := "res://tests/draw_latency.tscn"
+const DRAW_LATENCY_TIMEOUT_S := 125.0
 
 var _failed := 0
 var _pending := {}
@@ -62,9 +66,16 @@ func _requested() -> Dictionary:
 	return names
 
 
+# The deadline for one scene. A named scene can need longer than the default.
+func _timeout_for(path: String) -> float:
+	return DRAW_LATENCY_TIMEOUT_S if path == DRAW_LATENCY_PATH else TEST_TIMEOUT_S
+
+
 func _run_one(path: String) -> Dictionary:
 	_saw_ok = false
 	_wipe_dir(_artifact_dir(path))
+	# Select the deadline once, so the wait and the note agree.
+	var timeout_s: float = _timeout_for(path)
 	# Godot numbers screens from zero. Open test windows on the second screen.
 	var args := PackedStringArray(["--screen", str(TEST_SCREEN), "--path", ProjectSettings.globalize_path("res://"), path])
 	var proc := OS.execute_with_pipe(OS.get_executable_path(), args, false)
@@ -78,7 +89,7 @@ func _run_one(path: String) -> Dictionary:
 	while OS.is_process_running(pid):
 		_pump(out)
 		_pump(err_out)
-		if (Time.get_ticks_msec() - started) / 1000.0 >= TEST_TIMEOUT_S:
+		if (Time.get_ticks_msec() - started) / 1000.0 >= timeout_s:
 			timed_out = true
 			OS.kill(pid)
 			await _await_exit(pid)
@@ -89,7 +100,7 @@ func _run_one(path: String) -> Dictionary:
 	_flush(out)
 	_flush(err_out)
 	if timed_out:
-		return {"code": 1, "note": "timed out after %.0f s" % TEST_TIMEOUT_S}
+		return {"code": 1, "note": "timed out after %.0f s" % timeout_s}
 	var code := OS.get_process_exit_code(pid)
 	if code == 0 and not _saw_ok:
 		return {"code": 1, "note": "exit 0 but no pass marker"}

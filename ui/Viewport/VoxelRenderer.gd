@@ -9,7 +9,7 @@ const SURFACE_JOB_LIMIT_MAX := 8
 
 # All viewports share meshes and jobs. Workers own their input and output arrays.
 static var _surface_cache: Dictionary = {}
-static var _surface_use_order: Array[String] = []
+static var _surface_use_order: Array[PackedInt64Array] = []
 static var _surface_cache_bytes := 0
 static var _surface_jobs: Dictionary = {}
 static var _active_renderer_count := 0
@@ -170,11 +170,26 @@ func _update_chunks(updated_frame: int, chunk_positions: Array[Vector3i]) -> voi
 	_report_activity()
 
 
-static func _signature(active_frame: VoxelFrame, chunk_location: Vector3i, smooth_normals: bool) -> String:
-	var surface_key := "smooth/" if smooth_normals else "flat/"
-	for offset in VoxelMeshBuilder.neighbor_offsets(smooth_normals):
+# The exact surface identity of one chunk, as a packed integer key. Element zero
+# is the shading mode. Each later pair is one neighbor in `neighbor_offsets`
+# order: its instance id and its voxel revision. A missing neighbor writes the
+# pair (0, 0), and a live instance id is never zero. The key holds every value
+# that changes the surface, so a content-equal key matches exactly.
+#
+# A packed array passes by reference. Never write to a key after a dictionary
+# holds it, or the key's hash and content disagree.
+static func _signature(active_frame: VoxelFrame, chunk_location: Vector3i, smooth_normals: bool) -> PackedInt64Array:
+	var offsets := VoxelMeshBuilder.neighbor_offsets(smooth_normals)
+	var surface_key := PackedInt64Array()
+	surface_key.resize(1 + offsets.size() * 2)
+	surface_key[0] = 1 if smooth_normals else 0
+	var index := 1
+	for offset: Vector3i in offsets:
 		var chunk: VoxelFrame.Chunk = active_frame.chunks.get(chunk_location + offset)
-		surface_key += "%s:%s/" % [chunk.get_instance_id(), chunk.voxel_revision] if chunk else "0/"
+		if chunk:
+			surface_key[index] = chunk.get_instance_id()
+			surface_key[index + 1] = chunk.voxel_revision
+		index += 2
 	return surface_key
 
 
@@ -199,7 +214,7 @@ func _update_surfaces() -> void:
 			return
 	var active_frame := _get_frame()
 	for chunk_location in _pending_surface_keys.keys():
-		var surface_key: String = _pending_surface_keys[chunk_location]
+		var surface_key: PackedInt64Array = _pending_surface_keys[chunk_location]
 		if _surface_cache.has(surface_key):
 			_install(chunk_location, surface_key, _surface_cache[surface_key])
 			_pending_surface_keys.erase(chunk_location)
@@ -235,13 +250,13 @@ func _report_activity() -> void:
 		_reported_remaining = remaining
 
 
-static func _cache_surface(surface_key: String, chunk_surface: ArrayMesh, geometry_bytes: int, material: StandardMaterial3D) -> void:
+static func _cache_surface(surface_key: PackedInt64Array, chunk_surface: ArrayMesh, geometry_bytes: int, material: StandardMaterial3D) -> void:
 	var total_bytes := geometry_bytes + _texture_bytes(material)
 	_surface_cache[surface_key] = {"surface": chunk_surface, "material": material, "bytes": total_bytes}
 	_surface_use_order.append(surface_key)
 	_surface_cache_bytes += total_bytes
 	while (_surface_cache_bytes > SURFACE_CACHE_LIMIT_BYTES or _surface_cache.size() > SURFACE_CACHE_LIMIT_ENTRIES) and _surface_use_order.size() > 1:
-		var oldest_surface_key: String = _surface_use_order.pop_front()
+		var oldest_surface_key: PackedInt64Array = _surface_use_order.pop_front()
 		_surface_cache_bytes -= _surface_cache[oldest_surface_key].bytes
 		_surface_cache.erase(oldest_surface_key)
 
@@ -295,7 +310,7 @@ static func _atlas_texture(atlas_size: Vector2i, atlas_data: PackedByteArray) ->
 	return ImageTexture.create_from_image(image)
 
 
-func _install(chunk_location: Vector3i, surface_key: String, entry: Dictionary) -> void:
+func _install(chunk_location: Vector3i, surface_key: PackedInt64Array, entry: Dictionary) -> void:
 	var chunk_surface: ArrayMesh = entry.surface
 	if chunk_surface == null:
 		_retire(chunk_location)

@@ -176,7 +176,7 @@ func _run() -> void:
 		exporter._model.get_node("AnimationRow/Play").button_pressed = true
 		# Hold an unfinished surface and a pending frame, as a slow build does.
 		exporter._model_pending_frame = 0
-		exporter._model_back_renderer._pending_surface_keys[Vector3i.ZERO] = "test"
+		exporter._model_back_renderer._pending_surface_keys[Vector3i.ZERO] = PackedInt64Array([1])
 		expect(not exporter._model_back_renderer.is_settled(), "the test holds an unfinished frame build")
 		exporter._process(1.0)
 		expect(exporter._model_playback.current_frame != 0, "the preview clock runs while a frame build is pending")

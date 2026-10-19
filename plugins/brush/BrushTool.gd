@@ -3,6 +3,14 @@ extends VoxelTool
 const INLINE_EDIT_LIMIT := 4096
 const BrushSettings := preload("./BrushToolSettings.gd")
 
+# Opt-in profiling hook. Off by default and free when off. A test turns it on to
+# time the edit result publication, which the frame gap hides.
+static var profile_enabled := false
+static var profile_finish_us := 0
+# One publication per `_finish_edit`. A reader compares this against the value
+# it last saw, so a stale duration never attributes to a later frame.
+static var profile_finish_seq := 0
+
 var _settings := preload("./settings.tres")
 var _filter := PixelPerfectStroke.new()
 var _source_document: VoxelDocument
@@ -272,6 +280,7 @@ func _process(_delta: float) -> void:
 
 
 func _finish_edit() -> void:
+	var profile_started_us := Time.get_ticks_usec() if profile_enabled else 0
 	var job := _job
 	_job = null
 	# A cancelled job stopped partway, and history may have replaced the frame under
@@ -292,6 +301,9 @@ func _finish_edit() -> void:
 			State.chunks_changed.emit(State.current_frame, job.changed_chunks)
 	State.finish_operation(_operation_id)
 	_operation_id = 0
+	if profile_enabled:
+		profile_finish_us = Time.get_ticks_usec() - profile_started_us
+		profile_finish_seq += 1
 
 
 # Undo and redo replace frame contents without an edit context change, so the
