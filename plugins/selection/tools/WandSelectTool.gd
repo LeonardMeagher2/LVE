@@ -73,7 +73,7 @@ func _commit(seed_cell: Vector3i) -> void:
 	_job.source_frame = _source_frame.copy_frame()
 	_job.edit_context = State.selection_context()
 	_job.seed_cell = seed_cell
-	_job.target_color = _source_frame.get_color(seed_cell)
+	_job.target_material = _source_frame.get_material(seed_cell)
 	_job.connected = _settings.connected
 	_job.previous_selection = State.selection.capture()
 	_job.mode = _settings.mode

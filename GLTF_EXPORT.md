@@ -11,11 +11,11 @@
 7. Select a path and save the file.
 8. To return to the editor, select **Export** again.
 
-- `.glb` stores the scene, geometry, and animation data in one file.
-- `.gltf` stores the scene in JSON and creates a separate `.bin` file.
-- Keep the `.bin` file beside its `.gltf` file.
+- `.glb` stores the scene, geometry, textures, and animation data in one file.
+- `.gltf` stores the scene in JSON and creates a separate `.bin` file and PNG textures.
+- Keep the `.bin` file and texture files beside the `.gltf` file.
 
-The shared export plugin is in `Plugins/Export/`.
+The shared export plugin is in `plugins/Export/`.
 Preview playback preserves the editor frame and camera.
 
 ## Scale animation
@@ -34,12 +34,18 @@ Animation keys still use exact zero scale.
 The export contains one mesh per non-empty voxel frame.
 Frame meshes are direct children of the model root.
 Empty frames keep their frame delays.
-Vertex colors use linear RGB values and preserve alpha.
-All frame meshes share one material that uses vertex colors.
-Each mesh uses two surfaces with this same material.
-Godot 4.7.2 reads vertex colors after it configures the first surface material.
-The second surface enables vertex colors on the shared material.
-The split preserves the geometry and adds no custom extension.
+Each frame mesh uses one surface and one material.
+Each frame has its own albedo, finish, and emission atlases.
+The albedo atlas stores sRGB colors and preserves alpha.
+The finish atlas stores roughness in green and metallic in blue.
+The emission atlas stores normalized sRGB emission.
+Emission above one uses the standard `KHR_materials_emissive_strength` extension.
+Textures use nearest filtering without mipmaps.
+Each island has a one-pixel gutter that repeats its edge samples.
+Each distinct voxel material uses one texel, regardless of face area.
+All faces with that full material share the texel center.
+Each atlas dimension has a 4096-pixel limit.
+If an atlas cannot fit, the export returns an error before writing files.
 
 With **Center** enabled, all frame meshes use one offset from their combined bounds.
 With **Center** disabled, all frame meshes keep their document coordinates.
@@ -68,15 +74,26 @@ Other applications can require their own loop setting.
 ## Final mesh simplification
 
 The worker simplifies each frame before export.
-The worker welds vertices within 0.00001 voxel units before and after simplification.
-Vertices with different normals or colors remain separate.
-The worker merges coplanar faces with the same color across chunk boundaries.
-The pass preserves silhouettes, cavities, sharp normals, and color boundaries.
+The worker welds vertices within 0.00001 voxel units before simplification.
+The worker dissolves coplanar faces within full-material seams.
+Color, alpha, emission, metallic, and roughness changes define those seams.
+Polygon boundaries retain silhouettes, cavities, and seam junctions.
 The pass uses sparse face masks instead of scanning empty frame bounds.
-If the pass does not reduce the triangle count, the export keeps the original frame mesh.
+The worker triangulates the remaining polygon boundaries, including regions around holes.
+Internal diagonal changes improve triangle shape without adding vertices or crossing material seams.
+Flat and smooth shading use the same polygon cleanup rules.
+Smooth shading retains the original normals at surviving corners.
+Removing interior vertices can change normal interpolation without changing the silhouette.
+The final mesh shares indexed vertices when their position, normal, and material sample match.
+
+The viewport and exporter use the same planar cleanup and atlas code.
+The viewport keeps separate chunks for local edits.
+The exporter also merges faces across chunk boundaries.
 
 A solid 64-cubed block uses six export quads instead of 96 chunk quads.
-The resulting mesh has twelve triangles and twenty-four vertices.
+The resulting flat mesh has twelve triangles and twenty-four vertices.
+The smooth mesh also has twelve triangles and shares eight corner vertices.
+A block split into two color regions keeps its material seam and uses twenty triangles.
 
 ## Import into Godot
 

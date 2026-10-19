@@ -16,7 +16,7 @@ func _run() -> void:
 		for z in 16:
 			for y in 16:
 				for x in 16:
-					State.paint(Vector3i(x, y, z), Color.RED)
+					State.paint(Vector3i(x, y, z), VoxelFrame.material(Color.RED))
 		renderer = load("res://ui/Viewport/VoxelRenderer.tscn").instantiate()
 		main.add_child(renderer)
 	)
@@ -47,7 +47,7 @@ func _run() -> void:
 		for z in 16:
 			for y in 16:
 				for x in range(16, 32):
-					State.paint(Vector3i(x, y, z), Color.RED)
+					State.paint(Vector3i(x, y, z), VoxelFrame.material(Color.RED))
 		State.end_stroke()
 		var affected: Array[Vector3i] = []
 		State.cells_changed.emit(0, affected)
@@ -66,7 +66,7 @@ func _run() -> void:
 	)
 	step("When the user switches away and back while a mesh job is pending", func():
 		State.add_frame()
-		State.paint(Vector3i(-1, 0, 0), Color.BLUE)
+		State.paint(Vector3i(-1, 0, 0), VoxelFrame.material(Color.BLUE))
 		var affected: Array[Vector3i] = [Vector3i(-1, 0, 0)]
 		State.cells_changed.emit(1, affected)
 		State.current_frame = 0
@@ -84,11 +84,9 @@ func _run() -> void:
 		var surface := _mesh_at(Vector3(-16, 0, 0))
 		expect(surface != null, "the negative chunk has a visible mesh")
 		if surface:
-			var arrays := surface.surface_get_arrays(0)
-			var blue := true
-			for color in arrays[Mesh.ARRAY_COLOR]:
-				blue = blue and color == Color.BLUE
-			expect(blue, "the voxel's vertices are blue")
+			var material: StandardMaterial3D = renderer._chunk_instances[Vector3i(-1, 0, 0)].material_override
+			var image := material.albedo_texture.get_image()
+			expect(image.get_pixel(1, 1) == Color.BLUE, "the voxel's atlas is blue")
 			expect(surface.get_aabb().position == Vector3(14.5, -0.5, -0.5), "the voxel retains its chunk-local position")
 	)
 

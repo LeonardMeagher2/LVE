@@ -14,7 +14,7 @@ func _run() -> void:
 	VoxelImageRenderer.frame_rendered.connect(_rendered)
 	step("When the user repeatedly edits one frame", func():
 		for x in 32:
-			State.paint(Vector3i(x, 0, 0), Color.BLUE)
+			State.paint(Vector3i(x, 0, 0), VoxelFrame.material(Color.BLUE))
 			VoxelImageRenderer.request_frame_render(0)
 	)
 	await get_tree().create_timer(0.1).timeout
@@ -28,7 +28,7 @@ func _run() -> void:
 		expect(watched.count() == 32, "the final document keeps all edited cells")
 	)
 	step("When the user edits the same frame again", func():
-		State.paint(Vector3i(32, 0, 0), Color.RED)
+		State.paint(Vector3i(32, 0, 0), VoxelFrame.material(Color.RED))
 		VoxelImageRenderer.request_frame_render(0)
 	)
 	while renders < 2:

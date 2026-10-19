@@ -18,9 +18,9 @@ func _run() -> void:
 		for x in 18:
 			for y in 18:
 				for z in 18:
-					source.set_cell(Vector3i(x, y, z), Color.RED)
-		source.set_cell(MARKER, Color.BLUE)
-		source.set_cell(Vector3i(96, 0, 0), Color.RED)
+					source.set_cell(Vector3i(x, y, z), VoxelFrame.material(Color.RED))
+		source.set_cell(MARKER, VoxelFrame.material(Color.BLUE))
+		source.set_cell(Vector3i(96, 0, 0), VoxelFrame.material(Color.RED))
 		State.selection.add(MARKER)
 		activate_tool("selection")
 		select_toolbar_item("selection", "Wand")

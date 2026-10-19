@@ -96,7 +96,7 @@ func _run() -> void:
 		for z in 18:
 			for y in 18:
 				for x in 18:
-					frame.set_cell(Vector3i(x, y, z), Color.RED if x < 9 else Color.BLUE)
+					frame.set_cell(Vector3i(x, y, z), VoxelFrame.material(Color.RED if x < 9 else Color.BLUE))
 		State.selection.from_box(Vector3i.ZERO, Vector3i(17, 17, 17))
 		State.selection_changed.emit()
 	)

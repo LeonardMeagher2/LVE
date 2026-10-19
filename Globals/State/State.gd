@@ -7,6 +7,7 @@ signal frames_changed()
 signal frame_changed()
 signal is_playing_toggled(toggled_on:bool)
 signal color_changed(color: Color)
+signal material_changed()
 signal palette_changed()
 signal default_palette_changed()
 signal selection_changed()
@@ -16,6 +17,7 @@ signal tag_changed()
 signal activity_changed()
 signal edit_context_changing()
 signal model_settings_changed()
+signal history_changed()
 
 const WORK_SLICE_US := 3000
 const DEFAULT_PALETTE_PATH := "user://default_palette.cfg"
@@ -50,7 +52,7 @@ class EraseJob extends VoxelFrame.EditJob:
 		var changes := {}
 		var completed := 0
 		for cell_position in selection_mask:
-			changes[cell_position] = Color.TRANSPARENT
+			changes[cell_position] = VoxelFrame.material(Color.TRANSPARENT)
 			completed += 1
 			if completed % 4096 == 0 and not checkpoint(completed):
 				return
@@ -109,7 +111,25 @@ var symmetry_origin := DEFAULT_SYMMETRY_ORIGIN:
 		symmetry_origin = value
 		symmetry_changed.emit()
 
-var current_color := Color.BLACK
+var _current_material := VoxelFrame.material(Color.BLACK)
+var current_material: PackedFloat32Array:
+	get:
+		return _current_material.duplicate()
+	set(value):
+		set_material(value)
+var current_palette_index := -1
+var current_color: Color:
+	get:
+		return VoxelFrame.material_color(_current_material)
+	set(value):
+		var material := current_material
+		material[0] = value.r
+		material[1] = value.g
+		material[2] = value.b
+		material[3] = value.a
+		_apply_material(material)
+var _material_edit_document: VoxelDocument
+var _material_edit_before := PackedFloat32Array()
 var selection := VoxelSelection.new()
 var undo_redo := UndoRedo.new()
 var _stroke_frame: VoxelFrame
@@ -127,8 +147,8 @@ func _init() -> void:
 
 func _ready() -> void:
 	load_default_palette()
-	document.palette.assign(default_palette)
-	current_color = default_palette[0]
+	document.palette = _copy_palette(default_palette)
+	_apply_material(default_palette[0])
 	edit_context_changing.connect(_interrupt_erase)
 	cells_changed.connect(func(_frame, _affected): stop())
 	chunks_changed.connect(func(_frame, _affected): stop())
@@ -149,6 +169,8 @@ func _ready() -> void:
 func set_document(value:VoxelDocument) -> void:
 	if value == document:
 		return
+	_material_edit_document = null
+	_material_edit_before = PackedFloat32Array()
 	edit_context_changing.emit()
 	_operations.clear()
 	_activity_started_ms = 0
@@ -160,12 +182,14 @@ func set_document(value:VoxelDocument) -> void:
 	selection.clear()
 	selection_changed.emit()
 	undo_redo.clear_history()
+	history_changed.emit()
 	if value is VoxelDocument:
 		document = value
 	else:
 		document = VoxelDocument.new()
-		document.palette.assign(default_palette)
-		_apply_color(default_palette[0])
+		document.palette = _copy_palette(default_palette)
+		_apply_material(default_palette[0])
+	_apply_material(_current_material)
 	if document.tags.is_empty():
 		document.add_tag("Default", 0, document.frames.size() - 1)
 	playback.document = document
@@ -177,6 +201,25 @@ func set_document(value:VoxelDocument) -> void:
 	current_frame = 0
 
 
+func _commit_history(execute: bool = true) -> void:
+	undo_redo.commit_action(execute)
+	history_changed.emit()
+
+
+func undo() -> bool:
+	var undone := undo_redo.undo()
+	if undone:
+		history_changed.emit()
+	return undone
+
+
+func redo() -> bool:
+	var redone := undo_redo.redo()
+	if redone:
+		history_changed.emit()
+	return redone
+
+
 func add_plugin(plugin: VoxelPlugin) -> void:
 	get_node("/root").add_child.call_deferred(plugin, true)
 	
@@ -185,12 +228,12 @@ func remove_plugin(plugin: VoxelPlugin) -> void:
 	plugin.queue_free()
 
 
-func paint(position: Vector3i, color:Color) -> void:
+func paint(position: Vector3i, cell_material: PackedFloat32Array) -> void:
 	if symmetry_axes == 0 and _stroke_edit_context == null:
-		document.paint(current_frame, position, color)
+		document.paint(current_frame, position, cell_material)
 		return
 	var context := drawing_context()
-	var changes := context.expand({position: color}, get_current_voxel_frame(), false, null)
+	var changes := context.expand({position: cell_material}, get_current_voxel_frame(), false, null)
 	get_current_voxel_frame().set_cells(changes)
 	document._bounds_dirty = true
 
@@ -307,7 +350,7 @@ func end_stroke(action: String = "Stroke") -> void:
 		undo_redo.create_action(action)
 		undo_redo.add_undo_method(_restore_chunks.bind(_stroke_frame, _stroke_start_chunks, _stroke_start_selection))
 		undo_redo.add_do_method(_restore_chunks.bind(_stroke_frame, stroke_end_chunks, selection.capture()))
-		undo_redo.commit_action(false)
+		_commit_history(false)
 	_stroke_frame = null
 	_stroke_start_chunks = {}
 	_stroke_start_selection = {}
@@ -330,7 +373,9 @@ func _chunks_equal(first_chunks: Dictionary, second_chunks: Dictionary) -> bool:
 	for chunk_location in first_chunks:
 		if not second_chunks.has(chunk_location):
 			return false
-		if first_chunks[chunk_location] != second_chunks[chunk_location] and first_chunks[chunk_location].cell_colors != second_chunks[chunk_location].cell_colors:
+		var first_chunk: VoxelFrame.Chunk = first_chunks[chunk_location]
+		var second_chunk: VoxelFrame.Chunk = second_chunks[chunk_location]
+		if first_chunk != second_chunk and not first_chunk.equals(second_chunk):
 			return false
 	return true
 
@@ -376,37 +421,60 @@ func _process(delta: float) -> void:
 	playback.update(delta)
 
 func set_color(color: Color) -> void:
-	if color == current_color:
+	var material := current_material
+	material[0] = color.r
+	material[1] = color.g
+	material[2] = color.b
+	material[3] = color.a
+	set_material(material)
+
+
+func set_material(material: PackedFloat32Array) -> void:
+	if not VoxelDocument.valid_material(material):
 		return
-	undo_redo.create_action("Set Color", UndoRedo.MERGE_ENDS)
-	undo_redo.add_undo_method(_apply_color.bind(current_color))
-	undo_redo.add_do_method(_apply_color.bind(color))
-	undo_redo.commit_action(false)
-	_apply_color(color)
-
-
-func _apply_color(color: Color) -> void:
-	current_color = color
-	color_changed.emit(color)
-
-func add_color(color: Color = current_color) -> void:
-	if not document.add_color(color):
+	end_material_edit()
+	if material == _current_material:
 		return
-	undo_redo.create_action("Add Palette Color")
-	undo_redo.add_undo_method(_remove_palette_color.bind(color))
-	undo_redo.add_do_method(_add_palette_color.bind(color))
-	undo_redo.commit_action(false)
-	palette_changed.emit()
+	undo_redo.create_action("Set Material", UndoRedo.MERGE_ENDS)
+	undo_redo.add_undo_method(_apply_material.bind(current_material))
+	undo_redo.add_do_method(_apply_material.bind(material.duplicate()))
+	_commit_history()
 
 
-func _add_palette_color(color: Color) -> void:
-	document.add_color(color)
-	palette_changed.emit()
+func _apply_material(material: PackedFloat32Array) -> void:
+	var next := material.duplicate()
+	# A swatch is selected only while all its values match the current material.
+	var index := document.palette.find(next) if document else -1
+	var changed := next != _current_material or index != current_palette_index
+	_current_material = next
+	current_palette_index = index
+	if changed:
+		color_changed.emit(current_color)
+		material_changed.emit()
 
 
-func _remove_palette_color(color: Color) -> void:
-	document.remove_color(color)
-	palette_changed.emit()
+func select_palette_entry(index: int) -> void:
+	if index < 0 or index >= document.palette.size():
+		return
+	end_material_edit()
+	_apply_material(document.palette[index])
+
+
+func add_material() -> void:
+	if edit_busy():
+		return
+	end_material_edit()
+	var index := document.palette.find(_current_material)
+	if index >= 0:
+		select_palette_entry(index)
+		return
+	if document.palette.size() >= VoxelDocument.MAX_PALETTE_COLORS:
+		return
+	var before := _palette_snapshot()
+	document.palette.append(_current_material.duplicate())
+	_apply_material(_current_material)
+	_record_palette_action("Add Palette Material", before)
+
 
 func get_color(index: int) -> Color:
 	return document.get_color(index)
@@ -414,83 +482,161 @@ func get_color(index: int) -> Color:
 func get_color_at(position: Vector3i) -> Color:
 	return document.get_color_at(current_frame, position)
 
-func remove_color(color: Color = current_color) -> void:
-	var index := document.palette.find(color)
-	if index == -1:
+func remove_palette_entry() -> void:
+	if edit_busy() or current_palette_index < 0:
 		return
-	undo_redo.create_action("Remove Palette Color")
-	undo_redo.add_undo_method(_insert_palette_color.bind(index, color))
-	undo_redo.add_do_method(_remove_palette_color.bind(color))
-	undo_redo.commit_action(false)
-	document.remove_color(color)
-	palette_changed.emit()
+	end_material_edit()
+	var before := _palette_snapshot()
+	var index := current_palette_index
+	document.palette.remove_at(index)
+	if document.palette.is_empty():
+		_apply_material(_current_material)
+	else:
+		_apply_material(document.palette[mini(index, document.palette.size() - 1)])
+	_record_palette_action("Remove Palette Material", before)
 
 
-func _insert_palette_color(index: int, color: Color) -> void:
-	if not document.palette.has(color):
-		document.palette.insert(index, color)
-	palette_changed.emit()
-
-func get_palette() -> PackedColorArray:
-	return document.palette
+func get_palette() -> Array[PackedFloat32Array]:
+	return _copy_palette(document.palette)
 
 
-func set_palette(colors: PackedColorArray, action_name: String = "Replace Palette") -> void:
-	if edit_busy() or get_palette() == colors:
+func set_palette(materials: Array[PackedFloat32Array], action_name: String = "Replace Palette") -> void:
+	if edit_busy() or not VoxelDocument.valid_palette(materials):
+		return
+	end_material_edit()
+	var unique := _copy_palette(materials)
+	if document.palette == unique:
+		return
+	var before := _palette_snapshot()
+	document.palette = unique
+	_apply_material(_current_material)
+	_record_palette_action(action_name, before)
+
+
+func move_palette_entry(from_index: int, to_index: int) -> void:
+	if edit_busy() or from_index == to_index or from_index < 0 or to_index < 0 or from_index >= document.palette.size() or to_index >= document.palette.size():
+		return
+	end_material_edit()
+	var before := _palette_snapshot()
+	var material := document.palette[from_index]
+	document.palette.remove_at(from_index)
+	document.palette.insert(to_index, material)
+	_apply_material(_current_material)
+	_record_palette_action("Move Palette Material", before)
+
+
+func edit_material(material: PackedFloat32Array) -> void:
+	if edit_busy() or not VoxelDocument.valid_material(material) or material == _current_material:
+		return
+	var before := current_material
+	_apply_material(material)
+	# A control gesture records one undo step for all its changes.
+	if _material_edit_document != document:
+		_record_material_action(before)
+
+
+func begin_material_edit() -> void:
+	if edit_busy() or _material_edit_document != null:
+		return
+	_material_edit_document = document
+	_material_edit_before = current_material
+
+
+func end_material_edit() -> void:
+	var edited_document := _material_edit_document
+	var before := _material_edit_before
+	_material_edit_document = null
+	_material_edit_before = PackedFloat32Array()
+	if edited_document == document and not before.is_empty() and before != _current_material:
+		_record_material_action(before)
+
+
+func cancel_material_edit() -> void:
+	var edited_document := _material_edit_document
+	var before := _material_edit_before
+	_material_edit_document = null
+	_material_edit_before = PackedFloat32Array()
+	if edited_document == document and not before.is_empty():
+		_apply_material(before)
+
+
+func _record_material_action(before: PackedFloat32Array) -> void:
+	undo_redo.create_action("Edit Material")
+	undo_redo.add_undo_method(_apply_material.bind(before))
+	undo_redo.add_do_method(_apply_material.bind(current_material))
+	_commit_history(false)
+
+
+func _copy_palette(materials: Array) -> Array[PackedFloat32Array]:
+	return VoxelDocument.unique_palette(materials)
+
+
+func _palette_snapshot() -> Dictionary:
+	# The index follows from the palette and the material. Store only what an undo must restore.
+	return {"palette": get_palette(), "material": current_material}
+
+
+func _record_palette_action(action_name: String, before: Dictionary) -> void:
+	var after := _palette_snapshot()
+	if before == after:
 		return
 	undo_redo.create_action(action_name)
-	undo_redo.add_undo_method(_apply_palette.bind(get_palette()))
-	undo_redo.add_do_method(_apply_palette.bind(colors))
-	undo_redo.commit_action()
-
-
-func _apply_palette(colors: PackedColorArray) -> void:
-	document.palette.assign(colors)
+	undo_redo.add_undo_method(_restore_palette.bind(document, before))
+	undo_redo.add_do_method(_restore_palette.bind(document, after))
+	_commit_history(false)
 	palette_changed.emit()
 
 
-func move_palette_color(from_index: int, to_index: int) -> void:
-	var colors := get_palette()
-	if edit_busy() or from_index == to_index or from_index < 0 or to_index < 0 or from_index >= colors.size() or to_index >= colors.size():
+func _restore_palette(edited_document: VoxelDocument, snapshot: Dictionary) -> void:
+	if document != edited_document:
 		return
-	var color := colors[from_index]
-	colors.remove_at(from_index)
-	colors.insert(to_index, color)
-	set_palette(colors, "Move Palette Color")
+	document.palette = _copy_palette(snapshot.palette)
+	_apply_material(snapshot.material)
+	palette_changed.emit()
 
 
-func get_builtin_palette() -> PackedColorArray:
+func get_builtin_palette() -> Array[PackedFloat32Array]:
 	# Keep grayscale first, then vivid hues, cooler shadows, and warmer highlights.
-	return PackedColorArray([
+	var colors := PackedColorArray([
 		Color.BLACK, Color("808080"), Color.WHITE,
 		Color("ff0000"), Color("ff8000"), Color("ffff00"), Color("80ff00"), Color("00ff00"), Color("00ff80"),
 		Color("00ffff"), Color("0080ff"), Color("0000ff"), Color("8000ff"), Color("ff00ff"), Color("ff0080"),
 		Color("800020"), Color("608000"), Color("008020"), Color("006080"), Color("200080"), Color("600080"),
 		Color("ffb399"), Color("fffbef"), Color("bfffaa"), Color("b3ffec"), Color("b3c6ff"), Color("ffb3ec"),
 	])
+	var materials: Array[PackedFloat32Array] = []
+	for color in colors:
+		materials.append(VoxelFrame.material(color))
+	return materials
 
 
 func load_default_palette(path: String = DEFAULT_PALETTE_PATH) -> void:
 	default_palette = get_builtin_palette()
 	var config := ConfigFile.new()
 	if config.load(path) == OK:
-		var colors: Variant = config.get_value("palette", "colors", PackedColorArray())
-		if colors is PackedColorArray and not colors.is_empty():
-			default_palette = colors
+		var materials: Variant = config.get_value("palette", "materials") if config.has_section_key("palette", "materials") else null
+		if materials == null:
+			var colors: Variant = config.get_value("palette", "colors") if config.has_section_key("palette", "colors") else null
+			if colors is PackedColorArray and colors.size() <= VoxelDocument.MAX_PALETTE_COLORS:
+				materials = []
+				for color in colors:
+					materials.append(VoxelFrame.material(color))
+		if VoxelDocument.valid_palette(materials) and not materials.is_empty():
+			default_palette = _copy_palette(materials)
 	default_palette_changed.emit()
 
 
 func save_default_palette(path: String = DEFAULT_PALETTE_PATH) -> Error:
 	if edit_busy():
 		return ERR_BUSY
-	var colors := get_palette()
-	if colors.is_empty():
+	var materials := get_palette()
+	if materials.is_empty() or not VoxelDocument.valid_palette(materials):
 		return ERR_INVALID_DATA
 	var config := ConfigFile.new()
-	config.set_value("palette", "colors", colors)
+	config.set_value("palette", "materials", Array(materials))
 	var error := config.save(path)
 	if error == OK:
-		default_palette = colors
+		default_palette = _copy_palette(materials)
 		default_palette_changed.emit()
 	return error
 
@@ -658,7 +804,7 @@ func set_smooth_normals(value: bool) -> void:
 	undo_redo.create_action("Set Smooth Normals")
 	undo_redo.add_undo_method(_apply_smooth_normals.bind(document.smooth_normals))
 	undo_redo.add_do_method(_apply_smooth_normals.bind(value))
-	undo_redo.commit_action(false)
+	_commit_history(false)
 	_apply_smooth_normals(value)
 
 
@@ -737,7 +883,7 @@ func _record_frame_action(action_name: String, before: Dictionary, after: Dictio
 	undo_redo.create_action(action_name)
 	undo_redo.add_undo_method(_restore_frame_layout.bind(before["frames"], before["ranges"], before["current"]))
 	undo_redo.add_do_method(_restore_frame_layout.bind(after["frames"], after["ranges"], after["current"]))
-	undo_redo.commit_action(false)
+	_commit_history(false)
 	_restore_frame_layout(after["frames"], after["ranges"], after["current"])
 
 
@@ -773,7 +919,7 @@ func set_frame_delay(index: int, ms: int) -> void:
 	undo_redo.create_action("Set Frame Delay")
 	undo_redo.add_undo_method(_apply_frame_delay.bind(index, frame.delay_ms))
 	undo_redo.add_do_method(_apply_frame_delay.bind(index, ms))
-	undo_redo.commit_action(false)
+	_commit_history(false)
 	_apply_frame_delay(index, ms)
 
 
@@ -797,7 +943,7 @@ func add_tag(tag_name: String, from: int = 0, to: int = -1) -> void:
 	undo_redo.create_action("Add Tag")
 	undo_redo.add_undo_method(_apply_tag_removed.bind(index, prev_active))
 	undo_redo.add_do_method(_apply_tag_inserted.bind(index, tag, index))
-	undo_redo.commit_action(false)
+	_commit_history(false)
 	_apply_tag_inserted(index, tag, index)
 
 
@@ -828,7 +974,7 @@ func remove_tag() -> void:
 	undo_redo.create_action("Remove Tag")
 	undo_redo.add_undo_method(_apply_tag_inserted.bind(index, tag, index))
 	undo_redo.add_do_method(_apply_tag_removed.bind(index, new_active))
-	undo_redo.commit_action(false)
+	_commit_history(false)
 	_apply_tag_removed(index, new_active)
 
 func set_tag_range(from: int, to: int, record_history: bool = true) -> void:
@@ -854,7 +1000,7 @@ func commit_tag_range(index: int, previous_range: Vector2i) -> void:
 	undo_redo.create_action("Set Tag Range")
 	undo_redo.add_undo_method(_apply_tag_range.bind(index, previous_range.x, previous_range.y))
 	undo_redo.add_do_method(_apply_tag_range.bind(index, tag.from, tag.to))
-	undo_redo.commit_action(false)
+	_commit_history(false)
 
 
 func _apply_tag_range(index: int, from: int, to: int) -> void:
@@ -875,7 +1021,7 @@ func set_tag_loop_mode(index: int, mode: int) -> void:
 	undo_redo.create_action("Set Loop Mode")
 	undo_redo.add_undo_method(_apply_tag_loop_mode.bind(index, tag.loop_mode))
 	undo_redo.add_do_method(_apply_tag_loop_mode.bind(index, mode))
-	undo_redo.commit_action(false)
+	_commit_history(false)
 	_apply_tag_loop_mode(index, mode)
 
 
@@ -894,7 +1040,7 @@ func set_tag_repeats(index: int, value: int) -> void:
 	undo_redo.create_action("Set Repeats")
 	undo_redo.add_undo_method(_apply_tag_repeats.bind(index, tag.repeats))
 	undo_redo.add_do_method(_apply_tag_repeats.bind(index, value))
-	undo_redo.commit_action(false)
+	_commit_history(false)
 	_apply_tag_repeats(index, value)
 
 
@@ -913,7 +1059,7 @@ func set_tag_name(index: int, tag_name: String) -> void:
 	undo_redo.create_action("Set Tag Name")
 	undo_redo.add_undo_method(_apply_tag_name.bind(index, tag.name))
 	undo_redo.add_do_method(_apply_tag_name.bind(index, tag_name))
-	undo_redo.commit_action(false)
+	_commit_history(false)
 	_apply_tag_name(index, tag_name)
 
 

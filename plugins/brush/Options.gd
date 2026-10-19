@@ -22,7 +22,6 @@ func _sync() -> void:
 	var frame := State.get_current_voxel_frame()
 	$Shape/Selection.disabled = _source_job != null or State.edit_busy() or frame == null or (frame.count() == 0 and _settings.selection_pattern.is_empty())
 	$Diameter.visible = _settings.shape != _settings.BrushShape.SELECTION
-	$DiameterIcon.visible = $Diameter.visible
 	$PixelPerfect.visible = _settings.mode != _settings.BrushMode.LINE
 	$PixelPerfect.set_pressed_no_signal(_settings.pixel_perfect)
 	$ShapeSeparator.visible = $Diameter.visible
@@ -76,7 +75,7 @@ func _on_selection_pressed() -> void:
 		_source_job = null
 		_operation_id = 0
 	if is_inside_tree() and State.document == document and State.get_current_voxel_frame() == frame and job.checkpoint(job.pattern.size()):
-		_settings.use_selection(job.pattern)
+		_settings.use_selection(job.pattern, job.pattern_materials)
 	if is_inside_tree():
 		_sync()
 

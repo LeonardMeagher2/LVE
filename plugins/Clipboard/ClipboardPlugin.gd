@@ -1,12 +1,15 @@
 extends VoxelPlugin
 
 const CLIPBOARD_PREFIX := '{"voxel_voxels":'
+# One clipboard record holds the cell and its nine material floats.
+const VOXEL_RECORD_SIZE := 3 + VoxelFrame.MATERIAL_STRIDE
 
 @onready var _options := preload("./Options.tscn").instantiate()
 @onready var _paste_tool := preload("./PasteTool.tscn").instantiate()
 var _button_group := preload("res://plugins/ToolBarButtonGroup.tres")
 var _pattern := {}
 var _selection_pattern := {}
+var _material_pattern := {}
 var _center := Vector3i.ZERO
 var _clipboard_text := ""
 var _copy_job: ClipboardCopyJob
@@ -28,8 +31,11 @@ class ClipboardCopyJob extends BrushToolSettings.CopyJob:
 		stage("Writing voxel clipboard", pattern.size())
 		var records := []
 		for cell_position: Vector3i in pattern:
-			var color: Color = pattern[cell_position]
-			records.append([cell_position.x, cell_position.y, cell_position.z, color.r, color.g, color.b, color.a])
+			var cell_material: PackedFloat32Array = pattern_materials[cell_position]
+			var record := [cell_position.x, cell_position.y, cell_position.z]
+			for value in cell_material:
+				record.append(value)
+			records.append(record)
 			if records.size() % 4096 == 0 and not checkpoint(records.size()):
 				return
 		stage("Writing clipboard selection", selection_mask.size())
@@ -45,7 +51,7 @@ class ClipboardCopyJob extends BrushToolSettings.CopyJob:
 			stage("Cutting voxels", _colors.size())
 			var changes := {}
 			for cell_position in _colors:
-				changes[cell_position] = Color.TRANSPARENT
+				changes[cell_position] = VoxelFrame.material(Color.TRANSPARENT)
 				if changes.size() % 4096 == 0 and not checkpoint(changes.size()):
 					return
 			changed_chunks = source_frame.set_cells(changes, self)
@@ -53,6 +59,7 @@ class ClipboardCopyJob extends BrushToolSettings.CopyJob:
 class ClipboardImportJob extends VoxelFrame.EditJob:
 	var text := ""
 	var pattern := {}
+	var pattern_materials := {}
 	var selection_pattern := {}
 
 	func run() -> void:
@@ -63,15 +70,26 @@ class ClipboardImportJob extends VoxelFrame.EditJob:
 		stage("Reading voxel clipboard", data.voxel_voxels.size())
 		var completed := 0
 		for record in data.voxel_voxels:
-			if not record is Array or record.size() != 7:
+			if not record is Array or record.size() != VOXEL_RECORD_SIZE:
 				pattern = {}
+				pattern_materials = {}
 				return
 			for value in record:
 				if not (value is float or value is int):
 					pattern = {}
+					pattern_materials = {}
 					return
 			var cell_position := Vector3i(int(record[0]), int(record[1]), int(record[2]))
-			pattern[cell_position] = Color(record[3], record[4], record[5], record[6])
+			var cell_material := PackedFloat32Array()
+			for index in range(3, VOXEL_RECORD_SIZE):
+				var value := float(record[index])
+				if value < 0.0 or value > 1.0:
+					pattern = {}
+					pattern_materials = {}
+					return
+				cell_material.append(value)
+			pattern[cell_position] = VoxelFrame.material_color(cell_material)
+			pattern_materials[cell_position] = cell_material
 			completed += 1
 			if completed % 4096 == 0 and not checkpoint(completed):
 				return
@@ -204,6 +222,8 @@ func _copy_voxels(cut_source: bool) -> void:
 		_pattern = job.pattern
 		_pattern.make_read_only()
 		_selection_pattern = job.selection_pattern
+		_material_pattern = job.pattern_materials
+		_material_pattern.make_read_only()
 		_center = job.center
 		_clipboard_text = job.text
 		_has_clipboard_voxels = true
@@ -273,10 +293,12 @@ func paste_voxels() -> void:
 		_pattern = job.pattern
 		_pattern.make_read_only()
 		_selection_pattern = job.selection_pattern
+		_material_pattern = job.pattern_materials
+		_material_pattern.make_read_only()
 		_center = Vector3i.ZERO
 		_clipboard_text = text
 	add_editor_node(_paste_tool)
-	_paste_tool.begin_paste(_pattern, _selection_pattern, _center)
+	_paste_tool.begin_paste(_pattern, _selection_pattern, _center, _material_pattern)
 
 
 func _report_job(operation_id: int, job: VoxelFrame.EditJob) -> void:

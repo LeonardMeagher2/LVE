@@ -34,7 +34,7 @@ func _run() -> void:
 	)
 
 	step("Given a voxel above the floor at the center aim", func():
-		State.document.set_cell(0, Vector3i(-3, 3, 0), State.current_color)
+		State.document.set_cell(0, Vector3i(-3, 3, 0), VoxelFrame.material(State.current_color))
 		sync_viewport()
 	)
 

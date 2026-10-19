@@ -119,9 +119,9 @@ func _run() -> void:
 	step("Given a selection with three voxels and two colors", func():
 		_empty("top")
 		var frame := State.get_current_voxel_frame()
-		frame.set_cell(Vector3i(10, 0, 10), Color.RED)
-		frame.set_cell(Vector3i(11, 0, 10), Color.BLUE)
-		frame.set_cell(Vector3i(11, 1, 10), Color.BLUE)
+		frame.set_cell(Vector3i(10, 0, 10), VoxelFrame.material(Color.RED))
+		frame.set_cell(Vector3i(11, 0, 10), VoxelFrame.material(Color.BLUE))
+		frame.set_cell(Vector3i(11, 1, 10), VoxelFrame.material(Color.BLUE))
 		State.selection.from_box(Vector3i(10, 0, 10), Vector3i(11, 1, 10))
 		State.selection_changed.emit()
 	)
@@ -159,9 +159,9 @@ func _run() -> void:
 		select_toolbar_item("Toolbar", "Paint")
 		State.current_color = Color.RED
 		var frame := State.get_current_voxel_frame()
-		frame.set_cell(Vector3i.ZERO, Color.BLUE)
-		frame.set_cell(Vector3i.RIGHT, Color.BLUE)
-		frame.set_cell(Vector3i.LEFT, Color.BLUE)
+		frame.set_cell(Vector3i.ZERO, VoxelFrame.material(Color.BLUE))
+		frame.set_cell(Vector3i.RIGHT, VoxelFrame.material(Color.BLUE))
+		frame.set_cell(Vector3i.LEFT, VoxelFrame.material(Color.BLUE))
 		State.selection.add(Vector3i.ZERO)
 		State.selection.add(Vector3i.RIGHT)
 		State.selection_changed.emit()
@@ -173,6 +173,35 @@ func _run() -> void:
 		expect(frame.get_color(Vector3i.ZERO) == Color.RED, "the selected center has the brush color")
 		expect(frame.get_color(Vector3i.RIGHT) == Color.RED, "the selected neighbor has the brush color")
 		expect(frame.get_color(Vector3i.LEFT) == Color.BLUE, "the unselected neighbor retains its color")
+	)
+
+
+	await get_tree().process_frame
+	step("When the user selects a sphere wider than the cursor limit", func():
+		_empty("top")
+		_click_shape("Sphere")
+		options.get_node("Diameter").value = 20
+		expect(tool._settings.shape == BrushToolSettings.BrushShape.SPHERE, "the sphere shape is active")
+		target = aim(_position(Vector3.ZERO)).target
+	)
+	# A diameter of twenty is the first sphere past the per-cell cursor limit. Its
+	# pattern is built on a worker, so the first call only starts that build. The
+	# second call sees the cached pattern and builds the real preview.
+	tool._cursor_axis = -1
+	tool._show_brush_shape(0)
+	var cursor: MeshInstance3D = tool.get_node("Cursor")
+	while tool._hover_job != null:
+		await get_tree().process_frame
+	tool._show_brush_shape(0)
+	while not cursor.is_settled():
+		await get_tree().process_frame
+	await get_tree().process_frame
+	step("Then the wide sphere preview keeps its voxel shape", func():
+		expect(cursor.mesh is ArrayMesh, "a wide sphere preview stays per-cell instead of becoming a box")
+		var surface: ArrayMesh = cursor.mesh
+		var vertices: PackedVector3Array = surface.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+		expect(vertices.size() > 0, "the sphere preview has voxel geometry")
+		expect(surface.get_aabb().size.is_equal_approx(Vector3.ONE * 20), "the sphere preview spans the brush width")
 	)
 
 

@@ -24,9 +24,9 @@ func _run() -> void:
 		exporter = plugin("ExportPlugin")
 		tabs = main.get_node("%TabContainer")
 		State.document = VoxelDocument.new()
-		State.document.set_cell(0, Vector3i(4, 2, 1), Color.RED)
+		State.document.set_cell(0, Vector3i(4, 2, 1), VoxelFrame.material(Color.RED))
 		State.document.add_frame()
-		State.document.set_cell(1, Vector3i(5, 2, 1), Color.BLUE)
+		State.document.set_cell(1, Vector3i(5, 2, 1), VoxelFrame.material(Color.BLUE))
 		State.frames_changed.emit()
 		State.active_tag = State.document.add_tag("Second", 1, 1)
 		State.selection.from_box(Vector3i(4, 2, 1), Vector3i(5, 2, 1))
@@ -170,6 +170,58 @@ func _run() -> void:
 		selector.item_selected.emit(0)
 	)
 	await get_tree().process_frame
+	step("When a frame build is pending in the preview", func():
+		exporter._model.get_node("AnimationRow/Play").button_pressed = false
+		exporter._model_playback.current_frame = 0
+		exporter._model.get_node("AnimationRow/Play").button_pressed = true
+		# Hold an unfinished surface and a pending frame, as a slow build does.
+		exporter._model_pending_frame = 0
+		exporter._model_back_renderer._pending_surface_keys[Vector3i.ZERO] = PackedInt64Array([1])
+		expect(not exporter._model_back_renderer.is_settled(), "the test holds an unfinished frame build")
+		exporter._process(1.0)
+		expect(exporter._model_playback.current_frame != 0, "the preview clock runs while a frame build is pending")
+		exporter._model_back_renderer._pending_surface_keys.clear()
+		exporter._model.get_node("AnimationRow/Play").button_pressed = false
+	)
+	step("When the editor frame changes while the preview is paused", func():
+		exporter._model_playback.is_playing = false
+		exporter._model_playback.current_frame = 0
+		State.current_frame = 1
+	)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	step("Then the editor frame leaves the preview position alone", func():
+		expect(exporter._model_playback.current_frame == 0, "an editor frame change does not move the preview")
+		State.current_frame = 0
+	)
+	step("When the editor and the preview play the same tags", func():
+		State.document.frames[0].delay_ms = 50
+		State.document.frames[1].delay_ms = 250
+		State.document.add_tag("Parity forward", 0, 1, AnimationTag.LoopMode.FORWARD, 0)
+		State.document.add_tag("Parity ping", 0, 1, AnimationTag.LoopMode.PING_PONG, 2)
+		State.tag_changed.emit()
+	)
+	await get_tree().process_frame
+	var parity_failure := ""
+	for tag_index in [1, 2, 3, 4]:
+		var selector: OptionButton = exporter._model.get_node("AnimationRow/Tags")
+		selector.select(tag_index + 1)
+		selector.item_selected.emit(tag_index + 1)
+		await get_tree().process_frame
+		State.stop()
+		exporter._model_playback.is_playing = false
+		State.active_tag = tag_index
+		var editor_steps := _clock_steps(State.playback, 0)
+		var preview_steps := _clock_steps(exporter._model_playback, State.document.tags[tag_index].from)
+		if editor_steps != preview_steps:
+			parity_failure = "tag %d: %s vs %s" % [tag_index, editor_steps, preview_steps]
+	step("Then both clocks play the same frames", func():
+		expect(parity_failure.is_empty(), "editor and preview clocks play identical frames%s" % ("" if parity_failure.is_empty() else " (%s)" % parity_failure))
+		State.stop()
+		State.active_tag = 0
+		State.current_frame = 0
+	)
+	await get_tree().process_frame
 	if DisplayServer.get_name() != "headless":
 		await _preview_behavior()
 	step("When the user returns to the editor", func():
@@ -190,7 +242,7 @@ func _run() -> void:
 		selector.select(2)
 		selector.item_selected.emit(2)
 		var loaded := VoxelDocument.new()
-		loaded.frames[0].set_cells({Vector3i.ZERO: Color.GREEN, Vector3i(17, 0, 0): Color.BLUE})
+		loaded.frames[0].set_cells({Vector3i.ZERO: VoxelFrame.material(Color.GREEN), Vector3i(17, 0, 0): VoxelFrame.material(Color.BLUE)})
 		State.document = loaded
 	)
 	await get_tree().process_frame
@@ -305,6 +357,18 @@ func _preview_behavior() -> void:
 	)
 	await RenderingServer.frame_post_draw
 	get_viewport().get_texture().get_image().save_png(_dir() + "/Workspace.png")
+
+
+# Feed the same elapsed time to one controller. Return each displayed frame.
+func _clock_steps(playback: AnimationPlayback, offset: int, ticks := 40) -> Array[int]:
+	var steps: Array[int] = []
+	playback.is_playing = false
+	playback.is_playing = true
+	for _tick in ticks:
+		playback.update(0.1)
+		steps.append(playback.current_frame + offset)
+	playback.is_playing = false
+	return steps
 
 
 func _wait_preview() -> void:

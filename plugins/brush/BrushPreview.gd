@@ -9,7 +9,7 @@ func _ready() -> void:
 	super._ready()
 	if apply_edit_symmetry:
 		_solid_material.cull_mode = BaseMaterial3D.CULL_DISABLED
-		_box_material.cull_mode = BaseMaterial3D.CULL_DISABLED
+		_primitive_material.cull_mode = BaseMaterial3D.CULL_DISABLED
 		for mask in range(1, 8):
 			var mirror := MeshInstance3D.new()
 			mirror.name = "Mirror%s" % mask

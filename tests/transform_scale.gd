@@ -48,7 +48,7 @@ func _run() -> void:
 		State.undo_redo.clear_history()
 		press_option("Scale uniformly")
 		_paint_block(4)
-		_frame().set_cell(Vector3i(3, 3, 0), Color.from_rgba8(40, 120, 40))
+		_frame().set_cell(Vector3i(3, 3, 0), VoxelFrame.material(Color.from_rgba8(40, 120, 40)))
 	)
 
 	step("When the user drags past the pivot to the opposite side", func():
@@ -106,7 +106,7 @@ func _paint_block(size: int) -> void:
 	for x in size:
 		for y in size:
 			var c := Vector3i(x, y, 0)
-			_frame().set_cell(c, Color.from_rgba8(200, 60, 60))
+			_frame().set_cell(c, VoxelFrame.material(Color.from_rgba8(200, 60, 60)))
 			State.selection.add(c)
 	State.selection_changed.emit()
 

@@ -21,7 +21,7 @@ func _run() -> void:
 		State.document = VoxelDocument.new()
 		document_ref = weakref(State.document)
 		State.begin_stroke()
-		State.paint(Vector3i.ZERO, Color.RED)
+		State.paint(Vector3i.ZERO, VoxelFrame.material(Color.RED))
 		State.end_stroke("Paint")
 	)
 	step("When the user starts another document", func():
@@ -79,7 +79,7 @@ func _run() -> void:
 		for x in 32:
 			for y in 32:
 				for z in 32:
-					colors[Vector3i(x, y, z)] = Color.RED
+					colors[Vector3i(x, y, z)] = VoxelFrame.material(Color.RED)
 		State.get_current_voxel_frame().set_cells(colors)
 		copy_options = load("res://plugins/brush/Options.tscn").instantiate()
 		main.add_child(copy_options)
@@ -100,7 +100,7 @@ func _run() -> void:
 	)
 	if DisplayServer.get_name() != "headless":
 		step("When the user opens Export before unloading its live preview", func():
-			State.get_current_voxel_frame().set_cell(Vector3i.ZERO, Color.RED)
+			State.get_current_voxel_frame().set_cell(Vector3i.ZERO, VoxelFrame.material(Color.RED))
 			State.document.add_frame()
 			State.frames_changed.emit()
 			plugin("ExportPlugin")._menu_item.get_node("ExportBtn").button_pressed = true

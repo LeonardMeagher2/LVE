@@ -30,7 +30,7 @@ func _run() -> void:
 			for y in 32:
 				for x in 32:
 					var cell_position := Vector3i(x, y, z)
-					frame.set_cell(cell_position, Color.RED)
+					frame.set_cell(cell_position, VoxelFrame.material(Color.RED))
 					State.selection.add(cell_position)
 		camera_rig().set_view("front")
 		activate_tool("transform")

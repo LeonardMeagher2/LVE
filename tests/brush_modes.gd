@@ -21,7 +21,7 @@ func _run() -> void:
 		select_toolbar_item("Toolbar", "Pencil")
 		State.current_color = Color.from_rgba8(200, 60, 60)
 		anchor = aim(center).target
-		State.document.set_cell(0, anchor, Color.from_rgba8(150, 150, 150))
+		State.document.set_cell(0, anchor, VoxelFrame.material(Color.from_rgba8(150, 150, 150)))
 		sync_viewport()
 		front = aim(center).add_target
 	)

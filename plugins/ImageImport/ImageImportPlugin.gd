@@ -55,7 +55,7 @@ class ImportJob extends VoxelFrame.EditJob:
 			var centered_colors := {}
 			stage("Centering image voxels", _patterns[frame_index].size())
 			for cell_position: Vector3i in _patterns[frame_index]:
-				centered_colors[cell_position - center] = _patterns[frame_index][cell_position]
+				centered_colors[cell_position - center] = VoxelFrame.material(_patterns[frame_index][cell_position])
 				if centered_colors.size() % 4096 == 0 and not checkpoint(centered_colors.size()):
 					return
 			stage("Building image voxels", centered_colors.size())
@@ -96,7 +96,7 @@ class ImportJob extends VoxelFrame.EditJob:
 					_occupied_bounds = _occupied_bounds.merge(bounds) if _occupied_bounds.has_volume() else bounds
 					if not _palette_colors.has(color):
 						_palette_colors[color] = true
-						imported_document.palette.append(color)
+						imported_document.palette.append(VoxelFrame.material(color))
 				completed += 1
 				if completed % 4096 == 0 and not checkpoint(completed):
 					return false

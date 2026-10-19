@@ -27,9 +27,9 @@ func _run() -> void:
 		settings = exporter._sheet_settings
 		State.document = VoxelDocument.new()
 		settings.get_node("TurntableRow/Turntable").button_pressed = false
-		State.document.set_cell(0, Vector3i(-1, 0, 0), Color.RED)
+		State.document.set_cell(0, Vector3i(-1, 0, 0), VoxelFrame.material(Color.RED))
 		State.document.add_frame()
-		State.document.set_cell(1, Vector3i(1, 0, 0), Color.BLUE)
+		State.document.set_cell(1, Vector3i(1, 0, 0), VoxelFrame.material(Color.BLUE))
 		State.get_voxel_frame(1).delay_ms = 250
 		State.document.add_frame()
 		State.frames_changed.emit()

@@ -59,7 +59,9 @@ func _rotate_toggle() -> Button:
 
 
 func _run() -> void:
-	step("Given an editor with no view mode active", func():
+	step("Given the Pencil tool and no active view mode", func():
+		activate_tool("Toolbar")
+		select_toolbar_item("Toolbar", "Pencil")
 		viewport = editor_viewport()
 		var container := viewport.get_parent()
 		container.stretch = false

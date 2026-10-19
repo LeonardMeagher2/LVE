@@ -88,8 +88,8 @@ func _run() -> void:
 func _setup() -> void:
 	State.document = VoxelDocument.new()
 	frame = State.get_current_voxel_frame()
-	frame.set_cell(Vector3i(2, 0, 0), Color.RED)
-	frame.set_cell(Vector3i(4, 0, 0), Color.BLUE)
+	frame.set_cell(Vector3i(2, 0, 0), VoxelFrame.material(Color.RED))
+	frame.set_cell(Vector3i(4, 0, 0), VoxelFrame.material(Color.BLUE))
 	for cell_position in [Vector3i(1, 0, 0), Vector3i(2, 0, 0), Vector3i(4, 0, 0), Vector3i(5, 0, 0), Vector3i(3, 2, -1)]:
 		State.selection.add(cell_position)
 	State.selection_changed.emit()

@@ -12,6 +12,22 @@ func _sync() -> void:
 	$Connected.set_pressed_no_signal(_settings.connected)
 	$Connected.visible = _settings.tool == _settings.Tools.WAND
 	$Sep.visible = $Connected.visible
+	$empty.set_pressed_no_signal(_settings.include_empty)
+	# The wand picks a voxel. It has no empty cell option.
+	var show_empty := _settings.tool != _settings.Tools.WAND
+	for control in [$EmptySep, $empty]:
+		control.visible = show_empty
+	$Depth.set_pressed_no_signal(_settings.depth_test)
+	# The depth test reads the screen shape. The wand picks a voxel.
+	$Depth.visible = show_empty
+
+
+func _on_depth_toggled(toggled_on: bool) -> void:
+	_settings.depth_test = toggled_on
+
+
+func _on_empty_toggled(toggled_on: bool) -> void:
+	_settings.include_empty = toggled_on
 
 
 func _on_connected_toggled(toggled_on: bool) -> void:

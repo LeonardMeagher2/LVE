@@ -104,6 +104,7 @@ popup/item_0/id = 0
 layout_mode = 2
 
 [node name="UndoBtn" type="Button" parent="." unique_id=234567890]
+unique_name_in_owner = true
 layout_mode = 2
 tooltip_text = "Undo"
 shortcut = SubResource("Shortcut_undo")
@@ -111,6 +112,7 @@ icon = ExtResource("6_undo")
 icon_alignment = 1
 
 [node name="RedoBtn" type="Button" parent="." unique_id=345678901]
+unique_name_in_owner = true
 layout_mode = 2
 tooltip_text = "Redo"
 shortcut = SubResource("Shortcut_redo")

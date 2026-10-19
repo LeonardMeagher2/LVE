@@ -28,10 +28,10 @@ func _run() -> void:
 		red = a + Vector3i(0, 1, 0)
 		var gray := Color.from_rgba8(150, 150, 150)
 		var f: VoxelFrame = State.document.frames[State.current_frame]
-		f.set_cell(a, gray)
-		f.set_cell(b, gray)
-		f.set_cell(c, gray)
-		f.set_cell(red, Color.RED)
+		f.set_cell(a, VoxelFrame.material(gray))
+		f.set_cell(b, VoxelFrame.material(gray))
+		f.set_cell(c, VoxelFrame.material(gray))
+		f.set_cell(red, VoxelFrame.material(Color.RED))
 		camera_rig().center_on(f.get_bounds())
 	)
 

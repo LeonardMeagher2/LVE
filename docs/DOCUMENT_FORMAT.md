@@ -9,13 +9,13 @@ Leonard's Voxel Editor uses one document encoding in two file types.
 
 ## Binary envelope
 
-Version 1 uses this 16-byte header.
+Version 3 uses this 16-byte header.
 Header integers use little-endian byte order.
 
 | Offset | Bytes | Contents |
 | --- | --- | --- |
 | 0 | 4 | Signature: `4C 56 45 00`, or `LVE` and a zero byte |
-| 4 | 4 | Unsigned format version: `1` |
+| 4 | 4 | Unsigned format version: `3` |
 | 8 | 4 | Unsigned payload byte count |
 | 12 | 4 | Unsigned CRC-32 of the payload |
 | 16 | Variable | Godot 4 Variant binary payload |
@@ -35,7 +35,7 @@ All document fields are required.
 
 | Key | Type | Contents |
 | --- | --- | --- |
-| `palette` | `PackedColorArray` | Ordered palette colors |
+| `palette` | Untyped array | Ordered `PackedFloat32Array` material entries |
 | `frames` | Untyped array | Frame dictionaries |
 | `tags` | Untyped array | Animation tag dictionaries |
 | `smooth_normals` | Boolean | Model shading option |
@@ -47,21 +47,40 @@ Each frame has these fields.
 | Key | Type | Contents |
 | --- | --- | --- |
 | `delay_ms` | Integer | Frame duration in milliseconds |
-| `voxels` | Untyped array | `[1, chunk_records]` |
+| `voxels` | Untyped array | `[3, chunk_records]` |
 
-Each chunk record is `[location, colors, nodes]`.
+Each material holds nine floats: color RGBA, emission RGB, metallic, and roughness.
+Palette entries and voxels use the same material layout.
+The palette combines entries only when all nine values match.
+Voxels store their own values, not palette indices.
+Editing a swatch changes future strokes, not existing voxels.
+The palette controls use the voxel color multiplied by emission strength for emission RGB.
+Older independent emission RGB values remain stored until the color or emission strength changes.
+
+Each chunk record is `[location, materials, nodes]`.
 
 - `location` is a `Vector3i` chunk coordinate.
 - Each chunk contains 16 × 16 × 16 voxel positions.
-- `colors` is a `PackedColorArray`.
-- Color index zero contains Godot's `Color.TRANSPARENT`.
+- `materials` is a `PackedFloat32Array` with nine floats per material.
+- Material index zero contains an empty material with Godot's `Color.TRANSPARENT`.
 - `nodes` is a `PackedInt32Array` in depth-first order.
-- A nonnegative node is a uniform leaf with that color index.
+- A nonnegative node is a uniform leaf with that material index.
 - A node of `-1` has eight children.
 - Each child has half the parent's region size.
 - Child index bits select X, Y, and Z offsets, in that order.
 - No node can subdivide a one-voxel region.
 - Every node must belong to the chunk tree.
+
+The loader also reads document versions 1 and 2.
+Their color palettes receive black emission, metallic 0, and roughness 1.
+The loader also reads voxel storage versions 1 and 2.
+Saving writes the current versions.
+
+Palette PNG export stores colors only.
+It does not store emission, metallic, or roughness.
+The private `lvPL` PNG chunk stores the entry count, not material settings.
+The importer uses this count to retain transparent colors from exported 16-pixel tiles.
+Same-color variants become identical default materials after color-only import and combine into one swatch.
 
 Each tag has `name`, `from`, `to`, `loop_mode`, and `repeats` fields.
 Frame ranges are inclusive.
@@ -115,7 +134,7 @@ It checks Variant types, counts, lengths, and nesting before calling `bytes_to_v
 It rejects objects, script-typed containers, and unsupported Variant types.
 It validates all frames before expanding octree leaves into voxel dictionaries.
 
-Version 1 uses these limits.
+The current format uses these limits.
 
 | Item | Limit |
 | --- | --- |
@@ -123,18 +142,18 @@ Version 1 uses these limits.
 | Animation frames | 10,000 |
 | Animation tags | 10,000 |
 | Tag name | 1,024 characters |
-| Palette colors | 65,536 |
+| Palette entries | 65,536 |
 | Occupied voxels across all frames | 4,194,304 |
 | Chunk records per frame | 65,536 |
 | Absolute chunk coordinate on each axis | 65,535 |
-| Colors per chunk | 4,097 |
+| Materials per chunk, including the empty entry | 4,097 |
 | Octree nodes per chunk | 4,681 |
 | Variant nesting | 16 levels |
 | Decoded Variant values | 1,000,000 |
 | Frame duration | 1 through 86,400,000 milliseconds |
 | Finite repeat count | 1 through 1,000,000 |
 
-Voxel and palette color components must be finite and between zero and one.
+Voxel and palette material components must be finite and between zero and one.
 Light color components and strengths must be finite and between zero and sixteen.
 Lighting bases must be finite and invertible.
 Camera and export values must satisfy their supported ranges.

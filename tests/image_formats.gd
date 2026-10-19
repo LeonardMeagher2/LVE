@@ -42,7 +42,7 @@ func _run() -> void:
 		step("Given a document before opening the %s image" % extension, func():
 			State.document = VoxelDocument.new()
 			previous_document = State.document
-			State.get_current_voxel_frame().set_cell(Vector3i(30, 0, 0), Color.GREEN)
+			State.get_current_voxel_frame().set_cell(Vector3i(30, 0, 0), VoxelFrame.material(Color.GREEN))
 			bar.current_save_path = "previous.tres"
 		)
 		await bar._on_file_opened(paths[extension])
@@ -50,17 +50,17 @@ func _run() -> void:
 			expect(State.document != previous_document, "Open replaces the previous document")
 			expect(State.get_current_voxel_frame().count() == 16, "the image supplies all sixteen voxels")
 			expect(_is_red(State.get_current_voxel_frame().get_color(Vector3i.ZERO)), "the image retains its red voxel colors")
-			expect(State.get_palette().size() == 1 and _is_red(State.get_palette()[0]), "the document palette contains the decoded image color")
+			expect(State.get_palette().size() == 1 and _is_red(VoxelFrame.material_color(State.get_palette()[0])), "the document palette contains the decoded image color")
 			expect(bar.current_save_path.is_empty(), "the image starts with a new voxel save path")
 		)
 		var imported_document := State.document
 		step("When the user imports the %s image as a palette" % extension, func():
-			State.set_palette(PackedColorArray([Color.BLUE]))
+			State.set_palette([VoxelFrame.material(Color.BLUE)])
 		)
 		var error := await panel.import_palette(paths[extension])
 		step("Then palette import reads the same %s image color" % extension, func():
 			expect(error == OK, "the palette image import completes")
-			expect(State.get_palette().size() == 1 and _is_red(State.get_palette()[0]), "the palette contains the decoded image color")
+			expect(State.get_palette().size() == 1 and _is_red(VoxelFrame.material_color(State.get_palette()[0])), "the palette contains the decoded image color")
 			expect(State.document == imported_document and State.get_current_voxel_frame().count() == 16, "palette import preserves the voxel document")
 			expect(not State.edit_busy(), "image loading releases editing")
 		)

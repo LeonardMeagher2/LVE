@@ -136,7 +136,7 @@ func _rotate_test(drag_offset: Vector2, view_name: String, axis: int, axis_sign:
 func _setup_bar() -> void:
 	State.document.frames[0].clear()
 	for c in BAR_CELLS:
-		State.document.set_cell(0, c, Color.from_rgba8(200, 60, 60))
+		State.document.set_cell(0, c, VoxelFrame.material(Color.from_rgba8(200, 60, 60)))
 	_select_frame_cells()
 	_vp.sync_to(0)
 

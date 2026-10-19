@@ -105,10 +105,13 @@ func _begin_line(pick: PickResult) -> void:
 	_endpoint = VoxelPicking.NONE
 	_dragged = false
 	_stroke_pattern = _settings.pattern()
+	_stroke_offsets = _settings.pattern_offsets()
+	_stroke_material_pattern = _settings.selection_material_pattern.duplicate(true) if _settings.shape == BrushSettings.BrushShape.SELECTION else {}
 	_stroke_diameter = _settings.diameter
 	_stroke_shape = _settings.shape
 	_stroke_pattern_size = _settings.estimated_size()
 	_stroke_color = State.current_color
+	_stroke_material = State.current_material.duplicate()
 	_selection_mask = State.selection.capture()
 	_edit_context = State.drawing_context()
 	_update_endpoint(_anchor)
@@ -136,9 +139,12 @@ func _start_preview() -> void:
 	_job = _create_preview_job()
 	_job.centers = _preview_centers()
 	_job.pattern = _stroke_pattern
+	_job.offsets = _stroke_offsets
+	if not _job.replace_materials:
+		_job.material_pattern = _stroke_material_pattern
 	_job.diameter = _stroke_diameter
 	_job.shape = _stroke_shape
-	_job.color = _stroke_color
+	_job.material = _stroke_material
 	_job.selection_mask = _selection_mask
 	_job.edit_context = _edit_context
 	_job.edited_frame = _line_snapshot.copy_frame()
@@ -186,15 +192,26 @@ func _finish_preview() -> void:
 	if job.revision != _revision or _anchor == VoxelPicking.NONE:
 		return
 	_preview_result = job
-	_settings.cache_pattern(job.diameter, job.shape, job.pattern)
+	_settings.cache_pattern(job.diameter, job.shape, job.pattern, job.offsets)
 	_stroke_pattern = job.pattern
+	_stroke_offsets = job.offsets
 	_show_preview(job)
-	visible = not job.cell_colors.is_empty()
+	visible = not job.applied_cells.is_empty()
 
 
 func _show_preview(job: BrushJob) -> void:
 	position = Vector3.ZERO
-	$Cursor.show_voxels(job.cell_colors, _stroke_color, false, 0, _stroke_shape == _settings.BrushShape.SELECTION)
+	$Cursor.set_brush_material(_stroke_material)
+	var use_voxel_colors := _stroke_shape == _settings.BrushShape.SELECTION
+	$Cursor.show_voxels(job.applied_cells if use_voxel_colors else _preview_colors(job), _stroke_color, false, 0, use_voxel_colors)
+
+
+# The preview shows the applied cells. Each color comes from the applied material.
+func _preview_colors(job: BrushJob) -> Dictionary:
+	var colors := {}
+	for cell_position in job.applied_cells:
+		colors[cell_position] = VoxelFrame.material_color(job.applied_cells[cell_position])
+	return colors
 
 
 func _request_commit() -> void:
@@ -243,6 +260,8 @@ func _on_settings_changed() -> void:
 		super._on_settings_changed()
 	else:
 		_stroke_pattern = _settings.pattern()
+		_stroke_offsets = _settings.pattern_offsets()
+		_stroke_material_pattern = _settings.selection_material_pattern.duplicate(true) if _settings.shape == BrushSettings.BrushShape.SELECTION else {}
 		_stroke_diameter = _settings.diameter
 		_stroke_shape = _settings.shape
 		_stroke_pattern_size = _settings.estimated_size()
@@ -253,6 +272,7 @@ func _on_color_changed(color: Color) -> void:
 	super._on_color_changed(color)
 	if _anchor != VoxelPicking.NONE:
 		_stroke_color = color
+		_stroke_material = State.current_material.duplicate()
 		_request_preview()
 
 

@@ -17,6 +17,7 @@ enum BrushShape { CUBE, SPHERE, SELECTION }
 			return
 		diameter = value
 		_cached_pattern = {}
+		_cached_offsets = []
 		emit_changed()
 
 @export var shape: BrushShape = BrushShape.CUBE:
@@ -25,25 +26,37 @@ enum BrushShape { CUBE, SPHERE, SELECTION }
 			return
 		shape = value
 		_cached_pattern = {}
+		_cached_offsets = []
 		emit_changed()
 
 var selection_pattern := {}
+var selection_material_pattern := {}
 var _cached_pattern := {}
+# The pattern keys in insertion order. A plain array iterates about twice as fast
+# as the dictionary, and a shape brush needs only the offsets. The dictionary
+# stays for the material lookup that a selection brush and a paste require.
+var selection_offsets: Array = []
+var _cached_offsets: Array = []
 
 class PatternJob extends VoxelFrame.EditJob:
 	var diameter := 1
 	var shape := BrushShape.CUBE
 	var pattern := {}
+	var offsets: Array = []
 
 	func run() -> void:
 		pattern = BrushToolSettings.build_pattern(diameter, shape, self)
+		if not pattern.is_empty():
+			offsets = pattern.keys()
 
 class CopyJob extends VoxelFrame.EditJob:
 	var source_frame: VoxelFrame
 	var selection_mask := {}
 	var pattern := {}
+	var pattern_materials := {}
 	var center := Vector3i.ZERO
 	var _colors := {}
+	var _materials := {}
 	var _bounds := AABB()
 
 	func run() -> void:
@@ -51,14 +64,14 @@ class CopyJob extends VoxelFrame.EditJob:
 		var completed := 0
 		if selection_mask.is_empty():
 			for chunk in source_frame.chunks.values():
-				for cell_position: Vector3i in chunk.cell_colors:
-					_include(cell_position, chunk.cell_colors[cell_position])
+				for cell_position: Vector3i in chunk.world_cells():
+					_include(cell_position, chunk.get_material(cell_position))
 					completed += 1
 					if completed % 4096 == 0 and not checkpoint(completed):
 						return
 		else:
 			for cell_position: Vector3i in selection_mask:
-				_include(cell_position, source_frame.get_color(cell_position))
+				_include(cell_position, VoxelFrame.material(source_frame.get_color(cell_position), source_frame.get_emission(cell_position), source_frame.get_metallic(cell_position), source_frame.get_roughness(cell_position)))
 				completed += 1
 				if completed % 4096 == 0 and not checkpoint(completed):
 					return
@@ -67,23 +80,29 @@ class CopyJob extends VoxelFrame.EditJob:
 		completed = 0
 		for cell_position: Vector3i in _colors:
 			pattern[cell_position - center] = _colors[cell_position]
+			pattern_materials[cell_position - center] = _materials[cell_position]
 			completed += 1
 			if completed % 4096 == 0 and not checkpoint(completed):
 				return
 
-	func _include(cell_position: Vector3i, color: Color) -> void:
-		if color == Color.TRANSPARENT:
+	func _include(cell_position: Vector3i, cell_material: PackedFloat32Array) -> void:
+		var cell_color := VoxelFrame.material_color(cell_material)
+		if cell_color == Color.TRANSPARENT:
 			return
-		_colors[cell_position] = color
+		_colors[cell_position] = cell_color
+		_materials[cell_position] = cell_material
 		var cell_bounds := AABB(Vector3(cell_position) - Vector3.ONE * 0.5, Vector3.ONE)
 		_bounds = _bounds.merge(cell_bounds) if _bounds.has_volume() else cell_bounds
 
 
-func use_selection(copied_pattern: Dictionary) -> void:
+func use_selection(copied_pattern: Dictionary, copied_material_pattern: Dictionary = {}) -> void:
 	if copied_pattern.is_empty():
 		return
 	selection_pattern = copied_pattern
 	selection_pattern.make_read_only()
+	selection_offsets = copied_pattern.keys()
+	selection_material_pattern = copied_material_pattern.duplicate(true)
+	selection_material_pattern.make_read_only()
 	shape = BrushShape.SELECTION
 	emit_changed()
 
@@ -101,10 +120,21 @@ func pattern() -> Dictionary:
 	return _cached_pattern
 
 
-func cache_pattern(brush_diameter: int, brush_shape: int, cells: Dictionary) -> void:
+# The offsets of `pattern()` in the same order. A job that finds this empty
+# derives it from the pattern, so the two never disagree.
+func pattern_offsets() -> Array:
+	if shape == BrushShape.SELECTION:
+		return selection_offsets
+	if _cached_offsets.is_empty() and estimated_size() <= 4096:
+		_cached_offsets = pattern().keys()
+	return _cached_offsets
+
+
+func cache_pattern(brush_diameter: int, brush_shape: int, cells: Dictionary, offsets: Array = []) -> void:
 	if diameter == brush_diameter and shape == brush_shape and shape != BrushShape.SELECTION:
 		_cached_pattern = cells
 		_cached_pattern.make_read_only()
+		_cached_offsets = offsets
 
 
 static func build_pattern(brush_diameter: int, brush_shape: int, job: VoxelFrame.EditJob = null) -> Dictionary:

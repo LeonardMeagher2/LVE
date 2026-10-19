@@ -29,7 +29,10 @@ func _run() -> void:
 		for y in range(14, 18):
 			for x in range(14, 18):
 				source_colors[Vector3i(x, y, 0)] = Color.RED if x < 16 else Color.BLUE
-		State.get_current_voxel_frame().set_cells(source_colors)
+		var materials := {}
+		for cell in source_colors:
+			materials[cell] = VoxelFrame.material(source_colors[cell])
+		State.get_current_voxel_frame().set_cells(materials)
 		State.frames_changed.emit()
 		bar = main.get_node("%MenuBar")
 		settings = bar.get_node("ModelSettingsBtn").get_popup()
@@ -95,7 +98,7 @@ func _run() -> void:
 	)
 	step("When the user erases a voxel in a diagonally adjacent chunk", func():
 		State.begin_stroke()
-		State.paint(Vector3i(16, 16, 0), Color.TRANSPARENT)
+		State.paint(Vector3i(16, 16, 0), VoxelFrame.material(Color.TRANSPARENT))
 		State.end_stroke()
 		var affected: Array[Vector3i] = [Vector3i(16, 16, 0)]
 		State.cells_changed.emit(0, affected)
@@ -150,7 +153,7 @@ func _run() -> void:
 				for index in arrays[Mesh.ARRAY_INDEX]:
 					valid_indices = valid_indices and index >= 0 and index < arrays[Mesh.ARRAY_VERTEX].size()
 				index_count += arrays[Mesh.ARRAY_INDEX].size()
-			expect(valid_indices and index_count == 288, "every exposed voxel face survives export with valid indices")
+			expect(valid_indices and index_count == 60, "smooth faces dissolve across chunks while retaining the color seam")
 	)
 	if DisplayServer.get_name() != "headless":
 		await _check_sheet_shading()

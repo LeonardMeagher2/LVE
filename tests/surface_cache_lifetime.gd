@@ -17,7 +17,7 @@ func _run() -> void:
 		for z in 48:
 			for y in 48:
 				for x in 48:
-					State.paint(Vector3i(x, y, z), Color.RED)
+					State.paint(Vector3i(x, y, z), VoxelFrame.material(Color.RED))
 		scene_renderer = load("res://ui/Viewport/VoxelRenderer.tscn").instantiate()
 		main.add_child(scene_renderer)
 	)
@@ -31,24 +31,24 @@ func _run() -> void:
 	step("Given more empty history results than the cache can retain", func():
 		# Seed completed empty results without generating thousands of redundant meshes.
 		for history_index in range(VoxelRenderer.SURFACE_CACHE_LIMIT_ENTRIES + 1):
-			VoxelRenderer._cache_surface("enclosed-history-%s" % history_index, null, 0)
+			VoxelRenderer._cache_surface(_history_key(history_index), null, 0, null)
 	)
 	step("Then empty results evict old entries without hiding active surfaces", func():
 		expect(VoxelRenderer._surface_cache.size() == VoxelRenderer.SURFACE_CACHE_LIMIT_ENTRIES, "empty results stay within the entry limit")
 		expect(VoxelRenderer._surface_cache_bytes == 0, "the empty results have zero geometry bytes")
-		expect(not VoxelRenderer._surface_cache.has("enclosed-history-0"), "the oldest empty result is evicted")
-		expect(VoxelRenderer._surface_cache.has("enclosed-history-%s" % VoxelRenderer.SURFACE_CACHE_LIMIT_ENTRIES), "the latest empty result is retained")
+		expect(not VoxelRenderer._surface_cache.has(_history_key(0)), "the oldest empty result is evicted")
+		expect(VoxelRenderer._surface_cache.has(_history_key(VoxelRenderer.SURFACE_CACHE_LIMIT_ENTRIES)), "the latest empty result is retained")
 		expect(_visible_count() == visible_surface_count, "eviction keeps active surfaces visible")
 	)
 	step("When the user recolors an enclosed voxel repeatedly", func():
 		State.begin_stroke()
 	)
 	for color in [Color.BLUE, Color.GREEN, Color.YELLOW]:
-		State.paint(enclosed_voxel, color)
+		State.paint(enclosed_voxel, VoxelFrame.material(color))
 		var affected_cells: Array[Vector3i] = [enclosed_voxel]
 		State.cells_changed.emit(0, affected_cells)
 		await _settle()
-		var surface_key: String = scene_renderer._displayed_surface_keys[enclosed_chunk]
+		var surface_key: PackedInt64Array = scene_renderer._displayed_surface_keys[enclosed_chunk]
 		expect(VoxelRenderer._surface_cache.size() <= VoxelRenderer.SURFACE_CACHE_LIMIT_ENTRIES, "the edited chunk keeps the cache within its entry limit")
 		expect(VoxelRenderer._surface_cache.has(surface_key), "the edited chunk's completed result is cached")
 		if VoxelRenderer._surface_cache.has(surface_key):
@@ -82,6 +82,11 @@ func _run() -> void:
 func _settle() -> void:
 	while not scene_renderer.is_settled():
 		await get_tree().process_frame
+
+
+# A distinct cache key per seeded history entry.
+func _history_key(index: int) -> PackedInt64Array:
+	return PackedInt64Array([index + 1, 1])
 
 
 func _visible_count() -> int:

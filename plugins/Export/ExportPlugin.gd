@@ -114,8 +114,9 @@ func _ready() -> void:
 	_model.get_node("AnimationRow/Play").toggled.connect(_on_play_toggled)
 	_model_camera.view_changed.connect(_on_preview_camera_changed)
 	State.document_changed.connect(_on_document_changed)
+	# The preview content depends on the frames and the tags, not on the editor's
+	# current frame. Following that frame would reset the preview clock.
 	State.frames_changed.connect(_source_changed)
-	State.frame_changed.connect(_source_changed)
 	State.tag_changed.connect(_source_changed)
 	State.cells_changed.connect(_source_changed.unbind(2))
 	State.chunks_changed.connect(_source_changed.unbind(2))
@@ -421,8 +422,6 @@ func _refresh_model() -> void:
 		_model_frames.append(State.get_voxel_frame(index).copy_frame())
 	_model_renderer.transform = _model_transform()
 	_model_back_renderer.transform = _model_renderer.transform
-	var playing: bool = _model.get_node("AnimationRow/Play").button_pressed
-	_model_playback.is_playing = false
 	var preview_document := VoxelDocument.new()
 	preview_document.frames.assign(_model_frames)
 	preview_document.tags.clear()
@@ -433,9 +432,13 @@ func _refresh_model() -> void:
 		preview_document.tags.append(tag)
 	_model_playback.document = preview_document
 	_model_playback.active_tag = 0 if _selected_tag else -1
-	_model_playback.current_frame = clampi(State.current_frame - frame_range.x, 0, _model_frames.size() - 1)
-	if playing:
-		_model_playback.is_playing = true
+	# A running preview keeps its own position. A stopped preview follows the
+	# editor frame. Rebuilding the content must not restart the preview clock.
+	_model_playback.current_frame = clampi(
+		_model_playback.current_frame if _model_playback.is_playing else State.current_frame - frame_range.x,
+		0,
+		maxi(0, _model_frames.size() - 1)
+	)
 	_show_model_frame()
 	_restoring_export_settings = true
 	if _model_camera_needs_center or not _pending_export_camera.is_empty():
@@ -534,13 +537,14 @@ func _set_status_context(provider: Callable, cancel := Callable()) -> void:
 func _process(delta: float) -> void:
 	if not is_instance_valid(_workspace) or not _workspace.is_visible_in_tree():
 		return
+	# Advance the preview clock on every visible frame, like the editor clock.
+	# A pending frame build must not change the animation timing.
+	_model_playback.update(delta)
 	if State.edit_busy():
 		return
 	if _model_dirty:
 		_refresh_model()
 	_present_model_frame()
-	if _model_pending_frame < 0:
-		_model_playback.update(delta)
 	if not _preview_running and _preview_due_ms >= 0 and Time.get_ticks_msec() >= _preview_due_ms:
 		_update_sheet_preview()
 

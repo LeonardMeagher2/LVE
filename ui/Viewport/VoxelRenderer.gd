@@ -2,16 +2,27 @@ class_name VoxelRenderer
 extends Node3D
 
 const CHUNK_SIZE := VoxelFrame.CHUNK_SIZE
-const MAX_SURFACE_JOBS := 2
 const SURFACE_CACHE_LIMIT_BYTES := 64 * 1024 * 1024
 const SURFACE_CACHE_LIMIT_ENTRIES := 1024
+const SURFACE_JOB_LIMIT_MIN := 2
+const SURFACE_JOB_LIMIT_MAX := 8
 
 # All viewports share meshes and jobs. Workers own their input and output arrays.
 static var _surface_cache: Dictionary = {}
-static var _surface_use_order: Array[String] = []
+static var _surface_use_order: Array[PackedInt64Array] = []
 static var _surface_cache_bytes := 0
 static var _surface_jobs: Dictionary = {}
 static var _active_renderer_count := 0
+static var _surface_job_limit := 0
+
+
+# Chunk surfaces are independent. Run them on most of the worker threads and
+# leave room for brush, fill, and wand jobs.
+static func _job_limit() -> int:
+	if _surface_job_limit == 0:
+		_surface_job_limit = clampi(OS.get_processor_count() - 1, SURFACE_JOB_LIMIT_MIN, SURFACE_JOB_LIMIT_MAX)
+	return _surface_job_limit
+
 
 @export_range(-1, 100, 1, "or_greater") var frame: int = -1:
 	set(value):
@@ -116,11 +127,13 @@ func _update(updated_frame: int, affected_cells: Array[Vector3i]) -> void:
 		_rebuild()
 		return
 	var active_frame := _get_frame()
+	# A changed cell rebuilds its own chunk and each neighbor that reads it.
 	var affected_chunks := {}
-	var offsets := VoxelMeshBuilder.neighbor_offsets(State.document.smooth_normals)
 	for cell_position in affected_cells:
-		for offset in offsets:
-			affected_chunks[VoxelFrame.chunk_position(cell_position + offset)] = true
+		var chunk_location := VoxelFrame.chunk_position(cell_position)
+		affected_chunks[chunk_location] = true
+		for offset in VoxelFrame.crosstalk_chunks(cell_position):
+			affected_chunks[chunk_location + offset] = true
 	for chunk_location in affected_chunks:
 		_request(active_frame, chunk_location)
 	_report_activity()
@@ -141,25 +154,42 @@ func _request(active_frame: VoxelFrame, chunk_location: Vector3i) -> void:
 		# Keep the completed mesh visible until the replacement is ready.
 
 
+# The edit reports each changed chunk and each neighbor that meshes across a
+# changed face, so no neighbor expansion is needed here. A large edit lists a
+# shared neighbor once per changed chunk, so request each chunk once.
 func _update_chunks(updated_frame: int, chunk_positions: Array[Vector3i]) -> void:
 	if updated_frame != (frame if frame >= 0 else State.current_frame):
 		return
 	var active_frame := _get_frame()
-	var affected_chunks := {}
-	var offsets := VoxelMeshBuilder.neighbor_offsets(State.document.smooth_normals)
+	var requested := {}
 	for chunk_location in chunk_positions:
-		for offset in offsets:
-			affected_chunks[chunk_location + offset] = true
-	for chunk_location in affected_chunks:
+		if requested.has(chunk_location):
+			continue
+		requested[chunk_location] = true
 		_request(active_frame, chunk_location)
 	_report_activity()
 
 
-static func _signature(active_frame: VoxelFrame, chunk_location: Vector3i, smooth_normals: bool) -> String:
-	var surface_key := "smooth/" if smooth_normals else "flat/"
-	for offset in VoxelMeshBuilder.neighbor_offsets(smooth_normals):
+# The exact surface identity of one chunk, as a packed integer key. Element zero
+# is the shading mode. Each later pair is one neighbor in `neighbor_offsets`
+# order: its instance id and its voxel revision. A missing neighbor writes the
+# pair (0, 0), and a live instance id is never zero. The key holds every value
+# that changes the surface, so a content-equal key matches exactly.
+#
+# A packed array passes by reference. Never write to a key after a dictionary
+# holds it, or the key's hash and content disagree.
+static func _signature(active_frame: VoxelFrame, chunk_location: Vector3i, smooth_normals: bool) -> PackedInt64Array:
+	var offsets := VoxelMeshBuilder.neighbor_offsets(smooth_normals)
+	var surface_key := PackedInt64Array()
+	surface_key.resize(1 + offsets.size() * 2)
+	surface_key[0] = 1 if smooth_normals else 0
+	var index := 1
+	for offset: Vector3i in offsets:
 		var chunk: VoxelFrame.Chunk = active_frame.chunks.get(chunk_location + offset)
-		surface_key += "%s:%s/" % [chunk.get_instance_id(), chunk.voxel_revision] if chunk else "0/"
+		if chunk:
+			surface_key[index] = chunk.get_instance_id()
+			surface_key[index + 1] = chunk.voxel_revision
+		index += 2
 	return surface_key
 
 
@@ -178,19 +208,19 @@ func _update_surfaces() -> void:
 			if not surface_job.surface_arrays[Mesh.ARRAY_VERTEX].is_empty():
 				chunk_surface = ArrayMesh.new()
 				chunk_surface.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, surface_job.surface_arrays)
-			_cache_surface(surface_key, chunk_surface, surface_job.geometry_bytes)
+			_cache_surface(surface_key, chunk_surface, surface_job.geometry_bytes, _build_material(surface_job))
 			_surface_jobs.erase(surface_key)
 		if Time.get_ticks_usec() - update_started_us >= State.WORK_SLICE_US:
 			return
 	var active_frame := _get_frame()
 	for chunk_location in _pending_surface_keys.keys():
-		var surface_key: String = _pending_surface_keys[chunk_location]
+		var surface_key: PackedInt64Array = _pending_surface_keys[chunk_location]
 		if _surface_cache.has(surface_key):
-			_install(chunk_location, surface_key, _surface_cache[surface_key].surface)
+			_install(chunk_location, surface_key, _surface_cache[surface_key])
 			_pending_surface_keys.erase(chunk_location)
 			_surface_use_order.erase(surface_key)
 			_surface_use_order.append(surface_key)
-		elif not _surface_jobs.has(surface_key) and _surface_jobs.size() < MAX_SURFACE_JOBS:
+		elif not _surface_jobs.has(surface_key) and _surface_jobs.size() < _job_limit():
 			var surface_job := VoxelMeshBuilder.new()
 			surface_job.source_frame = active_frame.copy_frame()
 			surface_job.chunk_location = chunk_location
@@ -220,17 +250,68 @@ func _report_activity() -> void:
 		_reported_remaining = remaining
 
 
-static func _cache_surface(surface_key: String, chunk_surface: ArrayMesh, geometry_bytes: int) -> void:
-	_surface_cache[surface_key] = {"surface": chunk_surface, "geometry_bytes": geometry_bytes}
+static func _cache_surface(surface_key: PackedInt64Array, chunk_surface: ArrayMesh, geometry_bytes: int, material: StandardMaterial3D) -> void:
+	var total_bytes := geometry_bytes + _texture_bytes(material)
+	_surface_cache[surface_key] = {"surface": chunk_surface, "material": material, "bytes": total_bytes}
 	_surface_use_order.append(surface_key)
-	_surface_cache_bytes += geometry_bytes
+	_surface_cache_bytes += total_bytes
 	while (_surface_cache_bytes > SURFACE_CACHE_LIMIT_BYTES or _surface_cache.size() > SURFACE_CACHE_LIMIT_ENTRIES) and _surface_use_order.size() > 1:
-		var oldest_surface_key: String = _surface_use_order.pop_front()
-		_surface_cache_bytes -= _surface_cache[oldest_surface_key].geometry_bytes
+		var oldest_surface_key: PackedInt64Array = _surface_use_order.pop_front()
+		_surface_cache_bytes -= _surface_cache[oldest_surface_key].bytes
 		_surface_cache.erase(oldest_surface_key)
 
 
-func _install(chunk_location: Vector3i, surface_key: String, chunk_surface: ArrayMesh) -> void:
+static func _texture_bytes(material: StandardMaterial3D) -> int:
+	if material == null:
+		return 0
+	var counted := {}
+	var total_bytes := 0
+	for texture in [material.albedo_texture, material.metallic_texture, material.roughness_texture, material.emission_texture]:
+		if texture is ImageTexture and not counted.has(texture):
+			counted[texture] = true
+			total_bytes += texture.get_image().get_data().size()
+	return total_bytes
+
+
+# Build one material for a chunk that holds materials. Every other chunk keeps
+# the shared material, so a document without materials renders as before.
+func _build_material(surface_job: VoxelMeshBuilder) -> StandardMaterial3D:
+	if surface_job.atlas_size.x == 0:
+		return null
+	var shared_material: Material = mesh.surface_get_material(0) if mesh and mesh.get_surface_count() > 0 else null
+	if surface_job.atlas:
+		return surface_job.atlas.create_material(shared_material as StandardMaterial3D)
+	var material: StandardMaterial3D = shared_material.duplicate() if shared_material is StandardMaterial3D else StandardMaterial3D.new()
+	var finish_texture := _atlas_texture(surface_job.atlas_size, surface_job.atlas_orm)
+	material.albedo_texture = _atlas_texture(surface_job.atlas_size, surface_job.atlas_albedo)
+	# A StandardMaterial3D ignores `orm_texture`. Bind the packed atlas to the
+	# metallic and the roughness slot, and pick the blue and the green channel.
+	material.metallic_texture = finish_texture
+	material.metallic_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_BLUE
+	material.roughness_texture = finish_texture
+	material.roughness_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_GREEN
+	material.emission_texture = _atlas_texture(surface_job.atlas_size, surface_job.atlas_emission)
+	# The default add operator sums the emission color and the emission texture.
+	# A black color adds no light, so the texture alone carries the emission.
+	material.emission_enabled = true
+	material.emission = Color.BLACK
+	material.emission_energy_multiplier = 1.0
+	material.metallic = 1.0
+	material.roughness = 1.0
+	material.vertex_color_use_as_albedo = false
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
+	material.specular_mode = BaseMaterial3D.SPECULAR_SCHLICK_GGX
+	material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	return material
+
+
+static func _atlas_texture(atlas_size: Vector2i, atlas_data: PackedByteArray) -> ImageTexture:
+	var image := Image.create_from_data(atlas_size.x, atlas_size.y, false, Image.FORMAT_RGB8, atlas_data)
+	return ImageTexture.create_from_image(image)
+
+
+func _install(chunk_location: Vector3i, surface_key: PackedInt64Array, entry: Dictionary) -> void:
+	var chunk_surface: ArrayMesh = entry.surface
 	if chunk_surface == null:
 		_retire(chunk_location)
 		_displayed_surface_keys[chunk_location] = surface_key
@@ -239,11 +320,10 @@ func _install(chunk_location: Vector3i, surface_key: String, chunk_surface: Arra
 	if chunk_instance == null:
 		chunk_instance = MeshInstance3D.new()
 		chunk_instance.position = Vector3(chunk_location * CHUNK_SIZE)
-		if mesh and mesh.get_surface_count() > 0:
-			chunk_instance.material_override = mesh.surface_get_material(0)
 		add_child(chunk_instance)
 		_chunk_instances[chunk_location] = chunk_instance
 	chunk_instance.mesh = chunk_surface
+	chunk_instance.material_override = entry.material if entry.material else (mesh.surface_get_material(0) if mesh and mesh.get_surface_count() > 0 else null)
 	chunk_instance.visible = true
 	_displayed_surface_keys[chunk_location] = surface_key
 

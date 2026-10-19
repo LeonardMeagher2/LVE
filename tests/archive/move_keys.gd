@@ -22,7 +22,7 @@ func _run() -> void:
 		svp.size = Vector2i(800, 500)
 		_center = Vector2(400.0, 250.0)
 		_cell = aim(_vp, _center).target
-		State.document.set_cell(0, _cell, State.current_color)
+		State.document.set_cell(0, _cell, VoxelFrame.material(State.current_color))
 		State.selection.add(_cell)
 		_vp.sync_to(0)
 		State.set_tool(State.tools.move)

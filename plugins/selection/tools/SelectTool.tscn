@@ -1,17 +1,15 @@
 [gd_scene format=3 uid="uid://b1lkdaijckvw6"]
 
 [ext_resource type="Script" uid="uid://dk4jhhhrqeexi" path="res://plugins/selection/tools/SelectTool.gd" id="1_cmmhg"]
-[ext_resource type="ArrayMesh" uid="uid://cqj6xncf14cm" path="res://plugins/OutlineCube.tres" id="2_7qumi"]
-[ext_resource type="Material" uid="uid://dv7wwwbfihlej" path="res://plugins/cursor_material.tres" id="2_j1b3m"]
-[ext_resource type="PackedScene" uid="uid://cw3tcgea2f3x4" path="res://plugins/selection/SelectionPreview.tscn" id="4_j1b3m"]
+[ext_resource type="Script" path="res://plugins/selection/ScreenBand.gd" id="5_band"]
+[ext_resource type="Material" path="res://plugins/selection/ants_line_material.tres" id="6_ants"]
 
 [node name="SelectionTool" type="Node3D" unique_id=1152130835]
 script = ExtResource("1_cmmhg")
 
-[node name="Cursor" type="MeshInstance3D" parent="." unique_id=1781053984]
-material_override = ExtResource("2_j1b3m")
-cast_shadow = 0
-mesh = ExtResource("2_7qumi")
-
-[node name="SelectionPreview" parent="." unique_id=685590344 instance=ExtResource("4_j1b3m")]
-material_override = ExtResource("2_j1b3m")
+[node name="ScreenBand" type="Line2D" parent="."]
+visible = false
+material = ExtResource("6_ants")
+width = 1.0
+texture_mode = 1
+script = ExtResource("5_band")

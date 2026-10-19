@@ -101,9 +101,9 @@ func _setup() -> void:
 		for y in 20:
 			for x in 20:
 				var cell_position := Vector3i(x, y, z)
-				source_frame.set_cell(cell_position, Color.RED)
+				source_frame.set_cell(cell_position, VoxelFrame.material(Color.RED))
 				State.selection.add(cell_position)
-	source_frame.set_cell(MARKER, Color.GREEN)
+	source_frame.set_cell(MARKER, VoxelFrame.material(Color.GREEN))
 	camera_rig().set_view("front")
 	activate_tool("transform")
 	select_toolbar_item("transform", "Scale")

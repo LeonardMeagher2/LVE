@@ -11,8 +11,8 @@ func _ready() -> void:
 func _run() -> void:
 	step("Given two selected voxels in distant chunks", func():
 		State.document = VoxelDocument.new()
-		State.paint(Vector3i.ZERO, Color.RED)
-		State.paint(Vector3i(255, 255, 255), Color.GREEN)
+		State.paint(Vector3i.ZERO, VoxelFrame.material(Color.RED))
+		State.paint(Vector3i(255, 255, 255), VoxelFrame.material(Color.GREEN))
 		State.selection.add(Vector3i.ZERO)
 		State.selection.add(Vector3i(255, 255, 255))
 		camera_rig().set_view("front")

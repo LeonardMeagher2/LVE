@@ -33,7 +33,7 @@ func _run() -> void:
 		frame = State.get_current_voxel_frame()
 		expect(frame.count() == 16384, "all opaque PNG pixels become voxels")
 		expect(frame.get_bounds().size == Vector3(128, 1, 128), "the image is one voxel thick on the floor plane")
-		expect(State.document.palette == [Color.RED], "the image contributes one unique red color")
+		expect(State.document.palette == [VoxelFrame.material(Color.RED)], "the image contributes one unique red color")
 		expect(not State.edit_busy(), "the imported image releases editing")
 		expect(not clipboard._paste_tool._active, "opening the large PNG creates no placement step")
 		expect(not State.undo_redo.has_undo(), "opening the large PNG starts a new edit history")

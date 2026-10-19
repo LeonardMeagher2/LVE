@@ -115,6 +115,8 @@ class RotateJob extends TransformJob:
 					var color: Color = source_colors.get(source, Color.TRANSPARENT)
 					if color != Color.TRANSPARENT:
 						destination_colors[destination] = color
+						if source_materials.has(source):
+							destination_materials[destination] = source_materials[source]
 					if track_selection and selected.has(source):
 						destination_selection[destination] = true
 					_candidate_completed += 1
@@ -150,6 +152,8 @@ class RotateJob extends TransformJob:
 			var destination := min_c + mapped
 			if source_colors.has(source):
 				destination_colors[destination] = source_colors[source]
+				if source_materials.has(source):
+					destination_materials[destination] = source_materials[source]
 			if track_selection:
 				destination_selection[destination] = true
 			completed += 1
@@ -178,6 +182,8 @@ class RotateJob extends TransformJob:
 			var destination := _rotate_cell(source, p, q, min_c, max_c, direction, turns)
 			if source_colors.has(source):
 				destination_colors[destination] = source_colors[source]
+				if source_materials.has(source):
+					destination_materials[destination] = source_materials[source]
 			if track_selection:
 				destination_selection[destination] = true
 			completed += 1
@@ -218,6 +224,7 @@ class RotateJob extends TransformJob:
 		var direction := 1.0 if probe_rot[q] > 0.5 else -1.0
 		var pivot2d := Vector2(pivot[p], pivot[q])
 		var layers := {}
+		var material_layers := {}
 		var selection_layers := {}
 		stage("Preparing rotation", source_positions.size())
 		var completed := 0
@@ -233,6 +240,9 @@ class RotateJob extends TransformJob:
 				if not layers.has(layer):
 					layers[layer] = {}
 				layers[layer][Vector2i(source[p], source[q])] = source_colors[source]
+				if not material_layers.has(layer):
+					material_layers[layer] = {}
+				material_layers[layer][Vector2i(source[p], source[q])] = source_materials[source]
 			completed += 1
 			if completed % 4096 == 0 and not checkpoint(completed):
 				return
@@ -274,6 +284,17 @@ class RotateJob extends TransformJob:
 				destination[p] = uv.x + correction.x
 				destination[q] = uv.y + correction.y
 				destination_colors[destination] = layer_results[layer][uv]
+				var source_uv := _source_cell(uv, pivot2d, direction * angle)
+				var layer_materials: Dictionary = material_layers.get(layer, {})
+				var cell_material: PackedFloat32Array = layer_materials.get(source_uv, VoxelFrame.material(layer_results[layer][uv]))
+				cell_material = cell_material.duplicate()
+				# Scale2x can select a neighbor's color. Keep that sampled color.
+				var color: Color = layer_results[layer][uv]
+				cell_material[VoxelFrame.MATERIAL_COLOR] = color.r
+				cell_material[VoxelFrame.MATERIAL_COLOR + 1] = color.g
+				cell_material[VoxelFrame.MATERIAL_COLOR + 2] = color.b
+				cell_material[VoxelFrame.MATERIAL_COLOR + 3] = color.a
+				destination_materials[destination] = cell_material
 				if track_selection:
 					destination_selection[destination] = true
 			if track_selection:
@@ -285,6 +306,12 @@ class RotateJob extends TransformJob:
 					destination_selection[destination] = true
 			if not checkpoint(completed):
 				return
+
+	# The source cell that a rotated cell samples. A material follows the nearest source cell.
+	func _source_cell(cell: Vector2i, pivot2d: Vector2, angle: float) -> Vector2i:
+		var center := Vector2(cell) + Vector2(0.5, 0.5)
+		var back := (center - pivot2d).rotated(-angle) + pivot2d
+		return Vector2i(floori(back.x), floori(back.y))
 
 
 func _begin_grab(origin: Vector3, dir: Vector3) -> void:

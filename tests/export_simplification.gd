@@ -21,20 +21,20 @@ func _run() -> void:
 		for z in 64:
 			for y in 64:
 				for x in range(-32, 32):
-					cells[Vector3i(x, y, z)] = Color.RED
+					cells[Vector3i(x, y, z)] = VoxelFrame.material(Color.RED)
 		source_document.frames[0].set_cells(cells)
 		var striped := source_document.add_frame(0)
 		var blue_cells := {}
 		for z in 64:
 			for y in 64:
 				for x in 32:
-					blue_cells[Vector3i(x, y, z)] = Color.BLUE
+					blue_cells[Vector3i(x, y, z)] = VoxelFrame.material(Color.BLUE)
 		striped.set_cells(blue_cells)
 		var hollow := source_document.add_frame(0)
-		hollow.set_cell(CAVITY, Color.TRANSPARENT)
+		hollow.set_cell(CAVITY, VoxelFrame.material(Color.TRANSPARENT))
 		var sparse := source_document.add_frame()
-		sparse.set_cell(Vector3i(-4096, 4096, -4096), Color.RED)
-		sparse.set_cell(Vector3i(4096, -4096, 4096), Color.BLUE)
+		sparse.set_cell(Vector3i(-4096, 4096, -4096), VoxelFrame.material(Color.RED))
+		sparse.set_cell(Vector3i(4096, -4096, 4096), VoxelFrame.material(Color.BLUE))
 	)
 	var started := Time.get_ticks_msec()
 	var exporter := plugin("ExportPlugin")
@@ -49,7 +49,16 @@ func _run() -> void:
 			return
 		for gltf_mesh in state.get_meshes():
 			raw_meshes.append(gltf_mesh.mesh)
+			var raw_mesh: ImporterMesh = gltf_mesh.mesh
+			expect(raw_mesh.get_surface_count() == 1, "each nonempty frame has one textured surface")
+			for surface_index in raw_mesh.get_surface_count():
+				var arrays := raw_mesh.get_surface_arrays(surface_index)
+				expect(arrays[Mesh.ARRAY_COLOR] == null, "the raw frame has no vertex colors")
+				expect(arrays[Mesh.ARRAY_TEX_UV] is PackedVector2Array, "the raw frame has atlas UVs")
 		imported_scene = document.generate_scene(state, 30, false, false)
+		expect(imported_scene != null, "the asset creates a scene")
+		if imported_scene == null:
+			return
 		main.add_child(imported_scene)
 	)
 	step("Then the solid cube uses six exact faces with sharp normals", func():
@@ -61,27 +70,18 @@ func _run() -> void:
 		expect(mesh.get_aabb().size.is_equal_approx(Vector3.ONE * 64), "the solid cube keeps its exact dimensions")
 		expect(absf(_area(mesh) - 6.0 * 64 * 64) < 0.01, "the solid cube keeps its exact surface area")
 		expect(_sharp_normals(mesh), "the face normals stay aligned with the outward voxel faces")
-		print("Final solid cube: 96 chunk quads become 6 export quads")
+		print("Final solid cube: 96 chunk quads become 12 export triangles")
 	)
 	step("Then color boundaries remain exact", func():
 		if imported_scene == null:
 			return
 		var mesh := _mesh(1)
-		expect(_index_count(mesh) == 60, "the two-color cube has ten exact colored faces")
-		var colors_preserved := true
-		var raw_mesh := raw_meshes[1]
-		for surface_index in raw_mesh.get_surface_count():
-			var arrays := raw_mesh.get_surface_arrays(surface_index)
-			var positions: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
-			var colors: PackedColorArray = arrays[Mesh.ARRAY_COLOR]
-			for vertex_index in positions.size():
-				if colors[vertex_index] == Color.RED:
-					colors_preserved = colors_preserved and positions[vertex_index].x <= -0.5
-				elif colors[vertex_index] == Color.BLUE:
-					colors_preserved = colors_preserved and positions[vertex_index].x >= -0.5
-				else:
-					colors_preserved = false
-		expect(colors_preserved, "each face keeps its source color and partition boundary")
+		expect(_index_count(mesh) == 60, "the two-color cube keeps twenty triangles along material seams")
+		expect(_vertex_count(mesh) == 40, "the two-color cube retains forty sharp-edge and material-seam vertices")
+		expect(raw_meshes.size() == 4, "all frames retain their raw import meshes")
+		if raw_meshes.size() != 4:
+			return
+		_check_voxel_colors(raw_meshes[1], mesh.get_aabb())
 	)
 	step("Then the cavity and distant voxels keep all their exposed faces", func():
 		if imported_scene == null:
@@ -100,6 +100,75 @@ func _run() -> void:
 		imported_scene.free()
 	if FileAccess.file_exists(OUTPUT):
 		DirAccess.remove_absolute(OUTPUT)
+
+
+func _check_voxel_colors(mesh: ImporterMesh, bounds: AABB) -> void:
+	if mesh.get_surface_count() != 1:
+		return
+	var material := mesh.get_surface_material(0) as StandardMaterial3D
+	expect(material != null and material.albedo_texture != null, "the two-color cube has an albedo atlas")
+	if material == null or material.albedo_texture == null:
+		return
+	var image := material.albedo_texture.get_image()
+	expect(image != null, "the two-color atlas is readable")
+	if image == null:
+		return
+	var arrays := mesh.get_surface_arrays(0)
+	var colors_preserved := true
+	var sampled := 0
+	var red_samples := 0
+	var blue_samples := 0
+	for axis in 3:
+		for side in 2:
+			for row in 64:
+				for column in 64:
+					var point := bounds.position
+					point[axis] += bounds.size[axis] * side
+					point[(axis + 1) % 3] += row + 0.5
+					point[(axis + 2) % 3] += column + 0.5
+					var uv: Variant = _uv_at(arrays, point)
+					if not uv is Vector2:
+						colors_preserved = false
+						continue
+					var pixel := Vector2i(floori(uv.x * image.get_width()), floori(uv.y * image.get_height()))
+					if pixel.x < 0 or pixel.y < 0 or pixel.x >= image.get_width() or pixel.y >= image.get_height():
+						colors_preserved = false
+						continue
+					var is_red := point.x < bounds.get_center().x
+					var expected := Color.RED if is_red else Color.BLUE
+					var actual := image.get_pixelv(pixel)
+					colors_preserved = colors_preserved and absf(actual.r - expected.r) < 0.005 and absf(actual.g - expected.g) < 0.005 and absf(actual.b - expected.b) < 0.005 and absf(actual.a - 1.0) < 0.005
+					sampled += 1
+					if is_red:
+						red_samples += 1
+					else:
+						blue_samples += 1
+	expect(sampled == 6 * 64 * 64, "every exposed voxel face has interpolated UVs")
+	expect(red_samples == 3 * 64 * 64 and blue_samples == 3 * 64 * 64, "the samples cover both color partitions equally")
+	expect(colors_preserved, "every voxel face samples its source color across the merged quads")
+
+
+func _uv_at(arrays: Array, point: Vector3) -> Variant:
+	var positions: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
+	if not arrays[Mesh.ARRAY_TEX_UV] is PackedVector2Array:
+		return null
+	var uvs: PackedVector2Array = arrays[Mesh.ARRAY_TEX_UV]
+	if uvs.size() != positions.size():
+		return null
+	for index in range(0, indices.size(), 3):
+		var a := positions[indices[index]]
+		var ab := positions[indices[index + 1]] - a
+		var ac := positions[indices[index + 2]] - a
+		var normal := ab.cross(ac)
+		if normal.length_squared() < 0.000001 or absf(normal.normalized().dot(point - a)) > 0.001:
+			continue
+		var denominator := ab.dot(ab) * ac.dot(ac) - ab.dot(ac) * ab.dot(ac)
+		var v := (ac.dot(ac) * (point - a).dot(ab) - ab.dot(ac) * (point - a).dot(ac)) / denominator
+		var w := (ab.dot(ab) * (point - a).dot(ac) - ab.dot(ac) * (point - a).dot(ab)) / denominator
+		if v >= -0.00001 and w >= -0.00001 and v + w <= 1.00001:
+			return uvs[indices[index]] * (1.0 - v - w) + uvs[indices[index + 1]] * v + uvs[indices[index + 2]] * w
+	return null
 
 
 func _mesh(frame_index: int) -> Mesh:

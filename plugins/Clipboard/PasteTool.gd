@@ -5,6 +5,8 @@ signal finished()
 var _active := false
 var _placement_operation_id := 0
 var _selection_pattern := {}
+var _material_pattern := {}
+var _preview_pattern := {}
 
 
 class PasteJob extends BrushJob:
@@ -22,7 +24,7 @@ class PasteJob extends BrushJob:
 				return
 
 
-func begin_paste(pattern: Dictionary, selection_pattern: Dictionary, center: Vector3i) -> void:
+func begin_paste(pattern: Dictionary, selection_pattern: Dictionary, center: Vector3i, material_pattern := {}) -> void:
 	_active = true
 	_source_document = State.document
 	_source_frame = State.get_current_voxel_frame()
@@ -30,7 +32,18 @@ func begin_paste(pattern: Dictionary, selection_pattern: Dictionary, center: Vec
 	_anchor = center
 	_endpoint = VoxelPicking.NONE
 	_stroke_pattern = pattern
+	_stroke_offsets = pattern.keys()
 	_selection_pattern = selection_pattern
+	_material_pattern = material_pattern
+	_preview_pattern = pattern
+	if not material_pattern.is_empty():
+		if material_pattern.size() == pattern.size():
+			_preview_pattern = material_pattern
+		else:
+			_preview_pattern = pattern.duplicate()
+			for cell in pattern:
+				_preview_pattern[cell] = material_pattern.get(cell, VoxelFrame.material(pattern[cell]))
+			_preview_pattern.make_read_only()
 	_stroke_shape = _settings.BrushShape.SELECTION
 	_stroke_pattern_size = maxi(pattern.size(), selection_pattern.size())
 	_selection_mask = {}
@@ -66,12 +79,14 @@ func _preview_centers() -> Array[Vector3i]:
 
 func _show_preview(_built_job: BrushJob) -> void:
 	position = Vector3(_endpoint)
-	$Cursor.show_voxels(_stroke_pattern, Color.WHITE)
+	$Cursor.show_voxels(_preview_pattern, Color.WHITE)
 
 
 func _create_preview_job() -> BrushJob:
 	var job := PasteJob.new()
 	job.selection_pattern = _selection_pattern
+	job.material_pattern = _material_pattern
+	job.replace_materials = true
 	return job
 
 

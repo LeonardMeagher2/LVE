@@ -68,7 +68,7 @@ func _run() -> void:
 	)
 	step("Given a voxel above the floor and a thin line brush", func():
 		_empty()
-		State.get_current_voxel_frame().set_cell(Vector3i(4, 3, 0), Color.BLUE)
+		State.get_current_voxel_frame().set_cell(Vector3i(4, 3, 0), VoxelFrame.material(Color.BLUE))
 	)
 	step("When the user clicks the floor and previews an elevated hit", func():
 		_click(Vector3.ZERO)
@@ -110,8 +110,8 @@ func _run() -> void:
 	step("Given two voxels at different heights", func():
 		_empty()
 		var frame := State.get_current_voxel_frame()
-		frame.set_cell(Vector3i(0, 3, 0), Color.BLUE)
-		frame.set_cell(Vector3i(4, 0, 0), Color.BLUE)
+		frame.set_cell(Vector3i(0, 3, 0), VoxelFrame.material(Color.BLUE))
+		frame.set_cell(Vector3i(4, 0, 0), VoxelFrame.material(Color.BLUE))
 	)
 	step("When the user starts above the floor and previews empty space", func():
 		_click(Vector3(0, 3, 0))
@@ -176,7 +176,7 @@ func _run() -> void:
 	)
 	step("Given a voxel viewed from an angle", func():
 		_empty()
-		State.get_current_voxel_frame().set_cell(Vector3i.ZERO, Color.BLUE)
+		State.get_current_voxel_frame().set_cell(Vector3i.ZERO, VoxelFrame.material(Color.BLUE))
 		camera_rig().set_view("isometric")
 	)
 	step("When the user clicks and releases on the voxel", func():
@@ -254,8 +254,8 @@ func _run() -> void:
 	step("Given a copied brush with two colors", func():
 		_empty()
 		var frame := State.get_current_voxel_frame()
-		frame.set_cell(Vector3i(8, 0, 8), Color.RED)
-		frame.set_cell(Vector3i(8, 0, 9), Color.BLUE)
+		frame.set_cell(Vector3i(8, 0, 8), VoxelFrame.material(Color.RED))
+		frame.set_cell(Vector3i(8, 0, 9), VoxelFrame.material(Color.BLUE))
 		State.selection.from_box(Vector3i(8, 0, 8), Vector3i(8, 0, 9))
 		State.selection_changed.emit()
 		options.get_node("Shape/Selection").pressed.emit()
