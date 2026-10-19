@@ -84,18 +84,30 @@ func _format(next: float) -> String:
 	return ("%." + str(decimals) + "f") % next
 
 
+# Handle the pointer in the GUI stage. The GUI keeps the pointer on the pressed
+# button until the release, so this receives the drag outside the button's rect.
+# It also needs the release, because the release clears that state. A mouse event
+# consumed in the input stage stops before the GUI, so a drag must not use _input.
 func _gui_input(event: InputEvent) -> void:
 	if disabled:
 		return
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
-		if not event.pressed:
-			return
-		accept_event()
-		# Finish the previous field before starting this field's undo scope.
-		grab_focus()
-		_begin_edit()
-		_pointer_down = _editing
-		set_pressed_no_signal(_pointer_down)
+		if event.pressed:
+			accept_event()
+			# Finish the previous field before starting this field's undo scope.
+			grab_focus()
+			_begin_edit()
+			_pointer_down = _editing
+			set_pressed_no_signal(_pointer_down)
+		elif _pointer_down:
+			_end_drag()
+	elif event is InputEventMouseMotion and _pointer_down:
+		# A release outside the window delivers no button event, so the button
+		# state on the motion ends the drag instead.
+		if event.button_mask & MOUSE_BUTTON_MASK_LEFT:
+			_update_drag(event.relative)
+		else:
+			_end_drag()
 	elif event.is_action("ui_accept"):
 		accept_event()
 		if event.is_action_pressed("ui_accept") and not event.is_echo():
@@ -105,24 +117,6 @@ func _gui_input(event: InputEvent) -> void:
 	elif event.is_action_pressed("ui_cancel") and _editing:
 		accept_event()
 		_finish_edit(true)
-
-
-# Track the drag in the input stage. The pointer can leave the button's rect
-# during a drag, so hover-based GUI events are not enough.
-func _input(event: InputEvent) -> void:
-	if disabled or not _pointer_down:
-		return
-	if event is InputEventMouseMotion:
-		get_viewport().set_input_as_handled()
-		# A release outside the window delivers no button event, so the button
-		# state on the motion ends the drag instead.
-		if event.button_mask & MOUSE_BUTTON_MASK_LEFT:
-			_update_drag(event.relative)
-		else:
-			_end_drag()
-	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and not event.pressed:
-		get_viewport().set_input_as_handled()
-		_end_drag()
 
 
 func _end_drag() -> void:
