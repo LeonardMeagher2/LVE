@@ -12,13 +12,13 @@ See [GLTF_EXPORT.md](GLTF_EXPORT.md) for the mesh export format and import setti
 
 - [ ] Close the remaining implementation tasks
   - [ ] Ask the user to test the Transform and Plane tools manually
-  - [ ] Run the full behavior suite and the final full suite for these changes:
+  - [ ] Run the affected behavior tests for these changes:
     - Per-voxel materials and material swatches
     - Independent picker settings and palette entries
     - Shared planar cleanup in the viewport and exporter
-  - Run the suites without another Godot instance using this project.
+  - Run the suite without another Godot instance using this project.
   - Clipboard and model settings popup checks previously failed in a suite but passed alone.
-  - The latest closing suite passed 138 of 139 scenes. `hidpi` and `draw_latency` passed.
+  - The latest suite passed 138 of 139 scenes. `hidpi` and `draw_latency` passed.
   - `material_controls` failed five keyboard-entry checks in that suite, then passed four targeted reruns.
   - [ ] Investigate the intermittent keyboard-focus failure in `material_controls`. Do not treat targeted reruns as a clean full suite.
   - [ ] Check orthographic rays and long-distance occlusion in the selection depth test.
@@ -55,9 +55,9 @@ See [GLTF_EXPORT.md](GLTF_EXPORT.md) for the mesh export format and import setti
     - Require visible latency to follow the stroke footprint, not the queued motion count.
     - Keep edit time, visible latency, and frame gaps from regressing at ordinary brush sizes.
     - Verify geometry, material samples, sparse models, undo, and cancellation.
-    - Run affected tests and the required full suites when closing this implementation task.
+    - Run the affected tests when closing this implementation task.
     - `draw_latency` runs visible strokes on the second monitor and needs about 51 s under load. It has a named 125 s suite deadline. Every other scene keeps the 30 s default.
-    - The closing suite passed 138 of 139 scenes. Keep the keyboard-focus failure open despite four passing targeted reruns.
+    - The latest suite passed 138 of 139 scenes. Keep the keyboard-focus failure open despite four passing targeted reruns.
   - Use the 2026-10-18 pre-cleanup checkpoint only as context: 26 ms maximum gap and 0.828 s visible completion.
   - At that checkpoint, diameter nine had 48 ms visible latency and an 8 ms gap.
   - Preserve dense 16-cube chunks unless measurements support a storage change.

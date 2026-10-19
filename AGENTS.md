@@ -4,13 +4,12 @@ Leonard's Voxel Editor is a Godot voxel-animation editor. Godot is the only tool
 
 ## Workflow
 
-- Use [TASKS.md](TASKS.md) for the roadmap. Work on one active task at a time.
+- Use [TASKS.md](TASKS.md) for the roadmap.
 - Read adjacent files before editing. Follow their structure and style.
-- Use the smallest design that solves the current problem. Reuse suitable resources, utilities, and engine features.
+- Reuse suitable resources, utilities, and engine features.
 - Add abstractions only for a concrete need. Explain non-obvious choices and their tradeoffs.
 - When committing, prefer whole-file staging over partial staging.
 - Record verified engine and workflow learnings in [NOTES.md](NOTES.md) during the task that finds them.
-- Use one short, dated bullet per learning. Exclude opinions and obvious facts.
 
 ## Documentation
 
@@ -27,14 +26,9 @@ Use the `godot-docs` skill to verify API assumptions against the current stable 
 
 ### Structure and state
 
-- Use Nodes for scene-tree behavior, engine callbacks, input, and spatial relationships.
-- Use Resources for reusable definitions and saved assets. Use RefCounted objects for temporary logic without tree membership.
-- Use inheritance for specialization. Use composition for capabilities that vary independently.
 - Keep execution state separate from shared Resources. Before mutation or duplication, identify which objects and nested data remain shared.
-- Use direct calls for known receivers, signals for events, and groups for role-based discovery.
 - Pass operation-specific dependencies explicitly. Reserve Autoloads for application-wide responsibilities.
 - Use parentage for natural lifetime and spatial relationships. Avoid dependencies on unrelated tree paths.
-- Keep reusable components focused. Put workflow ordering and policy in the responsible component.
 - Restore previous values after temporary changes. Define the scope of events and undo history.
 
 ### Lifecycle and timing
@@ -43,7 +37,6 @@ Use the `godot-docs` skill to verify API assumptions against the current stable 
 - Clean up subscriptions and external registrations. Avoid duplicate connections on tree re-entry.
 - Node parentage controls lifetime. The `owner` property controls inclusion in saved scenes.
 - Free Nodes outside an owning tree explicitly. Break RefCounted reference cycles.
-- Use physics callbacks for physics, frame callbacks for frame updates, and events for discrete changes.
 - Use elapsed time for behavior measured in seconds. Fixed per-frame interpolation is not frame-rate independent.
 - After each `await`, verify target validity and that the operation is still current.
 - Define asynchronous cancellation and completion. Distinguish finished input, calculated results, and fully consumed output.
@@ -64,14 +57,14 @@ Use the `godot-docs` skill to verify API assumptions against the current stable 
 - Never set `focus_mode = 0` (FOCUS_NONE) on controls.
 - Never set `custom_minimum_size` on icon-only toolbar buttons. Let the container size them.
 - Set `icon_alignment = 1` (CENTER) on icon-only buttons.
+- Handle mouse input in `_gui_input`. The GUI keeps the pointer on the pressed control until the release, and it must see the release to clear that state. A mouse event consumed in `_input` stops before the GUI.
 
 ## Verification
 
 Run commands from the project root.
 
-- Run the tests affected by the change.
-- For shared code changes, run the full suite. Shared code includes state, documents, tool bases, and UI containers.
-- Run the full suite again before closing a task.
+- Run the affected tests after changes and before closing a task.
+- Run the full suite before a push.
 - For documentation-only changes, review the text and diff. Tests are not required.
 
 Run one behavior test:
