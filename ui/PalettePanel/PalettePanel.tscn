@@ -11,7 +11,7 @@
 [ext_resource type="Texture2D" uid="uid://denrh23gr1h18" path="res://icons/light.svg" id="11_emission"]
 [ext_resource type="Texture2D" uid="uid://daustgyl361sn" path="res://icons/metallic.svg" id="12_metallic"]
 [ext_resource type="Texture2D" uid="uid://ci3taagaxm7e" path="res://icons/roughness.svg" id="13_roughness"]
-[ext_resource type="PackedScene" uid="uid://kxi223occ3vl" path="res://ui/PalettePanel/MaterialValue.tscn" id="14_value"]
+[ext_resource type="PackedScene" uid="uid://kxi223occ3vl" path="res://ui/ValueButton/ValueButton.tscn" id="14_value"]
 
 [node name="PalettePanel" type="VBoxContainer" unique_id=920144879]
 custom_maximum_size = Vector2(512, -1)

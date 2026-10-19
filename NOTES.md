@@ -51,6 +51,8 @@ Use Git history for old bug reports and removed designs.
 - 2026-09-07: Use explicit cell indices in grids. Prepending a row changes each child's node index.
 - 2026-09-07: Before reading rebuilt container rectangles, wait one frame.
 - 2026-09-07: For drags across controls, track motion in `_input()`. `gui_input` stops outside the control.
+- 2026-10-18: A pointer release outside the window sends no button event. Treat a motion event with an empty `button_mask` as that lost release and end the drag.
+- 2026-10-18: Clamp the accumulated value of a relative-movement drag on every event. A reversal at the limit then changes the value at once, with no dead zone.
 - 2026-09-07: Set drag previews only during a GUI drag. Check `get_viewport().gui_is_dragging()` first.
 - 2026-09-07: Implement button drag handling in a Button subclass. The button consumes its press before the parent.
 - 2026-10-05: Use the `align_to_largest_stylebox` theme constant to keep button sizes stable across states.

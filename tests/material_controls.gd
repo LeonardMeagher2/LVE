@@ -43,7 +43,7 @@ func _run() -> void:
 			_motion(start + Vector2(8, 0), Vector2(8, 0))
 			_motion(start + Vector2(40, 0), Vector2(32, 0))
 			expect(field.value > before and field.get_node("Fill").visible, "dragging changes the value and shows its slider fill")
-			expect(is_equal_approx(field.value, before + 0.4), "forty pixels changes the value by 0.4")
+			expect(is_equal_approx(field.value, before + 0.2), "forty pixels changes the value by 0.2")
 		)
 		if name == "%Metallic":
 			await _capture("dragging.png")

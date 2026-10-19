@@ -22,7 +22,6 @@ func _sync() -> void:
 	var frame := State.get_current_voxel_frame()
 	$Shape/Selection.disabled = _source_job != null or State.edit_busy() or frame == null or (frame.count() == 0 and _settings.selection_pattern.is_empty())
 	$Diameter.visible = _settings.shape != _settings.BrushShape.SELECTION
-	$DiameterIcon.visible = $Diameter.visible
 	$PixelPerfect.visible = _settings.mode != _settings.BrushMode.LINE
 	$PixelPerfect.set_pressed_no_signal(_settings.pixel_perfect)
 	$ShapeSeparator.visible = $Diameter.visible
