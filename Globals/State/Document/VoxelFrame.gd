@@ -128,6 +128,16 @@ class EditJob extends RefCounted:
 		_cancel_requested = true
 		_progress_lock.unlock()
 
+	# Wait for the worker and retire its handle. This owns the wait and the id
+	# reset only: it never cancels the job, and it never touches the operation,
+	# the result, or the publication checkpoint. Main thread only. A job without
+	# a worker, or one whose task was already retired, returns at once.
+	func wait_for_worker() -> void:
+		if worker_task_id < 0:
+			return
+		WorkerThreadPool.wait_for_task_completion(worker_task_id)
+		worker_task_id = -1
+
 	func apply_cells(frame: VoxelFrame, changes: Dictionary, existing_only := false, matching_material: Variant = null) -> Array[Vector3i]:
 		applied_cells = edit_context.expand(changes, frame, existing_only, matching_material, self) if edit_context else changes
 		if not checkpoint(0):
@@ -289,6 +299,17 @@ class Chunk extends RefCounted:
 		var bulk := _uniform_batch(changes, declared_uniform)
 		if bulk.size() > 0:
 			return _fill_chunk(bulk, chunk_origin, copy_for_write)
+		# A partial batch whose cells the caller declared share one material can
+		# write one appended row for the whole batch. The hint is trusted only
+		# because it is explicit, and the chunk must already share rows: on an
+		# unshared chunk every cell owns its row, so the per-cell path below writes
+		# in place without growing the table or forcing a compaction. An empty
+		# replacement also keeps that path, so the erase semantics stay in one
+		# place.
+		if shared_materials and declared_uniform != null:
+			var declared: PackedFloat32Array = declared_uniform
+			if not VoxelFrame.is_empty(declared):
+				return _apply_uniform_partial(changes, chunk_origin, copy_for_write, declared)
 		var target := self
 		var copied := false
 		var face_bits := 0
@@ -310,8 +331,6 @@ class Chunk extends RefCounted:
 				target.occupied_count -= 1
 				if target.on_bounds(cell_position):
 					target.bounds_dirty = true
-				if target.materials.size() > target.occupied_count * MATERIAL_STRIDE * 2:
-					target._compact()
 			else:
 				if id > 0:
 					var base := (id - 1) * MATERIAL_STRIDE
@@ -347,7 +366,80 @@ class Chunk extends RefCounted:
 					max_cell = Vector3i(maxi(max_cell.x, local.x), maxi(max_cell.y, local.y), maxi(max_cell.z, local.z))
 			face_bits |= VoxelFrame._face_bits(local)
 			changed_count += 1
+		# One compaction per batch instead of one per erased cell. The table never
+		# grows on an erase, so the end state is the same. A chunk this batch emptied
+		# needs no compaction, because the frame drops it. Only a copied target is
+		# compacted, so a batch that changes nothing leaves the chunk shared.
+		if changed_count > 0 and target.occupied_count > 0 and target.materials.size() > target.occupied_count * MATERIAL_STRIDE * 2:
+			target._compact()
 		# One bounds merge for the whole batch instead of one per cell.
+		if changed_count > 0 and not target.bounds_dirty and max_cell.x >= min_cell.x:
+			var batch_bounds := AABB(Vector3(chunk_origin + min_cell) - Vector3.ONE * 0.5, Vector3(max_cell - min_cell + Vector3i.ONE))
+			target.occupied_bounds = target.occupied_bounds.merge(batch_bounds) if target.occupied_bounds.has_volume() else batch_bounds
+		return [target, face_bits, changed_count]
+
+
+	# A partial batch whose cells the caller declared share one material. The chunk
+	# already shares rows, so every changed slot moves to one row appended once for
+	# the batch. The batch pays one row instead of one row or one in-place write per
+	# cell. Rows outside the batch stay, so a cell the batch does not touch keeps
+	# its material. The row is appended only when the batch changes a cell, so a
+	# repeated batch copies nothing. The caller must pass the hint only when every
+	# cell holds it.
+	func _apply_uniform_partial(changes: Dictionary, chunk_origin: Vector3i, copy_for_write: Callable, cell_material: PackedFloat32Array) -> Array:
+		var target := self
+		var copied := false
+		var face_bits := 0
+		var changed_count := 0
+		var min_cell := Vector3i.MAX
+		var max_cell := Vector3i.MIN
+		var new_id := 0
+		# The last id and its match are cached. A batch writes one chunk, and a
+		# coherent batch visits the same row in a run, so a scalar cache removes the
+		# repeated compare without a dictionary step per cell.
+		var last_id := 0
+		var last_same := false
+		for cell_position: Vector3i in changes:
+			var local := cell_position - chunk_origin
+			var slot := cell_slot(local)
+			var id := target.grid[slot]
+			if id > 0:
+				var same := false
+				if id == last_id:
+					same = last_same
+				else:
+					var base := (id - 1) * MATERIAL_STRIDE
+					same = true
+					for offset in MATERIAL_STRIDE:
+						if target.materials[base + offset] != cell_material[offset]:
+							same = false
+							break
+					last_id = id
+					last_same = same
+				if same:
+					continue
+			if not copied:
+				target = copy_for_write.call()
+				copied = true
+				# One owned row for the whole batch. `append_array` copies the values,
+				# so a later change to the caller's material cannot reach the table.
+				target.materials.append_array(cell_material)
+				new_id = target.materials.size() / MATERIAL_STRIDE
+				target.shared_materials = true
+			if id == 0:
+				target.occupied_count += 1
+			target.grid[slot] = new_id
+			face_bits |= VoxelFrame._face_bits(local)
+			changed_count += 1
+			if not target.bounds_dirty:
+				min_cell = Vector3i(mini(min_cell.x, local.x), mini(min_cell.y, local.y), mini(min_cell.z, local.z))
+				max_cell = Vector3i(maxi(max_cell.x, local.x), maxi(max_cell.y, local.y), maxi(max_cell.z, local.z))
+		# One compaction for the whole batch, after every changed slot moved to the
+		# new row, so the new id is never used after a remap.
+		if changed_count > 0 and target.occupied_count > 0 and target.materials.size() > target.occupied_count * MATERIAL_STRIDE * 2:
+			target._compact()
+		# One bounds merge for the whole batch. Every change here is a write, so the
+		# bounds only grow.
 		if changed_count > 0 and not target.bounds_dirty and max_cell.x >= min_cell.x:
 			var batch_bounds := AABB(Vector3(chunk_origin + min_cell) - Vector3.ONE * 0.5, Vector3(max_cell - min_cell + Vector3i.ONE))
 			target.occupied_bounds = target.occupied_bounds.merge(batch_bounds) if target.occupied_bounds.has_volume() else batch_bounds
@@ -376,23 +468,21 @@ class Chunk extends RefCounted:
 
 
 	# Write one material to every cell of this chunk. The grid holds one id and the
-	# table one material, so the cost does not follow the cell count.
+	# table one material, so the cost does not follow the cell count. An empty
+	# material removes the chunk, so the caller receives a null chunk to drop.
 	func _fill_chunk(cell_material: PackedFloat32Array, chunk_origin: Vector3i, copy_for_write: Callable) -> Array:
 		var cells := VoxelFrame.CHUNK_SIZE * VoxelFrame.CHUNK_SIZE * VoxelFrame.CHUNK_SIZE
 		if VoxelFrame.is_empty(cell_material):
 			if occupied_count == 0:
 				return [self, 0, 0]
 			# Every occupied cell changes, and the empty ones are already empty. The
-			# faces that need a rebuild are the extent of what was occupied.
-			var removed := occupied_count
+			# frame drops the whole chunk, so a copy, a grid fill, and a compaction
+			# would all be discarded work. The faces that need a rebuild are the
+			# extent of what was occupied.
 			var bounds := get_bounds()
-			var emptied: Chunk = copy_for_write.call()
-			emptied.grid.fill(0)
-			emptied.occupied_count = 0
-			emptied._compact()
 			var min_cell := Vector3i(bounds.position + Vector3.ONE * 0.5) - chunk_origin
 			var max_cell := Vector3i(bounds.end - Vector3.ONE * 0.5) - chunk_origin
-			return [emptied, _extent_face_bits(min_cell, max_cell), removed]
+			return [null, _extent_face_bits(min_cell, max_cell), occupied_count]
 		# The batch covers the chunk, so the result is one entry for every cell. A
 		# chunk the bulk fill wrote already holds exactly one entry, and then the
 		# answer needs no scan at all: the same material changes nothing, and any
@@ -715,14 +805,21 @@ func set_cells(cell_materials: Dictionary, edit_job: EditJob = null, uniform_mat
 		if outcome[2] == 0:
 			continue
 		chunk = outcome[0]
-		chunk.voxel_revision += 1
-		chunk.serialized_record.clear()
-		chunk.positions_by_color.clear()
-		if chunk.occupied_count == 0:
+		if chunk == null:
+			# The batch erased every cell of the chunk, so the frame drops it. No
+			# copy was made, so the shared marker must go with the chunk. Otherwise
+			# the marker outlives the removal until the next capture or restore.
 			chunks.erase(chunk_location)
+			_shared_chunks.erase(chunk_location)
 		else:
-			# A clean batch needs no rescan. Only an erase on the bounds sets the flag.
-			chunk.get_bounds()
+			chunk.voxel_revision += 1
+			chunk.serialized_record.clear()
+			chunk.positions_by_color.clear()
+			if chunk.occupied_count == 0:
+				chunks.erase(chunk_location)
+			else:
+				# A clean batch needs no rescan. Only an erase on the bounds sets the flag.
+				chunk.get_bounds()
 		changed_chunks.append(chunk_location)
 		for offset in _touched_neighbors(face_bits):
 			changed_chunks.append(chunk_location + offset)
