@@ -15,7 +15,6 @@ func set_column_index(i: int) -> void:
 
 
 func _ready() -> void:
-	set_process_input(true)
 	State.tag_changed.connect(_sync)
 	_sync()
 
@@ -42,13 +41,23 @@ func _sync() -> void:
 		%EndGrip.tooltip_text = "End frame %d" % (tag.to + 1)
 
 
+# Handle the pointer in the GUI stage. The GUI keeps the pointer on the pressed
+# cell until the release, so this receives the drag outside the cell. It also
+# needs the release, because the release clears that state. A mouse event consumed
+# in the input stage stops before the GUI, so a drag must not use _input.
 func _gui_input(event: InputEvent) -> void:
-	if _dragging:
-		return
-	var mb := event as InputEventMouseButton
-	if mb == null or not mb.pressed or mb.button_index != MOUSE_BUTTON_LEFT:
-		return
-	if not _is_from and not _is_to:
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+		if event.pressed:
+			_begin_drag(event)
+		elif _dragging:
+			_dragging = false
+			State.commit_tag_range(_drag_tag, _drag_range)
+	elif event is InputEventMouseMotion and _dragging:
+		_drag_range_to(event)
+
+
+func _begin_drag(mb: InputEventMouseButton) -> void:
+	if _dragging or (not _is_from and not _is_to):
 		return
 	_drag_from = _is_from and (not _is_to or mb.position.x < size.x * 0.5)
 	_dragging = true
@@ -58,22 +67,12 @@ func _gui_input(event: InputEvent) -> void:
 	accept_event()
 
 
-func _input(event: InputEvent) -> void:
-	if not _dragging:
-		return
-	var mb := event as InputEventMouseButton
-	if mb != null and not mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
-		_dragging = false
-		State.commit_tag_range(_drag_tag, _drag_range)
-		get_viewport().set_input_as_handled()
-		return
-	var mm := event as InputEventMouseMotion
-	if mm == null:
-		return
+func _drag_range_to(mm: InputEventMouseMotion) -> void:
 	var tag: AnimationTag = State.get_active_tag()
 	if tag == null or State.active_tag != _drag_tag:
 		return
-	var col := _column_from_x(mm.position.x)
+	# _column_from_x compares against the grid position, so pass the same space.
+	var col := _column_from_x((get_global_transform() * mm.position).x)
 	var from := col if _drag_from else tag.from
 	var to := tag.to if _drag_from else col
 	if from == tag.from and to == tag.to:

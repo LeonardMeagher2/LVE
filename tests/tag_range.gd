@@ -30,11 +30,11 @@ func _drag_to(cell: Node, target: Node, release: bool = true) -> void:
 	var press := InputEventMouseButton.new()
 	press.button_index = MOUSE_BUTTON_LEFT
 	press.pressed = true
-	press.position = cell.get_global_rect().get_center()
+	press.position = _local(cell, cell.get_global_rect().get_center())
 	cell._gui_input(press)
 	var motion := InputEventMouseMotion.new()
-	motion.position = target.get_global_rect().get_center()
-	cell._input(motion)
+	motion.position = _local(cell, target.get_global_rect().get_center())
+	cell._gui_input(motion)
 	if release:
 		_release_at(cell, target)
 
@@ -43,8 +43,13 @@ func _release_at(cell: Node, target: Node) -> void:
 	var event := InputEventMouseButton.new()
 	event.button_index = MOUSE_BUTTON_LEFT
 	event.pressed = false
-	event.position = target.get_global_rect().get_center()
-	cell._input(event)
+	event.position = _local(cell, target.get_global_rect().get_center())
+	cell._gui_input(event)
+
+
+# _gui_input receives pointer positions local to the cell.
+func _local(cell: Node, point: Vector2) -> Vector2:
+	return cell.get_global_transform().affine_inverse() * point
 
 
 func _run() -> void:
@@ -135,8 +140,8 @@ func _run() -> void:
 	step("When the user continues the drag onto the start frame", func():
 		var cells := _range_cells()
 		var motion := InputEventMouseMotion.new()
-		motion.position = cells[1].get_global_rect().get_center()
-		cells[3]._input(motion)
+		motion.position = _local(cells[3], cells[1].get_global_rect().get_center())
+		cells[3]._gui_input(motion)
 		_release_at(cells[3], cells[1])
 	)
 
