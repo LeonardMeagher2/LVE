@@ -90,17 +90,19 @@ class Job extends VoxelFrame.EditJob:
 			return region
 		stage("Testing camera visibility", region.size())
 		var origin: Vector3 = view_matrix.affine_inverse().origin
+		# The frame bounds are read once, so every visibility ray reuses them.
+		var bounds := source_frame.get_bounds()
 		var visible := {}
 		var completed := 0
 		for cell_position in region:
-			if _front_cell(origin, cell_position):
+			if _front_cell(origin, cell_position, bounds):
 				visible[cell_position] = true
 			completed += 1
 			if completed % 1024 == 0 and not checkpoint(completed):
 				return {}
 		return visible
 
-	func _front_cell(origin: Vector3, cell_position: Vector3i) -> bool:
+	func _front_cell(origin: Vector3, cell_position: Vector3i, bounds: AABB) -> bool:
 		var center := Vector3(cell_position)
 		for axis in 3:
 			var side := 1.0 if origin[axis] >= center[axis] else -1.0
@@ -110,17 +112,17 @@ class Job extends VoxelFrame.EditJob:
 				continue
 			var sample := center
 			sample[axis] += side * SURFACE_INSET
-			if _reaches(origin, sample, cell_position):
+			if _reaches(origin, sample, cell_position, bounds):
 				return true
 		return false
 
 	# True when no occupied cell stands between the camera and the sample point.
-	func _reaches(origin: Vector3, sample: Vector3, cell_position: Vector3i) -> bool:
+	func _reaches(origin: Vector3, sample: Vector3, cell_position: Vector3i, bounds: AABB) -> bool:
 		var to_sample := sample - origin
 		var distance := to_sample.length()
 		if distance <= 0.0:
 			return true
-		var hit := VoxelPicking.ray_voxel(origin, to_sample / distance, source_frame).hit
+		var hit := VoxelPicking.ray_voxel(origin, to_sample / distance, source_frame, bounds).hit
 		if hit == VoxelPicking.NONE:
 			return true
 		return hit == cell_position or (Vector3(hit) - origin).length() > distance

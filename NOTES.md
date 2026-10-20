@@ -236,6 +236,7 @@ Use Git history for old bug reports and removed designs.
 - 2026-09-12: Align smooth single-axis rotations from their actual output bounds. Predicted bounds can make previews jump near cardinal angles.
 - 2026-09-12: Use exact rotation at cardinal angles. Test the smooth path near those angles, not exactly on them.
 - 2026-09-12: Grid-aligned camera rays can hit voxel boundaries. Keep picking test fixtures away from those boundaries.
+- 2026-10-19: `VoxelPicking.ray_voxel` clips its grid DDA to the frame bounds. A ray from far away then reaches the content. The step bound comes from the bounds extent, because axis crossings can be arbitrarily close. `ScreenSelection` reads the bounds once per visibility pass, at about 17 us on a 262144-cell frame.
 - 2026-10-15: `VoxelTool.end_stroke()` records "Stroke" and takes no name. Override it for a different undo name.
 - 2026-10-17: During palette drags, distinguish local edits from external changes. Material matching can change the selected index mid-drag.
 - 2026-09-09: Use `UndoRedo.MERGE_ENDS` for repeated drag updates. It keeps the first undo and last redo.

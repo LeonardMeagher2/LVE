@@ -69,15 +69,61 @@ static func view_plane_through(point: Vector3, forward: Vector3) -> StrokePlane:
 	return p
 
 
-static func ray_voxel(origin: Vector3, dir: Vector3, frame: VoxelFrame) -> PickResult:
-	var g := origin + Vector3(0.5, 0.5, 0.5)
+static func ray_voxel(origin: Vector3, dir: Vector3, frame: VoxelFrame, supplied_bounds := AABB()) -> PickResult:
 	var res := PickResult.new()
 	if frame == null:
 		return res
-	var cell := Vector3i(floori(g.x), floori(g.y), floori(g.z))
+	if dir == Vector3.ZERO:
+		return res
+	var bounds := supplied_bounds
+	if not bounds.has_volume():
+		bounds = frame.get_bounds()
+	if not bounds.has_volume():
+		return res
+	# Work in cell space. Cell c spans [c, c + 1) after the +0.5 shift, which is
+	# the world span [c - 0.5, c + 0.5].
+	var g := origin + Vector3(0.5, 0.5, 0.5)
+	var lo := bounds.position + Vector3(0.5, 0.5, 0.5)
+	var hi := bounds.end + Vector3(0.5, 0.5, 0.5)
+	# Slab clip the ray against the bounds. Both ends use the original origin, so
+	# they share one parameter with the DDA below.
+	var t_enter := -INF
+	var t_exit := INF
+	for axis in 3:
+		var d: float = dir[axis]
+		if d == 0.0:
+			if g[axis] < lo[axis] or g[axis] > hi[axis]:
+				return res
+			continue
+		var near: float = (lo[axis] - g[axis]) / d
+		var far: float = (hi[axis] - g[axis]) / d
+		if near > far:
+			var swap := near
+			near = far
+			far = swap
+		t_enter = maxf(t_enter, near)
+		t_exit = minf(t_exit, far)
+	if t_enter > t_exit or t_exit <= 0.0:
+		return res
 	var step := Vector3i(
-		1 if dir.x > 0 else -1, 1 if dir.y > 0 else -1, 1 if dir.z > 0 else -1
+		1 if dir.x > 0.0 else -1, 1 if dir.y > 0.0 else -1, 1 if dir.z > 0.0 else -1
 	)
+	var cell_min := Vector3i(floori(lo.x), floori(lo.y), floori(lo.z))
+	var cell_max := Vector3i(floori(hi.x) - 1, floori(hi.y) - 1, floori(hi.z) - 1)
+	# Start inside the bounds. An origin outside them starts at the entry cell,
+	# which records the face the ray crosses so the first hit keeps its entry.
+	var t := 0.0
+	var entry := Vector3i.ZERO
+	var cell := Vector3i(floori(g.x), floori(g.y), floori(g.z))
+	if t_enter > 0.0:
+		t = t_enter
+		cell = _entry_cell(g + dir * t_enter, dir)
+		cell = Vector3i(
+			clampi(cell.x, cell_min.x, cell_max.x),
+			clampi(cell.y, cell_min.y, cell_max.y),
+			clampi(cell.z, cell_min.z, cell_max.z)
+		)
+		entry = _entry_face(g, dir, lo, hi, step)
 	var t_max := Vector3(INF, INF, INF)
 	var t_delta := Vector3(INF, INF, INF)
 	if dir.x != 0.0:
@@ -89,9 +135,11 @@ static func ray_voxel(origin: Vector3, dir: Vector3, frame: VoxelFrame) -> PickR
 	if dir.z != 0.0:
 		t_delta.z = absf(1.0 / dir.z)
 		t_max.z = ((float(cell.z) + (1.0 if step.z > 0 else 0.0)) - g.z) / dir.z
-	var t := 0.0
-	var entry := Vector3i.ZERO
-	for i in 1024:
+	# The ray crosses at most one boundary per bounds cell on each axis, so the
+	# extent bounds the step count without any assumption about the direction.
+	var extent := cell_max - cell_min + Vector3i.ONE
+	var max_steps := extent.x + extent.y + extent.z + 2
+	for i in max_steps:
 		if frame.has(cell):
 			res.hit = cell
 			res.entry = entry
@@ -111,9 +159,37 @@ static func ray_voxel(origin: Vector3, dir: Vector3, frame: VoxelFrame) -> PickR
 			entry = Vector3i(0, 0, -step.z)
 			t = t_max.z
 			t_max.z += t_delta.z
-		if t > 512.0:
+		if t > t_exit:
 			break
 	return res
+
+
+# The cell that holds the ray just after it enters the bounds. A negative axis
+# picks the cell below the point, so an entry on a max bounds face stays inside.
+static func _entry_cell(point: Vector3, dir: Vector3) -> Vector3i:
+	var cell := Vector3i.ZERO
+	for axis in 3:
+		cell[axis] = ceili(point[axis]) - 1 if dir[axis] < 0.0 else floori(point[axis])
+	return cell
+
+
+# The bounds face the ray enters through, as the entry vector of the entry cell.
+# A tie keeps the first axis, which matches the DDA step order.
+static func _entry_face(g: Vector3, dir: Vector3, lo: Vector3, hi: Vector3, step: Vector3i) -> Vector3i:
+	var axis := -1
+	var nearest := -INF
+	for a in 3:
+		var d: float = dir[a]
+		if d == 0.0:
+			continue
+		var near: float = (lo[a] - g[a]) / d if d > 0.0 else (hi[a] - g[a]) / d
+		if near > nearest:
+			nearest = near
+			axis = a
+	var entry := Vector3i.ZERO
+	if axis >= 0:
+		entry[axis] = -step[axis]
+	return entry
 
 
 static func ground_pick(origin: Vector3, dir: Vector3, forward: Vector3) -> PickResult:
