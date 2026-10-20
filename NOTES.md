@@ -9,6 +9,22 @@ Use Git history for old bug reports and removed designs.
 - 2026-10-05: Do not call `super` from `_notification()`. Godot calls each inherited version.
 - 2026-10-05: Use `NOTIFICATION_POST_ENTER_TREE` for each tree entry. `_ready()` normally runs once.
 - 2026-10-05: Wait for every worker task before cleanup. Include cancelled tasks.
+- 2026-10-19: Cancel a bounded queue before joining its producer. Otherwise, a full queue can block cleanup.
+- 2026-10-19: A detached tool's coroutine continues when it awaits the active SceneTree's `process_frame` signal.
+- 2026-10-19: `State.run_edit_job` owns the worker launch, the progress pump, and the mandatory join. The caller keeps the operation, the result, and its cancel policy.
+- 2026-10-19: `VoxelFrame.EditJob.wait_for_worker()` owns the worker wait and the `worker_task_id` reset. It never cancels the job. Call it on the main thread only. The helper and a teardown owner can both call it; the first retires the handle.
+- 2026-10-19: A per-frame document or frame check is not equal to the `edit_context_changing` signal. Moving the current frame keeps the same frame object, so the signal fires where the poll does not.
+- 2026-10-19: `VoxelEditTransaction` owns the target frame, the frozen edit context, and the start snapshots. `State.finish_edit` and `State.cancel_edit` check the handle identity, so a stale handle cannot finish or roll back a newer edit.
+- 2026-10-19: `State.begin_edit()` returns null while an edit is active. A caller must check the handle before it mutates the model or marks a stroke active. An unchecked null call blocks every later edit.
+- 2026-10-19: A tool must clear its own edit handle before it calls `State.finish_edit` or `State.cancel_edit`. State clears the active handle before the history and restore signals, so a handler that opens a new stroke keeps its own handle.
+- 2026-10-19: `edit_context_changing` also stops an open Box or Lasso drag. The drag releases its own edit, so a Delete or Cut during the drag can start its own edit. The stale mouse release then commits nothing.
+- 2026-10-19: A cleanup that captures an operation id or a handle must clear the field before it calls `State.cancel_edit` or `State.finish_edit`. The restore and history signals can start a replacement operation, so a later read of the field would finish the replacement.
+- 2026-10-19: An inline edit records no operation. A history or selection handler can therefore start a new streamed edit on the same tool, because `edit_busy()` is false. The finalizer must capture its handle, operation, and source and clear the fields before the signal.
+- 2026-10-19: `_exit_tree()` and `NOTIFICATION_EXIT_TREE` run while `is_inside_tree()` is still true. The `tree_exited` signal runs after the node leaves the tree, when it is false. Release a subscription that a detach must drop from `tree_exited`, not from `_exit_tree`.
+- 2026-10-19: A tool's worker branch can await `State.run_edit_job` instead of pumping the worker in `_process`. The helper runs on State, so the completion, the progress, and the join continue after a tool switch detaches the node. `_process` then keeps only the hover.
+- 2026-10-19: A tool switch calls an explicit `finish_on_switch()` before the plugin removes the node. `_exit_tree` runs after the removal, when `get_viewport()` is null, so a selection outline must be applied while the tool is still attached.
+- 2026-10-19: A subscription that must outlive a detach stays connected while a job or edit is pending, and the work releases it only when the node is outside the tree and idle. The `edit_context_changing` and `history_changed` connections outlive a switch, so a frame or document change still cancels a detached result. `_settings.changed` may drop with the tree, because it only refreshes the hover cursor.
+- 2026-10-19: `BrushPlugin._on_settings_changed` runs after `_settings.mode` changed. The open stroke keeps its captured `_erase_existing`, so the commit still labels the action with the mode the stroke started in.
 - 2026-08-24: An overridden `_ready()` does not call its base version automatically. Connect shared setup to `ready` in `_init()`.
 - 2026-08-23: Connect signals to node methods when the receiver can be freed. Lambdas can retain access to freed nodes.
 - 2026-08-21: Lambdas capture local values. Use members or arrays for state that a lambda must change.
@@ -26,9 +42,13 @@ Use Git history for old bug reports and removed designs.
 - 2026-10-17: Dictionary iteration order is hash based. Sort the keys before remapping ids for deterministic serialization.
 - 2026-10-18: A `PackedInt64Array` works as a Dictionary key with content equality and hashing. `Array[PackedInt64Array]` supports content `has()` and `erase()`.
 - 2026-10-18: A packed array passes by reference. An in-place write after a Dictionary holds it corrupts the key. Only a `duplicate()` may change.
+- 2026-10-19: A new `class_name` script needs a global class cache entry. Run `godot --headless --path . --import` once after adding it. A headless scene run alone does not refresh the cache and fails to resolve the type.
+- 2026-10-19: The suite runner discovers every `tests/*.tscn` by name. A new test scene needs no `run_all.gd` change.
 
 ## UI and input
 
+- 2026-10-19: `Label.OVERRUN_TRIM_ELLIPSIS` reduces the text minimum width. Use font metrics for a bounded preferred width.
+- 2026-10-19: Godot 4.7.2 containers respect `Control.custom_maximum_size`. A maximum can cap an expanding job status widget.
 - 2026-08-22: Unique node names belong to their owner scene. Resolve subscene names from the subscene instance.
 - 2026-08-16: Use `MenuButton.get_popup()`. Connect the popup's `id_pressed` signal after the button is ready.
 - 2026-09-09: Set popup checkmarks in the handler. Clicking an item does not toggle its stored state.
@@ -59,6 +79,8 @@ Use Git history for old bug reports and removed designs.
 - 2026-08-16: Remove style overrides with `remove_theme_stylebox_override()`. Do not replace them with null.
 - 2026-10-17: `String.capitalize()` capitalizes every word. It does not produce sentence case.
 - 2026-10-17: A Control below a Node3D draws over its viewport's 3D content. A CanvasLayer at -1 draws behind it.
+- 2026-10-19: `State.update_operation` takes a diagnostic phase, not a label. The `Operation.label` from `begin_operation` stays the artist action. The job widget shows that label, a measured percentage, or `Cancelling…`. It shows no worker stage or count.
+- 2026-10-19: `Input.use_accumulated_input` defaults to true in this build. A real device therefore sends at most one motion per render frame.
 
 ## Assets and files
 
@@ -138,6 +160,18 @@ Use Git history for old bug reports and removed designs.
 - 2026-10-18: `VoxelRenderer._process` averages about 0.2 ms per frame headless and about 1 ms windowed. It stays near the 3 ms budget.
 - 2026-10-18: A headless renderer frame excludes the GPU upload, so its install cost is far below the windowed cost.
 - 2026-10-18: A chunk build costs about 10 ms and a snapshot about 2 ms. The surface jobs set the visible completion, not the frame gap.
+- 2026-10-18: The selection outline scan cost about 10 us per selected cell before the shared-neighbor change. It took 86 ms for 8192 cells and 669 ms for 65536 cells. The line merge took about 0.2 to 0.4 ms.
+- 2026-10-18: The shared-neighbor outline scan costs about 2 us per cell on a dense shape, about 7 us on a striped one, and about 12 us on a scattered one. It cut the dense 8192-cell outline from 87 ms to 20 ms and the 65536-cell outline from 678 ms to 134 ms.
+- 2026-10-18: A cell with all six face neighbors present has no outline edge. Skipping it before the twelve edge tests cut the dense 8192-cell outline from 36 ms to 20 ms.
+- 2026-10-18: An outline edge is always two units long. Storing only its run start lets a native `Array.sort()` replace the comparator sort over `Vector2i` runs.
+- 2026-10-18: A packed array passed as a function argument shares its buffer. An in-place append inside the callee reaches the caller.
+- 2026-10-18: `VoxelPreview.INLINE_OUTLINE_LIMIT` bounds the main-thread outline build. `OUTLINE_DELAY_LIMIT` is separate and debounces a large outline. A 216-cell outline builds inline in about 1.4 ms. A 4096-cell outline completes asynchronously in about 22 ms headless.
+- 2026-10-18: A preview outline request hashes every cell key and deep-copies the selection on the main thread. Both run on a memory-cache hit too. They cost about 1.4 ms for 8192 cells and about 11 ms for 65536 cells.
+- 2026-10-19: The fill notification cadence is an OR. It emits when the frame count or the microsecond interval elapses, so the shorter of the two sets the effective cadence.
+- 2026-10-19: Four viewports and one viewport issue very different request counts, but the shared surface job map starts about the same number of builds for both.
+- 2026-10-19: A streamed fill can build a chunk surface and then supersede it before any viewport installs it. Those builds show no progress.
+- 2026-10-19: A coarser fill cadence cut the wasted builds, but it did not consistently shorten the visible completion on the 32768- and 65536-cell fills.
+- 2026-10-19: The fill notification cadence stays at 3 frames or 20000 us. The coarser candidates did not win on completion, so the baseline is kept.
 
 ## Threading
 
@@ -149,6 +183,7 @@ Use Git history for old bug reports and removed designs.
 - 2026-10-18: `add_group_task()` gives each call an index from an atomic counter. Workers pull the next index, so the work balances without a fixed split.
 - 2026-10-18: `WorkerThreadPool.get_thread_count()` is not bound to GDScript. Use `OS.get_processor_count()` as the proxy.
 - 2026-10-18: A low-priority task cannot use most of the threads. Surface builds that pass `high_priority = false` run on about 30 percent of the pool.
+- 2026-10-18: Every edit job is one pool task. A large erase or outline scan therefore runs on one thread. Only the chunk surface builds split across threads.
 
 ## Materials and export
 
@@ -208,6 +243,50 @@ Use Git history for old bug reports and removed designs.
 - 2026-09-09: Emit state signals from undo callbacks. The UI does not observe `UndoRedo.version_changed`.
 - 2026-10-18: `UndoRedo` signals only `undo()` and `redo()` calls. Emit `State.history_changed` after every commit to refresh the history buttons.
 - 2026-09-07: Selection does not support Shift-to-add. The Clear button stays enabled for an empty selection.
+- 2026-10-18: `Chunk._compact()` walks the whole grid, sorts the used ids, and rebuilds the table. A 1024-entry table took about 758 us.
+- 2026-10-18: A batch that covers every slot of a chunk takes the bulk fill path in `set_cells`. A batch that covers every occupied cell of a partly filled chunk takes the per-cell path, and the frame still drops the chunk.
+- 2026-10-18: The erase write path compacts at most once per chunk. The table never grows on an erase, so the end state is the same. A chunk the batch emptied needs no compaction at all.
+- 2026-10-18: `EraseJob` shares one transparent material across the selection. The old per-cell allocation cost 5.0 ms for 8000 cells and 22.6 ms for 32768 cells. The shared material costs 1.0 ms and 5.5 ms.
+- 2026-10-18: An erase that empties a chunk removed the chunk only after copying it, zeroing the grid, and compacting the table. The frame drops the chunk, so all three steps were discarded work.
+- 2026-10-18: An erase of an 8000-cell block fell from 36 ms to 15 ms. A 32768-cell block fell from 58 ms to 30 ms.
+- 2026-10-18: An erase A/B over 64 one-cell chunks fell from 42 ms to 1.1 ms. Each emptied chunk paid a full-grid compaction before the change.
+- 2026-10-18: The erase compaction for a 4096-entry chunk fell from about 2.4 ms to about 1.1 ms. The old loop compacted more than once per chunk.
+- 2026-10-18: `_chunks_equal` compares the packed grid and the material table first. A recolor keeps the cell count, so it falls through to the element compare. That took 2.7 ms for a full 16-cube chunk.
+- 2026-10-18: A connected fill search cost about 2.6 us per visited cell before the shared search. A disconnected scan cost about 1.5 us per occupied cell.
+- 2026-10-19: The fill and the wand share `VoxelRegionSearch`. `WandJob` extends `VoxelFrame.EditJob` directly, so the selection plugin no longer depends on the fill plugin.
+- 2026-10-19: A property read on another object inside a hot loop costs more than an index into a local. Holding a chunk's grid and material arrays in locals cut the sparse occupied-cell scan from 2905 us to 1598 us over 1000 cells.
+- 2026-10-19: A material-id match cache pays only when a chunk holds clearly more cells than table entries. A chunk written cell by cell holds one entry per cell, and the cache then costs more than the compare it replaces.
+- 2026-10-19: The search writes the caller's value during the walk, so the fill needs no conversion pass. Over 8192 cells the separate pass cost about 900 us.
+- 2026-10-19: The shared search cut the occupied-cell scan on an 8192-cell block from 12.6 ms to 4.1 ms and the connected flood from 21.1 ms to 18.0 ms.
+- 2026-10-19: A tiny connected search costs 1 to 2 us more than the frozen search, because the shared search tests the seed. Its absolute cost is 7 to 9 us.
+- 2026-10-19: One job checkpoint costs about 4.6 us, because it locks a mutex. One check per chunk bounded the cancel wait of a sparse 125-chunk scan at 4.5 percent of its cost.
+- 2026-10-19: Inline chunk-grid indexing reduced dense connected-search medians by about 23 percent, without visited-mask allocations.
+- 2026-10-19: Pure byte-mask, bit-mask, and naive scanline prototypes were slower than the existing connected flood on dense fixtures.
+- 2026-10-19: On 8192- and 32768-cell blocks, faster connected searches did not reduce measured fill completion time.
+- 2026-10-19: Unrestricted fill batches repeated occupancy and full-material checks that the search already guaranteed. The identity-context shortcut removes those checks.
+- 2026-10-19: That expansion costs about twice the connected search kernel. On a uniform block it read 30 ms against a 14 ms kernel at 8192 cells, and 127 ms against a 60 ms kernel at 32768 cells.
+- 2026-10-19: A fill job with the edit context read 230 ms at 32768 cells. The same job without the context read 89 ms. The difference is the per-cell expansion.
+- 2026-10-19: Before shared-row writes, 512-cell slices cost 63 ms for 32768 cells. A whole-batch write cost 16 ms.
+- 2026-10-19: Removing redundant filtering left the measured 8192-cell fill near 58 ms. Main-thread write slices consumed the available frame budget.
+- 2026-10-19: An identity-context fill recorded zero `has` and `matches` calls. Non-empty selections and symmetry retained the filters.
+- 2026-10-19: Skipping that redundant fill filter cut the atomic job from 52.3 to 20.6 ms and the streamed worker from 52.7 to 17.4 ms on an 8192-cell block. The A/B alternated nine samples with two warmups in one process.
+- 2026-10-19: A non-empty selection keeps the fill expansion, because the search adds its seed without a mask test. The context must drop a seed that the selection excludes.
+- 2026-10-19: A nonzero symmetry axes keeps the fill expansion. A reflected cell of the same color but a different full material was rejected by the context, so the reflected filter is load-bearing.
+- 2026-10-19: Declared-uniform partial writes use one new row only on chunks that already share rows. Unshared chunks retain in-place writes.
+- 2026-10-19: Three 512-cell repaints on a bulk chunk fell from 2832 to 1867 us with shared-row writes.
+- 2026-10-19: Those repaints left four material rows instead of 1537. Per-cell and mixed-table fixtures retained their original path.
+- 2026-10-19: On bulk-built 32768-cell blocks, the windowed fill edit median fell from 243.3 to 187.6 ms. Surface completion fell from 278.5 to 243.9 ms.
+- 2026-10-19: The shared-row write cut the 8192-cell fill edit from 58.5 to 43.1 ms. The surface settle stayed the same.
+- 2026-10-19: An empty replacement keeps the per-cell erase path. The shared-row path runs only for a non-empty declared material.
+- 2026-10-19: `VoxelFrame.capture()` marks the source chunks shared, so the next write copies a chunk before it mutates. A renderer snapshot therefore keeps the state at capture time and never sees a later edit.
+- 2026-10-19: Short fills can finish before the first surface installs. Use a larger fixture to verify partial repaint feedback.
+- 2026-10-19: The partial shared-row write applies only to a chunk that already shares rows. An unshared chunk keeps the per-cell path, which writes each row in place. This avoids a table append and a full-grid compaction on a chunk with few occupied cells.
+- 2026-10-19: An unrestricted shared-row prototype slowed three unshared one-cell repaints from 29 to 253 us. Retain in-place writes there.
+- 2026-10-19: A scalar last-id match cache beat a per-id dictionary and no cache on a shared chunk. It read 1894 us against 2050 us for the dictionary and 2041 us for no cache over three 512-cell repaints.
+
+- 2026-10-19: A 32768-cell streamed fill notified 13 times and requested 250 chunk rebuilds. One chunk was rebuilt up to nine times. The renderer shared the builds, and the publication added about 50 to 70 ms over the edit-only wall.
+- 2026-10-19: The editor viewport alone and all four renderers settled in the same time on an 8192-cell fill (about 83 ms each). Renderer count does not drive the fill cost.
+
 
 ## Tests and processes
 
@@ -246,6 +325,10 @@ Use Git history for old bug reports and removed designs.
 - 2026-08-23: Use `OS.execute_with_pipe(..., false)` for nonblocking output capture and a process ID.
 - 2026-10-16: Drain child output pipes to prevent blocking. Alternatively, capture Godot output with `--log-file`.
 - 2026-10-16: Windows can reuse process IDs. Do not rely on a reused ID alone to identify a finished child.
+- 2026-10-18: `tests/outline_parity.tscn` compares the live outline builder with the frozen copy in `tests/outline_reference.gd`. It covers every nonempty 2x2x2 mask, representative and random shapes, and warmed A/B medians.
+- 2026-10-18: `tests/erase_parity.tscn` compares the live erase path with the frozen copy in `tests/erase_reference.gd`. It covers eleven erase shapes, six mixed erase and write batches, warmed A/B medians, compaction attribution, a captured whole-chunk removal, cancellation at a counted checkpoint, and undo.
+- 2026-10-18: A mouse release consumed in `Node._input` never reaches the GUI. The GUI keeps its mouse focus on the pressed Control and sends every later motion there, so a control that swallows the release freezes the viewport cursor.
+- 2026-10-18: A pushed mouse motion does not re-run the GUI hit test. It goes to the Control of the last press, and a motion with no earlier press reaches no Control. Drive GUI drag tests through a press, which sets the pointer capture.
 - 2026-10-18: `OS.get_cmdline_user_args()` returns the arguments after `--`. The suite runner passes test names to a multi-test child scene that way.
 - 2026-10-18: A test file can register several tests. Each test runs in turn with its own report section, checks, and timeout. An empty name request runs every test.
 - 2026-10-18: Merging the four tag and frame scenes into one multi-test file cut the windowed five-scene run from 33082 ms to 23435 ms.
