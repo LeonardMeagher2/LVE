@@ -182,6 +182,6 @@ func _key(tool: Node, code: Key) -> void:
 
 func _settle(tool: Node) -> void:
 	tick_count = 0
-	while tool._job or tool._stroke_open or (tool == line_tool and (line_tool._preview_requested or line_tool._commit_requested)):
+	while tool._job or tool._edit != null or (tool == line_tool and (line_tool._preview_requested or line_tool._commit_requested)):
 		tick_count += 1
 		await get_tree().process_frame

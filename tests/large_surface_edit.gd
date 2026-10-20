@@ -18,14 +18,14 @@ func _run() -> void:
 	step("Given a quarter-million-voxel frame", func():
 		State.document = VoxelDocument.new()
 		State.paint(Vector3i.ZERO, VoxelFrame.material(Color.RED))
-		State.begin_stroke()
+		var tx := State.begin_edit()
 		var colors := {}
 		for z in 64:
 			for y in 64:
 				for x in 64:
 					colors[Vector3i(x, y, z)] = VoxelFrame.material(Color.RED)
 		State.get_current_voxel_frame().set_cells(colors)
-		State.end_stroke()
+		State.finish_edit(tx)
 		State.selection_changed.emit()
 		large = State.get_current_voxel_frame()
 		renderer = load("res://ui/Viewport/VoxelRenderer.tscn").instantiate()

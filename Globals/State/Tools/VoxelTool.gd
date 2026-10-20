@@ -6,6 +6,9 @@ var _last_target := VoxelPicking.NONE
 var _stroke_active := false
 var _cells_dirty := false
 var _affected: Array[Vector3i] = []
+# The tool's owned edit handle, or null. The handle stays with the tool for the
+# whole edit, so a cancel can only roll back this tool's own edit.
+var _edit: VoxelEditTransaction
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -51,9 +54,13 @@ func handle_input(event: InputEvent, pos: Vector2) -> bool:
 		if mb.button_index != MOUSE_BUTTON_LEFT:
 			return false
 		if mb.pressed:
-			begin_stroke()
+			if _stroke_active:
+				return true
+			if open_stroke() == null:
+				return false
 			var pick := _pick_start(origin, dir)
-			if not pick:
+			if pick == null:
+				abort_stroke()
 				return false
 			_plane = pick.plane
 			_last_target = pick.target
@@ -124,10 +131,12 @@ func applied_cells(target: Vector3i, hit: Vector3i) -> Array[Vector3i]:
 
 func _end() -> void:
 	_flush_cells()
-	end_stroke()
+	# Clear the input state before the close signals, so a handler that opens a new
+	# stroke keeps its own input state.
 	_plane = null
 	_last_target = VoxelPicking.NONE
 	_stroke_active = false
+	close_stroke()
 
 
 func _flush_cells() -> void:
@@ -145,16 +154,38 @@ func _do_flush() -> void:
 	_affected.clear()
 
 
-func begin_stroke() -> void:
-	State.begin_stroke()
+# Open this tool's owned edit. Returns null when an edit is already active or the
+# current frame is missing. The caller must not mutate the model or mark a stroke
+# active until this returns non-null. A retained handle that a document reset
+# closed is dropped, so the tool acquires a fresh edit when State allows.
+func open_stroke() -> VoxelEditTransaction:
+	if _edit != null and _edit.is_closed():
+		_edit = null
+	if _edit == null:
+		_edit = State.begin_edit()
+	return _edit
 
 
-func end_stroke() -> void:
-	State.end_stroke()
+# Close this tool's edit and record it as one history action. The tool handle is
+# cleared before the call, so a handler that opens a new stroke during the history
+# signal keeps its own handle.
+func close_stroke(action: String = "Stroke") -> void:
+	var tx := _edit
+	if tx == null:
+		return
+	_edit = null
+	State.finish_edit(tx, action)
 
 
-func cancel_stroke() -> void:
-	State.cancel_stroke()
+# Roll this tool's edit back. Does nothing when the tool holds no edit. The tool
+# handle is cleared before the call, so a handler that opens a new stroke during
+# the restore signal keeps its own handle.
+func abort_stroke() -> void:
+	var tx := _edit
+	if tx == null:
+		return
+	_edit = null
+	State.cancel_edit(tx)
 
 
 func _pick_start(origin: Vector3, dir: Vector3) -> PickResult:

@@ -121,9 +121,9 @@ func _run() -> void:
 	step("When shared files contain invalid document data", _check_invalid_documents)
 	step("Then failed document opening preserves the current document and undo history", func():
 		var previous := State.document
-		State.begin_stroke()
+		var tx := State.begin_edit()
 		State.paint(Vector3i(100, 0, 0), VoxelFrame.material(Color.GREEN))
-		State.end_stroke()
+		State.finish_edit(tx)
 		menu._on_file_opened(prefix + "_invalid.lve")
 		menu.get_node("FileError").hide()
 		expect(State.document == previous and State.undo_redo.has_undo(), "failed opening preserves the document and history")

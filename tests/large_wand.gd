@@ -8,7 +8,7 @@ const MARKER := Vector3i(64, 0, 0)
 
 func _ready() -> void:
 	timeout = 30.0
-	test("large wand selections publish one complete result with undo and context cancellation", _run)
+	test("large wand selections publish progressive results with undo and context cancellation", _run, "large_wand")
 
 
 func _run() -> void:
@@ -29,15 +29,18 @@ func _run() -> void:
 	)
 	step("When the user selects the connected red block", func():
 		tool._settings.connected = true
+		tool._settings.mode = tool._settings.SelectMode.REPLACE
 		tool._commit(Vector3i.ZERO)
 		expect(State.edit_busy(), "the large wand reports foreground work")
-		expect(State.selection.count() == 1, "the selection remains unchanged while the wand prepares")
+		# Replace starts from an empty selection while the captured snapshot keeps undo.
+		expect(not State.selection.contains(MARKER), "Replace removes the prior marker before adding streamed matches")
 	)
 	await _settle()
 	step("Then the connected selection is one complete undoable result", func():
 		expect(State.selection.count() == 5832, "the connected block contains all its voxels")
 		expect(not State.selection.contains(Vector3i(96, 0, 0)), "the disconnected red voxel stays unselected")
-		expect(notifications == 1, "the wand publishes one selection notification")
+		# A large wand selection publishes as it streams, so it sends more than one.
+		expect(notifications >= 1, "the wand publishes at least one selection notification")
 		expect(source.get_color(Vector3i.ZERO) == Color.RED and source.count() == 5834, "the wand preserves the source voxels")
 		State.undo_redo.undo()
 		expect(State.selection.count() == 1 and State.selection.contains(MARKER), "one undo restores the prior selection")

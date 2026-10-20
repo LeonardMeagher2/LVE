@@ -13,18 +13,41 @@ var _preview_result: BrushJob
 
 func _enter_tree() -> void:
 	super._enter_tree()
-	State.cells_changed.connect(_on_cells_changed)
-	State.chunks_changed.connect(_on_cells_changed)
-	State.selection_changed.connect(_cancel_edit)
-	State.floor_plane_changed.connect(_cancel_edit)
+	if not State.cells_changed.is_connected(_on_cells_changed):
+		State.cells_changed.connect(_on_cells_changed)
+	if not State.chunks_changed.is_connected(_on_cells_changed):
+		State.chunks_changed.connect(_on_cells_changed)
+	if not State.selection_changed.is_connected(_cancel_edit):
+		State.selection_changed.connect(_cancel_edit)
+	if not State.floor_plane_changed.is_connected(_cancel_edit):
+		State.floor_plane_changed.connect(_cancel_edit)
 
 
 func _exit_tree() -> void:
 	super._exit_tree()
-	State.cells_changed.disconnect(_on_cells_changed)
-	State.chunks_changed.disconnect(_on_cells_changed)
-	State.selection_changed.disconnect(_cancel_edit)
-	State.floor_plane_changed.disconnect(_cancel_edit)
+	# The line preview owns a raw worker that `_process` pumps. `_process` stops on
+	# a detach, so the preview is discarded and its worker joined here.
+	if _job:
+		_job.cancel()
+		_job.wait_for_worker()
+		_job = null
+	State.finish_operation(_operation_id)
+	_operation_id = 0
+	if State.cells_changed.is_connected(_on_cells_changed):
+		State.cells_changed.disconnect(_on_cells_changed)
+	if State.chunks_changed.is_connected(_on_cells_changed):
+		State.chunks_changed.disconnect(_on_cells_changed)
+	if State.selection_changed.is_connected(_cancel_edit):
+		State.selection_changed.disconnect(_cancel_edit)
+	if State.floor_plane_changed.is_connected(_cancel_edit):
+		State.floor_plane_changed.disconnect(_cancel_edit)
+	# `tree_exited` releases the context subscriptions after this exit.
+
+
+# The line keeps its preview discard policy. Only the stroke tool commits on a
+# switch, so the line drops its pending preview.
+func finish_on_switch() -> void:
+	_cancel_edit()
 
 
 func handle_input(event: InputEvent, pos: Vector2) -> bool:
@@ -229,10 +252,12 @@ func _commit_line() -> void:
 	_cancel_edit()
 	if not context_valid:
 		return
-	State.begin_stroke()
+	var tx := State.begin_edit()
+	if tx == null:
+		return
 	frame.restore(job.edited_frame.capture())
 	State.document._bounds_dirty = true
-	State.end_stroke("Line")
+	State.finish_edit(tx, "Line")
 	if not job.changed_chunks.is_empty():
 		State.chunks_changed.emit(State.current_frame, job.changed_chunks)
 

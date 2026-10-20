@@ -23,6 +23,13 @@ func add(cell_position: Vector3i) -> void:
 	_selected_cells[cell_position] = true
 
 
+func erase(cell_position: Vector3i) -> void:
+	if not _selected_cells.has(cell_position):
+		return
+	_make_writable()
+	_selected_cells.erase(cell_position)
+
+
 func contains(cell_position: Vector3i) -> bool:
 	return _selected_cells.has(cell_position)
 

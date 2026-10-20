@@ -1,6 +1,7 @@
 [gd_scene format=3 uid="uid://dnkuglr7qodru"]
 
 [ext_resource type="Script" uid="uid://bjdwtcqqauyrc" path="res://ui/StatusBar/status_bar.gd" id="1_status"]
+[ext_resource type="PackedScene" path="res://ui/JobStatus/job_status.tscn" id="2_activity"]
 
 [sub_resource type="LabelSettings" id="LabelSettings_denks"]
 font_color = Color(1, 1, 1, 0.3372549)
@@ -16,24 +17,8 @@ label_settings = SubResource("LabelSettings_denks")
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="Activity" type="HBoxContainer" parent="." unique_id=1873723029]
-visible = false
+[node name="Activity" parent="." instance=ExtResource("2_activity")]
 layout_mode = 2
-
-[node name="ActivityLabel" type="Label" parent="Activity" unique_id=321452622]
-layout_mode = 2
-label_settings = SubResource("LabelSettings_denks")
-
-[node name="ActivityProgress" type="ProgressBar" parent="Activity" unique_id=791790755]
-custom_minimum_size = Vector2(100, 12)
-layout_mode = 2
-size_flags_vertical = 4
-show_percentage = false
-
-[node name="Cancel" type="Button" parent="Activity" unique_id=1138013306]
-visible = false
-layout_mode = 2
-text = "Cancel"
 
 [node name="StatusRight" type="Label" parent="." unique_id=424105243]
 layout_mode = 2

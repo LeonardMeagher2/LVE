@@ -52,7 +52,7 @@ func save_doc(path: String) -> Error:
 		return ERR_INVALID_DATA
 	var preview: Image
 	if path.get_extension().to_lower() == "png":
-		var operation := State.begin_operation("Rendering document preview", -1, true, self)
+		var operation := State.begin_operation("Rendering preview", -1, true, self)
 		preview = await VoxelImageRenderer.render_document_preview(document)
 		State.finish_operation(operation)
 		if State.document != document:

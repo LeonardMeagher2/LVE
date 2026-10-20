@@ -8,6 +8,9 @@ const CLICK_SIZE := 7.0
 var _settings := preload("../settings.tres")
 
 var _screen_press := Vector2.ZERO
+# The last pointer position a press or drag reported. A tool switch uses it to
+# apply the current outline as a release would.
+var _last_pos := Vector2.ZERO
 var _screen_job: ScreenSelection.Job
 var _screen_operation_id := 0
 var _screen_document: VoxelDocument
@@ -15,29 +18,56 @@ var _screen_frame: VoxelFrame
 
 
 func _enter_tree() -> void:
-	# A tool switch can interrupt a drag. Start the entry clean.
+	# A tool switch can interrupt a drag. Start the entry clean. The guarded
+	# connects keep a re-entry free of a duplicate subscription. `tree_exited` runs
+	# after the node leaves the tree, where `_exit_tree` still reports it inside.
 	_stroke_active = false
 	$ScreenBand.hide_band()
-	State.edit_context_changing.connect(_cancel_screen_job)
+	if not tree_exited.is_connected(_release_context_subscriptions):
+		tree_exited.connect(_release_context_subscriptions)
+	if not State.edit_context_changing.is_connected(_cancel_screen_job):
+		State.edit_context_changing.connect(_cancel_screen_job)
+
+
+func _notification(what: int) -> void:
+	if what != NOTIFICATION_PREDELETE:
+		return
+	# A freed node cannot await, so it cancels and joins its own screen job here.
+	# `wait_for_worker` is idempotent, so the runner's own join never double-waits.
+	var job := _screen_job
+	_screen_job = null
+	if job != null:
+		job.cancel()
+		job.wait_for_worker()
+	State.finish_operation(_screen_operation_id)
+	_screen_operation_id = 0
+	_screen_document = null
+	_screen_frame = null
+	var tx := _edit
+	_edit = null
+	if tx != null:
+		State.cancel_edit(tx)
+	_release_context_subscriptions()
 
 
 func _exit_tree() -> void:
+	# A pending calculation keeps its own continuation and its context subscription,
+	# so the detach does not cancel it. The plugin finalizes a held drag before it
+	# removes this node. The streamed wand keeps its own policy. `tree_exited`
+	# releases the context subscription once no calculation is pending.
+	if _screen_job != null:
+		return
 	_cancel_screen_job()
-	if _screen_job and _screen_job.worker_task_id != -1:
-		WorkerThreadPool.wait_for_task_completion(_screen_job.worker_task_id)
-	_screen_job = null
-	State.edit_context_changing.disconnect(_cancel_screen_job)
 
 
-func _process(_delta: float) -> void:
-	if _screen_job == null:
+# Release the context subscription only when no calculation is pending and the node
+# is outside the tree. A pending job keeps it, so a frame or document change can
+# still cancel its result.
+func _release_context_subscriptions() -> void:
+	if is_inside_tree() or _screen_job != null:
 		return
-	if not WorkerThreadPool.is_task_completed(_screen_job.worker_task_id):
-		var progress := _screen_job.progress()
-		State.update_operation(_screen_operation_id, progress[1], progress[2], progress[0])
-		return
-	WorkerThreadPool.wait_for_task_completion(_screen_job.worker_task_id)
-	_finish_screen_selection()
+	if State.edit_context_changing.is_connected(_cancel_screen_job):
+		State.edit_context_changing.disconnect(_cancel_screen_job)
 
 
 func handle_input(event: InputEvent, pos: Vector2) -> bool:
@@ -52,12 +82,35 @@ func handle_input(event: InputEvent, pos: Vector2) -> bool:
 	return false
 
 
+# A screen tool does not stream a selection. The wand overrides this.
+func is_streaming() -> bool:
+	return false
+
+
+# Drop the shape a stopped drag was building. The box tool holds no shape state.
+func _reset_shape() -> void:
+	pass
+
+
+# Stop a drag that still holds the pointer. The context changed under the drag, so
+# the tool releases its own edit and drops the shape. The eventual release must
+# not commit the stale drag.
+func _stop_drag() -> void:
+	_stroke_active = false
+	_screen_press = Vector2.ZERO
+	_reset_shape()
+	$ScreenBand.hide_band()
+	abort_stroke()
+
+
 func _screen_button(event: InputEventMouseButton, pos: Vector2) -> bool:
 	if event.button_index != MOUSE_BUTTON_LEFT:
 		return false
 	if event.pressed:
-		begin_stroke()
+		if open_stroke() == null:
+			return false
 		_screen_press = pos
+		_last_pos = pos
 		_stroke_active = true
 		_begin_shape(pos)
 		return true
@@ -71,9 +124,24 @@ func _screen_button(event: InputEventMouseButton, pos: Vector2) -> bool:
 
 func _screen_motion(event: InputEventMouseMotion, pos: Vector2) -> bool:
 	if _stroke_active and event.button_mask & MOUSE_BUTTON_MASK_LEFT:
+		_last_pos = pos
 		_update_shape(pos)
 		return true
 	return false
+
+
+# End a drag that a tool switch interrupted. The current outline applies as a
+# release would, while the viewport and camera are still attached, and the pending
+# calculation finishes after the detach. The streamed wand keeps its own policy.
+func finish_on_switch() -> void:
+	if is_streaming():
+		return
+	if _screen_job != null or not _stroke_active:
+		return
+	_stroke_active = false
+	$ScreenBand.hide_band()
+	_end()
+	_commit_shape(_last_pos)
 
 
 func _cancel_key(event: InputEventKey) -> bool:
@@ -84,7 +152,8 @@ func _cancel_key(event: InputEventKey) -> bool:
 		$ScreenBand.hide_band()
 		_end()
 	elif _settings.mode == _settings.SelectMode.REPLACE and not State.selection.is_empty():
-		begin_stroke()
+		if open_stroke() == null:
+			return true
 		State.selection.clear()
 		State.selection_changed.emit()
 		_end()
@@ -159,31 +228,44 @@ func _commit_screen(rectangle: Rect2, polygon: PackedVector2Array) -> void:
 	_screen_job.include_empty = _settings.include_empty and bounds.has_volume()
 	_screen_job.empty_min = _cell_of(bounds.position + Vector3.ONE * 0.5)
 	_screen_job.empty_max = _cell_of(bounds.end - Vector3.ONE * 0.5)
-	var work := _screen_job.estimate_work(frame.count() + _screen_job.empty_cell_count() + State.selection.count())
+	var job := _screen_job
+	var work := job.estimate_work(frame.count() + job.empty_cell_count() + State.selection.count())
 	if work <= IMMEDIATE_LIMIT:
-		_screen_job.run()
-		_finish_screen_selection()
+		job.run()
+		_finish_screen_selection(job, _screen_operation_id)
 		return
-	_screen_operation_id = State.begin_operation("Selecting projected voxels", work, true, self)
-	_screen_job.worker_task_id = WorkerThreadPool.add_task(_screen_job.run, true, "Screen selection")
+	# A large projection runs on the worker pool. The operation carries the cancel
+	# callback, so Escape still cancels a job whose tool a switch detached. The
+	# frozen view and source let the result finish after the detach.
+	var operation_id := State.begin_operation("Selecting", work, true, self, _cancel_screen_job)
+	_screen_operation_id = operation_id
+	await State.run_edit_job(job, operation_id, "Screen selection")
+	_finish_screen_selection(job, operation_id)
 
 
 func _cell_of(point: Vector3) -> Vector3i:
 	return Vector3i(floori(point.x + 0.5), floori(point.y + 0.5), floori(point.z + 0.5))
 
 
-func _finish_screen_selection() -> void:
-	var job := _screen_job
+func _finish_screen_selection(job: ScreenSelection.Job, operation_id: int) -> void:
+	# A cancel or a replacement owns the job now, so this result is dropped.
+	if _screen_job != job:
+		return
 	_screen_job = null
-	if job.checkpoint(0) and State.document == _screen_document and State.get_current_voxel_frame() == _screen_frame:
-		State.begin_stroke()
-		State.selection.restore(job.result)
-		State.end_stroke("Screen selection")
-		State.selection_changed.emit()
-	State.finish_operation(_screen_operation_id)
-	_screen_operation_id = 0
+	var document := _screen_document
+	var frame := _screen_frame
 	_screen_document = null
 	_screen_frame = null
+	if _screen_operation_id == operation_id:
+		_screen_operation_id = 0
+	if job.checkpoint(0) and State.document == document and State.get_current_voxel_frame() == frame:
+		var tx := State.begin_edit()
+		if tx != null:
+			State.selection.restore(job.result)
+			State.finish_edit(tx, "Screen selection")
+			State.selection_changed.emit()
+	State.finish_operation(operation_id)
+	_release_context_subscriptions()
 
 
 func _cancel_screen_job() -> void:
@@ -191,5 +273,9 @@ func _cancel_screen_job() -> void:
 		_screen_job.cancel()
 	_screen_document = null
 	_screen_frame = null
+	# A context change also stops a Box or Lasso drag that still holds the pointer.
+	# The wand keeps its streamed selection and finishes after the change.
+	if not is_streaming():
+		_stop_drag()
 	State.finish_operation(_screen_operation_id)
 	_screen_operation_id = 0

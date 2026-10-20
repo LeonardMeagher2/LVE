@@ -21,9 +21,9 @@ func _run() -> void:
 		frame = State.get_current_voxel_frame()
 		frame.set_cell(Vector3i(2, 0, 0), VoxelFrame.material(Color.RED))
 		State.undo_redo.clear_history()
-		State.begin_stroke()
+		var tx := State.begin_edit()
 		frame.set_cells({Vector3i(2, 0, 0): material})
-		State.end_stroke("Material")
+		State.finish_edit(tx, "Material")
 	)
 	step("Then the material change is undoable", func():
 		expect(_same_material(Vector3i(2, 0, 0), material), "the voxel keeps its new material")

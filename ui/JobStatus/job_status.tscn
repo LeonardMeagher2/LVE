@@ -1,0 +1,61 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://ui/JobStatus/job_status.gd" id="1_job"]
+[ext_resource type="Texture2D" path="res://icons/cross.svg" id="2_cancel"]
+
+[sub_resource type="LabelSettings" id="LabelSettings_job"]
+font_color = Color(1, 1, 1, 0.3372549)
+
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_job_bg"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_job_fill"]
+bg_color = Color(0.7, 0.8, 1, 0.12)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
+
+[node name="JobStatus" type="HBoxContainer"]
+visible = false
+size_flags_horizontal = 3
+script = ExtResource("1_job")
+
+[node name="Job" type="Control" parent="."]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+
+[node name="ActivityProgress" type="ProgressBar" parent="Job"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+show_percentage = false
+theme_override_styles/background = SubResource("StyleBoxEmpty_job_bg")
+theme_override_styles/fill = SubResource("StyleBoxFlat_job_fill")
+
+[node name="ActivityLabel" type="Label" parent="Job"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+vertical_alignment = 1
+text_overrun_behavior = 3
+label_settings = SubResource("LabelSettings_job")
+
+[node name="Cancel" type="Button" parent="."]
+visible = false
+layout_mode = 2
+tooltip_text = "Cancel operation"
+icon = ExtResource("2_cancel")
+icon_alignment = 1
+
+[node name="Delay" type="Timer" parent="."]
+one_shot = true
+wait_time = 0.2

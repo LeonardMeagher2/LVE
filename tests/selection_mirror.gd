@@ -60,9 +60,9 @@ func _run() -> void:
 		expect(State.selection.count() == 8, "redo restores the symmetric selection")
 	)
 	step("When the user paints inside the symmetric selection", func():
-		State.begin_stroke()
+		var tx := State.begin_edit()
 		State.paint(middle_cell, VoxelFrame.material(Color.BLUE))
-		State.end_stroke()
+		State.finish_edit(tx)
 	)
 	step("Then drawing respects both selected regions", func():
 		frame = State.get_current_voxel_frame()

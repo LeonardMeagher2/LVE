@@ -355,12 +355,7 @@ func import_palette(path: String) -> Error:
 	job.path = path
 	_import_job = job
 	var operation_id := State.begin_operation("Importing palette", -1, true, self)
-	job.worker_task_id = WorkerThreadPool.add_task(job.run, true, "Palette import")
-	while not WorkerThreadPool.is_task_completed(job.worker_task_id):
-		var progress := job.progress()
-		State.update_operation(operation_id, progress[1], progress[2], progress[0])
-		await get_tree().process_frame
-	WorkerThreadPool.wait_for_task_completion(job.worker_task_id)
+	await State.run_edit_job(job, operation_id, "Palette import")
 	_import_job = null
 	State.finish_operation(operation_id)
 	if State.document != document or not job.checkpoint(0):
@@ -421,5 +416,5 @@ func _exit_tree() -> void:
 	State.end_material_edit()
 	if _import_job:
 		_import_job.cancel()
-		WorkerThreadPool.wait_for_task_completion(_import_job.worker_task_id)
+		_import_job.wait_for_worker()
 	

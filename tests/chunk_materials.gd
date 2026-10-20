@@ -91,10 +91,10 @@ func _run() -> void:
 		frame.set_cell(Vector3i.ZERO, material)
 		frame.set_cell(Vector3i.RIGHT, material)
 		State.undo_redo.clear_history()
-		State.begin_stroke()
+		var tx := State.begin_edit()
 		frame.set_cell(Vector3i.ZERO, VoxelFrame.material(Color.TRANSPARENT))
 		frame.set_cell(Vector3i.ZERO, material)
-		State.end_stroke()
+		State.finish_edit(tx)
 		expect(not State.undo_redo.has_undo(), "equal voxel materials create no undo action")
 		var revision: int = frame.chunks[Vector3i.ZERO].voxel_revision
 		var changed := frame.set_cells({Vector3i.ZERO: material})

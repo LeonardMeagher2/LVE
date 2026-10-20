@@ -138,9 +138,9 @@ func _run() -> void:
 		State.selection.add(Vector3i(2, 0, 3))
 		State.selection.add(Vector3i(-2, 0, 3))
 		State.selection_changed.emit()
-		State.begin_stroke()
+		var tx := State.begin_edit()
 		State.paint(Vector3i(2, 0, 3), VoxelFrame.material(Color.GREEN))
-		State.end_stroke()
+		State.finish_edit(tx)
 	)
 	step("Then State applies symmetry within the selection", func():
 		frame = State.get_current_voxel_frame()
@@ -152,9 +152,9 @@ func _run() -> void:
 	step("Given all three axes and a voxel on the symmetry origin", func():
 		State.document = VoxelDocument.new()
 		State.symmetry_axes = 7
-		State.begin_stroke()
+		var tx := State.begin_edit()
 		State.paint(Vector3i.ZERO, VoxelFrame.material(Color.RED))
-		State.end_stroke()
+		State.finish_edit(tx)
 	)
 	step("Then coincident reflections create one voxel", func():
 		expect(State.get_current_voxel_frame().count() == 1, "reflection duplicates on the origin are removed")
@@ -229,6 +229,6 @@ func _click(world: Vector3) -> void:
 
 
 func _settle() -> void:
-	while State.edit_busy() or brush._brush_tool._stroke_open or brush._line_tool._job != null or brush._line_tool._preview_requested:
+	while State.edit_busy() or brush._brush_tool._edit != null or brush._line_tool._job != null or brush._line_tool._preview_requested:
 		await get_tree().process_frame
 	await get_tree().process_frame

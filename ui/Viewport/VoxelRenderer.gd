@@ -243,7 +243,7 @@ func _report_activity() -> void:
 		_reported_remaining = -1
 		return
 	if not State.has_operation(_operation_id):
-		_operation_id = State.begin_operation("Building surfaces", -1, false, self)
+		_operation_id = State.begin_operation("Rendering", -1, false, self)
 		_reported_remaining = -1
 	if remaining != _reported_remaining:
 		State.update_operation(_operation_id, 0, -1, "", "%d chunks remaining" % remaining)

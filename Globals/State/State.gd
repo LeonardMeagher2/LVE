@@ -28,12 +28,28 @@ const IMAGE_EXTENSIONS := ["bmp", "dds", "exr", "hdr", "jpg", "jpeg", "ktx", "kt
 var default_palette := get_builtin_palette()
 
 class Operation extends RefCounted:
+	var id := 0
+	# The artist-facing identity the owner set at begin_operation. It is stable, so
+	# the status display never changes its action name while the operation runs.
 	var label := ""
+	# The owner's current progress stage. It is diagnostic only: the status display
+	# shows the begin label, not this stage.
+	var phase := ""
 	var detail := ""
 	var completed := 0
 	var total := -1
 	var foreground := false
+	# Set when a cancel request was accepted. The owner finishes the operation, so
+	# completion stays with finish_operation.
+	var cancel_requested := false
 	var owner_ref: WeakRef
+	# An operation is cancellable only when its owner registered this callback. The
+	# capability is explicit, so a foreground operation without one stays visible and
+	# is not cancellable.
+	var _cancel_callback := Callable()
+
+	func can_cancel() -> bool:
+		return not cancel_requested and _cancel_callback.is_valid()
 
 var _operations: Dictionary[int, Operation] = {}
 var _next_operation_id := 1
@@ -50,14 +66,18 @@ class EraseJob extends VoxelFrame.EditJob:
 	func run() -> void:
 		stage("Preparing erase", selection_mask.size())
 		var changes := {}
+		# One material serves every cell. The write path only reads it, and the old
+		# loop allocated a nine-float copy for each selected cell.
+		var erased_material := VoxelFrame.material(Color.TRANSPARENT)
 		var completed := 0
 		for cell_position in selection_mask:
-			changes[cell_position] = VoxelFrame.material(Color.TRANSPARENT)
+			changes[cell_position] = erased_material
 			completed += 1
 			if completed % 4096 == 0 and not checkpoint(completed):
 				return
 		stage("Erasing selection", changes.size())
-		changed_chunks = edited_frame.set_cells(changes, self)
+		# The declared material lets a full-chunk batch skip the uniformity walk.
+		changed_chunks = edited_frame.set_cells(changes, self, erased_material)
 
 
 var playback := AnimationPlayback.new()
@@ -132,10 +152,11 @@ var _material_edit_document: VoxelDocument
 var _material_edit_before := PackedFloat32Array()
 var selection := VoxelSelection.new()
 var undo_redo := UndoRedo.new()
-var _stroke_frame: VoxelFrame
-var _stroke_start_chunks := {}
-var _stroke_start_selection := {}
-var _stroke_edit_context: VoxelFrame.EditContext
+# The one open edit, or null. It supplies the frozen edit context to drawing and
+# holds the identity a commit or a cancel must match. The owner holds the handle.
+var _active_edit: VoxelEditTransaction
+# The handle of the running erase selection coroutine.
+var _erase_edit: VoxelEditTransaction
 
 
 func _init() -> void:
@@ -175,10 +196,10 @@ func set_document(value:VoxelDocument) -> void:
 	_operations.clear()
 	_activity_started_ms = 0
 	activity_changed.emit()
-	_stroke_frame = null
-	_stroke_start_chunks = {}
-	_stroke_start_selection = {}
-	_stroke_edit_context = null
+	# The owners cancel or finish their own edit on the signal above. An owner that
+	# is not connected leaves its transaction open, so close it here. The captured
+	# frame belongs to the replaced document and must not touch the replacement.
+	_abandon_active_edit()
 	selection.clear()
 	selection_changed.emit()
 	undo_redo.clear_history()
@@ -229,7 +250,7 @@ func remove_plugin(plugin: VoxelPlugin) -> void:
 
 
 func paint(position: Vector3i, cell_material: PackedFloat32Array) -> void:
-	if symmetry_axes == 0 and _stroke_edit_context == null:
+	if symmetry_axes == 0 and _active_edit == null:
 		document.paint(current_frame, position, cell_material)
 		return
 	var context := drawing_context()
@@ -239,8 +260,14 @@ func paint(position: Vector3i, cell_material: PackedFloat32Array) -> void:
 
 
 func drawing_context() -> VoxelFrame.EditContext:
-	if _stroke_edit_context:
-		return _stroke_edit_context
+	# A stroke keeps the context it captured at begin, so a symmetry or selection
+	# change during the stroke cannot alter the cells it writes.
+	if _active_edit != null:
+		return _active_edit.edit_context
+	return _live_context()
+
+
+func _live_context() -> VoxelFrame.EditContext:
 	var context := VoxelFrame.EditContext.new()
 	context.axes = symmetry_axes
 	context.origin_twice = Vector3i(symmetry_origin * 2.0)
@@ -271,33 +298,68 @@ func selection_region(region: VoxelSelection) -> VoxelSelection:
 	return result
 
 
-func begin_operation(label: String, total: int = -1, foreground: bool = false, operation_owner: Node = null) -> int:
+func begin_operation(label: String, total: int = -1, foreground: bool = false, operation_owner: Node = null, cancel_callback: Callable = Callable()) -> int:
 	var operation := Operation.new()
 	operation.label = label
 	operation.total = total
 	operation.foreground = foreground
+	operation._cancel_callback = cancel_callback
 	if operation_owner:
 		operation.owner_ref = weakref(operation_owner)
 	if _operations.is_empty():
 		_activity_started_ms = Time.get_ticks_msec()
 	var operation_id := _next_operation_id
 	_next_operation_id += 1
+	operation.id = operation_id
 	_operations[operation_id] = operation
 	activity_changed.emit()
 	return operation_id
 
 
-func update_operation(operation_id: int, completed: int, total: int = -1, label: String = "", detail: String = "") -> void:
+# Request the cancellation of one operation. The owner runs its own cooperative
+# cancel path, so the request marks the operation and calls its callback. A second
+# request returns false, and completion stays with finish_operation. Returns true
+# when the request was accepted.
+func cancel_operation(operation_id: int) -> bool:
+	var operation: Operation = _operations.get(operation_id)
+	if operation == null or not operation.can_cancel():
+		return false
+	# Mark the request before the callback, so a repeat request is refused even when
+	# the callback defers its work.
+	operation.cancel_requested = true
+	var callback := operation._cancel_callback
+	activity_changed.emit()
+	if callback.is_valid():
+		callback.call()
+	return true
+
+
+# Cancel the cancellable foreground operation the status bar shows. Esc uses this,
+# so it still reaches a tool that a tool switch detached from the tree.
+func cancel_activity() -> bool:
+	var operation := get_activity()
+	if operation == null or not operation.foreground:
+		return false
+	# A pending cancellation already owns Esc. Report it as handled, so a repeat
+	# Escape is swallowed instead of reaching a tool's own cancel.
+	if operation.cancel_requested:
+		return true
+	return cancel_operation(operation.id)
+
+
+# Update the measured progress and the internal stage of one operation. The stage
+# and the detail are diagnostic: the status display shows only the begin label. The
+# begin label is never replaced, so a worker stage cannot change the artist action.
+func update_operation(operation_id: int, completed: int, total: int = -1, phase: String = "", detail: String = "") -> void:
 	var operation: Operation = _operations.get(operation_id)
 	if operation == null:
 		return
-	if operation.completed == completed and operation.total == total and operation.detail == detail and (label.is_empty() or operation.label == label):
+	if operation.completed == completed and operation.total == total and operation.detail == detail and operation.phase == phase:
 		return
 	operation.completed = completed
 	operation.total = total
 	operation.detail = detail
-	if not label.is_empty():
-		operation.label = label
+	operation.phase = phase
 	activity_changed.emit()
 
 
@@ -307,6 +369,26 @@ func finish_operation(operation_id: int) -> void:
 	if _operations.is_empty():
 		_activity_started_ms = 0
 	activity_changed.emit()
+
+
+# Run one edit job on the worker pool while its progress feeds the operation.
+# The caller keeps the job, the operation, the result, and its cancel policy.
+# `on_frame` runs once per pumped frame before the progress update, so a caller
+# can cancel the job when its context changes. The worker is always joined before
+# this returns, even when the operation is removed or the caller detaches. A
+# caller that waits for the worker itself retires `worker_task_id` through
+# `wait_for_worker`, and this stops without a second wait. `wait_for_worker`
+# clears the id after its own wait, so a later external wait never waits on a
+# disposed task.
+func run_edit_job(job: VoxelFrame.EditJob, operation_id: int, task_name: String, on_frame: Callable = Callable()) -> void:
+	job.worker_task_id = WorkerThreadPool.add_task(job.run, true, task_name)
+	while job.worker_task_id >= 0 and not WorkerThreadPool.is_task_completed(job.worker_task_id):
+		if on_frame.is_valid():
+			on_frame.call()
+		var progress := job.progress()
+		update_operation(operation_id, progress[1], progress[2], progress[0])
+		await get_tree().process_frame
+	job.wait_for_worker()
 
 
 func has_operation(operation_id: int) -> bool:
@@ -334,50 +416,62 @@ func edit_busy(requester: Node = null) -> bool:
 	return false
 
 
-func begin_stroke() -> void:
-	_stroke_edit_context = null
-	_stroke_edit_context = drawing_context()
-	_stroke_frame = get_current_voxel_frame()
-	_stroke_start_chunks = _stroke_frame.capture()
-	_stroke_start_selection = selection.capture()
+# Begin one owned edit on the current frame. The transaction captures the frame,
+# the selection, and the frozen edit context. Returns null when an edit is already
+# active or the current frame is missing, so a caller must check before it mutates
+# the model. The caller holds the returned handle for the whole edit.
+func begin_edit() -> VoxelEditTransaction:
+	if _active_edit != null:
+		return null
+	var frame := get_current_voxel_frame()
+	if frame == null:
+		return null
+	_active_edit = VoxelEditTransaction.begin(document, frame, selection, _live_context())
+	return _active_edit
 
 
-func end_stroke(action: String = "Stroke") -> void:
-	if _stroke_frame == null:
+func active_edit() -> VoxelEditTransaction:
+	return _active_edit
+
+
+# Close one owned edit and record its change as one history action. A stale handle
+# that no longer owns the active edit does nothing, so a cancelled edit can never
+# finish a newer one or roll back a newer document.
+func finish_edit(tx: VoxelEditTransaction, action: String = "Stroke") -> void:
+	if tx == null or tx != _active_edit:
 		return
-	var stroke_end_chunks := _stroke_frame.capture()
-	if not _chunks_equal(_stroke_start_chunks, stroke_end_chunks) or _stroke_start_selection != selection.all_cells():
-		undo_redo.create_action(action)
-		undo_redo.add_undo_method(_restore_chunks.bind(_stroke_frame, _stroke_start_chunks, _stroke_start_selection))
-		undo_redo.add_do_method(_restore_chunks.bind(_stroke_frame, stroke_end_chunks, selection.capture()))
-		_commit_history(false)
-	_stroke_frame = null
-	_stroke_start_chunks = {}
-	_stroke_start_selection = {}
-	_stroke_edit_context = null
-
-
-func cancel_stroke() -> void:
-	if _stroke_frame == null:
+	# Clear the active handle before any signal, so a history handler can begin a
+	# new edit without this call clearing it again.
+	_active_edit = null
+	var change := tx.finish()
+	if change == null:
 		return
-	_restore_chunks(_stroke_frame, _stroke_start_chunks, _stroke_start_selection)
-	_stroke_frame = null
-	_stroke_start_chunks = {}
-	_stroke_start_selection = {}
-	_stroke_edit_context = null
+	undo_redo.create_action(action)
+	undo_redo.add_undo_method(_restore_chunks.bind(change.frame, change.undo_chunks, change.undo_selection))
+	undo_redo.add_do_method(_restore_chunks.bind(change.frame, change.redo_chunks, change.redo_selection))
+	_commit_history(false)
 
 
-func _chunks_equal(first_chunks: Dictionary, second_chunks: Dictionary) -> bool:
-	if first_chunks.size() != second_chunks.size():
-		return false
-	for chunk_location in first_chunks:
-		if not second_chunks.has(chunk_location):
-			return false
-		var first_chunk: VoxelFrame.Chunk = first_chunks[chunk_location]
-		var second_chunk: VoxelFrame.Chunk = second_chunks[chunk_location]
-		if first_chunk != second_chunk and not first_chunk.equals(second_chunk):
-			return false
-	return true
+# Roll one owned edit back to its start snapshots. A stale handle does nothing.
+func cancel_edit(tx: VoxelEditTransaction) -> void:
+	if tx == null or tx != _active_edit:
+		return
+	# Clear the active handle before the restore signals, so a selection handler
+	# can begin a new edit and this restore cannot roll it back.
+	_active_edit = null
+	var rollback := tx.cancel()
+	if rollback == null:
+		return
+	_restore_chunks(rollback.frame, rollback.chunks, rollback.selection)
+
+
+# Close an edit whose document is replaced. The replacement discards the captured
+# frame, so the transaction releases its references without a restore.
+func _abandon_active_edit() -> void:
+	if _active_edit == null:
+		return
+	_active_edit.abandon()
+	_active_edit = null
 
 
 func _restore_chunks(edited_frame: VoxelFrame, chunk_snapshot: Dictionary, selection_snapshot: Dictionary) -> void:
@@ -725,23 +819,21 @@ func erase_selection() -> void:
 		return
 	var edited_document := document
 	var edited_frame := get_current_voxel_frame()
-	begin_stroke()
+	_erase_edit = begin_edit()
+	if _erase_edit == null:
+		return
 	var job := EraseJob.new()
 	job.edited_frame = edited_frame.copy_frame()
 	job.selection_mask = selection.capture()
 	_erase_job = job
-	var operation_id := begin_operation("Erasing selection", selection.count(), true, self)
+	var operation_id := begin_operation("Erasing selection", selection.count(), true, self, _interrupt_erase)
 	_erase_operation_id = operation_id
 	if selection.count() <= 4096:
 		job.run()
 	else:
-		job.worker_task_id = WorkerThreadPool.add_task(job.run, true, "Erase selection")
+		# Register the worker before the first await, so teardown can join it.
 		_erase_jobs.append(job)
-		while not WorkerThreadPool.is_task_completed(job.worker_task_id):
-			var progress := job.progress()
-			update_operation(operation_id, progress[1], progress[2], progress[0])
-			await get_tree().process_frame
-		WorkerThreadPool.wait_for_task_completion(job.worker_task_id)
+		await run_edit_job(job, operation_id, "Erase selection")
 		_erase_jobs.erase(job)
 	if _erase_job != job:
 		return
@@ -750,12 +842,16 @@ func erase_selection() -> void:
 		return
 	edited_frame.restore(job.edited_frame.capture())
 	document._bounds_dirty = true
-	end_stroke("Erase Selection")
+	# Clear the handle, the job, and the operation before the history signals, so a
+	# handler that opens a new erase keeps its own.
+	var erase_tx := _erase_edit
+	_erase_edit = null
+	_erase_job = null
+	_erase_operation_id = 0
+	finish_edit(erase_tx, "Erase Selection")
 	if not job.changed_chunks.is_empty():
 		chunks_changed.emit(current_frame, job.changed_chunks)
-	_erase_job = null
 	finish_operation(operation_id)
-	_erase_operation_id = 0
 
 
 func _interrupt_erase() -> void:
@@ -763,21 +859,30 @@ func _interrupt_erase() -> void:
 		return
 	_erase_job.cancel()
 	_erase_job = null
-	cancel_stroke()
-	finish_operation(_erase_operation_id)
+	# Clear the handle and capture the operation before the cancel signals, so a
+	# handler that opens a new erase keeps it, and this cleanup finishes only the
+	# captured operation.
+	var tx := _erase_edit
+	_erase_edit = null
+	var operation_id := _erase_operation_id
 	_erase_operation_id = 0
+	cancel_edit(tx)
+	finish_operation(operation_id)
 
 
 func _input(event: InputEvent) -> void:
-	if _erase_job and event.is_action_pressed("ui_cancel"):
-		_interrupt_erase()
+	if not event.is_action_pressed("ui_cancel"):
+		return
+	# A cancellable operation owns Esc while it runs, so the key still cancels a job
+	# whose tool a switch detached. Without one, the tools keep their own Esc.
+	if cancel_activity():
 		get_viewport().set_input_as_handled()
 
 
 func _exit_tree() -> void:
 	for job in _erase_jobs:
 		job.cancel()
-		WorkerThreadPool.wait_for_task_completion(job.worker_task_id)
+		job.wait_for_worker()
 
 
 func _notification(what: int) -> void:

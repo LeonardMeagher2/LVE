@@ -159,8 +159,7 @@ class ExportJob extends VoxelFrame.EditJob:
 func cancel() -> void:
 	if _export_job and _export_job.worker_task_id >= 0:
 		_export_job.cancel()
-		WorkerThreadPool.wait_for_task_completion(_export_job.worker_task_id)
-		_export_job.worker_task_id = -1
+		_export_job.wait_for_worker()
 	_finish_export()
 
 
@@ -184,7 +183,10 @@ func export_gltf(path: String, center_origin := true, tag_index := -1) -> Error:
 		tag.to -= first
 		job.tags.append(tag)
 	_export_job = job
-	_export_operation_id = State.begin_operation("Building export meshes", -1, true, host)
+	# Register this instance's cancel, so the status button and Escape cancel a
+	# running GLB export through State. The owner stays the host plugin, and the
+	# pending request stays with State until cancel() finishes the operation.
+	_export_operation_id = State.begin_operation("Exporting", -1, true, host, cancel)
 	var operation_id := _export_operation_id
 	job.worker_task_id = WorkerThreadPool.add_task(job.run, false, "glTF export meshes")
 	while job.worker_task_id >= 0 and not WorkerThreadPool.is_task_completed(job.worker_task_id):
@@ -195,8 +197,7 @@ func export_gltf(path: String, center_origin := true, tag_index := -1) -> Error:
 		await State.get_tree().process_frame
 	if job.worker_task_id < 0:
 		return ERR_UNAVAILABLE
-	WorkerThreadPool.wait_for_task_completion(job.worker_task_id)
-	job.worker_task_id = -1
+	job.wait_for_worker()
 	if _export_job != job:
 		return ERR_UNAVAILABLE
 	if not is_instance_valid(host) or not host.is_inside_tree() or not State.has_operation(operation_id):

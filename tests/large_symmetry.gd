@@ -82,6 +82,6 @@ func _click() -> void:
 
 
 func _settle() -> void:
-	while State.edit_busy() or brush._brush_tool._stroke_open:
+	while State.edit_busy() or brush._brush_tool._edit != null:
 		await get_tree().process_frame
 	await get_tree().process_frame

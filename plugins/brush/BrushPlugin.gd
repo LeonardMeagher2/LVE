@@ -33,17 +33,25 @@ func activate_tool() -> void:
 	add_option_bar_item(_options)
 
 func deactivate_tool() -> void:
+	# A switch ends the stroke like a release: the queued centers are stamped and
+	# the stroke commits as one history action. Escape and a context change keep
+	# their rollback.
+	_tool.finish_on_switch()
 	remove_editor_node(_tool)
 	remove_option_bar_item(_options)
 
 
 func _on_settings_changed() -> void:
-	if _settings.mode != _active_mode and _brush_tool._stroke_open:
-		_brush_tool._cancel_edit()
+	var mode_changed := _settings.mode != _active_mode
 	_active_mode = _settings.mode
 	var next_tool: Node3D = _line_tool if _settings.mode == _settings.BrushMode.LINE else _brush_tool
 	if next_tool == _tool:
+		# The same instance keeps the tool. A mode change still ends the stroke with
+		# the mode and material it captured at its start.
+		if mode_changed:
+			_tool.finish_on_switch()
 		return
+	_tool.finish_on_switch()
 	remove_editor_node(_tool)
 	_tool = next_tool
 	if _toolbar.button_pressed:

@@ -249,7 +249,9 @@ func _notification(what: int) -> void:
 	if what == NOTIFICATION_PREDELETE:
 		for job in _jobs:
 			job.cancel()
-			WorkerThreadPool.wait_for_task_completion(job.worker_task_id)
+			# Retire the handle, so the helper that is awaiting the job stops
+			# instead of waiting on a disposed task again.
+			job.wait_for_worker()
 
 
 func _disconnect_context_if_idle() -> void:
@@ -319,7 +321,9 @@ func _press(origin: Vector3, dir: Vector3) -> void:
 			_grab_waiting = false
 			return
 		_track_selection = not State.selection.is_empty()
-		begin_stroke()
+		if open_stroke() == null:
+			_grab_waiting = false
+			return
 		var symmetry := State.selection_context()
 		_symmetry_axes = symmetry.axes
 		_symmetry_origin_twice = symmetry.origin_twice
@@ -334,12 +338,10 @@ func _press(origin: Vector3, dir: Vector3) -> void:
 		if source_count <= INLINE_EDIT_LIMIT:
 			job.run()
 		else:
-			job.worker_task_id = WorkerThreadPool.add_task(job.run, true, "Transform source")
+			# Register the worker before the first await, so a cancel or context
+			# change during the preparation reaches this job.
 			_jobs.append(job)
-			while not WorkerThreadPool.is_task_completed(job.worker_task_id):
-				_report_job(preparation_id, job)
-				await State.get_tree().process_frame
-			WorkerThreadPool.wait_for_task_completion(job.worker_task_id)
+			await State.run_edit_job(job, preparation_id, "Transform source")
 			_jobs.erase(job)
 		State.finish_operation(preparation_id)
 		if input_revision != _input_revision or not _context_valid():
@@ -433,12 +435,8 @@ func _apply_preview() -> void:
 		if job.estimated_work() <= INLINE_EDIT_LIMIT:
 			job.run()
 		else:
-			job.worker_task_id = WorkerThreadPool.add_task(job.run, true, "Transform preview")
 			_jobs.append(job)
-			while not WorkerThreadPool.is_task_completed(job.worker_task_id):
-				_report_job(operation_id, job)
-				await State.get_tree().process_frame
-			WorkerThreadPool.wait_for_task_completion(job.worker_task_id)
+			await State.run_edit_job(job, operation_id, "Transform preview")
 			_jobs.erase(job)
 		_active_preview_job = null
 		if revision != _preview_revision or not _context_valid() or not State.has_operation(operation_id):
@@ -465,11 +463,6 @@ func _apply_preview() -> void:
 	_disconnect_context_if_idle()
 
 
-func _report_job(operation_id: int, job: VoxelFrame.EditJob) -> void:
-	var progress := job.progress()
-	State.update_operation(operation_id, progress[1], progress[2], progress[0])
-
-
 func _make_job() -> TransformJob:
 	return TransformJob.new()
 
@@ -484,9 +477,12 @@ func _finish_context_edit() -> void:
 	_preview_requested = false
 	for job in _jobs:
 		job.cancel()
-	_commit_now()
-	State.finish_operation(_operation_id)
+	# Capture the operation before the commit signals, so the cleanup finishes only
+	# this operation, never a replacement one a handler started.
+	var operation_id := _operation_id
 	_operation_id = 0
+	_commit_now()
+	State.finish_operation(operation_id)
 
 
 func _commit() -> void:
@@ -520,14 +516,23 @@ func _cancel() -> void:
 	_commit_requested = false
 	for job in _jobs:
 		job.cancel()
-	cancel_stroke()
 	_dragging = false
 	_pending = false
+	# Clear the grab and input state before the cancel signals, so a handler that
+	# opens a new stroke keeps its own captured state. The cancel does not call
+	# `_end`, because that would close the replacement stroke the handler opened.
 	_clear_grab()
 	_settings.transforming = false
-	_end()
-	State.finish_operation(_operation_id)
+	_flush_cells()
+	_plane = null
+	_last_target = VoxelPicking.NONE
+	_stroke_active = false
+	# Capture the operation before the signals, so the cleanup finishes only this
+	# operation, never a replacement one a handler started.
+	var operation_id := _operation_id
 	_operation_id = 0
+	abort_stroke()
+	State.finish_operation(operation_id)
 
 
 func _clear_grab() -> void:

@@ -33,7 +33,7 @@ func _run() -> void:
 	await get_tree().process_frame
 	step("Then the status bar shows animated progress and the normal status", func():
 		expect(status.get_node("Activity").visible, "long activity is visible")
-		expect(status.get_node("Activity/ActivityProgress").indeterminate, "unknown work uses animated progress")
+		expect(status.get_node("Activity/Job/ActivityProgress").indeterminate, "unknown work uses animated progress")
 		expect(status.get_node("StatusLeft").text == "#" + State.current_color.to_html(false), "the color status stays visible")
 		expect(status.get_node("StatusRight").text.contains("Frame 1/1"), "the frame status stays visible")
 		expect(status.get_node("StatusRight").text.contains("0×0×0"), "the empty document shows zero dimensions")
@@ -43,16 +43,16 @@ func _run() -> void:
 		State.update_operation(foreground_id, 25, 100)
 	)
 	step("Then the foreground edit shows its percentage", func():
-		expect(status.get_node("Activity/ActivityLabel").text.contains("Scaling"), "the foreground edit owns the activity label")
-		expect(status.get_node("Activity/ActivityProgress").value == 25, "the measured edit shows twenty-five percent")
-		expect(not status.get_node("Activity/ActivityProgress").indeterminate, "measured work uses percentage progress")
+		expect(status.get_node("Activity/Job/ActivityLabel").text.contains("Scaling"), "the foreground edit owns the activity label")
+		expect(status.get_node("Activity/Job/ActivityProgress").value == 25, "the measured edit shows twenty-five percent")
+		expect(not status.get_node("Activity/Job/ActivityProgress").indeterminate, "measured work uses percentage progress")
 	)
 	step("When the measured edit completes", func():
 		State.finish_operation(foreground_id)
 	)
 	step("Then the background activity continues without another delay", func():
 		expect(status.get_node("Activity").visible, "the remaining activity stays visible")
-		expect(status.get_node("Activity/ActivityLabel").text.contains("Building surfaces"), "the background work owns the label again")
+		expect(status.get_node("Activity/Job/ActivityLabel").text.contains("Building surfaces"), "the background work owns the label again")
 		State.finish_operation(background_id)
 		expect(not status.get_node("Activity").visible, "completion hides the activity display")
 	)

@@ -43,12 +43,12 @@ func _run() -> void:
 			expect(clockwise, "the exterior faces have clockwise winding")
 	)
 	step("When the user adds an adjacent solid chunk", func():
-		State.begin_stroke()
+		var tx := State.begin_edit()
 		for z in 16:
 			for y in 16:
 				for x in range(16, 32):
 					State.paint(Vector3i(x, y, z), VoxelFrame.material(Color.RED))
-		State.end_stroke()
+		State.finish_edit(tx)
 		var affected: Array[Vector3i] = []
 		State.cells_changed.emit(0, affected)
 	)

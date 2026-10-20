@@ -15,7 +15,6 @@ var _settings := preload("./settings.tres")
 var _filter := PixelPerfectStroke.new()
 var _source_document: VoxelDocument
 var _source_frame: VoxelFrame
-var _stroke_open := false
 var _end_requested := false
 var _pending_centers: Array[Vector3i] = []
 var _stroke_pattern := {}
@@ -136,9 +135,17 @@ class BrushJob extends VoxelFrame.EditJob:
 
 
 func _enter_tree() -> void:
-	State.edit_context_changing.connect(_cancel_edit)
-	State.history_changed.connect(_on_history_changed)
-	_settings.changed.connect(_on_settings_changed)
+	# A tool switch re-enters this node. The guarded connects stay symmetric, so a
+	# re-entry adds no duplicate subscription. `tree_exited` runs after the node
+	# leaves the tree, where `_exit_tree` still reports it inside.
+	if not tree_exited.is_connected(_release_context_subscriptions):
+		tree_exited.connect(_release_context_subscriptions)
+	if not State.edit_context_changing.is_connected(_cancel_edit):
+		State.edit_context_changing.connect(_cancel_edit)
+	if not State.history_changed.is_connected(_on_history_changed):
+		State.history_changed.connect(_on_history_changed)
+	if not _settings.changed.is_connected(_on_settings_changed):
+		_settings.changed.connect(_on_settings_changed)
 
 
 func _ready() -> void:
@@ -147,20 +154,63 @@ func _ready() -> void:
 	visible = false
 
 
+func _notification(what: int) -> void:
+	if what != NOTIFICATION_PREDELETE:
+		return
+	# A freed node cannot await, so it cancels and joins its own work here. The
+	# join is the one blocking wait. `wait_for_worker` is idempotent, so the stroke
+	# runner's own join never double-waits.
+	if _job:
+		_job.cancel()
+		_job.wait_for_worker()
+		_job = null
+	_teardown_hover()
+	State.finish_operation(_operation_id)
+	_operation_id = 0
+	var tx := _edit
+	_edit = null
+	if tx != null:
+		State.cancel_edit(tx)
+	_release_context_subscriptions()
+
+
+# A tool or mode switch detaches this node but keeps the stroke. The stroke runner
+# owns its worker join, and the context and history signals must outlive the
+# detach: a frame, document, or history change still invalidates a pending result.
+# `tree_exited` releases them once no work is pending, after the node has left the
+# tree. The settings signal only refreshes the hover cursor, so it stops here.
 func _exit_tree() -> void:
-	_cancel_edit()
-	if _job and _job.worker_task_id != -1:
-		WorkerThreadPool.wait_for_task_completion(_job.worker_task_id)
-	_job = null
+	_teardown_hover()
+	_last_pick = null
+	_cursor_axis = -1
+	if has_node("Cursor"):
+		$Cursor.show_selection(null)
+	visible = false
+	if _settings.changed.is_connected(_on_settings_changed):
+		_settings.changed.disconnect(_on_settings_changed)
+
+
+# Release the context and history subscriptions only when no stroke work is pending
+# and the node is outside the tree. A pending worker keeps them, so a frame or
+# document change can still cancel its result.
+func _release_context_subscriptions() -> void:
+	if is_inside_tree() or _edit != null or _job != null:
+		return
+	if State.edit_context_changing.is_connected(_cancel_edit):
+		State.edit_context_changing.disconnect(_cancel_edit)
+	if State.history_changed.is_connected(_on_history_changed):
+		State.history_changed.disconnect(_on_history_changed)
+
+
+# The hover job belongs to `_process`, which stops on a detach, so its join runs
+# with the teardown rather than with the stroke runner.
+func _teardown_hover() -> void:
 	if _hover_job:
 		_hover_job.cancel()
-		WorkerThreadPool.wait_for_task_completion(_hover_job.worker_task_id)
+		_hover_job.wait_for_worker()
 		_hover_job = null
 	State.finish_operation(_hover_operation_id)
 	_hover_operation_id = 0
-	State.edit_context_changing.disconnect(_cancel_edit)
-	State.history_changed.disconnect(_on_history_changed)
-	_settings.changed.disconnect(_on_settings_changed)
 
 
 func _on_color_changed(_color: Color) -> void:
@@ -177,11 +227,11 @@ func _on_settings_changed() -> void:
 
 
 func handle_input(event: InputEvent, pos: Vector2) -> bool:
-	if event.is_action_pressed("ui_cancel") and _stroke_open:
+	if event.is_action_pressed("ui_cancel") and _edit != null:
 		_cancel_edit()
 		return true
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
-		if _stroke_open or _job:
+		if _edit != null or _job:
 			return true
 		var ray := _ray(pos)
 		if _pick_start(ray[0], ray[1]).target == VoxelPicking.NONE:
@@ -189,12 +239,16 @@ func handle_input(event: InputEvent, pos: Vector2) -> bool:
 	return super.handle_input(event, pos)
 
 
-func begin_stroke() -> void:
-	super.begin_stroke()
+func open_stroke() -> VoxelEditTransaction:
+	# A closed handle is stale, so fall through to the base acquire.
+	if _edit != null and not _edit.is_closed():
+		return _edit
+	var tx := super.open_stroke()
+	if tx == null:
+		return null
 	_filter.reset()
 	_source_document = State.document
 	_source_frame = State.get_current_voxel_frame()
-	_stroke_open = true
 	_end_requested = false
 	_stroke_pattern = {}
 	_stroke_offsets = []
@@ -207,8 +261,11 @@ func begin_stroke() -> void:
 	_stroke_material = State.current_material.duplicate()
 	_paint_existing = _settings.mode == _settings.BrushMode.PAINT
 	_erase_existing = _settings.mode == _settings.BrushMode.ERASER
-	_selection_mask = State.selection.capture()
-	_edit_context = State.drawing_context()
+	# Reuse the context the transaction froze at begin. Its selection is a read-only
+	# snapshot, so the job can filter on it without copying the selection again.
+	_edit_context = tx.edit_context
+	_selection_mask = tx.edit_context.selection
+	return tx
 
 
 func _apply_pick(target: Vector3i, hit: Vector3i) -> void:
@@ -234,54 +291,67 @@ func _apply_stroke_to(to: Vector3i) -> void:
 func _queue_centers(centers: Array[Vector3i]) -> void:
 	_pending_centers.append_array(centers)
 	if _job == null:
-		_start_edit()
+		_run_stroke()
 
 
-func _start_edit() -> void:
-	if _pending_centers.is_empty():
-		return
-	_job = BrushJob.new()
-	_job.centers = _pending_centers
+# One runner owns one stroke batch at a time. An inline batch runs at once, so the
+# first stamp lands in the input event. A worker batch awaits `State.run_edit_job`,
+# which pumps the progress and joins the worker even when a tool switch detaches
+# this node. A center that arrives while the worker runs joins the next batch of
+# the same loop, so the loop drains the queue without recursion.
+func _run_stroke() -> void:
+	var tx := _edit
+	while _edit == tx and _job == null and not _pending_centers.is_empty():
+		var job := _build_job()
+		_job = job
+		var work := job.estimate_work(job.centers.size() * _stroke_pattern_size)
+		if work <= INLINE_EDIT_LIMIT:
+			job.run()
+		else:
+			_operation_id = State.begin_operation("Erasing brush" if job.erase_existing else "Painting brush", work, true, self, _cancel_edit)
+			await State.run_edit_job(job, _operation_id, "Brush stroke")
+		# A cancel or a replacement owns the stroke now, so this runner stops. A
+		# publication callback can also start a new runner on the same transaction,
+		# so the job identity, not `_job == null`, decides the next batch.
+		if _job != job:
+			_release_context_subscriptions()
+			return
+		_finish_edit(job)
+	# The stroke closes only after its last batch is published.
+	if _edit == tx and _end_requested and _job == null:
+		_finish_stroke()
+	_release_context_subscriptions()
+
+
+func _build_job() -> BrushJob:
+	var job := BrushJob.new()
+	job.centers = _pending_centers
 	_pending_centers = []
-	_job.pattern = _stroke_pattern
-	_job.offsets = _stroke_offsets
-	_job.previous_center = _stroke_last_center
-	_job.material_pattern = _stroke_material_pattern
-	_job.diameter = _stroke_diameter
-	_job.shape = _stroke_shape
-	_job.material = _stroke_material
-	_job.paint_existing = _paint_existing or _erase_existing
-	_job.erase_existing = _erase_existing
-	_job.selection_mask = _selection_mask
-	_job.edit_context = _edit_context
-	_job.edited_frame = _source_frame.copy_frame()
-	var work := _job.estimate_work(_job.centers.size() * _stroke_pattern_size)
-	if work <= INLINE_EDIT_LIMIT:
-		_job.run()
-		_finish_edit()
-	else:
-		_operation_id = State.begin_operation("Erasing brush" if _erase_existing else "Painting brush", work, true, self)
-		_job.worker_task_id = WorkerThreadPool.add_task(_job.run, true, "Brush stroke")
+	job.pattern = _stroke_pattern
+	job.offsets = _stroke_offsets
+	job.previous_center = _stroke_last_center
+	job.material_pattern = _stroke_material_pattern
+	job.diameter = _stroke_diameter
+	job.shape = _stroke_shape
+	job.material = _stroke_material
+	job.paint_existing = _paint_existing or _erase_existing
+	job.erase_existing = _erase_existing
+	job.selection_mask = _selection_mask
+	job.edit_context = _edit_context
+	job.edited_frame = _source_frame.copy_frame()
+	return job
 
 
 func _process(_delta: float) -> void:
 	_update_hover()
-	if _job:
-		if not WorkerThreadPool.is_task_completed(_job.worker_task_id):
-			var progress := _job.progress()
-			State.update_operation(_operation_id, progress[1], progress[2], progress[0])
-			return
-		WorkerThreadPool.wait_for_task_completion(_job.worker_task_id)
-		_finish_edit()
-	if _stroke_open:
-		_start_edit()
-		if _end_requested and _job == null:
-			_finish_stroke()
 
 
-func _finish_edit() -> void:
+func _finish_edit(job: BrushJob) -> void:
 	var profile_started_us := Time.get_ticks_usec() if profile_enabled else 0
-	var job := _job
+	# Capture the operation and clear the fields before the publication signals, so
+	# a handler that starts a new stroke on this transaction keeps its own state.
+	var operation_id := _operation_id
+	_operation_id = 0
 	_job = null
 	# A cancelled job stopped partway, and history may have replaced the frame under
 	# it, so its snapshot must not be published. Invalidate the stroke coverage so
@@ -289,7 +359,7 @@ func _finish_edit() -> void:
 	var applied := job.checkpoint(0)
 	if not applied:
 		_stroke_last_center = Vector3i.MAX
-	if applied and _stroke_open and State.document == _source_document and State.get_current_voxel_frame() == _source_frame:
+	if applied and _edit != null and State.document == _source_document and State.get_current_voxel_frame() == _source_frame:
 		_stroke_pattern = job.pattern
 		_stroke_offsets = job.offsets
 		if not job.centers.is_empty():
@@ -299,8 +369,7 @@ func _finish_edit() -> void:
 		State.document._bounds_dirty = true
 		if not job.changed_chunks.is_empty():
 			State.chunks_changed.emit(State.current_frame, job.changed_chunks)
-	State.finish_operation(_operation_id)
-	_operation_id = 0
+	State.finish_operation(operation_id)
 	if profile_enabled:
 		profile_finish_us = Time.get_ticks_usec() - profile_started_us
 		profile_finish_seq += 1
@@ -324,35 +393,47 @@ func _end() -> void:
 		_finish_stroke()
 
 
+# End the stroke like a release when a tool or mode switch detaches this tool. The
+# runner stamps the queued centers, awaits a running worker, and closes the stroke
+# as one history action. Escape and a context change keep their cooperative
+# rollback.
+func finish_on_switch() -> void:
+	if _edit == null:
+		return
+	_end()
+
+
 func _finish_stroke() -> void:
-	super._end()
-	_stroke_open = false
+	# Clear the tool's stroke state before the close signals, so a handler that
+	# opens a new stroke keeps its own captured state.
 	_end_requested = false
 	_source_document = null
 	_source_frame = null
 	_edit_context = null
+	super._end()
 
 
-func end_stroke() -> void:
-	State.end_stroke("Erase" if _erase_existing else "Stroke")
+func close_stroke(_action: String = "Stroke") -> void:
+	var tx := _edit
+	if tx == null:
+		return
+	_edit = null
+	State.finish_edit(tx, "Erase" if _erase_existing else "Stroke")
 
 
 func _cancel_edit() -> void:
 	if _job:
 		_job.cancel()
 	_stroke_last_center = Vector3i.MAX
-	if _hover_job:
-		_hover_job.cancel()
-	State.finish_operation(_hover_operation_id)
-	_hover_operation_id = 0
+	_teardown_hover()
 	_last_pick = null
 	_cursor_axis = -1
 	if has_node("Cursor"):
 		$Cursor.show_selection(null)
+	# Clear the tool's stroke state before the cancel signals, so a handler that
+	# opens a new stroke keeps its own captured state. The runner keeps `_job`
+	# until it resumes, so a teardown can still join the cancelled worker.
 	_pending_centers = []
-	if _stroke_open:
-		State.cancel_stroke()
-	_stroke_open = false
 	_end_requested = false
 	_stroke_active = false
 	_plane = null
@@ -363,6 +444,7 @@ func _cancel_edit() -> void:
 	visible = false
 	State.finish_operation(_operation_id)
 	_operation_id = 0
+	abort_stroke()
 
 
 func _pick_start(origin: Vector3, dir: Vector3) -> PickResult:
@@ -433,6 +515,6 @@ func _update_hover() -> void:
 	_hover_operation_id = 0
 	if job.checkpoint(0):
 		_settings.cache_pattern(job.diameter, job.shape, job.pattern, job.offsets)
-	if _last_pick and not _stroke_open:
+	if _last_pick and _edit == null:
 		_cursor_axis = -1
 		update_visual(_last_pick)

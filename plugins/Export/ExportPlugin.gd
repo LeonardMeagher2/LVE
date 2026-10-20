@@ -227,7 +227,7 @@ func _on_workspace_visibility_changed() -> void:
 	_preview_revision += 1
 	_menu_item.get_node("ExportBtn").set_pressed_no_signal(_workspace.is_visible_in_tree())
 	if _workspace.is_visible_in_tree():
-		_set_status_context(_export_status, _cancel_export)
+		_set_status_context(_export_status)
 		_model_dirty = true
 		_preview_due_ms = Time.get_ticks_msec() + PREVIEW_DELAY_MS
 	else:
@@ -523,15 +523,15 @@ func _export_status() -> Dictionary:
 
 func _refresh_export_status() -> void:
 	if _workspace.is_visible_in_tree():
-		_set_status_context(_export_status, _cancel_export)
+		_set_status_context(_export_status)
 
 
-func _set_status_context(provider: Callable, cancel := Callable()) -> void:
+func _set_status_context(provider: Callable) -> void:
 	var main := get_node_or_null("/root/Main")
 	if main:
 		var status_bar: EditorStatusBar = main.get_node_or_null("%StatusBar")
 		if status_bar:
-			status_bar.set_context(provider, cancel)
+			status_bar.set_context(provider)
 
 
 func _process(delta: float) -> void:
@@ -738,7 +738,7 @@ func _update_sheet_preview() -> void:
 	var resolution := int(_sheet_settings.get_node("SizeRow/Size").value)
 	var settings := _sheet_render_settings(_sheet_settings.get_node("ViewRow/View").selected, _view_count())
 	settings.layout = sheet_layout(frames.size() * settings.transforms.size(), resolution)
-	_preview_operation_id = State.begin_operation("Rendering sheet preview", frames.size() * settings.transforms.size(), false, self)
+	_preview_operation_id = State.begin_operation("Rendering preview", frames.size() * settings.transforms.size(), false, self)
 	var image := await _render_sheet(frames, settings, State.document, revision)
 	_preview_running = false
 	State.finish_operation(_preview_operation_id)
@@ -777,7 +777,7 @@ func export_sprite_sheet(path: String, first_frame := 0, last_frame := -1, tile_
 	_exporting = true
 	_cancel_requested = false
 	_preview_revision += 1
-	_operation_id = State.begin_operation("Exporting sprite sheet", frames.size() * views, true, self)
+	_operation_id = State.begin_operation("Exporting", frames.size() * views, true, self, _cancel_export)
 	var image := await _render_sheet(frames, settings, source_document)
 	if image == null:
 		_finish_export()

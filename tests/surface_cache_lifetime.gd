@@ -4,6 +4,7 @@ var scene_renderer: VoxelRenderer
 var enclosed_voxel := Vector3i(24, 24, 24)
 var enclosed_chunk := Vector3i(1, 1, 1)
 var visible_surface_count := 0
+var edit: VoxelEditTransaction
 
 
 func _ready() -> void:
@@ -41,7 +42,7 @@ func _run() -> void:
 		expect(_visible_count() == visible_surface_count, "eviction keeps active surfaces visible")
 	)
 	step("When the user recolors an enclosed voxel repeatedly", func():
-		State.begin_stroke()
+		edit = State.begin_edit()
 	)
 	for color in [Color.BLUE, Color.GREEN, Color.YELLOW]:
 		State.paint(enclosed_voxel, VoxelFrame.material(color))
@@ -54,7 +55,7 @@ func _run() -> void:
 		if VoxelRenderer._surface_cache.has(surface_key):
 			expect(VoxelRenderer._surface_cache[surface_key].surface == null, "the edited enclosed chunk still has no exposed faces")
 		expect(_visible_count() == visible_surface_count, "interior edits keep the exterior surfaces visible")
-	State.end_stroke()
+	State.finish_edit(edit)
 	step("When the user switches to an empty frame", func():
 		State.add_frame()
 	)

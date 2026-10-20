@@ -2,7 +2,15 @@ extends MeshInstance3D
 
 enum PreviewStyle { OUTLINE, SOLID }
 
-const INLINE_OUTLINE_LIMIT := 4096
+# An inline outline runs inside the request on the main thread. The measured scan
+# costs about 2 us per selected cell on a dense shape and about 12 us on a
+# scattered one. The shared work slice is 3000 us, so the conservative limit is
+# about 250 cells. A larger outline goes to a worker and installs a frame later
+# instead of stalling the frame that asked for it.
+const INLINE_OUTLINE_LIMIT := 256
+# The delay that debounces a large outline is separate from the inline budget. A
+# mid-size outline still starts at once, on a worker.
+const OUTLINE_DELAY_LIMIT := 4096
 const CACHE_LIMIT_BYTES := 64 * 1024 * 1024
 const CACHE_LIMIT_ENTRIES := 16
 
@@ -25,6 +33,20 @@ var _pending_cells := {}
 var _request_due_ms := 0
 var _preview_job: PreviewJob
 var _operation_id := 0
+# The progressive selection path. The wand streams a growing selection, so a new
+# snapshot must not cancel the outline that is already building. The path is
+# opt-in, so the brush and cursor keep the strict latest-only behavior.
+var _stream_job: PreviewJob
+var _stream_source: VoxelSelection
+var _stream_has_pending := false
+# Bumped when a clear or a strict request supersedes the stream. A running stream
+# outline installs only while its epoch still matches.
+var _stream_epoch := 0
+# True while the latest strict request still owns the preview. A stream publish
+# clears it, so a strict request repeated after a stream reinstalls its exact
+# result instead of trusting the stale requested set and leaving the stream on
+# screen.
+var _strict_alive := false
 var _box := BoxMesh.new()
 var _outline_material: Material
 var _solid_material := preload("res://VoxelMaterial.tres").duplicate()
@@ -38,6 +60,9 @@ class PreviewJob extends VoxelFrame.EditJob:
 	var smooth_normals := false
 	var color_key := Color.WHITE
 	var revision := 0
+	# The stream epoch of a progressive selection job. The strict `revision` above
+	# is the request id of the strict path.
+	var stream_epoch := 0
 	var cache_key := ""
 	var arrays := []
 	var atlas_surfaces: Array[VoxelMeshBuilder] = []
@@ -188,20 +213,91 @@ func show_voxels(colors: Dictionary, color: Color, outline: bool = false, cube_d
 	_request(colors, PreviewStyle.SOLID, use_voxel_colors, color if use_voxel_colors else Color.WHITE)
 
 
-func show_selection(selection: VoxelSelection) -> void:
+# Show a selection outline. A progressive request keeps the running outline job
+# alive and queues only the newest snapshot, so an in-flight intermediate outline
+# can finish and install. A strict request cancels the stream and takes over.
+func show_selection(selection: VoxelSelection, progressive := false) -> void:
 	if selection == null or selection.is_empty():
 		_clear_request()
 		return
 	material_override = _outline_material
-	_request(selection.capture(), PreviewStyle.OUTLINE)
+	if progressive:
+		_queue_stream(selection)
+		return
+	# `all_cells` hands out the live cells without marking the selection shared, so
+	# the request copy below does not force a second copy on the next add.
+	_request(selection.all_cells(), PreviewStyle.OUTLINE)
+
+
+# Queue the newest snapshot for the progressive path. The stream takes over the
+# preview: the pending strict request is dropped and the running strict job is
+# cancelled, so a delayed strict request cannot revive and overwrite the stream.
+# The running stream job is not cancelled. The snapshot is read when a job starts,
+# so many publishes between two outlines cost nothing and no stale snapshot is built.
+func _queue_stream(selection: VoxelSelection) -> void:
+	_request_revision += 1
+	_strict_alive = false
+	_pending_cells = {}
+	_request_due_ms = 0
+	if _preview_job:
+		_preview_job.cancel()
+	_stream_source = selection
+	_stream_has_pending = true
+	_start_activity()
+	_start_stream()
+
+
+func _start_stream() -> void:
+	if _stream_job or not _stream_has_pending or _stream_source == null:
+		return
+	if _preview_job:
+		# A strict job still winds down. Keep the newest snapshot until the strict
+		# job is joined and discarded, so the stream result is not lost.
+		return
+	var job := PreviewJob.new()
+	# Snapshot the live selection now, so the worker reads a stable set. The copy
+	# happens once per started outline, not once per publish.
+	job.cells = _stream_source.all_cells().duplicate()
+	job.outline_builder = _outline_vertices
+	job.style = PreviewStyle.OUTLINE
+	job.stream_epoch = _stream_epoch
+	_stream_has_pending = false
+	_stream_source = null
+	_stream_job = job
+	job.worker_task_id = WorkerThreadPool.add_task(job.run, false, "Voxel preview")
+
+
+func _finish_stream() -> void:
+	var job := _stream_job
+	_stream_job = null
+	# A clear or a strict request superseded the stream while the outline built, so
+	# its stale surface must not appear.
+	if job.stream_epoch == _stream_epoch and job.checkpoint(0):
+		_install_surface(job, false)
+	_start_stream()
+
+
+# Drop the queued snapshot and cancel the running stream outline. A clear or a
+# strict request supersedes the stream, so a later stream install is discarded.
+func _cancel_stream() -> void:
+	_stream_epoch += 1
+	_stream_has_pending = false
+	_stream_source = null
+	if _stream_job:
+		_stream_job.cancel()
 
 
 func _request(cells: Dictionary, style: PreviewStyle, use_voxel_colors: bool = false, color_key: Color = Color.WHITE) -> void:
+	_cancel_stream()
 	var colored := style == PreviewStyle.SOLID and use_voxel_colors
 	var smooth_normals := style == PreviewStyle.SOLID and State.document.smooth_normals
-	if style == _requested_style and use_voxel_colors == _requested_voxel_colors and smooth_normals == _requested_smooth_normals and color_key == _requested_color_key and _same_cells(_requested_cells, cells, colored):
+	# The dedupe trusts the requested set only while the strict request still owns
+	# the preview. A stream publish clears that ownership, so a strict request
+	# repeated after a stream reinstalls its exact result.
+	if _strict_alive and style == _requested_style and use_voxel_colors == _requested_voxel_colors and smooth_normals == _requested_smooth_normals and color_key == _requested_color_key and _same_cells(_requested_cells, cells, colored):
 		return
 	_request_revision += 1
+	_strict_alive = true
 	if _preview_job:
 		_preview_job.cancel()
 	_requested_style = style
@@ -211,6 +307,7 @@ func _request(cells: Dictionary, style: PreviewStyle, use_voxel_colors: bool = f
 	_requested_cells = cells if cells.is_read_only() else cells.duplicate(true)
 	_requested_cells.make_read_only()
 	_pending_cells = {}
+	_request_due_ms = 0
 	var cache_key := _cache_key(_requested_cells, style, colored, color_key, smooth_normals)
 	_requested_cache_key = cache_key
 	var cached: Dictionary = _mesh_cache.get(cache_key, {})
@@ -223,7 +320,7 @@ func _request(cells: Dictionary, style: PreviewStyle, use_voxel_colors: bool = f
 		_finish_activity()
 		return
 	_pending_cells = _requested_cells
-	_request_due_ms = Time.get_ticks_msec() + 100 if style == PreviewStyle.OUTLINE and cells.size() > INLINE_OUTLINE_LIMIT else 0
+	_request_due_ms = Time.get_ticks_msec() + 100 if style == PreviewStyle.OUTLINE and cells.size() > OUTLINE_DELAY_LIMIT else 0
 	_start_activity()
 	_start_preview()
 
@@ -248,10 +345,13 @@ static func _cache_key(cells: Dictionary, style: PreviewStyle, colored: bool, co
 
 func _clear_request() -> void:
 	_request_revision += 1
+	_strict_alive = false
 	_requested_cells = {}
 	_pending_cells = {}
+	_request_due_ms = 0
 	if _preview_job:
 		_preview_job.cancel()
+	_cancel_stream()
 	visible = false
 	_finish_activity()
 
@@ -285,14 +385,17 @@ static func _mesh_from_vertices(outline_vertices: PackedVector3Array) -> ArrayMe
 
 
 static func _outline_vertices(selection: VoxelSelection, job: VoxelFrame.EditJob = null) -> PackedVector3Array:
-	var boundary_edges := []
+	# Each cell edge goes straight onto the line it lies on. The old scan built one
+	# array of five-element arrays, then grouped it again. The run on a line is the
+	# edge start alone, because an edge is always two units long.
+	var runs_by_line := {}
 	var completed := 0
 	for cell_position in selection.all_cells():
-		boundary_edges.append_array(_boundary_edges(cell_position, selection))
+		_collect_boundary_runs(runs_by_line, cell_position, selection)
 		completed += 1
 		if job and completed % 4096 == 0 and not job.checkpoint(completed):
 			return PackedVector3Array()
-	return _merged_outline(boundary_edges, job)
+	return _merged_outline(runs_by_line, job)
 
 
 func _start_preview() -> void:
@@ -331,7 +434,24 @@ func _process(_delta: float) -> void:
 		else:
 			var progress := _preview_job.progress()
 			State.update_operation(_operation_id, progress[1], progress[2], progress[0])
+	# A streamed outline installs as soon as it is ready, so a growing selection
+	# shows its intermediate outline instead of waiting for the exact final one. It
+	# shares the strict install budget: a completed outline waits for the next frame
+	# when the current frame is already spent.
+	if _stream_job:
+		if WorkerThreadPool.is_task_completed(_stream_job.worker_task_id):
+			if _stream_job.stream_epoch == _stream_epoch and _install_time_us >= State.WORK_SLICE_US:
+				pass
+			else:
+				WorkerThreadPool.wait_for_task_completion(_stream_job.worker_task_id)
+				var started_us := Time.get_ticks_usec()
+				_finish_stream()
+				_install_time_us += Time.get_ticks_usec() - started_us
+		else:
+			var progress := _stream_job.progress()
+			State.update_operation(_operation_id, progress[1], progress[2], progress[0])
 	_start_preview()
+	_start_stream()
 	if is_settled():
 		_finish_activity()
 
@@ -341,6 +461,14 @@ func _finish_preview() -> void:
 	_preview_job = null
 	if job.revision != _request_revision or not job.checkpoint(0):
 		return
+	_install_surface(job, true)
+	_finish_activity()
+
+
+# Build and install the surface of a finished job. A streamed outline skips the
+# mesh cache, because its intermediate snapshots are throwaway and would evict the
+# exact outlines the tools reuse.
+func _install_surface(job: PreviewJob, cache: bool) -> void:
 	var surface := ArrayMesh.new()
 	if not job.arrays[Mesh.ARRAY_VERTEX].is_empty():
 		var primitive := Mesh.PRIMITIVE_LINES if job.style == PreviewStyle.OUTLINE else Mesh.PRIMITIVE_TRIANGLES
@@ -350,11 +478,11 @@ func _finish_preview() -> void:
 	for chunk_job in job.atlas_surfaces:
 		surface.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, chunk_job.surface_arrays)
 		surface.surface_set_material(surface.get_surface_count() - 1, _atlas_material(chunk_job))
-	_cache_mesh(job, surface)
+	if cache:
+		_cache_mesh(job, surface)
 	mesh = surface
 	position = Vector3.ZERO
 	visible = surface.get_surface_count() > 0
-	_finish_activity()
 
 
 static func _surface_material() -> StandardMaterial3D:
@@ -415,6 +543,10 @@ func _exit_tree() -> void:
 		_preview_job.cancel()
 		WorkerThreadPool.wait_for_task_completion(_preview_job.worker_task_id)
 		_preview_job = null
+	if _stream_job:
+		_stream_job.cancel()
+		WorkerThreadPool.wait_for_task_completion(_stream_job.worker_task_id)
+		_stream_job = null
 	_preview_count -= 1
 	if _preview_count == 0:
 		_mesh_cache.clear()
@@ -424,7 +556,7 @@ func _exit_tree() -> void:
 
 func _start_activity() -> void:
 	if not State.has_operation(_operation_id):
-		_operation_id = State.begin_operation("Updating voxel preview", -1, false, self)
+		_operation_id = State.begin_operation("Updating preview", -1, false, self)
 
 
 func _finish_activity() -> void:
@@ -433,25 +565,68 @@ func _finish_activity() -> void:
 
 
 func is_settled() -> bool:
-	return _pending_cells.is_empty() and _preview_job == null
+	return _pending_cells.is_empty() and _preview_job == null and _stream_job == null and not _stream_has_pending
 
 
-static func _boundary_edges(cell_position: Vector3i, selection: VoxelSelection) -> Array:
-	var boundary_edges := []
-	for edge_axis in 3:
-		var first_side_axis := (edge_axis + 1) % 3
-		var second_side_axis := (edge_axis + 2) % 3
-		for first_side_sign in [-1, 1]:
-			for second_side_sign in [-1, 1]:
-				var first_neighbor := _shifted(cell_position, first_side_axis, first_side_sign)
-				var second_neighbor := _shifted(cell_position, second_side_axis, second_side_sign)
-				if selection.contains(first_neighbor) and selection.contains(second_neighbor):
-					continue
-				var diagonal_neighbor := _shifted(first_neighbor, second_side_axis, second_side_sign)
-				if selection.contains(first_neighbor) != selection.contains(second_neighbor) and not selection.contains(diagonal_neighbor):
-					continue
-				boundary_edges.append([edge_axis, cell_position[first_side_axis] * 2 + first_side_sign, cell_position[second_side_axis] * 2 + second_side_sign, cell_position[edge_axis] * 2 - 1, cell_position[edge_axis] * 2 + 1])
-	return boundary_edges
+# One lookup per face neighbor, shared by the four edge tests of an axis. The old
+# scan read the same neighbor up to four times. The diagonal is read only when
+# exactly one side face is present, which is the only case that needs it.
+static func _collect_boundary_runs(runs_by_line: Dictionary, cell_position: Vector3i, selection: VoxelSelection) -> void:
+	var x := cell_position.x
+	var y := cell_position.y
+	var z := cell_position.z
+	var x_before := selection.contains(Vector3i(x - 1, y, z))
+	var x_after := selection.contains(Vector3i(x + 1, y, z))
+	var y_before := selection.contains(Vector3i(x, y - 1, z))
+	var y_after := selection.contains(Vector3i(x, y + 1, z))
+	var z_before := selection.contains(Vector3i(x, y, z - 1))
+	var z_after := selection.contains(Vector3i(x, y, z + 1))
+	# A cell with every face neighbor present has no boundary edge. The shared
+	# interior of a large model is most of the scan, so skip it before any edge test.
+	if x_before and x_after and y_before and y_after and z_before and z_after:
+		return
+	# Two present side faces hide the edge between them, so that test never runs.
+	# Edge axis 0 runs along x, so its side axes are y and z.
+	if not (y_before and z_before):
+		_append_boundary_edge(runs_by_line, 0, cell_position, 1, -1, 2, -1, y_before, z_before, selection)
+	if not (y_before and z_after):
+		_append_boundary_edge(runs_by_line, 0, cell_position, 1, -1, 2, 1, y_before, z_after, selection)
+	if not (y_after and z_before):
+		_append_boundary_edge(runs_by_line, 0, cell_position, 1, 1, 2, -1, y_after, z_before, selection)
+	if not (y_after and z_after):
+		_append_boundary_edge(runs_by_line, 0, cell_position, 1, 1, 2, 1, y_after, z_after, selection)
+	# Edge axis 1 runs along y, so its side axes are z and x.
+	if not (z_before and x_before):
+		_append_boundary_edge(runs_by_line, 1, cell_position, 2, -1, 0, -1, z_before, x_before, selection)
+	if not (z_before and x_after):
+		_append_boundary_edge(runs_by_line, 1, cell_position, 2, -1, 0, 1, z_before, x_after, selection)
+	if not (z_after and x_before):
+		_append_boundary_edge(runs_by_line, 1, cell_position, 2, 1, 0, -1, z_after, x_before, selection)
+	if not (z_after and x_after):
+		_append_boundary_edge(runs_by_line, 1, cell_position, 2, 1, 0, 1, z_after, x_after, selection)
+	# Edge axis 2 runs along z, so its side axes are x and y.
+	if not (x_before and y_before):
+		_append_boundary_edge(runs_by_line, 2, cell_position, 0, -1, 1, -1, x_before, y_before, selection)
+	if not (x_before and y_after):
+		_append_boundary_edge(runs_by_line, 2, cell_position, 0, -1, 1, 1, x_before, y_after, selection)
+	if not (x_after and y_before):
+		_append_boundary_edge(runs_by_line, 2, cell_position, 0, 1, 1, -1, x_after, y_before, selection)
+	if not (x_after and y_after):
+		_append_boundary_edge(runs_by_line, 2, cell_position, 0, 1, 1, 1, x_after, y_after, selection)
+
+
+# One cell edge, keyed by the line it lies on. The caller already dropped the
+# tests whose two side faces are both present. A single present side face keeps
+# the edge only when the diagonal is present.
+static func _append_boundary_edge(runs_by_line: Dictionary, edge_axis: int, cell_position: Vector3i, first_side_axis: int, first_side_sign: int, second_side_axis: int, second_side_sign: int, first_side: bool, second_side: bool, selection: VoxelSelection) -> void:
+	if first_side != second_side:
+		var diagonal_neighbor := _shifted(_shifted(cell_position, first_side_axis, first_side_sign), second_side_axis, second_side_sign)
+		if not selection.contains(diagonal_neighbor):
+			return
+	var line_key := Vector3i(edge_axis, cell_position[first_side_axis] * 2 + first_side_sign, cell_position[second_side_axis] * 2 + second_side_sign)
+	if not runs_by_line.has(line_key):
+		runs_by_line[line_key] = []
+	runs_by_line[line_key].append(cell_position[edge_axis] * 2 - 1)
 
 
 static func _shifted(cell_position: Vector3i, axis: int, offset: int) -> Vector3i:
@@ -460,32 +635,29 @@ static func _shifted(cell_position: Vector3i, axis: int, offset: int) -> Vector3
 	return neighbor_position
 
 
-static func _merged_outline(boundary_edges: Array, job: VoxelFrame.EditJob = null) -> PackedVector3Array:
-	var edge_runs_by_line := {}
-	var completed := 0
-	for edge in boundary_edges:
-		var line_key := Vector3i(edge[0], edge[1], edge[2])
-		if not edge_runs_by_line.has(line_key):
-			edge_runs_by_line[line_key] = []
-		edge_runs_by_line[line_key].append(Vector2i(edge[3], edge[4]))
-		completed += 1
-		if job and completed % 4096 == 0 and not job.checkpoint(completed):
-			return PackedVector3Array()
+# Runs on one line merge when the next start touches the open end. An edge is
+# always two units long, so the end is the start plus two. The native sort keeps
+# the ascending start order the old comparator produced.
+static func _merged_outline(runs_by_line: Dictionary, job: VoxelFrame.EditJob = null) -> PackedVector3Array:
 	var outline_vertices := PackedVector3Array()
-	for line_key in edge_runs_by_line:
+	var completed := 0
+	for line_key: Vector3i in runs_by_line:
 		if job and not job.checkpoint(completed):
 			return PackedVector3Array()
-		var line_runs: Array = edge_runs_by_line[line_key]
-		line_runs.sort_custom(func(first_run, second_run): return first_run.x < second_run.x)
-		var merged_run: Vector2i = line_runs[0]
+		var line_runs: Array = runs_by_line[line_key]
+		completed += line_runs.size()
+		line_runs.sort()
+		var merged_start: int = line_runs[0]
+		var merged_end := merged_start + 2
 		for run_index in range(1, line_runs.size()):
-			var next_run: Vector2i = line_runs[run_index]
-			if next_run.x <= merged_run.y:
-				merged_run.y = maxi(merged_run.y, next_run.y)
+			var next_start: int = line_runs[run_index]
+			if next_start <= merged_end:
+				merged_end = next_start + 2
 			else:
-				_emit_run(outline_vertices, line_key.x, line_key.y, line_key.z, merged_run)
-				merged_run = next_run
-		_emit_run(outline_vertices, line_key.x, line_key.y, line_key.z, merged_run)
+				_emit_run(outline_vertices, line_key.x, line_key.y, line_key.z, Vector2i(merged_start, merged_end))
+				merged_start = next_start
+				merged_end = next_start + 2
+		_emit_run(outline_vertices, line_key.x, line_key.y, line_key.z, Vector2i(merged_start, merged_end))
 	return outline_vertices
 
 

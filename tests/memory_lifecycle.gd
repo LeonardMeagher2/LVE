@@ -20,9 +20,9 @@ func _run() -> void:
 	step("Given a document with undo history", func():
 		State.document = VoxelDocument.new()
 		document_ref = weakref(State.document)
-		State.begin_stroke()
+		var tx := State.begin_edit()
 		State.paint(Vector3i.ZERO, VoxelFrame.material(Color.RED))
-		State.end_stroke("Paint")
+		State.finish_edit(tx, "Paint")
 	)
 	step("When the user starts another document", func():
 		State.document = VoxelDocument.new()

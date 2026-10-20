@@ -230,13 +230,14 @@ func _copy_voxels(cut_source: bool) -> void:
 		if DisplayServer.has_feature(DisplayServer.FEATURE_CLIPBOARD):
 			DisplayServer.clipboard_set(job.text)
 		if cut_source:
-			State.begin_stroke()
-			frame.restore(job.source_frame.capture())
-			State.document._bounds_dirty = true
-			State.clear_selection()
-			State.end_stroke("Cut")
-			if not job.changed_chunks.is_empty():
-				State.chunks_changed.emit(State.current_frame, job.changed_chunks)
+			var tx := State.begin_edit()
+			if tx != null:
+				frame.restore(job.source_frame.capture())
+				State.document._bounds_dirty = true
+				State.clear_selection()
+				State.finish_edit(tx, "Cut")
+				if not job.changed_chunks.is_empty():
+					State.chunks_changed.emit(State.current_frame, job.changed_chunks)
 	State.finish_operation(operation_id)
 	_sync_buttons()
 

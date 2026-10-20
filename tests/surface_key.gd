@@ -133,9 +133,9 @@ func _run() -> void:
 	)
 	step("When an edit is undone and redone", func():
 		State.document = VoxelDocument.new()
-		State.begin_stroke()
+		var tx := State.begin_edit()
 		State.paint(Vector3i(1, 0, 0), VoxelFrame.material(Color.BLUE))
-		State.end_stroke()
+		State.finish_edit(tx)
 		var edited := _key(State.get_current_voxel_frame(), Vector3i.ZERO, false)
 		State.undo_redo.undo()
 		var undone := _key(State.get_current_voxel_frame(), Vector3i.ZERO, false)

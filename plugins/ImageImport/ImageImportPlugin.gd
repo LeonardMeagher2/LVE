@@ -137,14 +137,11 @@ func import_image(path: String) -> Error:
 	job.plane_axis = State.floor_axis
 	_import_job = job
 	var operation_id := State.begin_operation("Importing image", -1, true, self)
-	job.worker_task_id = WorkerThreadPool.add_task(job.run, true, "Image import")
-	while not WorkerThreadPool.is_task_completed(job.worker_task_id):
+	# The import must stop when its document or frame changes under the worker.
+	await State.run_edit_job(job, operation_id, "Image import", func() -> void:
 		if State.document != document or State.get_current_voxel_frame() != frame:
 			job.cancel()
-		var progress := job.progress()
-		State.update_operation(operation_id, progress[1], progress[2], progress[0])
-		await State.get_tree().process_frame
-	WorkerThreadPool.wait_for_task_completion(job.worker_task_id)
+	)
 	_import_job = null
 	State.finish_operation(operation_id)
 	if State.document != document or State.get_current_voxel_frame() != frame or not job.checkpoint(0):
@@ -158,4 +155,4 @@ func import_image(path: String) -> Error:
 func _exit_tree() -> void:
 	if _import_job:
 		_import_job.cancel()
-		WorkerThreadPool.wait_for_task_completion(_import_job.worker_task_id)
+		_import_job.wait_for_worker()

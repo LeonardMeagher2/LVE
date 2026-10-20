@@ -97,9 +97,9 @@ func _run() -> void:
 		expect(renderer._chunk_instances[Vector3i.ZERO].mesh == smooth_mesh, "the selected smooth mesh is reused")
 	)
 	step("When the user erases a voxel in a diagonally adjacent chunk", func():
-		State.begin_stroke()
+		var tx := State.begin_edit()
 		State.paint(Vector3i(16, 16, 0), VoxelFrame.material(Color.TRANSPARENT))
-		State.end_stroke()
+		State.finish_edit(tx)
 		var affected: Array[Vector3i] = [Vector3i(16, 16, 0)]
 		State.cells_changed.emit(0, affected)
 	)

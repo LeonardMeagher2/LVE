@@ -32,7 +32,11 @@ func _notification(what: int) -> void:
 
 
 func _on_selection_changed() -> void:
-	_selection.show_selection(State.selection)
+	# A streaming wand publishes a growing selection. Route it through the
+	# progressive path, so a new snapshot cannot cancel the outline that is
+	# already building. Every other caller keeps the strict latest-only path.
+	var progressive: bool = _wand != null and is_instance_valid(_wand) and _wand.is_streaming()
+	_selection.show_selection(State.selection, progressive)
 
 
 func activate_tool() -> void:
@@ -44,6 +48,9 @@ func activate_tool() -> void:
 func deactivate_tool() -> void:
 	remove_option_bar_item(_options)
 	if _current_tool:
+		# A held Box or Lasso drag applies its current outline as a release would
+		# before the detach. A pending calculation finishes after it.
+		_current_tool.finish_on_switch()
 		remove_editor_node(_current_tool)
 
 
@@ -55,6 +62,7 @@ func _on_toolbar_toggled(on: bool) -> void:
 
 func _on_tool_changed(tool: int):
 	if _current_tool:
+		_current_tool.finish_on_switch()
 		remove_editor_node(_current_tool)
 		_current_tool = null
 	match tool:

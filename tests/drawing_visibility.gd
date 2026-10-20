@@ -2,6 +2,7 @@ extends "res://tests/test.gd"
 
 var renderer: VoxelRenderer
 var kept_visible := true
+var edit: VoxelEditTransaction
 
 
 func _ready() -> void:
@@ -18,7 +19,7 @@ func _run() -> void:
 	)
 	await _settle()
 	step("When the user draws repeatedly across the boundary", func():
-		State.begin_stroke()
+		edit = State.begin_edit()
 	)
 	for x in range(13, 20):
 		var cell := Vector3i(x, 0, 0)
@@ -28,7 +29,7 @@ func _run() -> void:
 		kept_visible = kept_visible and _mesh_at(Vector3.ZERO) != null
 		kept_visible = kept_visible and _mesh_at(Vector3(16, 0, 0)) != null
 		await get_tree().process_frame
-	State.end_stroke()
+	State.finish_edit(edit)
 	step("Then both existing chunks stay visible throughout the stroke", func():
 		expect(kept_visible, "both chunks remain visible while replacements are pending")
 	)

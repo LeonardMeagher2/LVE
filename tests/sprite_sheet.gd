@@ -6,6 +6,7 @@ var settings: Node
 var sheet_path := ""
 var tag_path := ""
 var cancel_path := ""
+var escape_path := ""
 var turntable_path := ""
 var voxel_size_path := ""
 var camera_size_path := ""
@@ -13,6 +14,8 @@ var original_document: VoxelDocument
 var renderer_count := 0
 var cancelled_result: Error = OK
 var cancelled_done := false
+var escaped_result: Error = OK
+var escaped_done := false
 
 
 func _ready() -> void:
@@ -39,6 +42,7 @@ func _run() -> void:
 		sheet_path = prefix + ".png"
 		tag_path = prefix + "_tag.png"
 		cancel_path = prefix + "_cancel.png"
+		escape_path = prefix + "_escape.png"
 		turntable_path = prefix + "_turntable.png"
 		voxel_size_path = prefix + "_voxel_size.png"
 		camera_size_path = prefix + "_camera_size.png"
@@ -195,6 +199,23 @@ func _run() -> void:
 		expect(exporter._export_viewport == null, "cancellation releases the render viewport reference")
 		exporter.show_editor_tab()
 	)
+	step("When the user cancels another export with Escape", func():
+		exporter._menu_item.get_node("ExportBtn").button_pressed = true
+		_start_escaped_export()
+		expect(State.edit_busy(), "the escaped sprite sheet rendering reports foreground work")
+		_key(KEY_ESCAPE)
+	)
+	while not escaped_done:
+		await get_tree().process_frame
+	step("Then Escape cancellation publishes no partial file and releases resources", func():
+		expect(escaped_result == ERR_BUSY, "the escaped export reports cancellation")
+		expect(not FileAccess.file_exists(escape_path), "the escaped export writes no partial PNG")
+		expect(not FileAccess.file_exists(escape_path.get_basename() + ".json"), "the escaped export writes no JSON sidecar")
+		expect(not State.edit_busy(), "the escape cancellation releases editing")
+		expect(VoxelRenderer._active_renderer_count == renderer_count, "the escape cancellation releases its temporary renderer")
+		expect(exporter._export_viewport == null, "the escape cancellation releases the render viewport reference")
+		exporter.show_editor_tab()
+	)
 	step("When the user resets the size for the front view", func():
 		settings.get_node("ViewRow/View").select(2)
 		settings.get_node("ViewRow/View").item_selected.emit(2)
@@ -269,6 +290,22 @@ func _run() -> void:
 func _start_cancelled_export() -> void:
 	cancelled_result = await exporter.export_sprite_sheet(cancel_path, 0, 2, 64, 1)
 	cancelled_done = true
+
+
+func _start_escaped_export() -> void:
+	escaped_result = await exporter.export_sprite_sheet(escape_path, 0, 2, 64, 1)
+	escaped_done = true
+
+
+func _key(code: Key) -> void:
+	var event := InputEventKey.new()
+	event.keycode = code
+	event.pressed = true
+	get_tree().root.push_input(event)
+	event = InputEventKey.new()
+	event.keycode = code
+	event.pressed = false
+	get_tree().root.push_input(event)
 
 
 func _visible_pixels(image: Image, rect: Rect2i) -> int:

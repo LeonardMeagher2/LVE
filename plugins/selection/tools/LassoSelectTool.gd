@@ -27,6 +27,10 @@ func _commit_shape(pos: Vector2) -> void:
 	_commit_screen(_screen_rectangle(pos), PackedVector2Array())
 
 
+func _reset_shape() -> void:
+	_points = PackedVector2Array()
+
+
 func _append_point(pos: Vector2) -> void:
 	if _points.size() >= SCREEN_POINT_LIMIT:
 		return

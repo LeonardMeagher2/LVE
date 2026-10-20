@@ -99,11 +99,13 @@ func _commit_line() -> void:
 	_cancel_edit()
 	if not context_valid:
 		return
-	State.begin_stroke()
+	var tx := State.begin_edit()
+	if tx == null:
+		return
 	frame.restore(job.edited_frame.capture())
 	State.document._bounds_dirty = true
 	State.selection.restore(job.pasted_selection)
-	State.end_stroke("Paste")
+	State.finish_edit(tx, "Paste")
 	if not job.changed_chunks.is_empty():
 		State.chunks_changed.emit(State.current_frame, job.changed_chunks)
 	State.selection_changed.emit()

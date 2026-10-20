@@ -24,9 +24,9 @@ func _run() -> void:
 	)
 
 	step("When the user paints a voxel in a stroke", func():
-		State.begin_stroke()
+		var tx := State.begin_edit()
 		State.paint(Vector3i.ZERO, VoxelFrame.material(Color.RED))
-		State.end_stroke()
+		State.finish_edit(tx)
 	)
 
 	step("Then undo is enabled and redo is disabled", func():

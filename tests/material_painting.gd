@@ -263,7 +263,7 @@ func _motion(world: Vector3) -> void:
 
 
 func _settle() -> void:
-	while State.edit_busy() or brush._brush_tool._stroke_open or brush._line_tool._job != null or brush._line_tool._preview_requested or brush._options._source_job != null or not plugin("FillPlugin")._tool.is_settled():
+	while State.edit_busy() or brush._brush_tool._edit != null or brush._line_tool._job != null or brush._line_tool._preview_requested or brush._options._source_job != null or not plugin("FillPlugin")._tool.is_settled():
 		await get_tree().process_frame
 	await get_tree().process_frame
 
