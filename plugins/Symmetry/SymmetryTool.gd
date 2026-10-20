@@ -1,5 +1,12 @@
 extends VoxelTool
 
+## The symmetry tool.
+##
+## It shows the mirror planes and toggles them. The X, Y, and Z keys toggle one
+## axis. A drag moves the symmetry origin. It changes no cells.
+
+## Whether the tool is active. A false value stops a drag and rebuilds the
+## planes.
 var active := false:
 	set(value):
 		active = value
@@ -79,6 +86,8 @@ func _accepts(event: InputEvent) -> bool:
 	return active and super._accepts(event)
 
 
+## Handles one input event. The X, Y, and Z keys toggle one mirror axis. A drag
+## moves the symmetry origin.
 func handle_input(event: InputEvent, pos: Vector2) -> bool:
 	if not active:
 		return false

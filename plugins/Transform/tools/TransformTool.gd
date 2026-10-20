@@ -1,6 +1,14 @@
 extends VoxelTool
 
+## Base class for the move, rotate, and scale tools.
+##
+## A press grabs the selection or the whole frame. A drag previews the
+## transform. A release leaves it pending, and Enter or the option bar commits
+## it. Escape cancels it. The whole transform is one history action.
+
+## The estimated work above which a job runs on the worker pool.
 const INLINE_EDIT_LIMIT := 4096
+## The pointer travel in pixels above which a press becomes a drag.
 const CLICK_SLOP_PX := 4.0
 const TOOL_DIALOG_SCENE := preload("./TransformDialog.tscn")
 
@@ -48,14 +56,25 @@ var _active_preview_job: TransformJob
 var _symmetry_axes := 0
 var _symmetry_origin_twice := Vector3i.ZERO
 
+## One cancellable job that reads the transform source.
+##
+## It collects the selected cells, or the whole frame, with their materials and
+## bounds. [method VoxelFrame.EditJob.run] is the worker body.
 class SourceJob extends VoxelFrame.EditJob:
+	## The frame snapshot to read.
 	var source_frame: VoxelFrame
+	## The source cells. An empty mask reads the whole frame.
 	var selection_mask := {}
+	## The source cell positions.
 	var cell_positions: Array[Vector3i] = []
+	## The source colors, keyed by cell position.
 	var cell_colors := {}
+	## The source full materials, keyed by cell position.
 	var cell_materials := {}
+	## The bounds of the source cells.
 	var bounds := AABB()
 
+	## Reads the source cells. This is the worker body.
 	func run() -> void:
 		if not selection_mask.is_empty():
 			stage("Preparing transform", selection_mask.size())
@@ -84,31 +103,59 @@ class SourceJob extends VoxelFrame.EditJob:
 		var cell_bounds := AABB(Vector3(cell_position) - Vector3.ONE * 0.5, Vector3.ONE)
 		bounds = bounds.merge(cell_bounds) if bounds.has_volume() else cell_bounds
 
+## One cancellable transform preview or commit job.
+##
+## The job computes the destination cells from the source and the offset, then
+## mirrors them through the symmetry. It writes the destination and restores
+## the cells that the transform uncovers.
+## [method VoxelFrame.EditJob.run] is the worker body.
 class TransformJob extends VoxelFrame.EditJob:
+	## The source cell positions.
 	var source_positions: Array[Vector3i] = []
+	## The source colors, keyed by cell position.
 	var source_colors := {}
+	## The source full materials, keyed by cell position.
 	var source_materials := {}
+	## The bounds of the source cells.
 	var source_bounds := AABB()
+	## The cells that the previous preview wrote.
 	var old_positions: Array[Vector3i] = []
+	## The cells that the previous preview covered, keyed by cell position.
 	var previous_covered := {}
+	## The materials of the previous covered cells.
 	var previous_covered_materials := {}
+	## The frame snapshot to write.
 	var edited_frame: VoxelFrame
+	## Whether the destination selection follows the transform.
 	var track_selection := false
+	## The destination colors, keyed by cell position.
 	var destination_colors := {}
+	## The destination full materials, keyed by cell position.
 	var destination_materials := {}
+	## The destination cell positions.
 	var destination_positions: Array[Vector3i] = []
+	## The destination selection, keyed by cell position.
 	var destination_selection := {}
+	## The bounds of the destination cells.
 	var destination_bounds := AABB()
+	## The cells that the transform covered, keyed by cell position.
 	var covered := {}
+	## The materials of the covered cells.
 	var covered_materials := {}
+	## The chunk locations that the transform changed.
 	var changed_chunks: Array[Vector3i] = []
+	## The cell offset of the transform.
 	var offset := Vector3i.ZERO
+	## The symmetry axes as a bit mask.
 	var symmetry_axes := 0
+	## Twice the symmetry origin in cell units.
 	var symmetry_origin_twice := Vector3i.ZERO
 
+	## Returns the estimated source cell count.
 	func estimated_work() -> int:
 		return source_positions.size()
 
+	## Computes and applies the transform. This is the worker body.
 	func run() -> void:
 		_reduce_to_fundamental_domain()
 		compute_destination()
@@ -221,6 +268,8 @@ class TransformJob extends VoxelFrame.EditJob:
 			destination_selection = context.expand(destination_selection, edited_frame, false, null, self)
 
 
+## Handles one input event. A press grabs the source. A drag previews. A release
+## leaves the transform pending. Enter commits and Escape cancels.
 func handle_input(event: InputEvent, pos: Vector2) -> bool:
 	if event is InputEventMouseButton:
 		return _on_mouse_button(event, pos)
@@ -644,5 +693,6 @@ func _update_params(_origin: Vector3, _dir: Vector3) -> bool:
 	return false
 
 
+## Returns [code]true[/code] when no preview or grab is pending.
 func is_settled() -> bool:
 	return not _preview_running and not _grab_waiting

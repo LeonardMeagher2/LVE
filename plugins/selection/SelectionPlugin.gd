@@ -1,5 +1,10 @@
 extends VoxelPlugin
 
+## The selection plugin.
+##
+## It owns the box, wand, and lasso selection tools. It shows the shared
+## selection preview and the selection option bar.
+
 var _settings := preload("./settings.tres")
 
 @onready var _toolbar:MenuButton = preload("./Toolbar.tscn").instantiate()
@@ -39,12 +44,15 @@ func _on_selection_changed() -> void:
 	_selection.show_selection(State.selection, progressive)
 
 
+## Activates the current selection tool and shows the option bar.
 func activate_tool() -> void:
 	_toolbar.set_pressed_no_signal(true)
 	add_option_bar_item(_options)
 	_on_tool_changed(_settings.tool)
 
 
+## Deactivates the current selection tool and hides the option bar. A held Box
+## or Lasso drag applies its outline before the detach.
 func deactivate_tool() -> void:
 	remove_option_bar_item(_options)
 	if _current_tool:

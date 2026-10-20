@@ -1,9 +1,18 @@
 extends "./TransformTool.gd"
 
+## The rotate transform tool.
+##
+## A drag rotates the source around its bounds center on the view axis. A click
+## opens the rotate dialog for exact angles. A quarter turn uses an exact
+## integer rotation. Any other angle uses [RotSprite].
+
 const TransformDialog := preload("./TransformDialog.gd")
 
+## One quarter turn in radians.
 const QUARTER := PI / 2.0
+## One degree in radians.
 const DEGREE := PI / 180.0
+## The magnetic pull to the nearest quarter turn, in radians.
 const MAGNETIC_PULL := DEGREE * 2.0
 
 var _axis := 1
@@ -15,12 +24,23 @@ var _euler := Vector3.ZERO
 var _gesture_base_euler := Vector3.ZERO
 var _job_euler := Vector3.ZERO
 
+## One cancellable rotate transform job.
+##
+## A quarter turn permutes the cell indices, so no voxel is lost. Any other
+## angle samples the source with [RotSprite].
+## [method TransformJob.compute_destination] is overridden.
 class RotateJob extends TransformJob:
+	## The rotation axis.
 	var axis := 1
+	## The rotation direction on the axis.
 	var axis_sign := 1.0
+	## The pivot in cell units.
 	var pivot := Vector3.ZERO
+	## The single-axis angle in radians.
 	var angle := 0.0
 	# Total rotation as XYZ Euler angles in radians. Applies Z first, then Y, then X.
+	## The total rotation as XYZ Euler angles in radians. It applies Z first, then
+	## Y, then X.
 	var euler := Vector3.ZERO
 	var _candidate_total := 0
 	var _candidate_completed := 0

@@ -1,53 +1,104 @@
 extends Node
 
+## The application singleton for editor state.
+##
+## State owns the current document, the current frame, the selection, the undo
+## history, and the operation list. It also owns the one open edit. It is
+## registered as the `State` autoload.
+##
+## Use the signals to observe changes. Start model changes through the edit and
+## history methods, so an undo restores them.
+
+## Emitted when the document is replaced.
 signal document_changed()
+## Emitted when cells in a frame change. [param frame] is the frame index.
+## [param affected] lists the changed cells.
 signal cells_changed(frame: int, affected: Array[Vector3i])
+## Emitted when chunks in a frame need a surface rebuild. [param frame] is the
+## frame index. [param affected] lists one cell per changed chunk.
 signal chunks_changed(frame: int, affected: Array[Vector3i])
+## Emitted when the frame list or a tag range changes.
 signal frames_changed()
+## Emitted when a frame property changes.
 signal frame_changed()
+## Emitted when playback starts or stops. [param toggled_on] is the new state.
 signal is_playing_toggled(toggled_on:bool)
+## Emitted when the current color changes.
 signal color_changed(color: Color)
+## Emitted when the current material changes.
 signal material_changed()
+## Emitted when the document palette changes.
 signal palette_changed()
+## Emitted when the default palette changes.
 signal default_palette_changed()
+## Emitted when the cell selection changes.
 signal selection_changed()
+## Emitted when the floor axis or the floor index changes.
 signal floor_plane_changed()
+## Emitted when the symmetry axes or the symmetry origin change.
 signal symmetry_changed()
+## Emitted when a tag property changes.
 signal tag_changed()
+## Emitted when an operation starts, updates, or finishes.
 signal activity_changed()
+## Emitted before the edit context changes. An open edit or drag must cancel its
+## work on this signal.
 signal edit_context_changing()
+## Emitted when a model setting changes.
 signal model_settings_changed()
+## Emitted after an undo or redo, and after each history commit.
 signal history_changed()
 
+## The main-thread work slice in microseconds for one pumped frame.
 const WORK_SLICE_US := 3000
+## The user path of the saved default palette.
 const DEFAULT_PALETTE_PATH := "user://default_palette.cfg"
+## The user path of the session file.
 const SESSION_PATH := "user://session.cfg"
+## The default symmetry origin, at the corner between eight cells.
 const DEFAULT_SYMMETRY_ORIGIN := Vector3(-0.5, -0.5, -0.5)
+## The image file extensions that the importer supports.
 const IMAGE_EXTENSIONS := ["bmp", "dds", "exr", "hdr", "jpg", "jpeg", "ktx", "ktx2", "png", "svg", "tga", "webp"]
 
+## The palette that the New Document action applies.
 var default_palette := get_builtin_palette()
 
+## One tracked operation for the status display.
+##
+## State owns the list. The owner starts an operation with
+## [method State.begin_operation] and finishes it with
+## [method State.finish_operation].
 class Operation extends RefCounted:
+	## The unique operation id.
 	var id := 0
 	# The artist-facing identity the owner set at begin_operation. It is stable, so
 	# the status display never changes its action name while the operation runs.
+	## The artist-facing action name. It stays fixed for the whole operation.
 	var label := ""
 	# The owner's current progress stage. It is diagnostic only: the status display
 	# shows the begin label, not this stage.
+	## The owner's current progress stage. It is diagnostic only.
 	var phase := ""
+	## A diagnostic detail line for the current stage.
 	var detail := ""
+	## The completed work count.
 	var completed := 0
+	## The total work count. A value below one means an unknown total.
 	var total := -1
+	## Whether the operation owns Escape and the status display.
 	var foreground := false
 	# Set when a cancel request was accepted. The owner finishes the operation, so
 	# completion stays with finish_operation.
+	## Whether a cancel request was accepted. The owner finishes the operation.
 	var cancel_requested := false
+	## A weak reference to the operation owner.
 	var owner_ref: WeakRef
 	# An operation is cancellable only when its owner registered this callback. The
 	# capability is explicit, so a foreground operation without one stays visible and
 	# is not cancellable.
 	var _cancel_callback := Callable()
 
+	## Returns [code]true[/code] when a cancel request can still be accepted.
 	func can_cancel() -> bool:
 		return not cancel_requested and _cancel_callback.is_valid()
 
@@ -58,11 +109,20 @@ var _erase_job: EraseJob
 var _erase_operation_id := 0
 var _erase_jobs: Array[EraseJob] = []
 
+## One erase edit job that clears every selected cell.
+##
+## The job shares one transparent material across the selection. State runs it
+## on the worker pool when the selection is large.
 class EraseJob extends VoxelFrame.EditJob:
+	## The edited frame copy. The result replaces the live frame.
 	var edited_frame: VoxelFrame
+	## The selected cells as a dictionary keyed by cell position.
 	var selection_mask := {}
+	## The chunk locations that the erase changed.
 	var changed_chunks: Array[Vector3i] = []
 
+	## Runs the erase on the calling thread. It checks the cancel flag at each
+	## checkpoint.
 	func run() -> void:
 		stage("Preparing erase", selection_mask.size())
 		var changes := {}
@@ -80,27 +140,33 @@ class EraseJob extends VoxelFrame.EditJob:
 		changed_chunks = edited_frame.set_cells(changes, self, erased_material)
 
 
+## The animation playback state.
 var playback := AnimationPlayback.new()
+## The current document. A write replaces the document and resets the history.
 var document: VoxelDocument : set=set_document
 
+## The index of the current frame.
 var current_frame: int:
 	get:
 		return playback.current_frame
 	set(value):
 		playback.current_frame = value
 
+## Whether animation playback runs.
 var is_playing: bool:
 	get:
 		return playback.is_playing
 	set(value):
 		playback.is_playing = value
 
+## The index of the active tag, or -1 when no tag is active.
 var active_tag: int:
 	get:
 		return playback.active_tag
 	set(value):
 		playback.active_tag = value
 
+## The world axis of the floor plane. Axis 0 is X, axis 1 is Y, and axis 2 is Z.
 var floor_axis:Vector3.Axis = Vector3.Axis.AXIS_Y:
 	set(value):
 		if value == floor_axis:
@@ -108,6 +174,7 @@ var floor_axis:Vector3.Axis = Vector3.Axis.AXIS_Y:
 		floor_axis = value
 		floor_plane_changed.emit()
 
+## The cell index of the floor plane along [member floor_axis].
 var floor_index := 0:
 	set(value):
 		if value == floor_index:
@@ -115,6 +182,7 @@ var floor_index := 0:
 		floor_index = value
 		floor_plane_changed.emit()
 
+## The symmetry axes as a bit mask. Bit 0 is X, bit 1 is Y, and bit 2 is Z.
 var symmetry_axes := 0:
 	set(value):
 		value &= 7
@@ -123,6 +191,7 @@ var symmetry_axes := 0:
 		symmetry_axes = value
 		symmetry_changed.emit()
 
+## The symmetry origin in cell units. It snaps to half units.
 var symmetry_origin := DEFAULT_SYMMETRY_ORIGIN:
 	set(value):
 		value = value.snapped(Vector3.ONE * 0.5)
@@ -132,12 +201,16 @@ var symmetry_origin := DEFAULT_SYMMETRY_ORIGIN:
 		symmetry_changed.emit()
 
 var _current_material := VoxelFrame.material(Color.BLACK)
+## The current material as nine floats. A read returns a copy. A write records a
+## history action.
 var current_material: PackedFloat32Array:
 	get:
 		return _current_material.duplicate()
 	set(value):
 		set_material(value)
+## The palette index that matches the current material, or -1 when none matches.
 var current_palette_index := -1
+## The color of the current material. A write keeps the other material values.
 var current_color: Color:
 	get:
 		return VoxelFrame.material_color(_current_material)
@@ -150,7 +223,9 @@ var current_color: Color:
 		_apply_material(material)
 var _material_edit_document: VoxelDocument
 var _material_edit_before := PackedFloat32Array()
+## The current cell selection.
 var selection := VoxelSelection.new()
+## The undo and redo history of the current document.
 var undo_redo := UndoRedo.new()
 # The one open edit, or null. It supplies the frozen edit context to drawing and
 # holds the identity a commit or a cancel must match. The owner holds the handle.
@@ -187,6 +262,8 @@ func _ready() -> void:
 	
 
 
+## Replaces the document and resets the history and the selection. A value that
+## is not a [VoxelDocument] creates a new empty document.
 func set_document(value:VoxelDocument) -> void:
 	if value == document:
 		return
@@ -227,6 +304,8 @@ func _commit_history(execute: bool = true) -> void:
 	history_changed.emit()
 
 
+## Undoes the last history action. Returns [code]true[/code] when an action was
+## undone.
 func undo() -> bool:
 	var undone := undo_redo.undo()
 	if undone:
@@ -234,6 +313,8 @@ func undo() -> bool:
 	return undone
 
 
+## Redoes the last undone action. Returns [code]true[/code] when an action was
+## redone.
 func redo() -> bool:
 	var redone := undo_redo.redo()
 	if redone:
@@ -241,14 +322,18 @@ func redo() -> bool:
 	return redone
 
 
+## Adds one plugin under the scene root.
 func add_plugin(plugin: VoxelPlugin) -> void:
 	get_node("/root").add_child.call_deferred(plugin, true)
 	
+## Removes one plugin and frees it.
 func remove_plugin(plugin: VoxelPlugin) -> void:
 	get_node("/root").remove_child(plugin)
 	plugin.queue_free()
 
 
+## Paints one cell with the current edit context. It expands the cell through
+## symmetry and the selection.
 func paint(position: Vector3i, cell_material: PackedFloat32Array) -> void:
 	if symmetry_axes == 0 and _active_edit == null:
 		document.paint(current_frame, position, cell_material)
@@ -259,6 +344,8 @@ func paint(position: Vector3i, cell_material: PackedFloat32Array) -> void:
 	document._bounds_dirty = true
 
 
+## Returns the edit context for the current drawing. An open edit supplies its
+## frozen context, so a later change cannot alter the open stroke.
 func drawing_context() -> VoxelFrame.EditContext:
 	# A stroke keeps the context it captured at begin, so a symmetry or selection
 	# change during the stroke cannot alter the cells it writes.
@@ -276,6 +363,7 @@ func _live_context() -> VoxelFrame.EditContext:
 	return context
 
 
+## Returns the transform that mirrors a point for one symmetry mask.
 func symmetry_transform(mask: int, origin: Vector3) -> Transform3D:
 	var reflection := Vector3.ONE
 	for axis in 3:
@@ -284,6 +372,8 @@ func symmetry_transform(mask: int, origin: Vector3) -> Transform3D:
 	return Transform3D(Basis.from_scale(reflection), origin - origin * reflection)
 
 
+## Returns an edit context that carries the symmetry only. The selection filter
+## is not applied.
 func selection_context() -> VoxelFrame.EditContext:
 	var drawing := drawing_context()
 	var context := VoxelFrame.EditContext.new()
@@ -292,12 +382,17 @@ func selection_context() -> VoxelFrame.EditContext:
 	return context
 
 
+## Returns the region after the symmetry expansion. The selection filter is not
+## applied.
 func selection_region(region: VoxelSelection) -> VoxelSelection:
 	var result := VoxelSelection.new()
 	result.restore(selection_context().expand(region.capture(), get_current_voxel_frame(), false, null))
 	return result
 
 
+## Starts one tracked operation and returns its id. [param label] is the artist
+## action. A [param total] below one means an unknown total. A [param
+## cancel_callback] makes the operation cancellable.
 func begin_operation(label: String, total: int = -1, foreground: bool = false, operation_owner: Node = null, cancel_callback: Callable = Callable()) -> int:
 	var operation := Operation.new()
 	operation.label = label
@@ -320,6 +415,9 @@ func begin_operation(label: String, total: int = -1, foreground: bool = false, o
 # cancel path, so the request marks the operation and calls its callback. A second
 # request returns false, and completion stays with finish_operation. Returns true
 # when the request was accepted.
+## Requests the cancellation of one operation. Returns [code]true[/code] when
+## the request was accepted. A second request returns [code]false[/code]. The
+## owner finishes the operation.
 func cancel_operation(operation_id: int) -> bool:
 	var operation: Operation = _operations.get(operation_id)
 	if operation == null or not operation.can_cancel():
@@ -336,6 +434,8 @@ func cancel_operation(operation_id: int) -> bool:
 
 # Cancel the cancellable foreground operation the status bar shows. Esc uses this,
 # so it still reaches a tool that a tool switch detached from the tree.
+## Cancels the cancellable foreground operation that the status bar shows.
+## Returns [code]true[/code] when the request was accepted or already pending.
 func cancel_activity() -> bool:
 	var operation := get_activity()
 	if operation == null or not operation.foreground:
@@ -350,6 +450,9 @@ func cancel_activity() -> bool:
 # Update the measured progress and the internal stage of one operation. The stage
 # and the detail are diagnostic: the status display shows only the begin label. The
 # begin label is never replaced, so a worker stage cannot change the artist action.
+## Updates the measured progress of one operation. [param completed] and [param
+## total] drive the percentage. [param phase] and [param detail] are diagnostic
+## only.
 func update_operation(operation_id: int, completed: int, total: int = -1, phase: String = "", detail: String = "") -> void:
 	var operation: Operation = _operations.get(operation_id)
 	if operation == null:
@@ -363,6 +466,8 @@ func update_operation(operation_id: int, completed: int, total: int = -1, phase:
 	activity_changed.emit()
 
 
+## Finishes one operation and removes it from the list. Does nothing when the id
+## is unknown.
 func finish_operation(operation_id: int) -> void:
 	if not _operations.erase(operation_id):
 		return
@@ -380,6 +485,9 @@ func finish_operation(operation_id: int) -> void:
 # `wait_for_worker`, and this stops without a second wait. `wait_for_worker`
 # clears the id after its own wait, so a later external wait never waits on a
 # disposed task.
+## Runs one edit job on the worker pool and pumps its progress. The worker is
+## always joined before this returns. [param on_frame] runs once per pumped
+## frame before the progress update.
 func run_edit_job(job: VoxelFrame.EditJob, operation_id: int, task_name: String, on_frame: Callable = Callable()) -> void:
 	job.worker_task_id = WorkerThreadPool.add_task(job.run, true, task_name)
 	while job.worker_task_id >= 0 and not WorkerThreadPool.is_task_completed(job.worker_task_id):
@@ -391,10 +499,13 @@ func run_edit_job(job: VoxelFrame.EditJob, operation_id: int, task_name: String,
 	job.wait_for_worker()
 
 
+## Returns [code]true[/code] when the operation id is tracked.
 func has_operation(operation_id: int) -> bool:
 	return _operations.has(operation_id)
 
 
+## Returns the operation for the status display. A foreground operation wins. A
+## background operation is the fallback.
 func get_activity() -> Operation:
 	var background_operation: Operation = null
 	for operation in _operations.values():
@@ -405,10 +516,14 @@ func get_activity() -> Operation:
 	return background_operation
 
 
+## Returns the elapsed time of the current activity in milliseconds. Returns
+## zero when no operation runs.
 func activity_elapsed_ms() -> int:
 	return Time.get_ticks_msec() - _activity_started_ms if not _operations.is_empty() else 0
 
 
+## Returns [code]true[/code] when a foreground operation blocks an edit. An
+## operation that [param requester] owns does not block it.
 func edit_busy(requester: Node = null) -> bool:
 	for operation in _operations.values():
 		if operation.foreground and (requester == null or operation.owner_ref == null or operation.owner_ref.get_ref() != requester):
@@ -420,6 +535,9 @@ func edit_busy(requester: Node = null) -> bool:
 # the selection, and the frozen edit context. Returns null when an edit is already
 # active or the current frame is missing, so a caller must check before it mutates
 # the model. The caller holds the returned handle for the whole edit.
+## Begins one owned edit on the current frame. Returns null while another edit
+## is active or the current frame is missing. The caller must check the result
+## before it mutates the model.
 func begin_edit() -> VoxelEditTransaction:
 	if _active_edit != null:
 		return null
@@ -430,6 +548,7 @@ func begin_edit() -> VoxelEditTransaction:
 	return _active_edit
 
 
+## Returns the open edit, or null when no edit is active.
 func active_edit() -> VoxelEditTransaction:
 	return _active_edit
 
@@ -437,6 +556,9 @@ func active_edit() -> VoxelEditTransaction:
 # Close one owned edit and record its change as one history action. A stale handle
 # that no longer owns the active edit does nothing, so a cancelled edit can never
 # finish a newer one or roll back a newer document.
+## Closes one owned edit and records its change as one history action. A stale
+## handle that no longer owns the active edit does nothing. The default action
+## is [code]Stroke[/code].
 func finish_edit(tx: VoxelEditTransaction, action: String = "Stroke") -> void:
 	if tx == null or tx != _active_edit:
 		return
@@ -453,6 +575,8 @@ func finish_edit(tx: VoxelEditTransaction, action: String = "Stroke") -> void:
 
 
 # Roll one owned edit back to its start snapshots. A stale handle does nothing.
+## Rolls one owned edit back to its start snapshots. A stale handle does
+## nothing.
 func cancel_edit(tx: VoxelEditTransaction) -> void:
 	if tx == null or tx != _active_edit:
 		return
@@ -487,22 +611,28 @@ func _restore_chunks(edited_frame: VoxelFrame, chunk_snapshot: Dictionary, selec
 		cells_changed.emit(frame_index, affected_cells)
 	selection_changed.emit()
 
+## Returns [code]true[/code] when the current frame holds the cell.
 func has_cell(position: Vector3i) -> bool:
 	return document.has_cell(current_frame, position)
 
+## Starts playback of the active tag.
 func play():
 	is_playing = true
 
+## Selects one tag and starts playback.
 func play_tag(i: int) -> void:
 	active_tag = i
 	is_playing = true
 
+## Stops playback.
 func stop():
 	is_playing = false
 
+## Selects one tag without playback.
 func select_tag(i: int) -> void:
 	active_tag = i
 
+## Clears the active tag.
 func deselect_tag() -> void:
 	active_tag = -1
 
@@ -514,6 +644,7 @@ func _process(delta: float) -> void:
 			finish_operation(operation_id)
 	playback.update(delta)
 
+## Sets the RGB and alpha of the current material and records a history action.
 func set_color(color: Color) -> void:
 	var material := current_material
 	material[0] = color.r
@@ -523,6 +654,8 @@ func set_color(color: Color) -> void:
 	set_material(material)
 
 
+## Sets the current material and records a history action. An invalid material
+## is ignored.
 func set_material(material: PackedFloat32Array) -> void:
 	if not VoxelDocument.valid_material(material):
 		return
@@ -547,6 +680,8 @@ func _apply_material(material: PackedFloat32Array) -> void:
 		material_changed.emit()
 
 
+## Selects a palette entry as the current material. An out-of-range index is
+## ignored.
 func select_palette_entry(index: int) -> void:
 	if index < 0 or index >= document.palette.size():
 		return
@@ -554,6 +689,8 @@ func select_palette_entry(index: int) -> void:
 	_apply_material(document.palette[index])
 
 
+## Adds the current material to the palette. An existing equal entry is selected
+## instead.
 func add_material() -> void:
 	if edit_busy():
 		return
@@ -570,12 +707,15 @@ func add_material() -> void:
 	_record_palette_action("Add Palette Material", before)
 
 
+## Returns the color of one palette entry.
 func get_color(index: int) -> Color:
 	return document.get_color(index)
 	
+## Returns the color of one cell in the current frame.
 func get_color_at(position: Vector3i) -> Color:
 	return document.get_color_at(current_frame, position)
 
+## Removes the selected palette entry.
 func remove_palette_entry() -> void:
 	if edit_busy() or current_palette_index < 0:
 		return
@@ -590,10 +730,13 @@ func remove_palette_entry() -> void:
 	_record_palette_action("Remove Palette Material", before)
 
 
+## Returns a copy of the document palette.
 func get_palette() -> Array[PackedFloat32Array]:
 	return _copy_palette(document.palette)
 
 
+## Replaces the document palette and records a history action. An invalid
+## palette is ignored. The default action name is [code]Replace Palette[/code].
 func set_palette(materials: Array[PackedFloat32Array], action_name: String = "Replace Palette") -> void:
 	if edit_busy() or not VoxelDocument.valid_palette(materials):
 		return
@@ -607,6 +750,7 @@ func set_palette(materials: Array[PackedFloat32Array], action_name: String = "Re
 	_record_palette_action(action_name, before)
 
 
+## Moves one palette entry to a new index and records a history action.
 func move_palette_entry(from_index: int, to_index: int) -> void:
 	if edit_busy() or from_index == to_index or from_index < 0 or to_index < 0 or from_index >= document.palette.size() or to_index >= document.palette.size():
 		return
@@ -619,6 +763,8 @@ func move_palette_entry(from_index: int, to_index: int) -> void:
 	_record_palette_action("Move Palette Material", before)
 
 
+## Applies one material edit. A control gesture records one history step for all
+## its changes.
 func edit_material(material: PackedFloat32Array) -> void:
 	if edit_busy() or not VoxelDocument.valid_material(material) or material == _current_material:
 		return
@@ -629,6 +775,7 @@ func edit_material(material: PackedFloat32Array) -> void:
 		_record_material_action(before)
 
 
+## Starts one material edit gesture. The gesture records one history action.
 func begin_material_edit() -> void:
 	if edit_busy() or _material_edit_document != null:
 		return
@@ -636,6 +783,7 @@ func begin_material_edit() -> void:
 	_material_edit_before = current_material
 
 
+## Ends the material edit gesture and records its history action.
 func end_material_edit() -> void:
 	var edited_document := _material_edit_document
 	var before := _material_edit_before
@@ -645,6 +793,7 @@ func end_material_edit() -> void:
 		_record_material_action(before)
 
 
+## Cancels the material edit gesture and restores the start material.
 func cancel_material_edit() -> void:
 	var edited_document := _material_edit_document
 	var before := _material_edit_before
@@ -689,6 +838,7 @@ func _restore_palette(edited_document: VoxelDocument, snapshot: Dictionary) -> v
 	palette_changed.emit()
 
 
+## Returns the built-in default palette.
 func get_builtin_palette() -> Array[PackedFloat32Array]:
 	# Keep grayscale first, then vivid hues, cooler shadows, and warmer highlights.
 	var colors := PackedColorArray([
@@ -704,6 +854,8 @@ func get_builtin_palette() -> Array[PackedFloat32Array]:
 	return materials
 
 
+## Loads the default palette from a config file. A missing or invalid file keeps
+## the built-in palette. The default path is [constant DEFAULT_PALETTE_PATH].
 func load_default_palette(path: String = DEFAULT_PALETTE_PATH) -> void:
 	default_palette = get_builtin_palette()
 	var config := ConfigFile.new()
@@ -720,6 +872,7 @@ func load_default_palette(path: String = DEFAULT_PALETTE_PATH) -> void:
 	default_palette_changed.emit()
 
 
+## Saves the current palette as the default. Returns the error code.
 func save_default_palette(path: String = DEFAULT_PALETTE_PATH) -> Error:
 	if edit_busy():
 		return ERR_BUSY
@@ -735,6 +888,8 @@ func save_default_palette(path: String = DEFAULT_PALETTE_PATH) -> Error:
 	return error
 
 
+## Deletes the saved default palette and restores the built-in palette. Returns
+## the error code.
 func reset_default_palette(path: String = DEFAULT_PALETTE_PATH) -> Error:
 	if edit_busy():
 		return ERR_BUSY
@@ -747,6 +902,7 @@ func reset_default_palette(path: String = DEFAULT_PALETTE_PATH) -> Error:
 	return OK
 
 
+## Stores the last document path in the session file.
 func remember_document(path: String, config_path: String = SESSION_PATH) -> void:
 	var config := ConfigFile.new()
 	config.load(config_path)
@@ -754,6 +910,7 @@ func remember_document(path: String, config_path: String = SESSION_PATH) -> void
 	config.save(config_path)
 
 
+## Removes the last document path from the session file.
 func forget_document(config_path: String = SESSION_PATH) -> void:
 	var config := ConfigFile.new()
 	if config.load(config_path) != OK:
@@ -763,6 +920,7 @@ func forget_document(config_path: String = SESSION_PATH) -> void:
 	config.save(config_path)
 
 
+## Returns the stored last document path, or an empty string.
 func last_document_path(config_path: String = SESSION_PATH) -> String:
 	var config := ConfigFile.new()
 	if config.load(config_path) != OK:
@@ -771,11 +929,14 @@ func last_document_path(config_path: String = SESSION_PATH) -> String:
 	return path if path is String else ""
 
 
+## Returns [code]true[/code] when the current scene is the application Main
+## scene.
 func is_app_session() -> bool:
 	var tree := get_tree()
 	return tree != null and tree.current_scene == tree.root.get_node_or_null("Main")
 
 
+## Returns the file dialog filter for the supported image formats.
 func get_image_file_filter() -> String:
 	var patterns := PackedStringArray()
 	for extension in IMAGE_EXTENSIONS:
@@ -783,6 +944,8 @@ func get_image_file_filter() -> String:
 	return ", ".join(patterns) + " ; Images"
 
 
+## Loads an image file into [param image]. It handles DDS and KTX buffers and
+## decompresses the result.
 func load_image(path: String, image: Image) -> Error:
 	var extension := path.get_extension().to_lower()
 	var error: Error = OK
@@ -801,12 +964,15 @@ func load_image(path: String, image: Image) -> Error:
 		return image.decompress()
 	return OK
 
+## Returns [code]true[/code] when the cell is editable. An empty selection
+## allows every cell.
 func can_edit(cell: Vector3i) -> bool:
 	if selection.is_empty():
 		return true
 	return selection.contains(cell)
 
 
+## Clears the cell selection.
 func clear_selection() -> void:
 	if selection.is_empty():
 		return
@@ -814,6 +980,8 @@ func clear_selection() -> void:
 	selection_changed.emit()
 
 
+## Erases every selected cell as one history action. A selection above 4096
+## cells runs on the worker pool.
 func erase_selection() -> void:
 	if selection.is_empty() or edit_busy():
 		return
@@ -890,19 +1058,23 @@ func _notification(what: int) -> void:
 		undo_redo.free()
 
 
+## Moves to the next frame, wrapping at the end.
 func next_frame() -> void:
 	var n := document.frames.size()
 	current_frame = (current_frame + 1) % n
 
 
+## Moves to the previous frame, wrapping at the start.
 func prev_frame() -> void:
 	var n := document.frames.size()
 	current_frame = (current_frame - 1) % n
 
+## Returns the frame count.
 func get_frame_count() -> int:
 	return document.frames.size()
 
 
+## Sets the smooth normals model option and records a history action.
 func set_smooth_normals(value: bool) -> void:
 	if edit_busy() or value == document.smooth_normals:
 		return
@@ -918,17 +1090,20 @@ func _apply_smooth_normals(value: bool) -> void:
 	model_settings_changed.emit()
 
 
+## Returns one frame by index, or null when the index is out of range.
 func get_voxel_frame(frame:int) -> VoxelFrame:
 	if frame < 0 or frame >= document.frames.size():
 		return null
 	return document.frames[frame]
 
+## Returns the current frame, or null when the index is out of range.
 func get_current_voxel_frame() -> VoxelFrame:
 	if current_frame < 0 or current_frame >= document.frames.size():
 		return null
 	return document.frames[current_frame]
 
 
+## Adds an empty frame after the current frame and records a history action.
 func add_frame() -> void:
 	edit_context_changing.emit()
 	is_playing = false
@@ -938,6 +1113,7 @@ func add_frame() -> void:
 	_record_frame_action("Add Frame", before, _frame_snapshot())
 
 
+## Duplicates the current frame and records a history action.
 func duplicate_frame() -> void:
 	edit_context_changing.emit()
 	is_playing = false
@@ -947,6 +1123,7 @@ func duplicate_frame() -> void:
 	_record_frame_action("Duplicate Frame", before, _frame_snapshot())
 
 
+## Deletes the current frame. The last remaining frame is kept.
 func delete_frame() -> void:
 	if document.frames.size() <= 1:
 		return
@@ -959,6 +1136,7 @@ func delete_frame() -> void:
 	_record_frame_action("Delete Frame", before, _frame_snapshot())
 
 
+## Moves one frame to a new index and records a history action.
 func move_frame(from: int, to: int) -> void:
 	var f := clampi(from, 0, document.frames.size() - 1)
 	var t := clampi(to, 0, document.frames.size() - 1)
@@ -1015,6 +1193,7 @@ func _set_tag_ranges(ranges: Array[Vector2i]) -> void:
 		tag.to = ranges[i].y
 
 
+## Sets a frame duration in milliseconds and records a history action.
 func set_frame_delay(index: int, ms: int) -> void:
 	if index < 0 or index >= document.frames.size():
 		return
@@ -1035,6 +1214,8 @@ func _apply_frame_delay(index: int, ms: int) -> void:
 	frame_changed.emit()
 
 
+## Adds an animation tag and records a history action. A negative [param to]
+## means the last frame. The frame range is inclusive.
 func add_tag(tag_name: String, from: int = 0, to: int = -1) -> void:
 	var end := to
 	if to < 0:
@@ -1064,12 +1245,15 @@ func _apply_tag_removed(index: int, active: int) -> void:
 	frames_changed.emit()
 
 
+## Returns the active tag, or null when no tag is active.
 func get_active_tag() -> AnimationTag:
 	return document.get_tag(active_tag)
 	
+## Returns one tag by index, or null when the index is out of range.
 func get_tag(i: int) -> AnimationTag:
 	return document.get_tag(i)
 
+## Removes the active tag. The last remaining tag is kept.
 func remove_tag() -> void:
 	if document.tags.size() <= 1:
 		return
@@ -1082,6 +1266,8 @@ func remove_tag() -> void:
 	_commit_history(false)
 	_apply_tag_removed(index, new_active)
 
+## Sets the active tag frame range. [param from] and [param to] are inclusive.
+## Set [param record_history] to record one history action.
 func set_tag_range(from: int, to: int, record_history: bool = true) -> void:
 	var tag := get_active_tag()
 	if tag == null:
@@ -1098,6 +1284,7 @@ func set_tag_range(from: int, to: int, record_history: bool = true) -> void:
 		commit_tag_range(index, previous_range)
 
 
+## Records one history action for a tag range change.
 func commit_tag_range(index: int, previous_range: Vector2i) -> void:
 	var tag := document.get_tag(index)
 	if tag == null or previous_range == Vector2i(tag.from, tag.to):
@@ -1119,6 +1306,8 @@ func _apply_tag_range(index: int, from: int, to: int) -> void:
 	tag_changed.emit()
 
 
+## Sets a tag loop mode and records a history action. See
+## [enum AnimationTag.LoopMode] for the values.
 func set_tag_loop_mode(index: int, mode: int) -> void:
 	var tag := document.get_tag(index)
 	if tag == null or tag.loop_mode == mode:
@@ -1138,6 +1327,8 @@ func _apply_tag_loop_mode(index: int, mode: int) -> void:
 	tag_changed.emit()
 
 
+## Sets a tag repeat count and records a history action. Zero means continuous
+## playback.
 func set_tag_repeats(index: int, value: int) -> void:
 	var tag := document.get_tag(index)
 	if tag == null or tag.repeats == value:
@@ -1157,6 +1348,7 @@ func _apply_tag_repeats(index: int, value: int) -> void:
 	tag_changed.emit()
 
 
+## Sets a tag name and records a history action.
 func set_tag_name(index: int, tag_name: String) -> void:
 	var tag := document.get_tag(index)
 	if tag == null or tag.name == tag_name:
@@ -1176,6 +1368,8 @@ func _apply_tag_name(index: int, tag_name: String) -> void:
 	tag_changed.emit()
 
 
+## Moves to the first frame of the active tag. It moves to frame zero when no
+## tag is active.
 func to_start() -> void:
 	var tag := get_active_tag()
 	if tag:
@@ -1183,6 +1377,8 @@ func to_start() -> void:
 	else:
 		current_frame = 0
 
+## Moves to the last frame of the active tag. It moves to the last frame when
+## no tag is active.
 func to_end() -> void:
 	var tag = get_active_tag()
 	if tag:

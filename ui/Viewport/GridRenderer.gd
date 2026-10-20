@@ -1,5 +1,10 @@
 extends MeshInstance3D
 
+## Draws the floor grid plane.
+##
+## The grid follows the floor axis, the floor index, and the document bounds.
+## It rebuilds only when one of those changes.
+
 var _last_bounds: AABB
 var _last_axis := -1
 var _last_index := 0
@@ -12,6 +17,7 @@ func _ready() -> void:
 	State.document_changed.connect(rebuild)
 	State.floor_plane_changed.connect(rebuild)
 
+## Rebuilds the grid when the floor plane or the bounds changed.
 func rebuild() -> void:
 	var bounds := State.document.bounds()
 	var axis := State.floor_axis
@@ -51,12 +57,15 @@ func rebuild() -> void:
 	position = p
 
 
+## Returns the low corner of the grid span. An empty bounds uses a small fixed
+## span.
 static func span_lo(bounds: AABB) -> Vector3:
 	if bounds.has_volume():
 		return bounds.position - Vector3.ONE * 1.0
 	return Vector3.ONE * -4.5
 
 
+## Returns the high corner of the grid span.
 static func span_hi(bounds: AABB) -> Vector3:
 	if bounds.has_volume():
 		return span_lo(bounds) + bounds.size + Vector3.ONE * 2.0

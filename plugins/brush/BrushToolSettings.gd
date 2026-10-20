@@ -1,15 +1,35 @@
 class_name BrushToolSettings
 extends Resource
 
+## The shared brush tool settings.
+##
+## The settings hold the brush mode, the shape, the diameter, and the
+## pixel-perfect flag. The resource is shared by the brush toolbar, the option
+## bar, and the tools. The `changed` signal notifies its observers.
+
+## The brush action.
 enum BrushMode {
+	## Draw single cells along the pointer.
 	PENCIL,
+	## Draw the brush footprint.
 	PAINT,
+	## Draw a straight line between two points.
 	LINE,
+	## Erase the brush footprint.
 	ERASER
 }
 
-enum BrushShape { CUBE, SPHERE, SELECTION }
+## The brush footprint shape.
+enum BrushShape {
+	## A filled cube.
+	CUBE,
+	## A filled sphere.
+	SPHERE,
+	## The last copied selection pattern.
+	SELECTION
+}
 
+## The brush diameter in cells. It clamps to the range 1 through 64.
 @export var diameter := 1:
 	set(value):
 		value = clampi(value, 1, 64)
@@ -20,6 +40,7 @@ enum BrushShape { CUBE, SPHERE, SELECTION }
 		_cached_offsets = []
 		emit_changed()
 
+## The brush footprint shape.
 @export var shape: BrushShape = BrushShape.CUBE:
 	set(value):
 		if value == shape:
@@ -29,36 +50,57 @@ enum BrushShape { CUBE, SPHERE, SELECTION }
 		_cached_offsets = []
 		emit_changed()
 
+## The copied selection pattern, keyed by offset from the pattern center.
 var selection_pattern := {}
+## The copied selection materials, keyed by offset from the pattern center.
 var selection_material_pattern := {}
 var _cached_pattern := {}
 # The pattern keys in insertion order. A plain array iterates about twice as fast
 # as the dictionary, and a shape brush needs only the offsets. The dictionary
 # stays for the material lookup that a selection brush and a paste require.
+## The selection pattern keys in insertion order.
 var selection_offsets: Array = []
 var _cached_offsets: Array = []
 
+## One cancellable job that builds a brush pattern.
+##
+## [method VoxelFrame.EditJob.run] is the worker body.
 class PatternJob extends VoxelFrame.EditJob:
+	## The brush diameter in cells.
 	var diameter := 1
+	## The brush shape.
 	var shape := BrushShape.CUBE
+	## The built pattern, keyed by offset from the center.
 	var pattern := {}
+	## The pattern keys in insertion order.
 	var offsets: Array = []
 
+	## Builds the pattern. This is the worker body.
 	func run() -> void:
 		pattern = BrushToolSettings.build_pattern(diameter, shape, self)
 		if not pattern.is_empty():
 			offsets = pattern.keys()
 
+## One cancellable job that copies a frame or a selection into a brush pattern.
+##
+## [method VoxelFrame.EditJob.run] is the worker body.
 class CopyJob extends VoxelFrame.EditJob:
+	## The source frame snapshot.
 	var source_frame: VoxelFrame
+	## The source cells as a dictionary keyed by cell position. An empty mask
+	## copies the whole frame.
 	var selection_mask := {}
+	## The copied colors, keyed by offset from the pattern center.
 	var pattern := {}
+	## The copied full materials, keyed by offset from the pattern center.
 	var pattern_materials := {}
+	## The pattern center in cell units.
 	var center := Vector3i.ZERO
 	var _colors := {}
 	var _materials := {}
 	var _bounds := AABB()
 
+	## Copies the source. This is the worker body.
 	func run() -> void:
 		stage("Preparing voxel source", selection_mask.size() if not selection_mask.is_empty() else source_frame.count())
 		var completed := 0
@@ -95,6 +137,9 @@ class CopyJob extends VoxelFrame.EditJob:
 		_bounds = _bounds.merge(cell_bounds) if _bounds.has_volume() else cell_bounds
 
 
+## Uses a copied pattern as the selection brush shape. [param copied_pattern]
+## maps an offset to a color. [param copied_material_pattern] maps an offset to
+## a full material. An empty pattern is ignored.
 func use_selection(copied_pattern: Dictionary, copied_material_pattern: Dictionary = {}) -> void:
 	if copied_pattern.is_empty():
 		return
@@ -107,10 +152,13 @@ func use_selection(copied_pattern: Dictionary, copied_material_pattern: Dictiona
 	emit_changed()
 
 
+## Returns the estimated pattern cell count.
 func estimated_size() -> int:
 	return selection_pattern.size() if shape == BrushShape.SELECTION else diameter ** 3
 
 
+## Returns the brush pattern, keyed by offset from the center. A shape pattern
+## above 4096 cells is not cached, so the caller must build it.
 func pattern() -> Dictionary:
 	if shape == BrushShape.SELECTION:
 		return selection_pattern
@@ -122,6 +170,8 @@ func pattern() -> Dictionary:
 
 # The offsets of `pattern()` in the same order. A job that finds this empty
 # derives it from the pattern, so the two never disagree.
+## Returns the offsets of [method pattern] in the same order. An empty result
+## means that the caller must derive the offsets from the pattern.
 func pattern_offsets() -> Array:
 	if shape == BrushShape.SELECTION:
 		return selection_offsets
@@ -130,6 +180,8 @@ func pattern_offsets() -> Array:
 	return _cached_offsets
 
 
+## Caches a built pattern for the given diameter and shape. It ignores the
+## selection shape.
 func cache_pattern(brush_diameter: int, brush_shape: int, cells: Dictionary, offsets: Array = []) -> void:
 	if diameter == brush_diameter and shape == brush_shape and shape != BrushShape.SELECTION:
 		_cached_pattern = cells
@@ -137,6 +189,9 @@ func cache_pattern(brush_diameter: int, brush_shape: int, cells: Dictionary, off
 		_cached_offsets = offsets
 
 
+## Builds a brush pattern for one diameter and shape. Returns a dictionary keyed
+## by offset from the center. An optional [param job] supplies the cancel
+## checkpoints and the progress stage.
 static func build_pattern(brush_diameter: int, brush_shape: int, job: VoxelFrame.EditJob = null) -> Dictionary:
 	var cells := {}
 	var first_offset := -floori(brush_diameter * 0.5)
@@ -154,6 +209,7 @@ static func build_pattern(brush_diameter: int, brush_shape: int, job: VoxelFrame
 					return {}
 	return cells
 
+## The brush action.
 @export var mode:BrushMode = BrushMode.PENCIL :
 	set(value):
 		if value == mode:
@@ -161,6 +217,7 @@ static func build_pattern(brush_diameter: int, brush_shape: int, job: VoxelFrame
 		mode = value
 		emit_changed()
 
+## Whether a stroke drops transient cells. It keeps the stroke connected.
 @export var pixel_perfect:bool = false :
 	set(value):
 		if value == pixel_perfect:

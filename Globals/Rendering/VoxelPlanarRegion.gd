@@ -1,21 +1,39 @@
 extends RefCounted
 
+## Triangulates planar voxel regions with a seam-preserving cleanup.
+##
+## A region is a set of occupied cells on one plane. The class follows the
+## outline loops, splits a pinched outline, cuts holes, and triangulates the
+## result. The cleanup never moves a protected seam corner.
+
+## The four edge directions in the loop walk order.
 const DIRECTIONS := [Vector2i.RIGHT, Vector2i.DOWN, Vector2i.LEFT, Vector2i.UP]
 # Keep the left turn first. It separates regions that touch at one corner.
+## The turn order that keeps the occupied cells on the left.
 const TURNS: Array[int] = [1, 0, 3, 2]
 # One row mask holds at most 64 cells. Wider or taller regions, and sparse
 # regions, use the dictionary path.
+## The maximum compact box width in cells.
 const BOX_LIMIT := 64
 
 
 # A compact cell box. One row mask per row and one edge bitfield per lattice
 # corner replace dictionary hashing. An empty box or a box outside the limit
 # returns null, and the caller keeps the dictionary path.
+## A compact cell box for a dense region.
+##
+## One row mask per row replaces dictionary hashing. A region that is too wide
+## or too sparse keeps the dictionary path.
 class Cells:
+	## The first cell of the box.
 	var origin := Vector2i.ZERO
+	## The box width in cells.
 	var width := 0
+	## The box height in cells.
 	var height := 0
+	## One row mask per row.
 	var rows: PackedInt64Array = []
+	## The occupied cell count.
 	var count := 0
 
 
@@ -59,6 +77,8 @@ static func _latch(checkpoint: Callable, state: Dictionary) -> Callable:
 
 # The unsimplified boundary loops of one region. A caller that needs both the
 # turns and the triangulation prepares them once instead of twice.
+## Returns the unsimplified boundary loops of one region. A caller that needs
+## both the turns and the triangulation prepares them once.
 static func raw_loops(cells: Dictionary, checkpoint := Callable()) -> Array[PackedVector2Array]:
 	var state := {"cancelled": false}
 	var check := _latch(checkpoint, state)
@@ -70,6 +90,7 @@ static func raw_loops(cells: Dictionary, checkpoint := Callable()) -> Array[Pack
 	return _box_loops(box, check)
 
 
+## Returns the simplified boundary loops of one region.
 static func contours(cells: Dictionary, checkpoint := Callable()) -> Array[PackedVector2Array]:
 	var state := {"cancelled": false}
 	var check := _latch(checkpoint, state)
@@ -91,6 +112,10 @@ static func contours(cells: Dictionary, checkpoint := Callable()) -> Array[Packe
 	return result
 
 
+## Returns one polygon record per triangle region. Each record holds
+## [code]points[/code] and [code]indices[/code]. [param protected] lists the
+## seam corners that must stay. [param prepared] supplies the loops from
+## [method raw_loops]. Returns an empty array on a cancel.
 static func triangulate(cells: Dictionary, protected: Dictionary = {}, checkpoint := Callable(), prepared: Array = []) -> Array:
 	# Remember cancellation even when the caller rejects only one checkpoint.
 	var state := {"cancelled": false}

@@ -1,10 +1,21 @@
 class_name VoxelRenderer
 extends Node3D
 
+## Draws the chunk meshes of one frame.
+##
+## Each renderer builds a chunk surface on the worker pool and caches it. All
+## renderers share one surface cache and one job map. A hidden workspace still
+## finishes its surface work.
+
+## The chunk edge length in cells.
 const CHUNK_SIZE := VoxelFrame.CHUNK_SIZE
+## The shared surface cache size limit in bytes.
 const SURFACE_CACHE_LIMIT_BYTES := 64 * 1024 * 1024
+## The shared surface cache entry limit.
 const SURFACE_CACHE_LIMIT_ENTRIES := 1024
+## The minimum concurrent surface job count.
 const SURFACE_JOB_LIMIT_MIN := 2
+## The maximum concurrent surface job count.
 const SURFACE_JOB_LIMIT_MAX := 8
 
 # All viewports share meshes and jobs. Workers own their input and output arrays.
@@ -24,6 +35,7 @@ static func _job_limit() -> int:
 	return _surface_job_limit
 
 
+## The frame index to draw, or -1 to follow the editor frame.
 @export_range(-1, 100, 1, "or_greater") var frame: int = -1:
 	set(value):
 		if value == frame:
@@ -33,8 +45,11 @@ static func _job_limit() -> int:
 			_rebuild()
 
 # Keep the scene's shared voxel material as the source of render settings.
+## The shared voxel material. Its surface material is the fallback.
 @export var mesh: Mesh
+## Whether the renderer reports a Rendering operation.
 @export var report_activity := true
+## The frame to draw. A null value follows [member frame] or the editor frame.
 var source_frame: VoxelFrame:
 	set(value):
 		if value == source_frame:
@@ -337,9 +352,11 @@ func _retire(chunk_location: Vector3i) -> void:
 	_displayed_surface_keys.erase(chunk_location)
 
 
+## Returns [code]true[/code] when no surface request is pending.
 func is_settled() -> bool:
 	return _pending_surface_keys.is_empty()
 
 
+## Rebuilds every displayed chunk surface.
 func refresh() -> void:
 	_rebuild()

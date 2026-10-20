@@ -1,5 +1,10 @@
 extends VBoxContainer
 
+## The animation timeline strip.
+##
+## It shows one cell per frame and a tag range row. The strip follows the frame
+## list and the active tag.
+
 const PLAY_ICON := preload("res://icons/play.svg")
 const PAUSE_ICON := preload("res://icons/pause.svg")
 const ANIMATION_FRAME = preload("uid://c2301xo3rbrka")

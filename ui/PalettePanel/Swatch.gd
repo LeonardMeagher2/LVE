@@ -1,8 +1,15 @@
 extends Button
 
+## One palette swatch.
+##
+## It shows a rounded material thumbnail and selects that palette entry. A
+## drag moves the entry to another swatch.
+
+## The drag data type that marks one palette material drag.
 const DRAG_TYPE := "voxel_palette_material"
 const ThumbnailRenderer := preload("./MaterialThumbnails.gd")
 
+## The material of this swatch. A write also updates the style and the tooltip.
 var cell_material: PackedFloat32Array = VoxelFrame.material(Color.BLACK):
 	set(value):
 		if value.size() != VoxelFrame.MATERIAL_STRIDE:
@@ -13,7 +20,9 @@ var cell_material: PackedFloat32Array = VoxelFrame.material(Color.BLACK):
 		tooltip_text = "Color: #%s\nRGBA: %.2f, %.2f, %.2f, %.2f\nEmission RGB: %.2f, %.2f, %.2f\nMetallic: %.2f\nRoughness: %.2f" % [color.to_html(true), value[0], value[1], value[2], value[3], value[4], value[5], value[6], value[7], value[8]]
 		_refresh_thumbnail()
 
+## The palette index of this swatch, or -1.
 var palette_index: int = -1
+## The color of [member cell_material]. A write keeps the other material values.
 var color: Color:
 	get:
 		return Color(cell_material[0], cell_material[1], cell_material[2], cell_material[3])
@@ -25,6 +34,7 @@ var color: Color:
 		material[3] = value.a
 		cell_material = material
 
+## The shared thumbnail renderer. A write reconnects its signal.
 var thumbnail_renderer: ThumbnailRenderer:
 	set(value):
 		_disconnect_renderer()
@@ -33,6 +43,7 @@ var thumbnail_renderer: ThumbnailRenderer:
 			_connect_renderer()
 		_refresh_thumbnail()
 
+## The current thumbnail texture, or null while it renders.
 var thumbnail_texture: Texture2D
 var _thumbnail_key := ""
 

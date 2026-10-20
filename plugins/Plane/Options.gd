@@ -1,5 +1,9 @@
 extends HBoxContainer
 
+## The plane option bar.
+##
+## It selects the floor axis. The buttons follow the current floor plane.
+
 func _ready() -> void:
 	State.floor_plane_changed.connect(_sync)
 	_sync()

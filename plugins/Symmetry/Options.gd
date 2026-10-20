@@ -1,5 +1,9 @@
 extends HBoxContainer
 
+## The symmetry option bar.
+##
+## It toggles the mirror axes and edits the symmetry origin. The controls are
+## disabled while an edit is busy.
 
 func _ready() -> void:
 	for axis in 3:

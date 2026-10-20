@@ -1,15 +1,29 @@
 extends RefCounted
 
+## Builds a texture-atlas mesh from greedy face groups.
+##
+## The surface cleans up the planar regions, protects the seam turns, and bakes
+## an atlas. [method run] converts a greedy mesh. [method run_groups] accepts
+## groups that a caller collected from a frame. [method merge] combines several
+## meshes into one surface.
+
 const ATLAS := preload("./VoxelAtlas.gd")
 const REGION := preload("./VoxelPlanarRegion.gd")
 # Matches the padded chunk size in VoxelMeshBuilder. The snapshot corner normals
 # read the padded material map with this stride.
+## The padded chunk edge length, with one border cell on each side.
 const PADDED_CHUNK_SIZE := VoxelFrame.CHUNK_SIZE + 2
+## The built mesh arrays, indexed by [enum Mesh.ArrayType].
 var arrays: Array = []
+## The baked atlas, or null before a run.
 var atlas: RefCounted
+## The result of the last run. A cancel or a failed bake sets
+## [constant ERR_UNAVAILABLE].
 var error: Error = OK
 
 
+## Builds one surface from a greedy mesh. [param origin] offsets the mesh in
+## world space. [param checkpoint] cancels the work.
 func run(source_arrays: Array, frame: VoxelFrame, origin := Vector3.ZERO, checkpoint := Callable(), smooth_normals := false) -> void:
 	atlas = ATLAS.new()
 	error = OK
@@ -27,6 +41,9 @@ func run(source_arrays: Array, frame: VoxelFrame, origin := Vector3.ZERO, checkp
 # Clean up groups that a caller collected straight from a frame. A caller that
 # collected from a padded snapshot passes its padded material map as
 # `corner_occupancy`, so the smooth normals need no frame lookup.
+## Builds one surface from groups that a caller collected from a frame.
+## [param corner_occupancy] supplies the padded occupancy map for the smooth
+## normals.
 func run_groups(groups: Dictionary, frame: VoxelFrame, origin := Vector3.ZERO, checkpoint := Callable(), smooth_normals := false, corner_occupancy: Variant = null) -> void:
 	atlas = ATLAS.new()
 	error = OK
@@ -41,6 +58,8 @@ func run_groups(groups: Dictionary, frame: VoxelFrame, origin := Vector3.ZERO, c
 		error = ERR_UNAVAILABLE
 
 
+## Combines several meshes into one surface. Returns an empty array on a cancel
+## or a failed bake.
 static func merge(source_arrays: Array, checkpoint := Callable()) -> Array:
 	checkpoint = _latched_checkpoint(checkpoint)
 	var bake := ATLAS.new()

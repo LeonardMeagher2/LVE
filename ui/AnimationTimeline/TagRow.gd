@@ -1,5 +1,10 @@
 extends HBoxContainer
 
+## The animation tag row.
+##
+## It selects a tag and edits its name, loop mode, and repeats. It also adds
+## and removes tags.
+
 const LOOP_FORWARD_ICON := preload("res://icons/loop_forward.svg")
 const LOOP_REVERSE_ICON := preload("res://icons/loop_reverse.svg")
 const LOOP_PING_PONG_ICON := preload("res://icons/loop_ping_pong.svg")

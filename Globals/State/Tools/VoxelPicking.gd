@@ -1,8 +1,17 @@
 class_name VoxelPicking
 extends RefCounted
 
+## Converts a pointer ray into a voxel cell.
+##
+## The class holds no state. A tool calls a static function with a ray and a
+## frame, and reads the result from a [PickResult].
+
+## The cell sentinel for a missing cell. It holds [constant Vector3.INF] in
+## each axis, so no real cell matches it.
 const NONE:Vector3i = Vector3i(Vector3.INF)
 
+## Returns the press pick for a ray. A ray that hits the model targets the hit
+## cell. A ray that misses targets the floor plane.
 static func start_pick(origin: Vector3, dir: Vector3, frame: VoxelFrame, forward: Vector3) -> PickResult:
 	var res := ray_voxel(origin, dir, frame)
 	if res.hit != VoxelPicking.NONE:
@@ -13,6 +22,8 @@ static func start_pick(origin: Vector3, dir: Vector3, frame: VoxelFrame, forward
 	return ground_pick(origin, dir, forward)
 
 
+## Returns the drag pick for a ray on a plane. A ray parallel to the plane or
+## behind the camera returns an empty result.
 static func drag_pick(origin: Vector3, dir: Vector3, frame: VoxelFrame, plane: StrokePlane) -> PickResult:
 	var denom := dir.dot(plane.normal)
 	if absf(denom) < 1e-8:
@@ -29,6 +40,8 @@ static func drag_pick(origin: Vector3, dir: Vector3, frame: VoxelFrame, plane: S
 	return res
 
 
+## Returns the world axis that faces the viewer most directly. Axis 0 is X,
+## axis 1 is Y, and axis 2 is Z.
 static func view_axis(forward: Vector3) -> int:
 	# The axis that faces the viewer. The press plane of a pick uses it.
 	var toward: Vector3 = -forward
@@ -42,6 +55,8 @@ static func view_axis(forward: Vector3) -> int:
 	return 0
 
 
+## Returns a plane through the target cell that faces the viewer. The plane
+## sits on the side of the cell toward the ray origin.
 static func view_plane(target: Vector3i, origin: Vector3, forward: Vector3) -> StrokePlane:
 	var axis := view_axis(forward)
 	var side := 1.0 if origin[axis] >= float(target[axis]) else -1.0
@@ -57,6 +72,7 @@ static func view_plane(target: Vector3i, origin: Vector3, forward: Vector3) -> S
 	return p
 
 
+## Returns a viewer-facing plane through a point. A drag maps onto this plane.
 static func view_plane_through(point: Vector3, forward: Vector3) -> StrokePlane:
 	# A plane through the point that faces the viewer. Drags map onto it.
 	var p := StrokePlane.new()
@@ -69,6 +85,10 @@ static func view_plane_through(point: Vector3, forward: Vector3) -> StrokePlane:
 	return p
 
 
+## Returns the first occupied cell along a ray. It uses the DDA method. The
+## traversal clips to the supplied bounds, or to the frame bounds when they are
+## not given. The bounds extent sets the step count, so a far ray needs no
+## distance or iteration cap.
 static func ray_voxel(origin: Vector3, dir: Vector3, frame: VoxelFrame, supplied_bounds := AABB()) -> PickResult:
 	var res := PickResult.new()
 	if frame == null:
@@ -192,6 +212,8 @@ static func _entry_face(g: Vector3, dir: Vector3, lo: Vector3, hi: Vector3, step
 	return entry
 
 
+## Returns a pick on the floor plane of the current document. The floor plane
+## is set by [member State.floor_axis] and [member State.floor_index].
 static func ground_pick(origin: Vector3, dir: Vector3, forward: Vector3) -> PickResult:
 	var axis := State.floor_axis
 	var denom := dir[axis]

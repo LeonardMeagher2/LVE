@@ -1,6 +1,12 @@
 class_name EditorStatusBar
 extends HBoxContainer
 
+## The application status bar.
+##
+## It shows the current color, the model size, the frame, and the zoom. A
+## context provider can replace the text for one workspace. It also hosts the
+## job status widget.
+
 # The widget script is preloaded as a type alias. A new class_name is not in the
 # global class cache until the editor regenerates it.
 const JobStatusWidget = preload("res://ui/JobStatus/job_status.gd")
@@ -45,6 +51,8 @@ func _on_ui_scale_item_selected(index: int) -> void:
 	get_node("/root/Main").set_ui_scale(%UIScale.get_item_id(index) / 100.0)
 
 
+## Sets a context provider that returns the left and right status text. An
+## invalid callable restores the editor status.
 func set_context(provider: Callable) -> void:
 	_context = provider
 	# The job widget owns the cancel button. It cancels through State, so the

@@ -1,13 +1,26 @@
 extends ConfirmationDialog
 
+## The exact-value dialog for the transform tools.
+##
+## It edits one scale, move, or rotate value. It emits [signal values_changed]
+## while the user edits, so the tool previews the value.
+
+## Emitted when one dialog value changes. The state holds the values, the axis,
+## and the uniform flag.
 signal values_changed(state: Dictionary)
 
+## The scale dialog mode.
 const MODE_SCALE := 0
+## The move dialog mode.
 const MODE_MOVE := 1
+## The rotate dialog mode.
 const MODE_ROTATE := 2
 
+## The state key of the values.
 const KEY_VALUES := "values"
+## The state key of the axis.
 const KEY_AXIS := "axis"
+## The state key of the uniform flag.
 const KEY_UNIFORM := "uniform"
 
 var _settings := preload("../settings.tres")
@@ -30,6 +43,7 @@ func _ready() -> void:
 	_sync_uniform()
 
 
+## Shows the dialog in scale mode with one value.
 func open_for_scale(value: Vector3) -> void:
 	_mode = MODE_SCALE
 	title = "Scale"
@@ -44,6 +58,7 @@ func open_for_scale(value: Vector3) -> void:
 	_updating = false
 
 
+## Shows the dialog in move mode with one offset.
 func open_for_move(offset: Vector3) -> void:
 	_mode = MODE_MOVE
 	title = "Move"
@@ -57,6 +72,7 @@ func open_for_move(offset: Vector3) -> void:
 	_updating = false
 
 
+## Shows the dialog in rotate mode with one angle in degrees.
 func open_for_rotate(angles_deg: Vector3) -> void:
 	_mode = MODE_ROTATE
 	title = "Rotate"

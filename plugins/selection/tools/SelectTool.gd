@@ -1,8 +1,16 @@
 extends VoxelTool
 
+## Base class for the box and lasso selection tools.
+##
+## A drag selects the full volume behind its screen shape. The tool builds the
+## selection on the worker pool for a large region. The shape applies as a
+## release when a tool switch interrupts the drag.
+
 # The select tools drag a shape over the view and select the full volume behind it.
+## The estimated work above which the selection runs on the worker pool.
 const IMMEDIATE_LIMIT := 4096
 # A press and release in one place still selects a small area.
+## The click rectangle edge length in pixels.
 const CLICK_SIZE := 7.0
 
 var _settings := preload("../settings.tres")
@@ -70,6 +78,8 @@ func _release_context_subscriptions() -> void:
 		State.edit_context_changing.disconnect(_cancel_screen_job)
 
 
+## Handles one input event. A left press starts a drag and a release commits it.
+## Escape cancels the drag or clears the selection in Replace mode.
 func handle_input(event: InputEvent, pos: Vector2) -> bool:
 	if _screen_job != null:
 		return _screen_pending_input(event)
@@ -83,6 +93,7 @@ func handle_input(event: InputEvent, pos: Vector2) -> bool:
 
 
 # A screen tool does not stream a selection. The wand overrides this.
+## Returns [code]false[/code]. The wand overrides this.
 func is_streaming() -> bool:
 	return false
 
@@ -133,6 +144,8 @@ func _screen_motion(event: InputEventMouseMotion, pos: Vector2) -> bool:
 # End a drag that a tool switch interrupted. The current outline applies as a
 # release would, while the viewport and camera are still attached, and the pending
 # calculation finishes after the detach. The streamed wand keeps its own policy.
+## Ends a drag that a tool switch interrupted. The current outline applies as a
+## release would.
 func finish_on_switch() -> void:
 	if is_streaming():
 		return

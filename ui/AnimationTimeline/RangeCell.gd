@@ -1,6 +1,12 @@
 class_name RangeCell
 extends HBoxContainer
 
+## One column of the animation tag range row.
+##
+## It shows the tag range bar and its start and end grips. A grip drag moves
+## the range edge.
+
+## The frame column index of this cell.
 var column_index := 0
 var _is_from := false
 var _is_to := false
@@ -10,6 +16,7 @@ var _drag_tag := -1
 var _drag_range := Vector2i.ZERO
 
 
+## Sets the frame column index of this cell.
 func set_column_index(i: int) -> void:
 	column_index = i
 

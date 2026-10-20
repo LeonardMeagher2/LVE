@@ -1,17 +1,35 @@
 extends RefCounted
 
+## Packs one padded rectangle per distinct face pattern.
+##
+## The atlas bakes an albedo image, a finish image, and an emission image. A
+## patch holds one material or one face-pattern material list. The gutter
+## repeats the edge texels, so nearest sampling needs no mipmaps.
+
 # Keep one padded rectangle per distinct face pattern in this frame.
+## The maximum atlas edge length in pixels.
 const MAX_SIZE := 4096
+## The patch records. Each holds a size, a material list, and a position.
 var patches: Array[Dictionary] = []
+## The patch id for each size and material key.
 var patch_ids := {}
+## The baked atlas size in pixels.
 var size := Vector2i.ZERO
+## The baked albedo image.
 var albedo: Image
+## The baked finish image. Blue holds metallic and green holds roughness.
 var orm: Image
+## The baked emission image.
 var emission: Image
+## The maximum emission strength across the patches.
 var emission_energy := 1.0
+## Whether any patch holds a color with alpha below one.
 var has_transparency := false
 
 
+## Adds one patch and returns its id. An equal patch returns its existing id. A
+## uniform material list becomes a one-by-one patch. Returns -1 when
+## [param checkpoint] cancels.
 func add_patch(materials: PackedFloat32Array, dimensions: Vector2i, checkpoint := Callable()) -> int:
 	var uniform := true
 	for base in range(VoxelFrame.MATERIAL_STRIDE, materials.size(), VoxelFrame.MATERIAL_STRIDE):
@@ -41,6 +59,9 @@ func add_patch(materials: PackedFloat32Array, dimensions: Vector2i, checkpoint :
 	return id
 
 
+## Bakes the images and returns the error code. It packs the patches from
+## tallest to shortest. Returns [constant ERR_UNAVAILABLE] when
+## [param checkpoint] cancels.
 func bake(checkpoint: Callable) -> Error:
 	if patches.is_empty():
 		return OK
@@ -130,6 +151,7 @@ func bake(checkpoint: Callable) -> Error:
 	return OK
 
 
+## Returns the four corner UVs of one patch.
 func patch_uvs(patch_id: int) -> PackedVector2Array:
 	var patch := patches[patch_id]
 	var start := Vector2(patch.position) / Vector2(size)
@@ -137,6 +159,8 @@ func patch_uvs(patch_id: int) -> PackedVector2Array:
 	return PackedVector2Array([start, Vector2(end.x, start.y), end, Vector2(start.x, end.y)])
 
 
+## Returns a material that samples the baked atlas. [param template] supplies the
+## base material settings.
 func create_material(template: StandardMaterial3D = null) -> StandardMaterial3D:
 	var material: StandardMaterial3D = template.duplicate() if template else StandardMaterial3D.new()
 	material.resource_name = "VoxelAtlas"

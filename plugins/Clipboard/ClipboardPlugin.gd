@@ -1,7 +1,15 @@
 extends VoxelPlugin
 
+## The clipboard plugin.
+##
+## It copies voxels to the system clipboard as JSON, and it pastes them with
+## the paste tool. It also cuts and deletes the selection. The clipboard text
+## holds the cells and their full materials.
+
+## The prefix that marks a voxel clipboard record.
 const CLIPBOARD_PREFIX := '{"voxel_voxels":'
 # One clipboard record holds the cell and its nine material floats.
+## The field count of one clipboard voxel record.
 const VOXEL_RECORD_SIZE := 3 + VoxelFrame.MATERIAL_STRIDE
 
 @onready var _options := preload("./Options.tscn").instantiate()
@@ -18,12 +26,22 @@ var _clipboard_poll_ms := 0
 var _has_clipboard_voxels := false
 var _shutting_down := false
 
+## One cancellable copy or cut job.
+##
+## The job builds the clipboard JSON from a frame snapshot. A cut also erases
+## the source cells. [method BrushToolSettings.CopyJob.run] is the base worker
+## body.
 class ClipboardCopyJob extends BrushToolSettings.CopyJob:
+	## The clipboard JSON text.
 	var text := ""
+	## The selected offsets relative to the pattern center.
 	var selection_pattern := {}
+	## Whether the job also erases the source cells.
 	var cut_source := false
+	## The chunk locations that a cut changed.
 	var changed_chunks: Array[Vector3i] = []
 
+	## Builds the clipboard text and applies a cut. This is the worker body.
 	func run() -> void:
 		super.run()
 		if not checkpoint(0):
@@ -56,12 +74,21 @@ class ClipboardCopyJob extends BrushToolSettings.CopyJob:
 					return
 			changed_chunks = source_frame.set_cells(changes, self)
 
+## One cancellable clipboard import job.
+##
+## The job parses the clipboard JSON into a pattern. It rejects a malformed
+## record. [method VoxelFrame.EditJob.run] is the worker body.
 class ClipboardImportJob extends VoxelFrame.EditJob:
+	## The clipboard JSON text to parse.
 	var text := ""
+	## The parsed colors, keyed by offset from the pattern center.
 	var pattern := {}
+	## The parsed full materials, keyed by offset from the pattern center.
 	var pattern_materials := {}
+	## The parsed selection offsets.
 	var selection_pattern := {}
 
+	## Parses the clipboard text. This is the worker body.
 	func run() -> void:
 		stage("Reading voxel clipboard", -1)
 		var data = JSON.parse_string(text)
@@ -186,10 +213,12 @@ func _read_clipboard() -> String:
 	return _clipboard_text
 
 
+## Copies the selection, or the whole frame, to the clipboard.
 func copy_voxels() -> void:
 	_copy_voxels(false)
 
 
+## Copies the selection, or the whole frame, to the clipboard and erases it.
 func cut_voxels() -> void:
 	_copy_voxels(true)
 
@@ -242,6 +271,7 @@ func _copy_voxels(cut_source: bool) -> void:
 	_sync_buttons()
 
 
+## Erases the selection as one history action.
 func delete_voxels() -> void:
 	if State.edit_busy() or State.selection.is_empty():
 		return
@@ -255,6 +285,7 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		return
 
 
+## Cancels a running paste. Returns [code]true[/code] when a paste was canceled.
 func cancel_paste() -> bool:
 	if _import_job:
 		_import_job.cancel()
@@ -265,6 +296,8 @@ func cancel_paste() -> bool:
 	return false
 
 
+## Starts a paste from the clipboard. It parses the clipboard text when it
+## changed, then places the paste tool.
 func paste_voxels() -> void:
 	if State.edit_busy() or _import_job:
 		return

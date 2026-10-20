@@ -1,6 +1,12 @@
 class_name ScreenSelection
 extends RefCounted
 
+## Builds a voxel selection from a screen shape.
+##
+## Every cell that projects inside the shape joins the region. The frame bounds
+## limit the empty cells. A subtract also tests the selected cells. An optional
+## depth test keeps only the cells that the camera sees a surface point of.
+
 # Screen selection tests each cell against a shape on the screen.
 # Every cell inside the shape joins the region, including hidden voxels.
 # The frame bounds limit the empty cells. A subtract also tests the selected
@@ -8,33 +14,56 @@ extends RefCounted
 # The mode values match SelectionToolSettings.SelectMode.
 # The depth test keeps the cells that the camera sees a surface point of.
 
+## The replace mode value. It matches [enum SelectionToolSettings.SelectMode].
 const REPLACE_MODE := 0
+## The subtract mode value. It matches [enum SelectionToolSettings.SelectMode].
 const SUBTRACT_MODE := 2
 # Aim inside the surface of a cell so the ray starts within the cell.
+## The distance from a cell center to its surface sample point.
 const SURFACE_INSET := 0.48
 
 
 # The job captures the camera and the shape. It reads no scene node.
+## One cancellable screen-selection job.
+##
+## The job captures the camera and the shape, so it reads no scene node.
+## [method VoxelFrame.EditJob.run] is the worker body.
 class Job extends VoxelFrame.EditJob:
+	## The frame snapshot to test.
 	var source_frame: VoxelFrame
+	## The inverse camera transform.
 	var view_matrix := Transform3D()
+	## The camera projection.
 	var projection := Projection()
+	## The viewport size in pixels.
 	var viewport_size := Vector2.ZERO
+	## The screen rectangle of a box selection.
 	var rectangle := Rect2()
+	## The screen polygon of a lasso selection.
 	var polygon := PackedVector2Array()
+	## The selection mode.
 	var mode := REPLACE_MODE
+	## The selection before this operation.
 	var previous_selection := {}
+	## Whether the selection keeps empty cells inside the frame bounds.
 	var include_empty := false
+	## Whether the selection keeps only the cells that the camera sees.
 	var depth_test := false
+	## The first empty cell of the empty-cell volume.
 	var empty_min := Vector3i.ZERO
+	## The last empty cell of the empty-cell volume.
 	var empty_max := Vector3i(-1, -1, -1)
+	## The result selection, keyed by cell position.
 	var result := {}
 
+	## Returns the empty cell count of the empty-cell volume. Returns zero when
+	## the empty-cell option is off.
 	func empty_cell_count() -> int:
 		if not include_empty:
 			return 0
 		return (empty_max.x - empty_min.x + 1) * (empty_max.y - empty_min.y + 1) * (empty_max.z - empty_min.z + 1)
 
+	## Builds the result selection. This is the worker body.
 	func run() -> void:
 		var total: int = source_frame.count() + empty_cell_count()
 		if mode == SUBTRACT_MODE:
@@ -137,6 +166,8 @@ class Job extends VoxelFrame.EditJob:
 
 
 # Return the viewport position of a world point. Return Vector2.INF behind the camera.
+## Returns the viewport position of a world point. Returns [constant Vector2.INF]
+## when the point is behind the camera.
 static func project(view_matrix: Transform3D, projection: Projection, viewport_size: Vector2, world_point: Vector3) -> Vector2:
 	var view_point: Vector3 = view_matrix * world_point
 	if view_point.z > 0.0:
@@ -149,12 +180,16 @@ static func project(view_matrix: Transform3D, projection: Projection, viewport_s
 
 
 # Capture the values that the worker needs to project a cell center.
+## Returns the inverse camera transform, the projection, and the viewport size.
+## Returns an empty array for a null camera.
 static func view_of(camera: Camera3D, viewport_size: Vector2) -> Array:
 	if camera == null:
 		return []
 	return [camera.global_transform.affine_inverse(), camera.get_camera_projection(), viewport_size]
 
 
+## Returns [code]true[/code] when a point lies inside a polygon. It uses the
+## crossing-number rule.
 static func point_in_polygon(point: Vector2, polygon: PackedVector2Array) -> bool:
 	var inside := false
 	var previous := polygon.size() - 1

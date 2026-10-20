@@ -1,17 +1,35 @@
 class_name PalettePanel
 extends VBoxContainer
 
+## The palette panel.
+##
+## It shows one swatch per palette entry and edits the current material. It
+## also imports and exports a palette image and manages the default palette.
+## See `docs/DOCUMENT_FORMAT.md` for the palette PNG chunk.
+
 const Swatch := preload("./Swatch.tscn")
 const SwatchButtonGroup := preload("./SwatchButtonGroup.tres")
+## The edge length of one palette image swatch in pixels.
 const IMAGE_SWATCH_SIZE := 16
+## The private PNG chunk type that names the palette entry count.
 const PALETTE_PNG_CHUNK := "lvPL"
+## The default palette menu actions.
 enum PaletteAction { USE_DEFAULT, SAVE_DEFAULT, RESET_DEFAULT }
 
+## One cancellable palette import job.
+##
+## The job reads the palette colors from an image. It reads the named tile
+## count from an exported palette PNG. [method VoxelFrame.EditJob.run] is the
+## worker body.
 class ImportJob extends VoxelFrame.EditJob:
+	## The image file path.
 	var path := ""
+	## The imported colors.
 	var colors := PackedColorArray()
+	## The import error code.
 	var error: Error = OK
 
+	## Reads the palette colors. This is the worker body.
 	func run() -> void:
 		var image := Image.new()
 		error = State.load_image(path, image)
@@ -347,6 +365,8 @@ func _on_palette_action(id: int) -> void:
 		push_error("LVE: default palette change failed: %s" % error_string(error))
 
 
+## Imports a palette image and returns the error code. The image replaces the
+## document palette as one history action.
 func import_palette(path: String) -> Error:
 	if State.edit_busy() or _import_job:
 		return ERR_BUSY
@@ -371,6 +391,8 @@ func import_palette(path: String) -> Error:
 	return OK
 
 
+## Exports the palette as a PNG image and returns the error code. The image
+## stores the colors only and names its entry count.
 func export_palette(path: String) -> Error:
 	if State.edit_busy():
 		return ERR_BUSY

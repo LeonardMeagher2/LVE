@@ -1,5 +1,10 @@
 extends HBoxContainer
 
+## The transform option bar.
+##
+## It edits the snap and uniform options, and it commits or cancels the active
+## transform drag. The visible options follow the active transform tool.
+
 var _settings := preload("./settings.tres")
 
 func _ready() -> void:

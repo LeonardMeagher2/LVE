@@ -1,5 +1,12 @@
 extends RefCounted
 
+## Exports the document as a glTF binary file.
+##
+## Each frame becomes one child mesh. A scale animation hides every other
+## frame, so the exporter writes a flipbook animation per tag. See
+## `GLTF_EXPORT.md` for the mesh format and the import settings.
+
+## The plugin node that owns this export. The export cancels with it.
 var host: Node
 var _export_job: ExportJob
 var _export_root: Node3D
@@ -10,18 +17,31 @@ func _init(owner_node: Node) -> void:
 	host = owner_node
 
 
+## One cancellable glTF mesh build job.
+##
+## The job builds and welds the mesh of every frame, then bakes one atlas per
+## frame. [method VoxelFrame.EditJob.run] is the worker body.
 class ExportJob extends VoxelFrame.EditJob:
+	## The position weld distance in world units.
 	const WELD_EPSILON := 0.00001
 	const ATLAS := preload("res://Globals/Rendering/VoxelAtlas.gd")
 	const SURFACE := preload("res://Globals/Rendering/VoxelSurface.gd")
+	## The frames to export.
 	var frames: Array[VoxelFrame] = []
+	## The tags to export.
 	var tags: Array[AnimationTag] = []
+	## The welded mesh arrays of every frame.
 	var frame_surfaces: Array[Array] = []
+	## The atlas of every frame.
 	var frame_atlases: Array[RefCounted] = []
+	## The export error code.
 	var error := OK
+	## Whether the export centers the model on the origin.
 	var center_origin := true
+	## Whether the mesh uses smooth normals.
 	var smooth_normals := false
 
+	## Builds and welds every frame mesh. This is the worker body.
 	func run() -> void:
 		var total := 0
 		for frame in frames:
@@ -156,6 +176,7 @@ class ExportJob extends VoxelFrame.EditJob:
 		return SURFACE.merge(arrays, checkpoint)
 
 
+## Cancels a running export and releases the export scene.
 func cancel() -> void:
 	if _export_job and _export_job.worker_task_id >= 0:
 		_export_job.cancel()
@@ -163,6 +184,9 @@ func cancel() -> void:
 	_finish_export()
 
 
+## Exports the document as a GLB file and returns the error code.
+## [param center_origin] centers the model on the origin. [param tag_index]
+## limits the export to one tag, or -1 for every tag.
 func export_gltf(path: String, center_origin := true, tag_index := -1) -> Error:
 	if State.edit_busy() or _export_job:
 		return ERR_BUSY

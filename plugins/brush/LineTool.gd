@@ -1,5 +1,11 @@
 extends "res://plugins/brush/BrushTool.gd"
 
+## The line tool.
+##
+## A press sets the anchor. A drag or a second click sets the endpoint and
+## commits one line. Enter commits the line. Escape and a context change
+## discard it. The line stamps the brush pattern along the path.
+
 var _anchor := VoxelPicking.NONE
 var _endpoint := VoxelPicking.NONE
 var _mouse_pressed := false
@@ -46,10 +52,14 @@ func _exit_tree() -> void:
 
 # The line keeps its preview discard policy. Only the stroke tool commits on a
 # switch, so the line drops its pending preview.
+## Discards the pending preview on a tool or mode switch. A line never commits
+## on a switch.
 func finish_on_switch() -> void:
 	_cancel_edit()
 
 
+## Handles one input event. It sets the anchor, the endpoint, and the commit.
+## Escape cancels and Enter commits.
 func handle_input(event: InputEvent, pos: Vector2) -> bool:
 	if event.is_action_pressed("ui_cancel") and _anchor != VoxelPicking.NONE:
 		_cancel_edit()
@@ -106,6 +116,7 @@ func _pick_start(origin: Vector3, dir: Vector3) -> PickResult:
 	return pick
 
 
+## Returns the drag pick on the plane through the anchor.
 func pick_drag(request: PickRequest) -> PickResult:
 	_plane = VoxelPicking.view_plane(_anchor, request.origin, request.forward)
 	return VoxelPicking.drag_pick(request.origin, request.dir, request.frame, _plane)
@@ -301,6 +312,8 @@ func _on_color_changed(color: Color) -> void:
 		_request_preview()
 
 
+## Updates the brush cursor for one pick. A line in progress shows its own
+## preview.
 func update_visual(pick: PickResult) -> void:
 	if pick.target == VoxelPicking.NONE:
 		visible = false

@@ -1,9 +1,16 @@
 extends "./SelectTool.gd"
 
+## The lasso selection tool.
+##
+## It selects the volume behind a dragged screen outline. The pointer path is
+## sampled. The samples bound the polygon test.
+
 # The lasso tool selects the volume behind a dragged outline.
 # The pointer path is sampled. The samples bound the polygon test.
 
+## The minimum distance between two sampled pointer points in pixels.
 const SCREEN_STEP := 6.0
+## The maximum sampled pointer point count.
 const SCREEN_POINT_LIMIT := 512
 
 var _points := PackedVector2Array()

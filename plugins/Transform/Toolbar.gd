@@ -1,5 +1,10 @@
 extends ToolMenuButton
 
+## The transform tool menu button.
+##
+## It selects a transform tool and shows that tool's icon. The transform
+## shortcuts select a tool too.
+
 var _settings := preload("./settings.tres")
 
 func _ready() -> void:

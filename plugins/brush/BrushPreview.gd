@@ -1,5 +1,10 @@
 extends "res://Globals/Rendering/VoxelPreview.gd"
 
+## A brush cursor that mirrors its preview through the symmetry axes.
+##
+## The preview duplicates its mesh for each active symmetry mask.
+
+## Whether the preview shows the symmetry mirrors.
 @export var apply_edit_symmetry := false
 var _mirrors: Array[MeshInstance3D] = []
 

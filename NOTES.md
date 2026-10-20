@@ -338,3 +338,4 @@ Use Git history for old bug reports and removed designs.
 - 2026-10-18: A child can print `TEST OK` and exit zero after an engine error. Check its error output too.
 - 2026-10-18: Godot rejects property assignment through a constant Resource reference. Store a mutable reference in a variable.
 - 2026-10-18: Capture startup Resource values before fixture resets. Hard-coded resets can hide default-setting regressions.
+- 2026-10-19: `godot --headless --path . --doctool <dir> --gdscript-docs res://` writes one XML per project script and inner class. It starts the project autoloads, so it prints the `/root/Main` startup errors. A plain `#` comment can precede the `##` script description, and the description still extracts.

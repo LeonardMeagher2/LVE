@@ -1,24 +1,45 @@
 class_name VoxelMeshBuilder
 extends RefCounted
 
+## Builds the mesh arrays of one chunk.
+##
+## The builder reads a padded snapshot of the chunk and its border. It emits
+## colored vertex arrays or a texture-atlas surface. State owns the worker
+## launch, and [method run] is the worker body.
+
+## The chunk edge length in cells.
 const CHUNK_SIZE := VoxelFrame.CHUNK_SIZE
+## The padded chunk edge length, with one border cell on each side.
 const PADDED_CHUNK_SIZE := CHUNK_SIZE + 2
 const SURFACE := preload("./VoxelSurface.gd")
 
+## The frame to read. A run clears it, so the worker does not hold the frame.
 var source_frame: VoxelFrame
+## The chunk coordinate to build.
 var chunk_location := Vector3i.ZERO
+## Whether the mesh uses smooth corner normals.
 var smooth_normals := false
+## Whether the mesh uses the texture atlas instead of vertex colors.
 var texture_materials := true
+## The worker pool task id, or -1 when no worker runs.
 var worker_task_id := -1
+## The built mesh arrays, indexed by [enum Mesh.ArrayType].
 var surface_arrays: Array = []
+## The estimated vertex and index byte count.
 var geometry_bytes := 0
+## The atlas size in pixels, or zero when no atlas exists.
 var atlas_size := Vector2i.ZERO
+## The albedo image data of the atlas.
 var atlas_albedo := PackedByteArray()
+## The finish image data of the atlas.
 var atlas_orm := PackedByteArray()
+## The emission image data of the atlas.
 var atlas_emission := PackedByteArray()
+## The built atlas, or null when the mesh uses vertex colors.
 var atlas: RefCounted
 
 
+## Builds the mesh arrays for one chunk. This is the worker body.
 func run() -> void:
 	var frame := source_frame
 	var snapshot := _snapshot(source_frame, chunk_location, smooth_normals)
@@ -192,6 +213,8 @@ func _collect_groups(padded_cell_colors: PackedColorArray, padded_cell_materials
 	return groups
 
 
+## Returns the chunk offsets that a mesh of this chunk reads. A smooth mesh
+## reads all 26 neighbors. A flat mesh reads only the six face neighbors.
 static func neighbor_offsets(use_smooth_normals: bool) -> Array[Vector3i]:
 	var offsets: Array[Vector3i] = [Vector3i.ZERO]
 	if not use_smooth_normals:

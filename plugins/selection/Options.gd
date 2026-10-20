@@ -1,5 +1,10 @@
 extends HBoxContainer
 
+## The selection option bar.
+##
+## It edits the selection mode and the selection options. It also clears the
+## selection. The visible options follow the active selection tool.
+
 var _settings := preload("./settings.tres")
 
 func _ready() -> void:

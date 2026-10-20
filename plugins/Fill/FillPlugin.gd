@@ -1,5 +1,9 @@
 extends VoxelPlugin
 
+## The fill plugin.
+##
+## It adds the fill tool button and its option bar.
+
 @onready var _toolbar := preload("./Toolbar.tscn").instantiate()
 @onready var _options := preload("./Options.tscn").instantiate()
 @onready var _tool := preload("./FillTool.tscn").instantiate()
@@ -17,12 +21,14 @@ func _notification(what: int) -> void:
 				node.free()
 
 
+## Activates the fill tool and shows its option bar.
 func activate_tool() -> void:
 	_toolbar.set_pressed_no_signal(true)
 	add_editor_node(_tool)
 	add_option_bar_item(_options)
 
 
+## Deactivates the fill tool and hides its option bar.
 func deactivate_tool() -> void:
 	remove_editor_node(_tool)
 	remove_option_bar_item(_options)

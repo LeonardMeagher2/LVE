@@ -1,22 +1,35 @@
 extends VoxelTool
 
+## The bucket fill tool.
+##
+## A press fills the picked region with the current material. The tool queues
+## one seed per visited cell during a drag. A small fill runs at once. A large
+## fill streams its cells from a worker, and the main thread applies them in
+## bounded slices. The stroke commits as one history action on release. Escape
+## and a context change roll it back.
+
 # The main-thread work one frame spends applying streamed fill batches. The worker
 # waits when the queue fills, so this budget bounds both the frame cost and the
 # handoff memory. Every seed of one frame shares the budget.
+## The main-thread work budget per frame in microseconds.
 const PUBLISH_BUDGET_US := 2000
 # The destinations one set_cells call applies. A raw search batch of 512 cells can
 # expand to eight times that through symmetry, and one indivisible call of that size
 # can overrun the frame budget. The slice size follows the measured cost of the
 # last call, so a fast machine applies more per call and a slow one less. The
 # pending batch keeps its place across frames, so no destination is dropped.
+## The minimum destination count of one apply slice.
 const APPLY_SLICE_MIN := 64
+## The maximum destination count of one apply slice.
 const APPLY_SLICE_MAX := 512
 # A changed-chunk notification wakes the renderer, which rebuilds the surfaces of
 # the listed chunks. A notification every frame makes the earlier rebuilds
 # obsolete, so the fill coalesces its chunk ids and notifies on this cadence. The
 # first notification leaves at once, so a partial surface still installs early.
 # The end of the operation always flushes the rest.
+## The minimum frame gap between chunk notifications.
 const NOTIFY_MIN_FRAMES := 3
+## The minimum time gap between chunk notifications in microseconds.
 const NOTIFY_MIN_INTERVAL_US := 20000
 
 var _settings := preload("./settings.tres")
@@ -49,20 +62,36 @@ var _changed_chunks := {}
 var _last_emit_frame := -1
 var _last_emit_us := 0
 
+## One cancellable fill job.
+##
+## The job searches a frame snapshot for the target material and applies the
+## replacement. A streaming job pushes its found cells to [member batch_queue].
+## [method VoxelFrame.EditJob.run] is the worker body.
 class FillJob extends VoxelFrame.EditJob:
+	## The frame snapshot to search and write.
 	var source_frame: VoxelFrame
+	## The cells that the fill may change. An empty mask allows every cell.
 	var selection_mask: Dictionary = {}
+	## The seed cell of a connected fill.
 	var seed_cell := Vector3i.ZERO
+	## The full material that the search matches.
 	var target_material := VoxelFrame.material(Color.TRANSPARENT)
+	## Whether the search floods the six face neighbors.
 	var connected := true
+	## The material that the fill writes to every match.
 	var replacement_material := VoxelFrame.material(Color.TRANSPARENT)
+	## The chunk locations that the fill changed.
 	var changed_chunks: Array[Vector3i] = []
+	## Whether the job applies the changes. A streaming job leaves this false.
 	var apply_changes := true
+	## The matched cells and their replacement material.
 	var matching_cells := {}
 	# A streaming job carries a bounded queue. The search pushes the cells it finds,
 	# and the main thread applies them, so the fill is visible before the search ends.
+	## The bounded handoff queue of a streaming job, or null.
 	var batch_queue: VoxelRegionSearch.BatchQueue
 
+	## Searches and applies the fill. This is the worker body.
 	func run() -> void:
 		stage("Finding connected voxels" if connected else "Finding matching voxels", -1 if connected else source_frame.count())
 		# The shared search writes the replacement material straight into the change
@@ -149,6 +178,8 @@ func _notification(what: int) -> void:
 			State.edit_context_changing.disconnect(_interrupt_fill)
 
 
+## Handles one input event. A press fills the picked region. A drag queues one
+## seed per visited cell. Escape cancels a running fill.
 func handle_input(event: InputEvent, pos: Vector2) -> bool:
 	if event is InputEventKey and event.is_action_pressed("ui_cancel") and _stroke_active:
 		_interrupt_fill()
@@ -440,5 +471,6 @@ func _interrupt_fill() -> void:
 	State.finish_operation(operation_id)
 
 
+## Returns [code]true[/code] when no fill runs.
 func is_settled() -> bool:
 	return not _fill_running

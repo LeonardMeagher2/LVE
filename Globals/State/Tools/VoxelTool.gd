@@ -1,6 +1,16 @@
 class_name VoxelTool
 extends Node3D
 
+## Base class for an interactive voxel tool.
+##
+## A tool handles pointer input in the 3D viewport and writes to the current
+## frame. It owns one edit at a time through [VoxelEditTransaction]. A subclass
+## overrides [method apply] to change cells. It can override [method pick_start],
+## [method pick_drag], and [method update_visual] to change the pick and cursor.
+##
+## The base class opens an edit on a left press and closes it on release. It
+## refuses input while another edit is active.
+
 var _plane: StrokePlane = null
 var _last_target := VoxelPicking.NONE
 var _stroke_active := false
@@ -45,6 +55,8 @@ func _accepts(event: InputEvent) -> bool:
 	return event is InputEventMouseButton or event is InputEventMouseMotion or event is InputEventKey
 
 
+## Handles one input event for this tool. Returns [code]true[/code] when the
+## tool consumes the event.
 func handle_input(event: InputEvent, pos: Vector2) -> bool:
 	var r := _ray(pos)
 	var origin: Vector3 = r[0]
@@ -108,6 +120,8 @@ func _hit_at(c: Vector3i) -> Vector3i:
 	return VoxelPicking.NONE
 
 
+## Returns [code]true[/code] when the two colors match. An epsilon above zero
+## allows that much difference on each channel.
 func colors_equal(a: Color, b: Color, epsilon:float = 0.0) -> bool:
 	if epsilon <= 0.0:
 		return a == b
@@ -116,10 +130,14 @@ func colors_equal(a: Color, b: Color, epsilon:float = 0.0) -> bool:
 		absf(a.b - b.b) <= epsilon and absf(a.a - b.a) <= epsilon
 	)
 
+## Applies the tool to one cell. Returns [code]true[/code] when the tool
+## changed the model. The base version does nothing.
 func apply(_target: Vector3i, _hit: Vector3i) -> bool:
 	return false
 
 
+## Returns the cells that [method apply] can change for this pick. The base
+## version returns the target cell and the hit cell.
 func applied_cells(target: Vector3i, hit: Vector3i) -> Array[Vector3i]:
 	var out: Array[Vector3i] = []
 	if target != VoxelPicking.NONE:
@@ -158,6 +176,9 @@ func _do_flush() -> void:
 # current frame is missing. The caller must not mutate the model or mark a stroke
 # active until this returns non-null. A retained handle that a document reset
 # closed is dropped, so the tool acquires a fresh edit when State allows.
+## Opens this tool's owned edit. Returns null while another edit is active or
+## the current frame is missing. The caller must check the result before it
+## mutates the model.
 func open_stroke() -> VoxelEditTransaction:
 	if _edit != null and _edit.is_closed():
 		_edit = null
@@ -169,6 +190,8 @@ func open_stroke() -> VoxelEditTransaction:
 # Close this tool's edit and record it as one history action. The tool handle is
 # cleared before the call, so a handler that opens a new stroke during the history
 # signal keeps its own handle.
+## Closes this tool's edit and records one history action. The default action is
+## [code]Stroke[/code]. Does nothing when the tool holds no edit.
 func close_stroke(action: String = "Stroke") -> void:
 	var tx := _edit
 	if tx == null:
@@ -180,6 +203,7 @@ func close_stroke(action: String = "Stroke") -> void:
 # Roll this tool's edit back. Does nothing when the tool holds no edit. The tool
 # handle is cleared before the call, so a handler that opens a new stroke during
 # the restore signal keeps its own handle.
+## Rolls this tool's edit back. Does nothing when the tool holds no edit.
 func abort_stroke() -> void:
 	var tx := _edit
 	if tx == null:
@@ -206,14 +230,18 @@ func _request(origin: Vector3, dir: Vector3, plane: StrokePlane) -> PickRequest:
 	return req
 
 
+## Returns the press pick for this request. Override it to change the pick.
 func pick_start(request: PickRequest) -> PickResult:
 	return VoxelPicking.start_pick(request.origin, request.dir, request.frame, request.forward)
 
 
+## Returns the drag pick for this request. Override it to change the pick.
 func pick_drag(request: PickRequest) -> PickResult:
 	return VoxelPicking.drag_pick(request.origin, request.dir, request.frame, request.plane)
 
 
+## Updates the tool cursor for one pick. The base version moves the node to the
+## picked cell and hides it when the pick misses.
 func update_visual(pick: PickResult) -> void:
 	if pick.target == VoxelPicking.NONE:
 		visible = false

@@ -1,15 +1,23 @@
 extends Control
 
+## Shows one sprite sheet preview.
+##
+## The preview draws the sheet over a checkerboard. The pointer wheel zooms. A
+## middle or right drag pans. The left drag pans in pan mode.
+
 const CHECKER := preload("res://ui/Checker.png")
 
+## Emitted when the zoom changes.
 signal zoom_changed(percent: float)
 
+## The preview texture. A write refits the view.
 var texture: Texture2D:
 	set(value):
 		texture = value
 		if texture and _fitted:
 			fit()
 		queue_redraw()
+## Whether a left drag pans the view.
 var pan_mode := false
 var _zoom := 100.0
 var _pan := Vector2.ZERO
@@ -26,6 +34,7 @@ func _on_resized() -> void:
 	queue_redraw()
 
 
+## Fits the sheet into the control and clears the pan.
 func fit() -> void:
 	_fitted = true
 	_pan = Vector2.ZERO
@@ -36,10 +45,12 @@ func fit() -> void:
 	queue_redraw()
 
 
+## Enables or disables pan mode.
 func set_pan_mode(enabled: bool) -> void:
 	pan_mode = enabled
 
 
+## Sets the zoom percent and leaves the fitted view.
 func set_zoom_percent(percent: float) -> void:
 	_fitted = false
 	_zoom = clampf(percent, 1.0, 100000.0)
@@ -47,6 +58,7 @@ func set_zoom_percent(percent: float) -> void:
 	queue_redraw()
 
 
+## Multiplies the zoom by one factor.
 func zoom(factor: float) -> void:
 	set_zoom_percent(_zoom * factor)
 

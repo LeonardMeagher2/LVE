@@ -1,18 +1,33 @@
 extends VoxelPlugin
 
+## The image import plugin.
+##
+## It imports an image or an Aseprite JSON sidecar as a new document. Each frame
+## becomes one voxel frame. A pixel above the alpha clip becomes a cell.
+
+## The alpha value above which an image pixel becomes a cell.
 const ALPHA_CLIP := 0.5
 
 var _import_job: ImportJob
 
+## One cancellable image import job.
+##
+## The job reads the image and its optional JSON sidecar, then builds a
+## document. [method VoxelFrame.EditJob.run] is the worker body.
 class ImportJob extends VoxelFrame.EditJob:
+	## The image file path.
 	var path := ""
+	## The world axis that the image plane faces.
 	var plane_axis := Vector3.Axis.AXIS_Y
+	## The import error code.
 	var error: Error = OK
+	## The imported document.
 	var imported_document := VoxelDocument.new()
 	var _patterns: Array[Dictionary] = []
 	var _occupied_bounds := AABB()
 	var _palette_colors := {}
 
+	## Reads the image and builds the document. This is the worker body.
 	func run() -> void:
 		stage("Reading image", -1)
 		var image := Image.new()
@@ -125,6 +140,8 @@ func _ready() -> void:
 	name = "ImageImportPlugin"
 
 
+## Imports one image as a new document and returns the error code. A busy
+## editor or a replaced document returns [constant ERR_BUSY].
 func import_image(path: String) -> Error:
 	if State.edit_busy() or _import_job:
 		return ERR_BUSY

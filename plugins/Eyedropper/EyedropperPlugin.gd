@@ -1,5 +1,9 @@
 extends VoxelPlugin
 
+## The eyedropper plugin.
+##
+## It adds the eyedropper tool button and its tool.
+
 @onready var _toolbar := preload("./Toolbar.tscn").instantiate()
 @onready var _tool := preload("./EyedropperTool.tscn").instantiate()
 
@@ -16,11 +20,13 @@ func _notification(what: int) -> void:
 				node.free()
 
 
+## Activates the eyedropper tool.
 func activate_tool() -> void:
 	_toolbar.set_pressed_no_signal(true)
 	add_editor_node(_tool)
 
 
+## Deactivates the eyedropper tool.
 func deactivate_tool() -> void:
 	remove_editor_node(_tool)
 

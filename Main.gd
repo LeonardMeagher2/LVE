@@ -1,6 +1,13 @@
 extends Control
 
+## The application main scene.
+##
+## It restores the last document, tracks the window title, and applies the UI
+## scale. It also disables the inactive tab, so only the current tab processes.
+
+## The user path of the saved interface settings.
 const UI_SETTINGS_PATH := "user://interface.cfg"
+## The document that opens when no last document exists.
 const STARTUP_DOCUMENT := "res://Flamingo.lve"
 var _ui_scale := 0.0
 var _scale_check_elapsed := 0.0
@@ -60,6 +67,8 @@ func _restore_startup_document(force: bool = false, session_path: String = "") -
 		%MenuBar.open_document(STARTUP_DOCUMENT, false)
 
 
+## Sets the UI scale. A zero value uses the automatic scale. When [param save]
+## is true, it writes the value to the interface settings.
 func set_ui_scale(value: float, save: bool = true) -> void:
 	_ui_scale = 0.0 if value == 0.0 else clampf(value, 1.0, 3.0)
 	_apply_ui_scale()

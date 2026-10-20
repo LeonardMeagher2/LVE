@@ -1,5 +1,10 @@
 extends ToolMenuButton
 
+## The brush tool menu button.
+##
+## It selects a brush mode and shows that mode's icon. The brush mode shortcuts
+## select a mode too.
+
 var _settings := preload("./settings.tres")
 
 func _ready() -> void:

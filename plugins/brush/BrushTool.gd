@@ -1,14 +1,24 @@
 extends VoxelTool
 
+## The brush and eraser tool.
+##
+## The tool stamps a brush pattern at each stroke center. A large stamp runs on
+## the worker pool. A stroke commits as one history action on release or on a
+## tool switch. Escape and an edit context change roll the stroke back.
+
+## The stamp work above which the job runs on the worker pool.
 const INLINE_EDIT_LIMIT := 4096
 const BrushSettings := preload("./BrushToolSettings.gd")
 
 # Opt-in profiling hook. Off by default and free when off. A test turns it on to
 # time the edit result publication, which the frame gap hides.
+## The opt-in profiling hook. It is free when off.
 static var profile_enabled := false
+## The last edit publication time in microseconds.
 static var profile_finish_us := 0
 # One publication per `_finish_edit`. A reader compares this against the value
 # it last saw, so a stale duration never attributes to a later frame.
+## The publication counter that a reader compares.
 static var profile_finish_seq := 0
 
 var _settings := preload("./settings.tres")
@@ -39,28 +49,51 @@ var _last_pick: PickResult
 var _hover_job: BrushSettings.PatternJob
 var _hover_operation_id := 0
 
+## One cancellable brush stamp job.
+##
+## The job writes one batch of stroke centers into a frame snapshot. A large
+## batch runs on the worker pool. [method VoxelFrame.EditJob.run] is the worker
+## body.
 class BrushJob extends VoxelFrame.EditJob:
+	## The stroke centers of this batch.
 	var centers: Array[Vector3i] = []
+	## The brush pattern, keyed by offset from the center.
 	var pattern := {}
 	# The pattern keys in the same order as the dictionary. The stamp reads only
 	# the offsets, and an array iterates about twice as fast as the dictionary.
+	## The pattern keys in insertion order.
 	var offsets: Array = []
 	# The center of the previous stamp in this stroke, or Vector3i.MAX for the
 	# first one. A short move leaves most of the footprint already written.
+	## The center of the previous stamp, or [constant Vector3i.MAX] for the first.
 	var previous_center := Vector3i.MAX
+	## The per-offset materials of a selection brush or a paste.
 	var material_pattern := {}
+	## Whether a selection pattern keeps its own materials.
 	var replace_materials := false
+	## The brush diameter in cells.
 	var diameter := 1
+	## The brush shape.
 	var shape := 0
+	## The material of a shape brush.
 	var material := VoxelFrame.material(Color.WHITE)
+	## Whether the stamp writes only cells that the frame holds.
 	var paint_existing := false
+	## Whether the stamp erases the footprint.
 	var erase_existing := false
+	## The selection cells that the stamp may change. An empty mask allows every
+	## cell.
 	var selection_mask := {}
+	## The frame snapshot to write.
 	var edited_frame: VoxelFrame
+	## The cells to write, keyed by cell position.
 	var cell_materials := {}
+	## The chunk locations that the stamp changed.
 	var changed_chunks: Array[Vector3i] = []
+	## The stroke revision that the job belongs to.
 	var revision := 0
 
+	## Stamps the centers into the frame snapshot. This is the worker body.
 	func run() -> void:
 		if pattern.is_empty() and shape != BrushSettings.BrushShape.SELECTION:
 			pattern = BrushSettings.build_pattern(diameter, shape, self)
@@ -226,6 +259,8 @@ func _on_settings_changed() -> void:
 	_on_color_changed(State.current_color)
 
 
+## Handles one input event. It cancels an open stroke on Escape and ignores a
+## left press that misses the model.
 func handle_input(event: InputEvent, pos: Vector2) -> bool:
 	if event.is_action_pressed("ui_cancel") and _edit != null:
 		_cancel_edit()
@@ -239,6 +274,8 @@ func handle_input(event: InputEvent, pos: Vector2) -> bool:
 	return super.handle_input(event, pos)
 
 
+## Opens this tool's stroke and captures its start state. Returns null while
+## another edit is active.
 func open_stroke() -> VoxelEditTransaction:
 	# A closed handle is stale, so fall through to the base acquire.
 	if _edit != null and not _edit.is_closed():
@@ -397,6 +434,7 @@ func _end() -> void:
 # runner stamps the queued centers, awaits a running worker, and closes the stroke
 # as one history action. Escape and a context change keep their cooperative
 # rollback.
+## Ends the stroke like a release when a tool or mode switch detaches this tool.
 func finish_on_switch() -> void:
 	if _edit == null:
 		return
@@ -413,6 +451,9 @@ func _finish_stroke() -> void:
 	super._end()
 
 
+## Closes this tool's stroke and records one history action. The action name is
+## [code]Erase[/code] for an eraser stroke and [code]Stroke[/code] otherwise.
+## The [param action] argument is ignored.
 func close_stroke(_action: String = "Stroke") -> void:
 	var tx := _edit
 	if tx == null:
@@ -456,12 +497,16 @@ func _pick_start(origin: Vector3, dir: Vector3) -> PickResult:
 	return pick
 
 
+## Returns the drag pick. A paint drag picks the surface cell, so the pointer
+## stays on the surface.
 func pick_drag(request: PickRequest) -> PickResult:
 	if _settings.mode != _settings.BrushMode.PAINT:
 		return super.pick_drag(request)
 	return VoxelPicking.start_pick(request.origin, request.dir, request.frame, request.forward)
 
 
+## Updates the brush cursor for one pick. It rebuilds the cursor mesh when the
+## view axis changes.
 func update_visual(pick: PickResult) -> void:
 	if pick.plane == null:
 		pick.plane = _plane

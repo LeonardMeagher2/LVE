@@ -1,5 +1,11 @@
 extends "res://plugins/brush/LineTool.gd"
 
+## The paste tool.
+##
+## It places a copied pattern at the pointer and commits one paste. Enter
+## commits. Escape cancels. It emits [signal finished] when it stops.
+
+## Emitted when the paste tool stops.
 signal finished()
 
 var _active := false
@@ -9,10 +15,17 @@ var _material_pattern := {}
 var _preview_pattern := {}
 
 
+## One cancellable paste job.
+##
+## It writes the pattern and builds the pasted selection.
+## [method BrushTool.BrushJob.run] is the base worker body.
 class PasteJob extends BrushJob:
+	## The selection offsets relative to the pattern center.
 	var selection_pattern := {}
+	## The pasted selection cells, keyed by cell position.
 	var pasted_selection := {}
 
+	## Writes the pattern and the pasted selection. This is the worker body.
 	func run() -> void:
 		super.run()
 		if not checkpoint(0):
@@ -24,6 +37,9 @@ class PasteJob extends BrushJob:
 				return
 
 
+## Starts one paste placement. [param pattern] maps an offset to a color.
+## [param material_pattern] maps an offset to a full material. [param center] is
+## the pattern center.
 func begin_paste(pattern: Dictionary, selection_pattern: Dictionary, center: Vector3i, material_pattern := {}) -> void:
 	_active = true
 	_source_document = State.document
@@ -51,6 +67,8 @@ func begin_paste(pattern: Dictionary, selection_pattern: Dictionary, center: Vec
 	_update_endpoint(center)
 
 
+## Handles one input event. A pointer move places the pattern. A click or Enter
+## commits the paste. Escape cancels it.
 func handle_input(event: InputEvent, pos: Vector2) -> bool:
 	if not _active:
 		return false

@@ -1,16 +1,29 @@
 extends Node3D
 
+## The editor viewport scene.
+##
+## It owns the camera, the light, and the grid. It handles the view drags and
+## the light drag. The lighting settings can follow the document.
+
+## Emitted after the lighting settings change.
 signal lighting_changed()
 
+## Whether the lighting settings load from and save to the document.
 @export var document_lighting := true
 
+## The view drag mode.
 enum ViewMode {
+	## No view drag.
 	NONE,
+	## Pan the view.
 	PAN,
+	## Orbit the view.
 	ROTATE,
+	## Drag the light.
 	LIGHT,
 }
 
+## The active view mode.
 var view_mode:ViewMode = ViewMode.NONE
 var _drag_mode:ViewMode = ViewMode.NONE
 var _light_dragging := false
@@ -111,11 +124,14 @@ func _on_camera_index_pressed(index:int) -> void:
 			%CameraRig.set_view(text)
 
 
+## Returns the lighting settings of this viewport. The keys match the export
+## lighting dictionary in `docs/DOCUMENT_FORMAT.md`.
 func get_lighting_settings() -> Dictionary:
 	var environment: Environment = $WorldEnvironment.environment
 	return {"basis": $Light.basis, "color": $Light.light_color, "energy": $Light.light_energy, "ambient_color": environment.ambient_light_color, "ambient_energy": environment.ambient_light_energy, "shadows": $Light.shadow_enabled, "shaded": %Viewport.debug_draw != Viewport.DEBUG_DRAW_UNSHADED}
 
 
+## Applies one lighting settings dictionary and emits [signal lighting_changed].
 func set_lighting_settings(settings: Dictionary) -> void:
 	VoxelImageRenderer.apply_lighting($Light, $WorldEnvironment.environment, settings)
 	%Viewport.debug_draw = settings.get("debug_draw", Viewport.DEBUG_DRAW_DISABLED if settings.shaded else Viewport.DEBUG_DRAW_UNSHADED)

@@ -1,5 +1,11 @@
 extends "./TransformTool.gd"
 
+## The scale transform tool.
+##
+## A drag scales the source around its bounds center. A click opens the scale
+## dialog for an exact factor. The uniform option keeps one factor on every
+## axis.
+
 const TransformDialog := preload("./TransformDialog.gd")
 
 var _axis := 1
@@ -17,9 +23,15 @@ var _use_world_scale := false
 var _total_world_scale := Vector3.ONE
 var _gesture_base_total := Vector3.ONE
 
+## The minimum reference distance in cells.
 const MIN_REF := 0.5
+## The minimum scale factor.
 const MIN_SCALE := 0.05
 
+## One cancellable scale transform job.
+##
+## It samples the source for each destination cell.
+## [method TransformJob.compute_destination] is overridden.
 class ScaleJob extends TransformJob:
 	var axis := 1
 	var p := 0

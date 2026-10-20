@@ -1,14 +1,24 @@
 class_name VoxelEditTransaction
 extends RefCounted
 
+## One owned edit on a frame and its selection.
+##
+## The transaction captures the document, the target frame, the frozen edit
+## context, and the start snapshots. It releases its live references when it
+## closes. The owner holds the handle for the whole edit.
+
 # One owned edit. The transaction captures the document, the target frame, the
 # frozen edit context, and the start snapshots. It compares the end state and
 # releases its live references when it closes. It never holds State or UndoRedo,
 # so the undo history can keep frozen snapshots without a reference cycle.
+## The document that owns the edited frame.
 var document: VoxelDocument
+## The edited frame.
 var frame: VoxelFrame
 # The context captured at begin. Its selection is a read-only copy-on-write
 # snapshot, so a later selection write cannot change the captured context.
+## The edit context captured at begin. Its selection is a copy-on-write
+## snapshot, so a later selection write cannot change it.
 var edit_context: VoxelFrame.EditContext
 var _selection: VoxelSelection
 var _start_chunks := {}
@@ -18,21 +28,34 @@ var _closed := false
 
 # The frozen before and after snapshots of one committed edit. The history binds
 # these, never the transaction.
+## The frozen before and after snapshots of one committed edit. The history
+## binds these, never the transaction.
 class Change extends RefCounted:
+	## The frame that the change restores.
 	var frame: VoxelFrame
+	## The chunk snapshot before the edit.
 	var undo_chunks: Dictionary
+	## The selection snapshot before the edit.
 	var undo_selection: Dictionary
+	## The chunk snapshot after the edit.
 	var redo_chunks: Dictionary
+	## The selection snapshot after the edit.
 	var redo_selection: Dictionary
 
 
 # The frozen start snapshots of one rolled-back edit.
+## The frozen start snapshots of one rolled-back edit.
 class Rollback extends RefCounted:
+	## The frame that the rollback restores.
 	var frame: VoxelFrame
+	## The chunk snapshot to restore.
 	var chunks: Dictionary
+	## The selection snapshot to restore.
 	var selection: Dictionary
 
 
+## Begins one owned edit. The transaction captures the start snapshots and
+## marks them shared. Returns the handle that the caller holds.
 static func begin(edited_document: VoxelDocument, edited_frame: VoxelFrame, edited_selection: VoxelSelection, context: VoxelFrame.EditContext) -> VoxelEditTransaction:
 	var transaction := VoxelEditTransaction.new()
 	transaction.document = edited_document
@@ -46,6 +69,7 @@ static func begin(edited_document: VoxelDocument, edited_frame: VoxelFrame, edit
 	return transaction
 
 
+## Returns [code]true[/code] after the transaction closed.
 func is_closed() -> bool:
 	return _closed
 
@@ -53,6 +77,9 @@ func is_closed() -> bool:
 # The change for one history action, or null when the frame and the selection are
 # unchanged. The result owns its snapshots. This releases the live references, so
 # a retained transaction cannot pin the selection or the frame.
+## Returns the change for one history action, or null when the frame and the
+## selection are unchanged. The result owns its snapshots. This releases the
+## live references.
 func finish() -> Change:
 	if _closed:
 		return null
@@ -73,6 +100,8 @@ func finish() -> Change:
 
 # The restore triple for a rollback, or null when the transaction was already
 # closed. This releases the live references.
+## Returns the restore triple for a rollback, or null when the transaction was
+## already closed. This releases the live references.
 func cancel() -> Rollback:
 	if _closed:
 		return null
@@ -87,6 +116,8 @@ func cancel() -> Rollback:
 
 # Close without a restore or a history change. The owning document is replaced, so
 # the captured frame must not touch the replacement.
+## Closes without a restore or a history change. Use this when the owning
+## document is replaced.
 func abandon() -> void:
 	if _closed:
 		return

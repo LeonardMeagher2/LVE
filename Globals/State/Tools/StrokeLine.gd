@@ -1,9 +1,15 @@
 class_name StrokeLine
 extends RefCounted
 
+## Builds a connected cell path between two cells.
+##
+## The path follows the straight line between the endpoints.
+
 # Returns the connected 8-neighbor path of cells from a to b inclusive.
 # The path follows the straight line, stepping the longest axis each step.
 
+## Returns the connected path of cells from [param a] to [param b], inclusive.
+## The path steps the longest axis at each step, so consecutive cells touch.
 static func cells(a: Vector3i, b: Vector3i) -> Array[Vector3i]:
 	var out: Array[Vector3i] = []
 	var p := a

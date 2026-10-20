@@ -1,9 +1,19 @@
 extends VoxelPlugin
 
+## The export plugin.
+##
+## It adds the Export tab and the menu item. The tab previews the model and the
+## sprite sheet. The plugin exports a GLB model or a PNG sprite sheet with a
+## JSON sidecar. See `GLTF_EXPORT.md` for the mesh format.
+
 const GLTF_EXPORT := preload("./GLTFExport.gd")
+## The camera view names of the sprite sheet.
 const VIEWS := ["3D preview", "Isometric", "Front", "Back", "Left", "Right", "Top", "Bottom"]
+## The yaw and pitch of each sprite sheet view.
 const ANGLES := [Vector2.ZERO, Vector2(-45, 45), Vector2.ZERO, Vector2(180, 0), Vector2(90, 0), Vector2(-90, 0), Vector2(0, 90), Vector2(0, -90)]
+## The debounce delay of the sheet preview in milliseconds.
 const PREVIEW_DELAY_MS := 200
+## The gap between two sheet tiles in pixels.
 const SPRITE_GAP := 1
 
 @onready var _menu_item := preload("./MenuBarItem.tscn").instantiate()
@@ -563,6 +573,8 @@ func _on_gltf_file_selected(path: String) -> void:
 	_report_result(await export_gltf(path), path)
 
 
+## Exports the model as a GLB file and returns the error code. It uses the
+## current center option and the selected tag.
 func export_gltf(path: String) -> Error:
 	var error: Error = await _gltf.export_gltf(path, _model.get_node("AnimationRow/Center").button_pressed, State.document.tags.find(_selected_tag) if _selected_tag else -1)
 	_sync()
@@ -582,6 +594,8 @@ func _report_result(error: Error, path: String) -> void:
 	_refresh_export_status()
 
 
+## Returns the sprite sheet grid for one frame count and tile size. The result
+## holds [code]size[/code], [code]tile_size[/code], and [code]rects[/code].
 static func sheet_layout(frame_count: int, tile_size: int) -> Dictionary:
 	var dimensions := Vector2i.ONE * tile_size
 	var actual_columns := maxi(1, ceili(sqrt(float(frame_count))))
@@ -749,6 +763,10 @@ func _update_sheet_preview() -> void:
 		_controls.get_node("Preview").texture = ImageTexture.create_from_image(image)
 
 
+## Exports a PNG sprite sheet and returns the error code. [param first_frame]
+## and [param last_frame] select the range. [param tile_size] sets one tile in
+## pixels. [param view] selects the camera view. [param include_json] also
+## writes the Aseprite JSON sidecar. [param views] adds turntable views.
 func export_sprite_sheet(path: String, first_frame := 0, last_frame := -1, tile_size := -1, view := 1, include_json := true, views := 1, tag_name := "") -> Error:
 	if _exporting or State.edit_busy():
 		return ERR_BUSY
@@ -794,6 +812,8 @@ func export_sprite_sheet(path: String, first_frame := 0, last_frame := -1, tile_
 	return error
 
 
+## Returns the Aseprite JSON sidecar for one sprite sheet. It lists every frame
+## rectangle and every tag.
 func sheet_metadata(path: String, first: int, last: int, layout: Dictionary, views := 1, tag_name := "") -> Dictionary:
 	var count := last - first + 1
 	var dimensions: Vector2i = layout.tile_size

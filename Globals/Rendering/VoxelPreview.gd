@@ -1,17 +1,34 @@
 extends MeshInstance3D
 
-enum PreviewStyle { OUTLINE, SOLID }
+## Draws the tool cursor and the selection outline in the viewport.
+##
+## The preview builds its mesh on a worker for a large request, so it installs
+## a frame later instead of stalling the frame that asked for it. It caches
+## built surfaces up to a byte and entry limit. A progressive selection keeps
+## the running outline and queues only the newest snapshot.
+
+## The shape that the preview draws.
+enum PreviewStyle {
+	## A line outline around the cells.
+	OUTLINE,
+	## A solid surface of the cells.
+	SOLID,
+}
 
 # An inline outline runs inside the request on the main thread. The measured scan
 # costs about 2 us per selected cell on a dense shape and about 12 us on a
 # scattered one. The shared work slice is 3000 us, so the conservative limit is
 # about 250 cells. A larger outline goes to a worker and installs a frame later
 # instead of stalling the frame that asked for it.
+## The largest outline that builds inline on the main thread.
 const INLINE_OUTLINE_LIMIT := 256
 # The delay that debounces a large outline is separate from the inline budget. A
 # mid-size outline still starts at once, on a worker.
+## The cell count above which a large outline waits one debounce delay.
 const OUTLINE_DELAY_LIMIT := 4096
+## The mesh cache size limit in bytes.
 const CACHE_LIMIT_BYTES := 64 * 1024 * 1024
+## The mesh cache entry limit.
 const CACHE_LIMIT_ENTRIES := 16
 
 static var _mesh_cache := {}
@@ -53,22 +70,39 @@ var _solid_material := preload("res://VoxelMaterial.tres").duplicate()
 var _primitive_material := preload("res://VoxelMaterial.tres").duplicate()
 var _brush_material := VoxelFrame.material(Color.WHITE)
 
+## One cancellable preview job that runs on the worker pool.
+##
+## The job holds a snapshot of the cells and builds the outline or the solid
+## mesh. [method VoxelFrame.EditJob.run] is the worker body.
 class PreviewJob extends VoxelFrame.EditJob:
+	## The cells to draw, keyed by cell position.
 	var cells := {}
+	## The shape to build.
 	var style := PreviewStyle.OUTLINE
+	## Whether a solid mesh reads the per-cell voxel colors.
 	var use_voxel_colors := false
+	## Whether a solid mesh uses smooth normals.
 	var smooth_normals := false
+	## The color that replaces a transparent cell color.
 	var color_key := Color.WHITE
+	## The strict request id that the job belongs to.
 	var revision := 0
 	# The stream epoch of a progressive selection job. The strict `revision` above
 	# is the request id of the strict path.
+	## The stream epoch that the job belongs to.
 	var stream_epoch := 0
+	## The mesh cache key of the job.
 	var cache_key := ""
+	## The built mesh arrays, indexed by [enum Mesh.ArrayType].
 	var arrays := []
+	## The per-chunk atlas surfaces of a solid mesh.
 	var atlas_surfaces: Array[VoxelMeshBuilder] = []
+	## The estimated geometry byte count.
 	var geometry_bytes := 0
+	## The callable that builds an outline from a selection.
 	var outline_builder: Callable
 
+	## Builds the mesh arrays. This is the worker body.
 	func run() -> void:
 		if style == PreviewStyle.OUTLINE:
 			var selection := VoxelSelection.new()
@@ -155,10 +189,13 @@ func _ready() -> void:
 	_primitive_material.vertex_color_use_as_albedo = false
 
 
+## Sets the brush cursor color.
 func set_brush_color(color: Color) -> void:
 	set_brush_material(VoxelFrame.material(color))
 
 
+## Sets the full brush cursor material. The material carries the color, the
+## emission, the metallic, and the roughness.
 func set_brush_material(cell_material: PackedFloat32Array) -> void:
 	_brush_material = cell_material.duplicate()
 	_apply_material(_primitive_material, cell_material)
@@ -178,6 +215,9 @@ static func _apply_material(target: StandardMaterial3D, cell_material: PackedFlo
 	target.specular_mode = BaseMaterial3D.SPECULAR_SCHLICK_GGX
 
 
+## Shows the brush cells. [param outline] draws a line outline. A
+## [param cube_diameter] above zero uses one box mesh for a cube brush.
+## [param use_voxel_colors] reads a full material from each cell value.
 func show_voxels(colors: Dictionary, color: Color, outline: bool = false, cube_diameter: int = 0, use_voxel_colors: bool = true) -> void:
 	if colors.is_empty():
 		_clear_request()
@@ -216,6 +256,8 @@ func show_voxels(colors: Dictionary, color: Color, outline: bool = false, cube_d
 # Show a selection outline. A progressive request keeps the running outline job
 # alive and queues only the newest snapshot, so an in-flight intermediate outline
 # can finish and install. A strict request cancels the stream and takes over.
+## Shows a selection outline. [param progressive] keeps the running outline and
+## queues only the newest snapshot. A null or empty selection hides the preview.
 func show_selection(selection: VoxelSelection, progressive := false) -> void:
 	if selection == null or selection.is_empty():
 		_clear_request()
@@ -356,6 +398,8 @@ func _clear_request() -> void:
 	_finish_activity()
 
 
+## Shows the single-cell cursor at one cell. [constant VoxelPicking.NONE] hides
+## it.
 func show_cell(cell_position: Vector3i) -> void:
 	_clear_request()
 	if cell_position == VoxelPicking.NONE:
@@ -371,6 +415,7 @@ func show_cell(cell_position: Vector3i) -> void:
 	visible = true
 
 
+## Returns a line mesh for one selection.
 static func outline_mesh(selection: VoxelSelection) -> ArrayMesh:
 	return _mesh_from_vertices(_outline_vertices(selection))
 
@@ -564,6 +609,7 @@ func _finish_activity() -> void:
 	_operation_id = 0
 
 
+## Returns [code]true[/code] when no preview job or request is pending.
 func is_settled() -> bool:
 	return _pending_cells.is_empty() and _preview_job == null and _stream_job == null and not _stream_has_pending
 

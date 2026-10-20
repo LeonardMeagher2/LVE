@@ -1,5 +1,11 @@
 extends HBoxContainer
 
+## The main menu bar.
+##
+## It opens, saves, and creates documents. It also shows the undo and redo
+## buttons and the model settings.
+
+## The path of the current document, or an empty string for a new document.
 var current_save_path:String = ""
 var _save_format := OptionButton.new()
 
@@ -42,6 +48,8 @@ func _on_model_setting_selected(id: int) -> void:
 	_sync_model_settings()
 
 
+## Saves the document to one path and returns the error code. A PNG path also
+## renders and stores a preview. The save path changes only on success.
 func save_doc(path: String) -> Error:
 	if State.edit_busy():
 		return ERR_BUSY
@@ -100,6 +108,8 @@ func _on_open_btn_pressed() -> void:
 	%FileDialog.add_filter(State.get_image_file_filter())
 	%FileDialog.popup_centered()
 
+## Opens one document file and returns [code]true[/code] on success. When
+## [param saved] is true, it records the path as the current save path.
 func open_document(path: String, saved: bool = true) -> bool:
 	var document := VoxelDocument.load_file(path)
 	if document == null:
@@ -157,6 +167,8 @@ func _on_save_format_selected(index: int) -> void:
 	%FileDialog.current_file = base_name + suffix
 
 
+## Returns the base file name of a document. It drops the `.lve` and
+## `.lve.png` suffixes.
 static func document_basename(file_name: String) -> String:
 	if file_name.to_lower().ends_with(".lve.png"):
 		return file_name.left(-8)

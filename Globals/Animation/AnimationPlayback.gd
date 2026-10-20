@@ -1,13 +1,24 @@
 class_name AnimationPlayback
 extends RefCounted
 
+## Advances the current frame for animation playback.
+##
+## The playback owns the current frame index, the playing flag, and the active
+## tag. It reads the frame durations from a [VoxelDocument].
+
+## Emitted before the current frame changes.
 signal frame_changing()
+## Emitted after the current frame changes.
 signal frame_changed()
+## Emitted when playback starts or stops.
 signal is_playing_toggled(playing: bool)
+## Emitted when the active tag changes.
 signal tag_changed()
 
+## The document that supplies the frames and the tags.
 var document := VoxelDocument.new()
 
+## The current frame index. A write clamps to the frame range.
 var current_frame := 0:
 	set(value):
 		value = clampi(value, 0, document.frames.size() - 1)
@@ -17,6 +28,7 @@ var current_frame := 0:
 		current_frame = value
 		frame_changed.emit()
 
+## Whether playback runs. Setting it to [code]true[/code] restarts the range.
 var is_playing := false:
 	set(value):
 		if value == is_playing:
@@ -26,6 +38,7 @@ var is_playing := false:
 			_restart()
 		is_playing_toggled.emit(is_playing)
 
+## The active tag index, or -1 when no tag is active.
 var active_tag := 0:
 	set(value):
 		value = clampi(value, -1, document.tags.size() - 1)
@@ -41,6 +54,8 @@ var _play_passes := 0
 var _play_elapsed := 0.0
 
 
+## Advances the playback by one time step. Call it once per frame. It advances
+## the frame when the elapsed time reaches the frame duration.
 func update(delta: float) -> void:
 	if not is_playing:
 		return
@@ -59,6 +74,7 @@ func _restart() -> void:
 		_play_dir = -1
 
 
+## Returns the first frame of the active tag, or frame zero.
 func first_frame() -> int:
 	var tag := document.get_tag(active_tag)
 	if tag:
@@ -66,6 +82,7 @@ func first_frame() -> int:
 	return 0
 
 
+## Returns the last frame of the active tag, or the last frame of the document.
 func last_frame() -> int:
 	var tag := document.get_tag(active_tag)
 	if tag:
@@ -83,6 +100,8 @@ func _play_repeats() -> int:
 	return tag.repeats if tag else 0
 
 
+## Advances to the next frame for the active loop mode. It stops playback when
+## the repeat count finishes.
 func advance() -> void:
 	if current_frame < first_frame() or current_frame > last_frame():
 		_restart()

@@ -1,5 +1,10 @@
 extends VoxelPlugin
 
+## The brush plugin.
+##
+## It owns the brush tool and the line tool. It adds their toolbar and option
+## bar, and it switches the active tool when the brush mode changes.
+
 @onready var _toolbar := preload("./Toolbar.tscn").instantiate()
 @onready var _options := preload("./Options.tscn").instantiate()
 @onready var _brush_tool := preload("./BrushTool.tscn").instantiate()
@@ -27,11 +32,14 @@ func _notification(what: int) -> void:
 				node.free()
 
 
+## Activates the brush tool and shows its option bar.
 func activate_tool() -> void:
 	_toolbar.set_pressed_no_signal(true)
 	add_editor_node(_tool)
 	add_option_bar_item(_options)
 
+## Deactivates the brush tool and hides its option bar. It ends an open stroke
+## like a release.
 func deactivate_tool() -> void:
 	# A switch ends the stroke like a release: the queued centers are stamped and
 	# the stroke commits as one history action. Escape and a context change keep

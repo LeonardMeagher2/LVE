@@ -1,6 +1,17 @@
 class_name VoxelRegionSearch
 extends RefCounted
 
+## Searches one snapshot frame for a material.
+##
+## One search serves the bucket fill and the wand. A connected search floods the
+## six face neighbors from a seed. A disconnected search scans every occupied
+## cell. The caller keeps its own policy for the result.
+##
+## The search only reads the frame, so a worker can run it beside the live
+## document. A canceled [param job] makes the search return [code]false[/code],
+## and the caller must discard the result. The search writes [param value] into
+## [param result] for every match, so the caller needs no conversion pass.
+
 # One region search serves the bucket fill and the wand. Both need the same walk
 # over one snapshot frame: a connected flood through the six face neighbors, or a
 # scan of every occupied cell. The caller keeps its own policy. The fill paints
@@ -31,13 +42,18 @@ extends RefCounted
 #   with the exact final set, so a streaming caller and an atomic caller agree.
 # - Material ids are local to a chunk. The search never compares ids across chunks.
 
+## The chunk edge length in cells.
 const CHUNK_SIZE := VoxelFrame.CHUNK_SIZE
+## The cell count of one chunk.
 const CHUNK_CELLS := CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE
 # Hoisted so the hot compare does not look the constant up on another class.
+## The float count of one material.
 const MATERIAL_STRIDE := VoxelFrame.MATERIAL_STRIDE
+## The six face directions.
 const DIRECTIONS := VoxelFrame.DIRECTIONS
 # The cells one streamed batch holds. A batch bounds both the handoff memory and
 # the work a consumer does between two checks.
+## The cell count of one streamed batch.
 const STREAM_BATCH := 512
 
 
@@ -45,7 +61,12 @@ const STREAM_BATCH := 512
 # a batch and waits while the queue is full, so the producer cannot run away from
 # the consumer. The consumer never waits. `cancel` wakes a waiting producer, so a
 # cancelled operation always lets its worker finish.
+## A bounded handoff from a searching worker to the main thread.
+##
+## The producer waits while the queue is full, so it cannot run away from the
+## consumer. The consumer never waits. [method cancel] wakes a waiting producer.
 class BatchQueue extends RefCounted:
+	## The maximum queued batch count.
 	const LIMIT := 4
 
 	var _batches: Array = []
@@ -55,6 +76,8 @@ class BatchQueue extends RefCounted:
 
 	# Take ownership of one batch. Returns false when the queue was cancelled, and
 	# the producer must then stop.
+	## Takes ownership of one batch. Returns [code]false[/code] when the queue was
+	## canceled, and the producer must then stop.
 	func push(batch: Dictionary) -> bool:
 		while true:
 			_mutex.lock()
@@ -71,6 +94,8 @@ class BatchQueue extends RefCounted:
 
 	# The next batch, or an empty dictionary when none waits. The main thread calls
 	# this. A pushed batch is never empty.
+	## Returns the next batch, or an empty dictionary when none waits. Call it on
+	## the main thread. A pushed batch is never empty.
 	func take() -> Dictionary:
 		_mutex.lock()
 		var batch := {}
@@ -82,18 +107,21 @@ class BatchQueue extends RefCounted:
 		return batch
 
 	# Refuse every later push and wake a waiting producer.
+	## Refuses every later push and wakes a waiting producer.
 	func cancel() -> void:
 		_mutex.lock()
 		_cancelled = true
 		_mutex.unlock()
 		_free.post()
 
+	## Returns [code]true[/code] when the queue was canceled.
 	func is_cancelled() -> bool:
 		_mutex.lock()
 		var value := _cancelled
 		_mutex.unlock()
 		return value
 
+	## Returns [code]true[/code] when no batch waits.
 	func is_empty() -> bool:
 		_mutex.lock()
 		var value := _batches.is_empty()
@@ -101,6 +129,8 @@ class BatchQueue extends RefCounted:
 		return value
 
 	# The queued batch count, for a diagnostic read from another thread.
+	## Returns the queued batch count. A diagnostic can read it from another
+	## thread.
 	func depth() -> int:
 		_mutex.lock()
 		var value := _batches.size()
@@ -115,9 +145,16 @@ class BatchQueue extends RefCounted:
 # blocks the producer and never the consumer. The fields are public: a hot loop
 # reads `keys` and `cursor` directly, because a property read per cell costs more
 # than an index into a local.
+## A consumer cursor over one bounded [BatchQueue].
+##
+## It owns the queue, the keys of the batch in progress, and the cursor into
+## them. The fields are public, so a hot loop reads them without a property call.
 class BatchCursor extends RefCounted:
+	## The queue that the cursor consumes.
 	var queue: BatchQueue
+	## The keys of the batch in progress.
 	var keys: Array = []
+	## The cursor into [member keys].
 	var cursor := 0
 
 	func _init(batch_queue: BatchQueue = null) -> void:
@@ -126,12 +163,16 @@ class BatchCursor extends RefCounted:
 	# True when the queue is drained and every key of the current batch is applied.
 	# It does not report that the producer finished. The caller tests its worker
 	# task separately.
+	## Returns [code]true[/code] when the queue is drained and every key of the
+	## current batch is applied. It does not report that the producer finished.
 	func is_done() -> bool:
 		return cursor >= keys.size() and queue.is_empty()
 
 	# The end of the next slice, or -1 when no key waits. Loads the next queued
 	# batch only when the current keys are consumed. A pushed batch is never empty,
 	# so a loaded batch always holds at least one key.
+	## Returns the end of the next slice, or -1 when no key waits. It loads the
+	## next queued batch only when the current keys are consumed.
 	func next_end(limit: int) -> int:
 		if cursor >= keys.size():
 			var batch := queue.take()
@@ -142,6 +183,12 @@ class BatchCursor extends RefCounted:
 		return mini(cursor + limit, keys.size())
 
 
+## Searches [param frame] and fills [param result] with every match. A
+## [param connected] search floods the six face neighbors from [param seed_cell].
+## A disconnected search scans every occupied cell. A non-empty
+## [param selection_mask] blocks traversal and matching. Returns [code]false[/code]
+## when [param job] cancels, and the caller must discard [param result].
+## [param stream] receives the found cells in batches while the search runs.
 static func find(result: Dictionary, frame: VoxelFrame, seed_cell: Vector3i, target_material: PackedFloat32Array, connected: bool, value: Variant = true, selection_mask: Dictionary = {}, job: VoxelFrame.EditJob = null, stream: Callable = Callable()) -> bool:
 	if frame == null:
 		return true

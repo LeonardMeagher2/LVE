@@ -1,8 +1,16 @@
 extends Node
 
+## Renders and caches the palette material thumbnails.
+##
+## One off-screen viewport renders a rounded tile for each material. The cache
+## is bounded. A headless run fills a flat color instead.
+
+## Emitted when one thumbnail finishes. [param key] is the material key.
 signal thumbnail_ready(key: String, texture: Texture2D)
 
+## The maximum cached thumbnail count.
 const CACHE_LIMIT := 256
+## The tile edge length at display scale one, in pixels.
 const TILE_SIZE := 32
 
 var _cache: Dictionary = {}
@@ -44,11 +52,15 @@ func _ready() -> void:
 		_render_pending.call_deferred(_revision)
 
 
+## Returns the cache key of one material and display scale. Every material float
+## is part of the key.
 func thumbnail_key(material: PackedFloat32Array, display_scale: float = 1.0) -> String:
 	# Use every float's bytes. Same-color material variants must not share a key.
 	return material.to_byte_array().hex_encode() + ":" + var_to_bytes(display_scale).hex_encode()
 
 
+## Returns the cached thumbnail, or null while one renders. A finished
+## thumbnail emits [signal thumbnail_ready].
 func request_thumbnail(material: PackedFloat32Array, display_scale: float = 1.0) -> Texture2D:
 	if material.size() != VoxelFrame.MATERIAL_STRIDE:
 		return null

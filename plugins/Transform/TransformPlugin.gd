@@ -1,5 +1,10 @@
 extends VoxelPlugin
 
+## The transform plugin.
+##
+## It owns the move, rotate, and scale tools. It shows the transform option bar
+## and switches the active tool.
+
 var _settings := preload("./settings.tres")
 
 @onready var _toolbar: MenuButton = preload("./Toolbar.tscn").instantiate()
@@ -26,6 +31,7 @@ func _notification(what: int) -> void:
 				node.free()
 
 
+## Activates the current transform tool and shows the option bar.
 func activate_tool() -> void:
 	_active = true
 	_toolbar.set_pressed_no_signal(true)
@@ -33,6 +39,7 @@ func activate_tool() -> void:
 	_on_tool_changed(_settings.tool)
 
 
+## Deactivates the current transform tool and hides the option bar.
 func deactivate_tool() -> void:
 	_active = false
 	remove_option_bar_item(_options)

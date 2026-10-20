@@ -1,5 +1,10 @@
 extends ToolMenuButton
 
+## The selection tool menu button.
+##
+## It selects a selection tool and shows that tool's icon. The selection tool
+## shortcuts select a tool too.
+
 var _settings := preload("./settings.tres")
 
 func _ready() -> void:

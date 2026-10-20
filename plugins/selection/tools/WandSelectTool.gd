@@ -1,13 +1,21 @@
 extends "./SelectTool.gd"
 
+## The wand selection tool.
+##
+## A click selects the connected region of the picked material. A large
+## selection streams its cells, and the live selection grows while the search
+## runs. One open stroke holds the whole change for a single undo action.
+
 # The main-thread work one frame spends merging streamed selection batches. The
 # worker waits when the queue fills, so the budget bounds both the merge cost and
 # the handoff memory. The budget covers only the merge. The publication that
 # follows it copies the selection once for the preview, and that copy is outside
 # the budget, so the budget is not a hard frame-cost claim.
+## The main-thread merge budget per frame in microseconds.
 const PUBLISH_BUDGET_US := 2000
 # One merge step. A batch expanded by symmetry can hold thousands of cells, so it
 # is applied in slices that each recheck the budget.
+## The cell count of one merge slice.
 const MERGE_SLICE := 256
 
 var _source_document: VoxelDocument
@@ -19,24 +27,40 @@ var _retired_jobs: Array[WandJob] = []
 var _reaping := false
 var _operation_id := 0
 
+## One cancellable wand selection job.
+##
+## The job searches a frame snapshot for the target material. A streaming job
+## pushes its found cells to [member batch_queue]. [method
+## VoxelFrame.EditJob.run] is the worker body.
 class WandJob extends VoxelFrame.EditJob:
+	## The frame snapshot to search.
 	var source_frame: VoxelFrame
+	## The picked seed cell.
 	var seed_cell := Vector3i.ZERO
+	## The full material that the search matches.
 	var target_material := VoxelFrame.material(Color.TRANSPARENT)
+	## Whether the search floods the six face neighbors.
 	var connected := true
+	## The selection before this operation.
 	var previous_selection := {}
+	## The selection mode.
 	var mode := 0
+	## The result selection, keyed by cell position.
 	var result := {}
+	## The matched cells.
 	var matching_cells := {}
 	# A streaming job carries a bounded queue. The search pushes the cells it finds,
 	# and the main thread grows the live selection, so the selection and its outline
 	# are visible before the search ends.
+	## The bounded handoff queue of a streaming job, or null.
 	var batch_queue: VoxelRegionSearch.BatchQueue
 	# The consumer merges one large expanded batch in small slices, so the frame
 	# budget is respected inside a batch. The cursor owns the batch keys and the
 	# position into them.
+	## The consumer cursor over [member batch_queue].
 	var batch_cursor: VoxelRegionSearch.BatchCursor
 
+	## Searches and builds the result selection. This is the worker body.
 	func run() -> void:
 		stage("Finding connected voxels" if connected else "Finding matching voxels", -1 if connected else source_frame.count())
 		# The wand ignores the current selection as a barrier, so it passes no mask.
@@ -117,6 +141,8 @@ func _notification(what: int) -> void:
 		State.edit_context_changing.disconnect(_cancel_selection)
 
 
+## Handles one input event. A left press selects the picked region. Escape
+## cancels a running selection.
 func handle_input(event: InputEvent, pos: Vector2) -> bool:
 	if event.is_action_pressed("ui_cancel") and _job:
 		_cancel_selection()
@@ -246,6 +272,8 @@ func _selection_current(job: WandJob) -> bool:
 # True while a streamed selection owns an open stroke. The preview uses this to
 # choose its progressive outline path. A small selection lands at once, so it
 # never reports a stream.
+## Returns [code]true[/code] while a streamed selection owns an open stroke. The
+## preview uses this to choose its progressive outline path.
 func is_streaming() -> bool:
 	return _job != null and _edit != null
 
