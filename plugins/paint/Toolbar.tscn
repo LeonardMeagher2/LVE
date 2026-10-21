@@ -1,0 +1,25 @@
+[gd_scene format=3]
+
+[ext_resource type="ButtonGroup" uid="uid://tm4elm05vye0" path="res://plugins/ToolBarButtonGroup.tres" id="1_bg"]
+[ext_resource type="Texture2D" uid="uid://os815iumesvl" path="res://icons/paint.svg" id="2_paint"]
+[ext_resource type="Texture2D" path="res://icons/bucket_fill.svg" id="3_fill"]
+[ext_resource type="Script" path="res://plugins/paint/Toolbar.gd" id="4_script"]
+[ext_resource type="Texture2D" path="res://icons/spray.svg" id="5_spray"]
+
+[node name="paint" type="MenuButton"]
+tooltip_text = "Paint tools"
+button_group = ExtResource("1_bg")
+icon = ExtResource("2_paint")
+flat = false
+icon_alignment = 1
+item_count = 3
+popup/item_0/text = "Paintbrush"
+popup/item_0/icon = ExtResource("2_paint")
+popup/item_0/id = 0
+popup/item_1/text = "Bucket Fill"
+popup/item_1/icon = ExtResource("3_fill")
+popup/item_1/id = 1
+popup/item_2/text = "Spray Can"
+popup/item_2/icon = ExtResource("5_spray")
+popup/item_2/id = 2
+script = ExtResource("4_script")

@@ -1,4 +1,4 @@
-extends "res://plugins/Fill/FillTool.gd".FillJob
+extends "res://plugins/paint/FillTool.gd".FillJob
 
 # Test-only fill job that cancels itself after a fixed number of checkpoints, so
 # the shared search stops in the middle of its work instead of before it starts.

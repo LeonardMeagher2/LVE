@@ -1,10 +1,10 @@
 extends "res://tests/test.gd"
 
-# A tool switch finishes the work a Pencil, Paint, or Eraser stroke queued and
-# commits it as one history action. A Box or Lasso switch applies the outline a
-# held drag already drew, and a released calculation finishes after the detach.
-# Escape and a frame or document change keep their rollback. The line preview and
-# the streamed wand keep their own policy.
+# A tool switch finishes the work a Pencil or Eraser stroke queued and commits it
+# as one history action. A Box or Lasso switch applies the outline a held drag
+# already drew, and a released calculation finishes after the detach. Escape and a
+# frame or document change keep their rollback. The line preview and the streamed
+# wand keep their own policy.
 
 const BRUSH_DIAMETER := 20
 const HELD_SIDE := 5
@@ -162,17 +162,17 @@ func _brush_mode_switch() -> void:
 		State.undo_redo.undo()
 		State.undo_redo.clear_history()
 	)
-	step("When the user presses and switches to Paint while the worker runs", func():
+	step("When the user presses and switches to the paintbrush while the worker runs", func():
 		State.document = VoxelDocument.new()
 		frame = State.get_current_voxel_frame()
 		_wide_brush()
 		_press(center)
 		expect(State.edit_busy(), "the press starts a foreground worker")
-		select_toolbar_item("Toolbar", "Paint")
+		select_toolbar_item("paint", "Paintbrush")
 	)
 	await _await_brush_idle()
 	step("Then the stroke finishes with the Pencil mode it captured", func():
-		expect(frame.storage_data() == reference, "the mode change keeps the captured Pencil stroke")
+		expect(frame.storage_data() == reference, "the tool switch keeps the captured Pencil stroke")
 		expect(State.undo_redo.has_undo(), "the finished stroke records one undo action")
 		State.undo_redo.undo()
 		expect(frame.count() == 0, "one undo clears the stroke")
@@ -530,12 +530,12 @@ func _brush_pixel_perfect_switch() -> void:
 		expect(frame.count() == 0, "one undo clears the reference stroke")
 		State.undo_redo.clear_history()
 	)
-	step("When the user draws the same stroke and switches mode while the worker runs", func():
+	step("When the user draws the same stroke and switches tool while the worker runs", func():
 		State.document = VoxelDocument.new()
 		frame = State.get_current_voxel_frame()
 		_pixel_perfect_stroke()
 		expect(State.edit_busy(), "the stroke runs a worker")
-		select_toolbar_item("Toolbar", "Paint")
+		select_toolbar_item("paint", "Paintbrush")
 	)
 	await _await_brush_idle()
 	step("Then the switch flushes the same queued centers once", func():

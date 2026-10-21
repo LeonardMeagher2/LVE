@@ -1,6 +1,6 @@
 [gd_scene format=3]
 
-[ext_resource type="Script" uid="uid://q6qg3ldr12im" path="res://plugins/Fill/FillTool.gd" id="1_script"]
+[ext_resource type="Script" uid="uid://q6qg3ldr12im" path="res://plugins/paint/FillTool.gd" id="1_script"]
 [ext_resource type="Material" path="res://plugins/cursor_material.tres" id="2_material"]
 [ext_resource type="ArrayMesh" path="res://plugins/OutlineCube.tres" id="3_outline"]
 

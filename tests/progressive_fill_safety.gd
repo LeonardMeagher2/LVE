@@ -9,7 +9,7 @@ extends "res://tests/test.gd"
 #   godot --headless --path . res://tests/progressive_fill_safety.tscn -- connected_capture
 
 const REFERENCE := preload("res://tests/region_search_reference.gd")
-const FILL_TOOL := preload("res://plugins/Fill/FillTool.gd")
+const FILL_TOOL := preload("res://plugins/paint/FillTool.gd")
 
 
 # A frame that counts the per-cell occupancy and material checks. The shared
@@ -68,7 +68,7 @@ const BLOCK_B := Vector3i(48, 0, 0)
 
 var frame: VoxelFrame
 var tool: Node
-var _settings := preload("res://plugins/Fill/settings.tres")
+var _settings := preload("res://plugins/paint/settings.tres")
 # Step lambdas capture locals by value, so the frames a later step needs are members.
 var _before: VoxelFrame
 var _expected_frame: VoxelFrame
@@ -163,8 +163,8 @@ func _count_block(x_side: int, y_side: int, z_side: int, color: Color) -> int:
 
 
 func _fill_tool() -> void:
-	activate_tool("fill")
-	tool = plugin("FillPlugin")._tool
+	select_toolbar_item("paint", "Bucket Fill")
+	tool = plugin("PaintPlugin")._fill_tool
 	State.current_material = VoxelFrame.material(Color.BLUE)
 	State.undo_redo.clear_history()
 
@@ -755,7 +755,7 @@ func _tool_switch() -> void:
 		State.undo_redo.clear_history()
 	)
 	step("When the user switches back to the fill tool", func():
-		activate_tool("fill")
+		select_toolbar_item("paint", "Bucket Fill")
 	)
 	step("Then the fill holds exactly one context connection", func():
 		expect(_fill_connections() == 1, "a switch back adds no second connection")

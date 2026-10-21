@@ -448,8 +448,8 @@ func _start_fill_workflow() -> void:
 	State.document._bounds_dirty = true
 	State.selection.clear()
 	State.undo_redo.clear_history()
-	activate_tool("fill")
-	fill_tool = plugin("FillPlugin")._tool
+	select_toolbar_item("paint", "Bucket Fill")
+	fill_tool = plugin("PaintPlugin")._fill_tool
 	State.current_material = VoxelFrame.material(Color.GREEN)
 	fill_tool._settings.connected = true
 	fill_tool._release_pending = true

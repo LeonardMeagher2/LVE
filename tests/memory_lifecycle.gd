@@ -108,7 +108,7 @@ func _run() -> void:
 		while not plugin("ExportPlugin")._preview_running:
 			await get_tree().process_frame
 	step("Given the editor plugins and their active and parked nodes", func():
-		for plugin_name in ["ExportPlugin", "ImageImportPlugin", "ClipboardPlugin", "SymmetryPlugin", "TransformPlugin", "SelectionPlugin", "PlanePlugin", "FillPlugin", "EyedropperPlugin", "BrushPlugin"]:
+		for plugin_name in ["ExportPlugin", "ImageImportPlugin", "ClipboardPlugin", "SymmetryPlugin", "TransformPlugin", "SelectionPlugin", "PlanePlugin", "PaintPlugin", "EyedropperPlugin", "BrushPlugin"]:
 			var item := plugin(plugin_name)
 			plugins.append(item)
 			for property in item.get_property_list():

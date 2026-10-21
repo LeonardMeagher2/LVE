@@ -24,12 +24,18 @@ func _sync() -> void:
 	$Diameter.set_value_no_signal(_settings.diameter)
 	var shape_buttons := [$Shape/Cube, $Shape/Sphere, $Shape/Selection]
 	shape_buttons[_settings.shape].button_pressed = true
-	var frame := State.get_current_voxel_frame()
-	$Shape/Selection.disabled = _source_job != null or State.edit_busy() or frame == null or (frame.count() == 0 and _settings.selection_pattern.is_empty())
+	_refresh_selection_availability()
 	$Diameter.visible = _settings.shape != _settings.BrushShape.SELECTION
 	$PixelPerfect.visible = _settings.mode != _settings.BrushMode.LINE
 	$PixelPerfect.set_pressed_no_signal(_settings.pixel_perfect)
 	$ShapeSeparator.visible = $Diameter.visible
+
+
+# Updates only the selection-source button. A cell or chunk change can cross the
+# empty-frame boundary, so the button is the only control that reacts to it.
+func _refresh_selection_availability() -> void:
+	var frame := State.get_current_voxel_frame()
+	$Shape/Selection.disabled = _source_job != null or State.edit_busy() or frame == null or (frame.count() == 0 and _settings.selection_pattern.is_empty())
 
 
 func _on_diameter_changed(value: float) -> void:
@@ -65,16 +71,13 @@ func _on_selection_pressed() -> void:
 	if source_count <= 4096:
 		job.run()
 	else:
-		job.worker_task_id = WorkerThreadPool.add_task(job.run, true, "Voxel brush")
-		while job.worker_task_id >= 0 and not WorkerThreadPool.is_task_completed(job.worker_task_id):
+		# The shared helper owns the launch, the progress pump, and the join. The
+		# context check runs once per pumped frame. The closure captures this job
+		# and its source context, so a stale pump cannot cancel a newer job.
+		await State.run_edit_job(job, operation_id, "Voxel brush", func() -> void:
 			if State.document != document or State.get_current_voxel_frame() != frame or not is_inside_tree():
 				job.cancel()
-			var progress := job.progress()
-			State.update_operation(operation_id, progress[1], progress[2], progress[0])
-			await State.get_tree().process_frame
-		if job.worker_task_id >= 0:
-			WorkerThreadPool.wait_for_task_completion(job.worker_task_id)
-			job.worker_task_id = -1
+		)
 	State.finish_operation(operation_id)
 	if _source_job == job:
 		_source_job = null
@@ -88,16 +91,14 @@ func _on_selection_pressed() -> void:
 func _exit_tree() -> void:
 	if _source_job:
 		_source_job.cancel()
-		if _source_job.worker_task_id >= 0:
-			WorkerThreadPool.wait_for_task_completion(_source_job.worker_task_id)
-			_source_job.worker_task_id = -1
+		_source_job.wait_for_worker()
 		_source_job = null
 	State.finish_operation(_operation_id)
 	_operation_id = 0
 
 
 func _on_cells_changed(_frame: int, _affected: Array[Vector3i]) -> void:
-	_sync()
+	_refresh_selection_availability()
 
 func _on_pixel_perfect_toggled(toggled_on: bool) -> void:
 	_settings.pixel_perfect = toggled_on

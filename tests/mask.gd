@@ -38,15 +38,15 @@ func _run() -> void:
 		expect(not frame.has(outside), "outside cell is not painted")
 	)
 
-	step("Given paint mode with voxels inside and outside the selection", func():
+	step("Given the paintbrush with voxels inside and outside the selection", func():
 		State.document.frames[0].clear()
 		State.document.set_cell(0, inside, VoxelFrame.material(Color.from_rgba8(150, 150, 150)))
 		State.document.set_cell(0, outside, VoxelFrame.material(Color.from_rgba8(150, 150, 150)))
-		select_toolbar_item("Toolbar", "Paint")
+		select_toolbar_item("paint", "Paintbrush")
 		State.current_color = Color.from_rgba8(200, 60, 60)
 	)
 
-	step("When the user clicks both voxels in paint mode", func():
+	step("When the user clicks both voxels with the paintbrush", func():
 		_click(center)
 		_click(center + Vector2(0.0, 60.0))
 	)
@@ -79,7 +79,7 @@ func _run() -> void:
 		State.document.set_cell(0, inside, VoxelFrame.material(Color.from_rgba8(150, 150, 150)))
 		State.document.set_cell(0, inside + Vector3i(0, 0, 1), VoxelFrame.material(Color.from_rgba8(150, 150, 150)))
 		State.document.set_cell(0, inside + Vector3i(0, 0, 2), VoxelFrame.material(Color.from_rgba8(150, 150, 150)))
-		activate_tool("fill")
+		select_toolbar_item("paint", "Bucket Fill")
 		State.current_color = Color.from_rgba8(200, 60, 60)
 	)
 

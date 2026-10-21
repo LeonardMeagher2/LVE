@@ -39,8 +39,8 @@ func _ready() -> void:
 # returns to its startup value, so a test that keeps the default size sees the
 # same size as a fresh process.
 func _setup_test() -> void:
-	var fill_options: Node = plugin("FillPlugin")._options
-	var connected := fill_options.get_node("Connected") as Button
+	var fill_options: Node = plugin("PaintPlugin")._options
+	var connected := fill_options.get_node("Fill/Connected") as Button
 	if not _defaults_ready:
 		_default_stretch = editor_viewport().get_parent().stretch
 		_default_mode = _selection_settings.mode
@@ -102,7 +102,7 @@ func _empty_screen_pos() -> Vector2:
 func _fill_all() -> void:
 	step("Given the fill tool with a blue brush and three separate red voxels", func():
 		_view_setup()
-		activate_tool("fill")
+		select_toolbar_item("paint", "Bucket Fill")
 		State.set_color(Color.BLUE)
 		r1 = aim(center).target
 		r2 = r1 + Vector3i(8, 0, 0)
@@ -121,7 +121,7 @@ func _fill_all() -> void:
 		viewport.push_input(motion)
 	)
 	step("Then Fill shows its wire cube on the voxel", func():
-		var tool: Node3D = plugin("FillPlugin")._tool
+		var tool: Node3D = plugin("PaintPlugin")._fill_tool
 		expect(tool.visible and tool.position == Vector3(r2), "the Fill cursor follows the hovered voxel")
 		var cursor: MeshInstance3D = tool.get_node("Cursor")
 		expect(cursor.mesh.surface_get_primitive_type(0) == Mesh.PRIMITIVE_LINES, "the Fill cursor uses wire lines")
@@ -134,7 +134,7 @@ func _fill_all() -> void:
 		viewport.push_input(motion)
 	)
 	step("Then the wire cursor follows the empty floor cell like the picker", func():
-		var tool: Node3D = plugin("FillPlugin")._tool
+		var tool: Node3D = plugin("PaintPlugin")._fill_tool
 		expect(tool.visible and tool.position == Vector3(empty_floor), "the Fill cursor stays visible over the empty floor cell")
 	)
 	step("Then the option bar shows a connected icon toggle", func():

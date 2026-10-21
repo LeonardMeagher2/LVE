@@ -32,7 +32,7 @@ var frame: VoxelFrame
 var fill_tool: Node
 var wand_tool: Node
 var preview: MeshInstance3D
-var _fill_settings := preload("res://plugins/Fill/settings.tres")
+var _fill_settings := preload("res://plugins/paint/settings.tres")
 var _first_visible_us := 0
 var _started_us := 0
 var _longest_frame_us := 0
@@ -130,8 +130,8 @@ func _fill_fixture() -> void:
 	frame.set_cells(_block(FILL_SIDE_X, FILL_SIDE_Y, FILL_SIDE_Z))
 	State.document._bounds_dirty = true
 	State.undo_redo.clear_history()
-	activate_tool("fill")
-	fill_tool = plugin("FillPlugin")._tool
+	select_toolbar_item("paint", "Bucket Fill")
+	fill_tool = plugin("PaintPlugin")._fill_tool
 	State.current_material = VoxelFrame.material(Color.BLUE)
 
 
@@ -367,8 +367,8 @@ func _streaming_parity() -> void:
 		State.document._bounds_dirty = true
 		State.clear_selection()
 		State.undo_redo.clear_history()
-		activate_tool("fill")
-		fill_tool = plugin("FillPlugin")._tool
+		select_toolbar_item("paint", "Bucket Fill")
+		fill_tool = plugin("PaintPlugin")._fill_tool
 		State.current_material = VoxelFrame.material(Color.BLUE)
 		_before = frame.copy_frame()
 	)
@@ -452,7 +452,7 @@ func _tool_switch() -> void:
 		State.undo_redo.clear_history()
 	)
 	step("When the user fills, switches tools, and cancels with Esc", func():
-		activate_tool("fill")
+		select_toolbar_item("paint", "Bucket Fill")
 		fill_tool._release_pending = true
 		fill_tool._queue_seed(Vector3i.ZERO)
 	)
@@ -481,7 +481,7 @@ func _tool_switch() -> void:
 		return
 	await _await_until(func(): return State.selection.count() == 0)
 	step("Then the switched-away wand keeps running and completes", func():
-		activate_tool("fill")
+		activate_tool("paint")
 		expect(wand_tool._job != null, "the tool switch did not cancel the wand")
 	)
 	await _await_until(func(): return wand_tool._job != null or State.edit_busy())

@@ -450,7 +450,7 @@ func _tool_switch_completes() -> void:
 			partial = true
 			break
 	step("When the user switches tools during the partial", func():
-		activate_tool("fill")
+		activate_tool("paint")
 		expect(wand._job != null, "the tool switch did not cancel the wand")
 		expect(not wand.is_inside_tree(), "the wand is detached from the tree")
 	)
@@ -480,7 +480,7 @@ func _cancel_after_switch() -> void:
 	while State.selection.count() == 0:
 		await get_tree().process_frame
 	step("When the user switches tools and clicks the status cancel", func():
-		activate_tool("fill")
+		activate_tool("paint")
 		expect(State.edit_busy(), "the detached wand still owns the operation")
 		widget = JOB_STATUS_SCENE.instantiate()
 		widget.delay_ms = 0
@@ -509,7 +509,7 @@ func _cancel_after_switch() -> void:
 	while State.selection.count() == 0:
 		await get_tree().process_frame
 	step("Then Esc reaches the detached wand", func():
-		activate_tool("fill")
+		activate_tool("paint")
 		var key := InputEventKey.new()
 		key.keycode = KEY_ESCAPE
 		key.pressed = true
@@ -526,7 +526,7 @@ func _cancel_after_switch() -> void:
 func _idle_detached_wand_keeps_other_stroke() -> void:
 	step("Given a detached idle wand and another tool's open edit", func():
 		_wand_fixture()
-		activate_tool("fill")
+		activate_tool("paint")
 		_other_edit = State.begin_edit()
 		expect(_other_edit != null and State.active_edit() == _other_edit, "another tool opened an edit")
 	)

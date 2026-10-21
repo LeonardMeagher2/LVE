@@ -22,8 +22,8 @@ func _run() -> void:
 					source_frame.set_cell(cell_position, VoxelFrame.material(Color.RED))
 					State.selection.add(cell_position)
 		source_frame.set_cell(DISTANT, VoxelFrame.material(Color.RED))
-		activate_tool("fill")
-		tool = plugin("FillPlugin")._tool
+		select_toolbar_item("paint", "Bucket Fill")
+		tool = plugin("PaintPlugin")._fill_tool
 		State.current_color = Color.BLUE
 		State.chunks_changed.connect(func(_frame, _affected): notifications += 1)
 	)
@@ -93,7 +93,7 @@ func _run() -> void:
 	)
 	step("When the document changes during a connected fill", func():
 		State.current_frame = 0
-		activate_tool("fill")
+		select_toolbar_item("paint", "Bucket Fill")
 		State.current_color = Color.GREEN
 		_fill()
 		State.document = VoxelDocument.new()

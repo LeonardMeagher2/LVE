@@ -292,23 +292,23 @@ func _brush_modes() -> void:
 		expect(frame.has(front), "a voxel is added beside the clicked voxel")
 	)
 
-	step("When the user switches to paint mode and clicks the front voxel", func():
-		select_toolbar_item("Toolbar", "Paint")
+	step("When the user switches to the paintbrush and clicks the front voxel", func():
+		select_toolbar_item("paint", "Paintbrush")
 		_click(center)
 	)
 
 	step("Then the front voxel is recolored and no voxel is added", func():
 		var frame: VoxelFrame = State.document.frames[0]
-		expect(frame.count() == 2, "paint mode adds no new voxels")
+		expect(frame.count() == 2, "the paintbrush adds no new voxels")
 		expect(frame.get_color(front) == Color.from_rgba8(200, 60, 60), "the front voxel has the brush color")
 	)
 
-	step("When the user clears the grid and clicks the empty grid in paint mode", func():
+	step("When the user clears the grid and clicks the empty grid with the paintbrush", func():
 		State.document.frames[0].clear()
 		sync_viewport()
 		_click(center)
 	)
 
-	step("Then paint mode leaves the empty grid unchanged", func():
+	step("Then the paintbrush leaves the empty grid unchanged", func():
 		expect(State.document.frames[0].count() == 0, "no voxel is painted on empty cells")
 	)

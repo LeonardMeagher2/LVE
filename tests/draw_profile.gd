@@ -31,6 +31,7 @@ extends "res://tests/test.gd"
 
 const BUILDER := preload("res://Globals/Rendering/VoxelMeshBuilder.gd")
 const BrushScript := preload("res://plugins/brush/BrushTool.gd")
+const Profile := preload("res://Globals/State/Tools/StrokeProfile.gd")
 const VIEWPORT_SCENE := preload("res://ui/Viewport/Viewport.tscn")
 const VOXEL_MESH := preload("res://VoxelMesh.tres")
 const IDLE_FRAMES := 40
@@ -149,11 +150,11 @@ func _process(_delta: float) -> void:
 # Return the publication duration for this interval, or zero. The sequence marks
 # the publication consumed, so it is never counted twice.
 func _consume_publication() -> int:
-	var current := BrushScript.profile_finish_seq
+	var current := Profile.finish_seq
 	if current == observed_pub_seq:
 		return 0
 	observed_pub_seq = current
-	return BrushScript.profile_finish_us
+	return Profile.finish_us
 
 
 func _run() -> void:
@@ -193,10 +194,10 @@ func _run() -> void:
 		expect(last_interval_publication_us == 0, "an idle frame after the stroke carries no publication")
 	)
 	step("Then the profile hook is restored", func():
-		BrushScript.profile_enabled = false
-		BrushScript.profile_finish_us = 0
-		BrushScript.profile_finish_seq = 0
-		expect(not BrushScript.profile_enabled, "the brush profiling hook is off")
+		Profile.enabled = false
+		Profile.finish_us = 0
+		Profile.finish_seq = 0
+		expect(not Profile.enabled, "the brush profiling hook is off")
 	)
 
 
@@ -321,7 +322,7 @@ func _prepare_tool() -> void:
 	var pattern := BrushToolSettings.build_pattern(diameter, shape)
 	tool._settings.cache_pattern(diameter, shape, pattern, pattern.keys())
 	pattern_us = Time.get_ticks_usec() - started_us
-	BrushScript.profile_enabled = true
+	Profile.enabled = true
 	State.chunks_changed.connect(_on_chunks_changed)
 
 
@@ -367,7 +368,7 @@ func _run_stroke() -> void:
 	max_publish_us = 0
 	publish_intervals = 0
 	last_interval_publication_us = 0
-	observed_pub_seq = BrushScript.profile_finish_seq
+	observed_pub_seq = Profile.finish_seq
 	if prof:
 		prof.process_us = 0
 		prof.frames = 0

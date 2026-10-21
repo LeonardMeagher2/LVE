@@ -60,6 +60,12 @@ var source_frame: VoxelFrame:
 var _chunk_instances: Dictionary = {}
 var _displayed_surface_keys: Dictionary = {}
 var _pending_surface_keys: Dictionary = {}
+# The one surface key this renderer may install from a completed build for each
+# chunk. A chunk holds at most one in-flight key, so the installs of one chunk
+# follow the request order and an older result can never replace a newer one.
+# A context change drops every entry, so a result built before the change is
+# never installed.
+var _inflight_surface_keys: Dictionary = {}
 var _retired_chunk_instances: Array[MeshInstance3D] = []
 var _displayed_frame: VoxelFrame
 var _operation_id := 0
@@ -126,6 +132,10 @@ func _rebuild() -> void:
 			chunk_instance.visible = false
 		_displayed_frame = active_frame
 	_pending_surface_keys.clear()
+	# A rebuild follows a context change: a document, a frame, a shading mode, a
+	# history restore, or a refresh. Every result built before it belongs to the
+	# previous context, so it leaves the install set.
+	_inflight_surface_keys.clear()
 	for chunk_location in _displayed_surface_keys.keys():
 		if active_frame == null or not active_frame.chunks.has(chunk_location):
 			_retire(chunk_location)
@@ -157,11 +167,15 @@ func _update(updated_frame: int, affected_cells: Array[Vector3i]) -> void:
 func _request(active_frame: VoxelFrame, chunk_location: Vector3i) -> void:
 	if not active_frame.chunks.has(chunk_location):
 		_pending_surface_keys.erase(chunk_location)
+		_inflight_surface_keys.erase(chunk_location)
 		_retire(chunk_location)
 		return
 	var surface_key := _signature(active_frame, chunk_location, State.document.smooth_normals)
 	if _displayed_surface_keys.get(chunk_location) == surface_key:
+		# The exact wanted surface is already on screen, so no result may replace
+		# it. Drop the newest request and any in-flight eligibility with it.
 		_pending_surface_keys.erase(chunk_location)
+		_inflight_surface_keys.erase(chunk_location)
 		if _chunk_instances.has(chunk_location):
 			_chunk_instances[chunk_location].visible = true
 	else:
@@ -228,26 +242,102 @@ func _update_surfaces() -> void:
 		if Time.get_ticks_usec() - update_started_us >= State.WORK_SLICE_US:
 			return
 	var active_frame := _get_frame()
+	# One chunk owns at most one in-flight key. Consume a completed in-flight
+	# result before the newest request for that chunk is launched, so a newer
+	# result is never replaced by an older one. A consumed result may be older
+	# than the newest request, and it still installs: it is a true state of the
+	# model, and the newest request follows it in the same frame.
+	for chunk_location in _inflight_surface_keys.keys():
+		if _consume_inflight(chunk_location):
+			_launch_surface(chunk_location, active_frame)
+		if Time.get_ticks_usec() - update_started_us >= State.WORK_SLICE_US:
+			return
 	for chunk_location in _pending_surface_keys.keys():
-		var surface_key: PackedInt64Array = _pending_surface_keys[chunk_location]
-		if _surface_cache.has(surface_key):
-			_install(chunk_location, surface_key, _surface_cache[surface_key])
-			_pending_surface_keys.erase(chunk_location)
-			_surface_use_order.erase(surface_key)
-			_surface_use_order.append(surface_key)
-		elif not _surface_jobs.has(surface_key) and _surface_jobs.size() < _job_limit():
-			var surface_job := VoxelMeshBuilder.new()
-			surface_job.source_frame = active_frame.copy_frame()
-			surface_job.chunk_location = chunk_location
-			surface_job.smooth_normals = State.document.smooth_normals
-			surface_job.worker_task_id = WorkerThreadPool.add_task(surface_job.run, false, "Voxel surface")
-			_surface_jobs[surface_key] = surface_job
+		if _inflight_surface_keys.has(chunk_location):
+			continue
+		_launch_surface(chunk_location, active_frame)
 		if Time.get_ticks_usec() - update_started_us >= State.WORK_SLICE_US:
 			return
 	while not _retired_chunk_instances.is_empty():
 		_retired_chunk_instances.pop_back().queue_free()
 		if Time.get_ticks_usec() - update_started_us >= State.WORK_SLICE_US:
 			break
+
+
+# Installs this renderer's in-flight result for one chunk when the shared cache
+# holds it. Returns true when it consumed one. The shared cache is keyed by the
+# exact surface identity, so a hit is always the surface of that exact state.
+func _consume_inflight(chunk_location: Vector3i) -> bool:
+	if not _inflight_surface_keys.has(chunk_location):
+		return false
+	# Only a chunk the renderer still requests is installed. A chunk the frame no
+	# longer holds leaves the request set first, and its result must not appear.
+	if not _pending_surface_keys.has(chunk_location):
+		_inflight_surface_keys.erase(chunk_location)
+		return false
+	var surface_key: PackedInt64Array = _inflight_surface_keys[chunk_location]
+	if not _surface_cache.has(surface_key):
+		if _surface_jobs.has(surface_key):
+			# The build still runs. Wait for its result.
+			return false
+		# The key left the cache and the job map. Another view reaped the build and
+		# the cache then evicted the result, so it can never install. Drop this
+		# eligibility, so the newest request is scheduled against the current
+		# frame. The retired key is never rebuilt.
+		_inflight_surface_keys.erase(chunk_location)
+		return false
+	_install(chunk_location, surface_key, _surface_cache[surface_key])
+	_touch_surface(surface_key)
+	_inflight_surface_keys.erase(chunk_location)
+	var wanted: PackedInt64Array = _pending_surface_keys[chunk_location]
+	if wanted == surface_key:
+		_pending_surface_keys.erase(chunk_location)
+	return true
+
+
+# Asks for one chunk's newest wanted surface. It installs a cached result at
+# once, adopts a result another renderer already builds, or starts one job while
+# the global job limit allows. A chunk that already owns an in-flight key waits
+# for that key, so the newest request stays pending until it is launched.
+func _launch_surface(chunk_location: Vector3i, active_frame: VoxelFrame) -> void:
+	if _inflight_surface_keys.has(chunk_location):
+		return
+	if not _pending_surface_keys.has(chunk_location):
+		return
+	var surface_key: PackedInt64Array = _pending_surface_keys[chunk_location]
+	if _displayed_surface_keys.get(chunk_location) == surface_key:
+		_pending_surface_keys.erase(chunk_location)
+		if _chunk_instances.has(chunk_location):
+			_chunk_instances[chunk_location].visible = true
+		return
+	if _surface_cache.has(surface_key):
+		_install(chunk_location, surface_key, _surface_cache[surface_key])
+		_pending_surface_keys.erase(chunk_location)
+		_touch_surface(surface_key)
+		return
+	if _surface_jobs.has(surface_key):
+		# Another renderer builds this exact surface already. Adopt it, so this
+		# renderer installs the shared result without a second build.
+		_inflight_surface_keys[chunk_location] = surface_key
+		return
+	if active_frame == null or not active_frame.chunks.has(chunk_location):
+		_pending_surface_keys.erase(chunk_location)
+		return
+	if _surface_jobs.size() >= _job_limit():
+		return
+	var surface_job := VoxelMeshBuilder.new()
+	surface_job.source_frame = active_frame.copy_frame()
+	surface_job.chunk_location = chunk_location
+	surface_job.smooth_normals = State.document.smooth_normals
+	surface_job.worker_task_id = WorkerThreadPool.add_task(surface_job.run, false, "Voxel surface")
+	_surface_jobs[surface_key] = surface_job
+	_inflight_surface_keys[chunk_location] = surface_key
+
+
+# Marks one installed or cached surface as the most recently used entry.
+static func _touch_surface(surface_key: PackedInt64Array) -> void:
+	_surface_use_order.erase(surface_key)
+	_surface_use_order.append(surface_key)
 
 
 func _report_activity() -> void:
@@ -350,6 +440,9 @@ func _retire(chunk_location: Vector3i) -> void:
 		_retired_chunk_instances.append(chunk_instance)
 		_chunk_instances.erase(chunk_location)
 	_displayed_surface_keys.erase(chunk_location)
+	# A retired chunk owns no surface, so a result still building for it must not
+	# appear later.
+	_inflight_surface_keys.erase(chunk_location)
 
 
 ## Returns [code]true[/code] when no surface request is pending.

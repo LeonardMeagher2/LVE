@@ -174,7 +174,7 @@ func _on_tool_toggled(on: bool) -> void:
 func _sync_options() -> void:
 	var target: Control
 	var pressed_button := _button_group.get_pressed_button()
-	for plugin_name in ["BrushPlugin", "SelectionPlugin", "TransformPlugin"]:
+	for plugin_name in ["BrushPlugin", "PaintPlugin", "SelectionPlugin", "TransformPlugin"]:
 		var plugin := get_node("/root/" + plugin_name)
 		if plugin._toolbar == pressed_button:
 			target = plugin._options

@@ -152,11 +152,11 @@ func _run() -> void:
 		expect(not frame.has(target + Vector3i(0, 1, 0)), "the copied brush preserves its empty cell")
 	)
 	await get_tree().process_frame
-	step("Given paint mode and a cube brush that overlaps a selection boundary", func():
+	step("Given the paintbrush with a cube footprint that overlaps a selection boundary", func():
 		_empty("top")
-		_click_shape("Cube")
-		options.get_node("Diameter").value = 3
-		select_toolbar_item("Toolbar", "Paint")
+		select_toolbar_item("paint", "Paintbrush")
+		plugin("PaintPlugin")._options.get_node("Brush/Shape/Cube").pressed.emit()
+		plugin("PaintPlugin")._options.get_node("Brush/Diameter").value = 3
 		State.current_color = Color.RED
 		var frame := State.get_current_voxel_frame()
 		frame.set_cell(Vector3i.ZERO, VoxelFrame.material(Color.BLUE))
@@ -167,9 +167,9 @@ func _run() -> void:
 		State.selection_changed.emit()
 		_click(_position(Vector3.ZERO))
 	)
-	step("Then paint mode recolors only selected occupied voxels", func():
+	step("Then the paintbrush recolors only selected occupied voxels", func():
 		var frame := State.get_current_voxel_frame()
-		expect(frame.count() == 3, "paint mode adds no voxels")
+		expect(frame.count() == 3, "the paintbrush adds no voxels")
 		expect(frame.get_color(Vector3i.ZERO) == Color.RED, "the selected center has the brush color")
 		expect(frame.get_color(Vector3i.RIGHT) == Color.RED, "the selected neighbor has the brush color")
 		expect(frame.get_color(Vector3i.LEFT) == Color.BLUE, "the unselected neighbor retains its color")
@@ -179,6 +179,7 @@ func _run() -> void:
 	await get_tree().process_frame
 	step("When the user selects a sphere wider than the cursor limit", func():
 		_empty("top")
+		activate_tool("Toolbar")
 		_click_shape("Sphere")
 		options.get_node("Diameter").value = 20
 		expect(tool._settings.shape == BrushToolSettings.BrushShape.SPHERE, "the sphere shape is active")

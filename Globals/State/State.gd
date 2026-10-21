@@ -251,7 +251,7 @@ func _ready() -> void:
 	
 	add_plugin(load("res://plugins/brush/BrushPlugin.gd").new())
 	add_plugin(load("res://plugins/Eyedropper/EyedropperPlugin.gd").new())
-	add_plugin(load("res://plugins/Fill/FillPlugin.gd").new())
+	add_plugin(load("res://plugins/paint/PaintPlugin.gd").new())
 	add_plugin(load("res://plugins/selection/SelectionPlugin.gd").new())
 	add_plugin(load("res://plugins/Transform/TransformPlugin.gd").new())
 	add_plugin(load("res://plugins/Symmetry/SymmetryPlugin.gd").new())

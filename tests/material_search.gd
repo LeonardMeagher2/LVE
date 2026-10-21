@@ -7,7 +7,7 @@ extends "res://tests/test.gd"
 const BLOCK := 18
 const DISTANT := Vector3i(64, 0, 0)
 
-var _fill_settings := preload("res://plugins/Fill/settings.tres")
+var _fill_settings := preload("res://plugins/paint/settings.tres")
 
 var fill: Node
 var wand: Node
@@ -39,8 +39,8 @@ func _fresh_frame() -> void:
 
 # Shared fixture: the fill tool with the green replacement material.
 func _fill_tool() -> void:
-	activate_tool("fill")
-	fill = plugin("FillPlugin")._tool
+	select_toolbar_item("paint", "Bucket Fill")
+	fill = plugin("PaintPlugin")._fill_tool
 	State.current_material = VoxelFrame.material(Color.GREEN)
 	State.undo_redo.clear_history()
 
@@ -128,8 +128,8 @@ func _material_matching() -> void:
 		frame.set_cell(Vector3i(-2, 0, 4), _metal_red())
 		State.symmetry_axes = 1
 		State.symmetry_origin = Vector3.ZERO
-		activate_tool("fill")
-		fill = plugin("FillPlugin")._tool
+		select_toolbar_item("paint", "Bucket Fill")
+		fill = plugin("PaintPlugin")._fill_tool
 		fill._settings.connected = false
 		State.current_material = VoxelFrame.material(Color.GREEN)
 		State.undo_redo.clear_history()

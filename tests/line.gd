@@ -19,7 +19,8 @@ func _run() -> void:
 		tool = plugin("BrushPlugin")._tool
 		options = plugin("BrushPlugin")._options
 		_empty()
-		expect(options.get_node("Diameter").value == 3, "the line tool retains the paint brush diameter")
+		expect(options.get_node("Diameter").value == 3, "the line tool keeps the brush diameter")
+		expect(plugin("PaintPlugin")._settings.diameter == 1, "the paint settings keep their own diameter")
 		expect(not options.get_node("PixelPerfect").visible, "the line options show only the line brush controls")
 	)
 	step("When the user clicks the start and moves the endpoint twice", func():
@@ -229,9 +230,9 @@ func _run() -> void:
 		_motion(Vector3(3, 0, 0))
 		select_toolbar_item("Toolbar", "Pencil")
 	)
-	step("Then switching tools discards the preview and shares the current size", func():
+	step("Then switching tools discards the preview and keeps the brush size", func():
 		expect(State.get_current_voxel_frame().count() == 0, "tool switching leaves the line uncommitted")
-		expect(plugin("BrushPlugin")._options.get_node("Diameter").value == 3, "the paint tool retains the line brush diameter")
+		expect(plugin("BrushPlugin")._options.get_node("Diameter").value == 3, "the brush keeps its own diameter")
 		select_toolbar_item("Toolbar", "Line")
 	)
 	step("Given a selection that crosses only part of the line", func():

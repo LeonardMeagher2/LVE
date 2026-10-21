@@ -51,7 +51,7 @@ func _run() -> void:
 	step("Given an occupied voxel with the same color and different metallic", func():
 		_reset(metal)
 		frame.set_cell(Vector3i.ZERO, matte)
-		select_toolbar_item("Toolbar", "Paint")
+		select_toolbar_item("paint", "Paintbrush")
 		sync_viewport()
 		State.undo_redo.clear_history()
 	)
@@ -59,7 +59,7 @@ func _run() -> void:
 		_click(Vector3(0, 0.5, 0))
 	)
 	await _settle()
-	step("Then Paint replaces the material without adding a voxel", func():
+	step("Then the paintbrush replaces the material without adding a voxel", func():
 		expect(frame.count() == 1, "Paint preserves the occupied voxel count")
 		expect(_same_material(Vector3i.ZERO, metal), "Paint replaces metallic even when the color matches")
 		State.undo_redo.undo()
@@ -101,8 +101,8 @@ func _run() -> void:
 	step("Given connected and separate voxels with the same color", func():
 		_reset(metal)
 		frame.set_cells({Vector3i.ZERO: matte, Vector3i.RIGHT: unsaved, Vector3i(4, 0, 0): matte, Vector3i(2, 0, 0): blue})
-		activate_tool("fill")
-		plugin("FillPlugin")._tool._settings.connected = true
+		select_toolbar_item("paint", "Bucket Fill")
+		plugin("PaintPlugin")._fill_tool._settings.connected = true
 		sync_viewport()
 		State.undo_redo.clear_history()
 	)
@@ -125,7 +125,7 @@ func _run() -> void:
 		expect(_same_material(Vector3i.RIGHT, unsaved), "redo preserves the excluded neighbor material")
 	)
 	step("When the user fills the separate region with connected disabled", func():
-		plugin("FillPlugin")._tool._settings.connected = false
+		plugin("PaintPlugin")._fill_tool._settings.connected = false
 		State.undo_redo.clear_history()
 		_click(Vector3(4, 0.5, 0))
 	)
@@ -263,7 +263,7 @@ func _motion(world: Vector3) -> void:
 
 
 func _settle() -> void:
-	while State.edit_busy() or brush._brush_tool._edit != null or brush._line_tool._job != null or brush._line_tool._preview_requested or brush._options._source_job != null or not plugin("FillPlugin")._tool.is_settled():
+	while State.edit_busy() or brush._brush_tool._edit != null or brush._line_tool._job != null or brush._line_tool._preview_requested or brush._options._source_job != null or not plugin("PaintPlugin")._fill_tool.is_settled():
 		await get_tree().process_frame
 	await get_tree().process_frame
 

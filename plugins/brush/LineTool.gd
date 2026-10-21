@@ -140,7 +140,7 @@ func _begin_line(pick: PickResult) -> void:
 	_dragged = false
 	_stroke_pattern = _settings.pattern()
 	_stroke_offsets = _settings.pattern_offsets()
-	_stroke_material_pattern = _settings.selection_material_pattern.duplicate(true) if _settings.shape == BrushSettings.BrushShape.SELECTION else {}
+	_stroke_material_pattern = _settings.selection_material_pattern.duplicate(true) if _settings.shape == StampSettings.BrushShape.SELECTION else {}
 	_stroke_diameter = _settings.diameter
 	_stroke_shape = _settings.shape
 	_stroke_pattern_size = _settings.estimated_size()
@@ -297,7 +297,7 @@ func _on_settings_changed() -> void:
 	else:
 		_stroke_pattern = _settings.pattern()
 		_stroke_offsets = _settings.pattern_offsets()
-		_stroke_material_pattern = _settings.selection_material_pattern.duplicate(true) if _settings.shape == BrushSettings.BrushShape.SELECTION else {}
+		_stroke_material_pattern = _settings.selection_material_pattern.duplicate(true) if _settings.shape == StampSettings.BrushShape.SELECTION else {}
 		_stroke_diameter = _settings.diameter
 		_stroke_shape = _settings.shape
 		_stroke_pattern_size = _settings.estimated_size()

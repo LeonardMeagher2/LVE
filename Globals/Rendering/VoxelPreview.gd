@@ -31,6 +31,13 @@ const CACHE_LIMIT_BYTES := 64 * 1024 * 1024
 ## The mesh cache entry limit.
 const CACHE_LIMIT_ENTRIES := 16
 
+## Whether a new request keeps the running worker instead of cancelling it. A
+## live cursor opts in, so it installs a bounded-latency snapshot in request
+## order instead of starving when the pointer changes the request every frame.
+## The strict default cancels, so Line, Paste, and the selection stay
+## latest-only.
+@export var coalesce_requests := false
+
 static var _mesh_cache := {}
 static var _cache_order: Array[String] = []
 static var _cache_bytes := 0
@@ -50,6 +57,14 @@ var _pending_cells := {}
 var _request_due_ms := 0
 var _preview_job: PreviewJob
 var _operation_id := 0
+# The request revision of the last installed strict surface. The opt-in
+# coalescing path installs a completed snapshot only when its revision is newer,
+# so an older worker can never overwrite a newer exact or cached surface.
+var _installed_revision := 0
+# The immutable cells of the last installed surface. A coalescing caller reads
+# them to match a visible preview to the sample that a click will paint. A clear
+# empties the set, so a hidden preview never offers stale cells.
+var _installed_cells := {}
 # The progressive selection path. The wand streams a growing selection, so a new
 # snapshot must not cancel the outline that is already building. The path is
 # opt-in, so the brush and cursor keep the strict latest-only behavior.
@@ -181,6 +196,11 @@ func _enter_tree() -> void:
 func _on_model_settings_changed() -> void:
 	if _requested_style == PreviewStyle.SOLID and not _requested_cells.is_empty():
 		_request(_requested_cells, _requested_style, _requested_voxel_colors, _requested_color_key)
+		# A coalescing caller keeps its running worker. When the settings really
+		# changed, that worker holds the old shading, so cancel it now. A job that
+		# `_request` just started, or a deduped request, is already current.
+		if _preview_job and _preview_job.revision != _request_revision:
+			_preview_job.cancel()
 
 
 func _ready() -> void:
@@ -296,7 +316,7 @@ func _start_stream() -> void:
 		# A strict job still winds down. Keep the newest snapshot until the strict
 		# job is joined and discarded, so the stream result is not lost.
 		return
-	var job := PreviewJob.new()
+	var job := _new_job()
 	# Snapshot the live selection now, so the worker reads a stable set. The copy
 	# happens once per started outline, not once per publish.
 	job.cells = _stream_source.all_cells().duplicate()
@@ -340,7 +360,10 @@ func _request(cells: Dictionary, style: PreviewStyle, use_voxel_colors: bool = f
 		return
 	_request_revision += 1
 	_strict_alive = true
-	if _preview_job:
+	# A coalescing caller wants the newest snapshot, not a restart. It keeps the
+	# running worker and installs its result in request order, so a continuous
+	# change never starves. The strict default cancels, so its request wins alone.
+	if _preview_job and not coalesce_requests:
 		_preview_job.cancel()
 	_requested_style = style
 	_requested_voxel_colors = use_voxel_colors
@@ -359,6 +382,8 @@ func _request(cells: Dictionary, style: PreviewStyle, use_voxel_colors: bool = f
 		visible = true
 		_cache_order.erase(cache_key)
 		_cache_order.append(cache_key)
+		_installed_revision = _request_revision
+		_installed_cells = cached.cells
 		_finish_activity()
 		return
 	_pending_cells = _requested_cells
@@ -387,6 +412,10 @@ static func _cache_key(cells: Dictionary, style: PreviewStyle, colored: bool, co
 
 func _clear_request() -> void:
 	_request_revision += 1
+	# A clear must not let an in-flight worker install after the hide. The
+	# installed revision moves past every running job, so none can reappear.
+	_installed_revision = _request_revision
+	_installed_cells = {}
 	_strict_alive = false
 	_requested_cells = {}
 	_pending_cells = {}
@@ -446,7 +475,7 @@ static func _outline_vertices(selection: VoxelSelection, job: VoxelFrame.EditJob
 func _start_preview() -> void:
 	if _preview_job or _pending_cells.is_empty() or Time.get_ticks_msec() < _request_due_ms:
 		return
-	_preview_job = PreviewJob.new()
+	_preview_job = _new_job()
 	_preview_job.cells = _pending_cells
 	_preview_job.outline_builder = _outline_vertices
 	_preview_job.style = _requested_style
@@ -456,11 +485,17 @@ func _start_preview() -> void:
 	_preview_job.revision = _request_revision
 	_preview_job.cache_key = _requested_cache_key
 	_pending_cells = {}
+	_start_activity()
 	if _preview_job.style == PreviewStyle.OUTLINE and _preview_job.cells.size() <= INLINE_OUTLINE_LIMIT:
 		_preview_job.run()
 		_finish_preview()
 	else:
 		_preview_job.worker_task_id = WorkerThreadPool.add_task(_preview_job.run, false, "Voxel preview")
+
+
+## Returns a new preview job. A test replaces it with a gated job.
+func _new_job() -> PreviewJob:
+	return PreviewJob.new()
 
 
 func _process(_delta: float) -> void:
@@ -470,7 +505,13 @@ func _process(_delta: float) -> void:
 		_install_time_us = 0
 	if _preview_job:
 		if WorkerThreadPool.is_task_completed(_preview_job.worker_task_id):
-			if _preview_job.revision == _request_revision and _install_time_us >= State.WORK_SLICE_US:
+			# A coalescing caller installs a completed snapshot in request order,
+			# so an intermediate result still reaches the screen. The strict path
+			# installs only the newest request.
+			var ready := _preview_job.revision == _request_revision
+			if coalesce_requests and not ready and _strict_alive and _preview_job.revision > _installed_revision:
+				ready = true
+			if ready and _install_time_us >= State.WORK_SLICE_US:
 				return
 			WorkerThreadPool.wait_for_task_completion(_preview_job.worker_task_id)
 			var started_us := Time.get_ticks_usec()
@@ -504,9 +545,19 @@ func _process(_delta: float) -> void:
 func _finish_preview() -> void:
 	var job := _preview_job
 	_preview_job = null
-	if job.revision != _request_revision or not job.checkpoint(0):
+	if not job.checkpoint(0):
 		return
-	_install_surface(job, true)
+	var latest := job.revision == _request_revision
+	# A coalescing caller installs an intermediate snapshot only when it is newer
+	# than the last installed surface and the strict request still owns the
+	# preview. A clear, a stream, or a newer exact result then wins.
+	var usable := latest
+	if not usable and coalesce_requests and _strict_alive and job.revision > _installed_revision:
+		usable = true
+	if not usable:
+		return
+	_install_surface(job, latest)
+	_installed_revision = maxi(_installed_revision, job.revision)
 	_finish_activity()
 
 
@@ -528,6 +579,15 @@ func _install_surface(job: PreviewJob, cache: bool) -> void:
 	mesh = surface
 	position = Vector3.ZERO
 	visible = surface.get_surface_count() > 0
+	# Record the exact cells that this surface draws. A caller reads them through
+	# [method installed_cells] to match a visible preview to a later click.
+	_installed_cells = job.cells
+
+
+## Returns the immutable cells of the last installed surface, or an empty
+## dictionary when no preview is visible. The caller must not change the result.
+func installed_cells() -> Dictionary:
+	return _installed_cells
 
 
 static func _surface_material() -> StandardMaterial3D:

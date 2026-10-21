@@ -156,10 +156,17 @@ func _enter_tree() -> void:
 
 
 func _exit_tree() -> void:
+	finish_on_switch()
+	if not _fill_running:
+		State.edit_context_changing.disconnect(_interrupt_fill)
+
+
+## Ends the fill like a release when a tool or mode switch detaches this tool.
+## The streaming worker finishes and the stroke commits as one history action.
+func finish_on_switch() -> void:
 	_release_pending = true
 	if not _fill_running:
 		_finish_fill_stroke()
-		State.edit_context_changing.disconnect(_interrupt_fill)
 
 
 func _notification(what: int) -> void:

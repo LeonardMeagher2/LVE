@@ -1,0 +1,123 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://plugins/paint/Options.gd" id="1_script"]
+[ext_resource type="Texture2D" uid="uid://cl0exu5ldguw" path="res://icons/pixel_perfect.svg" id="2_pixel"]
+[ext_resource type="Texture2D" uid="uid://dtgqku4g3l22e" path="res://icons/cube.svg" id="3_cube"]
+[ext_resource type="Texture2D" uid="uid://broaps7lc7g1u" path="res://icons/sphere.svg" id="4_sphere"]
+[ext_resource type="Texture2D" uid="uid://cwgfstwbiogcd" path="res://icons/select.svg" id="5_selection"]
+[ext_resource type="Texture2D" uid="uid://bbt7tj3kwq42w" path="res://icons/brush_diameter.svg" id="6_diameter"]
+[ext_resource type="PackedScene" uid="uid://kxi223occ3vl" path="res://ui/ValueButton/ValueButton.tscn" id="7_value"]
+[ext_resource type="Texture2D" uid="uid://dkpjood1t6s8x" path="res://icons/connected.svg" id="8_connected"]
+[ext_resource type="Texture2D" path="res://icons/spray_width.svg" id="9_width"]
+[ext_resource type="Texture2D" path="res://icons/spray_speed.svg" id="10_speed"]
+
+[sub_resource type="ButtonGroup" id="ShapeGroup"]
+
+[node name="Options" type="HBoxContainer"]
+script = ExtResource("1_script")
+
+[node name="Brush" type="HBoxContainer" parent="."]
+layout_mode = 2
+
+[node name="Shape" type="HBoxContainer" parent="Brush"]
+layout_mode = 2
+
+[node name="Cube" type="Button" parent="Brush/Shape"]
+layout_mode = 2
+tooltip_text = "Cube brush"
+toggle_mode = true
+button_group = SubResource("ShapeGroup")
+icon = ExtResource("3_cube")
+icon_alignment = 1
+
+[node name="Sphere" type="Button" parent="Brush/Shape"]
+layout_mode = 2
+tooltip_text = "Sphere brush"
+toggle_mode = true
+button_group = SubResource("ShapeGroup")
+icon = ExtResource("4_sphere")
+icon_alignment = 1
+
+[node name="Selection" type="Button" parent="Brush/Shape"]
+layout_mode = 2
+tooltip_text = "Use selected voxels as a brush, or all frame voxels when no selection exists"
+toggle_mode = true
+button_group = SubResource("ShapeGroup")
+icon = ExtResource("5_selection")
+icon_alignment = 1
+
+[node name="ShapeSeparator" type="VSeparator" parent="Brush"]
+layout_mode = 2
+
+[node name="Diameter" parent="Brush" instance=ExtResource("7_value")]
+layout_mode = 2
+tooltip_text = "Brush diameter in voxels. Diameter 1 paints one voxel."
+icon = ExtResource("6_diameter")
+min_value = 1.0
+max_value = 64.0
+step = 1.0
+decimals = 0
+value = 1.0
+
+[node name="PixelPerfect" type="Button" parent="Brush"]
+layout_mode = 2
+tooltip_text = "Pixel perfect strokes"
+toggle_mode = true
+icon = ExtResource("2_pixel")
+icon_alignment = 1
+
+[node name="Fill" type="HBoxContainer" parent="."]
+visible = false
+layout_mode = 2
+
+[node name="Connected" type="Button" parent="Fill"]
+layout_mode = 2
+tooltip_text = "Connected"
+toggle_mode = true
+button_pressed = true
+icon = ExtResource("8_connected")
+icon_alignment = 1
+
+[node name="Spray" type="HBoxContainer" parent="."]
+visible = false
+layout_mode = 2
+
+[node name="SpotSize" parent="Spray" instance=ExtResource("7_value")]
+layout_mode = 2
+tooltip_text = "Diameter in voxels of one paint spot. The spot paints every existing voxel inside a sphere of this diameter. Diameter 1 paints one voxel per spot."
+icon = ExtResource("6_diameter")
+min_value = 1.0
+max_value = 32.0
+step = 1.0
+decimals = 0
+value = 1.0
+
+[node name="SprayRadius" parent="Spray" instance=ExtResource("7_value")]
+layout_mode = 2
+tooltip_text = "Radius in voxels of the spray search area. The spray samples its spot centers from the existing voxels inside it."
+icon = ExtResource("9_width")
+min_value = 0.0
+max_value = 16.0
+step = 1.0
+decimals = 0
+value = 4.0
+
+[node name="Speed" parent="Spray" instance=ExtResource("7_value")]
+layout_mode = 2
+tooltip_text = "Spot centers sampled per click or per brush cell change. A spot diameter above one can paint more voxels than this count."
+icon = ExtResource("10_speed")
+min_value = 1.0
+max_value = 64.0
+step = 1.0
+decimals = 0
+value = 8.0
+
+[connection signal="pressed" from="Brush/Shape/Cube" to="." method="_on_cube_pressed"]
+[connection signal="pressed" from="Brush/Shape/Sphere" to="." method="_on_sphere_pressed"]
+[connection signal="pressed" from="Brush/Shape/Selection" to="." method="_on_selection_pressed"]
+[connection signal="value_changed" from="Brush/Diameter" to="." method="_on_diameter_changed"]
+[connection signal="toggled" from="Brush/PixelPerfect" to="." method="_on_pixel_perfect_toggled"]
+[connection signal="toggled" from="Fill/Connected" to="." method="_on_connected_toggled"]
+[connection signal="value_changed" from="Spray/SpotSize" to="." method="_on_spot_size_changed"]
+[connection signal="value_changed" from="Spray/SprayRadius" to="." method="_on_spray_radius_changed"]
+[connection signal="value_changed" from="Spray/Speed" to="." method="_on_speed_changed"]

@@ -44,6 +44,9 @@ Use Git history for old bug reports and removed designs.
 - 2026-10-18: A packed array passes by reference. An in-place write after a Dictionary holds it corrupts the key. Only a `duplicate()` may change.
 - 2026-10-19: A new `class_name` script needs a global class cache entry. Run `godot --headless --path . --import` once after adding it. A headless scene run alone does not refresh the cache and fails to resolve the type.
 - 2026-10-19: The suite runner discovers every `tests/*.tscn` by name. A new test scene needs no `run_all.gd` change.
+- 2026-10-20: A nested class of a base script is inherited. A subclass script constant resolves it, so `BrushTool.BrushJob` works.
+- 2026-10-20: A moved script keeps its `uid` when its `.uid` file moves with it. A scene or resource that still points at the old path and uid resolves the moved script.
+- 2026-10-20: A `static var` that a tool method reads or writes can keep the document and renderer scripts in use at exit. Godot then prints `ERROR: <n> resources still in use at exit`, and the suite runner counts that line as a scene failure. Two cases: the brush profile hook in `StrokeTool.gd`, whose values moved to a neutral holder script, and the spray spot and sphere offset caches in `SprayTool.gd`, which became per-instance. `tests/progressive_fill_safety.tscn`, `tests/transform_worker_lifecycle.tscn` and `tests/progressive_wand_safety.tscn` printed the report and stay clean with those changes. A static function without static state, such as a pure helper, did not.
 
 ## UI and input
 
@@ -172,6 +175,10 @@ Use Git history for old bug reports and removed designs.
 - 2026-10-19: A streamed fill can build a chunk surface and then supersede it before any viewport installs it. Those builds show no progress.
 - 2026-10-19: A coarser fill cadence cut the wasted builds, but it did not consistently shorten the visible completion on the 32768- and 65536-cell fills.
 - 2026-10-19: The fill notification cadence stays at 3 frames or 20000 us. The coarser candidates did not win on completion, so the baseline is kept.
+- 2026-10-20: Cache the spray preview by the chunk identity and `voxel_revision` of every batch chunk. A repeated cursor update tests one entry per chunk, and only a chunk change rescans the cells. A material-only write keeps the same sample, and a read-only preview dictionary avoids a repeated preparation. The identity shortcut is safe only with axes zero and an empty selection, because the source changes already exist. Symmetry must still filter empty mirrored destinations.
+- 2026-10-20: Run `godot --headless --path . res://tests/spray_perf.tscn` for spray CPU A/B medians in one process. The dense maximum sample fell from 284 to 211 ms. The plate maximum fell from 34 to 28 ms. An unchanged 35863-cell hover fell from 52 to 0.053 ms. Sparse sampling stayed effectively unchanged. These are headless CPU medians, not GPU or frame latency.
+- 2026-10-21: Give each chunk one in-flight render request and one latest-pending slot. Both show intermediate surfaces during edits. Invalidate eligibility on a frame, document, undo, source, or context change. Recover an evicted in-flight result by scheduling the latest request, not by waiting.
+- 2026-10-21: Use opt-in preview request coalescing to prevent repeated cancellation starvation. The latest immutable `installed_cells` snapshot makes a lagged visible-click application truthful. Keep the strict Line and Paste policy. Inline uniform solid is removed, because it cost 2 to 5 ms of input time.
 
 ## Threading
 
@@ -339,3 +346,5 @@ Use Git history for old bug reports and removed designs.
 - 2026-10-18: Godot rejects property assignment through a constant Resource reference. Store a mutable reference in a variable.
 - 2026-10-18: Capture startup Resource values before fixture resets. Hard-coded resets can hide default-setting regressions.
 - 2026-10-19: `godot --headless --path . --doctool <dir> --gdscript-docs res://` writes one XML per project script and inner class. It starts the project autoloads, so it prints the `/root/Main` startup errors. A plain `#` comment can precede the `##` script description, and the description still extracts.
+- 2026-10-21: Run `godot --path . --screen 1 res://tests/benchmarks/spray_latency.tscn` for spray latency. Dense 16 shows 47 dirty motions (input events that change watched chunk keys) and 8 installs, and misses the 4-movement target even with progress. Preview shows 29 installs and 0 discards with the production flag. The benchmark is not fully green.
+- 2026-10-21: `Node.set_script` resets script-export values to their script defaults. A profiling probe must save Inspector-authored exports before the swap and restore them after it. This bug invalidated a combined preview measurement.
