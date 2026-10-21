@@ -99,6 +99,18 @@ Use Git history for old bug reports and removed designs.
 
 ## Geometry and rendering
 
+- 2026-10-21: Distinguish isolated voxels from supported symmetric features when the occupancy normal is zero. Check eligible same-pass remnants after removals.
+- 2026-10-21: Measure hover separately from stroke completion. The stroke benchmark does not exercise normal hover input.
+- 2026-10-21: Baseline radius-32 hover spent 267 ms in input and 148 ms rebuilding the preview. The changed-cell path fitted twice.
+- 2026-10-21: Identical outline requests skip mesh generation, but repeated surface sampling still runs before that check.
+- 2026-10-20: Gather compact Smooth neighborhoods from snapshot chunk grids. Keep the exact lookup loop for scattered candidates.
+- 2026-10-20: Rendered rough-surface Smooth strokes improved with chunk-local gathering. Radius 32 visible completion fell from 1179 to 625 ms.
+- 2026-10-20: The same paired measurements reduced radius 16 visible completion from 290 to 151 ms. Radius four fell from 53 to 45 ms.
+- 2026-10-20: Maximum-radius input still took 423 ms after the gather change. Measure plane fitting, patch construction, and previews next.
+- 2026-10-20: Run `godot --path . --screen 1 res://tests/benchmarks/sculpt_latency.tscn` for paired rendered Smooth measurements. It uses two warmups and five alternating samples.
+- 2026-10-20: Keep one ray origin across DDA voxel steps. Restarting at each cell center repeats dominant-axis steps.
+- 2026-10-20: Use a small tolerance before flooring accumulated pass counts. Exact time splits can otherwise lose one pass.
+- 2026-10-20: Retain excess fractional credit after a weighted pass. Clamping the total to one reduces the requested rate.
 - 2026-10-17: `Camera3D.get_camera_projection()` excludes the camera transform. Apply the inverse camera transform before projection. Divide by w, then map normalized coordinates to viewport pixels.
 - 2026-10-17: Camera-space points with positive z are behind the camera.
 - 2026-10-17: `Geometry2D.triangulate_polygon()` returns counterclockwise triangles. Reverse positive-axis face indices for Godot's clockwise 3D winding.

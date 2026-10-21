@@ -1,0 +1,29 @@
+[gd_scene format=3]
+
+[ext_resource type="ButtonGroup" uid="uid://tm4elm05vye0" path="res://plugins/ToolBarButtonGroup.tres" id="1_bg"]
+[ext_resource type="Texture2D" path="res://icons/grow.svg" id="2_grow"]
+[ext_resource type="Texture2D" path="res://icons/flatten.svg" id="3_flatten"]
+[ext_resource type="Texture2D" path="res://icons/hand.svg" id="4_grab"]
+[ext_resource type="Texture2D" path="res://icons/smooth.svg" id="6_smooth"]
+[ext_resource type="Script" path="res://plugins/Sculpt/Toolbar.gd" id="5_script"]
+
+[node name="sculpt" type="MenuButton"]
+tooltip_text = "Sculpt tools"
+button_group = ExtResource("1_bg")
+icon = ExtResource("2_grow")
+flat = false
+icon_alignment = 1
+item_count = 4
+popup/item_0/text = "Grow"
+popup/item_0/icon = ExtResource("2_grow")
+popup/item_0/id = 0
+popup/item_1/text = "Flatten"
+popup/item_1/icon = ExtResource("3_flatten")
+popup/item_1/id = 1
+popup/item_2/text = "Smooth"
+popup/item_2/icon = ExtResource("6_smooth")
+popup/item_2/id = 3
+popup/item_3/text = "Grab"
+popup/item_3/icon = ExtResource("4_grab")
+popup/item_3/id = 2
+script = ExtResource("5_script")
