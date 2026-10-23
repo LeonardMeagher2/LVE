@@ -57,6 +57,23 @@ var _older_key := PackedInt64Array()
 var _newer_key := PackedInt64Array()
 var _base_key := PackedInt64Array()
 var _settled_at_start := false
+var _eligible_key := PackedInt64Array()
+var _backlog_key := PackedInt64Array()
+var _update_us := 0
+var _profile_launch := 0
+var _profile_snapshot_us := 0
+var _one_copy_us := 0
+var _shared_snapshots := 0
+
+
+## A test view whose update ends after the first queue item, so a finished
+## backlog cannot fit in one update. It proves the install order without a slow
+## native bake. The slice stays the real one until a test shortens it.
+class ShortSliceRenderer extends VoxelRenderer:
+	var slice_us := State.WORK_SLICE_US
+
+	func _work_slice_us() -> int:
+		return slice_us
 
 
 func _ready() -> void:
@@ -71,6 +88,9 @@ func _ready() -> void:
 	test("two views share one build per chunk and one cached mesh", _shared_views, "shared_views")
 	test("the request queue and the shared job map stay inside their bounds", _job_limits, "job_limits")
 	test("an eligible completed result installs before a newer request and keeps it pending", _coalesced_install, "coalesced_install")
+	test("an eligible completed result installs while a finished backlog is baked", _ready_install_beats_backlog, "ready_install_beats_backlog")
+	test("the opt-in profile attributes the surface phases of one update", _profile_counters, "profile_counters")
+	test("one launch pass shares one frozen frame snapshot", _shared_snapshot, "shared_snapshot")
 
 
 func _process(_delta: float) -> void:
@@ -587,6 +607,179 @@ func _coalesced_install() -> void:
 		expect(_same_key(_shown_key(second, _watch), _view_key(second, _watch)), "the newest surface installs")
 		expect(second._pending_surface_keys.is_empty(), "no request stays pending")
 	)
+
+
+# A completed in-flight result that the view already holds in the shared cache
+# must install even while a finished backlog of shared builds is reaped and baked
+# in the same update. One atlas bake can spend the whole work slice, so a view
+# that reaps the backlog first would let a ready result wait for a later frame.
+func _ready_install_beats_backlog() -> void:
+	step("Given a settled dedicated view of a standalone frame", func():
+		second = ShortSliceRenderer.new()
+		main.add_child(second)
+		_target = _build_frame(WIDE, 8)
+		second.source_frame = _target
+		watch_chunk(0, 0, 0)
+	)
+	await _settle(second)
+	step("Then the watched chunk is settled and displayed", func():
+		expect(second.is_settled(), "the view starts settled")
+		expect(second._chunk_instances.has(_watch), "the watched chunk is displayed")
+	)
+	step("When a newer request owns the chunk and an older result is cached", func():
+		var origin := _watch * VoxelFrame.CHUNK_SIZE
+		_target.set_cell(origin + Vector3i(0, 6, 0), VoxelFrame.material(Color.BLUE))
+		second._request(_target, _watch)
+		_eligible_key = _view_key(second, _watch)
+		_target.set_cell(origin + Vector3i(1, 6, 0), VoxelFrame.material(Color.YELLOW))
+		second._request(_target, _watch)
+		expect(second._pending_surface_keys.has(_watch), "the newest change owns the request")
+		expect(not _same_key(second._pending_surface_keys[_watch], _eligible_key), "the newest request is newer than the eligible result")
+	)
+	step("When one update holds the eligible result and a finished backlog", func():
+		_saved_cache = VoxelRenderer._surface_cache.duplicate()
+		_saved_order = VoxelRenderer._surface_use_order.duplicate()
+		_saved_bytes = VoxelRenderer._surface_cache_bytes
+		# A full cache slot for the eligible key and one finished build whose atlas
+		# bake is far over the work slice. The backlog job is added to the shared
+		# map and removed again, so no other view's job is touched.
+		VoxelRenderer._surface_cache = {_eligible_key: {"surface": ArrayMesh.new(), "material": null, "bytes": 0}}
+		VoxelRenderer._surface_use_order = [_eligible_key]
+		VoxelRenderer._surface_cache_bytes = 0
+		_backlog_key = PackedInt64Array([0, 424242, 7])
+		VoxelRenderer._surface_jobs[_backlog_key] = _backlog_job()
+		# One job is already in flight, so the update must not launch a second one.
+		VoxelRenderer._surface_job_limit = 1
+		second._inflight_surface_keys[_watch] = _eligible_key
+		# End the update after its first item, so the finished backlog cannot fit.
+		second.set("slice_us", 0)
+		var started := Time.get_ticks_usec()
+		second._update_surfaces()
+		_update_us = Time.get_ticks_usec() - started
+	)
+	step("Then the eligible result installed while the backlog was baked", func():
+		print("MEASURE renderer_progress ready_install_beats_backlog: update_us=%d work_slice_us=%d reaped_backlog=%s" % [
+			_update_us, State.WORK_SLICE_US, str(not VoxelRenderer._surface_jobs.has(_backlog_key)),
+		])
+		expect(_same_key(_shown_key(second, _watch), _eligible_key), "the eligible result installs during the backlog bake")
+	)
+	step("Then the shared cache and the job map return for the other tests", func():
+		if VoxelRenderer._surface_jobs.has(_backlog_key):
+			WorkerThreadPool.wait_for_task_completion(VoxelRenderer._surface_jobs[_backlog_key].worker_task_id)
+			VoxelRenderer._surface_jobs.erase(_backlog_key)
+		VoxelRenderer._surface_cache = _saved_cache
+		VoxelRenderer._surface_use_order = _saved_order
+		VoxelRenderer._surface_cache_bytes = _saved_bytes
+		VoxelRenderer._surface_job_limit = 0
+		expect(VoxelRenderer._surface_cache.size() > 0, "the shared cache is restored")
+	)
+
+
+# One launch pass shares one frame snapshot. It is made on the first launch and
+# the later launches of the same update read the same object. `copy_frame()` marks
+# the live chunks shared, so the next write copies its chunk and the snapshot stays
+# frozen for the running workers.
+func _shared_snapshot() -> void:
+	step("Given a settled wide block", func():
+		_wide_fixture()
+	)
+	await _settle(renderer)
+	step("When two interior chunks are requested in one update", func():
+		_edit_recorded(5, 5, 5)
+		_edit_recorded(21, 5, 5)
+		renderer.profile_surfaces = true
+		renderer.reset_profile()
+		renderer._update_surfaces()
+		var snapshot: Dictionary = renderer.profile_snapshot()
+		_profile_launch = int(snapshot["launch"])
+		_profile_snapshot_us = int(snapshot["snapshot_us"])
+		_shared_snapshots = int(snapshot["snapshots"])
+	)
+	step("Then the launches share one snapshot and a live write leaves it frozen", func():
+		# The snapshot is made once for the pass, whatever the launch count. A
+		# worker can clear its own `source_frame` as soon as it starts, so the count
+		# of made snapshots is the race-free proof, not the job field.
+		expect(_profile_launch >= 2, "the update launched a build for each requested chunk")
+		expect(_shared_snapshots == 1, "the update made one frame snapshot for every launch")
+		expect(renderer._launch_snapshot != null, "the update keeps its shared snapshot")
+		# The old path copied the frame once per launch. One measured copy against
+		# the shared pass shows the work the update skipped.
+		var copy_started := Time.get_ticks_usec()
+		renderer._get_frame().copy_frame()
+		_one_copy_us = Time.get_ticks_usec() - copy_started
+		print("MEASURE renderer_progress launch_snapshot: launches=%d snapshots=%d shared_snapshot_us=%d one_copy_us=%d old_cost_us=%d" % [
+			_profile_launch, _shared_snapshots, _profile_snapshot_us, _one_copy_us, _one_copy_us * _profile_launch,
+		])
+		var location := Vector3i.ZERO
+		var shared: VoxelFrame = renderer._launch_snapshot
+		var frozen_revision: int = shared.chunks[location].voxel_revision
+		var live_before: int = renderer._get_frame().chunks[location].voxel_revision
+		# A fresh cell of the same chunk, so the write really changes the chunk.
+		var write_cell := Vector3i(6, 6, 6)
+		_edit_recorded(write_cell.x, write_cell.y, write_cell.z)
+		expect(renderer._get_frame().chunks[location].voxel_revision != live_before, "the live chunk changed after the write")
+		expect(shared.chunks[location].voxel_revision == frozen_revision, "the shared snapshot chunk stays frozen")
+		renderer.profile_surfaces = false
+	)
+
+
+# The opt-in per-instance profile attributes one edit to the real phases, without
+# a static retainer and without a cost when it is off. The waits stay in the test
+# body, because a step lambda does not propagate its await to the harness.
+func _profile_counters() -> void:
+	step("Given a settled single-chunk view with the profile on", func():
+		_single_chunk_fixture()
+		watch_chunk(0, 0, 0)
+		renderer.profile_surfaces = true
+	)
+	await _settle(renderer)
+	step("When one surface edit runs through the update", func():
+		renderer.reset_profile()
+		_edit_surface(3)
+	)
+	var deadline := Time.get_ticks_msec() + 8000
+	while not renderer.is_settled() and Time.get_ticks_msec() < deadline:
+		await get_tree().process_frame
+	step("Then the profile counts the reaped and installed work", func():
+		var snapshot: Dictionary = renderer.profile_snapshot()
+		print("MEASURE renderer_progress profile_counters: %s" % str(snapshot))
+		expect(int(snapshot["consume"]) + int(snapshot["reaped"]) + int(snapshot["launch"]) >= 1, "the update recorded a consume, a reap, or a launch")
+		expect(int(snapshot["cache_us"]) >= 0 and int(snapshot["install_us"]) >= 0, "the cache and install phases are attributed")
+		expect(int(snapshot["jobs"]) >= 0 and int(snapshot["pending"]) >= 0, "the queue sizes are reported")
+	)
+	step("Then the profile turns off again", func():
+		renderer.profile_surfaces = false
+		renderer.reset_profile()
+	)
+
+
+# One finished build whose material bake costs far more than the work slice. Its
+# atlas is large enough that the three atlas textures and their readback alone
+# spend the update.
+func _backlog_job() -> VoxelMeshBuilder:
+	var job := VoxelMeshBuilder.new()
+	job.surface_arrays.resize(Mesh.ARRAY_MAX)
+	job.surface_arrays[Mesh.ARRAY_VERTEX] = PackedVector3Array()
+	job.chunk_location = Vector3i(999, 999, 999)
+	job.worker_task_id = _completed_task()
+	var side := 2048
+	var atlas := PackedByteArray()
+	atlas.resize(side * side * 3)
+	job.atlas_size = Vector2i(side, side)
+	job.atlas_albedo = atlas
+	job.atlas_orm = atlas
+	job.atlas_emission = atlas
+	return job
+
+
+# A task that has finished and was not awaited yet, so `is_task_completed` still
+# reports it finished and the renderer can reap it as a real completed build.
+func _completed_task() -> int:
+	var task_id := WorkerThreadPool.add_task(func(): pass, false, "backlog probe")
+	var deadline := Time.get_ticks_msec() + 5000
+	while not WorkerThreadPool.is_task_completed(task_id) and Time.get_ticks_msec() < deadline:
+		pass
+	return task_id
 
 
 # --- Fixtures ----------------------------------------------------------------

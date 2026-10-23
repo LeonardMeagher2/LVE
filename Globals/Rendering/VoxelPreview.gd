@@ -85,6 +85,51 @@ var _solid_material := preload("res://VoxelMaterial.tres").duplicate()
 var _primitive_material := preload("res://VoxelMaterial.tres").duplicate()
 var _brush_material := VoxelFrame.material(Color.WHITE)
 
+## A prepared solid preview that a worker built off the main thread.
+##
+## It carries the read-only color dictionary, the format flag, the display color,
+## and the hash of the cell keys. [method VoxelPreview.submit_prepared] formats
+## the exact cache key from the live smooth setting, so the main thread never
+## scans the values, hashes the keys, or copies the dictionary for a large batch.
+##
+## The values are immutable [Color] objects and the dictionary is read-only, so a
+## worker and the main thread may share the payload. A caller must never change
+## the payload or its dictionary.
+class SolidPayload extends RefCounted:
+	## The read-only color dictionary, keyed by cell position.
+	var spots := {}
+	## The number of cells.
+	var cell_count := 0
+	## Whether the frame reads a full material from each cell value.
+	var use_voxel_colors := false
+	## The color key of a transparent cell.
+	var color_key := Color.WHITE
+	## The display color of the material override.
+	var display_color := Color.WHITE
+	## The hash of the cell keys. A caller formats the exact cache key from it.
+	var cell_hash := 0
+
+
+## Builds one solid preview payload from cells and the display color.
+##
+## It is pure: it reads no Node, no State, and no RenderingServer, so a worker may
+## call it. The dictionary and the key hash are built once here, off the main
+## thread. The payload holds one uniform color, which is the spray cursor case.
+static func build_solid_payload(cells: Array[Vector3i], display_color: Color, use_voxel_colors := false) -> SolidPayload:
+	var payload := SolidPayload.new()
+	var spots := {}
+	for cell in cells:
+		spots[cell] = display_color
+	spots.make_read_only()
+	payload.spots = spots
+	payload.cell_count = spots.size()
+	payload.use_voxel_colors = use_voxel_colors
+	payload.color_key = display_color if use_voxel_colors else Color.WHITE
+	payload.display_color = display_color
+	payload.cell_hash = _cell_hash(spots, use_voxel_colors)
+	return payload
+
+
 ## One cancellable preview job that runs on the worker pool.
 ##
 ## The job holds a snapshot of the cells and builds the outline or the solid
@@ -110,6 +155,16 @@ class PreviewJob extends VoxelFrame.EditJob:
 	var cache_key := ""
 	## The built mesh arrays, indexed by [enum Mesh.ArrayType].
 	var arrays := []
+	## The per-chunk build microseconds of the solid path.
+	var build_us := 0
+	## The vertex and index merge microseconds of the solid path.
+	var merge_us := 0
+	## The number of chunks the solid path built.
+	var chunk_count := 0
+	## The number of built chunks that emitted no vertex.
+	var empty_chunks := 0
+	## The number of chunks that took the enclosed shortcut and skipped the build.
+	var culled_chunks := 0
 	## The per-chunk atlas surfaces of a solid mesh.
 	var atlas_surfaces: Array[VoxelMeshBuilder] = []
 	## The estimated geometry byte count.
@@ -131,18 +186,42 @@ class PreviewJob extends VoxelFrame.EditJob:
 		stage("Preparing solid preview", cells.size())
 		var colors := {}
 		var use_material_atlas := false
+		# A batch whose cells all hold one material declares that material once. The
+		# frame then fills a whole chunk in one write and skips its own per-cell
+		# compare, and this loop allocates no material array per cell. A batch that
+		# varies declares nothing, so the frame compares the cells itself.
+		var uniform_material: PackedFloat32Array = PackedFloat32Array()
+		var uniform_holds := true
 		for cell_position in cells:
 			var value = cells[cell_position]
 			if use_voxel_colors and value is PackedFloat32Array:
 				colors[cell_position] = value
 				use_material_atlas = true
+				uniform_holds = false
 			else:
 				var color: Color = value if value is Color else VoxelFrame.material_color(value)
-				colors[cell_position] = VoxelFrame.material((color_key if color == Color.TRANSPARENT else color) if use_voxel_colors else Color.WHITE)
+				var cell_material: PackedFloat32Array
+				if not use_voxel_colors:
+					if uniform_material.is_empty():
+						uniform_material = VoxelFrame.material(Color.WHITE)
+					cell_material = uniform_material
+				else:
+					var wanted := color_key if color == Color.TRANSPARENT else color
+					if uniform_holds and not uniform_material.is_empty() and VoxelFrame.material_color(uniform_material) == wanted:
+						cell_material = uniform_material
+					else:
+						cell_material = VoxelFrame.material(wanted)
+						if uniform_material.is_empty():
+							uniform_material = cell_material
+						else:
+							uniform_holds = false
+				colors[cell_position] = cell_material
 			if colors.size() % 4096 == 0 and not checkpoint(colors.size()):
 				return
 		var frame := VoxelFrame.new()
-		frame.set_cells(colors, self)
+		# Declare the shared material only when every cell really holds it, so a
+		# varying batch is never treated as one material.
+		frame.set_cells(colors, self, uniform_material if uniform_holds and not uniform_material.is_empty() else null)
 		var vertices := PackedVector3Array()
 		var normals := PackedVector3Array()
 		var vertex_colors := PackedColorArray()
@@ -157,10 +236,17 @@ class PreviewJob extends VoxelFrame.EditJob:
 			job.chunk_location = chunk_location
 			job.smooth_normals = smooth_normals
 			job.texture_materials = use_material_atlas
+			var build_started_us := Time.get_ticks_usec()
 			job.run()
+			build_us += Time.get_ticks_usec() - build_started_us
+			chunk_count += 1
+			if job.enclosed_culled:
+				culled_chunks += 1
 			if job.surface_arrays[Mesh.ARRAY_VERTEX].is_empty():
+				empty_chunks += 1
 				completed += 1
 				continue
+			var merge_started_us := Time.get_ticks_usec()
 			var chunk_origin := Vector3(chunk_location * VoxelFrame.CHUNK_SIZE)
 			if job.atlas_size.x > 0:
 				var chunk_vertices: PackedVector3Array = job.surface_arrays[Mesh.ARRAY_VERTEX]
@@ -169,6 +255,7 @@ class PreviewJob extends VoxelFrame.EditJob:
 				job.surface_arrays[Mesh.ARRAY_VERTEX] = chunk_vertices
 				atlas_surfaces.append(job)
 				geometry_bytes += job.geometry_bytes + job.atlas_albedo.size() + job.atlas_orm.size() + job.atlas_emission.size()
+				merge_us += Time.get_ticks_usec() - merge_started_us
 				completed += 1
 				continue
 			var vertex_offset := vertices.size()
@@ -178,6 +265,7 @@ class PreviewJob extends VoxelFrame.EditJob:
 			vertex_colors.append_array(job.surface_arrays[Mesh.ARRAY_COLOR])
 			for index in job.surface_arrays[Mesh.ARRAY_INDEX]:
 				indices.append(index + vertex_offset)
+			merge_us += Time.get_ticks_usec() - merge_started_us
 			completed += 1
 		arrays.resize(Mesh.ARRAY_MAX)
 		arrays[Mesh.ARRAY_VERTEX] = vertices
@@ -377,19 +465,70 @@ func _request(cells: Dictionary, style: PreviewStyle, use_voxel_colors: bool = f
 	_requested_cache_key = cache_key
 	var cached: Dictionary = _mesh_cache.get(cache_key, {})
 	if not cached.is_empty() and cached.color_key == color_key and _same_cells(cached.cells, _requested_cells, colored):
-		mesh = cached.surface
-		position = Vector3.ZERO
-		visible = true
-		_cache_order.erase(cache_key)
-		_cache_order.append(cache_key)
-		_installed_revision = _request_revision
-		_installed_cells = cached.cells
-		_finish_activity()
+		_install_cached(cache_key, cached)
 		return
 	_pending_cells = _requested_cells
 	_request_due_ms = Time.get_ticks_msec() + 100 if style == PreviewStyle.OUTLINE and cells.size() > OUTLINE_DELAY_LIMIT else 0
 	_start_activity()
 	_start_preview()
+
+
+## Shows a solid preview from a payload that a worker built.
+##
+## The payload holds the read-only color dictionary, the format flag, and the cell
+## hash, so this call never scans the values, hashes the keys, or copies the
+## dictionary. It formats the exact cache key from the live smooth setting and
+## reuses the shared mesh cache, the worker job, and the installed-cell contract of
+## [method show_voxels]. The caller must submit its newest payload, because this
+## path has no cell-set dedupe.
+func submit_prepared(payload: SolidPayload) -> void:
+	if payload == null or payload.cell_count == 0:
+		_clear_request()
+		return
+	_cancel_stream()
+	var colored := payload.use_voxel_colors
+	var smooth_normals := State.document.smooth_normals
+	# A uniform color payload uses the brush material, exactly like the default
+	# solid path of `show_voxels`. A colored payload keeps the neutral material.
+	if colored:
+		_apply_material(_solid_material, VoxelFrame.material(Color.WHITE))
+	else:
+		_apply_material(_solid_material, _brush_material)
+		_solid_material.albedo_color = payload.display_color
+	material_override = _solid_material
+	_request_revision += 1
+	_strict_alive = true
+	if _preview_job and not coalesce_requests:
+		_preview_job.cancel()
+	_requested_style = PreviewStyle.SOLID
+	_requested_voxel_colors = colored
+	_requested_smooth_normals = smooth_normals
+	_requested_color_key = payload.color_key
+	_requested_cells = payload.spots
+	_pending_cells = {}
+	_request_due_ms = 0
+	var cache_key := _key_from_hash(PreviewStyle.SOLID, colored, payload.cell_hash, payload.color_key, smooth_normals)
+	_requested_cache_key = cache_key
+	var cached: Dictionary = _mesh_cache.get(cache_key, {})
+	if not cached.is_empty() and cached.color_key == payload.color_key and _same_cells(cached.cells, _requested_cells, colored):
+		_install_cached(cache_key, cached)
+		return
+	_pending_cells = _requested_cells
+	_start_activity()
+	_start_preview()
+
+
+# Installs one cached surface and records it as the newest result. Shared by the
+# direct request and a prepared payload, so both install the exact same way.
+func _install_cached(cache_key: String, cached: Dictionary) -> void:
+	mesh = cached.surface
+	position = Vector3.ZERO
+	visible = true
+	_cache_order.erase(cache_key)
+	_cache_order.append(cache_key)
+	_installed_revision = _request_revision
+	_installed_cells = cached.cells
+	_finish_activity()
 
 
 static func _same_cells(first: Dictionary, second: Dictionary, colored: bool) -> bool:
@@ -406,7 +545,19 @@ static func _same_cells(first: Dictionary, second: Dictionary, colored: bool) ->
 
 
 static func _cache_key(cells: Dictionary, style: PreviewStyle, colored: bool, color_key: Color, smooth_normals: bool) -> String:
-	var cell_hash := cells.hash() if colored else cells.keys().hash()
+	return _key_from_hash(style, colored, _cell_hash(cells, colored), color_key, smooth_normals)
+
+
+# The hash of the requested cells. A colored solid reads the values, so its hash
+# covers them. Every other shape reads the keys alone.
+static func _cell_hash(cells: Dictionary, colored: bool) -> int:
+	return cells.hash() if colored else cells.keys().hash()
+
+
+# The exact cache key from one cell hash and the flags that change the surface. A
+# worker computes the cell hash, and the main thread formats the key with the live
+# smooth setting, so a prepared payload needs no main-thread key hash.
+static func _key_from_hash(style: int, colored: bool, cell_hash: int, color_key: Color, smooth_normals: bool) -> String:
 	return "%d:%s:%d:%s:%s" % [style, colored, cell_hash, color_key, smooth_normals]
 
 
