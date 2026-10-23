@@ -22,13 +22,15 @@ enum Tools {
 	PAINTBRUSH,
 	## Recolor a connected or a matching region.
 	FILL,
-	## Paint random spots inside a radius.
+	## Paint random spots inside a search size.
 	SPRAY
 }
 
 
 const PatternJob := preload("res://plugins/brush/StampPatternJob.gd")
 const CopyJob := preload("res://plugins/brush/StampCopyJob.gd")
+# The shared size helper comes from StampToolSettings. A second const with the
+# same name here clashes with the inherited one.
 
 ## The active paint tool.
 @export var tool: Tools = Tools.PAINTBRUSH :
@@ -49,26 +51,41 @@ const CopyJob := preload("res://plugins/brush/StampCopyJob.gd")
 		emit_changed()
 
 ## The diameter in cells of one spray spot. The spot paints every existing voxel
-## inside a sphere of this diameter. Diameter 1 paints the spot center alone. It
-## clamps to the range 1 through 32, which keeps the largest spot inside the old
-## search radius without a long inline sample on a dense model.
+## inside the shared brush sphere of this diameter. Diameter 1 paints the spot
+## center alone. It clamps to the range 1 through 64, so the spot matches the
+## brush sphere at every size.
 @export var spot_diameter := 1 :
 	set(value):
-		value = clampi(value, 1, 32)
+		value = VoxelBrushSize.clamp_size(value)
 		if value == spot_diameter:
 			return
 		spot_diameter = value
 		emit_changed()
 
-## The radius in cells of the spray search area. The spray samples its spot
-## centers from the existing voxels inside this radius.
-@export var spray_radius := 4 :
+## The width in cells of the spray search area. The spray samples its spot
+## centers from the existing voxels inside the shared brush sphere of this size.
+## Size 1 offers the brush cell alone. It clamps to the range 1 through 64.
+##
+## The old spray search radius of 4 spanned 9 cells, so the default size is 9.
+## The sphere mask admits more corner and diagonal cells than the old integer
+## ball of radius 4, so the default mask changes while it keeps the intended
+## physical width.
+@export var spray_size := 9 :
 	set(value):
-		value = clampi(value, 0, 16)
-		if value == spray_radius:
+		value = VoxelBrushSize.clamp_size(value)
+		if value == spray_size:
 			return
-		spray_radius = value
+		spray_size = value
 		emit_changed()
+
+## Deprecated: the old spray search radius. It is a view of [member spray_size],
+## so the two never disagree. Use [member spray_size] in new code. The old radius
+## r spanned 2r + 1 cells, so the getter returns the span-equivalent radius.
+var spray_radius: int :
+	get:
+		return VoxelBrushSize.size_to_radius(spray_size)
+	set(value):
+		spray_size = VoxelBrushSize.radius_to_size(value)
 
 ## The number of distinct spot centers that one click or one brush cell change
 ## samples. A spot diameter above one can paint more voxels than this count.

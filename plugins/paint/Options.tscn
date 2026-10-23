@@ -87,20 +87,20 @@ layout_mode = 2
 tooltip_text = "Diameter in voxels of one paint spot. The spot paints every existing voxel inside a sphere of this diameter. Diameter 1 paints one voxel per spot."
 icon = ExtResource("6_diameter")
 min_value = 1.0
-max_value = 32.0
+max_value = 64.0
 step = 1.0
 decimals = 0
 value = 1.0
 
-[node name="SprayRadius" parent="Spray" instance=ExtResource("7_value")]
+[node name="SpraySize" parent="Spray" instance=ExtResource("7_value")]
 layout_mode = 2
-tooltip_text = "Radius in voxels of the spray search area. The spray samples its spot centers from the existing voxels inside it."
+tooltip_text = "Width in voxels of the spray search area. The spray samples its spot centers from the existing voxels inside a sphere of this width. Width 1 offers the brush cell alone."
 icon = ExtResource("9_width")
-min_value = 0.0
-max_value = 16.0
+min_value = 1.0
+max_value = 64.0
 step = 1.0
 decimals = 0
-value = 4.0
+value = 9.0
 
 [node name="Speed" parent="Spray" instance=ExtResource("7_value")]
 layout_mode = 2
@@ -119,5 +119,5 @@ value = 8.0
 [connection signal="toggled" from="Brush/PixelPerfect" to="." method="_on_pixel_perfect_toggled"]
 [connection signal="toggled" from="Fill/Connected" to="." method="_on_connected_toggled"]
 [connection signal="value_changed" from="Spray/SpotSize" to="." method="_on_spot_size_changed"]
-[connection signal="value_changed" from="Spray/SprayRadius" to="." method="_on_spray_radius_changed"]
+[connection signal="value_changed" from="Spray/SpraySize" to="." method="_on_spray_size_changed"]
 [connection signal="value_changed" from="Spray/Speed" to="." method="_on_speed_changed"]

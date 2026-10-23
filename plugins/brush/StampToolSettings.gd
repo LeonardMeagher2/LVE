@@ -12,6 +12,12 @@ extends Resource
 ## named a job script directly, or that held the job classes itself, kept the
 ## whole document and renderer script graph alive at exit. The test runner
 ## reports that as a resource leak.
+##
+## The size helpers are a pure utility, so this class names them. The helper
+## names no project script, so it adds no reference cycle.
+
+## The pure size helpers. They own the valid diameter range and the clamps.
+const VoxelBrushSize := preload("res://Globals/State/Tools/VoxelBrushSize.gd")
 
 ## The stamp footprint shape.
 enum BrushShape {
@@ -26,7 +32,7 @@ enum BrushShape {
 ## The stamp diameter in cells. It clamps to the range 1 through 64.
 @export var diameter := 1:
 	set(value):
-		value = clampi(value, 1, 64)
+		value = VoxelBrushSize.clamp_size(value)
 		if value == diameter:
 			return
 		diameter = value

@@ -5,7 +5,8 @@ extends HBoxContainer
 ## It shows the options of the active paint tool. The brush section edits the
 ## paintbrush diameter, the shape, and the pixel-perfect flag. The fill section
 ## edits the connected option. The spray section edits the spot diameter, the
-## spray radius, and the speed.
+## spray search size, and the speed. The spot diameter and the search size are
+## voxel widths, not radii.
 
 var _settings := preload("./settings.tres")
 var _source_job: VoxelFrame.EditJob
@@ -36,7 +37,7 @@ func _sync() -> void:
 	$Brush/ShapeSeparator.visible = $Brush/Diameter.visible
 	$Fill/Connected.set_pressed_no_signal(_settings.connected)
 	$Spray/SpotSize.set_value_no_signal(_settings.spot_diameter)
-	$Spray/SprayRadius.set_value_no_signal(_settings.spray_radius)
+	$Spray/SpraySize.set_value_no_signal(_settings.spray_size)
 	$Spray/Speed.set_value_no_signal(_settings.speed)
 
 
@@ -122,8 +123,8 @@ func _on_spot_size_changed(value: float) -> void:
 	_settings.spot_diameter = int(value)
 
 
-func _on_spray_radius_changed(value: float) -> void:
-	_settings.spray_radius = int(value)
+func _on_spray_size_changed(value: float) -> void:
+	_settings.spray_size = int(value)
 
 
 func _on_speed_changed(value: float) -> void:
