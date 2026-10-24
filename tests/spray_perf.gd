@@ -10,15 +10,23 @@ extends "res://tests/test.gd"
 # with their sample counts. A repeated hover is compared with the per-cell
 # occupancy check and the preview dict build it replaced.
 #
+# A size whose occupied reach estimate passes the tool's inline limit samples on
+# the worker pool. That hover row reports the request cost alone, because the
+# inline A/B cannot compare a job that runs off the input frame.
+#
 #   godot --headless --path . res://tests/spray_perf.tscn
 
-const REFERENCE := preload("res://tests/spray_reference.gd")
+const REFERENCE := preload("res://tests/spray_reference_size.gd")
+const VoxelBrushSize := preload("res://Globals/State/Tools/VoxelBrushSize.gd")
+const SpraySampler := preload("res://plugins/paint/SpraySampler.gd")
 
 const SEED := 20261020
 const AB_SAMPLES := 5
 const AB_WARMUPS := 1
-# The spot diameter, the spray radius, and the speed of each measured setting.
-const SETTINGS := [[1, 4, 8], [8, 8, 16], [32, 16, 64]]
+# The spot size, the spray search size, and the speed of each measured setting.
+# The sizes are canonical widths. The old table named the search value a radius:
+# its spans were 9, 17, and 33 cells, so the span-equivalent sizes are used here.
+const SETTINGS := [[1, 9, 8], [8, 17, 16], [32, 33, 64]]
 const SETTING_NAMES := ["default", "medium", "max"]
 
 var _settings := preload("res://plugins/paint/settings.tres")
@@ -27,9 +35,11 @@ var tool: Node3D
 var frame: VoxelFrame
 var _cursor: MeshInstance3D
 var _reference
+var _reference_rng := RandomNumberGenerator.new()
 var _sink := 0
 var _parity_compared := 0
 var _parity_failures := 0
+var _parity_rng_failures := 0
 var _parity_first := ""
 var _hover_compared := 0
 
@@ -50,7 +60,7 @@ func _setup_test() -> void:
 	State.current_color = Color.RED
 	_settings.diameter = 1
 	_settings.spot_diameter = 1
-	_settings.spray_radius = 4
+	_settings.spray_size = 9
 	_settings.speed = 8
 	select_toolbar_item("paint", "Spray Can")
 	tool = plugin("PaintPlugin")._spray_tool
@@ -122,9 +132,8 @@ func _live_sample(center: Vector3i, context: VoxelFrame.EditContext, seed_value:
 
 
 func _reference_sample(center: Vector3i, context: VoxelFrame.EditContext, seed_value: int) -> Array[Vector3i]:
-	var rng := RandomNumberGenerator.new()
-	rng.seed = seed_value
-	return _reference.sample(center, frame, context, _settings.spot_diameter, _settings.spray_radius, _settings.speed, rng, VoxelFrame.material(Color.WHITE))
+	_reference_rng.seed = seed_value
+	return _reference.sample_size(center, frame, context, _settings.spot_diameter, _settings.spray_size, _settings.speed, _reference_rng, VoxelFrame.material(Color.WHITE))
 
 
 func _same_set(first: Array[Vector3i], second: Array[Vector3i]) -> bool:
@@ -138,8 +147,15 @@ func _same_set(first: Array[Vector3i], second: Array[Vector3i]) -> bool:
 
 func _compare(label: String, center: Vector3i, context: VoxelFrame.EditContext, seed_value: int) -> void:
 	var live := _live_sample(center, context, seed_value)
+	# The live kernel draws from the tool source and the frozen kernel from its
+	# own source. The two must consume the same draws, so the random state after
+	# the sample is one more ground truth than the cell set alone.
+	var live_state: int = tool._rng.state
 	var reference := _reference_sample(center, context, seed_value)
+	var reference_state: int = _reference_rng.state
 	_parity_compared += 1
+	if live_state != reference_state:
+		_parity_rng_failures += 1
 	if not _same_set(live, reference):
 		_parity_failures += 1
 		if _parity_first == "":
@@ -156,6 +172,7 @@ func _parity() -> void:
 	step("Given a dense block, a plate, and a sparse plane", func():
 		_parity_compared = 0
 		_parity_failures = 0
+		_parity_rng_failures = 0
 		_parity_first = ""
 	)
 	step("When every fixture is sampled by the live tool and the frozen reference", func():
@@ -168,7 +185,7 @@ func _parity() -> void:
 				_use_fixture(_sparse_cells())
 			for setting in SETTINGS.size():
 				_settings.spot_diameter = SETTINGS[setting][0]
-				_settings.spray_radius = SETTINGS[setting][1]
+				_settings.spray_size = SETTINGS[setting][1]
 				_settings.speed = SETTINGS[setting][2]
 				for entry in _contexts():
 					var label := "%s/%s/%s" % [fixture, SETTING_NAMES[setting], entry[0]]
@@ -178,6 +195,7 @@ func _parity() -> void:
 	step("Then the live sample matches the reference in every context", func():
 		expect(_parity_compared == 3 * SETTINGS.size() * 4 * 2, "every fixture, setting, and context compared twice")
 		expect(_parity_failures == 0, "every sample keeps the exact cell set%s" % ("" if _parity_first == "" else " (first: %s)" % _parity_first))
+		expect(_parity_rng_failures == 0, "every sample consumes the same random draws as the frozen reference")
 	)
 
 
@@ -253,11 +271,24 @@ func _time_new_hover() -> int:
 	return Time.get_ticks_usec() - started
 
 
+# One A/B pair of the hover request. A size whose occupied reach estimate passes
+# the inline limit queues a worker sample, so the inline path is not comparable
+# there and the request cost is reported as it is.
 func _measure_hover(label: String, center: Vector3i) -> void:
 	var pick := PickResult.new()
 	pick.target = center
 	pick.hit = center
+	var started := Time.get_ticks_usec()
 	tool.update_visual(pick)
+	var request_us := Time.get_ticks_usec() - started
+	_hover_compared += 1
+	var reach := VoxelBrushSize.reach(_settings.spray_size) + VoxelBrushSize.reach(_settings.spot_diameter)
+	var estimate := SpraySampler.occupied_estimate(frame, center, reach)
+	if tool._hover_sample_job != null:
+		print("MEASURE spray hover %s: worker queue (inline path off), request %d us, estimate %d, spot %d, search %d, speed %d, batch=%d" % [
+			label, request_us, estimate, _settings.spot_diameter, _settings.spray_size, _settings.speed, tool._batch_cells.size(),
+		])
+		return
 	var old_times: Array[int] = []
 	var new_times: Array[int] = []
 	for warmup in AB_WARMUPS:
@@ -272,9 +303,8 @@ func _measure_hover(label: String, center: Vector3i) -> void:
 			old_times.append(_time_old_hover())
 	var old_median := _median(old_times)
 	var new_median := _median(new_times)
-	_hover_compared += 1
-	print("MEASURE spray hover A/B %s: cells=%d old %d us, new %d us, gain %.2fx, samples %d/%d" % [
-		label, tool._batch_cells.size(), old_median, new_median,
+	print("MEASURE spray hover A/B %s: cells=%d estimate=%d old %d us, new %d us, gain %.2fx, samples %d/%d" % [
+		label, tool._batch_cells.size(), estimate, old_median, new_median,
 		float(old_median) / maxf(1.0, float(new_median)), old_times.size(), new_times.size(),
 	])
 
@@ -282,6 +312,7 @@ func _measure_hover(label: String, center: Vector3i) -> void:
 func _perf() -> void:
 	step("Given the dense, plate, and sparse fixtures at the default, medium, and maximum settings", func():
 		_parity_failures = 0
+		_parity_rng_failures = 0
 		_parity_first = ""
 		_hover_compared = 0
 	)
@@ -295,13 +326,14 @@ func _perf() -> void:
 				_use_fixture(_sparse_cells())
 			for setting in SETTINGS.size():
 				_settings.spot_diameter = SETTINGS[setting][0]
-				_settings.spray_radius = SETTINGS[setting][1]
+				_settings.spray_size = SETTINGS[setting][1]
 				_settings.speed = SETTINGS[setting][2]
 				_measure_sample("%s/%s" % [fixture, SETTING_NAMES[setting]], Vector3i.ZERO)
 				_measure_hover("%s/%s" % [fixture, SETTING_NAMES[setting]], Vector3i.ZERO)
 	)
 	step("Then every timed sample keeps the exact reference cell set", func():
 		expect(_parity_failures == 0, "every timed sample matches the frozen reference%s" % ("" if _parity_first == "" else " (first: %s)" % _parity_first))
+		expect(_parity_rng_failures == 0, "every timed sample consumes the same random draws")
 		expect(_hover_compared == 9, "every fixture and setting measured its hover")
 	)
 

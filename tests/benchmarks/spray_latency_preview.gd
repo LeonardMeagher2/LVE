@@ -51,6 +51,16 @@ func show_voxels(colors: Dictionary, color: Color, outline: bool = false, cube_d
 	show_us = Time.get_ticks_usec() - started
 
 
+## The prepared path of the spray cursor. It records the same show cost, so the
+## benchmark still times the cursor request after the worker built the payload.
+func submit_prepared(payload) -> void:
+	var started := Time.get_ticks_usec()
+	super.submit_prepared(payload)
+	show_us = Time.get_ticks_usec() - started
+	request_us = show_us
+	request_calls += 1
+
+
 func _request(cells: Dictionary, style: PreviewStyle, use_voxel_colors: bool = false, color_key: Color = Color.WHITE) -> void:
 	var started := Time.get_ticks_usec()
 	super._request(cells, style, use_voxel_colors, color_key)

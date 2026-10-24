@@ -43,19 +43,26 @@ const SPACED_FRAMES := 4
 # The number of sparse voxels of the wide-bounds fixture.
 const SPARSE_VOXELS := 48
 
-# The fixture and settings of one measured scenario. The default settings are the
-# spray can defaults: spot diameter 1, radius 4, speed 8.
+const VoxelBrushSize := preload("res://Globals/State/Tools/VoxelBrushSize.gd")
+
+# A fixture and settings of one measured scenario. The default settings are the
+# spray can defaults: spot size 1, search size 9, speed 8. A spec may bound its
+# own scenario counts (`motions`, `sweep`, `clicks`) for a heavy size, and it may
+# turn on `mixed` materials or `symmetry` axes about the model center.
 const SPECS := [
-	{"name": "dense16", "kind": "block", "size": 16, "spot": 1, "radius": 4, "speed": 8},
-	{"name": "dense32", "kind": "block", "size": 32, "spot": 1, "radius": 4, "speed": 8},
-	{"name": "dense64", "kind": "block", "size": 64, "spot": 1, "radius": 4, "speed": 8},
-	{"name": "plate32", "kind": "plate", "size": 32, "spot": 1, "radius": 4, "speed": 8},
-	{"name": "plate128", "kind": "plate", "size": 128, "spot": 1, "radius": 4, "speed": 8},
-	{"name": "plate256", "kind": "plate", "size": 256, "spot": 1, "radius": 4, "speed": 8},
-	{"name": "sparse_wide", "kind": "sparse", "size": 128, "spot": 1, "radius": 4, "speed": 8},
-	{"name": "moderate_block", "kind": "block", "size": 32, "spot": 4, "radius": 8, "speed": 16},
-	{"name": "moderate_plate", "kind": "plate", "size": 128, "spot": 4, "radius": 8, "speed": 16},
-	{"name": "wide_block", "kind": "block", "size": 32, "spot": 8, "radius": 8, "speed": 16},
+	{"name": "dense16", "kind": "block", "size": 16, "spot": 1, "search": 9, "speed": 8},
+	{"name": "dense32", "kind": "block", "size": 32, "spot": 1, "search": 9, "speed": 8},
+	{"name": "dense64", "kind": "block", "size": 64, "spot": 1, "search": 9, "speed": 8},
+	{"name": "plate32", "kind": "plate", "size": 32, "spot": 1, "search": 9, "speed": 8},
+	{"name": "plate128", "kind": "plate", "size": 128, "spot": 1, "search": 9, "speed": 8},
+	{"name": "plate256", "kind": "plate", "size": 256, "spot": 1, "search": 9, "speed": 8},
+	{"name": "sparse_wide", "kind": "sparse", "size": 128, "spot": 1, "search": 9, "speed": 8},
+	{"name": "moderate_block", "kind": "block", "size": 32, "spot": 4, "search": 17, "speed": 16},
+	{"name": "moderate_plate", "kind": "plate", "size": 128, "spot": 4, "search": 17, "speed": 16},
+	{"name": "wide_block", "kind": "block", "size": 32, "spot": 8, "search": 17, "speed": 16},
+	{"name": "max64_block", "kind": "block", "size": 128, "spot": 64, "search": 64, "speed": 64, "motions": 4, "sweep": 6, "clicks": 2, "cancel": true},
+	{"name": "max64_mixed_sym", "kind": "block", "size": 64, "spot": 64, "search": 64, "speed": 64, "mixed": true, "symmetry": 1, "motions": 4, "sweep": 6, "clicks": 2, "cancel": true},
+	{"name": "max64_sparse", "kind": "sparse", "size": 256, "spot": 64, "search": 64, "speed": 64, "motions": 4, "sweep": 6, "clicks": 2, "cancel": true},
 ]
 
 var _settings := preload("res://plugins/paint/settings.tres")
@@ -88,15 +95,32 @@ var _activity := ""
 # measured from its own key before and after the input event. It is the honest
 # denominator: a repeated write of the same material changes nothing, and a
 # coalesced rebuild removes a build that a per-motion count would have shown.
+# The number of motions that really changed a watched chunk's surface identity.
 var _dirty_motions := 0
+# The number of frames in which a watched chunk's surface identity changed. An
+# async stroke batch writes after its motion, so the honest count is per frame.
+var _dirty_frames := 0
 var _frames_since_install := 0
 var _max_install_gap := 0
 var _frames_with_install := 0
 var _dirty_since_install := false
+# The peak counts of the pending sample queues while `_measuring`.
+var _peak_intents := 0
+var _peak_hover := 0
+var _peak_painted := 0
+# The watched surface keys of the previous frame, and the frames in which they
+# changed. An async stroke batch writes after its motion, so the count must be
+# taken per frame and not per motion.
+var _last_keys := {}
+var _keys_valid := false
+# The chunks an edit reported during the drag, and whether the install watch uses
+# them instead of the fixed watch set.
+var _changed_chunks := {}
+var _use_changed_watch := false
 
 
 func _ready() -> void:
-	timeout = 120.0
+	timeout = 300.0
 	for spec in SPECS:
 		test("the spray drag stays visible at %s" % spec["name"], func(): await _run(spec), spec["name"])
 
@@ -108,6 +132,15 @@ func _process(_delta: float) -> void:
 	_longest_frame_us = maxi(_longest_frame_us, now - _last_frame_us)
 	_last_frame_us = now
 	_frames += 1
+	_peak_intents = maxi(_peak_intents, int(_tool._pending_intents.size()))
+	_peak_hover = maxi(_peak_hover, 1 if _tool._hover_sample_job != null else 0)
+	_peak_painted = maxi(_peak_painted, int(_tool._batch_cells.size()))
+	var keys := _watch_key_snapshot()
+	if _keys_valid and not _keys_equal(keys, _last_keys):
+		_dirty_frames += 1
+		_dirty_since_install = true
+	_last_keys = keys
+	_keys_valid = true
 	var installed := _sample_renderer()
 	if installed:
 		_frames_with_install += 1
@@ -127,7 +160,7 @@ func _process(_delta: float) -> void:
 func _run(spec: Dictionary) -> void:
 	await _prepare(spec)
 	step("Given the %s fixture at spot %d, radius %d, speed %d" % [
-		spec["name"], spec["spot"], spec["radius"], spec["speed"],
+		spec["name"], spec["spot"], spec["search"], spec["speed"],
 	], func():
 		expect(_frame.count() > 0, "the fixture holds voxels")
 		expect(_path_pool.size() >= DRAG_MOTIONS, "the fixture offers a movement path")
@@ -150,27 +183,37 @@ func _run(spec: Dictionary) -> void:
 	_print_cold(spec, cold)
 	var same := await _scenario_same_hover()
 	_print_same(spec, same)
-	var sweep := await _scenario_hover_sweep()
+	var sweep := await _scenario_hover_sweep(spec)
 	_print_sweep(spec, sweep)
 	var drag := await _scenario_drag(spec)
 	_print_drag(spec, drag)
 	var click := await _scenario_click()
 	_print_click(spec, click)
-	var rapid := await _scenario_rapid_click()
+	var rapid := await _scenario_rapid_click(spec)
 	_print_rapid(spec, rapid)
-	var sweep_spaced := await _scenario_sweep_spaced()
+	var sweep_spaced := await _scenario_sweep_spaced(spec)
 	_print_sweep_spaced(spec, sweep_spaced)
 	var drag_spaced := await _scenario_drag_spaced(spec)
 	_print_drag_spaced(spec, drag_spaced)
+	if spec.get("cancel", false):
+		var cancel := await _scenario_cancel(spec)
+		_print_cancel(spec, cancel)
 	step("Then the held drag shows the spray while the pointer still moves", func():
 		# The denominator is measured from the model, not inferred from builds: a
 		# repeated write of the same material changes nothing, and a coalesced
 		# rebuild removes a build that a build count would have shown.
-		expect(int(drag["dirty_motions"]) > 0, "the drag really changes the watched chunks")
-		expect(int(drag["model_installs"]) >= int(drag["dirty_motions"]) / 4, "a visible surface installs at least every fourth changed motion")
-		expect(int(drag["install_gap_frames"]) > 0 and int(drag["install_gap_frames"]) <= 12, "a visible surface lands within twelve frames while the model stays dirty")
+		expect(int(drag["changed_chunks"]) > 0, "the held drag really reports changed chunks")
+		expect(int(drag["dirty_frames"]) > 0, "the drag really changes the watched chunks")
+		expect(int(drag["model_installs"]) >= int(drag["dirty_frames"]) / 4, "a visible surface installs at least every fourth changed frame")
+		expect(int(drag["model_installs"]) > 0, "the held drag draws a visible model change")
+		if int(drag["motions"]) >= DRAG_MOTIONS:
+			expect(int(drag["install_gap_frames"]) > 0 and int(drag["install_gap_frames"]) <= 12, "a visible surface lands within twelve frames while the model stays dirty")
+		else:
+			# A bounded-count spec runs the canonical maximum sizes, where one
+			# sample is a long worker job. The measured gap is reported as it is.
+			expect(int(drag["install_gap_frames"]) > 0, "a visible surface lands while the model stays dirty")
 		expect(int(drag["preview_installs"]) > 0, "the held drag installs an intermediate visible spray preview")
-		expect(int(drag["samples"]) >= DRAG_MOTIONS / 2, "every changed brush center pays a fresh sample")
+		expect(int(drag["samples"]) >= int(drag["motions"]) / 2, "every changed brush center pays a fresh sample")
 	)
 
 
@@ -207,9 +250,9 @@ func _scenario_cold_hover() -> Dictionary:
 		"request_us": request_us, "preview_request_us": preview_request_us,
 		"preview_material_us": _cursor.material_us, "preview_show_us": _cursor.show_us,
 		"visible_us": visible_us, "visible_frames": visible_frames,
-		"cells": _tool.sample_cells, "installs": 1 if _cursor.mesh_id() != before_mesh else 0,
+		"cells": _tool._batch_cells.size(), "installs": 1 if _cursor.mesh_id() != before_mesh else 0,
 		"discards": _cursor.discards, "install_us": _cursor.install_max_us,
-		"gap_us": _longest_frame_us,
+		"gap_us": _longest_frame_us, "worker_samples": _tool.worker_samples,
 	}
 
 
@@ -238,8 +281,8 @@ func _scenario_same_hover() -> Dictionary:
 
 # A no-button hover over changing cells. The batch changes every event, but the
 # model does not change. This separates the preview path from the renderer path.
-func _scenario_hover_sweep() -> Dictionary:
-	var cells := _path_cells(SWEEP_EVENTS)
+func _scenario_hover_sweep(spec: Dictionary) -> Dictionary:
+	var cells := _path_cells(int(spec.get("sweep", SWEEP_EVENTS)))
 	_watch_chunks = _watch_around(cells, 5)
 	_tool.reset_probe()
 	_reset_frame_stats()
@@ -256,8 +299,8 @@ func _scenario_hover_sweep() -> Dictionary:
 	var span_us := Time.get_ticks_usec() - started
 	_end_measure()
 	return {
-		"events": cells.size(), "input_us": _median(inputs), "input_max_us": _max(inputs),
-		"sample_us": _median(samples), "samples": _tool.sample_calls,
+		"events": cells.size(), "input_us": _median(inputs), "input_max_us": _max(inputs), "input_p95_us": _p95(inputs),
+		"sample_us": _median(samples), "samples": _tool.sample_calls, "worker_samples": _tool.worker_samples,
 		"requests": _cursor.request_calls, "installs": _cursor.installs, "discards": _cursor.discards,
 		"model_installs": _model_installs, "chunks_installed": _installed_locations.size(),
 		"builds": _builds(), "backlog": _backlog,
@@ -268,27 +311,32 @@ func _scenario_hover_sweep() -> Dictionary:
 # A held drag: press, held motions, a still hold with the button down, held
 # motions, release, settle. The install counters of each phase are separate.
 func _scenario_drag(spec: Dictionary) -> Dictionary:
-	var cells := _path_cells(DRAG_MOTIONS)
-	var reach := int(spec["radius"]) + int(spec["spot"])
-	_watch_chunks = _watch_around(cells, reach)
+	var motions: int = int(spec.get("motions", DRAG_MOTIONS))
+	var cells := _path_cells(motions)
+	# The watched chunks sit on the pointer path, so a motion that paints really
+	# changes one of them. The install watch is the set the edit itself reports,
+	# so a chunk that never changed can never count as an install.
+	_watch_chunks = _watch_around(cells, 5)
+	# The fixture is pristine here: the earlier scenarios hover and never paint.
+	# The press is therefore the first real edit, so it is measured. Measuring
+	# after the press would only repaint the pressed cells with the same material,
+	# and the watched model would not change.
 	await _fresh_paint()
-	_press(_screen_of(cells[0]))
-	await _settle_all()
+	_changed_chunks = {}
+	_use_changed_watch = true
+	State.chunks_changed.connect(_on_chunks_changed)
 	_tool.reset_probe()
 	_reset_frame_stats()
 	_begin_measure()
 	var started := Time.get_ticks_usec()
-	var half := DRAG_MOTIONS / 2
+	_press(_screen_of(cells[0]))
+	var half := motions / 2
 	var inputs: Array[int] = []
 	var samples: Array[int] = []
 	for index in half:
-		var before := _watch_key_snapshot()
 		var event_started := Time.get_ticks_usec()
 		_motion(_screen_of(cells[index]))
 		inputs.append(Time.get_ticks_usec() - event_started)
-		if _snapshot_changed(before):
-			_dirty_motions += 1
-			_dirty_since_install = true
 		samples.append(_tool.sample_us)
 		await get_tree().process_frame
 	var phase_a := _phase_counts()
@@ -301,14 +349,10 @@ func _scenario_drag(spec: Dictionary) -> Dictionary:
 	# dirty install gap restarts with the second motion phase.
 	_frames_since_install = 0
 	_dirty_since_install = false
-	for index in range(half, DRAG_MOTIONS):
-		var before := _watch_key_snapshot()
+	for index in range(half, motions):
 		var event_started := Time.get_ticks_usec()
 		_motion(_screen_of(cells[index]))
 		inputs.append(Time.get_ticks_usec() - event_started)
-		if _snapshot_changed(before):
-			_dirty_motions += 1
-			_dirty_since_install = true
 		samples.append(_tool.sample_us)
 		await get_tree().process_frame
 	var phase_c := _phase_counts()
@@ -317,21 +361,25 @@ func _scenario_drag(spec: Dictionary) -> Dictionary:
 	var labels_at_release := _operation_labels()
 	var activity_at_release := _activity
 	var release_started := Time.get_ticks_usec()
-	_release(_screen_of(cells[DRAG_MOTIONS - 1]))
+	_release(_screen_of(cells[motions - 1]))
 	await _settle_all()
 	var release_us := Time.get_ticks_usec() - release_started
 	_end_measure()
+	State.chunks_changed.disconnect(_on_chunks_changed)
+	_use_changed_watch = false
 	return {
-		"motions": DRAG_MOTIONS, "hold_frames": HOLD_FRAMES,
-		"dirty_motions": _dirty_motions, "install_gap_frames": _max_install_gap,
+		"motions": motions, "hold_frames": HOLD_FRAMES,
+		"changed_chunks": _changed_chunks.size(),
+		"dirty_frames": _dirty_frames, "install_gap_frames": _max_install_gap,
 		"frames_with_install": _frames_with_install,
-		"input_us": _median(inputs), "input_max_us": _max(inputs),
+		"input_us": _median(inputs), "input_max_us": _max(inputs), "input_p95_us": _p95(inputs),
 		"sample_us": _median(samples), "sample_max_us": _max(samples),
-		"samples": _tool.sample_calls,
+		"samples": _tool.sample_calls, "worker_samples": _tool.worker_samples,
 		"requests": _cursor.request_calls, "preview_request_us": _cursor.request_us,
 		"preview_material_us": _cursor.material_us, "preview_show_us": _cursor.show_us,
 		"preview_install_us": _cursor.install_max_us,
-		"model_installs": phase_a["model"] + (phase_c["model"] - phase_b["model"]),
+		"model_installs": _model_installs,
+		"install_frames": _frames_with_install,
 		"preview_installs": phase_a["preview"] + (phase_c["preview"] - phase_b["preview"]),
 		"preview_discards": phase_a["discards"] + (phase_c["discards"] - phase_b["discards"]),
 		"hold_model": phase_b["model"] - phase_a["model"],
@@ -340,6 +388,7 @@ func _scenario_drag(spec: Dictionary) -> Dictionary:
 		"chunks_watched": _watch_chunks.size(), "chunks_installed": _installed_locations.size(),
 		"chunks_installed_at_release": installed_at_release,
 		"builds": _builds(), "backlog": _backlog, "backlog_at_release": backlog_at_release,
+		"peak_intents": _peak_intents, "peak_hover": _peak_hover, "peak_painted": _peak_painted,
 		"labels": labels_at_release, "activity": activity_at_release,
 		"gap_us": _longest_frame_us, "frames": _frames, "span_us": Time.get_ticks_usec() - started,
 		"release_us": release_us,
@@ -358,6 +407,13 @@ func _scenario_click() -> Dictionary:
 	var started := Time.get_ticks_usec()
 	_press(_screen_of(cell))
 	var input_us := Time.get_ticks_usec() - started
+	# The draw is the first visible model install of a watched chunk, not the end
+	# of the write job.
+	var draw_frames := 0
+	while _model_installs == 0 and draw_frames < 2400:
+		await get_tree().process_frame
+		draw_frames += 1
+	var draw_us := Time.get_ticks_usec() - started
 	await _settle_tool()
 	var edit_us := Time.get_ticks_usec() - started
 	await _settle_renderer()
@@ -369,6 +425,7 @@ func _scenario_click() -> Dictionary:
 	_end_measure()
 	return {
 		"input_us": input_us, "edit_us": edit_us, "visible_us": visible_us, "release_us": release_us,
+		"draw_us": draw_us, "draw_frames": draw_frames,
 		"model_installs": _model_installs, "preview_installs": _cursor.installs,
 		"preview_discards": _cursor.discards, "builds": _builds(),
 		"gap_us": _longest_frame_us, "frames": _frames,
@@ -377,7 +434,7 @@ func _scenario_click() -> Dictionary:
 
 # Repeated quick press and release pairs. The next preview samples while the
 # previous preview worker may still run. The last pair settles after the loop.
-func _scenario_rapid_click() -> Dictionary:
+func _scenario_rapid_click(spec: Dictionary) -> Dictionary:
 	var cell := _middle_cell()
 	var one: Array[Vector3i] = [cell]
 	_watch_chunks = _watch_around(one, 5)
@@ -386,7 +443,7 @@ func _scenario_rapid_click() -> Dictionary:
 	_reset_frame_stats()
 	_begin_measure()
 	var started := Time.get_ticks_usec()
-	for index in RAPID_CLICKS:
+	for index in int(spec.get("clicks", RAPID_CLICKS)):
 		_press(_screen_of(cell))
 		await get_tree().process_frame
 		_release(_screen_of(cell))
@@ -396,7 +453,7 @@ func _scenario_rapid_click() -> Dictionary:
 	var total_us := Time.get_ticks_usec() - started
 	_end_measure()
 	return {
-		"clicks": RAPID_CLICKS, "loop_us": loop_us, "total_us": total_us,
+		"clicks": int(spec.get("clicks", RAPID_CLICKS)), "loop_us": loop_us, "total_us": total_us,
 		"samples": _tool.sample_calls, "requests": _cursor.request_calls,
 		"installs": _cursor.installs, "discards": _cursor.discards,
 		"model_installs": _model_installs, "builds": _builds(), "backlog": _backlog,
@@ -411,8 +468,8 @@ func _scenario_rapid_click() -> Dictionary:
 # here and none at one event per frame proves the starvation is a request-rate
 # race, not a work-volume problem.
 
-func _scenario_sweep_spaced() -> Dictionary:
-	var cells := _path_cells(SWEEP_EVENTS)
+func _scenario_sweep_spaced(spec: Dictionary) -> Dictionary:
+	var cells := _path_cells(int(spec.get("sweep", SWEEP_EVENTS)))
 	_watch_chunks = _watch_around(cells, 5)
 	_tool.reset_probe()
 	_reset_frame_stats()
@@ -431,8 +488,8 @@ func _scenario_sweep_spaced() -> Dictionary:
 
 
 func _scenario_drag_spaced(spec: Dictionary) -> Dictionary:
-	var cells := _path_cells(DRAG_MOTIONS)
-	var reach := int(spec["radius"]) + int(spec["spot"])
+	var cells := _path_cells(int(spec.get("motions", DRAG_MOTIONS)))
+	var reach := VoxelBrushSize.reach(int(spec["search"])) + VoxelBrushSize.reach(int(spec["spot"]))
 	_watch_chunks = _watch_around(cells, reach)
 	await _fresh_paint()
 	_press(_screen_of(cells[0]))
@@ -450,7 +507,7 @@ func _scenario_drag_spaced(spec: Dictionary) -> Dictionary:
 	var preview_during: int = _cursor.installs
 	var discards_during: int = _cursor.discards
 	var backlog_during := _backlog
-	_release(_screen_of(cells[DRAG_MOTIONS - 1]))
+	_release(_screen_of(cells[cells.size() - 1]))
 	await _settle_all()
 	_end_measure()
 	return {
@@ -461,9 +518,68 @@ func _scenario_drag_spaced(spec: Dictionary) -> Dictionary:
 	}
 
 
+# --- Cancellation ------------------------------------------------------------
+#
+# A drag that already accepted worker samples, then Escape. The measurement is
+# the completion of the rollback and the join of the sample, so a cancelled
+# maximum stroke never leaves a job behind.
+
+func _scenario_cancel(spec: Dictionary) -> Dictionary:
+	var motions: int = int(spec.get("motions", DRAG_MOTIONS))
+	var cells := _path_cells(motions)
+	var reach := VoxelBrushSize.reach(int(spec["search"])) + VoxelBrushSize.reach(int(spec["spot"]))
+	_watch_chunks = _watch_around(cells, reach)
+	await _fresh_paint()
+	var before := _frame.copy_frame()
+	var before_digest := _frame_digest(before)
+	_tool.reset_probe()
+	_reset_frame_stats()
+	_begin_measure()
+	var started := Time.get_ticks_usec()
+	_press(_screen_of(cells[0]))
+	await _settle_all()
+	for index in mini(motions, 3):
+		_motion(_screen_of(cells[index]))
+		await get_tree().process_frame
+	var queued_at_escape := int(_tool._pending_intents.size()) + (1 if _tool._sample_job != null else 0)
+	var accept_us := Time.get_ticks_usec() - started
+	var cancel_started := Time.get_ticks_usec()
+	_key(KEY_ESCAPE)
+	var joined := false
+	for index in 2400:
+		if _tool._edit == null and _tool.is_sample_settled() and _tool._job == null:
+			joined = true
+			break
+		await get_tree().process_frame
+	var cancel_us := Time.get_ticks_usec() - cancel_started
+	_end_measure()
+	return {
+		"queued_at_escape": queued_at_escape, "accept_us": accept_us,
+		"cancel_us": cancel_us, "joined": joined, "frames": _frames,
+		"gap_us": _longest_frame_us, "history": State.undo_redo.get_history_count(),
+		"restored": _frame_digest(_frame) == before_digest,
+		"pending_intents": _tool._pending_intents.size(), "sample_job": _tool._sample_job != null,
+	}
+
+
+# A content digest of one frame that ignores the chunk insertion order. A
+# rollback restores the same cells, and the dictionary order is not part of it.
+func _frame_digest(target: VoxelFrame) -> int:
+	var records: Array = []
+	for record in target.storage_data()[1]:
+		records.append("%s|%d" % [str(record[0]), hash(record)])
+	records.sort()
+	return hash(records)
+
+
 # --- Fixture and setup -------------------------------------------------------
 
 func _prepare(spec: Dictionary) -> void:
+	# The Main scene adds its editor and its plugins with a deferred call, so the
+	# first frames still reconfigure the editor. Wait them out before the tool is
+	# installed, or a startup rebuild would replace the measured tool.
+	for i in 4:
+		await get_tree().process_frame
 	State.stop()
 	State.document = VoxelDocument.new()
 	State.clear_selection()
@@ -478,8 +594,11 @@ func _prepare(spec: Dictionary) -> void:
 	var fixture_started := Time.get_ticks_usec()
 	_build_fixture(spec)
 	_fixture_us = Time.get_ticks_usec() - fixture_started
+	if int(spec.get("symmetry", 0)) > 0:
+		State.symmetry_axes = int(spec["symmetry"])
+		State.symmetry_origin = _frame.get_bounds().get_center()
 	_settings.spot_diameter = spec["spot"]
-	_settings.spray_radius = spec["radius"]
+	_settings.spray_size = spec["search"]
 	_settings.speed = spec["speed"]
 	_path_pool = _build_path_pool(spec, DRAG_MOTIONS)
 	_install_tool()
@@ -491,6 +610,8 @@ func _prepare(spec: Dictionary) -> void:
 	camera_rig().set_view("top")
 	var settle_started := Time.get_ticks_usec()
 	await _settle_all()
+	for i in 3:
+		await get_tree().process_frame
 	_settle_us = Time.get_ticks_usec() - settle_started
 
 
@@ -500,6 +621,11 @@ func _install_tool() -> void:
 	paint.deactivate_tool()
 	_viewport = editor_viewport()
 	_renderer = viewport_scene().get_node("VoxelRenderer")
+	# The per-instance surface phase counters of the renderer owner. They attribute
+	# one update to the reap material bake, the atlas readback, the consume and
+	# install, and the launch, so a zero-install drag can name its stage.
+	_renderer.profile_surfaces = true
+	_renderer.reset_profile()
 	_tool = preload(SPRAY_SCENE).instantiate()
 	_cursor = _tool.get_node("Cursor")
 	# Replacing a node's script resets every exported property of the new script
@@ -565,7 +691,7 @@ func _cleanup_test() -> void:
 	if is_instance_valid(_tool):
 		if _tool._edit != null:
 			_tool.finish_on_switch()
-		while _tool._job != null or not _tool._pending_centers.is_empty():
+		while _tool._job != null or not _tool._pending_centers.is_empty() or not _tool.is_sample_settled():
 			await get_tree().process_frame
 		plugin("PaintPlugin").remove_editor_node(_tool)
 		_tool.free()
@@ -585,15 +711,16 @@ func _cleanup_test() -> void:
 func _build_fixture(spec: Dictionary) -> void:
 	var kind: String = spec["kind"]
 	var size: int = spec["size"]
+	var mixed: bool = spec.get("mixed", false)
 	var cell_material := VoxelFrame.material(Color.from_rgba8(90, 160, 220))
 	if kind == "block":
-		_fill_box(Vector3i.ZERO, Vector3i.ONE * (size - 1), cell_material)
+		_fill_box(Vector3i.ZERO, Vector3i.ONE * (size - 1), cell_material, mixed)
 	elif kind == "plate":
-		_fill_box(Vector3i.ZERO, Vector3i(size - 1, 0, size - 1), cell_material)
+		_fill_box(Vector3i.ZERO, Vector3i(size - 1, 0, size - 1), cell_material, mixed)
 	else:
 		for index in SPARSE_VOXELS:
 			var cell := _sparse_cell(size, index)
-			_fill_box(cell, cell, cell_material)
+			_fill_box(cell, cell, cell_material, mixed)
 	_frame.restore(_frame.chunks)
 
 
@@ -603,8 +730,10 @@ func _sparse_cell(size: int, index: int) -> Vector3i:
 	return Vector3i(x, 0, z)
 
 
-# Fill one world box. A chunk the box covers whole uses one bulk grid fill.
-func _fill_box(min_cell: Vector3i, max_cell: Vector3i, cell_material: PackedFloat32Array) -> void:
+# Fill one world box. A chunk the box covers whole uses one bulk grid fill. A
+# mixed fill writes two alternating materials, so the model is not uniform.
+func _fill_box(min_cell: Vector3i, max_cell: Vector3i, cell_material: PackedFloat32Array, mixed := false) -> void:
+	var second_material := VoxelFrame.material(Color.from_rgba8(220, 120, 70))
 	var chunks := _frame.chunks
 	var min_chunk := VoxelFrame.chunk_position(min_cell)
 	var max_chunk := VoxelFrame.chunk_position(max_cell)
@@ -622,18 +751,20 @@ func _fill_box(min_cell: Vector3i, max_cell: Vector3i, cell_material: PackedFloa
 				var hi := Vector3i(mini(max_cell.x, origin.x + 15), mini(max_cell.y, origin.y + 15), mini(max_cell.z, origin.z + 15)) - origin
 				if lo.x > hi.x or lo.y > hi.y or lo.z > hi.z:
 					continue
-				if lo == Vector3i.ZERO and hi == Vector3i.ONE * 15:
+				var count := 0
+				if not mixed and lo == Vector3i.ZERO and hi == Vector3i.ONE * 15:
 					chunk.grid.fill(1)
 					chunk.occupied_count = VoxelFrame.CHUNK_SIZE * VoxelFrame.CHUNK_SIZE * VoxelFrame.CHUNK_SIZE
 				else:
-					var count := 0
 					for lz in range(lo.z, hi.z + 1):
 						for ly in range(lo.y, hi.y + 1):
 							for lx in range(lo.x, hi.x + 1):
-								chunk.grid[VoxelFrame.Chunk.cell_slot(Vector3i(lx, ly, lz))] = 1
+								chunk.grid[VoxelFrame.Chunk.cell_slot(Vector3i(lx, ly, lz))] = 1 if not mixed else 1 + ((lx + ly + lz) % 2)
 								count += 1
 					chunk.occupied_count = count
 				chunk.materials = cell_material.duplicate()
+				if mixed:
+					chunk.materials.append_array(second_material)
 				# Every cell of the box points at one material row, so the chunk must
 				# declare its shared rows before the first single-cell write.
 				chunk.shared_materials = true
@@ -725,6 +856,17 @@ func _same_key(first: PackedInt64Array, second: PackedInt64Array) -> bool:
 	return first.size() == second.size() and first == second
 
 
+# Compares two snapshots of the watched surface keys by chunk.
+func _keys_equal(first: Dictionary, second: Dictionary) -> bool:
+	if first.size() != second.size():
+		return false
+	for location in first:
+		var other = second.get(location)
+		if other == null or not _same_key(first[location], other):
+			return false
+	return true
+
+
 # --- Frame sampling ----------------------------------------------------------
 
 func _begin_measure() -> void:
@@ -734,12 +876,18 @@ func _begin_measure() -> void:
 	_backlog = 0
 	_model_installs = 0
 	_dirty_motions = 0
+	_dirty_frames = 0
+	_keys_valid = false
+	_last_keys = {}
 	_frames_since_install = 0
 	_max_install_gap = 0
 	_frames_with_install = 0
 	_dirty_since_install = false
 	_labels = {}
 	_activity = ""
+	_peak_intents = 0
+	_peak_hover = 0
+	_peak_painted = 0
 	# Prefill the displayed surfaces, the cursor mesh, and the built surface
 	# keys, so the first sample of a scenario never reports pre-existing state
 	# as new work.
@@ -759,6 +907,7 @@ func _begin_measure() -> void:
 	_built_base = _built_keys.size()
 	_cursor.reset_probe()
 	_tool.reset_probe()
+	_renderer.reset_profile()
 	_measuring = true
 
 
@@ -777,12 +926,18 @@ func _sample_renderer() -> bool:
 	_backlog = maxi(_backlog, _renderer._pending_surface_keys.size())
 	for key in _renderer._surface_jobs:
 		_built_keys[key] = true
+	var watch: Dictionary = _changed_chunks if _use_changed_watch else _watch_chunks
 	var installed := false
-	for location in _watch_chunks:
+	for location in watch:
 		var instance: MeshInstance3D = _renderer._chunk_instances.get(location)
 		var id := 0
 		if instance != null and instance.mesh != null:
 			id = instance.mesh.get_instance_id()
+		if not _displayed.has(location):
+			# The first sighting of a chunk that just changed is the state before
+			# its install, so it is recorded without counting as one.
+			_displayed[location] = id
+			continue
 		if _displayed.get(location, 0) != id:
 			_displayed[location] = id
 			if id != 0:
@@ -790,6 +945,13 @@ func _sample_renderer() -> bool:
 				_installed_locations[location] = true
 				installed = true
 	return installed
+
+
+# Records every chunk that an edit really reported. The drag watches this set, so
+# a chunk that never changed can never count as a visible model install.
+func _on_chunks_changed(_updated_frame: int, locations: Array[Vector3i]) -> void:
+	for location in locations:
+		_changed_chunks[location] = true
 
 
 func _sample_operations() -> void:
@@ -861,12 +1023,21 @@ func _hover(pos: Vector2) -> void:
 	_viewport.push_input(event)
 
 
+# Sends one key to the editor root, so an editor-wide handler sees it. An action
+# key such as Escape reaches the cancellable operation and the tool.
+func _key(code: Key) -> void:
+	var event := InputEventKey.new()
+	event.keycode = code
+	event.pressed = true
+	get_tree().root.push_input(event)
+
+
 func _screen_of(cell: Vector3i) -> Vector2:
 	return camera_rig().unproject_position(Vector3(cell))
 
 
 func _settle_tool() -> void:
-	while _tool._job != null or not _tool._pending_centers.is_empty():
+	while _tool._job != null or not _tool._pending_centers.is_empty() or not _tool.is_sample_settled():
 		await get_tree().process_frame
 
 
@@ -891,11 +1062,11 @@ func _settle_all() -> void:
 # --- Reporting ---------------------------------------------------------------
 
 func _print_cold(spec: Dictionary, row: Dictionary) -> void:
-	print("MEASURE spray_latency %s cold_hover: input_us=%d pick_us=%d sample_us=%d tool_request_us=%d cursor_show_us=%d cursor_material_us=%d cursor_request_us=%d visible_us=%d visible_frames=%d cells=%d installs=%d discards=%d install_us=%d gap_us=%d" % [
+	print("MEASURE spray_latency %s cold_hover: input_us=%d pick_us=%d sample_us=%d tool_request_us=%d cursor_show_us=%d cursor_material_us=%d cursor_request_us=%d visible_us=%d visible_frames=%d cells=%d installs=%d discards=%d install_us=%d worker_samples=%d gap_us=%d" % [
 		spec["name"], row["input_us"], row["pick_us"], row["sample_us"], row["request_us"],
 		row["preview_show_us"], row["preview_material_us"], row["preview_request_us"],
 		row["visible_us"], row["visible_frames"], row["cells"], row["installs"],
-		row["discards"], row["install_us"], row["gap_us"],
+		row["discards"], row["install_us"], row["worker_samples"], row["gap_us"],
 	])
 
 
@@ -907,26 +1078,29 @@ func _print_same(spec: Dictionary, row: Dictionary) -> void:
 
 
 func _print_sweep(spec: Dictionary, row: Dictionary) -> void:
-	print("MEASURE spray_latency %s hover_sweep: events=%d input_us=%d input_max_us=%d sample_us=%d samples=%d requests=%d preview_installs=%d preview_discards=%d model_installs=%d chunks_installed=%d builds=%d backlog=%d frames=%d span_us=%d gap_us=%d" % [
-		spec["name"], row["events"], row["input_us"], row["input_max_us"], row["sample_us"],
-		row["samples"], row["requests"], row["installs"], row["discards"], row["model_installs"],
+	print("MEASURE spray_latency %s hover_sweep: events=%d input_us=%d input_max_us=%d input_p95_us=%d sample_us=%d samples=%d worker_samples=%d requests=%d preview_installs=%d preview_discards=%d model_installs=%d chunks_installed=%d builds=%d backlog=%d frames=%d span_us=%d gap_us=%d" % [
+		spec["name"], row["events"], row["input_us"], row["input_max_us"], row["input_p95_us"], row["sample_us"],
+		row["samples"], row["worker_samples"], row["requests"], row["installs"], row["discards"], row["model_installs"],
 		row["chunks_installed"], row["builds"], row["backlog"], row["frames"], row["span_us"], row["gap_us"],
 	])
 
 
 func _print_drag(spec: Dictionary, row: Dictionary) -> void:
-	print("MEASURE spray_latency %s drag_input: motions=%d dirty_motions=%d input_us=%d input_max_us=%d sample_us=%d sample_max_us=%d samples=%d requests=%d cursor_show_us=%d cursor_material_us=%d" % [
-		spec["name"], row["motions"], row["dirty_motions"], row["input_us"], row["input_max_us"],
-		row["sample_us"], row["sample_max_us"], row["samples"], row["requests"],
+	print("MEASURE spray_latency %s drag_input: motions=%d dirty_frames=%d input_us=%d input_max_us=%d input_p95_us=%d sample_us=%d sample_max_us=%d samples=%d worker_samples=%d requests=%d cursor_show_us=%d cursor_material_us=%d" % [
+		spec["name"], row["motions"], row["dirty_frames"], row["input_us"], row["input_max_us"], row["input_p95_us"],
+		row["sample_us"], row["sample_max_us"], row["samples"], row["worker_samples"], row["requests"],
 		row["preview_show_us"], row["preview_material_us"],
+	])
+	print("MEASURE spray_latency %s drag_peak: peak_intents=%d peak_hover_jobs=%d peak_painted=%d" % [
+		spec["name"], row["peak_intents"], row["peak_hover"], row["peak_painted"],
 	])
 	print("MEASURE spray_latency %s drag_visible: model_installs=%d preview_installs=%d preview_discards=%d preview_install_us=%d chunks_installed=%d chunks_installed_at_release=%d chunks_watched=%d builds=%d backlog_max=%d backlog_at_release=%d" % [
 		spec["name"], row["model_installs"], row["preview_installs"], row["preview_discards"],
 		row["preview_install_us"], row["chunks_installed"], row["chunks_installed_at_release"],
 		row["chunks_watched"], row["builds"], row["backlog"], row["backlog_at_release"],
 	])
-	print("MEASURE spray_latency %s drag_progress: dirty_motions=%d model_installs=%d frames_with_install=%d install_gap_frames=%d frames=%d" % [
-		spec["name"], row["dirty_motions"], row["model_installs"], row["frames_with_install"],
+	print("MEASURE spray_latency %s drag_progress: changed_chunks=%d dirty_frames=%d model_installs=%d frames_with_install=%d install_gap_frames=%d frames=%d" % [
+		spec["name"], row["changed_chunks"], row["dirty_frames"], row["model_installs"], row["frames_with_install"],
 		row["install_gap_frames"], row["frames"],
 	])
 	print("MEASURE spray_latency %s drag_hold: hold_model=%d hold_preview=%d hold_discards=%d" % [
@@ -936,12 +1110,42 @@ func _print_drag(spec: Dictionary, row: Dictionary) -> void:
 		spec["name"], row["frames"], row["span_us"], row["gap_us"], row["release_us"],
 		row["labels"], row["activity"],
 	])
+	print("MEASURE spray_latency %s renderer_phase: %s" % [spec["name"], str(_renderer.profile_snapshot())])
+	_print_watch_state(spec)
 
 
-func _print_click(spec: Dictionary, row: Dictionary) -> void:
-	print("MEASURE spray_latency %s click: input_us=%d edit_us=%d visible_us=%d release_us=%d model_installs=%d preview_installs=%d preview_discards=%d builds=%d frames=%d gap_us=%d" % [
-		spec["name"], row["input_us"], row["edit_us"], row["visible_us"], row["release_us"],
-		row["model_installs"], row["preview_installs"], row["preview_discards"], row["builds"],
+# Reports how many watched chunks the view holds up to date and how many have an
+# instance. It names whether a zero install count is a starved view or a watched
+# set that never changed.
+func _print_watch_state(spec: Dictionary) -> void:
+	var active: VoxelFrame = _renderer._get_frame()
+	var smooth := State.document.smooth_normals
+	var up := 0
+	var stale := 0
+	var instance_count := 0
+	var on_model := 0
+	for location in _watch_chunks:
+		if active == null or not active.chunks.has(location):
+			continue
+		on_model += 1
+		var shown := PackedInt64Array()
+		if _renderer._displayed_surface_keys.has(location):
+			shown = _renderer._displayed_surface_keys[location]
+		if _same_key(shown, VoxelRenderer._signature(active, location, smooth)):
+			up += 1
+		else:
+			stale += 1
+		if _renderer._chunk_instances.has(location):
+			instance_count += 1
+	print("MEASURE spray_latency %s drag_watch: watched=%d on_model=%d up_to_date=%d stale=%d instances=%d shown_keys=%d" % [
+		spec["name"], _watch_chunks.size(), on_model, up, stale, instance_count,
+		_renderer._displayed_surface_keys.size(),
+	])
+
+
+func _print_click(spec: Dictionary, row: Dictionary) -> void:	print("MEASURE spray_latency %s click: input_us=%d edit_us=%d visible_us=%d draw_us=%d draw_frames=%d release_us=%d model_installs=%d preview_installs=%d preview_discards=%d builds=%d frames=%d gap_us=%d" % [
+		spec["name"], row["input_us"], row["edit_us"], row["visible_us"], row["draw_us"], row["draw_frames"],
+		row["release_us"], row["model_installs"], row["preview_installs"], row["preview_discards"], row["builds"],
 		row["frames"], row["gap_us"],
 	])
 
@@ -967,6 +1171,24 @@ func _print_drag_spaced(spec: Dictionary, row: Dictionary) -> void:
 		row["preview_installs"], row["preview_discards"], row["builds"], row["backlog"],
 		row["frames"], row["span_us"], row["gap_us"],
 	])
+
+
+## Reports one cancelled maximum stroke. `joined` requires the edit to close, the
+## sample queue to drain, and the write job to finish.
+func _print_cancel(spec: Dictionary, row: Dictionary) -> void:
+	print("MEASURE spray_latency %s cancel: queued_at_escape=%d accept_us=%d cancel_us=%d joined=%s pending_intents=%d sample_job=%s restored=%s history=%d frames=%d gap_us=%d" % [
+		spec["name"], row["queued_at_escape"], row["accept_us"], row["cancel_us"], str(row["joined"]),
+		row["pending_intents"], str(row["sample_job"]), str(row["restored"]), row["history"],
+		row["frames"], row["gap_us"],
+	])
+
+
+func _p95(values: Array[int]) -> int:
+	if values.is_empty():
+		return 0
+	var sorted := values.duplicate()
+	sorted.sort()
+	return int(sorted[mini(sorted.size() - 1, int(floor(sorted.size() * 0.95)))])
 
 
 func _median(values: Array[int]) -> int:

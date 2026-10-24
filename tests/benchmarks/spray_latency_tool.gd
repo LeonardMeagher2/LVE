@@ -6,13 +6,16 @@ extends "res://plugins/paint/SprayTool.gd"
 ## validation. It changes no behavior and no result. The benchmark reads the
 ## counters after each input event.
 ##
-## The probe also exposes the per-instance shape caches, so the benchmark can
-## measure a cold first sample.
+## The probe also exposes the shared shape cache, so the benchmark can measure a
+## cold first sample.
 
 ## The microseconds of the last sampler call.
 var sample_us := 0
-## The sampler calls since the last reset.
+## The sampler calls since the last reset. It counts an inline sample and a
+## queued worker sample alike, because both sample one brush cell.
 var sample_calls := 0
+## The worker samples since the last reset.
+var worker_samples := 0
 ## The cells of the last sampled batch.
 var sample_cells := 0
 ## The microseconds of the last pick.
@@ -33,6 +36,7 @@ var batch_us := 0
 func reset_probe() -> void:
 	sample_us = 0
 	sample_calls = 0
+	worker_samples = 0
 	sample_cells = 0
 	pick_us = 0
 	visual_us = 0
@@ -42,11 +46,9 @@ func reset_probe() -> void:
 	batch_us = 0
 
 
-## Drops the per-instance shape caches. The next sample then pays the cold build.
+## Drops the shared spot shape cache. The next sample then pays the cold build.
 func clear_shape_caches() -> void:
-	_spot_offsets_cache = {}
-	_spot_radius_cache = {}
-	_sphere_offsets_cache = {}
+	super.clear_shape_caches()
 
 
 func handle_input(event: InputEvent, pos: Vector2) -> bool:
@@ -83,9 +85,9 @@ func _ensure_batch(center: Vector3i, frame: VoxelFrame, context: VoxelFrame.Edit
 	return fresh
 
 
-func _sample(center: Vector3i, frame: VoxelFrame, context: VoxelFrame.EditContext) -> Array[Vector3i]:
+func _sample(center: Vector3i, frame: VoxelFrame, context: VoxelFrame.EditContext, rng: RandomNumberGenerator = null, material = null, spot_size := -1, search_size := -1, speed := -1) -> Array[Vector3i]:
 	var started := Time.get_ticks_usec()
-	var cells := super._sample(center, frame, context)
+	var cells := super._sample(center, frame, context, rng, material, spot_size, search_size, speed)
 	sample_us = Time.get_ticks_usec() - started
 	sample_calls += 1
 	sample_cells = cells.size()
@@ -97,3 +99,12 @@ func _show_spots(cells: Array[Vector3i]) -> void:
 	super._show_spots(cells)
 	show_us = Time.get_ticks_usec() - started
 	show_calls += 1
+
+
+# A large brush cell queues this job instead of sampling inline. It counts as one
+# sample of that brush cell, so the benchmark sees every paid sample.
+func _build_sample_job(frame: VoxelFrame, center: Vector3i, context: VoxelFrame.EditContext, material: PackedFloat32Array, estimate: int) -> SpraySamplingJob:
+	var job := super._build_sample_job(frame, center, context, material, estimate)
+	sample_calls += 1
+	worker_samples += 1
+	return job

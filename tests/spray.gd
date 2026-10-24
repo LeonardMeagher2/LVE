@@ -8,6 +8,8 @@ const PLATE := 8
 const BLOCK := 4
 const SEED := 20261020
 
+const VoxelBrushSize := preload("res://Globals/State/Tools/VoxelBrushSize.gd")
+
 var _settings := preload("res://plugins/paint/settings.tres")
 
 var viewport: SubViewport
@@ -24,6 +26,9 @@ var cursor: MeshInstance3D
 var seen_meshes := {}
 var motion_max_us := 0
 var shown_batch: Array[Vector3i] = []
+var _dense_local: Array[Vector3i] = []
+var _dense_spots: Array[Vector3i] = []
+var _dense_result := {}
 
 
 func _ready() -> void:
@@ -36,7 +41,7 @@ func _ready() -> void:
 	test("the count caps at the available candidates", _candidate_shortage, "spray_shortage")
 	test("the spot diameter paints the exact brush sphere", _spot_footprint, "spray_spot")
 	test("the spot diameter clamps to its range", _diameter_clamp, "spray_diameter_clamp")
-	test("the spray radius limits the sampled centers", _spray_radius, "spray_radius")
+	test("the spray search size limits the sampled centers", _search_size, "spray_search_size")
 	test("the selection limits the sampled centers", _selection_limit, "spray_selection")
 	test("one undo and one redo cover the whole spray", _undo_redo, "spray_undo")
 	test("Escape rolls the spray back and a switch commits it", _cancel_and_switch, "spray_cancel")
@@ -46,6 +51,7 @@ func _ready() -> void:
 	test("a mostly empty spray region offers only its real voxels", _sparse_region, "spray_sparse")
 	test("a wide radius on a sparse frame offers only the real voxels", _wide_radius, "spray_wide")
 	test("a spot diameter skips a hole inside its sphere", _spot_hole, "spray_hole")
+	test("the dense spot union at the maximum matches the exact sphere union", _dense_union, "spray_dense_union")
 	test("a mirrored destination that is empty stays out of the preview and the write", _mirror_empty, "spray_mirror")
 	test("the rendered preview sits on the world cells, not a doubled translation", _rendered_position, "spray_render_position")
 	test("the rendered preview draws no redundant symmetry mirror", _rendered_mirror, "spray_render_mirror")
@@ -77,7 +83,7 @@ func _setup_test() -> void:
 	State.current_color = Color.RED
 	_settings.diameter = 1
 	_settings.spot_diameter = 1
-	_settings.spray_radius = 4
+	_settings.spray_size = 9
 	_settings.speed = 8
 	frame = State.get_current_voxel_frame()
 	viewport = editor_viewport()
@@ -365,7 +371,7 @@ func _reroll_single_candidate() -> void:
 		camera_rig().center_on(frame.get_bounds())
 		tool.seed_spray(SEED)
 		_settings.speed = 8
-		_settings.spray_radius = 0
+		_settings.spray_size = 1
 		_settings.spot_diameter = 1
 		_hover(_screen_pos_of(Vector3i.ZERO))
 		preview = tool.preview_cells()
@@ -459,7 +465,7 @@ func _spot_footprint() -> void:
 			_block()
 			tool.seed_spray(SEED)
 			_settings.speed = 1
-			_settings.spray_radius = 0
+			_settings.spray_size = 1
 			_settings.spot_diameter = diameter
 			_hover_cell(Vector3i.ZERO)
 			preview = tool.preview_cells()
@@ -480,23 +486,23 @@ func _diameter_clamp() -> void:
 	step("When the user sets the spot diameter above its maximum", func():
 		_settings.spot_diameter = 100
 	)
-	step("Then the maximum matches the spray range", func():
-		expect(_settings.spot_diameter == 32, "the maximum spot diameter keeps the dense sample responsive")
+	step("Then the maximum matches the brush range", func():
+		expect(_settings.spot_diameter == 64, "the maximum spot diameter matches the brush maximum")
 	)
 
 
-func _spray_radius() -> void:
-	step("Given a plate and a spray radius of zero", func():
+func _search_size() -> void:
+	step("Given a plate and a spray search size of one", func():
 		_plate()
 		tool.seed_spray(SEED)
-		_settings.spray_radius = 0
+		_settings.spray_size = 1
 	)
 	step("When the user presses and releases", func():
 		_press(center)
 		_release(center)
 	)
 	step("Then only the brush cell can be painted", func():
-		expect(_sprayed_count() == 1, "a zero spray radius offers the brush cell alone")
+		expect(_sprayed_count() == 1, "a size of one offers the brush cell alone")
 	)
 
 
@@ -636,7 +642,7 @@ func _sparse_region() -> void:
 		camera_rig().center_on(frame.get_bounds())
 		tool.seed_spray(SEED)
 		_settings.speed = 8
-		_settings.spray_radius = 6
+		_settings.spray_size = 13
 	)
 	step("When the pointer hovers the first voxel", func():
 		_hover(_screen_pos_of(Vector3i.ZERO))
@@ -658,6 +664,46 @@ func _sparse_region() -> void:
 	)
 
 
+# The dense spot union must equal the exact union of the spot spheres. The
+# interval union in the production footprint path trades the per-spot cell test
+# for a scanline union, so it must keep the exact cell set at the maximum size.
+func _dense_union() -> void:
+	var spots: Array[Vector3i] = [Vector3i.ZERO, Vector3i(20, 0, 0), Vector3i(0, -20, 12), Vector3i(9, 9, 9)]
+	step("Given a dense block and four maximum spot centers", func():
+		State.document = VoxelDocument.new()
+		frame = State.get_current_voxel_frame()
+		for x in range(-12, 13):
+			for y in range(-12, 13):
+				for z in range(-12, 13):
+					frame.set_cell(Vector3i(x, y, z), VoxelFrame.material(Color.BLUE))
+		_settings.spot_diameter = 64
+		_settings.spray_size = 64
+		tool._batch_material = VoxelFrame.material(Color.WHITE)
+		var local: Array[Vector3i] = []
+		for cell in frame.positions():
+			local.append(cell)
+		_dense_local = local
+		_dense_spots = spots
+	)
+	step("When the production footprint unions the four spot spheres", func():
+		_dense_result = tool._footprints(_dense_spots, _dense_local)
+	)
+	step("Then the union holds exactly the sphere cells of the four spots", func():
+		var expected := {}
+		for spot in _dense_spots:
+			for offset in VoxelBrushSize.sphere_offsets(64):
+				var cell := spot + offset
+				if frame.has(cell):
+					expected[cell] = true
+		expect(_dense_result.size() == expected.size(), "the dense union holds every sphere cell of the four spots")
+		var got: Array[Vector3i] = []
+		got.assign(_dense_result.keys())
+		var want: Array[Vector3i] = []
+		want.assign(expected.keys())
+		expect(_same_cell_set(got, want), "the dense union matches the exact sphere union")
+	)
+
+
 # A spot sphere that crosses a hole must keep the hole out of the preview and
 # the write, so a spot never paints an empty cell.
 func _spot_hole() -> void:
@@ -666,7 +712,7 @@ func _spot_hole() -> void:
 		frame.set_cell(Vector3i(1, 0, 0), VoxelFrame.material(Color.TRANSPARENT))
 		tool.seed_spray(SEED)
 		_settings.speed = 1
-		_settings.spray_radius = 0
+		_settings.spray_size = 1
 		_settings.spot_diameter = 3
 	)
 	step("When the pointer hovers the brush voxel", func():
@@ -699,7 +745,7 @@ func _mirror_empty() -> void:
 		camera_rig().center_on(frame.get_bounds())
 		tool.seed_spray(SEED)
 		_settings.speed = 1
-		_settings.spray_radius = 0
+		_settings.spray_size = 1
 		_settings.spot_diameter = 1
 	)
 	step("When the pointer hovers that voxel", func():
@@ -773,7 +819,7 @@ func _rendered_mirror() -> void:
 		camera_rig().center_on(frame.get_bounds())
 		tool.seed_spray(SEED)
 		_settings.speed = 1
-		_settings.spray_radius = 0
+		_settings.spray_size = 1
 		_settings.spot_diameter = 1
 	)
 	step("When the pointer hovers that voxel", func():
@@ -824,15 +870,15 @@ func _rendered_mirror() -> void:
 # A wide spot on a sparse frame reads the occupied chunks instead of the whole
 # reach ball. It must still offer only the real voxels.
 func _wide_radius() -> void:
-	step("Given one voxel and a spray with the widest spot and radius", func():
+	step("Given one voxel and a spray with the widest spot and search size", func():
 		State.document = VoxelDocument.new()
 		frame = State.get_current_voxel_frame()
 		frame.set_cell(Vector3i.ZERO, VoxelFrame.material(Color.BLUE))
 		camera_rig().center_on(frame.get_bounds())
 		tool.seed_spray(SEED)
 		_settings.speed = 8
-		_settings.spray_radius = 16
-		_settings.spot_diameter = 32
+		_settings.spray_size = 64
+		_settings.spot_diameter = 64
 	)
 	step("When the pointer hovers the voxel", func():
 		_hover(_screen_pos_of(Vector3i.ZERO))

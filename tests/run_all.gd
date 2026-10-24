@@ -54,6 +54,13 @@ const GROUP_ALIASES := {
 	"failed_greed": {"scene": "mesh_regressions", "case": "failed_greed"},
 	"snapshot_normals": {"scene": "normal_geometry", "case": "snapshot_normals"},
 	"_bench_snapshot_normals": {"scene": "normal_geometry", "case": "_bench_snapshot_normals"},
+	# The spray worker cases that moved to their own scenes, so a name selection
+	# still reaches them.
+	"worker_max": {"scene": "spray_worker_union", "case": "worker_max"},
+	"worker_union": {"scene": "spray_worker_union", "case": "worker_union"},
+	"worker_mirror": {"scene": "spray_worker_geometry", "case": "worker_mirror"},
+	"worker_expand": {"scene": "spray_worker_geometry", "case": "worker_expand"},
+	"worker_far": {"scene": "spray_worker_far", "case": "worker_far"},
 }
 
 var _failed := 0
