@@ -180,7 +180,7 @@ func _run(spec: Dictionary) -> void:
 		expect(int(same["submits"]) == 0, "a repeated identical set reaches no mesh build")
 		expect(int(sweep["submits"]) >= 1, "a changed cell submits a new set")
 		if spec["full"]:
-			expect(int(color["rebuilds"]) >= 1, "a color change marks the preview dirty")
+			expect(int(color["rebuilds"]) == 0, "a color-only change needs no preview rebuild")
 			expect(int(color["submits"]) == 0, "a color-only change submits no geometry")
 			expect(not color["mesh_changed"], "a color-only change installs no new mesh")
 			expect(int(geometry["submits"]) >= 1, "a geometry change submits a new set")

@@ -60,8 +60,12 @@ static func from_floor(floor_axis: int, floor_sign: int, floor_level: float, tar
 
 ## Returns a frame fitted to the local surface around a hit. It falls back to
 ## [param fallback] when the samples are too few or the fit is degenerate.
-static func fit(frame: VoxelFrame, hit: Vector3i, entry: Vector3i, radius: int, fallback: SculptFrame) -> SculptFrame:
-	var points := SculptGeometry.surface_points(frame, hit, entry, radius)
+##
+## [param job] supplies the cancel checkpoints of a worker. A cancelled fit
+## returns the fallback, and the job publishes nothing. The result and the query
+## stream are unchanged when the job is null or uncancelled.
+static func fit(frame: VoxelFrame, hit: Vector3i, entry: Vector3i, radius: int, fallback: SculptFrame, job: VoxelFrame.EditJob = null, context: SculptQueryContext = null) -> SculptFrame:
+	var points := SculptGeometry.surface_points(frame, hit, entry, radius, job, context)
 	if points.size() < 3:
 		return fallback
 	var fit := SculptGeometry.fit_surface_gradient(points, fallback.normal)

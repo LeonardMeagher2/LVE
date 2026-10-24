@@ -6,16 +6,23 @@ extends HBoxContainer
 ## add or the remove direction. Every tool shares the radius and the falloff.
 ## The Grab tool has a smaller radius bound, so its radius control shows that
 ## bound. The strength control is hidden for Grab, because Grab does not use it.
+##
+## Grow, Flatten, and Smooth share one normal source toggle. The button shows the
+## current source as an icon, and its pressed state marks the Face source. The
+## Grab tool hides the toggle, because Grab drags on the view plane.
 
 const SculptToolScript := preload("./SculptTool.gd")
 
+## The icon of each normal source, indexed by the enum value.
+const NORMAL_ICONS := [
+	preload("res://icons/sculpt_surface.svg"),
+	preload("res://icons/sculpt_face.svg"),
+]
 ## The tooltip of each normal source, indexed by the enum value.
 const NORMAL_TOOLTIPS := [
-	"Derive the plane normal from nearby voxels.",
-	"Use the exact face of the hovered voxel.",
+	"Surface normal: fit the plane to nearby voxels. Press for the exact face.",
+	"Face normal: use the exact face of the hovered voxel. Press for the fitted surface.",
 ]
-## The normal source item labels, indexed by the enum value.
-const NORMAL_LABELS := ["Surface", "Face"]
 
 var _settings: SculptToolSettings = preload("./settings.tres")
 
@@ -26,9 +33,6 @@ func bind(settings: SculptToolSettings) -> void:
 
 
 func _ready() -> void:
-	for label in NORMAL_LABELS:
-		$Normal.add_item(label)
-	$Normal.item_selected.connect(_on_normal_selected)
 	_settings.changed.connect(_sync)
 	_sync()
 
@@ -43,8 +47,10 @@ func _sync() -> void:
 	$Grow/Remove.set_pressed_no_signal(_settings.grow_mode == _settings.GrowMode.REMOVE)
 	# The Grab tool drags on the view plane, so the normal source does not apply.
 	$Normal.visible = tool != _settings.Tools.GRAB
-	$Normal.select(int(_settings.normal_source))
-	$Normal.tooltip_text = NORMAL_TOOLTIPS[int(_settings.normal_source)]
+	var source := int(_settings.normal_source)
+	$Normal.set_pressed_no_signal(source == _settings.NormalSource.FACE)
+	$Normal.icon = NORMAL_ICONS[source]
+	$Normal.tooltip_text = NORMAL_TOOLTIPS[source]
 	$Strength.visible = tool != _settings.Tools.GRAB
 	$Radius.max_value = radius_max
 	$Radius.set_value_no_signal(_settings.radius)
@@ -52,8 +58,8 @@ func _sync() -> void:
 	$Falloff.set_value_no_signal(_settings.falloff)
 
 
-func _on_normal_selected(index: int) -> void:
-	_settings.normal_source = index
+func _on_normal_toggled(pressed: bool) -> void:
+	_settings.normal_source = _settings.NormalSource.FACE if pressed else _settings.NormalSource.SURFACE
 
 
 func _on_add_pressed() -> void:

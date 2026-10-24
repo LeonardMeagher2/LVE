@@ -2,9 +2,13 @@ extends "res://plugins/Sculpt/SculptTool.gd"
 
 ## A test-only probe for the sculpt preview benchmark.
 ##
-## The probe wraps the real hover path, the preview rebuild, and the mesh
-## request with thin timers and counters. It changes no behavior and no result.
-## The sculpt preview benchmark is the only caller.
+## The probe wraps the real hover path, the preview rebuild, and the mesh request
+## with thin timers and counters. It changes no behavior and no result. The
+## sculpt preview benchmark and the hover cache test are the only callers.
+##
+## The hover fit and the footprint map run on the preview worker, so the probe
+## reads their cost from the controller stage counters. The counters of a stage
+## that still runs on the main thread wrap the method body.
 ##
 ## Timing rules. A counter named `_us` measures only the body of one method. A
 ## counter named `_total_us` includes the nested calls of that method. The
@@ -15,20 +19,18 @@ extends "res://plugins/Sculpt/SculptTool.gd"
 ##
 ## * `pick_total_us` wraps [method _pick_start], so it holds the ray pick, the
 ##   plane fit, and the plane hit.
-## * `fit_us` wraps [method _frame_for_pick] only, so it is the fit alone.
+## * `fit_us` wraps [method _frame_for_pick] only, so it is the press fit alone.
 ## * `visual_total_us` wraps [method update_visual].
-## * `hover_frame_us` wraps [method _compute_hover_frame] only.
+## * `hover_frame_us`, `sample_map_us`, and `cells_us` come from the controller,
+##   so they measure the worker stages of the idle hover.
 ## * `rebuild_total_us` wraps [method _rebuild_preview].
-## * `hover_samples_total_us` wraps [method _hover_samples], which calls
-##   [method _sample_map]. `sample_map_us` wraps [method _sample_map] only.
-## * `cells_us` wraps [method _preview_cells_for_samples] only.
-## * `set_preview_total_us` wraps [method _set_preview], which reaches the
-##   cursor request.
+## * `set_preview_total_us` wraps [method _set_preview], which reaches the cursor
+##   request.
 ## * `submits` counts the requests that reached the cursor mesh layer.
 ##   `dedupe_hits` counts the requests the cursor dropped as an identical set.
 ##   `debounced` counts the requests the cursor delayed by its outline debounce.
 ## * `dirty_frames` counts the frames whose `_process` saw a dirty preview.
-##   `deferred_frames` counts those frames that a running worker job deferred.
+##   `deferred_frames` counts those frames that a running job deferred.
 
 # The pick path.
 ## The inclusive microseconds of [method _pick_start].
@@ -45,32 +47,12 @@ var fit_calls := 0
 var visual_total_us := 0
 ## The calls of [method update_visual].
 var visual_calls := 0
-## The exclusive microseconds of [method _compute_hover_frame].
-var hover_frame_us := 0
-## The calls of [method _compute_hover_frame].
-var hover_frame_calls := 0
-## The calls that kept the cached hover frame.
-var hover_frame_hits := 0
-## The calls that rebuilt the hover frame.
-var hover_frame_misses := 0
 
 # The preview rebuild.
 ## The inclusive microseconds of [method _rebuild_preview].
 var rebuild_total_us := 0
 ## The calls of [method _rebuild_preview].
 var rebuild_calls := 0
-## The inclusive microseconds of [method _hover_samples].
-var hover_samples_total_us := 0
-## The calls of [method _hover_samples].
-var hover_samples_calls := 0
-## The exclusive microseconds of [method _sample_map].
-var sample_map_us := 0
-## The calls of [method _sample_map].
-var sample_map_calls := 0
-## The exclusive microseconds of [method _preview_cells_for_samples].
-var cells_us := 0
-## The calls of [method _preview_cells_for_samples].
-var cells_calls := 0
 ## The inclusive microseconds of [method _set_preview].
 var set_preview_total_us := 0
 ## The calls of [method _set_preview].
@@ -91,10 +73,6 @@ static var _seen_keys := {}
 var grab_preview_us := 0
 ## The calls of [method _grab_sources_for].
 var grab_preview_calls := 0
-## The inclusive microseconds of [method _hover_smooth_cells].
-var hover_smooth_us := 0
-## The calls of [method _hover_smooth_cells].
-var hover_smooth_calls := 0
 
 # The frames.
 ## The frames whose `_process` saw a dirty preview.
@@ -109,6 +87,31 @@ var last_cells := {}
 var last_cells_count := 0
 ## The order-free digest of the last rebuild cells.
 var last_cells_digest := 0
+
+# The hover stages. They run on the preview worker, so the probe reads the
+# controller counters when a result publishes.
+## The fit microseconds of the last published hover.
+var hover_frame_us := 0
+## The fit calls of the last published hover.
+var hover_frame_calls := 0
+## The fit calls that reused the cached frame.
+var hover_frame_hits := 0
+## The fit calls that rebuilt the frame.
+var hover_frame_misses := 0
+## The inclusive microseconds of the published footprint map.
+var hover_samples_total_us := 0
+## The calls of the published footprint map.
+var hover_samples_calls := 0
+## The exclusive microseconds of the cell pass of the published hover.
+var cells_us := 0
+## The calls of the cell pass of the published hover.
+var cells_calls := 0
+
+## The map watch of the last published hover. It forwards to the controller, so a
+## test reads the exact watch the cache compares.
+var _hover_map_watch: PackedInt64Array:
+	get:
+		return _preview.map_watch() if _preview != null else PackedInt64Array()
 
 ## The cursor mesh of this tool instance.
 var _cursor: MeshInstance3D
@@ -126,14 +129,12 @@ func reset_probe() -> void:
 	hover_frame_calls = 0
 	hover_frame_hits = 0
 	hover_frame_misses = 0
-	rebuild_total_us = 0
-	rebuild_calls = 0
 	hover_samples_total_us = 0
 	hover_samples_calls = 0
-	sample_map_us = 0
-	sample_map_calls = 0
 	cells_us = 0
 	cells_calls = 0
+	rebuild_total_us = 0
+	rebuild_calls = 0
 	set_preview_total_us = 0
 	set_preview_calls = 0
 	submits = 0
@@ -142,13 +143,13 @@ func reset_probe() -> void:
 	cache_hits = 0
 	grab_preview_us = 0
 	grab_preview_calls = 0
-	hover_smooth_us = 0
-	hover_smooth_calls = 0
 	dirty_frames = 0
 	deferred_frames = 0
 	last_cells = {}
 	last_cells_count = 0
 	last_cells_digest = 0
+	if _preview != null:
+		_preview.reset_counters()
 
 
 ## Resolves the cursor node of this tool instance.
@@ -156,22 +157,26 @@ func bind_cursor() -> void:
 	_cursor = get_node_or_null("Cursor") as MeshInstance3D
 
 
-## Returns the counters of the current measurement.
+## Returns the counters of the current measurement. The hover stages come from the
+## preview controller, because they run on its worker.
 func counters() -> Dictionary:
+	var preview: Dictionary = _preview.counters() if _preview != null else {}
 	return {
 		"pick_us": pick_total_us, "pick_calls": pick_calls,
 		"fit_us": fit_us, "fit_calls": fit_calls,
 		"visual_us": visual_total_us, "visual_calls": visual_calls,
 		"hover_us": hover_frame_us, "hover_calls": hover_frame_calls,
 		"hover_hits": hover_frame_hits, "hover_misses": hover_frame_misses,
-		"rebuild_us": rebuild_total_us, "rebuilds": rebuild_calls,
+		"rebuild_us": rebuild_total_us, "rebuilds": rebuild_calls + int(preview.get("publishes", 0)) + int(preview.get("hover_hits", 0)),
 		"hover_samples_us": hover_samples_total_us, "hover_samples": hover_samples_calls,
-		"sample_us": sample_map_us, "sample_maps": sample_map_calls,
+		"sample_us": hover_samples_total_us, "sample_maps": hover_samples_calls,
 		"cells_us": cells_us, "cells_calls": cells_calls,
 		"set_us": set_preview_total_us, "set_calls": set_preview_calls,
 		"submits": submits, "dedupe": dedupe_hits, "debounced": debounced, "cache_hits": cache_hits,
 		"grab_us": grab_preview_us, "grab_calls": grab_preview_calls,
-		"smooth_us": hover_smooth_us, "smooth_calls": hover_smooth_calls,
+		"smooth_us": 0, "smooth_calls": 0,
+		"launches": int(preview.get("launches", 0)), "publishes": int(preview.get("publishes", 0)),
+		"discarded": int(preview.get("discarded", 0)), "snapshot_us": int(preview.get("snapshot_us", 0)),
 		"dirty_frames": dirty_frames, "deferred_frames": deferred_frames,
 		"cells": last_cells_count, "digest": last_cells_digest,
 	}
@@ -225,7 +230,7 @@ static func vertex_digest(vertices: PackedVector3Array) -> int:
 func _process(delta: float) -> void:
 	if _preview_dirty:
 		dirty_frames += 1
-		if _busy():
+		if _busy() or (_preview != null and _preview.is_running()):
 			deferred_frames += 1
 	super._process(delta)
 
@@ -258,23 +263,22 @@ func _frame_for_pick_body(pick: PickResult, origin: Vector3) -> SculptFrame:
 	return super._frame_for_pick(pick, origin)
 
 
+## The footprint map of the stroke path. A reference probe overrides the body to
+## route the map through the frozen old surface query.
+func _sample_map(sculpt_frame: SculptFrame, center_point: Vector3, radius: int, falloff: float, known: Dictionary = {}) -> Dictionary:
+	return _sample_map_body(sculpt_frame, center_point, radius, falloff, known)
+
+
+## The production footprint map.
+func _sample_map_body(sculpt_frame: SculptFrame, center_point: Vector3, radius: int, falloff: float, known: Dictionary = {}) -> Dictionary:
+	return super._sample_map(sculpt_frame, center_point, radius, falloff, known)
+
+
 func update_visual(pick: PickResult) -> void:
 	var started := Time.get_ticks_usec()
 	super.update_visual(pick)
 	visual_total_us += Time.get_ticks_usec() - started
 	visual_calls += 1
-
-
-func _compute_hover_frame(pick: PickResult) -> void:
-	var before := _hover_frame
-	var started := Time.get_ticks_usec()
-	super._compute_hover_frame(pick)
-	hover_frame_us += Time.get_ticks_usec() - started
-	hover_frame_calls += 1
-	if _hover_frame == before:
-		hover_frame_hits += 1
-	else:
-		hover_frame_misses += 1
 
 
 func _rebuild_preview() -> void:
@@ -287,37 +291,11 @@ func _rebuild_preview() -> void:
 	last_cells_digest = cell_digest(_preview_cells)
 
 
-func _hover_samples(frame: SculptFrame, center_point: Vector3) -> Array:
-	var started := Time.get_ticks_usec()
-	var samples := super._hover_samples(frame, center_point)
-	hover_samples_total_us += Time.get_ticks_usec() - started
-	hover_samples_calls += 1
-	return samples
-
-
-func _sample_map(sculpt_frame: SculptFrame, center_point: Vector3, radius: int, falloff: float, known: Dictionary = {}) -> Dictionary:
-	var started := Time.get_ticks_usec()
-	var built := _sample_map_body(sculpt_frame, center_point, radius, falloff, known)
-	sample_map_us += Time.get_ticks_usec() - started
-	sample_map_calls += 1
-	return built
-
-
-## The production footprint map. A reference probe overrides this to route its
-## surface queries through the frozen old query inside the same timed span.
-func _sample_map_body(sculpt_frame: SculptFrame, center_point: Vector3, radius: int, falloff: float, known: Dictionary = {}) -> Dictionary:
-	return super._sample_map(sculpt_frame, center_point, radius, falloff, known)
-
-
-func _preview_cells_for_samples(samples: Array, frame: VoxelFrame, tool: int, grow_mode: int, seed_empty: bool, selection: Dictionary) -> Dictionary:
-	var started := Time.get_ticks_usec()
-	var cells := super._preview_cells_for_samples(samples, frame, tool, grow_mode, seed_empty, selection)
-	cells_us += Time.get_ticks_usec() - started
-	cells_calls += 1
-	return cells
-
-
 func _set_preview(cells: Dictionary) -> void:
+	last_cells = cells
+	last_cells_count = cells.size()
+	last_cells_digest = cell_digest(cells)
+	_sync_stage_counters()
 	if _cursor == null:
 		bind_cursor()
 	var before: Dictionary = _cursor._requested_cells if _cursor != null else {}
@@ -349,9 +327,16 @@ func _grab_sources_for(center: Vector3i) -> Dictionary:
 	return cells
 
 
-func _hover_smooth_cells() -> Dictionary:
-	var started := Time.get_ticks_usec()
-	var cells := super._hover_smooth_cells()
-	hover_smooth_us += Time.get_ticks_usec() - started
-	hover_smooth_calls += 1
-	return cells
+# Copies the controller stage counters into the probe fields. Every publish calls
+# it, so a reader sees the cost of the result that reached the cursor.
+func _sync_stage_counters() -> void:
+	if _preview == null:
+		return
+	hover_frame_us = _preview.hover_frame_us
+	hover_frame_calls = _preview.hover_frame_calls
+	hover_frame_hits = _preview.hover_frame_hits
+	hover_frame_misses = _preview.hover_frame_misses
+	hover_samples_total_us = _preview.sample_map_us
+	hover_samples_calls = _preview.sample_map_calls
+	cells_us = _preview.cells_us
+	cells_calls = _preview.cells_calls

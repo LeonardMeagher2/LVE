@@ -21,6 +21,7 @@ func _ready() -> void:
 	test("Grow path replay ignores frame and motion-event timing", _path_replay, "path_replay")
 	test("a Smooth click removes isolated remnants only inside the brush", _smooth_remnants, "smooth_remnants")
 	test("a new click cannot join a stroke that is finishing", _finishing_click, "finishing_click")
+	test("a cancel and repress during a frame-yielded drain stays safe", _cancel_mid_drain, "cancel_mid_drain")
 	test("the Sculpt implementation has no random source", _no_random_source, "no_random_source")
 
 
@@ -201,6 +202,46 @@ func _replay(wait_frames: bool, coalesced: bool) -> Dictionary:
 	_button(false, previous)
 	await _wait_idle()
 	return _frame.capture()
+
+
+func _cancel_mid_drain() -> void:
+	step("Given a long queued Grow stroke that yields a frame", func():
+		_settings.radius = 4
+		_settings.strength = 1.0
+		_settings.falloff = 0.5
+		camera_rig().set_view("top")
+		camera_rig().is_orthogonal = true
+		_far_pointer = camera_rig().unproject_position(Vector3(80, 0, 0))
+		_button(true, _pressed)
+		var far := camera_rig().unproject_position(Vector3(150, 0, 0))
+		_motion(far, far - _pressed)
+		expect(_tool._edit != null, "the long stroke is open")
+		expect(_tool._drain_active, "the long drain is still running")
+	)
+	await get_tree().process_frame
+	step("When the user cancels and represses elsewhere before the drain ends", func():
+		expect(_tool._drain_active, "the drain still waits on a frame")
+		_escape()
+		_button(true, _far_pointer)
+		_button(false, _far_pointer)
+	)
+	await _wait_idle()
+	step("Then the cancelled path consumed nothing of the new stroke", func():
+		expect(_tool._edit == null, "the new stroke finished on its own")
+		expect(_frame.has(Vector3i(80, 0, 0)), "the new press applied its own dab")
+		expect(not _frame.has(Vector3i(30, 0, 0)), "the cancelled path applied no intermediate dab")
+		expect(not _frame.has(Vector3i(60, 0, 0)), "the cancelled path applied no far dab")
+		expect(State.undo_redo.has_undo(), "the new stroke records one action")
+		State.undo()
+		expect(_frame.count() == 0, "one undo removes only the new stroke")
+	)
+
+
+func _escape() -> void:
+	var event := InputEventAction.new()
+	event.action = "ui_cancel"
+	event.pressed = true
+	_tool.handle_input(event, Vector2.ZERO)
 
 
 func _no_random_source() -> void:

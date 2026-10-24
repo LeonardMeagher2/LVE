@@ -7,6 +7,7 @@
 [ext_resource type="Texture2D" path="res://icons/brush_diameter.svg" id="5_radius"]
 [ext_resource type="Texture2D" path="res://icons/spray_rate.svg" id="6_strength"]
 [ext_resource type="Texture2D" path="res://icons/shadow.svg" id="7_falloff"]
+[ext_resource type="Texture2D" path="res://icons/sculpt_surface.svg" id="8_surface"]
 
 [sub_resource type="ButtonGroup" id="GrowGroup"]
 
@@ -32,9 +33,12 @@ button_group = SubResource("GrowGroup")
 icon = ExtResource("4_remove")
 icon_alignment = 1
 
-[node name="Normal" type="OptionButton" parent="."]
+[node name="Normal" type="Button" parent="."]
 layout_mode = 2
-tooltip_text = "Derive the plane normal from nearby voxels."
+tooltip_text = "Surface normal: fit the plane to nearby voxels. Press for the exact face."
+toggle_mode = true
+icon = ExtResource("8_surface")
+icon_alignment = 1
 
 [node name="Radius" parent="." instance=ExtResource("2_value")]
 layout_mode = 2
@@ -66,6 +70,7 @@ step = 0.05
 decimals = 2
 value = 0.5
 
+[connection signal="toggled" from="Normal" to="." method="_on_normal_toggled"]
 [connection signal="pressed" from="Grow/Add" to="." method="_on_add_pressed"]
 [connection signal="pressed" from="Grow/Remove" to="." method="_on_remove_pressed"]
 [connection signal="value_changed" from="Radius" to="." method="_on_radius_changed"]

@@ -13,3 +13,4 @@ material_override = ExtResource("2_material")
 cast_shadow = 0
 script = ExtResource("3_preview")
 apply_edit_symmetry = true
+coalesce_requests = true

@@ -89,6 +89,7 @@ func _surface_gradient() -> void:
 		_hover(_press)
 		_tool._rebuild_preview()
 	)
+	await _settle_preview()
 	step("Then the frame is fitted and its normal is not cardinal", func():
 		expect(_tool._hover_frame != null, "the hover builds a frame")
 		expect(_tool._hover_frame.fitted, "the Surface source fits the local surface")
@@ -121,6 +122,7 @@ func _face_exact() -> void:
 		_hover(_press)
 		_tool._rebuild_preview()
 	)
+	await _settle_preview()
 	step("Then the frame is the exact hovered face and no fit runs", func():
 		expect(_tool._hover_frame != null, "the hover builds a frame")
 		expect(not _tool._hover_frame.fitted, "the Face source never fits")
@@ -254,10 +256,11 @@ func _grab_hidden() -> void:
 		_press = _pos(Vector3(0, 3, 0))
 	)
 	step("Then the normal source control is hidden and offers both sources", func():
-		var control: OptionButton = plugin("SculptPlugin")._options.get_node("Normal")
+		var control: Button = plugin("SculptPlugin")._options.get_node("Normal")
 		expect(not control.visible, "the Grab tool hides the normal source")
-		expect(control.item_count == 2, "the control offers two sources")
-		expect(control.get_item_text(0) == "Surface" and control.get_item_text(1) == "Face", "the items are named Surface and Face")
+		expect(control.toggle_mode, "the normal source control is a toggle button")
+		expect(control.icon != null, "the normal source control shows an icon")
+		expect(control.text == "", "the normal source control has no text")
 	)
 	step("When the user hovers and presses with Grab", func():
 		_hover(_press)

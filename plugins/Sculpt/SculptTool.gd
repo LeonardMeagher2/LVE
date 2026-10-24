@@ -19,16 +19,39 @@ extends VoxelTool
 ## queue drains, so a long motion never builds a full path array and no accepted
 ## cell is dropped. A long drain yields a frame between bounded batches. An
 ## accepted press or motion anchor is the cell of the frozen cursor plane, so a
-## later refit never moves it. Grab is a proportional stretch drag on the true
-## camera-facing plane. A large dab or drag runs on the worker pool. A burst of
-## input drains after the release and commits as one history action. Escape and
-## an edit context change roll the stroke back.
+## later refit never moves it. Each Grow and Flatten column keeps its own support
+## lookup on that fixed plane. The lookup reaches 64 cells, beyond the old
+## per-radius bound. It does not provide unrestricted height. Grab is a
+## proportional stretch drag on the true camera-facing plane. A large dab or drag
+## runs on the worker pool: the
+## footprint map of a Grow or Flatten dab, the rounding fields of a Smooth dab,
+## and every write. A small dab stays inline, so a press with a small brush
+## edits in its input event. A burst of input drains after the release and
+## commits as one history action. Escape and an edit context change roll the
+## stroke back.
 
 const SculptSettings := preload("./SculptToolSettings.gd")
 const SmoothOperation := preload("./SmoothOperation.gd")
+# The shared pure preparation math. The tool and its worker jobs preload it, so
+# a job resolves it without the global class cache.
+const Prep := preload("./SculptPrep.gd")
 
 ## The estimated work above which a dab or a drag runs on the worker pool.
 const INLINE_EDIT_LIMIT := 4096
+## The footprint candidates above which a dab builds its map on the worker pool.
+## The map and the surface scan follow the disc, so their cost grows with the
+## disc area. A small disc stays inline, so a press edits in its input event. A
+## large disc runs on the worker, so the frame that accepted it keeps processing
+## input. The symmetry count multiplies the candidates, because every active mask
+## adds its own footprint.
+const PREP_CANDIDATE_LIMIT := 512
+## The height lookup depth of one Grow or Flatten footprint column. The walk is
+## bounded, and the bound matches the deepest footprint walk the tool already
+## shipped at the maximum radius. A taller bound than the old per-radius depth
+## resolves a column whose support sits above it, which is the artificial height
+## limit. The operation plane never moves, so the kernel coverage and the profile
+## inside the old bound are unchanged.
+const HEIGHT_LOOKUP_LIMIT := 64
 ## The largest Grab source radius in voxels.
 const GRAB_MAX_RADIUS := 12
 ## The largest Grab drag distance in voxels.
@@ -40,10 +63,6 @@ const DABS_PER_DRAIN := 32
 ## The half-cell distance that decides a flatten cut, a fill, or a settled
 ## sample.
 const FLATTEN_THRESHOLD := 0.5
-## The tolerance that snaps accumulated progress to an integer step boundary. A
-## split of one probe influence then applies the same steps as one call. The
-## value is far below one voxel, so a true fractional influence is unaffected.
-const PROGRESS_EPSILON := 1e-6
 ## The kept state entries above which the stroke drops the entries that left
 ## the footprint.
 const STATE_LIMIT := 65536
@@ -91,6 +110,10 @@ var _cursor_frame: SculptFrame
 var _press_ray_origin := Vector3.ZERO
 var _press_ray_dir := Vector3.ZERO
 var _stroke_seed_empty := false
+# The explicit floor plane of the open stroke. The press captures it, so a floor
+# UI change during a later drain never moves an accepted Grow dab.
+var _stroke_floor_axis := 1
+var _stroke_floor_index := 0
 var _stroke_center_point := Vector3.ZERO
 var _samples := {}
 var _progress := {}
@@ -103,6 +126,9 @@ var _segment_head := 0
 # motion, so the queue never grows with the number of crossed cells.
 var _dab_path: DabPath
 var _drain_active := false
+# The stroke id of the running drain. A zombie drain that resumes after a frame
+# yield must not retire the flag of a newer drain.
+var _drain_stroke_id := -1
 var _end_requested := false
 var _close_action := "Grow"
 var _stroke_id := 0
@@ -124,6 +150,27 @@ var _path_anchor := VoxelPicking.NONE
 var _drag_ray_origin := Vector3.INF
 var _drag_ray_dir := Vector3.INF
 var _drag_ray_moved := true
+# The Smooth placement state. The stroke captures the camera ray of every
+# accepted motion, and each dab reconstructs its own ray and resolves the real
+# hit on the accepted frame at dab time. No hit position is resolved at input
+# time, so a queued dab never depends on when a worker published.
+var _stroke_forward := Vector3.ZERO
+var _press_entry := Vector3i.ZERO
+# The Smooth placement camera family, captured at the press. The projection mode
+# picks the family: a perspective or frustum camera shares one focus, an
+# orthographic camera keeps one direction and translates the origin. A live
+# camera never changes an accepted dab.
+var _camera_perspective := false
+var _camera_focus := Vector3.ZERO
+var _stroke_ray_dir := Vector3.ZERO
+var _press_ray_offset := Vector3.ZERO
+var _press_camera_transform := Transform3D()
+var _press_projection := -1
+var _dab_ray_origin := Vector3.INF
+var _dab_ray_dir := Vector3.INF
+# The resolved actual hit and entry of the last Smooth dab.
+var _smooth_hit := VoxelPicking.NONE
+var _smooth_entry := Vector3i.ZERO
 
 # The Grab state.
 var _grab_sources: Array = []
@@ -148,18 +195,32 @@ var _last_pick: PickResult
 var _settings_tool := 0
 var _settings_grow_mode := 0
 var _settings_normal_source := 0
+var _settings_radius := 4
+var _settings_falloff := 0.5
 var _ball_cache := {}
 
-# The preview state.
+# The hover preview controller. It owns the hover frame, the cached cells, and
+# the worker that computes a cache miss. The tool keeps only the thin adapters:
+# the live inputs, the pause rule, the captured view, and the publish.
+var _preview: SculptPreview
+# The published preview cells. The controller writes it through `_set_preview`.
 var _preview_cells := {}
-var _preview_dirty := true
-var _hover_frame: SculptFrame
-var _hover_point := Vector3.ZERO
-var _hover_seed_empty := false
-var _hover_key := Vector3i.MAX
-var _hover_entry := Vector3i.MAX
-# The normal source of the cached hover frame. A source change refits the frame.
-var _hover_source := -1
+# The hover frame of the last published hover result. The controller owns it, so
+# the tool only forwards it. A normal source test reads it.
+var _hover_frame: SculptFrame:
+	get:
+		return _preview.hover_frame() if _preview != null else null
+# The frame index of the open stroke, so a cell change in another frame never
+# invalidates the preview of this one.
+var _stroke_frame_index := -1
+
+
+## Whether the visible preview may not match the current inputs. The hover
+## controller owns the flag. The stroke and the Grab paths clear it when they
+## publish, and the frame loop reads it.
+var _preview_dirty: bool:
+	get:
+		return _preview.is_dirty() if _preview != null else false
 
 
 ## One cancellable grow or flatten tick.
@@ -167,6 +228,11 @@ var _hover_source := -1
 ## The job reads the surface of every sample from a frame snapshot and writes
 ## the resulting cells. It reports the applied steps, the settled samples, and
 ## the tracked surfaces. [method VoxelFrame.EditJob.run] is the worker body.
+##
+## A large dab also sets [member preparing], so the job builds its footprint map
+## and its step list from the preparation inputs before it writes. The map then
+## runs on the worker too, and the main thread that accepted the dab keeps
+## processing input.
 class SculptTickJob extends VoxelFrame.EditJob:
 	## The stroke id that the job belongs to.
 	var stroke_id := 0
@@ -190,22 +256,58 @@ class SculptTickJob extends VoxelFrame.EditJob:
 	var material := PackedFloat32Array()
 	## The selected cells. An empty dictionary allows every cell.
 	var selection := {}
-	## The applied steps per sample.
+	## The applied steps per logical column.
 	var used_steps := {}
-	## The samples that reached their target or had no surface.
+	## The samples that reached their target or had no surface, per logical
+	## column. A moved effect origin must subtract and settle the same entry it
+	## added to.
 	var settled := {}
-	## The tracked surface per sample.
+	## The tracked surface per sample anchor.
 	var surfaces := {}
 	## The chunk locations that the tick changed.
 	var changed_chunks: Array[Vector3i] = []
 
+	## Whether the job builds its own footprint map and step list before it
+	## writes. A small dab leaves it false and passes [member samples] directly.
+	var preparing := false
+	## The locked frame of the dab. The job reads its normal and its tangent
+	## basis, and it never changes the frame.
+	var prep_sculpt_frame: SculptFrame
+	## The dab center point on the locked frame.
+	var prep_center := Vector3.ZERO
+	## The footprint radius, falloff, and bounded scan depth of the map.
+	var prep_radius := 4
+	var prep_falloff := 0.5
+	var prep_depth := 8
+	## The frozen edit context of the stroke. It supplies the symmetry masks.
+	var prep_context: VoxelFrame.EditContext
+	## The tracked surface of every existing anchor, so a persisting column
+	## never re-scans. The job reads it and never changes it.
+	var prep_known := {}
+	## The credited influence before the dab. The job reads it and never changes
+	## it, so the main thread owns the map and the job owns its own copy.
+	var prep_progress := {}
+	## The step count of one application at full weight.
+	var prep_strength := 8.0
+	## The new sample map the preparation built, or null when the job did not
+	## prepare. The main thread adopts it when the job publishes.
+	var prepared_samples = null
+	## The new credited influence the preparation built, or null when the job did
+	## not prepare.
+	var prepared_progress = null
+
 	## Computes and applies the tick. This is the worker body.
 	func run() -> void:
+		if preparing and not _prepare():
+			return
 		stage("Sculpting voxels", samples.size())
 		var changes := {}
 		var completed := 0
 		for sample in samples:
 			var anchor: Vector3i = sample["anchor"]
+			var key: Vector3i = anchor
+			if sample.has("key"):
+				key = sample["key"]
 			var surface: Vector3i = sample["surface"]
 			var steps: int = sample["steps"]
 			var used := 0
@@ -220,11 +322,27 @@ class SculptTickJob extends VoxelFrame.EditJob:
 				completed += 1
 				if completed % 512 == 0 and not checkpoint(completed):
 					return
-			used_steps[anchor] = used
+			used_steps[key] = used
 			surfaces[anchor] = surface
 			if done:
-				settled[anchor] = true
+				settled[key] = true
 		changed_chunks = apply_cells(edited_frame, changes)
+
+	# Builds the footprint map and the whole step list on the worker. The map
+	# reads the frame snapshot before any write, so the order matches the inline
+	# path. Returns false when a cancel stopped the preparation.
+	func _prepare() -> bool:
+		stage("Preparing footprint", prep_radius)
+		if not checkpoint(0):
+			return false
+		var built := SculptPreview.compute_sample_map(edited_frame, prep_sculpt_frame, prep_center, prep_radius, prep_falloff, prep_context, prep_depth, prep_known, self)
+		if not checkpoint(0):
+			return false
+		var progress := Prep.accumulated(prep_progress, built, tool, prep_strength, 1.0)
+		prepared_samples = built
+		prepared_progress = progress
+		samples = Prep.collect_steps(built, progress, tool)
+		return checkpoint(0)
 
 	# Applies one voxel step to one sample. Returns the new surface, or null
 	# when the sample cannot continue.
@@ -407,10 +525,43 @@ class SmoothJob extends VoxelFrame.EditJob:
 	## the query count.
 	var gather_reads := 0
 
+	## Whether the job fits its operation plane and builds its rounding fields
+	## before it rounds. A large dab sets it, so the refit and the field build
+	## run on the worker too.
+	var preparing := false
+	## The locked frame of the dab, before the refit. The job reads its normal
+	## only.
+	var prep_sculpt_frame: SculptFrame
+	## The dab center point and its footprint inputs.
+	var prep_center := Vector3.ZERO
+	var prep_radius := 4
+	var prep_falloff := 0.5
+	var prep_depth := 8
+	## The cells above and below a surface cell that the patch reaches.
+	var prep_reach := 2
+	## The frozen edit context of the stroke. It supplies the symmetry masks.
+	var prep_context: VoxelFrame.EditContext
+	## The selection of the frozen context, compared by value.
+	var prep_selection := {}
+	## The entered face of the dab and the normal source of the stroke.
+	var prep_entry := Vector3i.ZERO
+	var prep_source := 0
+	## The fields of the previous dab. The job keeps the carry and the credits
+	## of the surviving candidates. It reads the list and never changes it.
+	var prep_fields: Array = []
+	## The refitted operation plane the preparation resolved, or null.
+	var prepared_frame: SculptFrame
+	## The rounding fields the preparation built, or null when the job did not
+	## prepare. The main thread adopts them when the job publishes.
+	var prepared_fields = null
+
 	## Runs every field on the snapshot. This is the worker body.
 	func run() -> void:
 		# A pre-cancelled job must not compute or publish.
 		if not checkpoint(0):
+			cancelled = true
+			return
+		if preparing and not _prepare():
 			cancelled = true
 			return
 		var total := 0
@@ -450,6 +601,24 @@ class SmoothJob extends VoxelFrame.EditJob:
 		if changes.is_empty():
 			return
 		changed_chunks = apply_cells(edited_frame, changes)
+
+	# Fits the operation plane to the current surface and builds the rounding
+	# fields on the worker. The fields keep the fractional pass carry and the
+	# world-cell credits of the surviving candidates, so a brush move never
+	# discards earned time. The snapshot is read before any write, so the order
+	# matches the inline path. Returns false when a cancel stopped it.
+	func _prepare() -> bool:
+		prepared_frame = Prep.refit_smooth_frame(edited_frame, prep_sculpt_frame, prep_center, prep_entry, prep_source, prep_radius, prep_depth)
+		if not checkpoint(0):
+			return false
+		if prepared_frame == null:
+			return false
+		var built := Prep.smooth_fields(edited_frame, prepared_frame, prep_center, prep_radius, prep_falloff, prep_context, prep_selection, prep_depth, prep_reach, self)
+		if not checkpoint(0):
+			return false
+		prepared_fields = Prep.merge_smooth_fields(built, prep_fields)
+		fields = prepared_fields
+		return checkpoint(0)
 
 	# The progress check the module calls inside its per-cell loops.
 	func _checkpoint(completed: int) -> bool:
@@ -662,6 +831,12 @@ class DabPath extends RefCounted:
 	func remaining() -> int:
 		return _remaining
 
+	## Returns the completed fraction of the segment, from zero to one.
+	func progress() -> float:
+		if _span[_dominant] <= 0:
+			return 1.0
+		return 1.0 - float(_remaining) / float(_span[_dominant])
+
 	## Advances to the next crossed cell and returns it, or null at the end.
 	func next_cell() -> Variant:
 		if _remaining <= 0:
@@ -709,8 +884,8 @@ func _enter_tree() -> void:
 		State.chunks_changed.connect(_on_frame_cells_changed)
 	if not State.cells_changed.is_connected(_on_frame_cells_changed):
 		State.cells_changed.connect(_on_frame_cells_changed)
-	if not State.document_changed.is_connected(_mark_preview_dirty):
-		State.document_changed.connect(_mark_preview_dirty)
+	if not State.document_changed.is_connected(_on_document_changed):
+		State.document_changed.connect(_on_document_changed)
 	if not State.frame_changed.is_connected(_mark_preview_dirty):
 		State.frame_changed.connect(_mark_preview_dirty)
 
@@ -719,6 +894,14 @@ func _ready() -> void:
 	_settings_tool = _settings.tool
 	_settings_grow_mode = _settings.grow_mode
 	_settings_normal_source = _settings.normal_source
+	_settings_radius = _settings.radius
+	_settings_falloff = _settings.falloff
+	_preview = SculptPreview.new()
+	_preview.provider = _preview_inputs
+	_preview.publisher = _set_preview
+	_preview.pauser = _preview_paused
+	_preview.view_provider = _live_view
+	_preview.hider = _hide_preview_visible
 	State.color_changed.connect(_on_color_changed)
 	_on_color_changed(State.current_color)
 	visible = false
@@ -739,6 +922,8 @@ func _notification(what: int) -> void:
 		_smooth_job.cancel()
 		_smooth_job.wait_for_worker()
 		_smooth_job = null
+	if _preview != null:
+		_preview.join()
 	State.finish_operation(_operation_id)
 	_operation_id = 0
 	var tx := _edit
@@ -750,7 +935,9 @@ func _notification(what: int) -> void:
 
 func _exit_tree() -> void:
 	_last_pick = null
-	_hover_frame = null
+	if _preview != null:
+		_preview.join()
+		_preview.clear_all()
 	if has_node("Cursor"):
 		$Cursor.show_selection(null)
 	visible = false
@@ -780,23 +967,33 @@ func _disconnect_preview_signals() -> void:
 		State.chunks_changed.disconnect(_on_frame_cells_changed)
 	if State.cells_changed.is_connected(_on_frame_cells_changed):
 		State.cells_changed.disconnect(_on_frame_cells_changed)
-	if State.document_changed.is_connected(_mark_preview_dirty):
-		State.document_changed.disconnect(_mark_preview_dirty)
+	if State.document_changed.is_connected(_on_document_changed):
+		State.document_changed.disconnect(_on_document_changed)
 	if State.frame_changed.is_connected(_mark_preview_dirty):
 		State.frame_changed.disconnect(_mark_preview_dirty)
 
 
 func _on_color_changed(_color: Color) -> void:
+	# The preview is an opaque wireframe, so its outline material ignores the
+	# color. Only the brush material follows it. A color change marks no geometry
+	# dirty, so it never refits and never rescans the surface.
 	$Cursor.set_brush_material(State.current_material)
-	_mark_preview_dirty()
 
 
 func _mark_preview_dirty() -> void:
-	_preview_dirty = true
-	_hover_key = Vector3i.MAX
+	# A geometry or a context input changed, so the cached hover cells and the
+	# visible outline are no longer trustworthy. The controller drops the cache
+	# and hides the outline, and the next request rebuilds from the live inputs.
+	if _preview != null:
+		_preview.invalidate()
 
 
-func _on_frame_cells_changed(_frame: int, _affected: Array[Vector3i]) -> void:
+func _on_frame_cells_changed(frame: int, _affected: Array[Vector3i]) -> void:
+	# A geometry change in another frame cannot move this frame's preview. The
+	# open stroke keeps the frame it captured at the press.
+	var current := _stroke_frame_index if _edit != null else State.current_frame
+	if frame != current:
+		return
 	_mark_preview_dirty()
 
 
@@ -804,10 +1001,23 @@ func _on_settings_changed() -> void:
 	var tool_changed := _settings.tool != _settings_tool
 	var mode_changed := _settings.grow_mode != _settings_grow_mode
 	var source_changed := _settings.normal_source != _settings_normal_source
+	var geometry_changed := (
+		tool_changed or mode_changed or source_changed
+		or _settings.radius != _settings_radius
+		or _settings.falloff != _settings_falloff
+	)
 	_settings_tool = _settings.tool
 	_settings_grow_mode = _settings.grow_mode
 	_settings_normal_source = _settings.normal_source
-	_on_color_changed(State.current_color)
+	_settings_radius = _settings.radius
+	_settings_falloff = _settings.falloff
+	# The brush material is shared by the cursor, so refresh it on any change.
+	$Cursor.set_brush_material(State.current_material)
+	# The strength and the color change no preview cell, so they never dirty the
+	# geometry. The radius, the falloff, the tool, the mode, and the source all
+	# change the footprint or the plane.
+	if geometry_changed:
+		_mark_preview_dirty()
 	if _edit != null and (tool_changed or mode_changed or source_changed):
 		# The open stroke keeps the context it captured, so a source change ends
 		# it like a tool change and the next stroke uses the new source.
@@ -852,6 +1062,9 @@ func open_stroke() -> VoxelEditTransaction:
 	_stroke_context = tx.edit_context
 	_stroke_selection = tx.edit_context.selection
 	_stroke_normal_source = _settings.normal_source
+	_stroke_floor_axis = State.floor_axis
+	_stroke_floor_index = State.floor_index
+	_stroke_frame_index = State.current_frame
 	_source_document = State.document
 	_source_frame = State.get_current_voxel_frame()
 	_end_requested = false
@@ -866,6 +1079,18 @@ func open_stroke() -> VoxelEditTransaction:
 	_drag_ray_origin = Vector3.INF
 	_drag_ray_dir = Vector3.INF
 	_drag_ray_moved = true
+	_stroke_forward = Vector3.ZERO
+	_press_entry = Vector3i.ZERO
+	_camera_perspective = false
+	_camera_focus = Vector3.ZERO
+	_stroke_ray_dir = Vector3.ZERO
+	_press_ray_offset = Vector3.ZERO
+	_press_camera_transform = Transform3D()
+	_press_projection = -1
+	_dab_ray_origin = Vector3.INF
+	_dab_ray_dir = Vector3.INF
+	_smooth_hit = VoxelPicking.NONE
+	_smooth_entry = Vector3i.ZERO
 	_stroke_seed_empty = false
 	_grab_sources = []
 	_grab_source_cells = {}
@@ -875,7 +1100,12 @@ func open_stroke() -> VoxelEditTransaction:
 	_grab_pending_delta = null
 	_grab_empty = false
 	_clear_smooth()
-	_preview_dirty = true
+	# A press retires the hover at once: the running job is cancelled without a
+	# wait and its epoch moves, so no finished hover result can ever reach the
+	# cursor over the stroke. The worker is joined by the next frame.
+	if _preview != null:
+		_preview.cancel_pending()
+		_preview.invalidate()
 	return tx
 
 
@@ -909,10 +1139,17 @@ func _apply_pick(target: Vector3i, hit: Vector3i) -> void:
 	# anchor.
 	_path_anchor = SculptGeometry.cell_at(_press_point)
 	_stroke_center_point = _plane_point(_path_anchor)
+	# The press dab uses the exact press ray. The rest of the stroke reconstructs
+	# each ray from the captured camera family through its canonical cursor-plane
+	# point. The orthographic offset keeps the sub-cell phase of the first click.
+	_press_ray_offset = _press_ray_origin - _plane_point(_path_anchor)
+	_dab_ray_origin = _press_ray_origin
+	_dab_ray_dir = _press_ray_dir
 	# The press applies one dab at once, so a click that never moves still
 	# changes the model before the next frame.
 	_run_dab(_path_anchor)
-	_preview_dirty = true
+	if _preview != null:
+		_preview.invalidate()
 
 
 func _apply_stroke_to(to: Vector3i) -> void:
@@ -927,10 +1164,12 @@ func _apply_stroke_to(to: Vector3i) -> void:
 		return
 	# Queue the whole motion as one segment. The drain generates the crossed
 	# cells, so one large motion applies the same dabs as the same path
-	# delivered one cell at a time.
+	# delivered one cell at a time. Each dab reconstructs its ray from the
+	# captured camera family, so the result never depends on the batching.
 	_enqueue_segment(_path_anchor, to)
 	_path_anchor = to
-	_preview_dirty = true
+	if _preview != null:
+		_preview.invalidate()
 
 
 func _end() -> void:
@@ -980,9 +1219,9 @@ func _finish_stroke() -> void:
 	_source_document = null
 	_source_frame = null
 	_last_pick = null
-	_hover_frame = null
 	_preview_cells = {}
-	_preview_dirty = false
+	if _preview != null:
+		_preview.clear_all()
 	if has_node("Cursor"):
 		$Cursor.show_selection(null)
 	visible = false
@@ -1009,6 +1248,8 @@ func _cancel_edit() -> void:
 		_smooth_job.cancel()
 	# Drop the accepted path, so a stale completion cannot apply a cancelled dab.
 	_clear_pending()
+	# The zombie drain retires itself through its token, so the cancel leaves the
+	# flag alone. A new stroke starts its own drain at once.
 	_samples = {}
 	_progress = {}
 	_stroke_frame = null
@@ -1029,9 +1270,9 @@ func _cancel_edit() -> void:
 	_source_document = null
 	_source_frame = null
 	_last_pick = null
-	_hover_frame = null
 	_preview_cells = {}
-	_preview_dirty = true
+	if _preview != null:
+		_preview.invalidate()
 	visible = false
 	if has_node("Cursor"):
 		$Cursor.show_selection(null)
@@ -1050,9 +1291,24 @@ func _on_history_changed() -> void:
 
 # The tool edits on input, not on elapsed time. The frame loop only rebuilds a
 # dirty hover preview, so a held pointer never adds a dab on its own.
+#
+# The hover fit and the footprint map run on a worker. A stroke or a Grab hover
+# publishes on the main thread, because those are cheap and must not wait.
 func _process(_delta: float) -> void:
-	if _preview_dirty and not _busy():
-		_rebuild_preview()
+	if _preview == null:
+		return
+	# Join a finished hover worker and publish a valid result. A running worker
+	# is never awaited here.
+	_preview.poll()
+	if _edit != null or _busy():
+		if _preview_dirty:
+			_rebuild_preview()
+		return
+	if _settings.tool == SculptSettings.Tools.GRAB:
+		if _preview_dirty:
+			_rebuild_preview()
+		return
+	_preview.process()
 
 
 ## Applies extra deterministic influence at the current brush center.
@@ -1108,6 +1364,17 @@ func _next_dab_cell() -> Variant:
 			_dab_path = DabPath.new(segment[0], segment[1])
 		var cell = _dab_path.next_cell()
 		if cell != null:
+			# Reconstruct the ray of the canonical anchor from the captured camera
+			# family. A perspective camera runs the ray from its focus through the
+			# cursor-plane point. An orthographic camera keeps its direction and
+			# translates the press origin with the plane point.
+			var anchor_world := _plane_point(cell)
+			if _camera_perspective:
+				_dab_ray_origin = _camera_focus
+				_dab_ray_dir = (anchor_world - _camera_focus).normalized()
+			else:
+				_dab_ray_origin = anchor_world + _press_ray_offset
+				_dab_ray_dir = _stroke_ray_dir
 			return cell
 		_dab_path = null
 	_clear_pending()
@@ -1122,16 +1389,25 @@ func _clear_pending() -> void:
 	_dab_path = null
 
 
-# Applies the accepted dabs in order, in bounded batches. A batch of small dabs
-# runs inline. A large dab runs on the worker pool, and its completion resumes
-# the drain. A batch boundary yields one frame, so a giant jump never blocks one
-# frame and no accepted cell is dropped. The stroke finishes only when the
-# accepted path is consumed and no job runs.
+## Applies the accepted dabs in order, in bounded batches. A batch of small dabs
+## runs inline. A large dab runs on the worker pool, and its completion resumes
+## the drain. A batch boundary yields one frame, so a giant jump never blocks one
+## frame and no accepted cell is dropped. The stroke finishes only when the
+## accepted path is consumed and no job runs.
+##
+## The drain owns an explicit token: the stroke id and the transaction it started
+## with. A cancelled or replaced stroke cannot retire a newer drain, and a zombie
+## drain that resumes after the frame yield reads the token before it touches the
+## path, the shared flag, or the finish. A new stroke then starts its own drain at
+## once, so a bounded batch is never doubled by a stale loop.
 func _settle_dabs() -> void:
-	if _drain_active:
+	var stroke_id := _stroke_id
+	var tx := _stroke_tx
+	if _drain_active and _drain_stroke_id == stroke_id:
 		return
 	_drain_active = true
-	while _edit != null:
+	_drain_stroke_id = stroke_id
+	while _edit != null and _stroke_id == stroke_id and _stroke_tx == tx:
 		var budget := DABS_PER_DRAIN
 		while budget > 0 and not _busy() and _has_pending():
 			var cell = _next_dab_cell()
@@ -1142,8 +1418,10 @@ func _settle_dabs() -> void:
 		if not _busy() and not _has_pending():
 			break
 		await _next_frame()
-	_drain_active = false
-	if _end_requested and _edit != null and _edit == _stroke_tx:
+	# Only the drain that still owns the token retires the flag and the stroke.
+	if _drain_active and _drain_stroke_id == stroke_id:
+		_drain_active = false
+	if _stroke_id == stroke_id and _end_requested and _edit != null and _edit == _stroke_tx:
 		_finish_stroke()
 
 
@@ -1158,16 +1436,146 @@ func _next_frame() -> void:
 # Runs one dab at an anchor cell. The dab rebuilds the footprint or the rounding
 # field at the anchor, then applies one application.
 func _run_dab(cell: Vector3i) -> void:
-	_stroke_center_point = _plane_point(cell)
 	if _stroke_tool == SculptSettings.Tools.SMOOTH:
-		_rebuild_smooth()
-	else:
-		_rebuild_samples(_stroke_center_point)
+		_run_smooth_dab()
+		return
+	# Grow and Flatten share one fixed operation plane. The footprint center is
+	# the canonical anchor cell projected onto the frozen cursor plane, so every
+	# dab keeps the same tangent kernel and a long stroke keeps coherent bands.
+	# The per-column support lookup lifts the old height limit without moving the
+	# plane and without re-projecting the footprint onto a grown height.
+	_apply_dab_at(_plane_point(cell))
+
+
+## Applies one Grow or Flatten dab at the given effect center.
+##
+## A small dab builds its footprint inline, so a press with an ordinary brush
+## edits in its input event. A large dab builds the footprint on the worker
+## pool, so the frame that accepted it keeps processing input. Both paths read
+## one definition of the map and the credited influence.
+func _apply_dab_at(center_point: Vector3) -> void:
+	_stroke_center_point = center_point
+	if _dab_is_large(_stroke_radius):
+		_start_prep_dab(center_point)
+		return
+	_rebuild_samples(center_point)
 	_apply_influence(1.0)
-	_preview_dirty = true
+	_mark_hover_dirty()
 
 
-# Returns the world point of one anchor cell on the current stroke plane. The
+# Returns true when one dab of this radius and symmetry count must build its
+# footprint on the worker pool. The estimate reads the radius and the active mask
+# count only. It allocates nothing, so the press never builds the disc cache on
+# the main thread.
+func _dab_is_large(radius: int) -> bool:
+	return _dab_estimate(radius) > PREP_CANDIDATE_LIMIT
+
+
+# The footprint candidate count of one radius and symmetry count. Three quarters
+# of the disc area is a close estimate of the shipped disc size and needs no
+# allocation.
+func _dab_estimate(radius: int) -> int:
+	return radius * radius * 3 * _mask_count()
+
+
+func _mask_count() -> int:
+	return SculptPreview.masks_for(_context()).size()
+
+
+# Starts one Grow or Flatten dab whose footprint map, step list, and writes all
+# run on the worker pool. The job holds its own progress copy and its own frame
+# snapshot, so a cancel or a new stroke never changes what it reads.
+func _start_prep_dab(center_point: Vector3) -> void:
+	var job := SculptTickJob.new()
+	job.stroke_id = _stroke_id
+	job.preparing = true
+	job.edited_frame = _source_frame.copy_frame()
+	job.samples = []
+	job.tool = _stroke_tool
+	job.grow_mode = _stroke_grow_mode
+	job.seed_empty = _stroke_seed_empty
+	job.depth = _depth(_stroke_radius)
+	job.threshold = FLATTEN_THRESHOLD
+	job.material = _stroke_material
+	job.selection = _stroke_selection
+	job.prep_sculpt_frame = _stroke_frame
+	job.prep_center = center_point
+	job.prep_radius = _stroke_radius
+	job.prep_falloff = _stroke_falloff
+	job.prep_depth = _height_depth()
+	job.prep_context = _stroke_context
+	job.prep_known = Prep.known_surfaces(_samples)
+	job.prep_progress = _progress.duplicate()
+	job.prep_strength = _stroke_strength
+	_tick_job = job
+	_operation_id = State.begin_operation("Sculpting voxels", _dab_candidates(), true, self, _cancel_edit)
+	job.operation_id = _operation_id
+	_run_tick_worker(job)
+
+
+# The footprint candidate count of the current stroke, for the operation total.
+func _dab_candidates() -> int:
+	return _dab_estimate(_stroke_radius)
+
+
+## Runs one Smooth dab on the real surface under its reconstructed ray.
+##
+## The ray comes from the captured segment rays, so a queued dab never depends on
+## the live camera or on when a worker published. The hit and the entered face
+## resolve on the accepted frame at this call, so the 3D patch follows the real
+## surface. A ray that misses the model consumes the input spacing but applies no
+## Smooth edit and seeds nothing.
+func _run_smooth_dab() -> void:
+	var origin := _dab_ray_origin
+	var dir := _dab_ray_dir
+	if dir == Vector3.ZERO or dir == Vector3.INF:
+		return
+	if origin == Vector3.INF:
+		origin = _press_ray_origin
+	var actual := VoxelPicking.start_pick(origin, dir, _source_frame, _stroke_forward if _stroke_forward != Vector3.ZERO else _forward())
+	_smooth_hit = actual.hit
+	_smooth_entry = actual.entry
+	if actual.hit == VoxelPicking.NONE:
+		return
+	_stroke_center_point = Vector3(actual.hit)
+	if _dab_is_large(_stroke_radius):
+		_start_prep_smooth()
+		return
+	_rebuild_smooth()
+	_apply_influence(1.0)
+	_mark_hover_dirty()
+
+
+# Starts one Smooth dab whose refit, field build, rounding, and writes all run
+# on the worker pool. The job holds the previous field state for the carry and
+# the credits, so a brush move never discards earned time.
+func _start_prep_smooth() -> void:
+	var job := SmoothJob.new()
+	job.stroke_id = _stroke_id
+	job.preparing = true
+	job.edited_frame = _source_frame.copy_frame()
+	job.seconds = 1.0
+	job.rate = _stroke_strength
+	job.radius = SmoothOperation.KERNEL_RADIUS
+	job.remove_threshold = SmoothOperation.REMOVE_THRESHOLD
+	job.add_threshold = SmoothOperation.ADD_THRESHOLD
+	job.prep_sculpt_frame = _stroke_frame
+	job.prep_center = _stroke_center_point
+	job.prep_radius = _stroke_radius
+	job.prep_falloff = _stroke_falloff
+	job.prep_depth = _depth(_stroke_radius)
+	job.prep_reach = SMOOTH_NORMAL_REACH
+	job.prep_context = _context()
+	job.prep_selection = _stroke_selection
+	job.prep_entry = _smooth_entry
+	job.prep_source = _stroke_normal_source
+	job.prep_fields = _smooth_fields
+	_smooth_job = job
+	_operation_id = State.begin_operation("Smoothing voxels", _dab_candidates(), true, self, _cancel_edit)
+	job.operation_id = _operation_id
+	_run_smooth_worker(job)
+
+
 # Returns the world point of one anchor cell on the frozen stroke plane. The
 # anchor is a world cell and the plane is frozen at the press, so the same path
 # gives the same dab points at any event rate and no refit moves them.
@@ -1184,11 +1592,20 @@ func _busy() -> bool:
 	return _tick_job != null or _grab_job != null or _smooth_job != null
 
 
+# Returns true when a finished worker job still belongs to the current stroke and
+# may publish its result. Every dab job (tick, grab, smooth) shares this check: a
+# newer stroke, an expired cancel request, a closed handle, or a swapped document
+# or frame rejects the result.
+func _job_is_current(job: Variant) -> bool:
+	if job.stroke_id != _stroke_id or not job.checkpoint(0):
+		return false
+	if _edit == null or _edit != _stroke_tx:
+		return false
+	return State.document == _source_document and State.get_current_voxel_frame() == _source_frame
+
+
 func _rebuild_samples(center_point: Vector3) -> void:
-	var known := {}
-	for key in _samples:
-		known[_samples[key]["anchor"]] = _samples[key]["surface"]
-	_samples = _sample_map(_stroke_frame, center_point, _stroke_radius, _stroke_falloff, known)
+	_samples = _sample_map(_stroke_frame, center_point, _stroke_radius, _stroke_falloff, Prep.known_surfaces(_samples))
 	_prune_state()
 
 
@@ -1197,38 +1614,32 @@ func _rebuild_samples(center_point: Vector3) -> void:
 ## tracked surface, so a persisting column never re-scans. A repeated claimed
 ## surface keeps the highest weight, so two samples never write the same cell and
 ## no sample blocks or stalls a neighbor.
+##
+## Every candidate is collected first, then resolved once. The resolver keeps one
+## row per anchor and one row per claim, so a tilted disc whose entries share an
+## anchor or a claim can never leave a dangling owner. The surface scan of every
+## eligible entry runs in the same order as before, so the query stream is
+## unchanged.
 func _sample_map(sculpt_frame: SculptFrame, center_point: Vector3, radius: int, falloff: float, known: Dictionary = {}) -> Dictionary:
-	var built := {}
-	var claimed := {}
-	var context := _context()
-	var active := _active_frame()
-	var depth := _depth(radius)
-	for mask in _masks_for(context):
-		var reflected := sculpt_frame.reflected(context, mask)
-		var center := center_point if mask == 0 else SculptFrame.mirror_point(center_point, context, mask)
-		for entry in SculptGeometry.disk_offsets(radius):
-			var weight := SculptGeometry.weight_at(entry["distance"], float(radius), falloff)
-			if weight <= 0.0:
-				continue
-			var point: Vector3 = center + float(entry["u"]) * reflected.tangent_u + float(entry["v"]) * reflected.tangent_v
-			var anchor := SculptGeometry.cell_at(point)
-			var surface: Vector3i = known[anchor] if known.has(anchor) else SculptGeometry.surface_along(active, point, reflected.normal, depth, {})
-			var claim := surface if surface != VoxelPicking.NONE else anchor
-			if claimed.has(claim):
-				var winner: Vector3i = claimed[claim]
-				if float(built[winner]["weight"]) >= weight:
-					continue
-				built.erase(winner)
-			claimed[claim] = anchor
-			built[anchor] = {
-				"anchor": anchor,
-				"point": point,
-				"normal": reflected.normal,
-				"plane_origin": reflected.origin,
-				"weight": weight,
-				"surface": surface,
-			}
-	return built
+	# The body is shared with the hover worker, so the stroke and the preview
+	# read one definition. The height lookup uses the taller bound, so a column
+	# whose support sits above the old footprint depth still resolves without
+	# moving the plane.
+	return SculptPreview.compute_sample_map(_active_frame(), sculpt_frame, center_point, radius, falloff, _context(), _height_depth(), known)
+
+
+## Returns the stable logical column of one sample. The definition is shared with
+## the worker job, so the tool and the job agree on the key.
+static func _column_key(sample: Dictionary) -> Vector3i:
+	return Prep.column_key(sample)
+
+
+## Returns the credited-influence key of one sample. Grow keys by the stable
+## logical column, so a rising effect origin keeps one entry per physical column
+## and no soft-edge credit resets. Flatten keeps its anchor key, because its
+## operation plane is fixed and its anchors are already stable at any height.
+func _progress_key(sample: Dictionary) -> Vector3i:
+	return Prep.progress_key(sample, _stroke_tool)
 
 
 func _prune_state() -> void:
@@ -1238,43 +1649,38 @@ func _prune_state() -> void:
 	var kept_samples := {}
 	for anchor in _samples:
 		kept_samples[anchor] = _samples[anchor]
-		if _progress.has(anchor):
-			kept_progress[anchor] = _progress[anchor]
+		var key := _progress_key(_samples[anchor])
+		if _progress.has(key):
+			kept_progress[key] = _progress[key]
 	_progress = kept_progress
 	_samples = kept_samples
 
 
+## Earns the influence of the given applications on the current footprint. The
+## pure definition is shared with the worker job, so a small dab and a large dab
+## credit the same way. A call that earns nothing keeps the map identity.
 func _accumulate(applications: float) -> void:
-	if applications <= 0.0:
-		return
-	for anchor in _samples:
-		var weight: float = _samples[anchor]["weight"]
-		# The progress keeps the full earned amount, so a soft edge keeps its
-		# fractional influence across dabs. The strength is the step count of one
-		# application at full weight.
-		_progress[anchor] = float(_progress.get(anchor, 0.0)) + _stroke_strength * weight * applications
+	_progress = Prep.accumulated(_progress, _samples, _stroke_tool, _stroke_strength, applications)
 
 
 func _collect_steps() -> Array:
-	var out := []
-	for anchor in _samples:
-		var steps := int(floor(float(_progress.get(anchor, 0.0)) + PROGRESS_EPSILON))
-		if steps <= 0:
-			continue
-		var sample: Dictionary = _samples[anchor]
-		out.append({
-			"anchor": anchor,
-			"point": sample["point"],
-			"normal": sample["normal"],
-			"plane_origin": sample["plane_origin"],
-			"surface": sample["surface"],
-			"steps": steps,
-		})
-	return out
+	return Prep.collect_steps(_samples, _progress, _stroke_tool)
 
 
 func _depth(radius: int) -> int:
-	return mini(64, maxi(8, radius * 2))
+	return SculptPreview.depth_for(radius)
+
+
+## Returns the height lookup depth of one footprint column.
+##
+## The walk stays bounded, but a taller bound resolves a column whose support
+## sits above the old footprint depth. The operation plane never moves, so the
+## kernel coverage is unchanged and the profile of every column inside the old
+## bound is exactly the shipped one. Only a column that the old bound reported as
+## a missing surface gains its real support, which is the artificial height limit
+## this removes.
+func _height_depth() -> int:
+	return HEIGHT_LOOKUP_LIMIT
 
 
 func _run_tick() -> void:
@@ -1319,28 +1725,27 @@ func _finish_tick(job: SculptTickJob) -> void:
 	if _operation_id == job.operation_id:
 		_operation_id = 0
 	State.finish_operation(job.operation_id)
-	if job.stroke_id != _stroke_id or not job.checkpoint(0):
+	if not _job_is_current(job):
 		return
-	if _edit == null or _edit != _stroke_tx:
-		return
-	if State.document != _source_document or State.get_current_voxel_frame() != _source_frame:
-		return
-	for anchor in job.used_steps:
-		_progress[anchor] = maxf(float(_progress.get(anchor, 0.0)) - float(job.used_steps[anchor]), 0.0)
-	for anchor in job.settled:
-		_progress[anchor] = 0.0
+	# A preparing dab built its own map and step list on the worker, so adopt
+	# them before the applied steps adjust the credited influence.
+	if job.prepared_samples != null:
+		_samples = job.prepared_samples
+		_progress = job.prepared_progress
+	for key in job.used_steps:
+		_progress[key] = maxf(float(_progress.get(key, 0.0)) - float(job.used_steps[key]), 0.0)
+	for key in job.settled:
+		_progress[key] = 0.0
 	for anchor in job.surfaces:
 		if _samples.has(anchor):
 			_samples[anchor]["surface"] = job.surfaces[anchor]
+	if job.prepared_samples != null:
+		_prune_state()
 	_source_frame.restore(job.edited_frame.capture())
 	State.document._bounds_dirty = true
 	if not job.changed_chunks.is_empty():
 		State.chunks_changed.emit(State.current_frame, job.changed_chunks)
-	_preview_dirty = true
-
-
-func _after_tick() -> void:
-	_settle_dabs()
+	_mark_hover_dirty()
 
 
 # --- Grab -------------------------------------------------------------------
@@ -1375,7 +1780,7 @@ func _capture_grab(anchor: Vector3i) -> void:
 				"weight": weight,
 			})
 	_grab_empty = _grab_sources.is_empty()
-	_preview_dirty = true
+	_mark_hover_dirty()
 
 
 func _allows_selection(cell: Vector3i) -> bool:
@@ -1474,11 +1879,7 @@ func _finish_grab(job: GrabJob) -> void:
 			_grab_pending_delta = null
 			_run_grab(queued)
 		return
-	if not job.checkpoint(0):
-		return
-	if _edit == null or _edit != _stroke_tx:
-		return
-	if State.document != _source_document or State.get_current_voxel_frame() != _source_frame:
+	if not _job_is_current(job):
 		return
 	var before := _source_frame.chunks.duplicate()
 	_source_frame.restore(job.edited_frame.capture())
@@ -1511,7 +1912,7 @@ func _publish_grab_baseline() -> void:
 	var changed := _changed_chunks(before, _source_frame.chunks)
 	if not changed.is_empty():
 		State.chunks_changed.emit(State.current_frame, changed)
-	_preview_dirty = true
+	_mark_hover_dirty()
 
 
 func _changed_chunks(before: Dictionary, after: Dictionary) -> Array[Vector3i]:
@@ -1559,45 +1960,20 @@ func _clear_smooth() -> void:
 func _rebuild_smooth() -> void:
 	_refit_smooth_frame()
 	var fields := _build_smooth_fields(_stroke_frame, _stroke_center_point, _stroke_radius, _stroke_falloff, _stroke_selection)
-	for index in fields.size():
-		if index >= _smooth_fields.size():
-			continue
-		var old: Dictionary = _smooth_fields[index]
-		var old_credits: Dictionary = old["credits"]
-		var credits := {}
-		for cell: Vector3i in fields[index]["cells"]:
-			if old_credits.has(cell):
-				credits[cell] = old_credits[cell]
-		fields[index]["credits"] = credits
-		fields[index]["carry"] = float(old["carry"])
-	_smooth_fields = fields
+	_smooth_fields = Prep.merge_smooth_fields(fields, _smooth_fields)
 
 
 ## Re-fits the stroke plane to the current surface at the brush location. The
 ## previous frame is the fallback and the seed, so a sparse or degenerate fit
 ## keeps the previous orientation and the normal never flips.
 ##
-## The Face source keeps its locked face normal and never fits. Only the plane
-## origin follows the edited surface, so the outward direction stays exact.
+## The Face source uses the entered face of the actual hit, so a vertical side
+## keeps its own normal instead of the press face of the first cell. The pure
+## definition is shared with the worker job, so a large dab refits identically.
 func _refit_smooth_frame() -> void:
 	if _stroke_frame == null:
 		return
-	var active := _active_frame()
-	var axis := SculptGeometry.dominant_axis(_stroke_frame.normal)
-	var entry := Vector3i.ZERO
-	entry[axis] = 1 if _stroke_frame.normal[axis] >= 0.0 else -1
-	var hit := SculptGeometry.cell_at(_stroke_center_point)
-	if not active.has(hit):
-		var surface := SculptGeometry.surface_along(active, _stroke_center_point, _stroke_frame.normal, _depth(_stroke_radius), {})
-		if surface == VoxelPicking.NONE:
-			return
-		hit = surface
-	if _stroke_normal_source == SculptSettings.NormalSource.FACE:
-		var moved := _stroke_frame
-		moved.origin = Vector3(hit) + _stroke_frame.normal * 0.5
-		_stroke_frame = moved
-		return
-	_stroke_frame = SculptFrame.fit(active, hit, entry, _stroke_radius, _stroke_frame)
+	_stroke_frame = Prep.refit_smooth_frame(_active_frame(), _stroke_frame, _stroke_center_point, _smooth_entry, _stroke_normal_source, _stroke_radius, _depth(_stroke_radius))
 
 
 ## Returns one rounding field per active symmetry mask. Each field holds the
@@ -1611,53 +1987,13 @@ func _refit_smooth_frame() -> void:
 ## cell, so a soft edge rounds slower than a hard center. A cell is writable only
 ## when the frozen selection allows it.
 func _build_smooth_fields(sculpt_frame: SculptFrame, center_point: Vector3, radius: int, falloff: float, selection: Dictionary) -> Array:
-	var fields := []
-	var context := _context()
-	var active := _active_frame()
-	var depth := _depth(radius)
-	for mask in _masks_for(context):
-		var reflected := sculpt_frame.reflected(context, mask)
-		var normal: Vector3 = reflected.normal
-		var axis := SculptGeometry.dominant_axis(normal)
-		var cardinal := Vector3.ZERO
-		cardinal[axis] = 1.0 if normal[axis] >= 0.0 else -1.0
-		var center := center_point if mask == 0 else SculptFrame.mirror_point(center_point, context, mask)
-		var region := {}
-		for entry in SculptGeometry.disk_offsets(radius):
-			var weight := SculptGeometry.weight_at(entry["distance"], float(radius), falloff)
-			if weight <= 0.0:
-				continue
-			var surface := _smooth_surface_at(active, center, reflected, cardinal, entry, depth)
-			if surface == VoxelPicking.NONE:
-				continue
-			for step in range(-SMOOTH_NORMAL_REACH, SMOOTH_NORMAL_REACH + 1):
-				var cell := surface
-				cell[axis] += step
-				# A cell reached by two columns keeps the strongest weight, so
-				# the rate is deterministic and mirrored cells match.
-				region[cell] = maxf(float(region.get(cell, 0.0)), weight)
-		var cells := []
-		var weights := {}
-		for cell: Vector3i in region:
-			if SculptGeometry.allows(selection, cell):
-				cells.append(cell)
-				weights[cell] = float(region[cell])
-		cells.sort_custom(func(a: Vector3i, b: Vector3i) -> bool: return a.y < b.y if a.y != b.y else (a.z < b.z if a.z != b.z else a.x < b.x))
-		fields.append({
-			"cells": cells,
-			"weights": weights,
-			"credits": {},
-			"carry": 0.0,
-		})
-	return fields
+	# The body is shared with the hover worker and the dab worker, so all paths
+	# read one definition.
+	return Prep.smooth_fields(_active_frame(), sculpt_frame, center_point, radius, falloff, _context(), selection, _depth(radius), SMOOTH_NORMAL_REACH)
 
 
-## Returns the top cell of the column under a footprint point. The search is
-## along the signed layer axis of the reflected normal, so the patch reads the
-## real top of each column and the mirrored side uses its own outward sign.
-func _smooth_surface_at(frame: VoxelFrame, center: Vector3, reflected: SculptFrame, cardinal: Vector3, entry: Dictionary, depth: int) -> Vector3i:
-	var point: Vector3 = center + float(entry["u"]) * reflected.tangent_u + float(entry["v"]) * reflected.tangent_v
-	return SculptGeometry.surface_along(frame, point, cardinal, depth, {})
+
+
 
 
 ## Advances every Smooth field by the given number of applications. One
@@ -1725,11 +2061,7 @@ func _finish_smooth(job: SmoothJob) -> void:
 	if _operation_id == job.operation_id:
 		_operation_id = 0
 	State.finish_operation(job.operation_id)
-	if job.stroke_id != _stroke_id or not job.checkpoint(0):
-		return
-	if _edit == null or _edit != _stroke_tx:
-		return
-	if State.document != _source_document or State.get_current_voxel_frame() != _source_frame:
+	if not _job_is_current(job):
 		return
 	# Capture the identity, so a signal handler that cancels the stroke or swaps
 	# the document cannot make the refit touch stale state.
@@ -1737,6 +2069,12 @@ func _finish_smooth(job: SmoothJob) -> void:
 	var tx := _stroke_tx
 	var document := _source_document
 	var source := _source_frame
+	# A preparing dab built its fields and refit its plane on the worker, so
+	# adopt them before the carry and the credits of the tick are stored.
+	if job.prepared_frame != null:
+		_stroke_frame = job.prepared_frame
+	if job.prepared_fields != null:
+		_smooth_fields = job.prepared_fields
 	for index in job.carries.size():
 		if index < _smooth_fields.size():
 			_smooth_fields[index]["carry"] = job.carries[index]
@@ -1756,9 +2094,12 @@ func _finish_smooth(job: SmoothJob) -> void:
 	# Re-fit the plane to the accepted snapshot, so the next dab follows the
 	# changed surface. The patch stays as it was built, so a burst of dabs at one
 	# cell rounds the same cells as one call. The fractional carry is kept. The
-	# patch is rebuilt only when the brush moves.
-	_refit_smooth_frame()
-	_preview_dirty = true
+	# patch is rebuilt only when the brush moves. A preparing dab already refit
+	# the plane before it built the fields, and the next dab refits again, so no
+	# second fit runs here.
+	if job.prepared_fields == null:
+		_refit_smooth_frame()
+	_mark_hover_dirty()
 
 
 ## Returns the occupied writable cells of every Smooth field as a wireframe set.
@@ -1768,98 +2109,140 @@ func _smooth_preview_cells() -> Dictionary:
 	return _smooth_field_cells(_smooth_fields, _active_frame())
 
 
-func _hover_smooth_cells() -> Dictionary:
-	return _smooth_field_cells(_build_smooth_fields(_hover_frame, _hover_point, _settings.radius, _settings.falloff, _context().selection), _active_frame())
-
-
 func _smooth_field_cells(fields: Array, frame: VoxelFrame) -> Dictionary:
-	var cells := {}
-	if frame == null:
-		return cells
-	for field in fields:
-		for cell: Vector3i in field["cells"]:
-			if frame.has(cell):
-				cells[cell] = true
-	return cells
+	return SculptPreview.smooth_field_cells(fields, frame)
 
 
 # --- Preview ----------------------------------------------------------------
 
+## Pumps the preview for one frame. The runtime calls it from [method _process].
+## A test calls it to force one request outside the frame loop. A stroke and a
+## Grab hover publish on the main thread, because both are cheap.
 func _rebuild_preview() -> void:
-	_preview_dirty = false
 	if _edit != null:
 		if _stroke_tool == SculptSettings.Tools.GRAB:
-			_set_preview(_grab_source_cells)
+			_preview.publish_now(_grab_source_cells)
 		elif _stroke_tool == SculptSettings.Tools.SMOOTH:
-			_set_preview(_smooth_preview_cells())
+			_preview.publish_now(_smooth_preview_cells())
 		else:
-			_set_preview(_stroke_preview_cells())
-		return
-	if _last_pick == null or _last_pick.target == VoxelPicking.NONE:
-		_set_preview({})
+			_preview.publish_now(_stroke_preview_cells())
 		return
 	if _settings.tool == SculptSettings.Tools.GRAB:
-		_set_preview(_grab_sources_for(_last_pick.target))
+		if _last_pick == null or _last_pick.target == VoxelPicking.NONE:
+			_preview.publish_now({})
+			return
+		_preview.publish_now(_grab_sources_for(_last_pick.target))
 		return
-	_compute_hover_frame(_last_pick)
-	if _hover_frame == null:
-		_set_preview({})
+	# The hover request runs on the worker. A test or a benchmark calls it to
+	# start one request outside the frame loop, and then waits for the controller
+	# to settle and reads the published state. It re-checks the cache even when
+	# the hover is not dirty, so a raw write with no signal still refreshes.
+	_preview.refresh()
+
+
+## Returns the live inputs of one hover request. The controller freezes the frame
+## and runs the fit and the footprint map on the worker. The builder never fits
+## and never scans the surface, so a pointer event stays cheap.
+##
+## The builder also reports the live symmetry, the live selection, and the live
+## view, so the controller can re-check every one of them against the request
+## before a finished result reaches the cursor. A press passes its own pick, so
+## the reuse check reads the accepted pick and not the older hover pick.
+func _preview_inputs(pick: PickResult = null) -> Dictionary:
+	var use := pick if pick != null else _last_pick
+	if use == null:
+		return {}
+	var hit: Vector3i = use.hit
+	var target: Vector3i = use.target
+	if hit == VoxelPicking.NONE and target == VoxelPicking.NONE:
+		return {}
+	var active := _active_frame()
+	if active == null:
+		return {}
+	var context := _context()
+	var view := _live_view()
+	return {
+		"ready": true,
+		"frame": active,
+		"frame_id": active.get_instance_id(),
+		"hit": hit,
+		"entry": use.entry,
+		"target": target,
+		"forward": _forward(),
+		"context": context,
+		"axes": context.axes if context != null else 0,
+		"origin_twice": context.origin_twice if context != null else Vector3i.ZERO,
+		"selection": context.selection if context != null else {},
+		"floor_axis": State.floor_axis,
+		"floor_index": State.floor_index,
+		"tool": _settings.tool,
+		"grow_mode": _settings.grow_mode,
+		"source": _settings.normal_source,
+		"radius": _settings.radius,
+		"falloff": _settings.falloff,
+		"depth": _depth(_settings.radius),
+		"camera": view["camera"],
+		"projection": view["projection"],
+		"viewport": view["viewport"],
+	}
+
+
+## Returns true while an open stroke or a running edit blocks the hover. A press
+## then never waits for a preview worker.
+func _preview_paused() -> bool:
+	return _edit != null or _busy()
+
+
+## Returns the live view, so a zoom, a lens change, or a viewport resize drops a
+## stale hover result. The transform is the exact camera transform the renderer
+## uses, and the projection is the exact matrix, so an orthographic size or an FOV
+## change is caught. A view without a camera reports no valid view.
+func _live_view() -> Dictionary:
+	if not is_inside_tree():
+		return {"valid": false, "camera": Transform3D(), "projection": Projection(), "viewport": Vector2i.ZERO}
+	var viewport := get_viewport()
+	if viewport == null:
+		return {"valid": false, "camera": Transform3D(), "projection": Projection(), "viewport": Vector2i.ZERO}
+	var camera := viewport.get_camera_3d()
+	if camera == null:
+		return {"valid": false, "camera": Transform3D(), "projection": Projection(), "viewport": Vector2i(viewport.get_visible_rect().size)}
+	return {
+		"valid": true,
+		"camera": camera.get_camera_transform(),
+		"projection": camera.get_camera_projection(),
+		"viewport": Vector2i(viewport.get_visible_rect().size),
+	}
+
+
+## Hides the visible outline without clearing the cursor request. An invalidation
+## calls it, so a wrong footprint never shows, and the cursor keeps the mesh it
+## already built.
+func _hide_preview_visible() -> void:
+	visible = false
+
+
+# Marks the hover dirty after an input changed the footprint or the surface. The
+# controller keeps the visible outline and recomputes when a worker is free.
+func _mark_hover_dirty() -> void:
+	if _preview != null:
+		_preview.mark_intent()
+
+
+## Handles a document change. A new document discards the frame a running hover
+## job reads and the cached result, so the worker is joined before the preview
+## rebuilds. The join is bounded by one request.
+func _on_document_changed() -> void:
+	if _preview == null:
 		return
-	if _settings.tool == SculptSettings.Tools.SMOOTH:
-		_set_preview(_hover_smooth_cells())
-		return
-	var samples := _hover_samples(_hover_frame, _hover_point)
-	var cells := _preview_cells_for_samples(samples, _active_frame(), _settings.tool, _settings.grow_mode, _hover_seed_empty, _context().selection)
-	_set_preview(cells)
+	_preview.join()
+	_preview.invalidate()
 
 
 func _stroke_preview_cells() -> Dictionary:
 	var samples := []
 	for anchor in _samples:
 		samples.append(_samples[anchor])
-	return _preview_cells_for_samples(samples, _source_frame, _stroke_tool, _stroke_grow_mode, _stroke_seed_empty, _stroke_selection)
-
-
-## Returns the preview cells of the next executed step. Every sculpt preview is
-## an opaque wireframe. Grow Add and Flatten show the supporting occupied voxel
-## when the next destination is eligible. Remove shows its occupied removal
-## targets. An empty-floor seed shows its empty cell. A settled Flatten sample
-## shows nothing.
-func _preview_cells_for_samples(samples: Array, frame: VoxelFrame, tool: int, grow_mode: int, seed_empty: bool, selection: Dictionary) -> Dictionary:
-	var cells := {}
-	var changes := {}
-	for sample in samples:
-		if float(sample["weight"]) <= 0.0:
-			continue
-		var surface: Vector3i = sample["surface"]
-		var normal: Vector3 = sample["normal"]
-		var point: Vector3 = sample["point"]
-		match tool:
-			SculptSettings.Tools.GROW:
-				if grow_mode == SculptSettings.GrowMode.ADD:
-					var destination := SculptGeometry.grow_add_cell(frame, changes, surface, normal, point, seed_empty, selection)
-					if destination == VoxelPicking.NONE:
-						continue
-					cells[destination if surface == VoxelPicking.NONE else surface] = true
-				else:
-					var target := SculptGeometry.grow_remove_cell(surface, selection)
-					if target != VoxelPicking.NONE:
-						cells[target] = true
-			SculptSettings.Tools.FLATTEN:
-				var action := SculptGeometry.flatten_action(frame, changes, surface, normal, point, sample["plane_origin"], FLATTEN_THRESHOLD, seed_empty, selection)
-				var cell: Vector3i = action["cell"]
-				if cell == VoxelPicking.NONE:
-					continue
-				cells[cell if action.get("seed", false) else surface] = true
-	return cells
-
-
-func _hover_samples(frame: SculptFrame, center_point: Vector3) -> Array:
-	var built := _sample_map(frame, center_point, _settings.radius, _settings.falloff)
-	var samples := []
-	for key in built:
-		samples.append(built[key])
-	return samples
+	return SculptPreview.compute_preview_cells(samples, _source_frame, _stroke_tool, _stroke_grow_mode, _stroke_seed_empty, _stroke_selection, FLATTEN_THRESHOLD)
 
 
 ## Returns the eligible Grab source cells around a center. A source is occupied
@@ -1915,18 +2298,41 @@ func _pick_start(origin: Vector3, dir: Vector3) -> PickResult:
 		else:
 			pick.plane = null
 		return pick
-	# An idle hover defers the frame fit to `_compute_hover_frame`, which fits
-	# only when its hover key misses. A still pointer then pays no fit at all,
-	# and a new cell pays one. The pointer ray above is already recorded, so the
-	# stroke spacing baseline is unchanged. A press fits here, because
-	# `open_stroke` runs before this call and `_apply_pick` reads `_pending_frame`
-	# and `_press_point` at once.
+	# An idle hover runs its frame fit and its footprint map on the preview
+	# worker, so a still pointer pays nothing and a new cell pays one bounded
+	# request. The pointer ray above is already recorded, so the stroke spacing
+	# baseline is unchanged. A press fits here, because `open_stroke` runs before
+	# this call and `_apply_pick` reads `_pending_frame` and `_press_point` at
+	# once.
 	if _edit == null:
 		return pick
+	if _settings.tool == SculptSettings.Tools.SMOOTH or _settings.tool == SculptSettings.Tools.GROW:
+		# Capture the camera family of the press. A perspective or frustum camera
+		# shares one focus, an orthographic camera keeps one direction. Every dab
+		# reconstructs its ray from this captured family, so a later camera change
+		# never alters an accepted dab. Grow locks the direction this way, while
+		# Smooth uses the ray for its operation plane too.
+		_capture_press_camera(origin, dir)
+		_stroke_forward = _forward()
+		_press_entry = pick.entry
 	_pending_frame = _frame_for_pick(pick, origin)
 	pick.plane = _plane_for(_pending_frame.origin, _pending_frame.normal)
 	_press_point = _plane_hit(_pending_frame, origin, dir)
 	return pick
+
+
+# Captures the camera family of the press from the live camera. The projection
+# mode selects the family. A missing camera keeps the orthographic family.
+func _capture_press_camera(origin: Vector3, dir: Vector3) -> void:
+	var camera := get_viewport().get_camera_3d() if is_inside_tree() else null
+	_stroke_ray_dir = dir.normalized()
+	_camera_perspective = camera != null and camera.projection != Camera3D.PROJECTION_ORTHOGONAL
+	_press_projection = camera.projection if camera != null else Camera3D.PROJECTION_ORTHOGONAL
+	_press_camera_transform = camera.global_transform if camera != null else Transform3D()
+	# A perspective ray's origin is the camera focus. An orthographic ray's origin
+	# is a near-plane point, so the press origin keeps the sub-cell phase of the
+	# first click and the rest of the stroke reuses that constant offset.
+	_camera_focus = origin if _camera_perspective else Vector3.ZERO
 
 
 # Returns the ray and frame-plane intersection, or the frame origin when the
@@ -1940,6 +2346,13 @@ func _plane_hit(frame: SculptFrame, origin: Vector3, dir: Vector3) -> Vector3:
 
 func _frame_for_pick(pick: PickResult, origin: Vector3) -> SculptFrame:
 	if pick.hit != VoxelPicking.NONE:
+		# A large press reuses the fitted hover frame when the last hover result
+		# still matches this press exactly. The fit then never runs on the main
+		# thread. Any mismatch falls through to the fit below.
+		if _dab_is_large(_settings.radius):
+			var reused := _preview.stashed_frame(_preview_inputs(pick)) if _preview != null else null
+			if reused != null:
+				return reused
 		var entry := pick.entry
 		if entry == Vector3i.ZERO:
 			entry = Vector3i.ZERO
@@ -1979,6 +2392,11 @@ func pick_drag(request: PickRequest) -> PickResult:
 # operation plane adapts to an accepted dab. The point rounds to the dab anchor.
 func _frame_drag(request: PickRequest) -> PickResult:
 	var result := PickResult.new()
+	if _stroke_tool == SculptSettings.Tools.SMOOTH and _edit != null and _camera_changed():
+		# A camera transform or projection change ends the captured gesture, so no
+		# dab mixes the captured family with a live camera.
+		finish_on_switch()
+		return result
 	_drag_ray_moved = request.origin != _drag_ray_origin or request.dir != _drag_ray_dir
 	_drag_ray_origin = request.origin
 	_drag_ray_dir = request.dir
@@ -1988,6 +2406,16 @@ func _frame_drag(request: PickRequest) -> PickResult:
 	result.target = SculptGeometry.cell_at(intersection)
 	result.hit = result.target if request.frame != null and request.frame.has(result.target) else VoxelPicking.NONE
 	return result
+
+
+# Returns true when the live camera no longer matches the captured press camera.
+func _camera_changed() -> bool:
+	var camera := get_viewport().get_camera_3d() if is_inside_tree() else null
+	if camera == null:
+		return false
+	if camera.projection != _press_projection:
+		return true
+	return not camera.global_transform.is_equal_approx(_press_camera_transform)
 
 
 # Intersects the true camera-facing plane and rounds the point to a cell.
@@ -2007,54 +2435,23 @@ func _view_drag(request: PickRequest) -> PickResult:
 
 
 ## Updates the tool cursor and the preview for one pick.
+##
+## The builder records the pick and marks the hover dirty. The controller fits
+## the frame and builds the footprint on a worker, so a pointer event never runs
+## a fit or a surface scan on the main thread. Grab draws the occupied sources of
+## the view plane, so it needs no fitted frame.
 func update_visual(pick: PickResult) -> void:
 	if pick.plane == null:
 		pick.plane = _plane
 	_last_pick = pick
 	if pick.target == VoxelPicking.NONE:
+		if _preview != null:
+			# The pointer left the model, so every request is retired and the
+			# visible outline is cleared.
+			_preview.clear_all()
 		visible = false
-		_preview_dirty = false
-		_set_preview({})
 		return
-	if _edit == null:
-		_compute_hover_frame(pick)
-	_preview_dirty = true
-
-
-func _compute_hover_frame(pick: PickResult) -> void:
-	var active := _active_frame()
-	if active == null:
-		_hover_frame = null
-		return
-	if pick.hit == VoxelPicking.NONE:
-		# A miss uses the floor plane. A parallel ray leaves no target, so the
-		# hover has no frame and the sentinel arithmetic never runs.
-		if pick.target == VoxelPicking.NONE:
-			_hover_frame = null
-			return
-		var floor_axis: int = State.floor_axis
-		var level := float(State.floor_index) - 0.5
-		var floor_sign := 1 if pick.target[floor_axis] >= State.floor_index else -1
-		_hover_frame = SculptFrame.from_floor(floor_axis, floor_sign, level, pick.target)
-		_hover_point = _hover_frame.origin
-		_hover_seed_empty = true
-		return
-	_hover_seed_empty = false
-	if _hover_key == pick.hit and _hover_entry == pick.entry and _hover_source == _settings.normal_source and _hover_frame != null:
-		return
-	_hover_key = pick.hit
-	_hover_entry = pick.entry
-	_hover_source = _settings.normal_source
-	var entry := pick.entry
-	if entry == Vector3i.ZERO:
-		entry = Vector3i.ZERO
-		entry[VoxelPicking.view_axis(_forward())] = 1
-	var fallback := SculptFrame.from_face(pick.hit, entry)
-	if _settings.normal_source == SculptSettings.NormalSource.FACE:
-		_hover_frame = fallback
-	else:
-		_hover_frame = SculptFrame.fit(active, pick.hit, entry, _settings.radius, fallback)
-	_hover_point = _hover_frame.origin
+	_mark_hover_dirty()
 
 
 func _active_frame() -> VoxelFrame:
@@ -2073,11 +2470,4 @@ func _normal_source() -> int:
 
 
 func _masks_for(context: VoxelFrame.EditContext) -> Array:
-	var masks := []
-	if context == null:
-		masks.append(0)
-		return masks
-	for mask in 8:
-		if (mask & ~context.axes) == 0:
-			masks.append(mask)
-	return masks
+	return SculptPreview.masks_for(context)

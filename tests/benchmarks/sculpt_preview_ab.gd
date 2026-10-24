@@ -121,7 +121,9 @@ func _path_run(case_name: String, use_reference: bool) -> Dictionary:
 	_hover(_screen_of(_start_cell(case_name)))
 	await _settle_all()
 	_tool._rebuild_preview()
+	await _settle_preview_worker()
 	await _settle_all()
+	await _settle_preview_worker()
 	_clear_preview_cache()
 	_tool.reset_probe()
 	_reset_frame_stats()
@@ -170,6 +172,7 @@ func _path_run(case_name: String, use_reference: bool) -> Dictionary:
 	# The two exclusive fit timers of one run. The pick fit and the hover fit do
 	# not overlap, so their sum is the whole fit cost of the run.
 	row["fit_pair_us"] = int(row["fit_us"]) + int(row["hover_us"])
+	await _settle_preview_worker()
 	row["exact"] = _tool.exact_snapshot()
 	return row
 
@@ -217,6 +220,7 @@ func _invalidation_routes(label: String) -> void:
 	_hover(_screen_of(_mid_cell()))
 	await _settle_all()
 	_tool._rebuild_preview()
+	await _settle_preview_worker()
 	var base: Dictionary = _tool.exact_snapshot()
 	step("Then the %s path keeps the exact preview through every route" % label, func():
 		expect((base["cells"] as Array).size() > 0, "the settled hover outlines support voxels")
@@ -227,6 +231,7 @@ func _invalidation_routes(label: String) -> void:
 	State.color_changed.emit(State.current_color)
 	await _settle_all()
 	_tool._rebuild_preview()
+	await _settle_preview_worker()
 	var color: Dictionary = _tool.exact_snapshot()
 	expect(_same_exact(color, base), "%s: a color-only change keeps the exact cells, vertices, and bounds" % label)
 
@@ -234,6 +239,7 @@ func _invalidation_routes(label: String) -> void:
 	_settings.strength = 8.0 if _settings.strength != 8.0 else 1.0
 	await _settle_all()
 	_tool._rebuild_preview()
+	await _settle_preview_worker()
 	expect(_same_exact(_tool.exact_snapshot(), base), "%s: a strength-only change keeps the exact cells, vertices, and bounds" % label)
 
 	# 3. A geometry change in another frame.
@@ -249,6 +255,7 @@ func _invalidation_routes(label: String) -> void:
 	State.chunks_changed.emit(1, other_chunks)
 	await _settle_all()
 	_tool._rebuild_preview()
+	await _settle_preview_worker()
 	expect(State.document.frames.size() == 2 and State.get_current_voxel_frame() == _frame, "%s: the edited frame is not the editor frame" % label)
 	expect(_same_exact(_tool.exact_snapshot(), base), "%s: a geometry change in another frame keeps the exact cells, vertices, and bounds" % label)
 	State.document.remove_frame(1)
@@ -261,10 +268,12 @@ func _invalidation_routes(label: String) -> void:
 	sync_viewport()
 	await _settle_all()
 	_tool._rebuild_preview()
+	await _settle_preview_worker()
 	var current: Dictionary = _tool.exact_snapshot()
 	expect(not _same_exact(current, base), "%s: a current-frame geometry change moves the preview" % label)
 	_tool._mark_preview_dirty()
 	_tool._rebuild_preview()
+	await _settle_preview_worker()
 	expect(_same_exact(_tool.exact_snapshot(), current), "%s: the rebuilt preview matches the forced recompute" % label)
 
 	# 5. A raw cell write with no signal. The preview must not rebuild on its own,
@@ -278,11 +287,13 @@ func _invalidation_routes(label: String) -> void:
 	_hover(_screen_of(_mid_cell()))
 	await _settle_all()
 	_tool._rebuild_preview()
+	await _settle_preview_worker()
 	var raw_result: Dictionary = _tool.exact_snapshot()
 	expect(not _same_exact(raw_result, current), "%s: the next hover reads the raw write from the live frame" % label)
 	sync_viewport()
 	await _settle_all()
 	_tool._rebuild_preview()
+	await _settle_preview_worker()
 	expect(_same_exact(_tool.exact_snapshot(), raw_result), "%s: the signal route matches the raw write route" % label)
 
 	# 6. Two selections of the same size with different content.
@@ -292,12 +303,14 @@ func _invalidation_routes(label: String) -> void:
 	State.selection_changed.emit()
 	await _settle_all()
 	_tool._rebuild_preview()
+	await _settle_preview_worker()
 	var first: Dictionary = _tool.exact_snapshot()
 	var first_size := State.selection.count()
 	State.selection.from_box(mid + Vector3i(-1, -1, -4), mid + Vector3i(3, 1, 4))
 	State.selection_changed.emit()
 	await _settle_all()
 	_tool._rebuild_preview()
+	await _settle_preview_worker()
 	var second: Dictionary = _tool.exact_snapshot()
 	expect(State.selection.count() == first_size, "%s: the two selections hold the same cell count" % label)
 	expect((first["cells"] as Array) != (second["cells"] as Array), "%s: two selections of one size filter different cells" % label)
@@ -307,15 +320,17 @@ func _invalidation_routes(label: String) -> void:
 	State.selection_changed.emit()
 	await _settle_all()
 	_tool._rebuild_preview()
+	await _settle_preview_worker()
 	expect(_same_exact(_tool.exact_snapshot(), before_selection), "%s: clearing the selection restores the exact preview" % label)
 
 
 # --- Radius change ------------------------------------------------------------
 #
-# A radius change with a stationary pointer calls no `_pick_start`. The preview
-# rebuild pays one hover refit and one full footprint map at the new radius, so
-# this case isolates the surface query cost from the fit count. The fit switch is
-# reported as a control: the fit cleanup must not move a radius change.
+# A radius change with a stationary pointer calls no `_pick_start`. The frozen
+# path pays one hover refit and one full footprint map at the new radius, and the
+# candidate pays its worker request. The pair is the frozen path with the frozen
+# query against the candidate with the shipped query. The control runs the frozen
+# path with the shipped query, so the query cost and the path cost stay apart.
 
 func _resize_case() -> void:
 	var spec := {"name": "resize_r32", "radius": 4, "axes": 0, "selection": false, "mixed": false, "full": false}
@@ -362,17 +377,20 @@ func _resize_case() -> void:
 				expect(shrink_parity["vertices"], "the radius 4 installed vertex arrays match")
 				expect(shrink_parity["aabb"], "the radius 4 installed bounds match")
 			)
-	_print_path("resize_grow_4_32", "reference_surface", grow_reference)
+	_print_path("resize_grow_4_32", "reference", grow_reference)
 	_print_path("resize_grow_4_32", "candidate", grow_candidate)
-	_print_path("resize_grow_4_32", "fit_control", grow_control)
-	_print_path("resize_shrink_32_4", "reference_surface", shrink_reference)
+	_print_path("resize_grow_4_32", "reference_shipped_query", grow_control)
+	_print_path("resize_shrink_32_4", "reference", shrink_reference)
 	_print_path("resize_shrink_32_4", "candidate", shrink_candidate)
 
 
 func _resize_pair(target_radius: int, pair: int) -> Dictionary:
 	var first_reference := pair % 2 == 0
-	var a := await _resize_run(target_radius, first_reference, false)
-	var b := await _resize_run(target_radius, not first_reference, false)
+	# The frozen path selects the frozen query with it. The candidate selects the
+	# shipped query, so the pair reports the whole change and the control below
+	# reports the frozen path with the shipped query.
+	var a := await _resize_run(target_radius, first_reference, first_reference)
+	var b := await _resize_run(target_radius, not first_reference, not first_reference)
 	return {
 		"reference": a if first_reference else b,
 		"candidate": b if first_reference else a,
@@ -381,7 +399,8 @@ func _resize_pair(target_radius: int, pair: int) -> Dictionary:
 
 # Runs one radius change from the opposite radius. The change is a settings change
 # with a stationary pointer, so no pick and no motion is involved. The event row
-# carries the settle window, and the counters carry the stages.
+# carries the settle window, and the counters carry the stages. `use_reference_fit`
+# selects the frozen path and `use_reference_surface` selects the frozen query.
 func _resize_run(target_radius: int, use_reference_surface: bool, use_reference_fit: bool) -> Dictionary:
 	_tool.use_reference_surface = use_reference_surface
 	_tool.use_reference = use_reference_fit
@@ -389,6 +408,7 @@ func _resize_run(target_radius: int, use_reference_surface: bool, use_reference_
 	_hover(_screen_of(_mid_cell()))
 	await _settle_all()
 	_tool._rebuild_preview()
+	await _settle_preview_worker()
 	await _settle_all()
 	_clear_preview_cache()
 	_tool.reset_probe()
@@ -399,17 +419,29 @@ func _resize_run(target_radius: int, use_reference_surface: bool, use_reference_
 	var settle_frames := 0
 	for index in 240:
 		await get_tree().process_frame
-		if _tool.rebuild_calls > 0 and not _tool._preview_dirty and _cursor.is_settled():
+		if not _tool.is_preview_dirty() and not _tool._preview.is_running() and _cursor.is_settled():
 			settle_frames = index + 1
 			break
 	var settle_us := Time.get_ticks_usec() - started
 	_end_measure()
+	await _settle_preview_worker()
 	var row := _row(1, [settle_us], [], [], [], [], {
 		"span_us": settle_us, "install_frames": settle_frames,
 		"visible_us": settle_us, "visible_frames": settle_frames,
 	})
 	row["exact"] = _tool.exact_snapshot()
 	return row
+
+
+# Waits for the preview controller to finish its worker request and for the
+# cursor mesh to settle, so a snapshot reads the published result and the installed
+# mesh that belongs to it.
+func _settle_preview_worker() -> void:
+	for index in 600:
+		if not _tool._preview.is_running() and not _tool.is_preview_dirty():
+			break
+		await get_tree().process_frame
+	await _settle_cursor()
 
 
 # --- Surface query parity and timing -----------------------------------------
@@ -501,6 +533,42 @@ func _surface_case() -> void:
 		expect(island_parity["mismatches"].is_empty(), "the tiny island under a wide query matches (%d queries)" % island_parity["count"])
 		expect(real_parity["mismatches"].is_empty(), "the real hover and resize stream matches (%d queries)" % real_parity["count"])
 	)
+	# The exact column index of the preview worker. It must never change an answer,
+	# so every query of the enumerations and of the real stream runs twice: once
+	# with the index and once through the frozen walk.
+	var index_parts := [
+		_index_parity(_frame, ramp_queries), _index_parity(empty, empty_queries),
+		_index_parity(slab, slab_queries), _index_parity(_frame, edge_queries),
+		_index_parity(far, far_queries), _index_parity(island, island_queries),
+		_index_parity(_frame, real["all"]),
+	]
+	var index_mismatches := 0
+	var index_queries := 0
+	for part in index_parts:
+		index_mismatches += (part["mismatches"] as Array).size()
+		index_queries += int(part["count"])
+	print("MEASURE sculpt_preview_ab surface_query index: queries=%d mismatches=%d" % [index_queries, index_mismatches])
+	step("Then the exact column index matches the frozen walk on every query", func():
+		expect(index_mismatches == 0, "the column index never changes a query answer (%d queries)" % index_queries)
+	)
+
+
+# Returns the parity of the exact column index against the frozen walk. Every
+# query of the list runs with a context and through the frozen query, so a
+# difference names the query and both results.
+func _index_parity(frame: VoxelFrame, queries: Array) -> Dictionary:
+	var query := SculptQueryContext.new(frame)
+	var mismatches := []
+	for entry in queries:
+		var point: Vector3 = entry["point"]
+		var normal: Vector3 = entry["normal"]
+		var depth: int = entry["depth"]
+		var changes: Dictionary = entry.get("changes", {})
+		var indexed := SculptGeometry.surface_along(frame, point, normal, depth, changes, query)
+		var frozen := SurfaceQuery.surface_along(frame, point, normal, depth, changes)
+		if indexed != frozen:
+			mismatches.append({"point": point, "normal": normal, "depth": depth, "indexed": indexed, "frozen": frozen})
+	return {"count": queries.size(), "mismatches": mismatches}
 
 
 # Captures the real query stream. The frozen surface path records every map query
@@ -511,7 +579,9 @@ func _surface_case() -> void:
 func _capture_real_queries() -> Dictionary:
 	var fit_queries: Array = []
 	var map_queries: Array = []
-	_tool.use_reference = false
+	# The frozen path records the map queries through the frozen query, so the
+	# captured stream is the real stream of a real hover at each radius.
+	_tool.use_reference = true
 	_tool.use_reference_surface = true
 	for radius in [4, 16, 32]:
 		_settings.radius = radius
@@ -520,6 +590,7 @@ func _capture_real_queries() -> Dictionary:
 		SurfaceQuery.begin_capture()
 		_tool._mark_preview_dirty()
 		_tool._rebuild_preview()
+		await _settle_preview_worker()
 		SurfaceQuery.end_capture()
 		map_queries.append_array(SurfaceQuery.captured)
 		fit_queries.append_array(_fit_queries(_tool._last_pick.hit, _tool._last_pick.entry, radius))
@@ -532,6 +603,7 @@ func _capture_real_queries() -> Dictionary:
 	SurfaceQuery.end_capture()
 	map_queries.append_array(SurfaceQuery.captured)
 	fit_queries.append_array(_fit_queries(_tool._last_pick.hit, _tool._last_pick.entry, 32))
+	_tool.use_reference = false
 	_tool.use_reference_surface = false
 	return {"fit": fit_queries, "map": map_queries, "all": fit_queries + map_queries}
 
@@ -716,6 +788,9 @@ func _print_path(case_name: String, path_name: String, rows: Array) -> void:
 	# The mesh request layer is printed apart from the CPU stages. `submits` and
 	# `dedupe` are the request layer, `sample_us`, `cells_us`, and `set_us` are
 	# the rebuild stages, and `fit_us` and `hover_us` are the input stages.
+	# `hover_med_us` is the synchronous hover fit of one input event. The candidate
+	# runs its fit on the worker, so its per-event value is zero and its `hover_us`
+	# is the controller stage total. The reference fits on the main thread.
 	print("MEASURE sculpt_preview_ab %s %s_event: runs=%d input_med_us=%d input_max_us=%d pick_med_us=%d fit_med_us=%d hover_med_us=%d visual_med_us=%d fit_us=%d hover_us=%d fit_pair_us=%d" % [
 		case_name, path_name, rows.size(),
 		_path_median(rows, "input_med_us"), _path_median(rows, "input_max_us"),

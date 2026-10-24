@@ -6,18 +6,15 @@ extends RefCounted
 ## The helpers hold no state. The tool and the tests share them, so the
 ## footprint, the falloff, and the column surface have one definition.
 
-## The smallest face-normal alignment that counts as the visible surface.
-const MIN_ALIGN := 0.25
-## The smallest in-plane spread of a plane fit.
-const FIT_MIN_SPREAD := 0.5
-## The largest normal spread relative to the in-plane spread of a plane fit.
-const FIT_MAX_FLATNESS := 0.5
 ## The smallest tilt from the seed normal that a plane fit accepts.
 const FIT_MIN_TILT := 0.3
 ## The margin by which one axis must beat another to become the dominant axis.
 ## A near tie keeps the preferred axis, so a fitted normal never flips its
 ## dominant axis between two refits of one unchanged 45 degree surface.
 const AXIS_TIE_EPSILON := 1e-3
+## The disc offsets between two cancel checks of one worker fit. One offset is one
+## bounded surface walk, so a small value bounds the work between two cancels.
+const FIT_CANCEL_CHECKPOINT := 32
 
 ## Returns the first non-zero axis of a cell step, or -1 when every axis is
 ## zero.
@@ -25,6 +22,20 @@ static func axis_of(step: Vector3i) -> int:
 	for axis in 3:
 		if step[axis] != 0:
 			return axis
+	return -1
+
+
+## Returns the one axis of an exactly cardinal direction, or -1 when the direction
+## has zero or two non-zero components. An exact cardinal direction is the only
+## one whose walk stays inside a single column.
+static func cardinal_axis(direction: Vector3) -> int:
+	for axis in 3:
+		if direction[axis] == 0.0:
+			continue
+		for other in 3:
+			if other != axis and direction[other] != 0.0:
+				return -1
+		return axis
 	return -1
 
 
@@ -78,11 +89,58 @@ static func cell_at(point: Vector3) -> Vector3i:
 	return Vector3i(roundi(point.x), roundi(point.y), roundi(point.z))
 
 
+## Resolves a footprint candidate list into the exact sample map.
+##
+## Every candidate holds an "anchor" cell, an "influence" weight, and a "claim"
+## cell. The result keeps one row per accepted anchor, keyed by that anchor. An
+## anchor and a claim are each unique, so no two rows write the same cell and no
+## row is left without its own key.
+##
+## The candidates resolve in one pass in their own order, so the row order is the
+## shipped order. The strongest influence keeps a claimed cell. An anchor keeps
+## the last candidate, which is the shipped rule. A displacement releases the
+## whole opposite map entry, so an owner is never left dangling. The pass never
+## aborts on a duplicate anchor or claim.
+static func resolve_samples(candidates: Array) -> Dictionary:
+	var built := {}
+	var claim_owner := {}
+	for row in candidates:
+		var anchor: Vector3i = row["anchor"]
+		var claim: Vector3i = row["claim"]
+		var weight := float(row["weight"])
+		# The claim rule: the strongest influence keeps the claimed cell.
+		if claim_owner.has(claim):
+			var owner: Vector3i = claim_owner[claim]
+			if float(built[owner]["weight"]) >= weight:
+				continue
+			claim_owner.erase(claim)
+			built.erase(owner)
+		# The anchor rule keeps the shipped last-wins result. The previous claim of
+		# the anchor is released, so its owner is never left dangling.
+		if built.has(anchor):
+			var previous: Vector3i = built[anchor]["claim"]
+			claim_owner.erase(previous)
+		built[anchor] = row
+		claim_owner[claim] = anchor
+	return built
+
+
 ## Returns the integer offsets of a disk in a plane. Each entry holds the two
 ## in-plane offsets and the distance from the center.
+##
+## The result is cached per radius. The array and every entry dictionary are
+## read-only, and a mutex guards the build, so a preview worker can read one
+## radius while the main thread builds another. A caller must not change an
+## entry. One preview at a high radius asks for the disc several times, so the
+## cache removes the repeated allocation and square root of every entry.
 static func disk_offsets(radius: int) -> Array:
-	var offsets := []
 	var use_radius := maxi(radius, 1)
+	_disk_lock.lock()
+	var cached: Array = _disk_cache.get(use_radius, [])
+	_disk_lock.unlock()
+	if not cached.is_empty():
+		return cached
+	var offsets := []
 	var radius_squared := use_radius * use_radius
 	for u in range(-use_radius, use_radius + 1):
 		for v in range(-use_radius, use_radius + 1):
@@ -90,7 +148,22 @@ static func disk_offsets(radius: int) -> Array:
 			if distance_squared > radius_squared:
 				continue
 			offsets.append({"u": u, "v": v, "distance": sqrt(float(distance_squared))})
-	return offsets
+	for entry in offsets:
+		entry.make_read_only()
+	offsets.make_read_only()
+	_disk_lock.lock()
+	var existing: Array = _disk_cache.get(use_radius, [])
+	if existing.is_empty():
+		_disk_cache[use_radius] = offsets
+		cached = offsets
+	else:
+		cached = existing
+	_disk_lock.unlock()
+	return cached
+
+
+static var _disk_cache := {}
+static var _disk_lock := Mutex.new()
 
 
 ## Returns the cells a ray passes through, starting at the cell that holds
@@ -168,7 +241,12 @@ static func previous_cell(cell_position: Vector3i, direction: Vector3, ray_origi
 ## of the bounded scan. The fallback then walks the two rays one cell at a time
 ## from distance two, so no full path array is built, no cell is read twice, and
 ## no cell is tested out of order.
-static func surface_along(frame: VoxelFrame, point: Vector3, normal: Vector3, depth: int, changes := {}) -> Vector3i:
+##
+## [param context] is an optional exact read-only index of one frame snapshot. It
+## shortens an exactly cardinal query on an empty column, because a cardinal walk
+## never leaves its column. The result is identical, so a caller without a context
+## keeps the walk.
+static func surface_along(frame: VoxelFrame, point: Vector3, normal: Vector3, depth: int, changes := {}, context: SculptQueryContext = null) -> Vector3i:
 	if normal == Vector3.ZERO:
 		return VoxelPicking.NONE
 	# Nothing can hold a cell, so no ray can find a surface. A pending change can
@@ -180,6 +258,12 @@ static func surface_along(frame: VoxelFrame, point: Vector3, normal: Vector3, de
 	# start of the march, and they keep the negative half boundary with it.
 	var g := point + Vector3(0.5, 0.5, 0.5)
 	var origin_cell := Vector3i(floori(g.x), floori(g.y), floori(g.z))
+	# An exactly cardinal walk stays in the column of its origin cell, so an empty
+	# column returns NONE with no walk. The result is the exact walk result.
+	if context != null and changes.is_empty():
+		var cardinal := cardinal_axis(normal)
+		if cardinal >= 0 and context.column_empty(cardinal, origin_cell):
+			return VoxelPicking.NONE
 	var nearest := VoxelPicking.NONE
 	# The origin cell is the distance zero cell of the outward walk.
 	var first_distance := 1
@@ -354,7 +438,12 @@ static func flatten_action(frame: VoxelFrame, changes: Dictionary, surface: Vect
 ## Returns the exposed face boundary points around a hit. The points come from
 ## the connected outward surface only, so an opposing wall or a cave floor is
 ## excluded. Each point holds the boundary position and its weight.
-static func surface_points(frame: VoxelFrame, hit: Vector3i, entry: Vector3i, radius: int) -> Array:
+##
+## [param job] supplies the cancel checkpoints of a worker. [param context] is an
+## optional exact read-only column index of the same frame snapshot. A cancelled
+## fit returns no points, so the caller keeps its fallback and the job publishes
+## nothing. The point order and the query stream are unchanged.
+static func surface_points(frame: VoxelFrame, hit: Vector3i, entry: Vector3i, radius: int, job: VoxelFrame.EditJob = null, context: SculptQueryContext = null) -> Array:
 	var points := []
 	if frame == null or entry == Vector3i.ZERO:
 		return points
@@ -364,11 +453,15 @@ static func surface_points(frame: VoxelFrame, hit: Vector3i, entry: Vector3i, ra
 	var u_axis := (axis + 1) % 3
 	var v_axis := (axis + 2) % 3
 	var columns := {}
+	var completed := 0
 	for offset in disk_offsets(use_radius):
 		var point := Vector3(hit)
 		point[u_axis] += float(offset["u"])
 		point[v_axis] += float(offset["v"])
-		var surface := surface_along(frame, point, entry_normal, maxi(8, use_radius * 2))
+		var surface := surface_along(frame, point, entry_normal, maxi(8, use_radius * 2), {}, context)
+		completed += 1
+		if job != null and completed % FIT_CANCEL_CHECKPOINT == 0 and not job.checkpoint(completed):
+			return []
 		if surface == VoxelPicking.NONE:
 			continue
 		var key := Vector2i(offset["u"], offset["v"])
@@ -446,80 +539,3 @@ static func fit_surface_gradient(points: Array, seed: Vector3) -> Dictionary:
 	if normal.dot(seed) < FIT_MIN_TILT:
 		return {"ok": false}
 	return {"ok": true, "normal": normal, "centroid": centroid}
-
-
-## Returns a weighted least-squares plane fit of the boundary points. The
-## result holds the unit normal, the weighted centroid, and an ok flag. The fit
-## rejects a degenerate, a non-planar, or a wildly tilted point set.
-static func fit_plane(points: Array, seed: Vector3) -> Dictionary:
-	var total := 0.0
-	var centroid := Vector3.ZERO
-	for entry in points:
-		total += float(entry["weight"])
-		centroid += (entry["point"] as Vector3) * float(entry["weight"])
-	if total <= 1e-9:
-		return {"ok": false}
-	centroid /= total
-	var c := [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]]
-	for entry in points:
-		var delta: Vector3 = entry["point"] - centroid
-		var w := float(entry["weight"])
-		c[0][0] += w * delta.x * delta.x
-		c[0][1] += w * delta.x * delta.y
-		c[0][2] += w * delta.x * delta.z
-		c[1][1] += w * delta.y * delta.y
-		c[1][2] += w * delta.y * delta.z
-		c[2][2] += w * delta.z * delta.z
-	c[1][0] = c[0][1]
-	c[2][0] = c[0][2]
-	c[2][1] = c[1][2]
-	var trace: float = c[0][0] + c[1][1] + c[2][2]
-	if trace <= 1e-9:
-		return {"ok": false}
-	# The normal is the eigenvector of the smallest covariance eigenvalue. Power
-	# iteration on `trace * I - C` finds it, because its largest eigenvalue is
-	# the smallest of C.
-	var normal := seed.normalized()
-	if normal == Vector3.ZERO:
-		normal = Vector3.UP
-	for _iteration in 24:
-		var next := Vector3(
-			(trace - c[0][0]) * normal.x - c[0][1] * normal.y - c[0][2] * normal.z,
-			-c[1][0] * normal.x + (trace - c[1][1]) * normal.y - c[1][2] * normal.z,
-			-c[2][0] * normal.x - c[2][1] * normal.y + (trace - c[2][2]) * normal.z
-		)
-		if next.length() < 1e-9:
-			break
-		normal = next.normalized()
-	if normal.dot(seed) < 0.0:
-		normal = -normal
-	var lambda_min := _quadratic(c, normal)
-	var spread_normal := sqrt(maxf(lambda_min, 0.0))
-	var spread_plane := sqrt(maxf((trace - lambda_min) * 0.5, 0.0))
-	if spread_plane < FIT_MIN_SPREAD:
-		return {"ok": false}
-	if spread_normal > FIT_MAX_FLATNESS * spread_plane:
-		return {"ok": false}
-	if normal.dot(seed) < FIT_MIN_TILT:
-		return {"ok": false}
-	return {"ok": true, "normal": normal, "centroid": centroid}
-
-
-static func _quadratic(c: Array, normal: Vector3) -> float:
-	var cx: float = c[0][0] * normal.x + c[0][1] * normal.y + c[0][2] * normal.z
-	var cy: float = c[1][0] * normal.x + c[1][1] * normal.y + c[1][2] * normal.z
-	var cz: float = c[2][0] * normal.x + c[2][1] * normal.y + c[2][2] * normal.z
-	return normal.x * cx + normal.y * cy + normal.z * cz
-
-
-static func _contributes(frame: VoxelFrame, cell: Vector3i, entry_normal: Vector3) -> bool:
-	var directions := [
-		Vector3i(1, 0, 0), Vector3i(-1, 0, 0), Vector3i(0, 1, 0),
-		Vector3i(0, -1, 0), Vector3i(0, 0, 1), Vector3i(0, 0, -1),
-	]
-	for direction in directions:
-		if frame.has(cell + direction):
-			continue
-		if Vector3(direction).dot(entry_normal) >= MIN_ALIGN:
-			return true
-	return false

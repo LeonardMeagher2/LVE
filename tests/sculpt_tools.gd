@@ -199,6 +199,18 @@ func _hover(pos: Vector2) -> void:
 	viewport.push_input(event)
 
 
+# Waits for the hover preview controller to publish its result and for the cursor
+# mesh to settle. The hover fit and the footprint map run on the worker, so a test
+# that reads the published cells waits here.
+func _settle_preview() -> void:
+	for index in 600:
+		await get_tree().process_frame
+		if tool == null:
+			return
+		if tool._preview.is_settled() and tool.get_node("Cursor").is_settled():
+			return
+
+
 func _key(code: Key) -> void:
 	var event := InputEventKey.new()
 	event.keycode = code
@@ -1855,6 +1867,7 @@ func _smooth_preview() -> void:
 		_hover(press)
 		tool._rebuild_preview()
 	)
+	await _settle_preview()
 	step("Then the wireframe outlines only occupied surface voxels", func():
 		expect(not tool._preview_cells.is_empty(), "the preview outlines the surface")
 		var empty := 0
@@ -1870,6 +1883,7 @@ func _smooth_preview() -> void:
 		_hover(press)
 		tool._rebuild_preview()
 	)
+	await _settle_preview()
 	step("Then the preview outlines only the allowed support", func():
 		expect(tool._preview_cells.has(Vector3i(0, 0, 0)), "the allowed support is outlined")
 		expect(tool._preview_cells.size() == 1, "an unallowed support is hidden")
@@ -1919,9 +1933,10 @@ func _smooth_adaptive() -> void:
 		_settings.strength = 8.0
 		press = _pos(Vector3i(1, 0, 0))
 	)
-	step("When the user hovers and then presses beside the spike", func():
+	await step("When the user hovers and then presses beside the spike", func():
 		_hover(press)
 		tool._rebuild_preview()
+		await _settle_preview()
 		var before: Vector3 = tool._hover_frame.normal
 		_press(press)
 		var after: Vector3 = tool._stroke_frame.normal
@@ -2697,6 +2712,7 @@ func _preview_ghost() -> void:
 		_hover(press)
 		tool._rebuild_preview()
 	)
+	await _settle_preview()
 	step("Then the wireframe outlines every supporting surface voxel", func():
 		var expected := {}
 		for entry in SculptGeometry.disk_offsets(2):
@@ -2709,6 +2725,7 @@ func _preview_ghost() -> void:
 		_hover(press)
 		tool._rebuild_preview()
 	)
+	await _settle_preview()
 	step("Then the preview outlines the occupied removal targets", func():
 		expect(tool._preview_cells.has(Vector3i(0, 0, 0)), "the surface voxel is a removal target")
 		expect(not tool._preview_cells.has(Vector3i(0, 1, 0)), "an empty cell is not a removal target")
@@ -2736,6 +2753,7 @@ func _preview_ghost_oblique() -> void:
 		_hover(press)
 		tool._rebuild_preview()
 	)
+	await _settle_preview()
 	step("Then the outline follows the uneven surface", func():
 		expect(tool._hover_frame != null and tool._hover_frame.fitted, "the hover fits the step surface")
 		expect(not tool._preview_cells.is_empty(), "the preview outlines a support region")
@@ -2774,6 +2792,7 @@ func _preview_selection_destination() -> void:
 		_hover(press)
 		tool._rebuild_preview()
 	)
+	await _settle_preview()
 	step("Then only the support of the allowed destination is outlined", func():
 		expect(tool._preview_cells.has(Vector3i(0, 0, 0)), "the support of the allowed destination is outlined")
 		expect(tool._preview_cells.size() == 1, "the supports of the blocked destinations are hidden")
@@ -2782,7 +2801,7 @@ func _preview_selection_destination() -> void:
 
 
 func _preview_refresh() -> void:
-	step("Given a flat plate and a radius 1 hover", func():
+	await step("Given a flat plate and a radius 1 hover", func():
 		_view("top")
 		for x in range(-3, 4):
 			for z in range(-3, 4):
@@ -2795,6 +2814,7 @@ func _preview_refresh() -> void:
 		press = _pos(Vector3.ZERO)
 		_hover(press)
 		tool._rebuild_preview()
+		await _settle_preview()
 		grown = tool._preview_cells.size()
 		expect(grown == 5, "a radius 1 outline marks five support voxels")
 	)
@@ -2804,6 +2824,7 @@ func _preview_refresh() -> void:
 		_hover(press)
 		tool._rebuild_preview()
 	)
+	await _settle_preview()
 	step("Then the outline follows the new top", func():
 		expect(tool._preview_cells.has(Vector3i(0, 1, 0)), "the new top is outlined")
 		expect(not tool._preview_cells.has(Vector3i(0, 0, 0)), "the buried cell is no longer the support")
@@ -2813,6 +2834,7 @@ func _preview_refresh() -> void:
 		_hover(press)
 		tool._rebuild_preview()
 	)
+	await _settle_preview()
 	step("Then the outline grows with the settings", func():
 		expect(tool._preview_cells.size() > grown, "the wider radius outlines more support voxels")
 	)
@@ -2834,6 +2856,7 @@ func _grab_preview_sources() -> void:
 		_hover(press)
 		tool._rebuild_preview()
 	)
+	await _settle_preview()
 	step("Then the preview shows only occupied eligible sources", func():
 		expect(not tool._preview_cells.is_empty(), "the preview shows the source region")
 		var empty := 0
@@ -2848,6 +2871,7 @@ func _grab_preview_sources() -> void:
 		_hover(press)
 		tool._rebuild_preview()
 	)
+	await _settle_preview()
 	step("Then the mirrored sources appear", func():
 		expect(tool._preview_cells.has(Vector3i(0, 0, 0)), "the pressed side is a source")
 		expect(tool._preview_cells.has(Vector3i(-1, 0, 0)), "the mirrored side is a source")
