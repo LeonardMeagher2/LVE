@@ -18,8 +18,10 @@ See [GLTF_EXPORT.md](GLTF_EXPORT.md) for the mesh export format and import setti
     - Shared planar cleanup in the viewport and exporter
   - Run the suite without another Godot instance using this project.
   - Clipboard and model settings popup checks previously failed in a suite but passed alone.
-  - The latest suite passed 138 of 139 scenes. `hidpi` and `draw_latency` passed.
-  - `material_controls` failed five keyboard-entry checks in that suite, then passed four targeted reruns.
+  - The latest suite passed 156 of 157 scenes. The ownership hover sweep exceeded its 30-second scene deadline.
+  - Both corrected ownership scenes passed the targeted runner. All eight affected Spray scenes also passed.
+  - The changed-cell and radius-resize Sculpt A/B checks passed with exact preview parity.
+  - `material_controls`, `hidpi`, and `draw_latency` passed. Keep the earlier intermittent keyboard-focus failure open.
   - [ ] Investigate the intermittent keyboard-focus failure in `material_controls`. Do not treat targeted reruns as a clean full suite.
   - [ ] Check orthographic rays and long-distance occlusion in the selection depth test.
   - Keep full-material seams and the same polygon cleanup for flat and smooth shading.
@@ -34,6 +36,22 @@ See [GLTF_EXPORT.md](GLTF_EXPORT.md) for the mesh export format and import setti
 ## Rendering and performance
 
 - [ ] Keep drawing responsive on large models (active)
+  - [ ] Complete the remaining Sculpt integration.
+    - Move cold-press surface fitting off the main thread. Validated hover reuse does not cover every press.
+    - Match the Grow preview lookup depth to the stroke lookup depth.
+    - Verify long Grow strokes manually. Keep the original mound profile without periodic waves.
+    - Remove the fixed Grow lookup restriction without adding unbounded searches.
+    - Connect the opaque surface contour to hover and active strokes. The tested contour helper is not connected.
+    - Apply the shared size range from 1 to 64 to Sculpt and Grab.
+    - Remove the hidden Grab radius limit. Move maximum-size capture off the main thread.
+    - Keep broad rounding disabled until complete-tool measurements justify its larger read region and cost.
+  - [ ] Close the maximum-size Spray preview and rendering gaps.
+    - Require visible cursor updates during sustained drags. The latest maximum-size measurements installed no cursor preview during dragging.
+    - Reduce model installation gaps. Mesher improvements did not remove the measured multi-second gaps.
+  - [ ] Consolidate proven performance mechanisms for new tools.
+    - Reuse footprints, operation ownership, cancellation, and prepared outputs without adding per-voxel overhead.
+    - Keep replaceable hover requests separate from accepted edits. Preserve every accepted edit.
+    - Measure Transform, Line, Paste, and selection depth checks before choosing further changes.
   - [x] Profile maximum-diameter strokes with the real renderer before choosing the next change.
     - Measure cube and sphere brushes at diameters 9, 32, and 64.
     - Separate input handling, edit completion, surface completion, and the longest frame gap.
@@ -57,7 +75,7 @@ See [GLTF_EXPORT.md](GLTF_EXPORT.md) for the mesh export format and import setti
     - Verify geometry, material samples, sparse models, undo, and cancellation.
     - Run the affected tests when closing this implementation task.
     - `draw_latency` runs visible strokes on the second monitor and needs about 51 s under load. It has a named 125 s suite deadline. Every other scene keeps the 30 s default.
-    - The latest suite passed 138 of 139 scenes. Keep the keyboard-focus failure open despite four passing targeted reruns.
+    - Keep the latest suite result in the Verification section. Keep the intermittent keyboard-focus failure open.
   - Use the 2026-10-18 pre-cleanup checkpoint only as context: 26 ms maximum gap and 0.828 s visible completion.
   - At that checkpoint, diameter nine had 48 ms visible latency and an 8 ms gap.
   - Preserve dense 16-cube chunks unless measurements support a storage change.

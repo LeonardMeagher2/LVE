@@ -99,6 +99,25 @@ Use Git history for old bug reports and removed designs.
 
 ## Geometry and rendering
 
+- 2026-10-23: Key Grow influence by logical world column and direction, not the moving 3D anchor. Height changes otherwise strand soft-edge credits.
+- 2026-10-23: Measure terrain preparation before accepting worker writes as responsive. Baseline large Grow events took 83 ms on press and 70 ms on motion.
+- 2026-10-23: Keep cold-press fitting visible in performance reports. Worker preparation reduced measured Grow presses to 46 ms cold and 8 ms with validated hover reuse.
+- 2026-10-23: Keep world-space span coordinates as integers. Eight-bit packing with a 64-cell bias limited dense Spray to coordinates from -64 through 191.
+- 2026-10-23: Measure input responsiveness and visible progress separately. Track changed chunks, because same-color repainting caused a false zero-install result.
+- 2026-10-23: Prepare large uniform preview payloads on the worker. A 474013-cell request previously spent 280 ms building its map and 174 ms preparing its request.
+- 2026-10-23: Skip enclosed mesh chunks only when their own materials and all six neighboring boundary planes are opaque. The exact shortcut reduced 13.3 ms empty builds to 0.15 ms.
+- 2026-10-23: Measure mesh phases before adding shared read caches. Face scanning consumed 60–72% of the measured uniform surface builds.
+- 2026-10-23: Use padded axis strides during face scanning. Copy only each neighboring chunk's overlap with the padded volume.
+- 2026-10-23: Cache material decoding by each neighboring chunk's local material identifier. Keep content-based material deduplication unchanged.
+- 2026-10-23: Measure fragmented atlas meshes separately. Cleanup and atlas generation consumed 90% of the measured translucent checkerboard build.
+- 2026-10-23: Accept worker changes only after checking visible output under sustained load. A fast input frame does not prove useful progress.
+- 2026-10-23: Keep default ownership regressions bounded. The side-hover test covers nine anchors across five views and five radii.
+- 2026-10-23: Run `tests/sculpt_sample_ownership.tscn -- exhaustive` for the complete side-hover grid. This sweep exceeds the suite's 30-second scene deadline.
+- 2026-10-23: Check every ownership row, then report failures per footprint. Per-cell assertion reporting can exceed the scene deadline.
+- 2026-10-23: Put maximum-size ownership checks in a separate scene. Preserve their full matrix and the runner's 30-second deadline.
+- 2026-10-23: Capture accepted sample settings in each queue entry. Shared pending settings can change older accepted input.
+- 2026-10-23: Copy the random generator state for worker sampling. Commit its final state only when adopting a current result.
+- 2026-10-23: Reject new strokes until cancelled sample runners retire. A stale runner can otherwise strand a new stroke.
 - 2026-10-21: Distinguish isolated voxels from supported symmetric features when the occupancy normal is zero. Check eligible same-pass remnants after removals.
 - 2026-10-21: Measure hover separately from stroke completion. The stroke benchmark does not exercise normal hover input.
 - 2026-10-21: Baseline radius-32 hover spent 267 ms in input and 148 ms rebuilding the preview. The changed-cell path fitted twice.
