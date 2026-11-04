@@ -9,7 +9,7 @@ Leonard's Voxel Editor is a Godot voxel-animation editor. Godot is the only tool
 - Reuse suitable resources, utilities, and engine features.
 - Add abstractions only for a concrete need. Explain non-obvious choices and their tradeoffs.
 - When committing, prefer whole-file staging over partial staging.
-- Record verified engine and workflow learnings in [NOTES.md](NOTES.md) during the task that finds them.
+- Record verified engine and workflow learnings in [MEMORY.md](MEMORY.md) during the task that finds them.
 
 ## Documentation
 
@@ -64,13 +64,12 @@ Use the `godot-docs` skill to verify API assumptions against the current stable 
 Run commands from the project root.
 
 - Run the affected tests after changes and before closing a task.
-- Run the full suite before a push.
 - For documentation-only changes, review the text and diff. Tests are not required.
 
 Run one behavior test:
 
 ```text
-godot --headless --path . res://tests/paint_strokes.tscn -- paint
+godot --path . res://tests/paint_strokes.tscn -- paint
 ```
 
 Run the full suite:
@@ -86,8 +85,10 @@ godot --headless --path . -s res://tests/run_all.gd -- paint line brush_modes
 ```
 
 Reports are in `tests/artifacts/`. The runner exits non-zero on failure.
-The runner opens each child scene on screen 1. Tests in one group share a child process.
-For headless checks, run a scene directly. For failure screenshots, remove `--headless` from that direct command.
+The runner opens each child scene on screen 0. Tests in one group share a child process.
+Run a test scene with a window. The runner never passes `--headless` to a child, and the coordinator is the only headless process.
+A headless scene cannot draw, take a failure screenshot, or use the clipboard, focus, or popup paths.
+A headless scene that records no check fails, so a skipped case never reports success.
 To select tests inside a scene, add their names after `--`. A scene name selects its entire group.
 
 ### Writing tests
@@ -97,7 +98,8 @@ To select tests inside a scene, add their names after `--`. A scene name selects
 - Register each behavior in `_ready()` with `test(description, callable, name)`. Use a unique name within the file.
 - Keep related tests in one file. Share fixtures and helpers without sharing execution state.
 - Override `_setup_test()` and `_cleanup_test()` to isolate each test. The harness awaits both hooks.
-- Keep each test selectable alone or in another order. Add legacy names to `GROUP_ALIASES` in `tests/run_all.gd`.
+- Keep each test selectable alone or in another order. The runner reads case names from the `test()` calls, so no alias table exists. Name each case after its old scene when a scene merges.
+- A case that records no check fails. Set `allow_no_checks` before `test()` only for a print-only probe.
 - Use `step("Given ...", func)`, `step("When ...", func)`, and `step("Then ...", func)` for setup, actions, and checks.
 - Use `expect(condition, message)` with an affirmative description of the required state.
 - Put waits in the test body, not step lambdas. Use member variables for state shared between steps.

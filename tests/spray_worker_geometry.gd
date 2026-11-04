@@ -7,7 +7,7 @@ extends "res://tests/test.gd"
 # they are split from the worker pipeline scene `spray_worker`. Each scene then
 # stays under the shared runner deadline while the window is open.
 #
-#   godot --headless --path . res://tests/spray_worker_geometry.tscn
+#   godot --path . res://tests/spray_worker_geometry.tscn
 
 const SEED := 20261023
 const BLOCK := 8

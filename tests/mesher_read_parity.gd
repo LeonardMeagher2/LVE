@@ -8,7 +8,7 @@ extends "res://tests/test.gd"
 # body in `tests/mesher_read_reference.gd`. The arrays, the atlas size, and the
 # geometry bytes must match element for element, so the rewrite changes no output.
 #
-#   godot --headless --path . res://tests/mesher_read_parity.tscn
+#   godot --path . res://tests/mesher_read_parity.tscn
 
 const REF := preload("res://tests/mesher_read_reference.gd")
 const CHUNK := VoxelFrame.CHUNK_SIZE

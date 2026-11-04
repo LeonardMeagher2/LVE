@@ -14,13 +14,16 @@ extends "res://plugins/brush/StrokeTool.gd"
 ## edit context, and the occupancy stay the same. The press and every brush cell
 ## change paint the exact previewed batch, so a preview never disagrees with the
 ## stroke. A press on a different cell drops a batch that belongs to another cell,
-## so a pending hover never makes the click paint the previous cell. A completed
-## click rerolls the next preview, so the next click paints a new sample. The tool
-## never paints and never rerolls while the pointer holds still.
+## so a pending hover never makes the click paint the previous cell. The cursor
+## reports the request token of its installed surface. A lagging surface of
+## another cell never paints, even when the current batch already names the press
+## cell. A completed click rerolls the next preview, so the next click paints a
+## new sample. The tool never paints and never rerolls while the pointer holds
+## still.
 ##
-## A small batch samples inline, in the input event. A batch whose occupied reach
+## A small batch samples inline, in the input event. A batch whose indexed work
 ## estimate passes [constant INLINE_SAMPLE_LIMIT] samples on the worker pool, so
-## the input frame never pays a long gather, a cold spot pattern build, or a wide
+## the input frame never pays a long sample, a cold spot pattern build, or a wide
 ## spot union. One hover sample runs at a time and the newest request waits behind
 ## it, so a steady sweep installs results in request order instead of restarting.
 ## A completed result installs only while its frame, its edit context, and its
@@ -47,12 +50,20 @@ const SpraySampler := preload("./SpraySampler.gd")
 ## The cancellable worker job of one spray sample.
 const SpraySamplingJob := preload("./SpraySamplingJob.gd")
 
-## The occupied reach estimate at or below which a batch samples inline.
+## The indexed work at or below which a batch samples inline.
 ##
-## The measured gather of one reach cube costs about 0.2 us per grid slot, so the
-## limit keeps one input event near a millisecond. A larger batch samples on the
-## worker pool instead.
-const INLINE_SAMPLE_LIMIT := 2048
+## The unit is one row operation. Eight nonempty chunk-row scans (2048) plus a
+## small sphere and footprint allowance fit one input event. A wider sphere, a
+## large selection, or a footprint union crosses to the worker pool.
+##
+## The estimate excludes the one-time occupancy-row build of a cold chunk. That
+## build reads one dense chunk grid (CHUNK_SIZE cubed slots) and writes
+## CHUNK_SIZE squared masks per touched nonempty chunk. A point search that
+## crosses a chunk corner touches at most eight chunks, so a cold build can add
+## up to 32768 slot reads outside the estimate. The limit is a warm-path budget,
+## not a bound on the cold build. The benchmarks report `index_builds` and
+## `index_grid_reads`, so the cold cost is measured instead of assumed.
+const INLINE_SAMPLE_LIMIT := 2200
 
 ## One accepted stroke brush cell and every input that its sample needs.
 ##
@@ -76,6 +87,21 @@ class Intent extends RefCounted:
 			and estimate == other.estimate and spot_size == other.spot_size \
 			and search_size == other.search_size and speed == other.speed
 
+## The captured identity of one sampled batch.
+##
+## The cursor returns the token of the surface that it installed, so a press can
+## tell whether the visible cells belong to the cell, the frame, and the edit
+## context that the press uses. A lagging surface of the same cell and context
+## stays the exact batch that the press paints. A surface of another cell never
+## paints. The tool makes one token per sampled batch, never one per cell, and it
+## never changes a token after it creates it.
+class BatchToken extends RefCounted:
+	var center := VoxelPicking.NONE
+	var frame: VoxelFrame
+	var axes := 0
+	var origin_twice := Vector3i.ZERO
+	var selection := {}
+
 var _paint_settings: PaintToolSettings
 var _rng := RandomNumberGenerator.new()
 ## The number of committed random draws. A worker captures the epoch with its
@@ -83,6 +109,33 @@ var _rng := RandomNumberGenerator.new()
 var _rng_epoch := 0
 ## The shared spot shape cache. The main thread and the sample workers share it.
 var _shape_cache := SpraySampler.ShapeCache.new()
+# One immutable selection mask index for the current editor selection snapshot.
+# The cache is keyed by the dictionary identity of `State.selection.all_cells()`.
+# A selection write replaces that dictionary, so a stale identity never hits. A
+# raw mutable context never matches the editor snapshot and is never cached.
+var _selection_source := {}
+var _selection_index: RefCounted = null
+# The last pair of different read-only snapshots that compared equal. The pair
+# avoids a repeated content scan when a stroke context and the live context are
+# different dictionaries with the same cells.
+var _selection_equal_a := {}
+var _selection_equal_b := {}
+## The chunk row builds of the last sample.
+var last_index_builds := 0
+## The dense grid slots that those builds read.
+var last_index_grid_reads := 0
+## The row masks that those builds wrote.
+var last_index_build_slots := 0
+## The selection mask builds of the last sample.
+var last_selection_builds := 0
+## The inline work estimate that the last gate compared.
+var last_work_estimate := 0
+## The chunks that the last worker snapshot captured.
+var last_capture_chunks := 0
+## The total indexed row operations of the last sample.
+var last_row_ops := 0
+## The occupied footprint cells that the last sample visited.
+var last_footprint_visits := 0
 # The batch that the preview shows and the next change paints.
 var _batch_center := VoxelPicking.NONE
 var _batch_cells: Array[Vector3i] = []
@@ -93,6 +146,10 @@ var _batch_selection := {}
 # The frame the batch sampled from. A document or frame change makes the batch
 # stale, because its cells belong to the old frame.
 var _batch_frame: VoxelFrame
+# The captured identity of the current batch. The cursor keeps the token of the
+# surface that it installed, so a press can attribute the visible cells to the
+# request that produced them. A null token means no owned surface is installed.
+var _batch_token: BatchToken
 # Whether the last cursor update sampled a new batch.
 var _batch_fresh := false
 # The chunk identity and voxel revision of every chunk that holds a batch cell.
@@ -159,7 +216,16 @@ func _ready() -> void:
 # re-entry drops it, so the next hover samples the current frame again.
 func _enter_tree() -> void:
 	_invalidate_batch()
+	# A selection or document change while detached was missed, so the cache
+	# starts empty on every re-entry.
+	clear_selection_cache()
 	super._enter_tree()
+	# The cache describes the live editor selection. A selection write or a
+	# document switch makes the built masks stale even when no hover runs.
+	if not State.selection_changed.is_connected(_on_selection_changed):
+		State.selection_changed.connect(_on_selection_changed)
+	if not State.document_changed.is_connected(_on_document_changed):
+		State.document_changed.connect(_on_document_changed)
 
 
 # A detach drops the batch, so its chunk snapshot never outlives the batch. A
@@ -167,6 +233,11 @@ func _enter_tree() -> void:
 # keeps running and the runner publishes it, so a switch never discards queued
 # brush cells.
 func _exit_tree() -> void:
+	clear_selection_cache()
+	if State.selection_changed.is_connected(_on_selection_changed):
+		State.selection_changed.disconnect(_on_selection_changed)
+	if State.document_changed.is_connected(_on_document_changed):
+		State.document_changed.disconnect(_on_document_changed)
 	_invalidate_batch()
 	super._exit_tree()
 
@@ -203,6 +274,73 @@ func seed_spray(seed_value: int) -> void:
 ## Drops the shared spot shape cache. The next sample pays the cold build.
 func clear_shape_caches() -> void:
 	_shape_cache.clear()
+
+
+## Drops the cached selection masks. A selection write also misses the identity
+## check on its own, so this is a memory release, not a correctness requirement.
+func clear_selection_cache() -> void:
+	_selection_source = {}
+	_selection_index = null
+	_selection_equal_a = {}
+	_selection_equal_b = {}
+
+
+# A selection write releases the cached masks even when no hover runs. An old
+# late job also fails the identity check, so it cannot recache stale masks.
+func _on_selection_changed() -> void:
+	clear_selection_cache()
+
+
+# A document switch changes the frame and the selection, so the cached masks
+# cannot describe the new document.
+func _on_document_changed() -> void:
+	clear_selection_cache()
+
+
+# Returns true when two selection dictionaries hold the same cells.
+##
+## A read-only snapshot compares by identity first, so the common production
+## hover never scans 125k entries. Two different read-only snapshots compare by
+## content once and the equal pair is remembered. A raw mutable dictionary never
+## compares by content: an aliased dictionary can change without a new identity.
+func _same_selection(first: Dictionary, second: Dictionary) -> bool:
+	if not first.is_read_only() or not second.is_read_only():
+		return false
+	if is_same(first, second):
+		return true
+	var cached_pair := (is_same(first, _selection_equal_a) and is_same(second, _selection_equal_b)) or (is_same(first, _selection_equal_b) and is_same(second, _selection_equal_a))
+	if cached_pair:
+		return true
+	if first != second:
+		return false
+	_selection_equal_a = first
+	_selection_equal_b = second
+	return true
+
+
+# Returns the cached masks of one frozen editor selection snapshot, or null.
+func _cached_selection_index(selection: Dictionary) -> RefCounted:
+	if selection.is_empty() or not selection.is_read_only():
+		clear_selection_cache()
+		return null
+	if not is_same(selection, State.selection.all_cells()):
+		clear_selection_cache()
+		return null
+	if is_same(_selection_source, selection) and _selection_index != null:
+		return _selection_index
+	return null
+
+
+# Keeps one built selection index only when it still describes the current
+# editor snapshot. A raw mutable context never matches and is never cached.
+func _remember_selection_index(selection: Dictionary, index: RefCounted) -> void:
+	if not selection.is_read_only() or not is_same(selection, State.selection.all_cells()):
+		clear_selection_cache()
+		return
+	if index == null:
+		return
+	_selection_source = selection
+	_selection_index = index
 
 
 ## Returns [code]true[/code] when no hover or stroke sample is pending. A caller
@@ -276,10 +414,11 @@ func handle_input(event: InputEvent, pos: Vector2) -> bool:
 			# while the current cell still waits on the worker. Drop it, so the
 			# press paints its own cell. A batch already sampled for this cell and
 			# context stays, so a lagging cursor still paints the exact surface it
-			# shows.
+			# shows. An installed surface of another cell is also ignored by its
+			# request token, even when `_batch_center` already names the press cell.
 			var stale := _batch_center != pick.hit or _batch_frame != _source_frame
 			if not stale and _edit_context != null:
-				stale = _batch_axes != _edit_context.axes or _batch_origin != _edit_context.origin_twice or _batch_selection != _edit_context.selection
+				stale = _batch_axes != _edit_context.axes or _batch_origin != _edit_context.origin_twice or not _same_selection(_batch_selection, _edit_context.selection)
 			if stale:
 				_invalidate_batch()
 				_clear_cursor_preview()
@@ -425,6 +564,7 @@ func _invalidate_batch() -> void:
 	_batch_cells = []
 	_batch_material = VoxelFrame.material(Color.WHITE)
 	_batch_frame = null
+	_batch_token = null
 	_batch_fresh = false
 	_batch_chunks = {}
 	_batch_payload = null
@@ -439,12 +579,12 @@ func _invalidate_batch() -> void:
 func _ensure_batch(center: Vector3i, frame: VoxelFrame, context: VoxelFrame.EditContext, material: PackedFloat32Array) -> bool:
 	if frame == null or context == null:
 		return false
-	if center == _batch_center and frame == _batch_frame and material == _batch_material and context.axes == _batch_axes and context.origin_twice == _batch_origin and context.selection == _batch_selection and _batch_holds(frame):
+	if center == _batch_center and frame == _batch_frame and material == _batch_material and context.axes == _batch_axes and context.origin_twice == _batch_origin and _same_selection(context.selection, _batch_selection) and _batch_holds(frame):
 		return false
 	# A changed frame, material, symmetry, or selection makes the displayed
 	# surface stale. Hide it, so a click can never paint a preview of another
 	# context while the new sample builds.
-	var context_changed := frame != _batch_frame or material != _batch_material or context.axes != _batch_axes or context.origin_twice != _batch_origin or context.selection != _batch_selection
+	var context_changed := frame != _batch_frame or material != _batch_material or context.axes != _batch_axes or context.origin_twice != _batch_origin or not _same_selection(context.selection, _batch_selection)
 	if context_changed:
 		_clear_cursor_preview()
 	_batch_center = center
@@ -453,6 +593,7 @@ func _ensure_batch(center: Vector3i, frame: VoxelFrame, context: VoxelFrame.Edit
 	_batch_axes = context.axes
 	_batch_origin = context.origin_twice
 	_batch_selection = context.selection
+	_batch_token = _make_batch_token(frame, center, context)
 	_batch_cells = _sample(center, frame, context)
 	_snapshot_batch_chunks(frame)
 	# An inline sample holds no prepared payload, so the show path builds the
@@ -469,10 +610,11 @@ func _ensure_batch(center: Vector3i, frame: VoxelFrame, context: VoxelFrame.Edit
 func _ensure_batch_if_cheap(center: Vector3i, frame: VoxelFrame, context: VoxelFrame.EditContext, material: PackedFloat32Array) -> bool:
 	if frame == null or context == null:
 		return false
-	if center == _batch_center and frame == _batch_frame and material == _batch_material and context.axes == _batch_axes and context.origin_twice == _batch_origin and context.selection == _batch_selection and _batch_holds(frame):
+	if center == _batch_center and frame == _batch_frame and material == _batch_material and context.axes == _batch_axes and context.origin_twice == _batch_origin and _same_selection(context.selection, _batch_selection) and _batch_holds(frame):
 		return false
-	var reach := VoxelBrushSize.reach(_paint_settings.spray_size) + VoxelBrushSize.reach(_paint_settings.spot_diameter)
-	var estimate := SpraySampler.occupied_estimate(frame, center, reach)
+	var selection_index := _cached_selection_index(context.selection)
+	var estimate := SpraySampler.work_estimate(frame, center, _paint_settings.spray_size, _paint_settings.spot_diameter, context.selection, _paint_settings.speed, selection_index)
+	last_work_estimate = estimate
 	if estimate <= INLINE_SAMPLE_LIMIT:
 		return _ensure_batch(center, frame, context, material)
 	if not _press_pending:
@@ -516,12 +658,9 @@ func _run_intents() -> void:
 		var intent: Intent = _pending_intents.pop_front()
 		if intent.frame == null or intent.context == null:
 			continue
-		var job := _build_sample_job(intent.frame, intent.center, intent.context, intent.material, intent.estimate)
+		var job := _build_sample_job(intent.frame, intent.center, intent.context, intent.material, intent.estimate, intent.spot_size, intent.search_size, intent.speed)
 		# The accepted cell captured its own sizes, so a settings change while a
-		# sample waits never alters the batch of an accepted brush cell.
-		job.spot_size = intent.spot_size
-		job.search_size = intent.search_size
-		job.speed = intent.speed
+		# sample waits never alters the batch or the captured ROI.
 		_sample_job = job
 		_sample_operation_id = State.begin_operation("Sampling spray", job.local_estimate, true, self, _cancel_edit)
 		await State.run_edit_job(job, _sample_operation_id, "Spray sample")
@@ -544,6 +683,13 @@ func _run_intents() -> void:
 				continue
 			witness = {}
 		_commit_sample_state(job)
+		_remember_selection_index(job.selection, job.built_selection_index)
+		last_index_builds = job.index_builds
+		last_index_grid_reads = job.index_grid_reads
+		last_index_build_slots = job.index_build_slots
+		last_selection_builds = job.selection_builds
+		last_row_ops = job.row_ops
+		last_footprint_visits = job.footprint_visits
 		if not job.cells.is_empty():
 			_adopt_batch(intent.frame, intent.center, intent.context, intent.material, job.cells, witness, job.preview_payload)
 			_queue_centers(job.cells)
@@ -575,10 +721,11 @@ func _teardown_samples() -> void:
 func _ensure_hover_batch(center: Vector3i, frame: VoxelFrame, context: VoxelFrame.EditContext, material: PackedFloat32Array) -> void:
 	if frame == null or context == null:
 		return
-	if center == _batch_center and frame == _batch_frame and material == _batch_material and context.axes == _batch_axes and context.origin_twice == _batch_origin and context.selection == _batch_selection and _batch_holds(frame):
+	if center == _batch_center and frame == _batch_frame and material == _batch_material and context.axes == _batch_axes and context.origin_twice == _batch_origin and _same_selection(context.selection, _batch_selection) and _batch_holds(frame):
 		return
-	var reach := VoxelBrushSize.reach(_paint_settings.spray_size) + VoxelBrushSize.reach(_paint_settings.spot_diameter)
-	var estimate := SpraySampler.occupied_estimate(frame, center, reach)
+	var selection_index := _cached_selection_index(context.selection)
+	var estimate := SpraySampler.work_estimate(frame, center, _paint_settings.spray_size, _paint_settings.spot_diameter, context.selection, _paint_settings.speed, selection_index)
+	last_work_estimate = estimate
 	if estimate <= INLINE_SAMPLE_LIMIT:
 		# The inline sample is the newest result. It blocks every older worker
 		# result and drops the request that waited behind it.
@@ -587,7 +734,7 @@ func _ensure_hover_batch(center: Vector3i, frame: VoxelFrame, context: VoxelFram
 		_hover_request = {}
 		_ensure_batch(center, frame, context, material)
 		return
-	var context_changed := frame != _batch_frame or material != _batch_material or context.axes != _batch_axes or context.origin_twice != _batch_origin or context.selection != _batch_selection
+	var context_changed := frame != _batch_frame or material != _batch_material or context.axes != _batch_axes or context.origin_twice != _batch_origin or not _same_selection(context.selection, _batch_selection)
 	if context_changed:
 		# A stale surface of another context must not stay visible or be painted.
 		_clear_cursor_preview()
@@ -643,7 +790,7 @@ func _install_hover(job: SpraySamplingJob) -> void:
 	if frame == null or frame != job.source_frame:
 		return
 	var context := State.drawing_context()
-	if context.axes != job.axes or context.origin_twice != job.origin_twice or context.selection != job.selection:
+	if context.axes != job.axes or context.origin_twice != job.origin_twice or not _same_selection(context.selection, job.selection):
 		return
 	if not _witness_holds(job.witness, frame) and not _cells_hold(frame, job.cells):
 		_invalidate_batch()
@@ -657,6 +804,16 @@ func _install_hover(job: SpraySamplingJob) -> void:
 	# skips the per-cell snapshot.
 	_adopt_batch(frame, job.center, context, job.material, job.cells, witness, job.preview_payload)
 	_commit_sample_state(job)
+	# Cache the index against the selection the job actually sampled, not the
+	# live context. A different dictionary with the same cells must not inherit
+	# an index it did not build.
+	_remember_selection_index(job.selection, job.built_selection_index)
+	last_index_builds = job.index_builds
+	last_index_grid_reads = job.index_grid_reads
+	last_index_build_slots = job.index_build_slots
+	last_selection_builds = job.selection_builds
+	last_row_ops = job.row_ops
+	last_footprint_visits = job.footprint_visits
 	_hover_installed_epoch = job.request_epoch
 
 
@@ -669,6 +826,19 @@ func _cells_hold(frame: VoxelFrame, cells: Array[Vector3i]) -> bool:
 	return true
 
 
+# Builds the immutable identity of one sampled batch. It holds the captured cell,
+# the source frame, and the frozen symmetry and selection, so a press can compare
+# the visible surface to its own request without a per-cell check.
+func _make_batch_token(frame: VoxelFrame, center: Vector3i, context: VoxelFrame.EditContext) -> BatchToken:
+	var token := BatchToken.new()
+	token.center = center
+	token.frame = frame
+	token.axes = context.axes
+	token.origin_twice = context.origin_twice
+	token.selection = context.selection
+	return token
+
+
 # Records one finished sample as the current batch and shows it. A caller that
 # already holds the batch chunk witness passes it, so the install costs one test
 # per chunk and not one test per cell.
@@ -679,6 +849,7 @@ func _adopt_batch(frame: VoxelFrame, center: Vector3i, context: VoxelFrame.EditC
 	_batch_axes = context.axes
 	_batch_origin = context.origin_twice
 	_batch_selection = context.selection
+	_batch_token = _make_batch_token(frame, center, context)
 	_batch_cells = cells
 	_batch_payload = payload
 	if witness.is_empty():
@@ -766,15 +937,20 @@ func _apply_batch() -> void:
 
 
 # Applies the batch that the cursor shows. A coalescing cursor can display an
-# older snapshot while a newer sample waits on the worker. The press then paints
-# the visible cells, so the click never applies a different known sample. When
-# nothing valid is displayed, the press accepts its own brush cell like a drag
-# step: a large batch queues on the worker, so the input frame never pays a long
-# sample, and the stroke closes only after that batch wrote.
+# older snapshot while a newer sample for the same cell waits on the worker. The
+# press then paints the visible cells, so the click never applies a different
+# known sample. A surface of another cell never paints, because its token does
+# not match this press. When no owned and valid surface is displayed, the press
+# accepts its own brush cell like a drag step: a large batch queues on the worker,
+# so the input frame never pays a long sample, and the stroke closes only after
+# that batch wrote.
 func _apply_offered() -> void:
 	_cancel_hover_sample()
 	var shown := _installed_cells()
-	if not shown.is_empty() and _offered_cells_valid(shown):
+	# The cursor can show a surface of another cell while a newer sample waits.
+	# Paint the visible cells only when the surface belongs to this press's cell,
+	# frame, and context. The current batch alone cannot prove ownership.
+	if not shown.is_empty() and _shown_owned_by_press(_installed_token()) and _offered_cells_valid(shown):
 		# The cursor shows the batch this tool last handed it, so the batch array
 		# is its cell list. A prepared 474k-cell dict avoids a 474k key list here.
 		if is_same(shown, _shown_spots) and not _batch_cells.is_empty():
@@ -786,8 +962,9 @@ func _apply_offered() -> void:
 		return
 	var pick := _last_pick
 	if pick != null and pick.hit != VoxelPicking.NONE and _source_frame != null and _edit_context != null:
-		var reach := VoxelBrushSize.reach(_paint_settings.spray_size) + VoxelBrushSize.reach(_paint_settings.spot_diameter)
-		var estimate := SpraySampler.occupied_estimate(_source_frame, pick.hit, reach)
+		var selection_index := _cached_selection_index(_edit_context.selection)
+		var estimate := SpraySampler.work_estimate(_source_frame, pick.hit, _paint_settings.spray_size, _paint_settings.spot_diameter, _edit_context.selection, _paint_settings.speed, selection_index)
+		last_work_estimate = estimate
 		if estimate > INLINE_SAMPLE_LIMIT:
 			_accept_intent(pick.hit, _source_frame, _edit_context, _stroke_material, estimate)
 			return
@@ -801,6 +978,29 @@ func _installed_cells() -> Dictionary:
 	if not has_node("Cursor"):
 		return {}
 	return $Cursor.installed_cells()
+
+
+# Returns the opaque token of the cursor's installed surface, or null.
+func _installed_token() -> Variant:
+	if not has_node("Cursor"):
+		return null
+	return $Cursor.installed_token()
+
+
+# Returns true when the installed surface belongs to the cell, frame, and context
+# of this press. A lagging surface of the same cell and context is the exact
+# batch that the press must paint. A surface of another cell must not paint, even
+# when the current batch already names the press cell.
+func _shown_owned_by_press(token: Variant) -> bool:
+	if not (token is BatchToken):
+		return false
+	var owner := token as BatchToken
+	var pick := _last_pick
+	if pick == null or pick.hit == VoxelPicking.NONE:
+		return false
+	if owner.center != pick.hit or owner.frame != _source_frame or _edit_context == null:
+		return false
+	return owner.axes == _edit_context.axes and owner.origin_twice == _edit_context.origin_twice and _same_selection(owner.selection, _edit_context.selection)
 
 
 # Returns true when every displayed cell still exists and the display context
@@ -839,26 +1039,37 @@ func _clear_cursor_preview() -> void:
 		$Cursor.show_selection(null)
 
 
-# Builds one spray sample job from explicit inputs. The job copies the frame, so
-# the worker reads a frozen snapshot and never the live frame. It captures the
-# exact random state, so a worker draws the same sequence as an inline sample from
-# the same state.
-func _build_sample_job(frame: VoxelFrame, center: Vector3i, context: VoxelFrame.EditContext, material: PackedFloat32Array, estimate: int) -> SpraySamplingJob:
+# Builds one spray sample job from explicit inputs. The job snapshots only the
+# chunks that the sample can read or write, so the worker never reads the live
+# frame and never pays a whole-frame copy. It captures the exact random state, so
+# a worker draws the same sequence as an inline sample from the same state. The
+# optional sizes are the captured values of an accepted intent. The ROI and the
+# job fields use the same resolved sizes.
+func _build_sample_job(frame: VoxelFrame, center: Vector3i, context: VoxelFrame.EditContext, material: PackedFloat32Array, estimate: int, spot_size := -1, search_size := -1, speed := -1) -> SpraySamplingJob:
+	# Resolve the sizes once. The ROI, the job fields, and the random state must
+	# describe the same captured sample even when the live settings change later.
+	var use_spot: int = _paint_settings.spot_diameter if spot_size < 0 else spot_size
+	var use_search: int = _paint_settings.spray_size if search_size < 0 else search_size
+	var use_speed: int = _paint_settings.speed if speed < 0 else speed
 	var job := SpraySamplingJob.new()
-	job.frame = frame.copy_frame()
+	var locations := SpraySampler.capture_chunks(center, use_search, use_spot, context.axes, context.origin_twice)
+	job.frame = frame.copy_chunks(locations)
+	job.capture_chunk_count = job.frame.chunks.size()
+	last_capture_chunks = job.capture_chunk_count
 	job.source_frame = frame
 	job.center = center
 	job.axes = context.axes
 	job.origin_twice = context.origin_twice
 	job.selection = context.selection
 	job.material = material.duplicate()
-	job.spot_size = _paint_settings.spot_diameter
-	job.search_size = _paint_settings.spray_size
-	job.speed = _paint_settings.speed
+	job.spot_size = use_spot
+	job.search_size = use_search
+	job.speed = use_speed
 	job.sample_state = _rng.state
 	job.rng_epoch = _rng_epoch
 	job.shape_cache = _shape_cache
 	job.local_estimate = estimate
+	job.selection_index = _cached_selection_index(context.selection)
 	return job
 
 
@@ -884,9 +1095,16 @@ func _sample(center: Vector3i, frame: VoxelFrame, context: VoxelFrame.EditContex
 	var use_spot: int = _paint_settings.spot_diameter if spot_size < 0 else spot_size
 	var use_search: int = _paint_settings.spray_size if search_size < 0 else search_size
 	var use_speed: int = _paint_settings.speed if speed < 0 else speed
-	var reach := VoxelBrushSize.reach(use_search) + VoxelBrushSize.reach(use_spot)
-	var local := SpraySampler.local_cells(center, reach, frame, context)
-	var cells := SpraySampler.sample_local(center, frame, context, local, use_spot, use_search, use_speed, use_rng, use_material, _shape_cache)
+	var report := {}
+	var selection_index := _cached_selection_index(context.selection)
+	var cells := SpraySampler.sample(center, frame, context, use_spot, use_search, use_speed, use_rng, use_material, _shape_cache, null, report, selection_index)
+	last_index_builds = report.get("index_builds", 0)
+	last_index_grid_reads = report.get("index_grid_reads", 0)
+	last_index_build_slots = report.get("index_build_slots", 0)
+	last_selection_builds = report.get("selection_builds", 0)
+	last_row_ops = report.get("row_ops", 0)
+	last_footprint_visits = report.get("footprint_visits", 0)
+	_remember_selection_index(context.selection, report.get("selection_index"))
 	# An inline sample consumes the shared stream at once. A worker sample commits
 	# its end state only when its result is adopted.
 	if rng == null:
@@ -954,11 +1172,13 @@ func _show_spots(cells: Array[Vector3i]) -> void:
 	var color := VoxelFrame.material_color(_batch_material)
 	if _batch_payload != null:
 		# The worker built the read-only color dictionary and the cell hash, so the
-		# main thread neither builds the color map nor hashes the keys.
+		# main thread neither builds the color map nor hashes the keys. The token
+		# names the batch that this payload draws, so a cache hit still reports it.
 		_preview_active = true
 		_preview_version = _batch_version
 		_shown_spots = _batch_payload.spots
 		_shown_witness = _batch_chunks
+		_batch_payload.token = _batch_token
 		$Cursor.submit_prepared(_batch_payload)
 		return
 	var spots := {}
@@ -972,12 +1192,18 @@ func _show_spots(cells: Array[Vector3i]) -> void:
 	# visible surface with one test per chunk.
 	_shown_spots = spots
 	_shown_witness = _batch_chunks
-	$Cursor.show_voxels(spots, color, false, 0, false)
+	$Cursor.show_voxels(spots, color, false, 0, false, _batch_token)
 
 
 # A sparse spray stamps repeated samples at the same cell. The overlap skip of
 # the shared job would drop a repeat, so the spray never skips an offset.
+##
+## The sampler already expanded the captured symmetry and selection, so the write
+## must not expand the same context a second time. The shared job still applies
+## the selection mask, the existing-only filter, and the captured material to
+## every cell.
 func _build_job() -> BrushJob:
 	var job := super._build_job()
 	job.previous_center = Vector3i.MAX
+	job.centers_are_final = true
 	return job

@@ -4,7 +4,7 @@ extends "res://tests/test.gd"
 # String key for every state, and it must cost less. The legacy key lives in a
 # test-only reference, so the production code has one key path.
 #
-#   godot --headless --path . res://tests/surface_key.tscn
+#   godot --path . res://tests/surface_key.tscn
 
 const REFERENCE := preload("res://tests/surface_key_reference.gd")
 const RENDERER_SCENE := preload("res://ui/Viewport/VoxelRenderer.tscn")

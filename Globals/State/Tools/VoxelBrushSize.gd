@@ -8,7 +8,7 @@ extends RefCounted
 ##
 ## Use this script for consistent brush-like size controls. The brush stamp,
 ## paint stamp, spray spot, and spray search area use these helpers.
-## Sculpt size controls are not connected yet. The sphere mask matches the
+## Terrain size controls are not connected yet. The sphere mask matches the
 ## shipped brush sphere, so an even size keeps the brush alignment.
 ##
 ## The script names no project script. A caller preloads it and keeps its own

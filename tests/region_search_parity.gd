@@ -8,7 +8,7 @@ extends "res://tests/test.gd"
 # A/B alternates the two in one process and reports medians with their sample
 # counts.
 #
-#   godot --headless --path . res://tests/region_search_parity.tscn
+#   godot --path . res://tests/region_search_parity.tscn
 
 const REFERENCE := preload("res://tests/region_search_reference.gd")
 const CANCEL_JOB := preload("res://tests/region_search_cancel_job.gd")

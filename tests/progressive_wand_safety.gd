@@ -8,8 +8,8 @@ extends "res://tests/test.gd"
 # cancel or a clear cannot resurrect a stale outline, and that the tool lifecycle
 # (tool switch, status-bar cancel, Esc, free, reaper) leaves no worker behind.
 #
-#   godot --headless --path . res://tests/progressive_wand_safety.tscn
-#   godot --headless --path . res://tests/progressive_wand_safety.tscn -- replace_partial_excludes_prior
+#   godot --path . res://tests/progressive_wand_safety.tscn
+#   godot --path . res://tests/progressive_wand_safety.tscn -- replace_partial_excludes_prior
 #
 # The tests assert the installed mesh, not only the selection count. A pixel check
 # is not part of a headless run, so visibility is proven by the installed surface,

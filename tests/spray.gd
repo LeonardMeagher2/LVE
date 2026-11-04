@@ -9,6 +9,7 @@ const BLOCK := 4
 const SEED := 20261020
 
 const VoxelBrushSize := preload("res://Globals/State/Tools/VoxelBrushSize.gd")
+const VoxelPreview := preload("res://Globals/Rendering/VoxelPreview.gd")
 
 var _settings := preload("res://plugins/paint/settings.tres")
 
@@ -29,6 +30,10 @@ var shown_batch: Array[Vector3i] = []
 var _dense_local: Array[Vector3i] = []
 var _dense_spots: Array[Vector3i] = []
 var _dense_result := {}
+var _final_job
+var _reference_job
+var _rng_before := 0
+var _history_before := 0
 
 
 func _ready() -> void:
@@ -67,6 +72,10 @@ func _ready() -> void:
 	test("a moving click paints exactly the offered sample", _moving_click, "spray_moving_click")
 	test("a coalesced cursor does not resurrect across a frame clear", _coalesced_clear_hides, "spray_coalesced_clear")
 	test("a lagging cursor paints the displayed snapshot, not the pending sample", _display_parity, "spray_display")
+	test("a lagging cursor never paints the surface of another cell", _ownership_gate, "spray_ownership")
+	test("the spray write skips the second symmetry expansion with exact parity", _write_parity, "spray_write_parity")
+	test("the spray write keeps its selection and existing-only filters", _write_filters, "spray_write_filters")
+	test("the spray write draws no random number and records one undo action", _write_rng_undo, "spray_write_undo")
 	test("a frame change clears the displayed preview", _display_clears, "spray_display_clear")
 	test("a selection change clears the displayed preview", _selection_clears, "spray_display_selection")
 
@@ -229,6 +238,15 @@ func _settle_cursor(cursor: MeshInstance3D) -> void:
 		await get_tree().process_frame
 		if cursor.is_settled() and cursor.mesh != null:
 			return
+
+
+# Drops the shared preview mesh cache, so the next preview request builds on a
+# worker and cannot install during the input event. The spray scene does not
+# depend on cache warmth.
+func _clear_preview_cache() -> void:
+	VoxelPreview._mesh_cache.clear()
+	VoxelPreview._cache_order.clear()
+	VoxelPreview._cache_bytes = 0
 
 
 # The world AABB of every visible mesh of the cursor and its mirror children.
@@ -1216,9 +1234,9 @@ func _coalesced_clear_hides() -> void:
 	)
 
 
-# A coalescing cursor can show an older snapshot while a newer sample waits on
-# the worker. The next press must paint the displayed snapshot, so the click and
-# the visible preview never disagree.
+# A coalescing cursor can show an older snapshot while a newer sample for the
+# same cell waits on the worker. The next press must paint the displayed
+# snapshot, so the click and the visible preview never disagree.
 func _display_parity() -> void:
 	step("Given a plate with a displayed spray preview", func():
 		_plate()
@@ -1233,19 +1251,55 @@ func _display_parity() -> void:
 		expect(shown_batch.size() > 0, "the displayed batch holds cells")
 		expect(cursor.installed_cells().size() == shown_batch.size(), "the installed surface holds A")
 	)
-	step("When the pointer moves and presses before the new sample installs", func():
-		_hover(_screen_pos_of(Vector3i(6, 0, 4)))
+	step("When the same cell rerolls and presses before the new sample installs", func():
+		# Keep the installed A and its captured frame, material, and context.
+		# Reset only the batch cell, so the hover samples a new batch for the
+		# same cell without clearing the cursor.
+		tool.seed_spray(SEED + 1)
+		tool._batch_center = VoxelPicking.NONE
+		_clear_preview_cache()
+		_hover(_screen_pos_of(Vector3i(0, 0, 0)))
 		var pending: Array[Vector3i] = tool.preview_cells()
 		expect(pending != shown_batch, "the new sample B differs from A")
+		expect(not cursor.is_settled(), "the new sample B builds on a worker")
 		expect(cursor.installed_cells().size() == shown_batch.size(), "the new sample B is not installed yet")
 		var keys: Array[Vector3i] = []
 		keys.assign(cursor.installed_cells().keys())
 		expect(_same_cell_set(keys, shown_batch), "the installed surface is still the displayed A")
-		_press(_screen_pos_of(Vector3i(6, 0, 4)))
+		_press(_screen_pos_of(Vector3i(0, 0, 0)))
 	)
 	step("Then the click paints exactly the displayed A", func():
 		expect(_same_cell_set(_sprayed_cells(), shown_batch), "the click painted the visible A")
 		expect(_sprayed_count() == shown_batch.size(), "the click painted A alone")
+		_release(_screen_pos_of(Vector3i(0, 0, 0)))
+	)
+
+
+# A lagging surface belongs to the cell that sampled it. A press on another cell
+# must paint its own current batch, never the installed surface of the old cell.
+func _ownership_gate() -> void:
+	step("Given a displayed preview A for one cell", func():
+		_plate()
+		tool.seed_spray(SEED)
+		_settings.speed = 8
+		cursor = tool.get_node("Cursor")
+		_hover(_screen_pos_of(Vector3i(0, 0, 0)))
+	)
+	await _settle_cursor(cursor)
+	step("When the pointer moves to cell B and presses before B installs", func():
+		shown_batch = tool._batch_cells.duplicate()
+		_hover(_screen_pos_of(Vector3i(6, 0, 4)))
+		preview = tool.preview_cells()
+		expect(preview != shown_batch, "the new sample B differs from A")
+		expect(cursor.installed_cells().size() == shown_batch.size(), "B is not installed yet")
+		var keys: Array[Vector3i] = []
+		keys.assign(cursor.installed_cells().keys())
+		expect(_same_cell_set(keys, shown_batch), "the installed surface is still A")
+		_press(_screen_pos_of(Vector3i(6, 0, 4)))
+	)
+	step("Then the press paints its own B and never A", func():
+		expect(_same_cell_set(_sprayed_cells(), preview), "the press painted its own batch B")
+		expect(_sprayed_count() == preview.size(), "the press painted B alone")
 		_release(_screen_pos_of(Vector3i(6, 0, 4)))
 	)
 
@@ -1297,3 +1351,210 @@ func _selection_clears() -> void:
 		keys.assign(cursor.installed_cells().keys())
 		expect(not _same_cell_set(keys, shown_batch), "the old selection's installed surface is gone")
 	)
+
+
+# The spray samples and expands its batch before the write. The write job must
+# not expand the same context again. These cases compare the already-expanded
+# write against the previous expansion path on the same cells and frame.
+func _write_parity() -> void:
+	var cases := [
+		{
+			"name": "a near chunk boundary with X symmetry",
+			"center": Vector3i(-1, 0, -1), "spot": 3, "search": 3, "speed": 5,
+			"axes": 1, "origin": Vector3.ZERO, "selection": [],
+			"material": VoxelFrame.material(Color.RED),
+		},
+		{
+			"name": "an even spot and search width",
+			"center": Vector3i.ZERO, "spot": 4, "search": 4, "speed": 6,
+			"axes": 0, "origin": Vector3.ZERO, "selection": [],
+			"material": VoxelFrame.material(Color.RED),
+		},
+		{
+			"name": "far coordinates",
+			"center": Vector3i(3000, 0, -3000), "spot": 3, "search": 3, "speed": 5,
+			"axes": 1, "origin": Vector3.ZERO, "selection": [],
+			"material": VoxelFrame.material(Color.RED),
+		},
+		{
+			"name": "an asymmetric selection under X symmetry",
+			"center": Vector3i(1, 0, 0), "spot": 3, "search": 3, "speed": 5,
+			"axes": 1, "origin": Vector3.ZERO,
+			"selection": _half_selection(Vector3i(1, 0, 0)),
+			"material": VoxelFrame.material(Color.RED),
+		},
+		{
+			"name": "a full metal material",
+			"center": Vector3i.ZERO, "spot": 3, "search": 3, "speed": 5,
+			"axes": 1, "origin": Vector3.ZERO, "selection": [],
+			"material": VoxelFrame.material(Color.RED, Color(0.5, 0.25, 0.125), 1.0, 0.25),
+		},
+	]
+	for entry in cases:
+		step("Given %s" % entry["name"], func():
+			var center: Vector3i = entry["center"]
+			var material: PackedFloat32Array = entry["material"]
+			var axes: int = entry["axes"]
+			var origin: Vector3 = entry["origin"]
+			var spot: int = entry["spot"]
+			var search: int = entry["search"]
+			var speed: int = entry["speed"]
+			_build_parity_frame(center)
+			State.symmetry_axes = axes
+			State.symmetry_origin = origin
+			State.clear_selection()
+			for cell in entry["selection"]:
+				var cell_position: Vector3i = cell
+				State.selection.add(cell_position)
+			State.selection_changed.emit()
+			State.set_material(material)
+			tool.seed_spray(SEED)
+			_settings.spot_diameter = spot
+			_settings.spray_size = search
+			_settings.speed = speed
+			_hover_cell(center)
+			preview = tool.preview_cells()
+			expect(preview.size() > 0, "the case samples a non-empty batch")
+		)
+		step("When the write runs with the sampled batch", func():
+			expect(tool.open_stroke() != null, "the stroke opens")
+			_final_job = tool._build_job()
+			_final_job.centers = preview.duplicate()
+			_final_job.run()
+			_reference_job = tool._build_job()
+			_reference_job.centers = preview.duplicate()
+			_reference_job.centers_are_final = false
+			_reference_job.run()
+		)
+		step("Then the fast path writes the same cells, materials, and chunks", func():
+			var material: PackedFloat32Array = entry["material"]
+			expect(_final_job.applied_cells == _reference_job.applied_cells, "the applied cells and materials match")
+			expect(_same_chunk_set(_final_job.changed_chunks, _reference_job.changed_chunks), "the changed chunks match")
+			expect(_same_frame_content(_final_job.edited_frame, _reference_job.edited_frame), "the written frames match")
+			for cell in _final_job.applied_cells:
+				expect(_final_job.applied_cells[cell] == material, "every cell holds the captured material")
+			tool._cancel_edit()
+		)
+
+
+# The already-expanded fast path still applies the selection mask and the
+# existing-only filter. A cell outside the selection or a cell that the write
+# snapshot does not hold never writes.
+func _write_filters() -> void:
+	step("Given a plate with one selected cell and one unselected cell", func():
+		_plate()
+		State.clear_selection()
+		State.selection.add(Vector3i(0, 0, 0))
+		State.selection_changed.emit()
+		State.set_material(VoxelFrame.material(Color.RED))
+		tool.seed_spray(SEED)
+		expect(tool.open_stroke() != null, "the stroke opens")
+	)
+	step("When the final write batch holds the selected and the unselected cell", func():
+		var centers: Array[Vector3i] = [Vector3i(0, 0, 0), Vector3i(1, 0, 0)]
+		_final_job = tool._build_job()
+		_final_job.centers = centers
+		_final_job.run()
+	)
+	step("Then only the selected cell writes", func():
+		expect(_final_job.applied_cells.has(Vector3i(0, 0, 0)), "the selected cell writes")
+		expect(not _final_job.applied_cells.has(Vector3i(1, 0, 0)), "the unselected cell stays out")
+	)
+	step("When the write snapshot no longer holds the selected cell", func():
+		_final_job.edited_frame.set_cell(Vector3i(0, 0, 0), VoxelFrame.material(Color.TRANSPARENT))
+		var second = tool._build_job()
+		var centers: Array[Vector3i] = [Vector3i(0, 0, 0)]
+		second.centers = centers
+		second.edited_frame = _final_job.edited_frame.copy_frame()
+		second.run()
+		_final_job = second
+	)
+	step("Then the existing-only filter drops the erased cell", func():
+		expect(not _final_job.applied_cells.has(Vector3i(0, 0, 0)), "the erased cell stays out")
+		tool._cancel_edit()
+	)
+
+
+# The write must not draw a random number, because the sample already consumed
+# its stream. The whole spray stays one undo action with the full material.
+func _write_rng_undo() -> void:
+	var metal := VoxelFrame.material(Color.RED, Color(0.5, 0.25, 0.125), 1.0, 0.25)
+	step("Given a mirrored, selected, full-material spray with a displayed preview", func():
+		_plate()
+		State.symmetry_axes = 1
+		State.symmetry_origin = Vector3.ZERO
+		State.clear_selection()
+		State.selection.add(Vector3i(2, 0, 0))
+		State.selection.add(Vector3i(-2, 0, 0))
+		State.selection_changed.emit()
+		State.set_material(metal)
+		tool.seed_spray(SEED)
+		_settings.speed = 6
+		_hover(_screen_pos_of(Vector3i(2, 0, 0)))
+		preview = tool.preview_cells()
+	)
+	await _settle_cursor(tool.get_node("Cursor"))
+	step("When the press writes the displayed batch", func():
+		before = frame.copy_frame()
+		_rng_before = tool._rng.state
+		_history_before = State.undo_redo.get_history_count()
+		_press(_screen_pos_of(Vector3i(2, 0, 0)))
+		expect(tool._rng.state == _rng_before, "the write draws no random number")
+		expect(_same_cell_set(_sprayed_cells(), preview), "the write paints the displayed batch")
+		_release(_screen_pos_of(Vector3i(2, 0, 0)))
+	)
+	step("Then one undo and one redo cover the exact spray", func():
+		expect(State.undo_redo.get_history_count() == _history_before + 1, "the spray records one action")
+		State.undo_redo.undo()
+		expect(frame.storage_data() == before.storage_data(), "one undo restores the plate")
+		State.undo_redo.redo()
+		for cell in preview:
+			expect(frame.get_material(cell) == metal, "every sprayed cell keeps the full material")
+	)
+
+
+# Builds a small solid frame around one cell, so a spray sample has occupied
+# cells at every tested coordinate.
+func _build_parity_frame(center: Vector3i) -> void:
+	State.document = VoxelDocument.new()
+	frame = State.get_current_voxel_frame()
+	for x in range(-4, 5):
+		for y in range(0, 3):
+			for z in range(-4, 5):
+				frame.set_cell(center + Vector3i(x, y, z), VoxelFrame.material(Color.BLUE))
+
+
+# The cells of one half-space of the parity frame. It is asymmetric under the X
+# mirror, so the selection filter has a real effect.
+func _half_selection(center: Vector3i) -> Array[Vector3i]:
+	var cells: Array[Vector3i] = []
+	for x in range(center.x, center.x + 5):
+		for y in range(0, 3):
+			for z in range(center.z - 4, center.z + 5):
+				cells.append(Vector3i(x, y, z))
+	return cells
+
+
+func _same_chunk_set(first: Array[Vector3i], second: Array[Vector3i]) -> bool:
+	if first.size() != second.size():
+		return false
+	var lookup := {}
+	for location in first:
+		lookup[location] = true
+	for location in second:
+		if not lookup.has(location):
+			return false
+	return true
+
+
+# Compares two frames by chunk content, not by chunk insertion order. The write
+# path and the expansion path can group the same cells in a different order.
+func _same_frame_content(first: VoxelFrame, second: VoxelFrame) -> bool:
+	if first.chunks.size() != second.chunks.size():
+		return false
+	for location in first.chunks:
+		var chunk: VoxelFrame.Chunk = first.chunks[location]
+		var other: VoxelFrame.Chunk = second.chunks.get(location)
+		if other == null or not chunk.equals(other):
+			return false
+	return true

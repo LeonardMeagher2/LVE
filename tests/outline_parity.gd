@@ -8,7 +8,7 @@ extends "res://tests/test.gd"
 # alternates the two implementations in one process and reports medians with
 # their sample counts, so no result rests on a single minimum.
 #
-#   godot --headless --path . res://tests/outline_parity.tscn
+#   godot --path . res://tests/outline_parity.tscn
 
 const REFERENCE := preload("res://tests/outline_reference.gd")
 const PREVIEW_SCRIPT := preload("res://Globals/Rendering/VoxelPreview.gd")

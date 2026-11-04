@@ -58,6 +58,11 @@ var _hover_operation_id := 0
 class BrushJob extends VoxelFrame.EditJob:
 	## The stroke centers of this batch.
 	var centers: Array[Vector3i] = []
+	## Whether [member centers] already holds the final cells after the symmetry
+	## expansion and the selection filter. The spray samples its batch first, so
+	## the write must not expand the same context again. The stamp still applies
+	## the selection mask, the existing-only filter, and the captured material.
+	var centers_are_final := false
 	## The brush pattern, keyed by offset from the center.
 	var pattern := {}
 	# The pattern keys in the same order as the dictionary. The stamp reads only
@@ -111,7 +116,9 @@ class BrushJob extends VoxelFrame.EditJob:
 		# pattern cell per center.
 		var mask_empty: bool = selection_mask.is_empty()
 		var existing_only := paint_existing
-		var every_cell := edit_context != null or (mask_empty and not existing_only)
+		# A final batch still passes the selection and existing-only filters. It
+		# only skips the symmetry expansion that its producer already ran.
+		var every_cell := (edit_context != null and not centers_are_final) or (mask_empty and not existing_only)
 		# A shape brush paints one material, so an offset that wrote a cell leaves
 		# the same material behind. That makes it safe to skip the offsets the
 		# previous center already covered, which leaves the new edge alone. A
@@ -154,6 +161,14 @@ class BrushJob extends VoxelFrame.EditJob:
 					if not checkpoint(completed):
 						return
 		stage("Applying brush", cell_materials.size())
+		if centers_are_final:
+			# The batch already holds every mirrored and selected destination. A
+			# second expansion would rebuild the same set. The stamp filtered every
+			# cell above, so the write set stays exact.
+			applied_cells = cell_materials
+			if checkpoint(0):
+				changed_chunks = edited_frame.set_cells(applied_cells, self, applied_uniform)
+			return
 		changed_chunks = apply_cells(edited_frame, cell_materials, paint_existing)
 
 
@@ -404,7 +419,10 @@ func _build_job() -> BrushJob:
 	job.erase_existing = _stroke_erases
 	job.selection_mask = _selection_mask
 	job.edit_context = _edit_context
-	job.edited_frame = _source_frame.copy_frame()
+	# The batch writes its own frame. `job_frame` shares the chunk objects and
+	# copies a chunk only when the batch writes it. The stroke owns the edit, so
+	# the source does not change while the batch runs.
+	job.edited_frame = VoxelFrame.job_frame(_source_frame)
 	return job
 
 
@@ -431,7 +449,9 @@ func _finish_edit(job: BrushJob) -> void:
 		if not job.centers.is_empty():
 			_stroke_last_center = job.centers[job.centers.size() - 1]
 		_settings.cache_pattern(job.diameter, job.shape, job.pattern, job.offsets)
-		_source_frame.restore(job.edited_frame.capture())
+		# Publish only the chunks the batch wrote. A whole-frame restore copies
+		# every chunk dictionary and marks every chunk shared again.
+		_source_frame.apply_published(job.changed_chunks, job.edited_frame)
 		State.document._bounds_dirty = true
 		if not job.changed_chunks.is_empty():
 			State.chunks_changed.emit(State.current_frame, job.changed_chunks)

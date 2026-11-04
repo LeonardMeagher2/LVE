@@ -11,6 +11,8 @@ const CLIPBOARD_PREFIX := '{"voxel_voxels":'
 # One clipboard record holds the cell and its nine material floats.
 ## The field count of one clipboard voxel record.
 const VOXEL_RECORD_SIZE := 3 + VoxelFrame.MATERIAL_STRIDE
+## The largest copy or cut source that runs on the main thread.
+const INLINE_EDIT_LIMIT := 4096
 
 @onready var _options := preload("./Options.tscn").instantiate()
 @onready var _paste_tool := preload("./PasteTool.tscn").instantiate()
@@ -236,18 +238,21 @@ func _copy_voxels(cut_source: bool) -> void:
 	_copy_job = job
 	var source_count := job.selection_mask.size() if not job.selection_mask.is_empty() else frame.count()
 	var operation_id := State.begin_operation("Cutting voxels" if cut_source else "Copying voxels", source_count, true, self)
-	if source_count <= 4096:
+	if source_count <= INLINE_EDIT_LIMIT:
 		job.run()
 	else:
-		job.worker_task_id = WorkerThreadPool.add_task(job.run, true, "Copy voxels")
-		while not WorkerThreadPool.is_task_completed(job.worker_task_id):
+		# The runner pumps the progress and joins the worker. The frame check
+		# cancels the job when its document or frame changes.
+		await State.run_edit_job(job, operation_id, "Copy voxels", func() -> void:
 			if State.document != document or State.get_current_voxel_frame() != frame:
 				job.cancel()
-			_report_job(operation_id, job)
-			await State.get_tree().process_frame
-		WorkerThreadPool.wait_for_task_completion(job.worker_task_id)
+		)
+	# A shutdown or a newer job owns the fields now, so this job cannot install.
+	if _copy_job != job:
+		State.finish_operation(operation_id)
+		return
 	_copy_job = null
-	if State.document == document and State.get_current_voxel_frame() == frame and job.checkpoint(0) and not job.pattern.is_empty():
+	if not _shutting_down and State.document == document and State.get_current_voxel_frame() == frame and job.checkpoint(0) and not job.pattern.is_empty():
 		_pattern = job.pattern
 		_pattern.make_read_only()
 		_selection_pattern = job.selection_pattern
@@ -261,7 +266,7 @@ func _copy_voxels(cut_source: bool) -> void:
 		if cut_source:
 			var tx := State.begin_edit()
 			if tx != null:
-				frame.restore(job.source_frame.capture())
+				frame.apply_published(job.changed_chunks, job.source_frame)
 				State.document._bounds_dirty = true
 				State.clear_selection()
 				State.finish_edit(tx, "Cut")
@@ -313,16 +318,20 @@ func paste_voxels() -> void:
 		job.text = text
 		_import_job = job
 		var operation_id := State.begin_operation("Reading voxel clipboard", -1, true, self)
-		job.worker_task_id = WorkerThreadPool.add_task(job.run, true, "Read voxel clipboard")
-		while not WorkerThreadPool.is_task_completed(job.worker_task_id):
+		# The runner pumps the progress and joins the worker. The frame check
+		# cancels the job when its document or frame changes.
+		await State.run_edit_job(job, operation_id, "Read voxel clipboard", func() -> void:
 			if State.document != document or State.get_current_voxel_frame() != frame:
 				job.cancel()
-			_report_job(operation_id, job)
-			await State.get_tree().process_frame
-		WorkerThreadPool.wait_for_task_completion(job.worker_task_id)
+		)
+		# A shutdown or a newer job owns the fields now, so this job cannot start
+		# a paste.
+		if _import_job != job:
+			State.finish_operation(operation_id)
+			return
 		_import_job = null
 		State.finish_operation(operation_id)
-		if State.document != document or State.get_current_voxel_frame() != frame or not job.checkpoint(0) or job.pattern.is_empty():
+		if _shutting_down or State.document != document or State.get_current_voxel_frame() != frame or not job.checkpoint(0) or job.pattern.is_empty():
 			return
 		_pattern = job.pattern
 		_pattern.make_read_only()
@@ -333,11 +342,6 @@ func paste_voxels() -> void:
 		_clipboard_text = text
 	add_editor_node(_paste_tool)
 	_paste_tool.begin_paste(_pattern, _selection_pattern, _center, _material_pattern)
-
-
-func _report_job(operation_id: int, job: VoxelFrame.EditJob) -> void:
-	var progress := job.progress()
-	State.update_operation(operation_id, progress[1], progress[2], progress[0])
 
 
 func _on_paste_finished() -> void:
@@ -353,8 +357,9 @@ func _remove_paste_preview() -> void:
 
 func _exit_tree() -> void:
 	_shutting_down = true
+	# The runner owns the join and retires the task id. This wait is the same
+	# exactly-once join, so a second wait never touches a disposed task.
 	for job in [_copy_job, _import_job]:
 		if job:
 			job.cancel()
-			if job.worker_task_id != -1:
-				WorkerThreadPool.wait_for_task_completion(job.worker_task_id)
+			job.wait_for_worker()

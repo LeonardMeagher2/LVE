@@ -252,7 +252,7 @@ func _ready() -> void:
 	add_plugin(load("res://plugins/brush/BrushPlugin.gd").new())
 	add_plugin(load("res://plugins/Eyedropper/EyedropperPlugin.gd").new())
 	add_plugin(load("res://plugins/paint/PaintPlugin.gd").new())
-	add_plugin(load("res://plugins/Sculpt/SculptPlugin.gd").new())
+	add_plugin(load("res://plugins/Terrain/TerrainPlugin.gd").new())
 	add_plugin(load("res://plugins/selection/SelectionPlugin.gd").new())
 	add_plugin(load("res://plugins/Transform/TransformPlugin.gd").new())
 	add_plugin(load("res://plugins/Symmetry/SymmetryPlugin.gd").new())
@@ -992,7 +992,7 @@ func erase_selection() -> void:
 	if _erase_edit == null:
 		return
 	var job := EraseJob.new()
-	job.edited_frame = edited_frame.copy_frame()
+	job.edited_frame = VoxelFrame.job_frame(edited_frame)
 	job.selection_mask = selection.capture()
 	_erase_job = job
 	var operation_id := begin_operation("Erasing selection", selection.count(), true, self, _interrupt_erase)
@@ -1009,7 +1009,9 @@ func erase_selection() -> void:
 	if document != edited_document or get_current_voxel_frame() != edited_frame:
 		_interrupt_erase()
 		return
-	edited_frame.restore(job.edited_frame.capture())
+	# Publish only the chunks the erase wrote. The erase edit owns the frame,
+	# so an unchanged chunk stays as it is.
+	edited_frame.apply_published(job.changed_chunks, job.edited_frame)
 	document._bounds_dirty = true
 	# Clear the handle, the job, and the operation before the history signals, so a
 	# handler that opens a new erase keeps its own.

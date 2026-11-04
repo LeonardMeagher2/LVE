@@ -9,7 +9,7 @@ extends "res://tests/test.gd"
 # lag. The fixture build and the renderer settle stay outside every timed value.
 #
 #   godot --headless --path . res://tests/benchmarks/spray_max64.tscn
-#   godot --path . --screen 1 res://tests/benchmarks/spray_max64.tscn
+#   godot --path . --screen 0 res://tests/benchmarks/spray_max64.tscn
 #
 # A spec names its canonical sizes explicitly: `spot` and `search` are widths in
 # cells and `speed` is the sampled spot center count. An optional `mixed` value

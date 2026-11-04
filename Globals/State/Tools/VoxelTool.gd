@@ -101,7 +101,9 @@ func handle_input(event: InputEvent, pos: Vector2) -> bool:
 
 
 func _apply_pick(target: Vector3i, hit: Vector3i) -> void:
-	apply(target, hit)
+	# A tool that reports no change changes no cells, so it publishes nothing.
+	if not apply(target, hit):
+		return
 	for c in applied_cells(target, hit):
 		_affected.append(c)
 	_flush_cells()

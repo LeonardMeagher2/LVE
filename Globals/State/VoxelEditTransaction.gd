@@ -25,6 +25,11 @@ var _start_chunks := {}
 var _start_selection := {}
 var _closed := false
 
+# Phase counters of the terrain benchmark. The benchmark resets them by direct
+# static write.
+static var _profile_chunks_equal_calls := 0
+static var _profile_chunks_equal_us := 0
+
 
 # The frozen before and after snapshots of one committed edit. The history binds
 # these, never the transaction.
@@ -137,6 +142,14 @@ func _release() -> void:
 # Compare by content. Two equal chunks can number their ids differently. This is
 # static so the history compare and its measurement share one implementation.
 static func _chunks_equal(first_chunks: Dictionary, second_chunks: Dictionary) -> bool:
+	var started := Time.get_ticks_usec()
+	var result := _compare_chunks(first_chunks, second_chunks)
+	_profile_chunks_equal_calls += 1
+	_profile_chunks_equal_us += Time.get_ticks_usec() - started
+	return result
+
+
+static func _compare_chunks(first_chunks: Dictionary, second_chunks: Dictionary) -> bool:
 	if first_chunks.size() != second_chunks.size():
 		return false
 	for chunk_location in first_chunks:

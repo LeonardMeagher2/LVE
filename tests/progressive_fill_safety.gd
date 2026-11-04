@@ -5,8 +5,8 @@ extends "res://tests/test.gd"
 # search, the coalesced chunk notification, one undo per stroke, a cancel after a
 # partial result, and a tool switch.
 #
-#   godot --headless --path . res://tests/progressive_fill_safety.tscn
-#   godot --headless --path . res://tests/progressive_fill_safety.tscn -- connected_capture
+#   godot --path . res://tests/progressive_fill_safety.tscn
+#   godot --path . res://tests/progressive_fill_safety.tscn -- connected_capture
 
 const REFERENCE := preload("res://tests/region_search_reference.gd")
 const FILL_TOOL := preload("res://plugins/paint/FillTool.gd")

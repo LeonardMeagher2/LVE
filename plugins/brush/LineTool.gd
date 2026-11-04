@@ -31,8 +31,9 @@ func _enter_tree() -> void:
 
 func _exit_tree() -> void:
 	super._exit_tree()
-	# The line preview owns a raw worker that `_process` pumps. `_process` stops on
-	# a detach, so the preview is discarded and its worker joined here.
+	# The preview runner awaits `State.run_edit_job`, so it continues after this
+	# detach. The preview is discarded here and its worker joined once. The runner
+	# adopts only its own job, so it cannot publish this preview.
 	if _job:
 		_job.cancel()
 		_job.wait_for_worker()
@@ -181,16 +182,62 @@ func _start_preview() -> void:
 	_job.material = _stroke_material
 	_job.selection_mask = _selection_mask
 	_job.edit_context = _edit_context
-	_job.edited_frame = _line_snapshot.copy_frame()
+	# The preview writes its own frame. `job_frame` shares the frozen line
+	# snapshot, so a preview costs the cells it writes, not the whole frame.
+	_job.edited_frame = VoxelFrame.job_frame(_line_snapshot)
 	_job.revision = _revision
 	var work := _job.estimate_work(_job.centers.size() * _stroke_pattern_size)
 	if work <= INLINE_EDIT_LIMIT:
 		_job.run()
 		_finish_preview()
-	else:
-		if not State.has_operation(_operation_id):
-			_operation_id = State.begin_operation("Preparing line", work, true, self)
-		_job.worker_task_id = WorkerThreadPool.add_task(_job.run, true, "Line preview")
+		_service_preview()
+		return
+	# One runner owns this preview batch. It pumps the progress and joins the
+	# worker even when a tool switch detaches this node.
+	var job := _job
+	var operation_id := _begin_preview_operation(work)
+	await State.run_edit_job(job, operation_id, "Line preview", _cancel_preview_if_stale.bind(job))
+	# A cancel or a detach can clear or replace `_job` while the runner waits. The
+	# runner adopts only the job it started, so it cannot publish a stale preview
+	# or finish a newer operation.
+	if _job != job:
+		return
+	_finish_preview()
+	_finish_preview_operation(operation_id)
+	_service_preview()
+
+
+# Cancels one preview worker when its request is no longer current. The runner
+# calls this once per pumped frame, so a superseded preview stops early.
+func _cancel_preview_if_stale(job: BrushJob) -> void:
+	if _job != job or _anchor == VoxelPicking.NONE or job.revision != _revision:
+		job.cancel()
+
+
+## Returns the operation id that reports the preview progress. A subclass that
+## already owns a longer operation returns that id.
+func _begin_preview_operation(work: int) -> int:
+	if not State.has_operation(_operation_id):
+		_operation_id = State.begin_operation("Preparing line", work, true, self)
+	return _operation_id
+
+
+## Finishes the operation that reports the preview progress. A subclass that
+## shares a longer operation keeps it open.
+func _finish_preview_operation(operation_id: int) -> void:
+	State.finish_operation(operation_id)
+	if _operation_id == operation_id:
+		_operation_id = 0
+
+
+# Continues the preview after one job finishes or is discarded. A newer request
+# wins, and a commit waits for the newest preview.
+func _service_preview() -> void:
+	if _preview_requested and _anchor != VoxelPicking.NONE:
+		_start_preview()
+		return
+	if _job == null and not _preview_requested and _commit_requested:
+		_commit_line()
 
 
 func _create_preview_job() -> BrushJob:
@@ -204,20 +251,6 @@ func _preview_centers() -> Array[Vector3i]:
 func _process(_delta: float) -> void:
 	if _anchor == VoxelPicking.NONE:
 		_update_hover()
-	if _job:
-		if not WorkerThreadPool.is_task_completed(_job.worker_task_id):
-			var progress := _job.progress()
-			State.update_operation(_operation_id, progress[1], progress[2], "Preparing line", progress[0])
-			return
-		WorkerThreadPool.wait_for_task_completion(_job.worker_task_id)
-		_finish_preview()
-	if _preview_requested and _anchor != VoxelPicking.NONE:
-		_start_preview()
-	if _job == null and not _preview_requested:
-		State.finish_operation(_operation_id)
-		_operation_id = 0
-		if _commit_requested:
-			_commit_line()
 
 
 func _finish_preview() -> void:
@@ -266,7 +299,9 @@ func _commit_line() -> void:
 	var tx := State.begin_edit()
 	if tx == null:
 		return
-	frame.restore(job.edited_frame.capture())
+	# Publish the cells the preview wrote. The snapshot is unchanged, so an
+	# unchanged chunk stays as it is.
+	frame.apply_published(job.changed_chunks, job.edited_frame)
 	State.document._bounds_dirty = true
 	State.finish_edit(tx, "Line")
 	if not job.changed_chunks.is_empty():

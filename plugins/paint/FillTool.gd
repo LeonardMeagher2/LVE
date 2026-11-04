@@ -173,9 +173,7 @@ func _notification(what: int) -> void:
 	if what == NOTIFICATION_PREDELETE:
 		# A freed tool cannot finish its own edit, so release it here. Otherwise the
 		# active edit outlives the tool and blocks every later edit.
-		if _edit != null:
-			State.cancel_edit(_edit)
-			_edit = null
+		abort_stroke()
 		for search_job in _search_jobs:
 			search_job.cancel()
 			if search_job.batch_queue != null:
@@ -240,8 +238,7 @@ func _queue_seed(seed_cell: Vector3i) -> void:
 	if chunk.matches(seed_cell, replacement):
 		return
 	if not _stroke_active:
-		_edit = State.begin_edit()
-		if _edit == null:
+		if open_stroke() == null:
 			return
 		_stroke_active = true
 		_source_document = State.document
@@ -295,7 +292,9 @@ func _process_seeds() -> void:
 			search_job.run()
 			if not _fill_current(fill_revision):
 				break
-			_source_frame.restore(search_job.source_frame.capture())
+			# Publish only the chunks the search wrote. Replacing the whole frame
+			# copies every chunk dictionary for one fill.
+			_source_frame.apply_published(search_job.changed_chunks, search_job.source_frame)
 			_mark_changed(search_job.changed_chunks)
 			_flush_chunk_notifications(fill_revision, false)
 			if Time.get_ticks_usec() >= frame_deadline_us:
@@ -364,22 +363,26 @@ func _process_seeds() -> void:
 # the cursor keeps the rest for the next frame, so no destination is dropped. A
 # stale context drops the work. The changed chunk ids coalesce for one notification.
 func _drain_fill_batches(search_job: FillJob, fill_revision: int, deadline_us: int) -> void:
+	var slice_apply := _apply_fill_slice.bind(search_job, fill_revision)
 	while Time.get_ticks_usec() < deadline_us:
-		var end := _batch_cursor.next_end(_slice_cells)
-		if end < 0:
+		if not _batch_cursor.apply_slice(_slice_cells, slice_apply):
 			break
-		if not _fill_current(fill_revision):
-			break
-		var start := _batch_cursor.cursor
-		var keys: Array = _batch_cursor.keys
-		var slice := {}
-		for index in range(start, end):
-			slice[keys[index]] = search_job.replacement_material
-		var slice_started_us := Time.get_ticks_usec()
-		_mark_changed(_source_frame.set_cells(slice, null, search_job.replacement_material))
-		_batch_cursor.cursor = end
-		_retune_slice(end - start, Time.get_ticks_usec() - slice_started_us)
 	_flush_chunk_notifications(fill_revision, false)
+
+
+# Apply one slice of the pending batch. The cursor advances only when this returns
+# true, so a stale context leaves the slice for the next owner. The slice size is
+# retuned from the measured cost, so the next call aims at the frame budget.
+func _apply_fill_slice(keys: Array, start: int, end: int, search_job: FillJob, fill_revision: int) -> bool:
+	if not _fill_current(fill_revision):
+		return false
+	var slice := {}
+	for index in range(start, end):
+		slice[keys[index]] = search_job.replacement_material
+	var slice_started_us := Time.get_ticks_usec()
+	_mark_changed(_source_frame.set_cells(slice, null, search_job.replacement_material))
+	_retune_slice(end - start, Time.get_ticks_usec() - slice_started_us)
+	return true
 
 
 # Size the next slice from the measured cost of the last one, so one set_cells call

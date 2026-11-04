@@ -4,16 +4,16 @@ extends "res://tests/test.gd"
 # is independent, so any single test can run alone in any requested order.
 
 const RUNNER := preload("res://tests/run_all.gd")
-const GROUP_SCENES := {"tag_group": true, "step_timing": true}
+const GROUP_SCENES := {"tag_group": ["frames", "tag_frame_remove", "tag_playback", "tags"], "step_timing": []}
 
 
 func _ready() -> void:
 	test("the test filter selects tests by name", _filter, "filter")
-	test("a whole group dominates its aliases in any order", _whole_group, "whole_group")
-	test("several aliases deduplicate to one run", _alias_dedup, "alias_dedup")
+	test("a whole group dominates its case names in any order", _whole_group, "whole_group")
+	test("several case names deduplicate to one run", _case_dedup, "case_dedup")
 	test("a test owns its own result and check list", _own_result, "own_result")
 	test("engine errors cannot pass as successful output", _engine_errors, "engine_errors")
-	test("every legacy name selects its migrated test", _legacy_aliases, "legacy_aliases")
+	test("every registered name resolves to its scene", _name_resolution, "name_resolution")
 
 
 func _filter() -> void:
@@ -52,10 +52,10 @@ func _whole_group() -> void:
 	step("Then the whole group wins in the group-first order", func():
 		_expect_whole_group(RUNNER.build_entries(["tag_group", "tags"], GROUP_SCENES))
 	)
-	step("Then the whole group wins in the alias-first order", func():
+	step("Then the whole group wins in the case-first order", func():
 		_expect_whole_group(RUNNER.build_entries(["tags", "tag_group"], GROUP_SCENES))
 	)
-	step("Then the whole group wins with every alias present", func():
+	step("Then the whole group wins with every case name present", func():
 		var names := ["frames", "tags", "tag_group", "tag_playback", "tag_frame_remove"]
 		_expect_whole_group(RUNNER.build_entries(names, GROUP_SCENES))
 	)
@@ -69,13 +69,13 @@ func _expect_whole_group(result: Dictionary) -> void:
 	expect(cases.is_empty(), "the whole group selects every case")
 
 
-func _alias_dedup() -> void:
-	step("Then several aliases deduplicate to one run", func():
+func _case_dedup() -> void:
+	step("Then several case names deduplicate to one run", func():
 		var result: Dictionary = RUNNER.build_entries(["tags", "frames", "tags"], GROUP_SCENES)
 		var entries: Array = result["entries"]
 		expect(entries.size() == 1, "one group entry is built")
 		var cases: Array = entries[0]["cases"]
-		expect(cases == ["frames", "tags"], "the aliases deduplicate in sorted order")
+		expect(cases == ["frames", "tags"], "the case names deduplicate in sorted order")
 	)
 	step("Then an unknown name is reported and nothing is built", func():
 		var result: Dictionary = RUNNER.build_entries(["tags", "missing"], GROUP_SCENES)
@@ -104,26 +104,39 @@ func _engine_errors() -> void:
 	)
 
 
-func _legacy_aliases() -> void:
-	step("Then all migrated aliases resolve without narrowing a whole group", func():
+func _name_resolution() -> void:
+	step("Then every registered case resolves to the scene that declares it", func():
 		var scenes := {}
-		for file in DirAccess.get_files_at("res://tests"):
-			if file.ends_with(".tscn"):
-				scenes[file.get_basename()] = true
 		var errors: Array[String] = []
-		for name in RUNNER.GROUP_ALIASES:
-			var alias: Dictionary = RUNNER.GROUP_ALIASES[name]
-			var selected: Dictionary = RUNNER.build_entries([name], scenes)
-			var entries: Array = selected["entries"]
-			if entries.size() != 1:
-				errors.append("%s has no unique scene" % name)
+		for file in DirAccess.get_files_at("res://tests"):
+			if not file.ends_with(".tscn"):
 				continue
-			if entries[0]["path"] != alias["scene"] or entries[0]["cases"] != [alias["case"]]:
-				errors.append("%s selects the wrong case" % name)
-			for names in [[name, alias["scene"]], [alias["scene"], name]]:
-				var whole: Dictionary = RUNNER.build_entries(names, scenes)
-				var groups: Array = whole["entries"]
-				if groups.size() != 1 or not groups[0]["cases"].is_empty():
-					errors.append("%s narrows the whole group" % name)
-		expect(errors.is_empty(), "all legacy selectors resolve independently and in whole groups: %s" % "; ".join(errors))
+			var scene_name := file.get_basename()
+			var cases := RUNNER._scene_cases("res://tests/%s.gd" % scene_name)
+			scenes[scene_name] = cases
+			if cases.is_empty():
+				continue
+			for case_name in cases:
+				var entries: Array = RUNNER.build_entries([case_name], scenes)["entries"]
+				var found := false
+				for entry in entries:
+					if entry["path"] != scene_name:
+						continue
+					# A case named after its own scene is reached as the whole
+					# scene, so the scene name still wins that selection.
+					if entry["cases"] == [case_name] or (case_name == scene_name and entry["cases"].is_empty()):
+						found = true
+				if not found:
+					errors.append("%s does not resolve to %s" % [case_name, scene_name])
+		expect(not scenes.is_empty(), "the runner discovers scenes")
+		expect(errors.is_empty(), "every registered case resolves to its scene: %s" % "; ".join(errors))
+	)
+	step("Then a plain scene name selects every case and the scene name wins", func():
+		var entries: Array = RUNNER.build_entries(["tag_group", "tags"], GROUP_SCENES)["entries"]
+		expect(entries.size() == 1 and entries[0]["cases"].is_empty(), "the scene name dominates its case names")
+	)
+	step("Then an unknown name is reported", func():
+		var result: Dictionary = RUNNER.build_entries(["missing"], GROUP_SCENES)
+		expect(result["unknown"] == ["missing"], "the unknown name is reported")
+		expect(result["entries"].is_empty(), "an unknown name builds no plan")
 	)

@@ -48,6 +48,26 @@ var result_state := 0
 var rng_epoch := 0
 ## The shared spot shape cache.
 var shape_cache: RefCounted
+## The chunks that the frozen snapshot captured.
+var capture_chunk_count := 0
+## The frozen selection masks, or null when the caller has none. The sampler uses
+## them for a large selection and returns the built index in
+## [member built_selection_index].
+var selection_index: RefCounted
+## The selection masks that the sample used or built, or null.
+var built_selection_index: RefCounted
+## The chunk row builds that the sample paid.
+var index_builds := 0
+## The dense grid slots that those builds read.
+var index_grid_reads := 0
+## The row masks that those builds wrote.
+var index_build_slots := 0
+## The selection mask builds that the sample paid.
+var selection_builds := 0
+## The total indexed row operations of the sample.
+var row_ops := 0
+## The occupied footprint cells that the sample visited.
+var footprint_visits := 0
 ## The request epoch of this sample. A caller drops a result whose epoch is not
 ## the newest installed one.
 var request_epoch := 0
@@ -59,9 +79,10 @@ var witness := {}
 ## builds it. The worker builds the read-only color dictionary and the cell hash
 ## here, so the main thread never does that work for a large batch.
 var preview_payload: VoxelPreview.SolidPayload
-## The occupied cell estimate of the reach range. It sizes the progress total.
+## The indexed row work estimate of the sample. It sizes the progress total.
 var local_estimate := 0
-## The gathered cell count of the reach range, or zero before the worker runs.
+## The legacy gathered cell count. The indexed sampler reports zero, because it
+## never gathers the reach range.
 var local_count := 0
 ## The candidate cell count inside the search sphere, or zero before the worker
 ## runs.
@@ -77,9 +98,16 @@ func run() -> void:
 	rng.state = sample_state
 	stage("Sampling spray", local_estimate)
 	var report := {}
-	cells = SpraySampler.sample(center, frame, context, spot_size, search_size, speed, rng, material, shape_cache, self, report)
+	cells = SpraySampler.sample(center, frame, context, spot_size, search_size, speed, rng, material, shape_cache, self, report, selection_index)
 	local_count = report.get("local", 0)
 	candidate_count = report.get("candidates", 0)
+	built_selection_index = report.get("selection_index")
+	index_builds = report.get("index_builds", 0)
+	index_grid_reads = report.get("index_grid_reads", 0)
+	index_build_slots = report.get("index_build_slots", 0)
+	selection_builds = report.get("selection_builds", 0)
+	row_ops = report.get("row_ops", 0)
+	footprint_visits = report.get("footprint_visits", 0)
 	result_state = rng.state
 	# A cancelled union leaves no cells behind, so a caller never adopts a partial
 	# batch and no payload is built for it.

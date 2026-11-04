@@ -1,6 +1,0 @@
-[gd_scene format=3]
-
-[ext_resource type="Script" path="res://tests/sprite_sheet_shadows.gd" id="1"]
-
-[node name="SpriteSheetShadows" type="Node"]
-script = ExtResource("1")

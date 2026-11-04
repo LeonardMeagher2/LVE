@@ -8,7 +8,7 @@ extends "res://tests/test.gd"
 # afford. Run one configuration on the second monitor with:
 #
 #   $env:LVE_PROF_DIAMETER="64"; $env:LVE_PROF_SHAPE="cube"
-#   godot --path . --screen 1 res://tests/draw_profile.tscn
+#   godot --path . --screen 0 res://tests/draw_profile.tscn
 #
 # Environment:
 #   LVE_PROF_SHAPE      cube | sphere            (default cube)

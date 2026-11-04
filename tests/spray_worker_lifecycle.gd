@@ -51,6 +51,7 @@ func _ready() -> void:
 	timeout = 60.0
 	test("Escape then an immediate repress waits for the retired runner", _lifecycle_cancel_repress, "lifecycle_cancel")
 	test("a queued brush cell keeps the settings captured when it was accepted", _lifecycle_intent_settings, "lifecycle_intent")
+	test("a queued large cell keeps its ROI after the live settings shrink", _lifecycle_decrease_intent, "lifecycle_intent_decrease")
 	test("a press paints its own cell while another hover waits", _lifecycle_press_own_cell, "lifecycle_press")
 	test("a cancelled dense union publishes no partial batch", _lifecycle_cancel_checkpoints, "lifecycle_checkpoints")
 	test("the worker draws the same state as the inline path", _lifecycle_rng_parity, "lifecycle_rng")
@@ -98,6 +99,22 @@ func _block(half: int) -> void:
 				frame.set_cell(Vector3i(x, y, z), VoxelFrame.material(Color.BLUE))
 	camera_rig().center_on(frame.get_bounds())
 	# A new document drops the preview surface of the previous fixture.
+	tool._clear_cursor_preview()
+
+
+# A wide slab whose top face sits on the chunk boundary at y=16. A width 17
+# search at the top face crosses two occupied chunk rows, so the work estimate
+# passes the inline limit, and the two press cells stay outside each other's
+# reach.
+func _press_slab() -> void:
+	State.document = VoxelDocument.new()
+	frame = State.get_current_voxel_frame()
+	var blue := VoxelFrame.material(Color.BLUE)
+	for x in range(-17, 18):
+		for y in range(-10, 17):
+			for z in range(-8, 9):
+				frame.set_cell(Vector3i(x, y, z), blue)
+	camera_rig().center_on(frame.get_bounds())
 	tool._clear_cursor_preview()
 
 
@@ -173,11 +190,11 @@ func _settle_cursor() -> void:
 
 
 # The large sizes of the worker checks. The solid half-width block keeps the
-# occupied reach estimate well above the inline limit.
+# occupied reach estimate well above the inline limit at search 33.
 func _use_large() -> void:
 	_block(8)
 	_settings.spot_diameter = 4
-	_settings.spray_size = 17
+	_settings.spray_size = 33
 	_settings.speed = 16
 	tool.clear_shape_caches()
 	tool._invalidate_batch()
@@ -222,7 +239,7 @@ func _lifecycle_intent_settings() -> void:
 	step("Given a dense block and a queued worker sample with spot 1", func():
 		_block(8)
 		_settings.spot_diameter = 1
-		_settings.spray_size = 17
+		_settings.spray_size = 33
 		_settings.speed = 8
 		tool.clear_shape_caches()
 		tool._invalidate_batch()
@@ -231,7 +248,7 @@ func _lifecycle_intent_settings() -> void:
 		expect(tool._sample_job != null, "the first accepted sample runs on the worker")
 		_first_job = tool._sample_job
 		expect(_first_job.spot_size == 1, "the first job captured spot 1")
-		expect(_first_job.search_size == 17, "the first job captured search 17")
+		expect(_first_job.search_size == 33, "the first job captured search 33")
 		expect(_first_job.speed == 8, "the first job captured speed 8")
 	)
 	step("When the settings change and the drag accepts another cell", func():
@@ -253,13 +270,72 @@ func _lifecycle_intent_settings() -> void:
 	)
 
 
-func _lifecycle_press_own_cell() -> void:
-	var a := Vector3i(-9, BLOCK, 0)
-	var b := Vector3i(9, BLOCK, 0)
-	step("Given a dense block and an installed batch at cell A", func():
-		_block(BLOCK)
+func _lifecycle_decrease_intent() -> void:
+	step("Given a frozen selection with a far mirror and captured large sizes", func():
+		State.document = VoxelDocument.new()
+		frame = State.get_current_voxel_frame()
+		var blue := VoxelFrame.material(Color.BLUE)
+		frame.set_cell(Vector3i(16, 0, 0), blue)
+		frame.set_cell(Vector3i(-17, 0, 0), blue)
+		State.clear_selection()
+		State.selection.add(Vector3i(16, 0, 0))
+		State.selection.add(Vector3i(-17, 0, 0))
+		State.selection_changed.emit()
+		State.symmetry_axes = 1
+		State.symmetry_origin = State.DEFAULT_SYMMETRY_ORIGIN
+		_settings.spot_diameter = 4
+		_settings.spray_size = 33
+		_settings.speed = 1
+		tool.clear_shape_caches()
+		tool._invalidate_batch()
+		tool.clear_selection_cache()
+		_context = State.drawing_context()
+		_material = VoxelFrame.material(Color.WHITE)
+		# A busy runner makes `_accept_intent` only queue the cell, so the live
+		# settings can shrink before the job builds.
+		tool._intent_running = true
+		tool._accept_intent(Vector3i(8, 0, 0), frame, _context, _material, 5000)
+		expect(tool._pending_intents.size() == 1, "the large cell waits in the intent queue")
+		expect(tool._pending_intents[0].search_size == 33, "the intent captured search 33")
+		expect(tool._pending_intents[0].spot_size == 4, "the intent captured spot 4")
+	)
+	step("When the live settings shrink before the queued job builds", func():
 		_settings.spot_diameter = 1
-		_settings.spray_size = 13
+		_settings.spray_size = 9
+		_settings.speed = 1
+		# The frozen reference uses the captured sizes while the live settings
+		# are already small.
+		tool.seed_spray(SEED)
+		_inline = tool._sample(Vector3i(8, 0, 0), frame, _context, null, _material, 4, 33, 1)
+		_inline_state = tool._rng.state
+		tool.seed_spray(SEED)
+		tool.clear_selection_cache()
+		tool.open_stroke()
+		expect(tool._edit != null, "the check opened a stroke transaction")
+		tool._intent_running = false
+	)
+	await tool._run_intents()
+	await _settle()
+	step("Then the job used the captured ROI and drew the frozen intent", func():
+		expect(tool.preview_cells() == _inline, "the queued job keeps the frozen inline cells")
+		expect(_inline.has(Vector3i(16, 0, 0)) and _inline.has(Vector3i(-17, 0, 0)), "the frozen output holds the base and the far mirror")
+		expect(tool._rng.state == _inline_state, "the queued job consumes the same draws")
+		# The small live box covers neither the base chunk nor the mirror chunk.
+		expect(tool.last_capture_chunks == 2, "the large ROI captured the base and the far mirror chunk")
+		expect(tool._selection_index == null, "a two-cell selection needs no mask cache")
+		if tool._edit != null:
+			State.cancel_edit(tool._edit)
+			tool._edit = null
+	)
+
+
+func _lifecycle_press_own_cell() -> void:
+	var a := Vector3i(-9, 16, 0)
+	var b := Vector3i(9, 16, 0)
+	step("Given a wide slab and an installed batch at cell A", func():
+		_press_slab()
+		_settings.spot_diameter = 1
+		_settings.spray_size = 17
 		_settings.speed = 8
 		tool.clear_shape_caches()
 		tool._invalidate_batch()
@@ -283,7 +359,7 @@ func _lifecycle_press_own_cell() -> void:
 	await _settle()
 	step("Then the press painted B and never A", func():
 		expect(tool._batch_center == b, "the adopted batch belongs to B")
-		var reach := VoxelBrushSize.reach(13) + VoxelBrushSize.reach(1)
+		var reach := VoxelBrushSize.reach(17) + VoxelBrushSize.reach(1)
 		var limit := reach * reach
 		var painted := _painted_cells()
 		expect(painted.size() > 0, "the press painted voxels")
@@ -294,7 +370,7 @@ func _lifecycle_press_own_cell() -> void:
 				outside_b += 1
 			if Vector3(cell - a).length_squared() <= float(limit):
 				near_a += 1
-		expect(outside_b == 0, "every painted cell lies inside B's reach")
+		expect(outside_b == 0, "every painted cell lies inside B's captured reach")
 		expect(near_a == 0, "no painted cell belongs to A's reach")
 		_release(_screen_pos_of(b))
 		expect(State.undo_redo.get_history_count() == 1, "the click records one action")

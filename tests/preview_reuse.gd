@@ -43,7 +43,7 @@ func _run() -> void:
 		step("Then the preview reuses the solid geometry", func():
 			expect(preview.mesh == solid_mesh, "movement and display color reuse the completed solid mesh")
 			expect(preview.position == Vector3(index * 10, 0, 0), "the reused preview retains its current position")
-			expect(preview.material_override.albedo_color == (Color.BLUE if index % 2 else Color.GREEN), "the reused preview has the current display color")
+			expect((preview.material_override.get_shader_parameter("cursor_color") as Color) == (Color.BLUE if index % 2 else Color.GREEN), "the reused preview has the current display color")
 		)
 	print("Eight preview moves and color changes: %.2f ms" % ((Time.get_ticks_usec() - started_us) / 1000.0))
 	step("When another tool requests the same solid shape", func():
@@ -79,7 +79,7 @@ func _run() -> void:
 	step("Then the colored preview retains both source colors", func():
 		var colors: PackedColorArray = preview.mesh.surface_get_arrays(0)[Mesh.ARRAY_COLOR]
 		expect(colors.has(Color.RED) and colors.has(Color.BLUE), "the solid preview keeps both voxel colors")
-		expect(preview.material_override.albedo_color == Color.WHITE, "the colored preview keeps a neutral material tint")
+		expect((preview.material_override.get_shader_parameter("cursor_color") as Color) == Color.WHITE, "the colored preview keeps a neutral material tint")
 	)
 	step("When the source dictionary changes after a preview request", func():
 		var mutable := {Vector3i.ZERO: Color.TRANSPARENT, Vector3i(0, 2, 0): Color.TRANSPARENT}

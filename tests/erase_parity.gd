@@ -9,7 +9,7 @@ extends "res://tests/test.gd"
 # coverage. The A/B alternates the two paths in one process and reports medians
 # with their sample counts.
 #
-#   godot --headless --path . res://tests/erase_parity.tscn
+#   godot --path . res://tests/erase_parity.tscn
 
 const REFERENCE := preload("res://tests/erase_reference.gd")
 const STATE_SCRIPT := preload("res://Globals/State/State.gd")

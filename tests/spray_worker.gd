@@ -169,11 +169,11 @@ func _settle() -> void:
 
 
 # The large sizes of every worker check. The solid half-width block keeps the
-# occupied reach estimate well above the inline limit.
+# occupied reach estimate well above the inline limit at search 33.
 func _use_large() -> void:
 	_block(BLOCK)
 	_settings.spot_diameter = 4
-	_settings.spray_size = 17
+	_settings.spray_size = 33
 	_settings.speed = 16
 	tool.clear_shape_caches()
 	tool._invalidate_batch()
@@ -183,12 +183,13 @@ func _worker_hover() -> void:
 	step("Given a dense block and a size whose reach passes the inline limit", func():
 		_block(BLOCK)
 		_settings.spot_diameter = 1
-		_settings.spray_size = 17
+		_settings.spray_size = 33
 		_settings.speed = 8
 		tool._invalidate_batch()
 	)
 	step("When the pointer hovers one voxel", func():
 		_hover(center)
+		expect(tool.last_work_estimate > 2200, "the hover work passes the inline limit [INLINE_SAMPLE_LIMIT]")
 		expect(tool._hover_sample_job != null, "the large batch samples on the worker")
 		expect(tool.preview_cells().is_empty(), "the worker sample does not block the input frame")
 	)
@@ -199,7 +200,7 @@ func _worker_hover() -> void:
 		expect(tool._hover_sample_job == null, "the finished sample released its handle")
 		for cell in preview:
 			expect(frame.has(cell), "every installed cell is an existing voxel")
-			expect(VoxelBrushSize.contains_sphere(17, cell - tool._batch_center), "every installed cell is inside the search sphere")
+			expect(VoxelBrushSize.contains_sphere(33, cell - tool._batch_center), "every installed cell is inside the search sphere")
 	)
 	await _settle_cursor()
 	step("When the user presses", func():
@@ -223,6 +224,7 @@ func _worker_press() -> void:
 	)
 	step("When the user presses before the hover sample installs", func():
 		_hover(center)
+		expect(tool.last_work_estimate > 2200, "the hover work passes the inline limit [INLINE_SAMPLE_LIMIT]")
 		expect(tool._hover_sample_job != null, "the hover sample waits on the worker")
 		_press(center)
 		expect(tool._edit != null, "the press opens its stroke")

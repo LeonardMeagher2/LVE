@@ -1,6 +1,0 @@
-[gd_scene format=3]
-
-[ext_resource type="Script" path="res://tests/history_buttons.gd" id="1"]
-
-[node name="HistoryButtons" type="Node"]
-script = ExtResource("1")

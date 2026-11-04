@@ -39,6 +39,11 @@ func _update_window_title() -> void:
 
 
 func _ready() -> void:
+	# Godot coalesces pointer motion to one event per render frame by default. A
+	# long frame then turns a curved drag into a chord between two far samples,
+	# and every tool paints that chord. Take each event instead, so a stroke
+	# follows the pointer even when a frame runs long.
+	Input.use_accumulated_input = false
 	var settings := ConfigFile.new()
 	if settings.load(UI_SETTINGS_PATH) == OK:
 		var saved_scale := float(settings.get_value("interface", "scale", 0.0))

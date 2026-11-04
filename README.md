@@ -23,6 +23,12 @@ See [docs/DOCUMENT_FORMAT.md](docs/DOCUMENT_FORMAT.md) for the format specificat
 
 Godot is the only toolchain.
 
+## Tool flows
+
+Use the [tool flow maps](docs/tool-flows/README.md) to compare tools and review shared behavior.
+
+See [tool research](docs/research/tools/README.md) for evidence reviews and bounded experiments.
+
 ## Icon
 
 The vector icon in `icon.svg` preserves the source image's pixel edges, colors, and transparency.

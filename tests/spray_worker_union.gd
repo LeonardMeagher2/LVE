@@ -5,7 +5,7 @@ extends "res://tests/test.gd"
 # `spray_worker_geometry` to keep one scene inside the shared runner deadline
 # while the window is open.
 #
-#   godot --headless --path . res://tests/spray_worker_union.tscn
+#   godot --path . res://tests/spray_worker_union.tscn
 
 const SEED := 20261023
 const BLOCK := 8

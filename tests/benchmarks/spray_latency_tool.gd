@@ -44,6 +44,14 @@ func reset_probe() -> void:
 	show_calls = 0
 	input_us = 0
 	batch_us = 0
+	last_work_estimate = 0
+	last_capture_chunks = 0
+	last_index_builds = 0
+	last_index_grid_reads = 0
+	last_index_build_slots = 0
+	last_selection_builds = 0
+	last_row_ops = 0
+	last_footprint_visits = 0
 
 
 ## Drops the shared spot shape cache. The next sample then pays the cold build.
@@ -103,8 +111,8 @@ func _show_spots(cells: Array[Vector3i]) -> void:
 
 # A large brush cell queues this job instead of sampling inline. It counts as one
 # sample of that brush cell, so the benchmark sees every paid sample.
-func _build_sample_job(frame: VoxelFrame, center: Vector3i, context: VoxelFrame.EditContext, material: PackedFloat32Array, estimate: int) -> SpraySamplingJob:
-	var job := super._build_sample_job(frame, center, context, material, estimate)
+func _build_sample_job(frame: VoxelFrame, center: Vector3i, context: VoxelFrame.EditContext, material: PackedFloat32Array, estimate: int, spot_size := -1, search_size := -1, speed := -1) -> SpraySamplingJob:
+	var job := super._build_sample_job(frame, center, context, material, estimate, spot_size, search_size, speed)
 	sample_calls += 1
 	worker_samples += 1
 	return job

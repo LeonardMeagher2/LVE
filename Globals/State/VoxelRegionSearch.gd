@@ -141,10 +141,9 @@ class BatchQueue extends RefCounted:
 # A consumer cursor over one bounded queue. It owns the queue, the keys of the
 # batch in progress, and the cursor into them, so the pending keys and their
 # position always move together. Both the streamed fill and the streamed wand
-# consume their queue through it. It calls only `take`, so a full queue still
-# blocks the producer and never the consumer. The fields are public: a hot loop
-# reads `keys` and `cursor` directly, because a property read per cell costs more
-# than an index into a local.
+# consume their queue through `apply_slice`. It calls only `take`, so a full queue
+# still blocks the producer and never the consumer. The fields stay public, so a
+# caller can read the pending batch without a property call.
 ## A consumer cursor over one bounded [BatchQueue].
 ##
 ## It owns the queue, the keys of the batch in progress, and the cursor into
@@ -156,6 +155,9 @@ class BatchCursor extends RefCounted:
 	var keys: Array = []
 	## The cursor into [member keys].
 	var cursor := 0
+	# A callback that reads or applies a slice must not consume the same cursor
+	# again. The guard refuses that nested call, so the outer slice keeps its end.
+	var _applying := false
 
 	func _init(batch_queue: BatchQueue = null) -> void:
 		queue = batch_queue
@@ -181,6 +183,31 @@ class BatchCursor extends RefCounted:
 			keys = batch.keys()
 			cursor = 0
 		return mini(cursor + limit, keys.size())
+
+	# Hand one bounded slice to `apply`. It receives the keys and the [start, end)
+	# range of the slice. The cursor advances only after `apply` returns true, so a
+	# caller that refuses a stale slice keeps it for the next owner. A nested call
+	# from inside `apply` returns false, so a callback cannot rewind the cursor it
+	# is consuming. A cursor without a queue yields no slice.
+	## Hands one bounded slice to [param apply]. It receives the keys and the
+	## [code][start, end)[/code] range of the slice. The cursor advances only
+	## after [param apply] returns [code]true[/code], so a caller that refuses a
+	## stale slice keeps it. A nested call from inside [param apply] returns
+	## [code]false[/code]. A cursor without a queue yields no slice.
+	func apply_slice(limit: int, apply: Callable) -> bool:
+		if queue == null or _applying:
+			return false
+		var end := next_end(limit)
+		if end <= cursor:
+			return false
+		var start := cursor
+		_applying = true
+		var accepted: bool = apply.call(keys, start, end)
+		_applying = false
+		if not accepted:
+			return false
+		cursor = end
+		return true
 
 
 ## Searches [param frame] and fills [param result] with every match. A

@@ -7,8 +7,8 @@ extends "res://tests/test.gd"
 # progressive surfaces while it runs. A context change, a retire, or a chunk
 # removal drops the in-flight eligibility, so an obsolete result never appears.
 #
-#   godot --headless --path . res://tests/renderer_progress.tscn
-#   godot --headless --path . res://tests/renderer_progress.tscn -- held_edits
+#   godot --path . res://tests/renderer_progress.tscn
+#   godot --path . res://tests/renderer_progress.tscn -- held_edits
 #
 # The end-to-end drag acceptance lives in `tests/benchmarks/spray_latency.tscn`.
 

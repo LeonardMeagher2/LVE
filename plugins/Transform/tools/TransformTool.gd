@@ -478,7 +478,9 @@ func _apply_preview() -> void:
 		job.old_positions.assign(_dest_colors.keys() if not _dest_cells.is_empty() else _colors.keys())
 		job.previous_covered = _covered
 		job.previous_covered_materials = _covered_materials
-		job.edited_frame = _source_frame.copy_frame()
+		# The preview writes its own frame. `job_frame` shares the source chunks
+		# and copies a chunk only when the preview writes it.
+		job.edited_frame = VoxelFrame.job_frame(_source_frame)
 		job.track_selection = _track_selection
 		_active_preview_job = job
 		if job.estimated_work() <= INLINE_EDIT_LIMIT:
@@ -490,7 +492,9 @@ func _apply_preview() -> void:
 		_active_preview_job = null
 		if revision != _preview_revision or not _context_valid() or not State.has_operation(operation_id):
 			continue
-		_source_frame.restore(job.edited_frame.capture())
+		# Publish only the chunks the preview wrote. The job reverts the cells it
+		# no longer covers, so its changed list holds every chunk to restore.
+		_source_frame.apply_published(job.changed_chunks, job.edited_frame)
 		_covered = job.covered
 		_covered_materials = job.covered_materials
 		_dest_cells = job.destination_positions

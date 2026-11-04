@@ -5,6 +5,10 @@ const MAIN_SCENE := "res://Main.tscn"
 
 var main: Node
 var timeout := 10.0
+# A probe that prints its result has no checks. Set this to true before `test()`
+# to register one such case. `test()` clears it again, so each probe opts in
+# alone. A normal test must record at least one check.
+var allow_no_checks := false
 var _name := ""
 var _desc := ""
 var _test_loc := ""
@@ -95,7 +99,9 @@ func test(description: String, c: Callable, test_name := "") -> void:
 			_test_loc = loc
 			_fail_hard("duplicate test name: %s" % name)
 			return
-	_tests.append({"name": name, "description": description, "callable": c, "loc": loc, "timeout": timeout})
+	var empty_ok := allow_no_checks
+	allow_no_checks = false
+	_tests.append({"name": name, "description": description, "callable": c, "loc": loc, "timeout": timeout, "empty_ok": empty_ok})
 	if not _scheduled:
 		_scheduled = true
 		_run_tests.call_deferred()
@@ -170,6 +176,13 @@ func _run_tests() -> void:
 			return
 		watchdog.stop()
 		watchdog.queue_free()
+		# A test body that returns early, or that errors before its first check,
+		# otherwise reports success with nothing proved. A scene that needs a
+		# window must run windowed, so a headless run fails here instead of
+		# passing with no coverage.
+		if _checks.is_empty() and not bool(entry["empty_ok"]):
+			_fail_hard("test %s recorded no checks (does the scene need a window?)" % str(entry["name"]))
+			return
 		_test_open = false
 	_finish_all()
 

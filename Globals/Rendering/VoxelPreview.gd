@@ -65,6 +65,13 @@ var _installed_revision := 0
 # them to match a visible preview to the sample that a click will paint. A clear
 # empties the set, so a hidden preview never offers stale cells.
 var _installed_cells := {}
+# The opaque token of the newest request, or null. A cache hit and a worker
+# install report the token of the request that asked for the surface, never the
+# token of a cached entry, so a caller can attribute the visible cells even when
+# an equal cached mesh holds a different cell dictionary.
+var _requested_token: Variant = null
+# The opaque token of the last installed surface, or null. A clear drops it.
+var _installed_token: Variant = null
 # The progressive selection path. The wand streams a growing selection, so a new
 # snapshot must not cancel the outline that is already building. The path is
 # opt-in, so the brush and cursor keep the strict latest-only behavior.
@@ -83,6 +90,14 @@ var _box := BoxMesh.new()
 var _outline_material: Material
 var _solid_material := preload("res://VoxelMaterial.tres").duplicate()
 var _primitive_material := preload("res://VoxelMaterial.tres").duplicate()
+# The instance override is this per-instance lit material, not the carrier. It
+# lights like a voxel and wins the depth tie with the terrain through one
+# clip-space step. The carrier keeps the same values for callers that read it.
+var _lit_material := preload("res://Globals/Rendering/cursor_lit.tres").duplicate()
+# True while the visible override mirrors the box carrier. The solid and
+# prepared paths mirror the solid carrier, so a material change without a new
+# submit can mirror the carrier that is on screen.
+var _lit_from_box := false
 var _brush_material := VoxelFrame.material(Color.WHITE)
 
 ## A prepared solid preview that a worker built off the main thread.
@@ -108,6 +123,10 @@ class SolidPayload extends RefCounted:
 	var display_color := Color.WHITE
 	## The hash of the cell keys. A caller formats the exact cache key from it.
 	var cell_hash := 0
+	## The opaque request token of this payload, or null. A caller sets it before
+	## [method VoxelPreview.submit_prepared] when it must attribute the installed
+	## surface to its request. The token is never part of the cache key.
+	var token: Variant = null
 
 
 ## Builds one solid preview payload from cells and the display color.
@@ -147,6 +166,10 @@ class PreviewJob extends VoxelFrame.EditJob:
 	var color_key := Color.WHITE
 	## The strict request id that the job belongs to.
 	var revision := 0
+	## The opaque request token that the job belongs to, or null. A caller reads
+	## it from the installed surface, so an intermediate coalesced result keeps
+	## the identity of the request that produced it.
+	var token: Variant = null
 	# The stream epoch of a progressive selection job. The strict `revision` above
 	# is the request id of the strict path.
 	## The stream epoch that the job belongs to.
@@ -283,7 +306,7 @@ func _enter_tree() -> void:
 
 func _on_model_settings_changed() -> void:
 	if _requested_style == PreviewStyle.SOLID and not _requested_cells.is_empty():
-		_request(_requested_cells, _requested_style, _requested_voxel_colors, _requested_color_key)
+		_request(_requested_cells, _requested_style, _requested_voxel_colors, _requested_color_key, _requested_token)
 		# A coalescing caller keeps its running worker. When the settings really
 		# changed, that worker holds the old shading, so cancel it now. A job that
 		# `_request` just started, or a deduped request, is already current.
@@ -309,6 +332,12 @@ func set_brush_material(cell_material: PackedFloat32Array) -> void:
 	_apply_material(_primitive_material, cell_material)
 	if not _requested_voxel_colors:
 		_apply_material(_solid_material, cell_material)
+	# A caller can change the material without a new submit. Mirror the carrier
+	# that the visible override uses, so the change reaches the cursor at once.
+	if _lit_from_box:
+		_sync_lit_material(_primitive_material)
+	else:
+		_sync_lit_material(_solid_material)
 
 
 static func _apply_material(target: StandardMaterial3D, cell_material: PackedFloat32Array) -> void:
@@ -323,16 +352,28 @@ static func _apply_material(target: StandardMaterial3D, cell_material: PackedFlo
 	target.specular_mode = BaseMaterial3D.SPECULAR_SCHLICK_GGX
 
 
+# Mirrors a carrier's values onto the per-instance lit material, so the visible
+# override and the carrier always agree.
+func _sync_lit_material(carrier: StandardMaterial3D) -> void:
+	_lit_material.set_shader_parameter("cursor_color", carrier.albedo_color)
+	_lit_material.set_shader_parameter("emission_color", carrier.emission)
+	_lit_material.set_shader_parameter("metallic", carrier.metallic)
+	_lit_material.set_shader_parameter("roughness", carrier.roughness)
+	_lit_material.set_shader_parameter("use_vertex_color", carrier.vertex_color_use_as_albedo)
+
+
 ## Shows the brush cells. [param outline] draws a line outline. A
 ## [param cube_diameter] above zero uses one box mesh for a cube brush.
 ## [param use_voxel_colors] reads a full material from each cell value.
-func show_voxels(colors: Dictionary, color: Color, outline: bool = false, cube_diameter: int = 0, use_voxel_colors: bool = true) -> void:
+## [param token] is optional opaque metadata that the caller can read back from
+## the installed surface through [method installed_token].
+func show_voxels(colors: Dictionary, color: Color, outline: bool = false, cube_diameter: int = 0, use_voxel_colors: bool = true, token: Variant = null) -> void:
 	if colors.is_empty():
 		_clear_request()
 		return
 	if outline:
 		material_override = _outline_material
-		_request(colors, PreviewStyle.OUTLINE)
+		_request(colors, PreviewStyle.OUTLINE, false, Color.WHITE, token)
 		return
 	# A cube's voxels have the same six faces as a box, so above the caller's limit
 	# the box is exact and costs nothing. A shape whose voxels are stepped has no
@@ -341,7 +382,9 @@ func show_voxels(colors: Dictionary, color: Color, outline: bool = false, cube_d
 		_clear_request()
 		_box.size = Vector3.ONE * cube_diameter
 		_primitive_material.albedo_color = color
-		material_override = _primitive_material
+		_lit_from_box = true
+		_sync_lit_material(_primitive_material)
+		material_override = _lit_material
 		mesh = _box
 		position = Vector3.ONE * -0.5 if cube_diameter % 2 == 0 else Vector3.ZERO
 		visible = true
@@ -351,14 +394,16 @@ func show_voxels(colors: Dictionary, color: Color, outline: bool = false, cube_d
 	else:
 		_apply_material(_solid_material, _brush_material)
 		_solid_material.albedo_color = color
+	_lit_from_box = false
+	_sync_lit_material(_solid_material)
 	# Full per-cell materials use the cached surfaces' atlas materials.
-	material_override = _solid_material
+	material_override = _lit_material
 	if use_voxel_colors:
 		for cell in colors:
 			if colors[cell] is PackedFloat32Array:
 				material_override = null
 				break
-	_request(colors, PreviewStyle.SOLID, use_voxel_colors, color if use_voxel_colors else Color.WHITE)
+	_request(colors, PreviewStyle.SOLID, use_voxel_colors, color if use_voxel_colors else Color.WHITE, token)
 
 
 # Show a selection outline. A progressive request keeps the running outline job
@@ -437,13 +482,14 @@ func _cancel_stream() -> void:
 		_stream_job.cancel()
 
 
-func _request(cells: Dictionary, style: PreviewStyle, use_voxel_colors: bool = false, color_key: Color = Color.WHITE) -> void:
+func _request(cells: Dictionary, style: PreviewStyle, use_voxel_colors: bool = false, color_key: Color = Color.WHITE, token: Variant = null) -> void:
 	_cancel_stream()
 	var colored := style == PreviewStyle.SOLID and use_voxel_colors
 	var smooth_normals := style == PreviewStyle.SOLID and State.document.smooth_normals
 	# The dedupe trusts the requested set only while the strict request still owns
 	# the preview. A stream publish clears that ownership, so a strict request
-	# repeated after a stream reinstalls its exact result.
+	# repeated after a stream reinstalls its exact result. A deduped request keeps
+	# the token of the surface that is already installed.
 	if _strict_alive and style == _requested_style and use_voxel_colors == _requested_voxel_colors and smooth_normals == _requested_smooth_normals and color_key == _requested_color_key and _same_cells(_requested_cells, cells, colored):
 		return
 	_request_revision += 1
@@ -453,6 +499,7 @@ func _request(cells: Dictionary, style: PreviewStyle, use_voxel_colors: bool = f
 	# change never starves. The strict default cancels, so its request wins alone.
 	if _preview_job and not coalesce_requests:
 		_preview_job.cancel()
+	_requested_token = token
 	_requested_style = style
 	_requested_voxel_colors = use_voxel_colors
 	_requested_smooth_normals = smooth_normals
@@ -480,12 +527,14 @@ func _request(cells: Dictionary, style: PreviewStyle, use_voxel_colors: bool = f
 ## dictionary. It formats the exact cache key from the live smooth setting and
 ## reuses the shared mesh cache, the worker job, and the installed-cell contract of
 ## [method show_voxels]. The caller must submit its newest payload, because this
-## path has no cell-set dedupe.
+## path has no cell-set dedupe. The payload token, when set, is reported by the
+## installed surface.
 func submit_prepared(payload: SolidPayload) -> void:
 	if payload == null or payload.cell_count == 0:
 		_clear_request()
 		return
 	_cancel_stream()
+	_requested_token = payload.token
 	var colored := payload.use_voxel_colors
 	var smooth_normals := State.document.smooth_normals
 	# A uniform color payload uses the brush material, exactly like the default
@@ -495,7 +544,9 @@ func submit_prepared(payload: SolidPayload) -> void:
 	else:
 		_apply_material(_solid_material, _brush_material)
 		_solid_material.albedo_color = payload.display_color
-	material_override = _solid_material
+	_lit_from_box = false
+	_sync_lit_material(_solid_material)
+	material_override = _lit_material
 	_request_revision += 1
 	_strict_alive = true
 	if _preview_job and not coalesce_requests:
@@ -527,7 +578,11 @@ func _install_cached(cache_key: String, cached: Dictionary) -> void:
 	_cache_order.erase(cache_key)
 	_cache_order.append(cache_key)
 	_installed_revision = _request_revision
+	# The cached entry holds the cells of the request that built it. The token
+	# comes from the request that asked for the hit, so an equal cached surface
+	# still reports the identity of the current request.
 	_installed_cells = cached.cells
+	_installed_token = _requested_token
 	_finish_activity()
 
 
@@ -567,6 +622,8 @@ func _clear_request() -> void:
 	# installed revision moves past every running job, so none can reappear.
 	_installed_revision = _request_revision
 	_installed_cells = {}
+	_installed_token = null
+	_requested_token = null
 	_strict_alive = false
 	_requested_cells = {}
 	_pending_cells = {}
@@ -634,6 +691,7 @@ func _start_preview() -> void:
 	_preview_job.smooth_normals = _requested_smooth_normals
 	_preview_job.color_key = _requested_color_key
 	_preview_job.revision = _request_revision
+	_preview_job.token = _requested_token
 	_preview_job.cache_key = _requested_cache_key
 	_pending_cells = {}
 	_start_activity()
@@ -731,14 +789,25 @@ func _install_surface(job: PreviewJob, cache: bool) -> void:
 	position = Vector3.ZERO
 	visible = surface.get_surface_count() > 0
 	# Record the exact cells that this surface draws. A caller reads them through
-	# [method installed_cells] to match a visible preview to a later click.
+	# [method installed_cells] to match a visible preview to a later click. The
+	# token keeps the identity of the request that produced this result, so a
+	# coalesced intermediate surface still names its own request.
 	_installed_cells = job.cells
+	_installed_token = job.token
 
 
 ## Returns the immutable cells of the last installed surface, or an empty
 ## dictionary when no preview is visible. The caller must not change the result.
 func installed_cells() -> Dictionary:
 	return _installed_cells
+
+
+## Returns the opaque request token of the last installed surface, or null when
+## no preview is visible or the caller gave no token. A caller reads it to
+## attribute the visible surface to the request that produced it. A cache hit
+## reports the token of the request that asked for the hit.
+func installed_token() -> Variant:
+	return _installed_token
 
 
 static func _surface_material() -> StandardMaterial3D:

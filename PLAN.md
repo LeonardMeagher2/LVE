@@ -69,7 +69,7 @@ higher than the memory cost of the snapshots.
 ### The transform gesture math is tool feel
 
 `RotateTool`, `ScaleTool`, `MoveTool`, and `RotSprite` implement snap, magnet,
-cardinal-angle exactness, and nearest-neighbor preview sampling. NOTES.md shows
+cardinal-angle exactness, and nearest-neighbor preview sampling. MEMORY.md shows
 these were tuned against observed jumps and boundary hits. That is tool feel,
 the same category as brush stroke continuity. There is no engine equivalent, and
 the roadmap will build more tools (extrude) on the same base.

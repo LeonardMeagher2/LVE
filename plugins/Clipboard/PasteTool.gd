@@ -108,6 +108,17 @@ func _create_preview_job() -> BrushJob:
 	return job
 
 
+## Returns the placement operation, so the placement and the preview share one
+## status entry and one cancel path.
+func _begin_preview_operation(_work: int) -> int:
+	return _placement_operation_id
+
+
+## Keeps the placement operation open until the paste stops.
+func _finish_preview_operation(_id: int) -> void:
+	pass
+
+
 func _commit_line() -> void:
 	if _preview_result == null:
 		return
@@ -120,7 +131,9 @@ func _commit_line() -> void:
 	var tx := State.begin_edit()
 	if tx == null:
 		return
-	frame.restore(job.edited_frame.capture())
+	# Publish the cells the paste preview wrote. The snapshot is unchanged, so
+	# an unchanged chunk stays as it is.
+	frame.apply_published(job.changed_chunks, job.edited_frame)
 	State.document._bounds_dirty = true
 	State.selection.restore(job.pasted_selection)
 	State.finish_edit(tx, "Paste")
@@ -137,6 +150,14 @@ func _cancel_edit() -> void:
 	super._cancel_edit()
 	if was_active:
 		finished.emit()
+
+
+# A removal without a cancel still releases the placement operation, so the
+# status bar cannot keep a finished paste.
+func _exit_tree() -> void:
+	State.finish_operation(_placement_operation_id)
+	_placement_operation_id = 0
+	super._exit_tree()
 
 
 func _on_settings_changed() -> void:

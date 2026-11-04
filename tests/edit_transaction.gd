@@ -4,8 +4,8 @@ extends "res://tests/test.gd"
 # an identity-checked commit and cancel, a frozen context, and a clean release on
 # a document reset.
 #
-#   godot --headless --path . res://tests/edit_transaction.tscn
-#   godot --headless --path . res://tests/edit_transaction.tscn -- noop
+#   godot --path . res://tests/edit_transaction.tscn
+#   godot --path . res://tests/edit_transaction.tscn -- noop
 
 var _brush_settings := preload("res://plugins/brush/settings.tres")
 const BRUSH_SCENE := preload("res://plugins/brush/BrushTool.tscn")

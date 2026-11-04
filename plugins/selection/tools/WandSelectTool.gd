@@ -235,20 +235,8 @@ func _drain_selection_batches(job: WandJob) -> void:
 	var changed := false
 	var started_us := Time.get_ticks_usec()
 	var cursor := job.batch_cursor
-	while true:
-		var slice_end := cursor.next_end(MERGE_SLICE)
-		if slice_end < 0:
-			break
-		var index := cursor.cursor
-		var keys: Array = cursor.keys
-		while index < slice_end:
-			var cell_position: Vector3i = keys[index]
-			if job.mode == 2:
-				State.selection.erase(cell_position)
-			else:
-				State.selection.add(cell_position)
-			index += 1
-		cursor.cursor = slice_end
+	var slice_apply := _apply_selection_slice.bind(job)
+	while cursor.apply_slice(MERGE_SLICE, slice_apply):
 		changed = true
 		if not _selection_current(job):
 			return
@@ -256,6 +244,20 @@ func _drain_selection_batches(job: WandJob) -> void:
 			break
 	if changed:
 		_publish_selection()
+
+
+# Merge one slice into the live selection. A stale context refuses the slice before
+# it changes the selection, so the cursor keeps it for the next owner.
+func _apply_selection_slice(keys: Array, start: int, end: int, job: WandJob) -> bool:
+	if not _selection_current(job):
+		return false
+	for index in range(start, end):
+		var cell_position: Vector3i = keys[index]
+		if job.mode == 2:
+			State.selection.erase(cell_position)
+		else:
+			State.selection.add(cell_position)
+	return true
 
 
 # Tell the views that the live selection changed. The drain runs once per frame, so

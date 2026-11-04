@@ -4,7 +4,7 @@ extends "res://tests/test.gd"
 # is outside automatic suite discovery, because its acceptance is a throughput
 # target that depends on the hardware and the machine load.
 #
-#   godot --path . --screen 1 res://tests/benchmarks/renderer_cycle.tscn
+#   godot --path . --screen 0 res://tests/benchmarks/renderer_cycle.tscn
 #
 # The benchmark keeps one chunk dirty on every frame and records, through a phase
 # probe, when each build's worker finished, when its result was cached, and when

@@ -7,7 +7,7 @@ var tool: Node3D
 var cursor: MeshInstance3D
 var settings: BrushToolSettings
 var shape_mesh: Mesh
-var display_material: StandardMaterial3D
+var display_material: ShaderMaterial
 var revision := 0
 var other: MeshInstance3D
 var line: Node3D
@@ -163,14 +163,13 @@ func _settle(preview: MeshInstance3D) -> void:
 
 
 func _expect_uniform(preview: MeshInstance3D, value: PackedFloat32Array) -> void:
-	var material: StandardMaterial3D = preview.material_override
-	expect(material.albedo_color.is_equal_approx(VoxelFrame.material_color(value)), "the cursor displays the selected color")
-	expect(material.emission.is_equal_approx(Color(value[4], value[5], value[6])), "the cursor displays the full emission RGB")
-	var emitting := Color(value[4], value[5], value[6]) != Color.BLACK
-	expect(material.emission_enabled == emitting and is_equal_approx(material.emission_energy_multiplier, 1.0), "the emission RGB includes the selected strength")
-	expect(is_equal_approx(material.metallic, value[7]), "the cursor displays the selected metallic value")
-	expect(is_equal_approx(material.roughness, value[8]), "the cursor displays the selected roughness value")
-	expect(material.shading_mode == BaseMaterial3D.SHADING_MODE_PER_PIXEL, "the cursor uses per-pixel material shading")
+	var material: ShaderMaterial = preview.material_override
+	var cursor_color: Color = material.get_shader_parameter("cursor_color")
+	expect(cursor_color.is_equal_approx(VoxelFrame.material_color(value)), "the cursor displays the selected color")
+	var emission_color: Color = material.get_shader_parameter("emission_color")
+	expect(emission_color.is_equal_approx(Color(value[4], value[5], value[6])), "the cursor displays the full emission RGB")
+	expect(is_equal_approx(material.get_shader_parameter("metallic"), value[7]), "the cursor displays the selected metallic value")
+	expect(is_equal_approx(material.get_shader_parameter("roughness"), value[8]), "the cursor displays the selected roughness value")
 
 
 func _expect_atlas(preview: MeshInstance3D) -> void:

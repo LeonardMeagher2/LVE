@@ -8,7 +8,7 @@ extends "res://tests/test.gd"
 # settles on the newest exact snapshot. The preview exposes the installed cells,
 # so a caller can match a visible preview to a later click.
 #
-#   godot --headless --path . res://tests/preview_schedule.tscn
+#   godot --path . res://tests/preview_schedule.tscn
 #
 # The tests count real mesh installs and compare real world AABBs. They never
 # assert a stale snapshot as the newest. Waits stay in the test body, because a
@@ -42,6 +42,12 @@ class GatedPreview extends PREVIEW:
 			installs += 1
 
 
+## An opaque request token for the attribution tests. Two tokens compare by
+## identity, which is what a caller needs to match a surface to its request.
+class Token extends RefCounted:
+	pass
+
+
 var preview
 var cached_mesh: Mesh
 var _variant_base := 0
@@ -57,6 +63,8 @@ func _ready() -> void:
 	test("the preview exposes the exact installed cells", _installed_cells_exposed, "preview_installed_cells")
 	test("an identical settings or document change keeps the running worker", _settings_change_keeps, "preview_settings_keeps")
 	test("a changed shading cancels the running worker and queues a new snapshot", _settings_change_replaces, "preview_settings_replaces")
+	test("a cache hit reports the token of the request that asked for it", _cache_hit_token, "preview_cache_token")
+	test("a clear or a cancel drops the installed token", _token_clear, "preview_token_clear")
 
 
 func _setup_test() -> void:
@@ -320,4 +328,68 @@ func _settings_change_replaces() -> void:
 		State.model_settings_changed.emit()
 		expect(preview._preview_job._cancel_requested, "the changed request cancels the old worker")
 		expect(not preview._pending_cells.is_empty(), "the changed request queues a new snapshot")
+	)
+
+
+# A cached mesh belongs to the request that built it, but the installed surface
+# belongs to the request that asked for the hit. The token must follow the
+# request, not the cached cell dictionary.
+func _cache_hit_token() -> void:
+	var cells := _variant(0)
+	var first := Token.new()
+	var second := Token.new()
+	step("Given a surface that installs and caches with its request token", func():
+		preview = PREVIEW.new()
+		add_child(preview)
+		preview.show_voxels(cells, Color.RED, false, 0, false, first)
+	)
+	await _await_settled(preview)
+	step("Then the installed token is the first request", func():
+		expect(preview.installed_token() == first, "the first install reports its own token")
+		cached_mesh = preview.mesh
+	)
+	step("When a second request for the same cells hits the mesh cache", func():
+		preview._clear_request()
+		preview.show_voxels(cells, Color.RED, false, 0, false, second)
+	)
+	step("Then the cached surface reports the second request token", func():
+		expect(preview.mesh == cached_mesh, "the surface comes from the cache")
+		expect(preview.installed_token() == second, "the cache hit reports the request that asked for it")
+		expect(not is_same(preview.installed_cells(), preview._requested_cells), "the cached cells are the cached object, not the new request")
+		expect(_same_keys(preview.installed_cells(), cells), "the cached cells hold the requested cells")
+	)
+
+
+# A clear and a cancel both hide the surface, so neither may leave a token that
+# a later click could attribute to the hidden request.
+func _token_clear() -> void:
+	var token := Token.new()
+	step("Given an installed surface with a request token", func():
+		preview = PREVIEW.new()
+		add_child(preview)
+		preview.show_voxels({Vector3i(_variant_base + 3000, 0, 0): Color.WHITE}, Color.RED, false, 0, false, token)
+	)
+	await _await_settled(preview)
+	step("Then the token belongs to the installed surface", func():
+		expect(preview.installed_token() == token, "the installed surface reports its token")
+	)
+	step("When the preview clears", func():
+		preview.show_voxels({}, Color.RED)
+	)
+	step("Then the clear drops the token", func():
+		expect(preview.installed_token() == null, "a clear drops the installed token")
+		expect(preview.installed_cells().is_empty(), "a clear drops the installed cells")
+	)
+	step("When a blocked request clears before its worker installs", func():
+		preview.free()
+		preview = GatedPreview.new()
+		add_child(preview)
+		preview.show_voxels(_variant(0), Color.RED, false, 0, false, token)
+		preview.show_voxels({}, Color.RED)
+		GatedJob.gate.post()
+	)
+	await _await_settled(preview)
+	step("Then the cancelled request installs no token", func():
+		expect(preview.installed_token() == null, "the cancelled request installs no token")
+		expect(preview.installed_cells().is_empty(), "the cancelled request installs no cells")
 	)

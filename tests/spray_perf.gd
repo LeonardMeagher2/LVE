@@ -14,7 +14,7 @@ extends "res://tests/test.gd"
 # the worker pool. That hover row reports the request cost alone, because the
 # inline A/B cannot compare a job that runs off the input frame.
 #
-#   godot --headless --path . res://tests/spray_perf.tscn
+#   godot --path . res://tests/spray_perf.tscn
 
 const REFERENCE := preload("res://tests/spray_reference_size.gd")
 const VoxelBrushSize := preload("res://Globals/State/Tools/VoxelBrushSize.gd")
@@ -285,8 +285,8 @@ func _measure_hover(label: String, center: Vector3i) -> void:
 	var reach := VoxelBrushSize.reach(_settings.spray_size) + VoxelBrushSize.reach(_settings.spot_diameter)
 	var estimate := SpraySampler.occupied_estimate(frame, center, reach)
 	if tool._hover_sample_job != null:
-		print("MEASURE spray hover %s: worker queue (inline path off), request %d us, estimate %d, spot %d, search %d, speed %d, batch=%d" % [
-			label, request_us, estimate, _settings.spot_diameter, _settings.spray_size, _settings.speed, tool._batch_cells.size(),
+		print("MEASURE spray hover %s: worker queue (inline path off), request %d us, estimate %d, work %d, spot %d, search %d, speed %d, batch=%d" % [
+			label, request_us, estimate, tool.last_work_estimate, _settings.spot_diameter, _settings.spray_size, _settings.speed, tool._batch_cells.size(),
 		])
 		return
 	var old_times: Array[int] = []
@@ -303,8 +303,8 @@ func _measure_hover(label: String, center: Vector3i) -> void:
 			old_times.append(_time_old_hover())
 	var old_median := _median(old_times)
 	var new_median := _median(new_times)
-	print("MEASURE spray hover A/B %s: cells=%d estimate=%d old %d us, new %d us, gain %.2fx, samples %d/%d" % [
-		label, tool._batch_cells.size(), estimate, old_median, new_median,
+	print("MEASURE spray hover A/B %s: cells=%d estimate=%d work=%d old %d us, new %d us, gain %.2fx, samples %d/%d" % [
+		label, tool._batch_cells.size(), estimate, tool.last_work_estimate, old_median, new_median,
 		float(old_median) / maxf(1.0, float(new_median)), old_times.size(), new_times.size(),
 	])
 

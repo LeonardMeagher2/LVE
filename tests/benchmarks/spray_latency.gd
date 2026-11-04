@@ -6,8 +6,8 @@ extends "res://tests/test.gd"
 # real windowed Vulkan renderer. The fixture construction and the first renderer
 # settle stay outside every timed region.
 #
-#   godot --path . --screen 1 res://tests/benchmarks/spray_latency.tscn
-#   godot --path . --screen 1 res://tests/benchmarks/spray_latency.tscn -- dense32 plate128
+#   godot --path . --screen 0 res://tests/benchmarks/spray_latency.tscn
+#   godot --path . --screen 0 res://tests/benchmarks/spray_latency.tscn -- dense32 plate128
 #
 # The benchmark measures four things a warmed sampler A/B cannot see:
 #

@@ -8,7 +8,7 @@ extends "res://tests/test.gd"
 # cell set, and the material output must stay exactly equal to the path that lets
 # the frame compare the cells itself.
 #
-#   godot --headless --path . res://tests/preview_solid_uniform.tscn
+#   godot --path . res://tests/preview_solid_uniform.tscn
 #
 # Each test uses its own chunk offset, so the shared preview mesh cache never
 # serves a shape another test already built. Cross-step state lives on members,
@@ -254,7 +254,7 @@ func _prepared_matches_normal() -> void:
 	step("When the same cells are submitted as a prepared payload", func():
 		_normal_mesh = preview.mesh
 		_normal_arrays = preview.mesh.surface_get_arrays(0).duplicate()
-		_normal_color = preview.material_override.albedo_color
+		_normal_color = preview.material_override.get_shader_parameter("cursor_color")
 		_normal_aabb = preview.mesh.get_aabb()
 		_normal_cells = preview.installed_cells()
 		var keys: Array[Vector3i] = []
@@ -269,7 +269,7 @@ func _prepared_matches_normal() -> void:
 	step("Then the prepared surface is the exact normal surface", func():
 		expect(preview.visible, "the prepared preview is visible")
 		expect(preview.mesh == _normal_mesh, "the prepared submit reuses the exact cached mesh")
-		expect(preview.material_override.albedo_color == _normal_color, "the prepared submit keeps the display color")
+		expect((preview.material_override.get_shader_parameter("cursor_color") as Color) == (_normal_color as Color), "the prepared submit keeps the display color")
 		expect(preview.mesh.get_aabb() == _normal_aabb, "the prepared submit keeps the bounds")
 		expect(preview.installed_cells() == _normal_cells, "the prepared submit installs the exact cells")
 		expect(preview.mesh.surface_get_arrays(0) == _normal_arrays, "the prepared submit keeps the vertex arrays")

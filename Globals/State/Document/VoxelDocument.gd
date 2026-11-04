@@ -31,6 +31,11 @@ const PNG_SIGNATURE := [137, 80, 78, 71, 13, 10, 26, 10]
 const PNG_DOCUMENT_CHUNK := "lvED"
 static var _crc_table := PackedInt64Array()
 
+# Phase counters of the terrain benchmark. The benchmark resets them by direct
+# static write.
+static var _profile_rescan_calls := 0
+static var _profile_rescan_us := 0
+
 ## The ordered material entries. Each entry holds nine floats.
 @export var palette: Array[PackedFloat32Array] = []
 ## The animation frames.
@@ -566,14 +571,17 @@ func bounds() -> AABB:
 
 
 func _rescan_bounds() -> void:
+	var started := Time.get_ticks_usec()
 	var b := AABB()
 	for f in frames:
 		var box := f.get_bounds()
 		if box.has_volume():
 			b = b.merge(box) if b.has_volume() else box
-	
+		
 	_bounds = b
 	_bounds_dirty = false
+	_profile_rescan_calls += 1
+	_profile_rescan_us += Time.get_ticks_usec() - started
 
 
 func _grow_bounds(cell: Vector3i) -> void:

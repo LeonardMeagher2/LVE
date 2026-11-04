@@ -8,8 +8,8 @@ extends "res://tests/test.gd"
 # that the final result matches the frozen reference exactly, that one stroke holds
 # one undo action, and that a cancel restores the starting frame and selection.
 #
-#   godot --headless --path . res://tests/progressive_fill_wand.tscn
-#   godot --headless --path . res://tests/progressive_fill_wand.tscn -- partial_fill
+#   godot --path . res://tests/progressive_fill_wand.tscn
+#   godot --path . res://tests/progressive_fill_wand.tscn -- partial_fill
 
 const REFERENCE := preload("res://tests/region_search_reference.gd")
 # The fill fixture must be large enough that the streamed partial publication is

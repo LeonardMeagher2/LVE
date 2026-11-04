@@ -11,7 +11,7 @@ extends "res://tests/test.gd"
 # element type and value. An unsafe case must fall through to the baseline and
 # match it exactly.
 #
-#   godot --headless --path . res://tests/mesher_enclosed.tscn
+#   godot --path . res://tests/mesher_enclosed.tscn
 
 const CHUNK := VoxelFrame.CHUNK_SIZE
 

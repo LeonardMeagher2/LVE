@@ -1,0 +1,6 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://tests/negative/no_checks.gd" id="1"]
+
+[node name="NoChecks" type="Node"]
+script = ExtResource("1")

@@ -8,7 +8,7 @@ extends "res://tests/test.gd"
 # because the many large unions and the two full presses exceed the shared runner
 # deadline when the window is open.
 #
-#   godot --headless --path . res://tests/spray_worker_far.tscn
+#   godot --path . res://tests/spray_worker_far.tscn
 
 const SEED := 20261023
 const BLOCK := 8

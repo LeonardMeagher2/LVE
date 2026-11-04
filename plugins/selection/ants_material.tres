@@ -10,3 +10,4 @@ shader_parameter/ant_color = Color(0.25, 0.25, 0.25, 1)
 shader_parameter/spacing = 10.00000038
 shader_parameter/speed = 20.0
 shader_parameter/scale = 1.0
+shader_parameter/depth_bias = 1e-05

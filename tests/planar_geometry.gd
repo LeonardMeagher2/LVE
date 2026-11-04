@@ -8,7 +8,7 @@ extends "res://tests/test.gd"
 # benchmark compares a frozen whole-surface build with the production one on
 # independent group copies. Run one process:
 #
-#   godot --headless --path . res://tests/planar_geometry.tscn
+#   godot --path . res://tests/planar_geometry.tscn
 #
 # Each test keeps the steps and checks of its original scene. The user arguments
 # after `--` name the tests to run, so an old scene name still selects its own

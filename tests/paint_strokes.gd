@@ -18,6 +18,7 @@ var _drawn: Array[Vector3i] = []
 var _default_color := Color.BLACK
 var _default_mode := BrushToolSettings.BrushMode.PENCIL
 var _default_pixel_perfect := false
+var _default_tool_button := ""
 var _defaults_ready := false
 
 
@@ -39,6 +40,7 @@ func _setup_test() -> void:
 		_default_color = State.current_color
 		_default_mode = _brush_settings.mode
 		_default_pixel_perfect = _brush_settings.pixel_perfect
+		_default_tool_button = _pressed_tool_button()
 		_defaults_ready = true
 	State.stop()
 	State.document = VoxelDocument.new()
@@ -48,6 +50,24 @@ func _setup_test() -> void:
 	var pixel_perfect := plugin("BrushPlugin")._options.get_node("PixelPerfect") as Button
 	if pixel_perfect != null and pixel_perfect.button_pressed != _default_pixel_perfect:
 		pixel_perfect.button_pressed = _default_pixel_perfect
+	# The brush-modes case switches to the paintbrush. A later case that drags in
+	# the viewport needs the startup tool back.
+	if not _default_tool_button.is_empty() and not _is_tool_button_pressed(_default_tool_button):
+		activate_tool(_default_tool_button)
+
+
+func _pressed_tool_button() -> String:
+	for b in main.get_node("%ToolBar").get_children():
+		if b is Button and b.button_pressed:
+			return str(b.name)
+	return ""
+
+
+func _is_tool_button_pressed(button_name: String) -> bool:
+	for b in main.get_node("%ToolBar").get_children():
+		if str(b.name) == button_name:
+			return b.button_pressed
+	return false
 
 
 # Shared viewport setup. Every viewport case uses the same view and center.

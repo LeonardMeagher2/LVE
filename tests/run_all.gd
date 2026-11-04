@@ -4,69 +4,22 @@ const TEST_TIMEOUT_S := 30.0
 # Drain verbose child output promptly so a full pipe does not stall its tests.
 const POLL_INTERVAL_S := 0.01
 const MAX_FAILURES := 3
-const TEST_SCREEN := 1
+const TEST_SCREEN := 0
 # `draw_latency` runs visible maximum-diameter strokes on the second monitor, so
 # it needs its own deadline. Every other scene keeps the default.
 const DRAW_LATENCY_PATH := "res://tests/draw_latency.tscn"
 const DRAW_LATENCY_TIMEOUT_S := 125.0
-# A grouped scene runs several named tests in one process. An old scene name
-# maps to its group scene and test name.
-const GROUP_ALIASES := {
-	"tags": {"scene": "tag_group", "case": "tags"},
-	"tag_playback": {"scene": "tag_group", "case": "tag_playback"},
-	"tag_frame_remove": {"scene": "tag_group", "case": "tag_frame_remove"},
-	"frames": {"scene": "tag_group", "case": "frames"},
-	"tags_ui": {"scene": "tag_controls", "case": "tags_ui"},
-	"tag_loop_ui": {"scene": "tag_controls", "case": "tag_loop_ui"},
-	"frame_delay": {"scene": "frame_timeline", "case": "frame_delay"},
-	"frame_selection": {"scene": "frame_timeline", "case": "frame_selection"},
-	"frame_reorder": {"scene": "frame_timeline", "case": "frame_reorder"},
-	"paint": {"scene": "paint_strokes", "case": "paint"},
-	"undo_redo": {"scene": "paint_strokes", "case": "undo_redo"},
-	"stroke_connect": {"scene": "paint_strokes", "case": "stroke_connect"},
-	"pixel_perfect": {"scene": "paint_strokes", "case": "pixel_perfect"},
-	"pixel_perfect_tool": {"scene": "paint_strokes", "case": "pixel_perfect_tool"},
-	"brush_modes": {"scene": "paint_strokes", "case": "brush_modes"},
-	"fill_all": {"scene": "fill_wand", "case": "fill_all"},
-	"wand_select": {"scene": "fill_wand", "case": "wand_select"},
-	"wand_all": {"scene": "fill_wand", "case": "wand_all"},
-	"erase_drag": {"scene": "erase_strokes", "case": "erase_drag"},
-	"erase_hover": {"scene": "erase_strokes", "case": "erase_hover"},
-	"erase_drag_visual": {"scene": "erase_strokes", "case": "erase_drag_visual"},
-	"selection": {"scene": "selection_interaction", "case": "selection"},
-	"selection_click": {"scene": "selection_interaction", "case": "selection_click"},
-	"lasso": {"scene": "selection_interaction", "case": "lasso"},
-	"material_matching": {"scene": "material_search", "case": "material_matching"},
-	"material_matching_large": {"scene": "material_search", "case": "material_matching_large"},
-	"transform_mode": {"scene": "transform_workflow", "case": "transform_mode"},
-	"transform_move": {"scene": "transform_workflow", "case": "transform_move"},
-	"transform_obstacle": {"scene": "transform_workflow", "case": "transform_obstacle"},
-	"transform_rotate": {"scene": "transform_rotation", "case": "transform_rotate"},
-	"transform_rotate_asymmetric": {"scene": "transform_rotation", "case": "transform_rotate_asymmetric"},
-	"transform_rotate_flamingo": {"scene": "transform_rotation", "case": "transform_rotate_flamingo"},
-	"transform_rotate_view_switch": {"scene": "transform_rotation", "case": "transform_rotate_view_switch"},
-	"transform_scale": {"scene": "transform_scaling", "case": "transform_scale"},
-	"transform_scale_view_switch": {"scene": "transform_scaling", "case": "transform_scale_view_switch"},
-	"planar_cleanup": {"scene": "planar_geometry", "case": "planar_cleanup"},
-	"planar_paths": {"scene": "planar_geometry", "case": "planar_paths"},
-	"planar_regions": {"scene": "planar_geometry", "case": "planar_regions"},
-	"planar_merge": {"scene": "mesh_regressions", "case": "planar_merge"},
-	"failed_greed": {"scene": "mesh_regressions", "case": "failed_greed"},
-	"snapshot_normals": {"scene": "normal_geometry", "case": "snapshot_normals"},
-	"_bench_snapshot_normals": {"scene": "normal_geometry", "case": "_bench_snapshot_normals"},
-	# The spray worker cases that moved to their own scenes, so a name selection
-	# still reaches them.
-	"worker_max": {"scene": "spray_worker_union", "case": "worker_max"},
-	"worker_union": {"scene": "spray_worker_union", "case": "worker_union"},
-	"worker_mirror": {"scene": "spray_worker_geometry", "case": "worker_mirror"},
-	"worker_expand": {"scene": "spray_worker_geometry", "case": "worker_expand"},
-	"worker_far": {"scene": "spray_worker_far", "case": "worker_far"},
-}
+# A grouped scene runs several named tests in one process. The runner reads each
+# scene's case names from the `test()` calls in its script, so a named run needs
+# no hand-kept table. The pattern matches a literal description, a plain method
+# as the callable, and an optional literal name.
+const CASE_CALL := "^[ \t]*test\\(\\s*\"[^\"]*\"\\s*,\\s*([A-Za-z_][A-Za-z0-9_]*)\\s*(?:,\\s*\"([^\"]*)\")?\\s*\\)"
 
 var _failed := 0
 var _pending := {}
 var _saw_ok := false
 var _saw_error := false
+var _timings: Array = []
 
 
 func _init() -> void:
@@ -89,25 +42,46 @@ func _run_all() -> void:
 		print("NO TESTS SELECTED")
 		_failed = 1
 		return
+	var started := Time.get_ticks_msec()
 	for entry in entries:
 		if _failed >= MAX_FAILURES:
 			print("STOPPED after %d failures" % _failed)
 			break
 		var path: String = entry["path"]
 		var result := await _run_one(entry)
+		var seconds := float(result["seconds"])
+		_timings.append({"path": path, "seconds": seconds})
 		if result["code"] == 0:
-			print("PASS %s" % path)
+			print("PASS %s (%.1f s)" % [path, seconds])
 		else:
 			_failed += 1
 			var note: String = result["note"]
 			if note == "":
 				note = "exit %d" % result["code"]
-			print("FAIL %s (%s)" % [path, note])
+			print("FAIL %s (%s) (%.1f s)" % [path, note, seconds])
+	_print_timing(Time.get_ticks_msec() - started)
+
+
+# Report the wall clock and the slowest scenes. A slow scene is visible in every
+# run, so a regression shows in the output, not only in the total.
+func _print_timing(total_ms: int) -> void:
+	if _timings.is_empty():
+		return
+	print("")
+	print("SUITE TIME: %.1f min over %d scene(s)" % [total_ms / 60000.0, _timings.size()])
+	var slowest := _timings.duplicate()
+	slowest.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return float(a["seconds"]) > float(b["seconds"])
+	)
+	var parts := PackedStringArray()
+	for i in mini(5, slowest.size()):
+		parts.append("%s %.1f s" % [str(slowest[i]["path"]).get_file().get_basename(), float(slowest[i]["seconds"])])
+	print("SLOWEST: %s" % ", ".join(parts))
 
 
 # One entry per scene to run. An entry holds the scene path and the case names
-# to pass to a grouped scene. A named run maps old scene names to their group.
-# An unknown name stops the run instead of running nothing.
+# to pass to a grouped scene. A named run resolves the name against the scenes
+# and their cases. An unknown name stops the run instead of running nothing.
 func _test_entries() -> Array:
 	var base: String = get_script().resource_path.get_base_dir()
 	var dir := DirAccess.open(base)
@@ -116,7 +90,8 @@ func _test_entries() -> Array:
 	var scenes := {}
 	for f in dir.get_files():
 		if f.ends_with(".tscn"):
-			scenes[f.get_basename()] = true
+			var scene_name := f.get_basename()
+			scenes[scene_name] = _scene_cases("%s/%s.gd" % [base, scene_name])
 	var only := _requested()
 	if only.is_empty():
 		var names := scenes.keys()
@@ -141,9 +116,32 @@ func _test_entries() -> Array:
 	return out
 
 
-# Map requested names to the scenes and case names to run. A whole group name
-# selects every case, so it dominates the aliases of that group in any order.
-# Several aliases of one group deduplicate to a single run. Unknown names are
+# The case names a scene registers. Read them from the `test()` calls instead of
+# booting the scene, so selection stays cheap and needs no alias table. A name
+# that is computed at run time cannot be read here and stays reachable by its
+# scene name.
+static func _scene_cases(script_path: String) -> Array:
+	var names: Array = []
+	if not FileAccess.file_exists(script_path):
+		return names
+	var re := RegEx.new()
+	if re.compile(CASE_CALL) != OK:
+		return names
+	for line in FileAccess.get_file_as_string(script_path).split("\n"):
+		var found := re.search(line)
+		if found == null:
+			continue
+		var explicit := found.get_string(2)
+		# `Test.test` falls back to the method name without its leading underscore.
+		var case_name := explicit if not explicit.is_empty() else found.get_string(1).trim_prefix("_")
+		if not names.has(case_name):
+			names.append(case_name)
+	return names
+
+
+# Map requested names to the scenes and case names to run. A scene name selects
+# every case of that scene, so it dominates that scene's case names in any
+# order. A case name selects the scenes that register it. Unknown names are
 # reported instead of silently running nothing.
 static func build_entries(requested_names: Array, scenes: Dictionary) -> Dictionary:
 	var order: Array[String] = []
@@ -153,34 +151,39 @@ static func build_entries(requested_names: Array, scenes: Dictionary) -> Diction
 	var sorted_names := requested_names.duplicate()
 	sorted_names.sort()
 	for name in sorted_names:
-		if GROUP_ALIASES.has(name):
-			var group: Dictionary = GROUP_ALIASES[name]
-			var scene_name := str(group["scene"])
-			if not scenes.has(scene_name):
-				unknown.append(str(name))
-				continue
+		var token := str(name)
+		if scenes.has(token):
+			if not by_scene.has(token):
+				order.append(token)
+			by_scene[token] = []
+			whole[token] = true
+			continue
+		var holders: Array[String] = []
+		for scene_name in scenes:
+			var names: Array = scenes[scene_name]
+			if names.has(token):
+				holders.append(str(scene_name))
+		if holders.is_empty():
+			unknown.append(token)
+			continue
+		holders.sort()
+		for scene_name in holders:
 			if not by_scene.has(scene_name):
-				by_scene[scene_name] = []
 				order.append(scene_name)
+				by_scene[scene_name] = []
 			if whole.has(scene_name):
 				continue
 			var cases: Array = by_scene[scene_name]
-			var case_name := str(group["case"])
-			if not cases.has(case_name):
-				cases.append(case_name)
-		elif scenes.has(name):
-			whole[name] = true
-			if not by_scene.has(name):
-				order.append(name)
-			by_scene[name] = []
-		else:
-			unknown.append(str(name))
+			if not cases.has(token):
+				cases.append(token)
 	# An unknown name stops the run, so the helper builds no plan then.
 	if not unknown.is_empty():
 		return {"entries": [], "unknown": unknown}
 	var entries: Array = []
 	for scene_name in order:
-		entries.append({"path": scene_name, "cases": by_scene[scene_name]})
+		var cases: Array = by_scene[scene_name]
+		cases.sort()
+		entries.append({"path": scene_name, "cases": cases})
 	return {"entries": entries, "unknown": unknown}
 
 
@@ -203,6 +206,7 @@ func _timeout_for(path: String) -> float:
 func _run_one(entry: Dictionary) -> Dictionary:
 	_saw_ok = false
 	_saw_error = false
+	var begin_ms := Time.get_ticks_msec()
 	var path: String = entry["path"]
 	_wipe_dir(_artifact_dir(path))
 	# Select the deadline once, so the wait and the note agree.
@@ -217,7 +221,7 @@ func _run_one(entry: Dictionary) -> Dictionary:
 			args.append(str(case_name))
 	var proc := OS.execute_with_pipe(OS.get_executable_path(), args, false)
 	if proc.is_empty():
-		return {"code": 1, "note": "could not start"}
+		return {"code": 1, "note": "could not start", "seconds": 0.0}
 	var pid: int = proc["pid"]
 	var out: FileAccess = proc["stdio"]
 	var err_out: FileAccess = proc["stderr"]
@@ -239,13 +243,13 @@ func _run_one(entry: Dictionary) -> Dictionary:
 	_pending.erase(out)
 	_pending.erase(err_out)
 	if timed_out:
-		return {"code": 1, "note": "timed out after %.0f s" % timeout_s}
+		return {"code": 1, "note": "timed out after %.0f s" % timeout_s, "seconds": (Time.get_ticks_msec() - begin_ms) / 1000.0}
 	var code := OS.get_process_exit_code(pid)
 	if code == 0 and _saw_error:
-		return {"code": 1, "note": "child reported an engine or script error"}
+		return {"code": 1, "note": "child reported an engine or script error", "seconds": (Time.get_ticks_msec() - begin_ms) / 1000.0}
 	if code == 0 and not _saw_ok:
-		return {"code": 1, "note": "exit 0 but no pass marker"}
-	return {"code": code, "note": ""}
+		return {"code": 1, "note": "exit 0 but no pass marker", "seconds": (Time.get_ticks_msec() - begin_ms) / 1000.0}
+	return {"code": code, "note": "", "seconds": (Time.get_ticks_msec() - begin_ms) / 1000.0}
 
 
 func _artifact_dir(path: String) -> String:
