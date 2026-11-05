@@ -451,7 +451,15 @@ They differ in their `State` effects and their undo behavior.
 The Plane tool moves the floor plane.
 A drag sets `State.floor_index`.
 The X, Y, and Z keys set `State.floor_axis`.
+The option bar has a Slice toggle.
 The source is [`PlaneTool.gd:36`](../../plugins/Plane/PlaneTool.gd#L36).
+
+The slice limits every edit to the floor layer.
+The layer is cell index `State.floor_index`, the layer above the grid line.
+The edit context freezes the axis and the index at begin.
+One write gate applies the limit. See [Write scope](#write-scope).
+The view also draws only the slice layer while the option is on.
+The source is [`VoxelRenderer.gd:63`](../../ui/Viewport/VoxelRenderer.gd#L63).
 
 ```mermaid
 flowchart LR
@@ -464,16 +472,23 @@ flowchart LR
     F["State.floor_axis X Y Z"]
     G["floor_plane_changed"]
     H["GridRenderer and Options sync"]
-    I["VoxelPicking.ground_pick"]
+    I["VoxelPicking slice_pick"]
     J["No edit transaction, no undo"]
+    K["State.slice_enabled"]
+    L["slice_changed"]
+    M["VoxelRenderer slice filter"]
   end
   A --> B --> C
   C -->|"drag"| D --> E
   C -->|"X Y Z keys"| F
+  C -->|"Slice toggle"| K
   E --> G
   F --> G
+  K --> L
   G --> H
   G -.->|"later pick"| I
+  L -.-> M
+  G -.-> M
   C -.->|"state only"| J
 ```
 
@@ -486,7 +501,18 @@ The grid follows `floor_plane_changed`.
 The source is [`GridRenderer.gd:18`](../../ui/Viewport/GridRenderer.gd#L18).
 
 The floor pick uses `State.floor_axis` and `State.floor_index`.
-The source is [`VoxelPicking.gd:217`](../../Globals/State/Tools/VoxelPicking.gd#L217).
+A slice pick meets the slice plane, so a voxel on another layer cannot block it.
+The source is [`VoxelPicking.gd:28`](../../Globals/State/Tools/VoxelPicking.gd#L28).
+
+#### Write scope
+
+`EditContext` holds the symmetry, the selection, and the floor slice.
+`State._live_context` fills it, and `State.begin_edit` freezes it.
+[`VoxelFrame.set_cells`](../../Globals/State/Document/VoxelFrame.gd) is the one write gate.
+It applies `EditContext.filter` when the job carries a context.
+A document load, an import, and a history restore pass no job, so they are never limited.
+A new writable-cell rule is one predicate in `EditContext`, not one check per tool.
+Terrain does not pass a context yet. Its per-column surface tracking must become slice-aware first.
 
 ### Symmetry
 

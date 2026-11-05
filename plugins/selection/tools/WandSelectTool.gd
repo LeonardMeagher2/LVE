@@ -64,9 +64,12 @@ class WandJob extends VoxelFrame.EditJob:
 	func run() -> void:
 		stage("Finding connected voxels" if connected else "Finding matching voxels", -1 if connected else source_frame.count())
 		# The wand ignores the current selection as a barrier, so it passes no mask.
+		# The floor slice still bounds the flood, so a selection stays on the layer.
 		var stream: Callable = Callable(self, "_stream_batch") if batch_queue != null else Callable()
+		var slice_axis := edit_context.slice_axis if edit_context else -1
+		var slice_index := edit_context.slice_index if edit_context else 0
 		matching_cells = {}
-		if not VoxelRegionSearch.find(matching_cells, source_frame, seed_cell, target_material, connected, true, {}, self, stream):
+		if not VoxelRegionSearch.find(matching_cells, source_frame, seed_cell, target_material, connected, true, {}, self, stream, slice_axis, slice_index):
 			return
 		if not checkpoint(0):
 			return

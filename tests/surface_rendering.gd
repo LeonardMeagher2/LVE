@@ -8,6 +8,7 @@ var quads := 0
 func _ready() -> void:
 	timeout = 30.0
 	test("surface rendering merges faces, closes chunk seams, and reuses cached frame meshes", _run)
+	test("a slice build keeps only the floor layer geometry", _slice_mesh, "slice_mesh")
 
 
 func _run() -> void:
@@ -89,6 +90,51 @@ func _run() -> void:
 			expect(image.get_pixel(1, 1) == Color.BLUE, "the voxel's atlas is blue")
 			expect(surface.get_aabb().position == Vector3(14.5, -0.5, -0.5), "the voxel retains its chunk-local position")
 	)
+
+
+func _slice_mesh() -> void:
+	step("Given two stacked cells in one chunk", func():
+		var frame := VoxelFrame.new()
+		frame.set_cells({
+			Vector3i(0, 2, 0): VoxelFrame.material(Color.RED),
+			Vector3i(0, 3, 0): VoxelFrame.material(Color.RED),
+		})
+		var full := _build_slice_mesh(frame, -1, 0)
+		var sliced := _build_slice_mesh(frame, Vector3.Axis.AXIS_Y, 2)
+		expect(_highest_vertex(full) == 3.5, "the full build keeps the upper cell")
+		expect(_highest_vertex(sliced) == 2.5, "the slice build closes the layer like a lone cell")
+	)
+	step("Then every slice vertex lies on the layer", func():
+		var frame := VoxelFrame.new()
+		frame.set_cells({
+			Vector3i(0, 2, 0): VoxelFrame.material(Color.RED),
+			Vector3i(0, 5, 0): VoxelFrame.material(Color.RED),
+		})
+		var sliced := _build_slice_mesh(frame, Vector3.Axis.AXIS_Y, 2)
+		var vertices: PackedVector3Array = sliced[Mesh.ARRAY_VERTEX]
+		var on_layer := true
+		for vertex: Vector3 in vertices:
+			if vertex.y != 1.5 and vertex.y != 2.5:
+				on_layer = false
+		expect(on_layer, "every vertex of the slice build lies on layer 2")
+	)
+
+
+func _highest_vertex(arrays: Array) -> float:
+	var highest := -INF
+	for vertex: Vector3 in arrays[Mesh.ARRAY_VERTEX]:
+		highest = maxf(highest, vertex.y)
+	return highest
+
+
+func _build_slice_mesh(frame: VoxelFrame, slice_axis: int, slice_index: int) -> Array:
+	var builder := VoxelMeshBuilder.new()
+	builder.source_frame = frame
+	builder.chunk_location = Vector3i.ZERO
+	builder.slice_axis = slice_axis
+	builder.slice_index = slice_index
+	builder.run()
+	return builder.surface_arrays
 
 
 func _settle() -> void:

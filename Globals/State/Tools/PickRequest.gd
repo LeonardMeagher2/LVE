@@ -16,3 +16,5 @@ var frame: VoxelFrame
 var plane: StrokePlane = null
 ## The camera forward direction. It selects the view axis.
 var forward := Vector3.ZERO
+## Whether the pick targets the floor layer instead of the front-most voxel.
+var slice := false

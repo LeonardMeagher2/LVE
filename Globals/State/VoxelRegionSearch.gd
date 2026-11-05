@@ -216,15 +216,20 @@ class BatchCursor extends RefCounted:
 ## [param selection_mask] blocks traversal and matching. Returns [code]false[/code]
 ## when [param job] cancels, and the caller must discard [param result].
 ## [param stream] receives the found cells in batches while the search runs.
-static func find(result: Dictionary, frame: VoxelFrame, seed_cell: Vector3i, target_material: PackedFloat32Array, connected: bool, value: Variant = true, selection_mask: Dictionary = {}, job: VoxelFrame.EditJob = null, stream: Callable = Callable()) -> bool:
+## [param slice_axis] and [param slice_index] bound the search to one layer when
+## the axis is not -1. A flood must not cross a layer, or a fill would paint
+## disconnected patches of the slice.
+static func find(result: Dictionary, frame: VoxelFrame, seed_cell: Vector3i, target_material: PackedFloat32Array, connected: bool, value: Variant = true, selection_mask: Dictionary = {}, job: VoxelFrame.EditJob = null, stream: Callable = Callable(), slice_axis := -1, slice_index := 0) -> bool:
 	if frame == null:
 		return true
 	# The entry check makes a cancellation that arrived before the call deterministic.
 	if job and not job.checkpoint(0):
 		return false
 	if connected:
-		return _find_connected(result, frame, seed_cell, target_material, value, selection_mask, job, stream)
-	return _find_occupied(result, frame, target_material, value, selection_mask, job, stream)
+		if slice_axis >= 0 and seed_cell[slice_axis] != slice_index:
+			return true
+		return _find_connected(result, frame, seed_cell, target_material, value, selection_mask, job, stream, slice_axis, slice_index)
+	return _find_occupied(result, frame, target_material, value, selection_mask, job, stream, slice_axis, slice_index)
 
 
 # A flood through the six face neighbors. The chunk of the current cell is held
@@ -233,7 +238,7 @@ static func find(result: Dictionary, frame: VoxelFrame, seed_cell: Vector3i, tar
 # than an index into a local. The local slot and its bounds are computed inline, so
 # a probe avoids the `material_id` and `cell_slot` calls. The walk order and the
 # result insertion order are unchanged, and the helper reads the frame only.
-static func _find_connected(result: Dictionary, frame: VoxelFrame, seed_cell: Vector3i, target_material: PackedFloat32Array, value: Variant, selection_mask: Dictionary, job: VoxelFrame.EditJob, stream: Callable) -> bool:
+static func _find_connected(result: Dictionary, frame: VoxelFrame, seed_cell: Vector3i, target_material: PackedFloat32Array, value: Variant, selection_mask: Dictionary, job: VoxelFrame.EditJob, stream: Callable, slice_axis := -1, slice_index := 0) -> bool:
 	var seed_chunk: VoxelFrame.Chunk = frame.chunks.get(VoxelFrame.chunk_position(seed_cell))
 	if not _chunk_matches(seed_chunk, seed_cell, target_material):
 		return true
@@ -270,6 +275,8 @@ static func _find_connected(result: Dictionary, frame: VoxelFrame, seed_cell: Ve
 		for direction in DIRECTIONS:
 			var neighbor: Vector3i = cell_position + direction
 			if result.has(neighbor):
+				continue
+			if slice_axis >= 0 and neighbor[slice_axis] != slice_index:
 				continue
 			if mask_active and not selection_mask.has(neighbor):
 				continue
@@ -313,7 +320,7 @@ static func _find_connected(result: Dictionary, frame: VoxelFrame, seed_cell: Ve
 # A scan of every occupied cell. The grid slots are walked in order, so the cell
 # position follows from the slot and no position array is built. Each distinct
 # material id of a chunk is compared once when the chunk holds few ids.
-static func _find_occupied(result: Dictionary, frame: VoxelFrame, target_material: PackedFloat32Array, value: Variant, selection_mask: Dictionary, job: VoxelFrame.EditJob, stream: Callable) -> bool:
+static func _find_occupied(result: Dictionary, frame: VoxelFrame, target_material: PackedFloat32Array, value: Variant, selection_mask: Dictionary, job: VoxelFrame.EditJob, stream: Callable, slice_axis := -1, slice_index := 0) -> bool:
 	var streaming := stream.is_valid()
 	var batch: Array[Vector3i] = []
 	var mask_active := not selection_mask.is_empty()
@@ -336,7 +343,7 @@ static func _find_occupied(result: Dictionary, frame: VoxelFrame, target_materia
 				continue
 			var cell_position := origin + Vector3i(slot % CHUNK_SIZE, (slot / CHUNK_SIZE) % CHUNK_SIZE, slot / (CHUNK_SIZE * CHUNK_SIZE))
 			var hit := _id_matches_cached(materials, id, target_material, matches) if cached else _id_matches(materials, id, target_material)
-			if hit and (not mask_active or selection_mask.has(cell_position)):
+			if hit and (slice_axis < 0 or cell_position[slice_axis] == slice_index) and (not mask_active or selection_mask.has(cell_position)):
 				result[cell_position] = value
 				if streaming:
 					batch.append(cell_position)

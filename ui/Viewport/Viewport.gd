@@ -57,6 +57,18 @@ func _ready() -> void:
 		lighting_changed.connect(_save_document_lighting)
 		State.document_changed.connect(_restore_document_lighting)
 		_restore_document_lighting()
+	State.slice_changed.connect(_on_slice_changed)
+	State.floor_plane_changed.connect(_on_slice_changed)
+	_on_slice_changed()
+
+
+# Shows only the slice layer while the slice is on. The renderer keeps its mesh
+# cache; the slice is part of the surface key, so a layer move rebuilds only the
+# slice row.
+func _on_slice_changed() -> void:
+	var renderer: VoxelRenderer = $VoxelRenderer
+	renderer.slice_axis = State.floor_axis if State.slice_enabled else -1
+	renderer.slice_index = State.floor_index
 
 
 func _save_document_lighting() -> void:

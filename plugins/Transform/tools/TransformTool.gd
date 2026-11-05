@@ -55,6 +55,10 @@ var _jobs: Array[VoxelFrame.EditJob] = []
 var _active_preview_job: TransformJob
 var _symmetry_axes := 0
 var _symmetry_origin_twice := Vector3i.ZERO
+# The frozen symmetry and slice scope of the open transform. It carries no
+# selection, because a transform moves cells to destinations outside the source
+# selection.
+var _symmetry_scope: VoxelFrame.EditContext
 
 ## One cancellable job that reads the transform source.
 ##
@@ -376,6 +380,7 @@ func _press(origin: Vector3, dir: Vector3) -> void:
 		var symmetry := State.selection_context()
 		_symmetry_axes = symmetry.axes
 		_symmetry_origin_twice = symmetry.origin_twice
+		_symmetry_scope = symmetry
 		_source_document = State.document
 		_source_frame = frame
 		_dragging = true
@@ -471,6 +476,8 @@ func _apply_preview() -> void:
 		var job := _make_job()
 		job.symmetry_axes = _symmetry_axes
 		job.symmetry_origin_twice = _symmetry_origin_twice
+		# The write gate keeps every destination on the slice layer.
+		job.edit_context = _symmetry_scope
 		job.source_positions = _cells
 		job.source_colors = _colors
 		job.source_materials = _materials

@@ -60,6 +60,22 @@ var source_frame: VoxelFrame:
 		source_frame = value
 		if is_inside_tree():
 			_rebuild()
+## The world axis of the slice, or -1 to draw every layer.
+var slice_axis := -1:
+	set(value):
+		if value == slice_axis:
+			return
+		slice_axis = value
+		if is_inside_tree():
+			_rebuild()
+## The cell index of the slice along [member slice_axis].
+var slice_index := 0:
+	set(value):
+		if value == slice_index:
+			return
+		slice_index = value
+		if is_inside_tree():
+			_rebuild()
 var _chunk_instances: Dictionary = {}
 var _displayed_surface_keys: Dictionary = {}
 var _pending_surface_keys: Dictionary = {}
@@ -189,7 +205,17 @@ func _request(active_frame: VoxelFrame, chunk_location: Vector3i) -> void:
 		_inflight_surface_keys.erase(chunk_location)
 		_retire(chunk_location)
 		return
-	var surface_key := _signature(active_frame, chunk_location, State.document.smooth_normals)
+	if slice_axis >= 0:
+		# A slice holds one layer, so only the chunk row that crosses it can emit
+		# a face. Requesting the other rows would build empty surfaces.
+		var row_cell := Vector3i(slice_index, slice_index, slice_index)
+		var slice_row := VoxelFrame.chunk_position(row_cell)[slice_axis]
+		if chunk_location[slice_axis] != slice_row:
+			_pending_surface_keys.erase(chunk_location)
+			_inflight_surface_keys.erase(chunk_location)
+			_retire(chunk_location)
+			return
+	var surface_key := _signature(active_frame, chunk_location, State.document.smooth_normals, slice_axis, slice_index)
 	if _displayed_surface_keys.get(chunk_location) == surface_key:
 		# The exact wanted surface is already on screen, so no result may replace
 		# it. Drop the newest request and any in-flight eligibility with it.
@@ -226,10 +252,12 @@ func _update_chunks(updated_frame: int, chunk_positions: Array[Vector3i]) -> voi
 #
 # A packed array passes by reference. Never write to a key after a dictionary
 # holds it, or the key's hash and content disagree.
-static func _signature(active_frame: VoxelFrame, chunk_location: Vector3i, smooth_normals: bool) -> PackedInt64Array:
+static func _signature(active_frame: VoxelFrame, chunk_location: Vector3i, smooth_normals: bool, slice_axis := -1, slice_index := 0) -> PackedInt64Array:
 	var offsets := VoxelMeshBuilder.neighbor_offsets(smooth_normals)
 	var surface_key := PackedInt64Array()
-	surface_key.resize(1 + offsets.size() * 2)
+	# A slice build appends its layer, so a normal key keeps its exact length.
+	var tail := 3 if slice_axis >= 0 else 0
+	surface_key.resize(1 + offsets.size() * 2 + tail)
 	surface_key[0] = 1 if smooth_normals else 0
 	var index := 1
 	for offset: Vector3i in offsets:
@@ -238,6 +266,10 @@ static func _signature(active_frame: VoxelFrame, chunk_location: Vector3i, smoot
 			surface_key[index] = chunk.get_instance_id()
 			surface_key[index + 1] = chunk.voxel_revision
 		index += 2
+	if slice_axis >= 0:
+		surface_key[index] = 1
+		surface_key[index + 1] = slice_axis
+		surface_key[index + 2] = slice_index
 	return surface_key
 
 
@@ -392,6 +424,8 @@ func _launch_surface(chunk_location: Vector3i, active_frame: VoxelFrame) -> void
 	surface_job.source_frame = _snapshot_for_launch(active_frame)
 	surface_job.chunk_location = chunk_location
 	surface_job.smooth_normals = State.document.smooth_normals
+	surface_job.slice_axis = slice_axis
+	surface_job.slice_index = slice_index
 	surface_job.worker_task_id = WorkerThreadPool.add_task(surface_job.run, false, "Voxel surface")
 	_surface_jobs[surface_key] = surface_job
 	_inflight_surface_keys[chunk_location] = surface_key

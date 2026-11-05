@@ -35,6 +35,8 @@ signal default_palette_changed()
 signal selection_changed()
 ## Emitted when the floor axis or the floor index changes.
 signal floor_plane_changed()
+## Emitted when the slice option changes.
+signal slice_changed()
 ## Emitted when the symmetry axes or the symmetry origin change.
 signal symmetry_changed()
 ## Emitted when a tag property changes.
@@ -184,6 +186,22 @@ var floor_index := 0:
 			return
 		floor_index = value
 		floor_plane_changed.emit()
+
+## Whether the slice limits every edit to the floor layer.
+##
+## The slice reuses [member floor_axis] and [member floor_index]. The writable
+## layer is cell index [member floor_index], the layer above the grid line.
+var slice_enabled := false:
+	set(value):
+		if value == slice_enabled:
+			return
+		slice_enabled = value
+		slice_changed.emit()
+
+
+## Returns the world level of the slice plane.
+func slice_level() -> float:
+	return float(floor_index) - 0.5
 
 ## The symmetry axes as a bit mask. Bit 0 is X, bit 1 is Y, and bit 2 is Z.
 var symmetry_axes := 0:
@@ -347,9 +365,9 @@ func remove_plugin(plugin: VoxelPlugin) -> void:
 
 
 ## Paints one cell with the current edit context. It expands the cell through
-## symmetry and the selection.
+## symmetry and maps it through the selection and the slice.
 func paint(position: Vector3i, cell_material: PackedFloat32Array) -> void:
-	if symmetry_axes == 0 and _active_edit == null:
+	if symmetry_axes == 0 and not slice_enabled and _active_edit == null:
 		document.paint(current_frame, position, cell_material)
 		return
 	var context := drawing_context()
@@ -374,6 +392,9 @@ func _live_context() -> VoxelFrame.EditContext:
 	context.origin_twice = Vector3i(symmetry_origin * 2.0)
 	context.selection = selection.capture()
 	context.selection.make_read_only()
+	if slice_enabled:
+		context.slice_axis = floor_axis
+		context.slice_index = floor_index
 	return context
 
 
@@ -386,13 +407,11 @@ func symmetry_transform(mask: int, origin: Vector3) -> Transform3D:
 	return Transform3D(Basis.from_scale(reflection), origin - origin * reflection)
 
 
-## Returns an edit context that carries the symmetry only. The selection filter
-## is not applied.
+## Returns an edit context that carries the symmetry and the slice, but not the
+## selection filter.
 func selection_context() -> VoxelFrame.EditContext:
-	var drawing := drawing_context()
-	var context := VoxelFrame.EditContext.new()
-	context.axes = drawing.axes
-	context.origin_twice = drawing.origin_twice
+	var context := drawing_context().duplicate()
+	context.selection = {}
 	return context
 
 
@@ -1012,6 +1031,8 @@ func erase_selection() -> void:
 	var job := EraseJob.new()
 	job.edited_frame = VoxelFrame.job_frame(edited_frame)
 	job.selection_mask = selection.capture()
+	# The erase is an edit, so the slice limits it like every other write.
+	job.edit_context = _erase_edit.edit_context
 	_erase_job = job
 	var operation_id := begin_operation("Erasing selection", selection.count(), true, self, _interrupt_erase)
 	_erase_operation_id = operation_id

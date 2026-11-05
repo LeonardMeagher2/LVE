@@ -23,6 +23,7 @@ var old_context: VoxelFrame.EditContext
 var refs: Array[WeakRef] = []
 var before_data := PackedByteArray()
 var before_count := 0
+var scope: VoxelFrame.EditContext
 var _default_color := Color.BLACK
 var _default_mode := BrushToolSettings.BrushMode.PENCIL
 var _defaults_ready := false
@@ -47,6 +48,7 @@ func _ready() -> void:
 	test("a same-tool transform cancel keeps the new stroke", _same_tool_reentrant_transform_cancel, "same_tool_reentrant_transform_cancel")
 	test("a tool reacquires an edit after a document reset", _tool_reacquire_after_document, "tool_reacquire_after_document")
 	test("closed transactions are released while history keeps the frame", _transaction_release, "transaction_release")
+	test("one edit scope limits the selection, the slice, and the writes", _scope_filter, "scope_filter")
 
 
 func _setup_test() -> void:
@@ -60,6 +62,9 @@ func _setup_test() -> void:
 	_brush_settings.mode = _default_mode
 	State.symmetry_axes = 0
 	State.symmetry_origin = State.DEFAULT_SYMMETRY_ORIGIN
+	State.slice_enabled = false
+	State.floor_axis = Vector3.Axis.AXIS_Y
+	State.floor_index = 0
 	State.clear_selection()
 	State.undo_redo.clear_history()
 	edit = null
@@ -362,6 +367,60 @@ func _captured_context() -> void:
 		expect(frame.has(Vector3i(2, 0, 0)), "the source cell is written")
 		expect(frame.has(Vector3i(-2, 0, 0)), "the captured reflection is written")
 		expect(not frame.has(Vector3i(198, 0, 0)), "the changed origin is not used")
+	)
+
+
+# One frozen scope holds every writable-cell rule. The write gate applies it to
+# any job that carries it, and a job without one writes everything.
+func _scope_filter() -> void:
+	step("Given a scope with a Y slice and one selected cell", func():
+		scope = VoxelFrame.EditContext.new()
+		scope.slice_axis = Vector3.Axis.AXIS_Y
+		scope.slice_index = 2
+		scope.selection[Vector3i(0, 2, 0)] = true
+		expect(scope.allows(Vector3i(0, 2, 0)), "the selected slice cell is allowed")
+		expect(not scope.allows(Vector3i(0, 3, 0)), "a cell off the slice is refused")
+		expect(not scope.allows(Vector3i(1, 2, 0)), "a cell outside the selection is refused")
+		var copy := scope.duplicate()
+		expect(copy.slice_axis == Vector3.Axis.AXIS_Y and copy.slice_index == 2, "the copy keeps the slice")
+		expect(copy.allows(Vector3i(0, 2, 0)), "the copy keeps the selection")
+	)
+	step("When a job with the scope writes a batch", func():
+		var frame := State.get_current_voxel_frame()
+		var job := VoxelFrame.EditJob.new()
+		job.edit_context = scope
+		frame.set_cells({
+			Vector3i(0, 2, 0): VoxelFrame.material(Color.RED),
+			Vector3i(0, 3, 0): VoxelFrame.material(Color.GREEN),
+			Vector3i(1, 2, 0): VoxelFrame.material(Color.BLUE),
+		}, job)
+		expect(frame.has(Vector3i(0, 2, 0)), "the allowed cell is written")
+		expect(not frame.has(Vector3i(0, 3, 0)), "the off-slice cell is not written")
+		expect(not frame.has(Vector3i(1, 2, 0)), "the unselected cell is not written")
+		expect(job.applied_cells.size() == 1, "the job reports only the written cell")
+	)
+	step("When a job without a scope writes the same batch", func():
+		var frame := State.get_current_voxel_frame()
+		frame.set_cells({
+			Vector3i(0, 3, 0): VoxelFrame.material(Color.GREEN),
+			Vector3i(1, 2, 0): VoxelFrame.material(Color.BLUE),
+		}, VoxelFrame.EditJob.new())
+		expect(frame.has(Vector3i(0, 3, 0)) and frame.has(Vector3i(1, 2, 0)), "an unscoped job writes every cell")
+	)
+	step("When a sliced edit is undone", func():
+		State.document = VoxelDocument.new()
+		State.slice_enabled = true
+		State.floor_index = 2
+		var frame := State.get_current_voxel_frame()
+		frame.set_cell(Vector3i(0, 5, 0), VoxelFrame.material(Color.RED))
+		var tx := State.begin_edit()
+		expect(tx != null, "the sliced edit opens")
+		State.paint(Vector3i(0, 2, 0), VoxelFrame.material(Color.BLUE))
+		State.finish_edit(tx)
+		expect(frame.has(Vector3i(0, 2, 0)), "the sliced edit writes the layer")
+		State.undo_redo.undo()
+		expect(not frame.has(Vector3i(0, 2, 0)), "undo removes the sliced edit")
+		expect(frame.has(Vector3i(0, 5, 0)), "undo restores the whole chunk, not only the slice")
 	)
 
 

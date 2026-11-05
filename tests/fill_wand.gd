@@ -31,6 +31,7 @@ func _ready() -> void:
 	test("fill recolors every voxel of the same color when connected is off", _fill_all, "fill_all")
 	test("the wand selects all connected voxels of one color", _wand_select, "wand_select")
 	test("wand selects every voxel of the same color when connected is off", _wand_all, "wand_all")
+	test("the slice stops a fill at the floor layer", _slice_fill, "slice_fill")
 
 
 # Each test starts from a fresh document. The selection mode and its connected
@@ -49,6 +50,9 @@ func _setup_test() -> void:
 		_defaults_ready = true
 	State.stop()
 	State.document = VoxelDocument.new()
+	State.slice_enabled = false
+	State.floor_axis = Vector3.Axis.AXIS_Y
+	State.floor_index = 0
 	_selection_settings.mode = _default_mode
 	_selection_settings.connected = _default_connected
 	if connected != null and connected.button_pressed != _default_fill_connected:
@@ -96,6 +100,48 @@ func _empty_screen_pos() -> Vector2:
 			var res := aim(Vector2(dx, dy))
 			if res.target != VoxelPicking.NONE and res.hit == VoxelPicking.NONE:
 				return Vector2(dx, dy)
+	return Vector2.INF
+
+
+func _slice_fill() -> void:
+	step("Given a red stack on the floor and a slice at layer 0", func():
+		_view_setup()
+		select_toolbar_item("paint", "Bucket Fill")
+		State.set_color(Color.BLUE)
+		var req := pick_request(center)
+		seed = VoxelPicking.start_pick(req.origin, req.dir, req.frame, req.forward, true).target
+		var f: VoxelFrame = State.document.frames[State.current_frame]
+		f.set_cell(seed, VoxelFrame.material(Color.RED))
+		f.set_cell(seed + Vector3i(1, 0, 0), VoxelFrame.material(Color.RED))
+		f.set_cell(seed + Vector3i(0, 1, 0), VoxelFrame.material(Color.RED))
+		f.set_cell(seed + Vector3i(0, 2, 0), VoxelFrame.material(Color.RED))
+		f.set_cell(seed + Vector3i(0, -1, 0), VoxelFrame.material(Color.RED))
+		State.floor_index = seed.y
+		State.slice_enabled = true
+		sync_viewport()
+	)
+	step("When the user fills the slice cell", func():
+		var pos := _slice_screen_pos_of(seed)
+		expect(pos != Vector2.INF, "the slice cell is visible")
+		_click(pos)
+	)
+	step("Then the fill stays on the layer", func():
+		var f: VoxelFrame = State.document.frames[State.current_frame]
+		expect(f.get_color(seed) == Color.BLUE, "the clicked slice cell takes the fill color")
+		expect(f.get_color(seed + Vector3i(1, 0, 0)) == Color.BLUE, "a connected cell on the layer takes the fill color")
+		expect(f.get_color(seed + Vector3i(0, 1, 0)) == Color.RED, "the cell above the layer keeps its color")
+		expect(f.get_color(seed + Vector3i(0, 2, 0)) == Color.RED, "a farther cell above the layer keeps its color")
+		expect(f.get_color(seed + Vector3i(0, -1, 0)) == Color.RED, "the cell below the layer keeps its color")
+	)
+
+
+func _slice_screen_pos_of(cell: Vector3i) -> Vector2:
+	for dy in range(0, int(viewport.size.y), 8):
+		for dx in range(0, int(viewport.size.x), 8):
+			var pos := Vector2(dx, dy)
+			var req := pick_request(pos)
+			if VoxelPicking.start_pick(req.origin, req.dir, req.frame, req.forward, true).target == cell:
+				return pos
 	return Vector2.INF
 
 

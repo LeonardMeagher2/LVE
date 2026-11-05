@@ -62,7 +62,12 @@ func begin_paste(pattern: Dictionary, selection_pattern: Dictionary, center: Vec
 			_preview_pattern.make_read_only()
 	_stroke_shape = _settings.BrushShape.SELECTION
 	_stroke_pattern_size = maxi(pattern.size(), selection_pattern.size())
-	_selection_mask = {}
+	# A paste places its whole pattern, so it ignores the selection and the
+	# symmetry. It still respects the slice, which the write gate applies.
+	_edit_context = VoxelFrame.EditContext.new()
+	if State.slice_enabled:
+		_edit_context.slice_axis = State.floor_axis
+		_edit_context.slice_index = State.floor_index
 	_placement_operation_id = State.begin_operation("Placing pasted voxels", -1, true, self)
 	_update_endpoint(center)
 

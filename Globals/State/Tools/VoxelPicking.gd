@@ -11,8 +11,12 @@ extends RefCounted
 const NONE:Vector3i = Vector3i(Vector3.INF)
 
 ## Returns the press pick for a ray. A ray that hits the model targets the hit
-## cell. A ray that misses targets the floor plane.
-static func start_pick(origin: Vector3, dir: Vector3, frame: VoxelFrame, forward: Vector3) -> PickResult:
+## cell. A ray that misses targets the floor plane. When [param slice] is true,
+## the ray targets the floor layer instead, so a voxel on another layer cannot
+## block it.
+static func start_pick(origin: Vector3, dir: Vector3, frame: VoxelFrame, forward: Vector3, slice := false) -> PickResult:
+	if slice:
+		return slice_pick(origin, dir, frame)
 	var res := ray_voxel(origin, dir, frame)
 	if res.hit != VoxelPicking.NONE:
 		res.target = res.hit
@@ -20,6 +24,44 @@ static func start_pick(origin: Vector3, dir: Vector3, frame: VoxelFrame, forward
 		res.plane = view_plane(res.target, origin, forward)
 		return res
 	return ground_pick(origin, dir, forward)
+
+
+## Returns the pick for a ray on the floor layer. The ray must meet the slice
+## plane in front of the camera. The target is the layer cell under the pointer,
+## and the plane is the slice itself, so a drag stays on the layer.
+static func slice_pick(origin: Vector3, dir: Vector3, frame: VoxelFrame) -> PickResult:
+	var axis := State.floor_axis
+	var denom := dir[axis]
+	if absf(denom) < 1e-8:
+		return PickResult.new()
+	var level := State.slice_level()
+	var t: float = (level - origin[axis]) / denom
+	if t <= 0.0:
+		return PickResult.new()
+	var point: Vector3 = origin + dir * t
+	var cell := Vector3i(floori(point.x + 0.5), floori(point.y + 0.5), floori(point.z + 0.5))
+	cell[axis] = State.floor_index
+	var res := PickResult.new()
+	res.target = cell
+	res.add_target = cell
+	res.hit = cell if frame != null and frame.has(cell) else VoxelPicking.NONE
+	res.plane = slice_plane()
+	return res
+
+
+## Returns the slice plane of the floor layer. A drag maps onto this plane.
+static func slice_plane() -> StrokePlane:
+	var axis := State.floor_axis
+	var plane := StrokePlane.new()
+	plane.axis = axis
+	plane.idx = State.floor_index
+	var point := Vector3.ZERO
+	point[axis] = State.slice_level()
+	plane.point = point
+	var normal := Vector3.ZERO
+	normal[axis] = 1.0
+	plane.normal = normal
+	return plane
 
 
 ## Returns the drag pick for a ray on a plane. A ray parallel to the plane or

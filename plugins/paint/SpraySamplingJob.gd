@@ -27,6 +27,10 @@ var axes := 0
 var origin_twice := Vector3i.ZERO
 ## The read-only selection of the frozen edit context.
 var selection := {}
+## The world axis of the writable slice, or -1 when every layer is writable.
+var slice_axis := -1
+## The cell index of the writable slice along [member slice_axis].
+var slice_index := 0
 ## The full material of every written cell.
 var material := PackedFloat32Array()
 ## The spot diameter in cells.
@@ -99,6 +103,14 @@ func run() -> void:
 	stage("Sampling spray", local_estimate)
 	var report := {}
 	cells = SpraySampler.sample(center, frame, context, spot_size, search_size, speed, rng, material, shape_cache, self, report, selection_index)
+	# The slice limits the sampled cells, so the cursor shows exactly the cells a
+	# press writes. The write gate repeats the test, so a later scope cannot pass.
+	if slice_axis >= 0:
+		var kept: Array[Vector3i] = []
+		for cell in cells:
+			if cell[slice_axis] == slice_index:
+				kept.append(cell)
+		cells = kept
 	local_count = report.get("local", 0)
 	candidate_count = report.get("candidates", 0)
 	built_selection_index = report.get("selection_index")

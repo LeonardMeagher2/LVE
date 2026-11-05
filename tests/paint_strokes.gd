@@ -15,9 +15,11 @@ var anchor := VoxelPicking.NONE
 var front := VoxelPicking.NONE
 var _p := PixelPerfectStroke.new()
 var _drawn: Array[Vector3i] = []
+var before_count := 0
 var _default_color := Color.BLACK
 var _default_mode := BrushToolSettings.BrushMode.PENCIL
 var _default_pixel_perfect := false
+var _default_diameter := 1
 var _default_tool_button := ""
 var _defaults_ready := false
 
@@ -29,6 +31,7 @@ func _ready() -> void:
 	test("draws a clean diagonal and skips transient cells", _pixel_perfect, "pixel_perfect")
 	test("pixel perfect mode paints the cursor cell and stays connected", _pixel_perfect_tool, "pixel_perfect_tool")
 	test("the brush adds voxels in front of the clicked face or recolors them in paint mode", _brush_modes, "brush_modes")
+	test("the slice option keeps a stroke on the floor layer", _slice_stroke, "slice_stroke")
 
 
 # Each test starts from a fresh document and the default brush. The brush mode
@@ -40,6 +43,7 @@ func _setup_test() -> void:
 		_default_color = State.current_color
 		_default_mode = _brush_settings.mode
 		_default_pixel_perfect = _brush_settings.pixel_perfect
+		_default_diameter = _brush_settings.diameter
 		_default_tool_button = _pressed_tool_button()
 		_defaults_ready = true
 	State.stop()
@@ -47,6 +51,11 @@ func _setup_test() -> void:
 	State.current_color = _default_color
 	_brush_settings.mode = _default_mode
 	_brush_settings.pixel_perfect = _default_pixel_perfect
+	_brush_settings.diameter = _default_diameter
+	State.slice_enabled = false
+	State.floor_axis = Vector3.Axis.AXIS_Y
+	State.floor_index = 0
+	State.symmetry_axes = 0
 	var pixel_perfect := plugin("BrushPlugin")._options.get_node("PixelPerfect") as Button
 	if pixel_perfect != null and pixel_perfect.button_pressed != _default_pixel_perfect:
 		pixel_perfect.button_pressed = _default_pixel_perfect
@@ -288,6 +297,56 @@ func _pixel_perfect_tool() -> void:
 		var frame: VoxelFrame = State.document.frames[0]
 		expect(frame.count() >= 2, "the stroke painted a line")
 		expect(frame.has(mouse_end), "the cursor cell is painted")
+	)
+
+
+func _slice_stroke() -> void:
+	step("Given a solid block, a diameter-3 brush, and a slice at layer 2", func():
+		_view_setup()
+		var cells := {}
+		for y in 6:
+			for z in range(-2, 3):
+				for x in range(-2, 3):
+					cells[Vector3i(x, y, z)] = VoxelFrame.material(Color.from_rgba8(90, 90, 90))
+		State.get_current_voxel_frame().set_cells(cells)
+		sync_viewport()
+		_brush_settings.diameter = 3
+		State.floor_axis = Vector3.Axis.AXIS_Y
+		State.floor_index = 2
+		State.slice_enabled = true
+		before_count = State.get_current_voxel_frame().count()
+	)
+	step("Then the center aim targets the floor layer", func():
+		var req := pick_request(center)
+		var target := VoxelPicking.start_pick(req.origin, req.dir, req.frame, req.forward, true).target
+		expect(target.y == 2, "the press aim lands on the slice layer")
+	)
+	step("When the user presses and releases on the model", func():
+		_click(center)
+	)
+	step("Then every written cell is on the slice layer", func():
+		var frame: VoxelFrame = State.get_current_voxel_frame()
+		var written := 0
+		var off_layer := 0
+		for c in frame.positions():
+			if frame.get_color(c) != Color.from_rgba8(90, 90, 90):
+				written += 1
+				if c.y != 2:
+					off_layer += 1
+		expect(written > 0, "the stroke writes cells on the layer")
+		expect(off_layer == 0, "the diameter-3 stamp writes no cell above or below the layer")
+	)
+	step("When the user undoes the stroke", func():
+		State.undo_redo.undo()
+	)
+	step("Then every cell keeps its original color", func():
+		var frame: VoxelFrame = State.get_current_voxel_frame()
+		var restored := true
+		for c in frame.positions():
+			if frame.get_color(c) != Color.from_rgba8(90, 90, 90):
+				restored = false
+		expect(frame.count() == before_count, "undo restores the cell count")
+		expect(restored, "undo restores the block")
 	)
 
 

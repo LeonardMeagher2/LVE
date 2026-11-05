@@ -97,8 +97,9 @@ static func material_color(cell_material: PackedFloat32Array) -> Color:
 
 ## The frozen edit inputs of one operation.
 ##
-## The context holds the symmetry axes, the symmetry origin, and the selection.
-## It expands a set of changes through the symmetry and the selection filter.
+## It holds the symmetry axes, the symmetry origin, the selected cells, and the
+## writable slice. It expands a set of changes through the symmetry and filters
+## them through the selection and the slice.
 class EditContext extends RefCounted:
 	## The symmetry axes as a bit mask. Bit 0 is X, bit 1 is Y, and bit 2 is Z.
 	var axes := 0
@@ -107,13 +108,48 @@ class EditContext extends RefCounted:
 	## The selected cells as a dictionary keyed by cell position. An empty
 	## dictionary allows every cell.
 	var selection := {}
+	## The world axis of the writable slice, or -1 when every layer is writable.
+	var slice_axis := -1
+	## The cell index of the writable slice along [member slice_axis].
+	var slice_index := 0
+
+	## Returns [code]true[/code] when this context permits a write to
+	## [param cell]. The slice is a spatial limit. An empty selection allows
+	## every cell.
+	func allows(cell: Vector3i) -> bool:
+		if slice_axis >= 0 and cell[slice_axis] != slice_index:
+			return false
+		return selection.is_empty() or selection.has(cell)
+
+	# The selection snapshot is read-only, so a copy shares it.
+	## Returns a copy of this context. The selection snapshot is shared.
+	func duplicate() -> EditContext:
+		var copy := EditContext.new()
+		copy.axes = axes
+		copy.origin_twice = origin_twice
+		copy.selection = selection
+		copy.slice_axis = slice_axis
+		copy.slice_index = slice_index
+		return copy
+
+	## Returns [param cells] without the cells that this context forbids. It
+	## returns the same dictionary when nothing is limited, so an edit without a
+	## selection or a slice pays no copy.
+	func filter(cells: Dictionary) -> Dictionary:
+		if slice_axis < 0 and selection.is_empty():
+			return cells
+		var kept := {}
+		for cell: Vector3i in cells:
+			if allows(cell):
+				kept[cell] = cells[cell]
+		return kept
 
 	## Expands a set of changes through the symmetry and the selection filter.
 	## [param existing_only] keeps only cells that the frame holds.
 	## [param matching_material] keeps only cells with that full material. The
 	## optional [param job] supplies the cancel checkpoints.
 	func expand(changes: Dictionary, frame: VoxelFrame, existing_only: bool, matching_material: Variant, job: EditJob = null) -> Dictionary:
-		if axes == 0 and selection.is_empty() and not existing_only and matching_material == null:
+		if axes == 0 and selection.is_empty() and slice_axis < 0 and not existing_only and matching_material == null:
 			return changes
 		var expanded := {}
 		var masks: Array[int] = []
@@ -150,7 +186,7 @@ class EditContext extends RefCounted:
 
 	# The reflected destination must hold the same full material as the source cell.
 	func _allows(cell: Vector3i, frame: VoxelFrame, existing_only: bool, matching_material: Variant) -> bool:
-		return (selection.is_empty() or selection.has(cell)) and (not existing_only or frame.has(cell)) and (matching_material == null or frame.matches(cell, matching_material))
+		return allows(cell) and (not existing_only or frame.has(cell)) and (matching_material == null or frame.matches(cell, matching_material))
 
 ## One cancellable edit job that runs on the worker pool.
 ##
@@ -998,6 +1034,13 @@ func set_cell(cell_position: Vector3i, cell_material: PackedFloat32Array) -> voi
 ## each neighbor that meshes across a changed face. A canceled [param edit_job]
 ## returns an empty array.
 func set_cells(cell_materials: Dictionary, edit_job: EditJob = null, uniform_material: Variant = null) -> Array[Vector3i]:
+	# The one write gate. A job that carries an edit scope may write only the
+	# cells that the scope allows, and the filtered set is the set the job
+	# reports as applied. A document write, a load, or a history restore passes
+	# no job, so it is never limited.
+	if edit_job != null and edit_job.edit_context != null:
+		cell_materials = edit_job.edit_context.filter(cell_materials)
+		edit_job.applied_cells = cell_materials
 	var started := Time.get_ticks_usec()
 	# A cancelled batch can still write some chunks, so the cache starts dirty.
 	_bounds_dirty = true

@@ -229,12 +229,13 @@ func _request(origin: Vector3, dir: Vector3, plane: StrokePlane) -> PickRequest:
 	req.frame = State.get_current_voxel_frame()
 	req.plane = plane
 	req.forward = _forward()
+	req.slice = State.slice_enabled
 	return req
 
 
 ## Returns the press pick for this request. Override it to change the pick.
 func pick_start(request: PickRequest) -> PickResult:
-	return VoxelPicking.start_pick(request.origin, request.dir, request.frame, request.forward)
+	return VoxelPicking.start_pick(request.origin, request.dir, request.frame, request.forward, request.slice)
 
 
 ## Returns the drag pick for this request. Override it to change the pick.

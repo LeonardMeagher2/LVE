@@ -102,6 +102,8 @@ class BatchToken extends RefCounted:
 	var axes := 0
 	var origin_twice := Vector3i.ZERO
 	var selection := {}
+	var slice_axis := -1
+	var slice_index := 0
 
 var _paint_settings: PaintToolSettings
 var _rng := RandomNumberGenerator.new()
@@ -144,6 +146,8 @@ var _batch_material := VoxelFrame.material(Color.WHITE)
 var _batch_axes := 0
 var _batch_origin := Vector3i.ZERO
 var _batch_selection := {}
+var _batch_slice_axis := -1
+var _batch_slice_index := 0
 # The frame the batch sampled from. A document or frame change makes the batch
 # stale, because its cells belong to the old frame.
 var _batch_frame: VoxelFrame
@@ -374,9 +378,9 @@ func _paints_existing() -> bool:
 
 
 ## Returns the drag pick. A spray drag picks the surface cell, so the pointer
-## stays on the surface.
+## stays on the surface. The slice keeps the pick on the floor layer.
 func pick_drag(request: PickRequest) -> PickResult:
-	return VoxelPicking.start_pick(request.origin, request.dir, request.frame, request.forward)
+	return VoxelPicking.start_pick(request.origin, request.dir, request.frame, request.forward, State.slice_enabled)
 
 
 func open_stroke() -> VoxelEditTransaction:
@@ -419,7 +423,7 @@ func handle_input(event: InputEvent, pos: Vector2) -> bool:
 			# request token, even when `_batch_center` already names the press cell.
 			var stale := _batch_center != pick.hit or _batch_frame != _source_frame
 			if not stale and _edit_context != null:
-				stale = _batch_axes != _edit_context.axes or _batch_origin != _edit_context.origin_twice or not _same_selection(_batch_selection, _edit_context.selection)
+				stale = not _batch_matches(_edit_context)
 			if stale:
 				_invalidate_batch()
 				_clear_cursor_preview()
@@ -580,12 +584,12 @@ func _invalidate_batch() -> void:
 func _ensure_batch(center: Vector3i, frame: VoxelFrame, context: VoxelFrame.EditContext, material: PackedFloat32Array) -> bool:
 	if frame == null or context == null:
 		return false
-	if center == _batch_center and frame == _batch_frame and material == _batch_material and context.axes == _batch_axes and context.origin_twice == _batch_origin and _same_selection(context.selection, _batch_selection) and _batch_holds(frame):
+	if center == _batch_center and frame == _batch_frame and material == _batch_material and _batch_matches(context) and _batch_holds(frame):
 		return false
 	# A changed frame, material, symmetry, or selection makes the displayed
 	# surface stale. Hide it, so a click can never paint a preview of another
 	# context while the new sample builds.
-	var context_changed := frame != _batch_frame or material != _batch_material or context.axes != _batch_axes or context.origin_twice != _batch_origin or not _same_selection(context.selection, _batch_selection)
+	var context_changed := frame != _batch_frame or material != _batch_material or not _batch_matches(context)
 	if context_changed:
 		_clear_cursor_preview()
 	_batch_center = center
@@ -594,6 +598,8 @@ func _ensure_batch(center: Vector3i, frame: VoxelFrame, context: VoxelFrame.Edit
 	_batch_axes = context.axes
 	_batch_origin = context.origin_twice
 	_batch_selection = context.selection
+	_batch_slice_axis = context.slice_axis
+	_batch_slice_index = context.slice_index
 	_batch_token = _make_batch_token(frame, center, context)
 	_batch_cells = _sample(center, frame, context)
 	_snapshot_batch_chunks(frame)
@@ -611,7 +617,7 @@ func _ensure_batch(center: Vector3i, frame: VoxelFrame, context: VoxelFrame.Edit
 func _ensure_batch_if_cheap(center: Vector3i, frame: VoxelFrame, context: VoxelFrame.EditContext, material: PackedFloat32Array) -> bool:
 	if frame == null or context == null:
 		return false
-	if center == _batch_center and frame == _batch_frame and material == _batch_material and context.axes == _batch_axes and context.origin_twice == _batch_origin and _same_selection(context.selection, _batch_selection) and _batch_holds(frame):
+	if center == _batch_center and frame == _batch_frame and material == _batch_material and _batch_matches(context) and _batch_holds(frame):
 		return false
 	var selection_index := _cached_selection_index(context.selection)
 	var estimate := SpraySampler.work_estimate(frame, center, _paint_settings.spray_size, _paint_settings.spot_diameter, context.selection, _paint_settings.speed, selection_index)
@@ -722,7 +728,7 @@ func _teardown_samples() -> void:
 func _ensure_hover_batch(center: Vector3i, frame: VoxelFrame, context: VoxelFrame.EditContext, material: PackedFloat32Array) -> void:
 	if frame == null or context == null:
 		return
-	if center == _batch_center and frame == _batch_frame and material == _batch_material and context.axes == _batch_axes and context.origin_twice == _batch_origin and _same_selection(context.selection, _batch_selection) and _batch_holds(frame):
+	if center == _batch_center and frame == _batch_frame and material == _batch_material and _batch_matches(context) and _batch_holds(frame):
 		return
 	var selection_index := _cached_selection_index(context.selection)
 	var estimate := SpraySampler.work_estimate(frame, center, _paint_settings.spray_size, _paint_settings.spot_diameter, context.selection, _paint_settings.speed, selection_index)
@@ -735,7 +741,7 @@ func _ensure_hover_batch(center: Vector3i, frame: VoxelFrame, context: VoxelFram
 		_hover_request = {}
 		_ensure_batch(center, frame, context, material)
 		return
-	var context_changed := frame != _batch_frame or material != _batch_material or context.axes != _batch_axes or context.origin_twice != _batch_origin or not _same_selection(context.selection, _batch_selection)
+	var context_changed := frame != _batch_frame or material != _batch_material or not _batch_matches(context)
 	if context_changed:
 		# A stale surface of another context must not stay visible or be painted.
 		_clear_cursor_preview()
@@ -837,6 +843,8 @@ func _make_batch_token(frame: VoxelFrame, center: Vector3i, context: VoxelFrame.
 	token.axes = context.axes
 	token.origin_twice = context.origin_twice
 	token.selection = context.selection
+	token.slice_axis = context.slice_axis
+	token.slice_index = context.slice_index
 	return token
 
 
@@ -850,6 +858,8 @@ func _adopt_batch(frame: VoxelFrame, center: Vector3i, context: VoxelFrame.EditC
 	_batch_axes = context.axes
 	_batch_origin = context.origin_twice
 	_batch_selection = context.selection
+	_batch_slice_axis = context.slice_axis
+	_batch_slice_index = context.slice_index
 	_batch_token = _make_batch_token(frame, center, context)
 	_batch_cells = cells
 	_batch_payload = payload
@@ -889,6 +899,13 @@ func _teardown_hover_sample() -> void:
 	_cancel_hover_sample()
 	if job:
 		job.wait_for_worker()
+
+
+# Returns true when the frozen context matches the one that the current batch
+# sampled with. The slice changes the sampled cells, so it is part of the batch
+# identity.
+func _batch_matches(context: VoxelFrame.EditContext) -> bool:
+	return context.axes == _batch_axes and context.origin_twice == _batch_origin and context.slice_axis == _batch_slice_axis and context.slice_index == _batch_slice_index and _same_selection(context.selection, _batch_selection)
 
 
 # Returns true when every cell of the batch still exists in the frame. The check
@@ -1001,7 +1018,7 @@ func _shown_owned_by_press(token: Variant) -> bool:
 		return false
 	if owner.center != pick.hit or owner.frame != _source_frame or _edit_context == null:
 		return false
-	return owner.axes == _edit_context.axes and owner.origin_twice == _edit_context.origin_twice and _same_selection(owner.selection, _edit_context.selection)
+	return owner.axes == _edit_context.axes and owner.origin_twice == _edit_context.origin_twice and owner.slice_axis == _edit_context.slice_axis and owner.slice_index == _edit_context.slice_index and _same_selection(owner.selection, _edit_context.selection)
 
 
 # Returns true when every displayed cell still exists and the display context
@@ -1062,6 +1079,8 @@ func _build_sample_job(frame: VoxelFrame, center: Vector3i, context: VoxelFrame.
 	job.axes = context.axes
 	job.origin_twice = context.origin_twice
 	job.selection = context.selection
+	job.slice_axis = context.slice_axis
+	job.slice_index = context.slice_index
 	job.material = material.duplicate()
 	job.spot_size = use_spot
 	job.search_size = use_search
