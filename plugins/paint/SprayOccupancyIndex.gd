@@ -15,6 +15,10 @@ extends RefCounted
 ## the wider integer reach box. A chunk that misses the sphere is filtered by the
 ## doubled integer test.
 ##
+## A [SurfaceIndex] derives the exposed cells of a chunk row from the same masks
+## and the six neighbor chunks. The spray therefore restricts its candidates to
+## voxels with an empty face neighbor without a per-cell scan.
+##
 ## The sphere span uses the same half-cell center and squared radius as
 ## [method VoxelBrushSize.contains_sphere]. The integer form avoids a float
 ## boundary drift, so an even size keeps the brush alignment. One [SphereSpans]
@@ -133,11 +137,13 @@ static func chunk_intersects(center: Vector3i, size: int, chunk: VoxelFrame.Chun
 ## Returns the chunk locations that one sample can read or write.
 ##
 ## The box covers the search sphere and the selected spot footprint, then every
-## active symmetry reflection of that whole box. The box is conservative: the
-## spot centers are inside the search sphere, so the sum of the first and last
-## offsets covers every footprint and every mirrored footprint. Missing chunks
-## are ignored by [method VoxelFrame.copy_chunks]. The cost follows the box, not
-## the whole frame.
+## active symmetry reflection of that whole box. It also names the six face
+## neighbors of every covered chunk, because an exposed cell reads the row masks
+## of its neighbor chunk. The box is conservative: the spot centers are inside
+## the search sphere, so the sum of the first and last offsets covers every
+## footprint and every mirrored footprint. Missing chunks are ignored by
+## [method VoxelFrame.copy_chunks]. The cost follows the box, not the whole
+## frame.
 static func capture_chunks(center: Vector3i, search_size: int, spot_size: int, axes: int, origin_twice: Vector3i) -> Array[Vector3i]:
 	var first := VoxelBrushSize.first_offset(search_size) + VoxelBrushSize.first_offset(spot_size)
 	var last := VoxelBrushSize.last_offset(search_size) + VoxelBrushSize.last_offset(spot_size)
@@ -160,7 +166,10 @@ static func capture_chunks(center: Vector3i, search_size: int, spot_size: int, a
 				for z in range(min_chunk.z, max_chunk.z + 1):
 					locations[Vector3i(x, y, z)] = true
 	var result: Array[Vector3i] = []
-	result.assign(locations.keys())
+	for location: Vector3i in locations:
+		result.append(location)
+		for direction in VoxelFrame.DIRECTIONS:
+			result.append(location + direction)
 	return result
 
 
@@ -225,6 +234,118 @@ class SelectionIndex extends RefCounted:
 		return result
 
 
+## The exposed occupied cells of one frozen frame, keyed by chunk.
+##
+## A cell is exposed when at least one of its six face neighbors is empty. The
+## row masks derive from the cached occupancy rows of the chunk and of its six
+## neighbor chunks, so one row costs a few bit operations and no per-cell scan.
+## The index is built per sample. Its entries are immutable after the build, so
+## the sampler never mutates a shared chunk cache.
+class SurfaceIndex extends RefCounted:
+	## The frame to read. The caller sets it before the first lookup.
+	var frame: VoxelFrame
+	## The chunk row builds that this index paid.
+	var index_builds := 0
+	## The dense grid slots that those builds read.
+	var index_grid_reads := 0
+	## The row masks that those builds wrote.
+	var index_build_slots := 0
+	## The exposed x bits of each local row, keyed by chunk location.
+	var _masks := {}
+
+	## Returns the exposed row masks of one chunk. A miss builds them once.
+	func masks_for(location: Vector3i) -> PackedInt32Array:
+		var cached: Variant = _masks.get(location)
+		if cached != null:
+			return cached
+		var built := _build(location)
+		_masks[location] = built
+		return built
+
+	## Returns true when the frame holds the cell and one of its six face
+	## neighbors is empty.
+	func exposed(cell: Vector3i) -> bool:
+		var location := VoxelFrame.chunk_position(cell)
+		var masks := masks_for(location)
+		var local := cell - location * VoxelFrame.CHUNK_SIZE
+		var row := local.y + VoxelFrame.CHUNK_SIZE * local.z
+		return masks[row] & (1 << local.x) != 0
+
+	# Builds the exposed row masks of one chunk. A missing chunk contributes
+	# zero bits, so its faces count as empty.
+	func _build(location: Vector3i) -> PackedInt32Array:
+		var masks := PackedInt32Array()
+		masks.resize(VoxelFrame.CHUNK_SIZE * VoxelFrame.CHUNK_SIZE)
+		var own := _row_masks(location)
+		if own.is_empty():
+			return masks
+		var east := _row_masks(location + Vector3i.RIGHT)
+		var west := _row_masks(location + Vector3i.LEFT)
+		var north := _row_masks(location + Vector3i.UP)
+		var south := _row_masks(location + Vector3i.DOWN)
+		var above := _row_masks(location + Vector3i.BACK)
+		var below := _row_masks(location + Vector3i.FORWARD)
+		for row in masks.size():
+			if own[row] == 0:
+				continue
+			masks[row] = surface_row(own, east, west, north, south, above, below, row)
+		return masks
+
+	# Returns the occupied row masks of one chunk, or an empty array when the
+	# frame does not hold it. A build that this call pays is added to the
+	# counters, so the sample report names the real cold work.
+	func _row_masks(location: Vector3i) -> PackedInt32Array:
+		var chunk: VoxelFrame.Chunk = frame.chunks.get(location)
+		if chunk == null or chunk.occupied_count == 0:
+			return PackedInt32Array()
+		var was_current := chunk.occupancy_index_current()
+		var rows := chunk.occupancy_rows()
+		if not was_current:
+			index_builds += 1
+			index_grid_reads += rows.grid_reads
+			index_build_slots += rows.build_slots
+		return rows.masks
+
+	## Returns the exposed x bits of one local row.
+	##
+	## A neighbor mask at a local edge comes from the adjacent chunk row. A
+	## missing array contributes no occupied bit there, so the edge cell counts
+	## as exposed in that direction.
+	static func surface_row(own: PackedInt32Array, east: PackedInt32Array, west: PackedInt32Array, north: PackedInt32Array, south: PackedInt32Array, above: PackedInt32Array, below: PackedInt32Array, row: int) -> int:
+		var occupied := own[row]
+		if occupied == 0:
+			return 0
+		var local_y := row & (VoxelFrame.CHUNK_SIZE - 1)
+		var local_z := row >> VoxelFrame.CHUNK_SHIFT
+		var neighbour_east := occupied >> 1
+		if not east.is_empty():
+			neighbour_east |= (east[row] & 1) << (VoxelFrame.CHUNK_SIZE - 1)
+		var neighbour_west := (occupied << 1) & 0xFFFF
+		if not west.is_empty():
+			neighbour_west |= (west[row] >> (VoxelFrame.CHUNK_SIZE - 1)) & 1
+		var neighbour_north := 0
+		if local_y < VoxelFrame.CHUNK_SIZE - 1:
+			neighbour_north = own[row + 1]
+		elif not north.is_empty():
+			neighbour_north = north[row - (VoxelFrame.CHUNK_SIZE - 1)]
+		var neighbour_south := 0
+		if local_y > 0:
+			neighbour_south = own[row - 1]
+		elif not south.is_empty():
+			neighbour_south = south[row + (VoxelFrame.CHUNK_SIZE - 1)]
+		var neighbour_above := 0
+		if local_z < VoxelFrame.CHUNK_SIZE - 1:
+			neighbour_above = own[row + VoxelFrame.CHUNK_SIZE]
+		elif not above.is_empty():
+			neighbour_above = above[row - VoxelFrame.CHUNK_SIZE * (VoxelFrame.CHUNK_SIZE - 1)]
+		var neighbour_below := 0
+		if local_z > 0:
+			neighbour_below = own[row - VoxelFrame.CHUNK_SIZE]
+		elif not below.is_empty():
+			neighbour_below = below[row + VoxelFrame.CHUNK_SIZE * (VoxelFrame.CHUNK_SIZE - 1)]
+		return occupied & (~neighbour_east | ~neighbour_west | ~neighbour_north | ~neighbour_south | ~neighbour_above | ~neighbour_below)
+
+
 ## The occupied candidates of one search sphere.
 ##
 ## The candidate order is the chunk walk order of the old gather: ascending
@@ -232,6 +353,8 @@ class SelectionIndex extends RefCounted:
 ## order through a chunk bucket and a native slot sort. A large selection uses
 ## the same row masks as the occupied cells. The set never builds the whole
 ## candidate array for the indexed path.
+##
+## An optional [member surface] restricts every candidate to an exposed voxel.
 class Candidates extends RefCounted:
 	## The candidate count.
 	var total := 0
@@ -259,6 +382,8 @@ class Candidates extends RefCounted:
 	var selection_work := 0
 	## The selection index used by this sample, or null.
 	var selection_index: RefCounted = null
+	## The exposed-cell index used by this sample, or null.
+	var surface: RefCounted = null
 	var _center := Vector3i.ZERO
 	var _size := 1
 	var _spans: RefCounted = null
@@ -288,7 +413,10 @@ class Candidates extends RefCounted:
 				var masks := {}
 				if selection_index != null:
 					masks = selection_index.masks_for(chunk.location)
-				var cell := SprayOccupancyIndex._nth_chunk(chunk, _center, _size, _spans, index - start, rows, masks)
+				var surface_masks := PackedInt32Array()
+				if surface != null:
+					surface_masks = surface.masks_for(chunk.location)
+				var cell := SprayOccupancyIndex._nth_chunk(chunk, _center, _size, _spans, index - start, rows, masks, surface_masks)
 				rank_rows += rows[0]
 				return cell
 		return Vector3i.ZERO
@@ -297,12 +425,14 @@ class Candidates extends RefCounted:
 ## Builds the occupied candidates of one search sphere. An optional [param job]
 ## supplies the cancel checkpoints. An optional [param selection_index] reuses
 ## the masks of a frozen selection. An optional [param spans] reuses the exact
-## row table of the search size.
-static func build_candidates(center: Vector3i, frame: VoxelFrame, size: int, selection: Dictionary, job: VoxelFrame.EditJob = null, selection_index: RefCounted = null, spans: RefCounted = null) -> Candidates:
+## row table of the search size. An optional [param surface] restricts the
+## candidates to exposed voxels.
+static func build_candidates(center: Vector3i, frame: VoxelFrame, size: int, selection: Dictionary, job: VoxelFrame.EditJob = null, selection_index: RefCounted = null, spans: RefCounted = null, surface: RefCounted = null) -> Candidates:
 	var result := Candidates.new()
 	result._center = center
 	result._size = size
 	result._spans = spans if spans != null else SphereSpans.build(size)
+	result.surface = surface
 	if selection.is_empty():
 		_build_indexed(center, frame, size, result, job)
 		return result
@@ -350,12 +480,17 @@ static func _build_indexed(center: Vector3i, frame: VoxelFrame, size: int, resul
 						continue
 				if chunk != null and chunk.occupied_count > 0 and chunk_intersects(center, size, chunk):
 					var was_current := chunk.occupancy_index_current()
-					if not was_current:
-						result.index_builds += 1
 					var rows := [0]
-					var count := _count_chunk(chunk, center, size, result._spans, rows, masks)
+					var surface_masks := PackedInt32Array()
+					if result.surface != null:
+						# The surface index counts every row build it pays,
+						# including a neighbor chunk of an earlier chunk.
+						surface_masks = result.surface.masks_for(location)
+					elif not was_current:
+						result.index_builds += 1
+					var count := _count_chunk(chunk, center, size, result._spans, rows, masks, surface_masks)
 					result.rows_scanned += rows[0]
-					if not was_current:
+					if result.surface == null and not was_current:
 						var built := chunk.occupancy_rows()
 						result.index_grid_reads += built.grid_reads
 						result.index_build_slots += built.build_slots
@@ -372,7 +507,8 @@ static func _build_indexed(center: Vector3i, frame: VoxelFrame, size: int, resul
 
 # Builds the ordered selected cells for a small selection. Each chunk bucket is
 # sorted by its native integer slot order, so the result keeps the chunk walk
-# order of the old gather without one global comparator sort.
+# order of the old gather without one global comparator sort. An optional
+# surface index drops a selected voxel that no empty face neighbor exposes.
 static func _build_bucket(center: Vector3i, frame: VoxelFrame, size: int, selection: Dictionary, job: VoxelFrame.EditJob, result: Candidates) -> void:
 	var buckets := {}
 	var completed := 0
@@ -385,6 +521,8 @@ static func _build_bucket(center: Vector3i, frame: VoxelFrame, size: int, select
 		if not frame.has(cell):
 			continue
 		if not VoxelBrushSize.contains_sphere(size, cell - center):
+			continue
+		if result.surface != null and not result.surface.exposed(cell):
 			continue
 		var location := VoxelFrame.chunk_position(cell)
 		var bucket: Variant = buckets.get(location)
@@ -475,8 +613,9 @@ static func work_estimate(frame: VoxelFrame, center: Vector3i, search_size: int,
 
 
 # Returns the occupied cells of one chunk inside the sphere. The caller adds the
-# row count to its work report.
-static func _count_chunk(chunk: VoxelFrame.Chunk, center: Vector3i, size: int, spans: RefCounted, rows: Array, selection_masks: Dictionary) -> int:
+# row count to its work report. A surface mask array intersects the occupied
+# mask, so the count holds exposed cells only.
+static func _count_chunk(chunk: VoxelFrame.Chunk, center: Vector3i, size: int, spans: RefCounted, rows: Array, selection_masks: Dictionary, surface_masks: PackedInt32Array) -> int:
 	var origin := chunk.origin()
 	var index := chunk.occupancy_rows()
 	if index == null:
@@ -498,17 +637,20 @@ static func _count_chunk(chunk: VoxelFrame.Chunk, center: Vector3i, size: int, s
 		if low > high:
 			continue
 		var mask := index.masks[row]
+		if not surface_masks.is_empty():
+			mask &= surface_masks[row]
 		if not selection_masks.is_empty():
 			mask &= selection_masks.get(row, 0)
-			if mask == 0:
-				continue
+		if mask == 0:
+			continue
 		total += count_in_span(mask, low, high)
 	return total
 
 
 # Returns the rank-th occupied cell of one chunk inside the sphere. The caller
-# adds the row count to its work report.
-static func _nth_chunk(chunk: VoxelFrame.Chunk, center: Vector3i, size: int, spans: RefCounted, rank: int, rows: Array, selection_masks: Dictionary) -> Vector3i:
+# adds the row count to its work report. A surface mask array intersects the
+# occupied mask, so the rank walks exposed cells only.
+static func _nth_chunk(chunk: VoxelFrame.Chunk, center: Vector3i, size: int, spans: RefCounted, rank: int, rows: Array, selection_masks: Dictionary, surface_masks: PackedInt32Array) -> Vector3i:
 	var origin := chunk.origin()
 	var index := chunk.occupancy_rows()
 	if index == null:
@@ -529,10 +671,12 @@ static func _nth_chunk(chunk: VoxelFrame.Chunk, center: Vector3i, size: int, spa
 		if low > high:
 			continue
 		var mask := index.masks[row]
+		if not surface_masks.is_empty():
+			mask &= surface_masks[row]
 		if not selection_masks.is_empty():
 			mask &= selection_masks.get(row, 0)
-			if mask == 0:
-				continue
+		if mask == 0:
+			continue
 		var count := count_in_span(mask, low, high)
 		if rank >= count:
 			rank -= count

@@ -330,23 +330,23 @@ func _worker_stale() -> void:
 		_settings.speed = 8
 		tool._invalidate_batch()
 		tool._hover_installed_epoch = 0
-		var job: VoxelFrame.EditJob = tool._build_sample_job(frame, Vector3i.ZERO, State.drawing_context(), VoxelFrame.material(Color.WHITE), 5000)
+		var job: VoxelFrame.EditJob = tool._build_sample_job(frame, Vector3i(0, SMALL_BLOCK, 0), State.drawing_context(), VoxelFrame.material(Color.WHITE), 5000)
 		job.request_epoch = 10
 		job.run()
 		tool._install_hover(job)
 		preview = tool.preview_cells()
 		expect(preview.size() > 0, "the finished sample installs its batch")
-		expect(tool._batch_center == Vector3i.ZERO, "the installed batch belongs to its cell")
+		expect(tool._batch_center == Vector3i(0, SMALL_BLOCK, 0), "the installed batch belongs to its cell")
 	)
 	step("When an older result arrives", func():
-		var older: VoxelFrame.EditJob = tool._build_sample_job(frame, Vector3i.ZERO, State.drawing_context(), VoxelFrame.material(Color.WHITE), 5000)
+		var older: VoxelFrame.EditJob = tool._build_sample_job(frame, Vector3i(0, SMALL_BLOCK, 0), State.drawing_context(), VoxelFrame.material(Color.WHITE), 5000)
 		older.request_epoch = 5
 		older.run()
 		tool._install_hover(older)
 		expect(tool.preview_cells() == preview, "an older result never replaces the installed batch")
 	)
 	step("When the edit context changed since the sample", func():
-		var stale: VoxelFrame.EditJob = tool._build_sample_job(frame, Vector3i.ZERO, State.drawing_context(), VoxelFrame.material(Color.WHITE), 5000)
+		var stale: VoxelFrame.EditJob = tool._build_sample_job(frame, Vector3i(0, SMALL_BLOCK, 0), State.drawing_context(), VoxelFrame.material(Color.WHITE), 5000)
 		stale.axes = 1
 		stale.request_epoch = 20
 		stale.run()
@@ -354,7 +354,7 @@ func _worker_stale() -> void:
 		expect(tool.preview_cells() == preview, "a result of another edit context is dropped")
 	)
 	step("When the frame lost a sampled cell", func():
-		var stale: VoxelFrame.EditJob = tool._build_sample_job(frame, Vector3i.ZERO, State.drawing_context(), VoxelFrame.material(Color.WHITE), 5000)
+		var stale: VoxelFrame.EditJob = tool._build_sample_job(frame, Vector3i(0, SMALL_BLOCK, 0), State.drawing_context(), VoxelFrame.material(Color.WHITE), 5000)
 		stale.request_epoch = 30
 		stale.run()
 		var victim: Vector3i = stale.cells[0]
@@ -363,7 +363,7 @@ func _worker_stale() -> void:
 		expect(tool.preview_cells().is_empty(), "a batch that holds a removed cell is dropped")
 	)
 	step("When the live frame was replaced", func():
-		var job: VoxelFrame.EditJob = tool._build_sample_job(frame, Vector3i.ZERO, State.drawing_context(), VoxelFrame.material(Color.WHITE), 5000)
+		var job: VoxelFrame.EditJob = tool._build_sample_job(frame, Vector3i(0, SMALL_BLOCK, 0), State.drawing_context(), VoxelFrame.material(Color.WHITE), 5000)
 		job.request_epoch = 40
 		job.run()
 		State.document = VoxelDocument.new()
@@ -382,7 +382,7 @@ func _worker_prepared_payload() -> void:
 		_use_large()
 		tool._invalidate_batch()
 		tool._hover_installed_epoch = 0
-		var job: VoxelFrame.EditJob = tool._build_sample_job(frame, Vector3i.ZERO, State.drawing_context(), VoxelFrame.material(Color.WHITE), 5000)
+		var job: VoxelFrame.EditJob = tool._build_sample_job(frame, Vector3i(0, BLOCK, 0), State.drawing_context(), VoxelFrame.material(Color.WHITE), 5000)
 		job.run()
 		_payload = job.preview_payload
 		expect(_payload != null, "the worker built a prepared payload")
@@ -395,7 +395,7 @@ func _worker_prepared_payload() -> void:
 		# Clear the mesh cache, so the install really builds and the install records
 		# the payload dictionary itself.
 		VoxelPreview._mesh_cache.clear()
-		var job: VoxelFrame.EditJob = tool._build_sample_job(frame, Vector3i.ZERO, State.drawing_context(), VoxelFrame.material(Color.WHITE), 5000)
+		var job: VoxelFrame.EditJob = tool._build_sample_job(frame, Vector3i(0, BLOCK, 0), State.drawing_context(), VoxelFrame.material(Color.WHITE), 5000)
 		job.request_epoch = 1
 		job.run()
 		_payload = job.preview_payload

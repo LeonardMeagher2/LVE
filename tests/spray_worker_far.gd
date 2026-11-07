@@ -163,22 +163,14 @@ func _worker_dense_far() -> void:
 		_settings.speed = 1
 		expect(frame.count() == 4913, "the far block holds every cell")
 	)
-	step("When the live tool samples one spot at the far cell", func():
+	step("When the live tool samples one spot at the far face cell", func():
 		var rng := RandomNumberGenerator.new()
 		rng.seed = SEED
-		_batch = tool._sample(_far_center, frame, State.drawing_context(), rng, VoxelFrame.material(Color.WHITE))
-		var pool := {}
-		for cell in frame.positions():
-			pool[cell] = true
-		var expected := {}
-		for sphere in VoxelBrushSize.sphere_offsets(64):
-			var cell := _far_center + sphere
-			if pool.has(cell):
-				expected[cell] = true
-		var want: Array[Vector3i] = []
-		want.assign(expected.keys())
-		expect(_batch.size() == want.size() and _same_cell_set(_batch, want), "the live far sample holds the exact spot union (%d of %d cells)" % [_batch.size(), want.size()])
-		expect(_batch.size() == 4913, "the live far sample paints the whole far block")
+		var sample_center := _far_center + Vector3i(0, BLOCK, 0)
+		_batch = tool._sample(sample_center, frame, State.drawing_context(), rng, VoxelFrame.material(Color.WHITE))
+		var shell := _shell_cells()
+		expect(_batch.size() == shell.size() and _same_cell_set(_batch, shell), "the live far sample holds the exposed shell (%d of %d cells)" % [_batch.size(), shell.size()])
+		expect(_batch.size() > 0 and _batch.size() < 4913, "the live far sample paints only the exposed shell")
 	)
 	# The application path: a real press through the viewport, with the camera
 	# centered on the far model. Before the coordinate fix this painted nothing,
@@ -214,10 +206,22 @@ func _worker_dense_far() -> void:
 			painted.append(cell)
 			if absi(cell.x - _far_center.x) > 9 or absi(cell.y - _far_center.y) > 9 or absi(cell.z - _far_center.z) > 9:
 				stray += 1
-		expect(painted.size() == 4913, "the far press paints the whole far block (%d cells)" % painted.size())
+		var shell := _shell_cells()
+		expect(painted.size() == shell.size(), "the far press paints the exposed shell (%d of %d cells)" % [painted.size(), shell.size()])
 		expect(stray == 0, "every painted cell sits in the far block and none near the origin")
-		expect(_same_cell_set(painted, frame.positions()), "the paint covers exactly the far block")
+		expect(_same_cell_set(painted, shell), "the paint covers exactly the exposed shell")
 		expect(VoxelFrame.chunk_position(_far_center) == Vector3i(625, -625, 625), "the far block sits in its own chunk coordinate")
 		_release(_screen_pos_of(_far_center))
 		expect(State.undo_redo.get_history_count() >= 1, "the far click records its action")
 	)
+
+
+# The exposed cells of the far block: every voxel with an empty face neighbor.
+func _shell_cells() -> Array[Vector3i]:
+	var cells: Array[Vector3i] = []
+	for cell in frame.positions():
+		for direction in VoxelFrame.DIRECTIONS:
+			if not frame.has(cell + direction):
+				cells.append(cell)
+				break
+	return cells

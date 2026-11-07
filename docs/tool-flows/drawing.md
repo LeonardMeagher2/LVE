@@ -286,9 +286,10 @@ flowchart TB
 ## Spray
 
 Spray samples random spots around the brush cell.
-It counts and ranks distinct occupied cells inside the search size.
+It counts and ranks distinct exposed cells inside the search size.
+A voxel is exposed when at least one of its six face neighbors is empty.
 It does not gather the full reach volume or build a candidate array.
-Each spot paints every existing voxel inside the spot sphere.
+Each spot paints every exposed voxel inside the spot sphere.
 A small batch samples inline.
 The inline gate uses indexed row work at or below 2200, not the old 2048 occupied count.
 A large batch samples on the worker pool from a local ROI snapshot.
@@ -302,7 +303,7 @@ flowchart TB
     IN["Input: hover, press, drag"]
     HOV["Latest hover request"]
     IDX["Indexed row count + rank"]
-    ROI["copy_chunks ROI<br/>search + spot + mirrors"]
+    ROI["copy_chunks ROI<br/>search + spot + mirrors<br/>+ neighbor chunks"]
     WORK["work_estimate 2200"]
     PREV["Cursor preview + BatchToken"]
     PRESS["Press: open_stroke"]
@@ -372,8 +373,8 @@ flowchart TB
 - Input: [`SprayTool.handle_input`](../../plugins/paint/SprayTool.gd) handles the press, drag, and lost release.
 - Hover: [`SprayTool._ensure_hover_batch`](../../plugins/paint/SprayTool.gd) samples inline or stores `_hover_request`.
 - Work gate: [`SprayTool.INLINE_SAMPLE_LIMIT`](../../plugins/paint/SprayTool.gd) is 2200. [`SpraySampler.work_estimate`](../../plugins/paint/SpraySampler.gd) supplies the row estimate.
-- Index: [`SprayOccupancyIndex.build_candidates`](../../plugins/paint/SprayOccupancyIndex.gd) counts and ranks occupied rows. [`SpraySampler.sample`](../../plugins/paint/SpraySampler.gd) keeps the lazy Fisher-Yates and RNG draws.
-- ROI: [`SpraySampler.capture_chunks`](../../plugins/paint/SpraySampler.gd) builds the local chunk box. [`VoxelFrame.copy_chunks`](../../Globals/State/Document/VoxelFrame.gd) returns the frozen subset.
+- Index: [`SprayOccupancyIndex.build_candidates`](../../plugins/paint/SprayOccupancyIndex.gd) counts and ranks exposed rows. [`SpraySampler.sample`](../../plugins/paint/SpraySampler.gd) keeps the lazy Fisher-Yates and RNG draws.
+- ROI: [`SpraySampler.capture_chunks`](../../plugins/paint/SpraySampler.gd) builds the local chunk box and the six neighbor chunks. [`VoxelFrame.copy_chunks`](../../Globals/State/Document/VoxelFrame.gd) returns the frozen subset.
 - Hover worker: [`SprayTool._start_hover_sample`](../../plugins/paint/SprayTool.gd) adds `SpraySamplingJob.run` to the worker pool.
 - Hover install: [`SprayTool._pump_hover_sample`](../../plugins/paint/SprayTool.gd) joins the job and calls `_install_hover`.
 - Press: [`SprayTool._apply_offered`](../../plugins/paint/SprayTool.gd) reads `$Cursor.installed_cells` and `$Cursor.installed_token`. A valid owned surface calls `_queue_centers`. No valid surface samples the cell. A large estimate calls `_accept_intent`.

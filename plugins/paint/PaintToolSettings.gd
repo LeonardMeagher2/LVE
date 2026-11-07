@@ -50,7 +50,7 @@ const CopyJob := preload("res://plugins/brush/StampCopyJob.gd")
 		connected = value
 		emit_changed()
 
-## The diameter in cells of one spray spot. The spot paints every existing voxel
+## The diameter in cells of one spray spot. The spot paints every exposed voxel
 ## inside the shared brush sphere of this diameter. Diameter 1 paints the spot
 ## center alone. It clamps to the range 1 through 64, so the spot matches the
 ## brush sphere at every size.
@@ -63,7 +63,8 @@ const CopyJob := preload("res://plugins/brush/StampCopyJob.gd")
 		emit_changed()
 
 ## The width in cells of the spray search area. The spray samples its spot
-## centers from the existing voxels inside the shared brush sphere of this size.
+## centers from the exposed voxels inside the shared brush sphere of this size.
+## A voxel is exposed when at least one of its six face neighbors is empty.
 ## Size 1 offers the brush cell alone. It clamps to the range 1 through 64.
 ##
 ## The old spray search radius of 4 spanned 9 cells, so the default size is 9.

@@ -21,12 +21,18 @@ const StampSettings := preload("res://plugins/brush/StampToolSettings.gd")
 var _spot_offsets_cache := {}
 var _spot_radius_cache := {}
 var _sphere_offsets_cache := {}
+# The frame of the current sample. The frozen candidate and footprint filters
+# read the six face neighbors from it, so they keep an independent view of the
+# exposed surface.
+var _frame: VoxelFrame
 
 
 # The old sample: gather the reach, filter the candidates, pick the distinct
 # centers with an index array, build the footprints, then expand through the
-# context with the existing-only filter.
+# context with the existing-only filter. The candidate and footprint filters
+# keep only exposed voxels, which is the production surface rule.
 func sample(center: Vector3i, frame: VoxelFrame, context: VoxelFrame.EditContext, spot_diameter: int, spray_radius: int, speed: int, rng: RandomNumberGenerator, material: PackedFloat32Array) -> Array[Vector3i]:
+	_frame = frame
 	var reach := spray_radius + _spot_radius(spot_diameter)
 	var local := _local_cells(center, reach, frame, context)
 	var candidates := _candidates(center, local, spray_radius)
@@ -45,7 +51,12 @@ func sample(center: Vector3i, frame: VoxelFrame, context: VoxelFrame.EditContext
 		spots.append(candidates[indices[i]])
 	var changes := _footprints(spots, local, spot_diameter, material)
 	var cells: Array[Vector3i] = []
-	cells.assign(context.expand(changes, frame, true, null).keys())
+	# The frozen expansion filters existing destinations only. The surface rule
+	# also drops a mirrored destination with no empty face neighbor, so the
+	# filter runs on the expanded result.
+	for cell: Vector3i in context.expand(changes, frame, true, null).keys():
+		if _exposed(cell):
+			cells.append(cell)
 	return cells
 
 
@@ -53,7 +64,7 @@ func _candidates(center: Vector3i, local: Array[Vector3i], spray_radius: int) ->
 	var limit := spray_radius * spray_radius
 	var cells: Array[Vector3i] = []
 	for cell in local:
-		if Vector3(cell - center).length_squared() <= limit:
+		if Vector3(cell - center).length_squared() <= limit and _exposed(cell):
 			cells.append(cell)
 	return cells
 
@@ -67,7 +78,7 @@ func _footprints(spots: Array[Vector3i], local: Array[Vector3i], spot_diameter: 
 			pattern[offset] = true
 		for spot in spots:
 			for cell in local:
-				if pattern.has(cell - spot):
+				if pattern.has(cell - spot) and _exposed(cell):
 					changes[cell] = material
 		return changes
 	var occupied := {}
@@ -76,9 +87,20 @@ func _footprints(spots: Array[Vector3i], local: Array[Vector3i], spot_diameter: 
 	for spot in spots:
 		for offset in offsets:
 			var cell := spot + offset
-			if occupied.has(cell):
+			if occupied.has(cell) and _exposed(cell):
 				changes[cell] = material
 	return changes
+
+
+# Returns true when the frame holds the cell and one of its six face neighbors
+# is empty. This is the independent oracle of the production surface mask.
+func _exposed(cell: Vector3i) -> bool:
+	if not _frame.has(cell):
+		return false
+	for direction in VoxelFrame.DIRECTIONS:
+		if not _frame.has(cell + direction):
+			return true
+	return false
 
 
 func _local_cells(center: Vector3i, reach: int, frame: VoxelFrame, context: VoxelFrame.EditContext) -> Array[Vector3i]:

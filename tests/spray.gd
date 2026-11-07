@@ -10,6 +10,7 @@ const SEED := 20261020
 
 const VoxelBrushSize := preload("res://Globals/State/Tools/VoxelBrushSize.gd")
 const VoxelPreview := preload("res://Globals/Rendering/VoxelPreview.gd")
+const SprayIndex := preload("res://plugins/paint/SprayOccupancyIndex.gd")
 
 var _settings := preload("res://plugins/paint/settings.tres")
 
@@ -45,6 +46,8 @@ func _ready() -> void:
 	test("the speed samples distinct occupied spot centers", _distinct_centers, "spray_centers")
 	test("the count caps at the available candidates", _candidate_shortage, "spray_shortage")
 	test("the spot diameter paints the exact brush sphere", _spot_footprint, "spray_spot")
+	test("a buried voxel offers no candidate and no spot", _buried_offers_nothing, "spray_buried")
+	test("the surface masks match a neighbor scan across chunk edges", _surface_mask_parity, "spray_surface_mask")
 	test("the spot diameter clamps to its range", _diameter_clamp, "spray_diameter_clamp")
 	test("the spray search size limits the sampled centers", _search_size, "spray_search_size")
 	test("the selection limits the sampled centers", _selection_limit, "spray_selection")
@@ -166,6 +169,28 @@ func _occupied_pattern(center: Vector3i, diameter: int) -> Array[Vector3i]:
 		if frame.has(cell):
 			cells.append(cell)
 	return cells
+
+
+# The brush sphere cells that the frame holds and that expose an empty face. A
+# buried cell stays out, because the spray never paints it.
+func _exposed_pattern(center: Vector3i, diameter: int) -> Array[Vector3i]:
+	var cells: Array[Vector3i] = []
+	for offset in _pattern_offsets(diameter):
+		var cell := center + offset
+		if _exposed(cell):
+			cells.append(cell)
+	return cells
+
+
+# Returns true when the frame holds the cell and one of its six face neighbors
+# is empty. It is the naive oracle of the production surface mask.
+func _exposed(cell: Vector3i) -> bool:
+	if not frame.has(cell):
+		return false
+	for direction in VoxelFrame.DIRECTIONS:
+		if not frame.has(cell + direction):
+			return true
+	return false
 
 
 func _same_cell_set(first: Array[Vector3i], second: Array[Vector3i]) -> bool:
@@ -477,7 +502,9 @@ func _candidate_shortage() -> void:
 
 # The spot footprint must be the shared brush sphere of the spot diameter, so an
 # even diameter keeps the brush's even alignment instead of a rounded radius.
+# The spot keeps only exposed voxels, so the solid block contributes its shell.
 func _spot_footprint() -> void:
+	var pick_cell := Vector3i(0, BLOCK, 0)
 	for diameter in [1, 2, 3, 4, 5]:
 		step("Given a solid block and a spray spot diameter of %d" % diameter, func():
 			_block()
@@ -485,12 +512,62 @@ func _spot_footprint() -> void:
 			_settings.speed = 1
 			_settings.spray_size = 1
 			_settings.spot_diameter = diameter
-			_hover_cell(Vector3i.ZERO)
+			_hover_cell(pick_cell)
 			preview = tool.preview_cells()
 		)
-		step("Then the spot is the exact brush sphere of that diameter", func():
-			expect(_same_cell_set(preview, _pattern_cells(Vector3i.ZERO, diameter)), "the diameter %d spot matches the brush sphere" % diameter)
+		step("Then the spot is the exact exposed brush sphere of that diameter", func():
+			expect(_same_cell_set(preview, _exposed_pattern(pick_cell, diameter)), "the diameter %d spot matches the exposed brush sphere" % diameter)
 		)
+
+
+# A buried voxel has no empty face neighbor, so it never becomes a spot center
+# and a spot centered on it paints nothing.
+func _buried_offers_nothing() -> void:
+	step("Given a solid block and a spray centered on a buried voxel", func():
+		_block()
+		tool.seed_spray(SEED)
+		_settings.speed = 8
+		_settings.spray_size = 3
+		_settings.spot_diameter = 1
+		_hover_cell(Vector3i.ZERO)
+	)
+	step("Then the buried center offers no candidate", func():
+		expect(tool.preview_cells().is_empty(), "a buried center offers no candidate")
+		expect(not tool.get_node("Cursor").visible, "the cursor hides with the empty batch")
+	)
+
+
+# The production surface mask must match a naive six-neighbor scan. The fixture
+# crosses chunk edges and negative coordinates, and one hole exposes inner
+# faces, so every boundary direction is covered.
+func _surface_mask_parity() -> void:
+	var failures := 0
+	var compared := 0
+	step("Given a ball of voxels across chunk edges with a hole", func():
+		State.document = VoxelDocument.new()
+		frame = State.get_current_voxel_frame()
+		var limit := 17 * 17
+		for x in range(-17, 18):
+			for y in range(-17, 18):
+				for z in range(-17, 18):
+					if x * x + y * y + z * z > limit:
+						continue
+					frame.set_cell(Vector3i(x, y, z), VoxelFrame.material(Color.BLUE))
+		frame.set_cell(Vector3i.ZERO, VoxelFrame.material(Color.TRANSPARENT))
+	)
+	step("Then every cell matches the neighbor scan", func():
+		var surface := SprayIndex.SurfaceIndex.new()
+		surface.frame = frame
+		for x in range(-18, 19):
+			for y in range(-18, 19):
+				for z in range(-18, 19):
+					var cell := Vector3i(x, y, z)
+					compared += 1
+					if surface.exposed(cell) != _exposed(cell):
+						failures += 1
+		expect(compared > 0, "the scan compared cells")
+		expect(failures == 0, "the surface mask matches the six-neighbor scan")
+	)
 
 
 # The spot diameter clamps to the same range as the brush diameter.

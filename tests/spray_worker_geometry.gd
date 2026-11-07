@@ -177,8 +177,8 @@ func _worker_mirror() -> void:
 		_settings.speed = 16
 		tool._batch_material = VoxelFrame.material(Color.WHITE)
 	)
-	step("When the sampler samples the centered cell", func():
-		cells = tool._sample(Vector3i.ZERO, frame, State.drawing_context())
+	step("When the sampler samples the centered surface cell", func():
+		cells = tool._sample(Vector3i(0, SMALL_BLOCK, 0), frame, State.drawing_context())
 	)
 	step("Then every sampled cell keeps its whole-cell mirror", func():
 		expect(cells.size() > 0, "the symmetry sample holds cells")
@@ -190,15 +190,27 @@ func _worker_mirror() -> void:
 	)
 	step("When the symmetry origin sits on a half cell", func():
 		State.symmetry_origin = Vector3(0.5, 0.5, 0.5)
-		cells = tool._sample(Vector3i.ZERO, frame, State.drawing_context())
+		cells = tool._sample(Vector3i(0, SMALL_BLOCK, 0), frame, State.drawing_context())
 	)
-	step("Then every cell whose half-cell mirror exists is mirrored too", func():
+	step("Then every exposed half-cell mirror inside the frame is mirrored too", func():
 		expect(cells.size() > 0, "the half-cell symmetry sample holds cells")
 		var lookup := {}
 		for cell in cells:
 			lookup[cell] = true
 		for cell in cells:
 			var mirror := Vector3i(1 - cell.x, cell.y, cell.z)
-			if frame.has(mirror):
-				expect(lookup.has(mirror), "every mirrored destination inside the frame joins the batch")
+			if _exposed(mirror):
+				expect(lookup.has(mirror), "every exposed mirrored destination inside the frame joins the batch")
 	)
+
+
+# Returns true when the frame holds the cell and one of its six face neighbors
+# is empty. A half-cell mirror can land on a buried voxel, and the surface rule
+# keeps that voxel out.
+func _exposed(cell: Vector3i) -> bool:
+	if not frame.has(cell):
+		return false
+	for direction in VoxelFrame.DIRECTIONS:
+		if not frame.has(cell + direction):
+			return true
+	return false

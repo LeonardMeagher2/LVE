@@ -350,7 +350,7 @@ Read `Open` as a question that this research cannot settle.
 | Line | Preview the path. Release confirms. Escape cancels. Shift constrains the angle. | S5 Straight Line Tool, S1 Line brush mode | Anchor, preview, release or second click or Enter commits. Escape, context, or switch drops. No documented angle modifier. | Gap for angle constraint. Intentional for switch drop. | Medium |
 | Paint Brush | Recolor existing cells. Require a hit. | S1 Paint brush, S4 Drawing | Requires a hit. Recolors existing cells. One `Stroke` action. | Parity. | High |
 | Fill | Contiguous flood or global match. Selection as boundary. Tolerance for similar colors. | S5 Fill Tool | Six-face flood or all matching. Selection blocks traversal and matching. Exact material match. No tolerance. No region preview. | Gap for tolerance. Intentional for no region preview. | High for barrier, Medium for tolerance |
-| Spray | Count, spot size, and search area are separate. Airbrush can keep painting while held. | S5 Spray Brush Engine, S7 Airbrush, S1 Surface mode | Speed is spots per press or cell. Spot diameter is the painted sphere. Search width is the sampled area. Samples occupied volume. | Open for time-based flow. Intentional for volume sampling. | High for distinctions, Medium for expectation |
+| Spray | Count, spot size, and search area are separate. Airbrush can keep painting while held. | S5 Spray Brush Engine, S7 Airbrush, S1 Surface mode | Speed is spots per press or cell. Spot diameter is the painted sphere. Search width is the sampled area. Samples exposed voxels only. | Open for time-based flow. Intentional for surface sampling. | High for distinctions, Medium for expectation |
 | Box and Lasso modes | Replace, add, subtract, intersect. | S4 Selecting, S5 Selections, S6 Selecting, S1 Selection Brushes | Replace, add, subtract. No intersect. ScreenSelection subtract also adds covered selected cells. Wand subtract does not. | Gap for intersect. Intentional for subtract detail. | High |
 | Wand | Connected flood or global match. Material match. Combine modes. | S5 Selections, S1 Region Select | Six-face flood or full scan. Exact material. Current selection is not a barrier. Ignores depth and empty options. | Gap for tolerance. Intentional for exact material. | Medium |
 | Visibility and depth | Select visible only or select through. Use an explicit toggle. | S6 X-Ray, S1 Rect Select, S4 Selecting | Box and Lasso have `depth_test` true by default. `include_empty` is optional. Wand ignores both. | Gap for Wand parity. Intentional for per-tool option. | Medium |
@@ -424,7 +424,7 @@ Do not change them from this research.
 | --- | --- | --- |
 | Deterministic Terrain press and crossed cells | A press and crossed cells decide the edit. The tool does not use stationary time flow. | GIMP airbrush flow is a different interaction model [S7]. It is not evidence for Terrain. |
 | Build fixed plane mound | Build builds on a fixed plane. | No source in this file compares a fixed-plane mound with a surface-normal mound. |
-| Spray volume sampling | Spray samples occupied voxels in a volume. It is not surface-only. | MagicaVoxel has a surface mode [S1]. LVE has not chosen that policy. |
+| Spray surface sampling | Spray samples exposed voxels only. It keeps a spot center and a painted cell only when one face neighbor is empty. | MagicaVoxel has a surface mode [S1]. LVE uses an exposed-face rule, not a view-dependent surface mode. |
 | Accepted edits never drop | Accepted Spray intents and stroke centers are not discarded. | No source in this file requires accepted work to be dropped when a preview changes. |
 | Circle Build cursor is neutral and non-predictive | The cursor does not predict the next mound. | A predictive preview is a design choice. The latest request is in progress under another owner. |
 | Transform release leaves the edit pending | Release is not a commit. | Blender confirms with the left mouse button [S6]. LVE uses a different commit boundary. |
@@ -443,7 +443,7 @@ It does not prove a requirement.
 | Fill tolerance | Krita has threshold, spread, and close gap [S5]. | Exact material match. | Add a tolerance for material similarity, or keep exact matching. |
 | Eyedropper color-only | Aseprite and Krita pick color with sampling options [S4][S5]. | Pick the full material. | Add a modifier or option, or keep material-only picking. |
 | Line angle constraint | Krita uses Shift for 15 degree steps [S5]. | No documented angle modifier. | Add a constraint, or keep free angles. |
-| Surface-only Spray | MagicaVoxel has a surface mode [S1]. | Volume sampling. | Add a surface option, or keep volume sampling. |
+| Surface-only Spray | MagicaVoxel has a surface mode [S1]. | Exposed-face sampling is unconditional. | Add a volume option, or keep surface-only. |
 | Plane and Symmetry undo | LVE uses state-only utilities with no undo. | No undo action. | Add undo, or keep state-only behavior. |
 
 ## Ranked UX recommendations

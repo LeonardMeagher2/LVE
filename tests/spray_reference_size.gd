@@ -40,10 +40,11 @@ func sample_size(center: Vector3i, frame: VoxelFrame, context: VoxelFrame.EditCo
 
 # The frozen `sample` passes its radius slot to this filter. This adapter reads
 # the canonical size instead, so the candidate pool is the shared brush sphere.
+# It keeps the inherited exposed-voxel filter, which matches production.
 func _candidates(center: Vector3i, local: Array[Vector3i], _reach: int) -> Array[Vector3i]:
 	var cells: Array[Vector3i] = []
 	for cell in local:
-		if VoxelBrushSize.contains_sphere(search_size, cell - center):
+		if VoxelBrushSize.contains_sphere(search_size, cell - center) and _exposed(cell):
 			cells.append(cell)
 	return cells
 

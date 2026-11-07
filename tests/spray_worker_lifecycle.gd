@@ -424,13 +424,13 @@ func _lifecycle_rng_parity() -> void:
 		tool.seed_spray(SEED)
 		_context = State.drawing_context()
 		_material = VoxelFrame.material(Color.WHITE)
-		var inline_cells: Array[Vector3i] = tool._sample(Vector3i.ZERO, frame, _context, null, _material)
+		var inline_cells: Array[Vector3i] = tool._sample(Vector3i(0, 3, 0), frame, _context, null, _material)
 		_inline = inline_cells
 		_inline_state = tool._rng.state
 	)
 	step("When the worker samples from the same captured state", func():
 		tool.seed_spray(SEED)
-		var job: VoxelFrame.EditJob = tool._build_sample_job(frame, Vector3i.ZERO, _context, _material, 5000)
+		var job: VoxelFrame.EditJob = tool._build_sample_job(frame, Vector3i(0, 3, 0), _context, _material, 5000)
 		job.run()
 		expect(job.cells == _inline, "the worker draws the exact inline cells")
 		expect(job.result_state == _inline_state, "the worker ends on the exact inline state")

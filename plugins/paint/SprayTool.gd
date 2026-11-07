@@ -3,8 +3,9 @@ extends "res://plugins/brush/StrokeTool.gd"
 ## The spray can tool.
 ##
 ## The tool paints random spots around the brush cell. It samples distinct
-## occupied spot centers from the existing voxels inside the spray search size.
-## Each spot center paints every existing voxel inside a sphere of the spot
+## exposed spot centers from the existing voxels inside the spray search size. A
+## voxel is exposed when at least one of its six face neighbors is empty. Each
+## spot center paints every exposed existing voxel inside a sphere of the spot
 ## diameter. Diameter 1 paints the spot center alone. The spot sphere is the
 ## shared brush sphere of that diameter, and the search size is the shared brush
 ## sphere of that width, so an even size keeps the brush alignment.
@@ -1112,15 +1113,17 @@ func _sample(center: Vector3i, frame: VoxelFrame, context: VoxelFrame.EditContex
 	return cells
 
 
-# The occupied cells that the selection allows inside the spray search size. The
-# spray samples from this pool, so a sample never lands on an empty cell.
+# The occupied cells that the search sphere of that size allows in the local set.
+# It is the pure sphere mask helper. The live sampler adds the surface and
+# selection filters itself.
 func _candidates(center: Vector3i, local: Array[Vector3i], search_size := -1) -> Array[Vector3i]:
 	var size: int = _paint_settings.spray_size if search_size < 0 else search_size
 	return SpraySampler.candidate_cells(center, local, size)
 
 
-# The voxels that the spot centers paint. An optional job supplies the cancel
-# checkpoints of the dense row union.
+# The voxels that the spot centers paint, read from the local set. It is the
+# unfiltered legacy union helper that the union tests call. The live sampler uses
+# `SpraySampler.footprints_selected`, which keeps exposed voxels only.
 func _footprints(spots: Array[Vector3i], local: Array[Vector3i], spot_size := -1, material = null, job: VoxelFrame.EditJob = null) -> Dictionary:
 	var use_spot: int = _paint_settings.spot_diameter if spot_size < 0 else spot_size
 	var use_material: PackedFloat32Array = _batch_material if material == null else material

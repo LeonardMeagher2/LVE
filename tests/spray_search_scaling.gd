@@ -349,7 +349,8 @@ func _work_counts() -> void:
 	)
 	step("Then the work follows the chunk rows, not the candidate volume", func():
 		expect(int(report.get("local", -1)) == 0, "the legacy local array stays empty")
-		expect(int(report.get("candidates", 0)) > 100000, "the search sphere holds more than one hundred thousand candidates")
+		expect(int(report.get("candidates", 0)) > 500, "the exposed search shell holds many candidates")
+		expect(int(report.get("candidates", 0)) < 100000, "the buried block core is not a candidate")
 		expect(int(report.get("chunks", 0)) <= 64, "the exact size 64 box walks four chunks per axis")
 		expect(int(report.get("rows", 0)) <= 64 * 256, "the count reads at most one row per chunk row")
 		expect(int(report.get("rank_rows", 0)) <= 8 * 2 * 256, "the rank selection reads a bounded number of rows")
@@ -430,8 +431,8 @@ func _edge_cases() -> void:
 		var context := VoxelFrame.EditContext.new()
 		context.axes = 1
 		context.origin_twice = Vector3i.ZERO
-		var live := _live_sample(Vector3i.ZERO, context, 4, 4, 6, SEED)
-		var reference := _reference_sample(Vector3i.ZERO, context, 4, 4, 6, SEED)
+		var live := _live_sample(Vector3i(0, 8, 0), context, 4, 4, 6, SEED)
+		var reference := _reference_sample(Vector3i(0, 8, 0), context, 4, 4, 6, SEED)
 		expect(_same_set(live, reference), "the even mirrored batch matches the reference")
 		expect(_live_state == _reference_state, "the even mirrored batch consumes the same draws")
 	)
@@ -446,7 +447,7 @@ func _edge_cases() -> void:
 		_new_frame()
 		_fill_box(Vector3i.ONE * -20, Vector3i.ONE * -7, VoxelFrame.material(Color.BLUE))
 		frame.restore(frame.chunks)
-		var center := Vector3i(-13, -13, -13)
+		var center := Vector3i(-13, -7, -13)
 		var live := _live_sample(center, _identity(), 1, 9, 8, SEED)
 		var reference := _reference_sample(center, _identity(), 1, 9, 8, SEED)
 		expect(_same_set(live, reference), "the negative-chunk batch matches the reference")
@@ -515,8 +516,8 @@ func _selection_index() -> void:
 		var report := {}
 		var rng := RandomNumberGenerator.new()
 		rng.seed = SEED
-		var cells := SpraySampler.sample(Vector3i.ZERO, frame, _selection_context(_large_selection), 1, 1, 8, rng, VoxelFrame.material(Color.WHITE), tool._shape_cache, null, report, index)
-		expect(cells.size() == 1, "width one offers the center alone")
+		var cells := SpraySampler.sample(Vector3i(0, 8, 0), frame, _selection_context(_large_selection), 1, 1, 8, rng, VoxelFrame.material(Color.WHITE), tool._shape_cache, null, report, index)
+		expect(cells.size() == 1, "width one offers the face cell alone")
 		expect(int(report.get("selection_checked", -1)) == 0, "the indexed selection does not walk the selection")
 		expect(int(report.get("selection_builds", -1)) == 0, "the caller-provided masks are reused")
 	)
@@ -525,16 +526,16 @@ func _selection_index() -> void:
 		var report := {}
 		var rng := RandomNumberGenerator.new()
 		rng.seed = SEED
-		var live := SpraySampler.sample(Vector3i.ZERO, frame, _selection_context(_large_selection), 1, 9, 8, rng, VoxelFrame.material(Color.WHITE), tool._shape_cache, null, report, index)
+		var live := SpraySampler.sample(Vector3i(0, 8, 0), frame, _selection_context(_large_selection), 1, 9, 8, rng, VoxelFrame.material(Color.WHITE), tool._shape_cache, null, report, index)
 		var live_state := rng.state
 		var small := {}
 		for cell in frame.positions():
-			if VoxelBrushSize.contains_sphere(9, cell - Vector3i.ZERO) and _large_selection.has(cell):
+			if VoxelBrushSize.contains_sphere(9, cell - Vector3i(0, 8, 0)) and _large_selection.has(cell):
 				small[cell] = true
 		var small_report := {}
 		var small_rng := RandomNumberGenerator.new()
 		small_rng.seed = SEED
-		var reference := SpraySampler.sample(Vector3i.ZERO, frame, _selection_context(small), 1, 9, 8, small_rng, VoxelFrame.material(Color.WHITE), tool._shape_cache, null, small_report)
+		var reference := SpraySampler.sample(Vector3i(0, 8, 0), frame, _selection_context(small), 1, 9, 8, small_rng, VoxelFrame.material(Color.WHITE), tool._shape_cache, null, small_report)
 		expect(live == reference, "the large mask sample keeps the small selection cells and order")
 		expect(live_state == small_rng.state, "the large mask sample consumes the same draws")
 		expect(int(report.get("selection_checked", -1)) == 0, "the width nine sample does not walk the large selection")
@@ -550,17 +551,17 @@ func _selection_index() -> void:
 		var report := {}
 		var rng := RandomNumberGenerator.new()
 		rng.seed = SEED
-		var cells := SpraySampler.sample(Vector3i.ZERO, frame, _selection_context(_large_selection), 1, 1, 8, rng, VoxelFrame.material(Color.WHITE), tool._shape_cache, null, report)
-		expect(cells.size() == 1, "the mask sample still offers the center alone")
+		var cells := SpraySampler.sample(Vector3i(0, 8, 0), frame, _selection_context(_large_selection), 1, 1, 8, rng, VoxelFrame.material(Color.WHITE), tool._shape_cache, null, report)
+		expect(cells.size() == 1, "the mask sample still offers the face cell alone")
 		expect(int(report.get("selection_work", 0)) == _large_selection.size(), "the mask build reports one row op per selected cell")
 		expect(int(report.get("row_ops", 0)) >= _large_selection.size(), "the row work includes the mask build")
 	)
 	step("When a small selection uses the bucket", func():
-		var small := {Vector3i.ZERO: true, Vector3i(1, 0, 0): true}
+		var small := {Vector3i(0, 8, 0): true, Vector3i(1, 8, 0): true}
 		var report := {}
 		var rng := RandomNumberGenerator.new()
 		rng.seed = SEED
-		var cells := SpraySampler.sample(Vector3i.ZERO, frame, _selection_context(small), 1, 9, 8, rng, VoxelFrame.material(Color.WHITE), tool._shape_cache, null, report)
+		var cells := SpraySampler.sample(Vector3i(0, 8, 0), frame, _selection_context(small), 1, 9, 8, rng, VoxelFrame.material(Color.WHITE), tool._shape_cache, null, report)
 		expect(cells.size() == 2, "the bucket offers both selected cells")
 		expect(int(report.get("selection_checked", 0)) == 2, "the bucket checks each selected cell")
 		expect(int(report.get("selection_work", 0)) == 1, "the bucket reports half a row op per entry")
@@ -579,18 +580,18 @@ func _tool_selection_cache() -> void:
 		tool._invalidate_batch()
 	)
 	step("When the first width one hover builds the masks on the worker", func():
-		_hover_cell(Vector3i.ZERO)
+		_hover_cell(Vector3i(0, 8, 0))
 		expect(tool._hover_sample_job != null, "an uncached large selection samples on the worker")
 	)
 	await _settle_tool()
 	step("Then the worker batch installs and the masks are cached", func():
-		expect(tool.preview_cells().size() == 1, "the width one batch holds the center")
+		expect(tool.preview_cells().size() == 1, "the width one batch holds the face cell")
 		expect(tool._selection_index != null, "the worker result caches the frozen masks")
 		expect(tool.last_row_ops > 0, "the selection mask build reports its row work")
 		tool._invalidate_batch()
 	)
 	step("When the same width one hover runs again", func():
-		_hover_cell(Vector3i.ZERO)
+		_hover_cell(Vector3i(0, 8, 0))
 		expect(tool._hover_sample_job == null, "the cached masks keep the second lookup inline")
 		expect(tool.last_selection_builds == 0, "the second lookup reuses the selection masks")
 		expect(tool.last_index_builds == 0, "the second lookup reuses the chunk rows")
@@ -599,15 +600,15 @@ func _tool_selection_cache() -> void:
 		State.selection.add(Vector3i(100, 0, 0))
 		State.selection_changed.emit()
 		tool._invalidate_batch()
-		_hover_cell(Vector3i.ZERO)
+		_hover_cell(Vector3i(0, 8, 0))
 		expect(tool._hover_sample_job != null, "a changed selection identity misses the cache")
 		tool._invalidate_batch()
 	)
 
 
 func _mutable_selection() -> void:
-	step("Given a raw mutable selection and a small block", func():
-		_use_dense(8)
+	step("Given a raw mutable selection and a small plate", func():
+		_use_plate(8)
 		tool.clear_selection_cache()
 		var selection := {Vector3i.ZERO: true}
 		var context := _selection_context(selection)
@@ -626,7 +627,7 @@ func _mutable_selection() -> void:
 
 func _mutable_alias() -> void:
 	step("Given a raw mutable context that aliases the editor cells", func():
-		_use_dense(8)
+		_use_plate(8)
 		State.selection.from_box(Vector3i.ZERO, Vector3i.ZERO)
 		var raw := State.selection.all_cells()
 		tool.clear_selection_cache()
