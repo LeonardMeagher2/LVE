@@ -1,6 +1,8 @@
 [gd_scene format=3 uid="uid://dry8h2j8mppx6"]
 
 [ext_resource type="Script" uid="uid://1oua32iblto7" path="res://plugins/Plane/Options.gd" id="1_script"]
+[ext_resource type="PackedScene" uid="uid://kxi223occ3vl" path="res://ui/ValueButton/ValueButton.tscn" id="2_value"]
+[ext_resource type="Texture2D" uid="uid://cdkfilu41t086" path="res://icons/depth.svg" id="3_layers"]
 
 [sub_resource type="ButtonGroup" id="bg"]
 
@@ -31,14 +33,17 @@ toggle_mode = true
 button_group = SubResource("bg")
 text = "Z"
 
-[node name="slice" type="Button" parent="." unique_id=72182485]
-custom_minimum_size = Vector2(24, 0)
+[node name="Layers" parent="." unique_id=72182485 instance=ExtResource("2_value")]
 layout_mode = 2
-tooltip_text = "Limit painting to the floor layer and show only that layer"
-toggle_mode = true
-text = "Slice"
+tooltip_text = "Number of slice layers around the floor plane. 0 shows every layer. An even count puts the extra layer above the floor."
+icon = ExtResource("3_layers")
+min_value = 0.0
+max_value = 64.0
+step = 1.0
+decimals = 0
+value = 0.0
 
 [connection signal="toggled" from="x" to="." method="_on_x_toggled"]
 [connection signal="toggled" from="y" to="." method="_on_y_toggled"]
 [connection signal="toggled" from="z" to="." method="_on_z_toggled"]
-[connection signal="toggled" from="slice" to="." method="_on_slice_toggled"]
+[connection signal="value_changed" from="Layers" to="." method="_on_layers_changed"]

@@ -68,8 +68,9 @@ class WandJob extends VoxelFrame.EditJob:
 		var stream: Callable = Callable(self, "_stream_batch") if batch_queue != null else Callable()
 		var slice_axis := edit_context.slice_axis if edit_context else -1
 		var slice_index := edit_context.slice_index if edit_context else 0
+		var slice_count := edit_context.slice_count if edit_context else 1
 		matching_cells = {}
-		if not VoxelRegionSearch.find(matching_cells, source_frame, seed_cell, target_material, connected, true, {}, self, stream, slice_axis, slice_index):
+		if not VoxelRegionSearch.find(matching_cells, source_frame, seed_cell, target_material, connected, true, {}, self, stream, slice_axis, slice_index, slice_count):
 			return
 		if not checkpoint(0):
 			return

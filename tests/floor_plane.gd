@@ -8,6 +8,7 @@ var before := 0
 func _ready() -> void:
 	test("the floor plane picks from any side, changes axis, and moves with the plane tool", _run)
 	test("the slice option targets the floor layer and shows it alone", _slice_run, "slice_plane")
+	test("a slice slab covers the layers around the floor", _slab_run, "slice_slab")
 
 
 func _setup_test() -> void:
@@ -56,12 +57,13 @@ func _slice_run() -> void:
 		activate_tool("plane")
 	)
 	await get_tree().process_frame
-	step("Then the option bar toggles the slice and keeps the floor index", func():
-		press_option("Limit painting to the floor layer and show only that layer")
-		expect(State.slice_enabled, "the slice option turns the slice on")
-		expect(State.floor_index == 2, "the slice option does not move the floor")
-		press_option("Limit painting to the floor layer and show only that layer")
-		expect(not State.slice_enabled, "a second press turns the slice off")
+	step("Then the option bar sets the slice layers and keeps the floor index", func():
+		var layers = plugin("PlanePlugin")._options.get_node("Layers")
+		layers.value = 1
+		expect(State.slice_layers == 1 and State.slice_enabled, "one layer turns the slice on")
+		expect(State.floor_index == 2, "the layer count does not move the floor")
+		layers.value = 0
+		expect(State.slice_layers == 0 and not State.slice_enabled, "zero layers shows every layer")
 		activate_tool("Toolbar")
 	)
 	step("Given the slice view on layer 2", func():
@@ -258,3 +260,35 @@ func _axis_button(label: String) -> Button:
 		if b and b.toggle_mode and b.text == label:
 			return b
 	return null
+
+func _slab_run() -> void:
+	step("Given cells above and below a floor layer and a three-layer slab", func():
+		State.floor_axis = Vector3.Axis.AXIS_Y
+		State.floor_index = 2
+		var frame := State.get_current_voxel_frame()
+		for y in [1, 2, 3, 4]:
+			frame.set_cell(Vector3i(0, y, 0), VoxelFrame.material(Color.RED))
+		State.document._bounds_dirty = true
+		State.slice_layers = 3
+		expect(State.slice_first() == 1 and State.slice_last() == 3, "the slab is the floor layer plus one each side")
+	)
+	step("Then the ray picks the top cell inside the slab", func():
+		var pick := VoxelPicking.start_pick(Vector3(0.5, 20.0, 0.5), Vector3(0, -1, 0), State.get_current_voxel_frame(), Vector3(0, 1, 0), true)
+		expect(pick.target == Vector3i(0, 3, 0), "the top cell of the slab is the target")
+		expect(pick.hit == Vector3i(0, 3, 0), "a cell above the slab does not block")
+	)
+	step("Then the write gate keeps the slab range", func():
+		var context := State.drawing_context()
+		expect(context.allows(Vector3i(0, 1, 0)), "the layer below the floor is writable")
+		expect(context.allows(Vector3i(0, 2, 0)), "the floor layer is writable")
+		expect(context.allows(Vector3i(0, 3, 0)), "the layer above the floor is writable")
+		expect(not context.allows(Vector3i(0, 4, 0)), "a layer above the slab is refused")
+		expect(not context.allows(Vector3i(0, 0, 0)), "a layer below the slab is refused")
+	)
+	step("When the slab holds one layer", func():
+		State.slice_layers = 1
+		expect(State.slice_first() == 2 and State.slice_last() == 2, "one layer keeps the floor layer")
+		var pick := VoxelPicking.start_pick(Vector3(0.5, 20.0, 0.5), Vector3(0, -1, 0), State.get_current_voxel_frame(), Vector3(0, 1, 0), true)
+		expect(pick.target == Vector3i(0, 2, 0), "the floor layer is the target")
+		expect(not State.drawing_context().allows(Vector3i(0, 3, 0)), "the layer above the one-layer slice is refused")
+	)

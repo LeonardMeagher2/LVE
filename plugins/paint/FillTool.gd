@@ -101,7 +101,8 @@ class FillJob extends VoxelFrame.EditJob:
 		var stream: Callable = Callable(self, "_stream_batch") if batch_queue != null else Callable()
 		var slice_axis := edit_context.slice_axis if edit_context else -1
 		var slice_index := edit_context.slice_index if edit_context else 0
-		if not VoxelRegionSearch.find(changes, source_frame, seed_cell, target_material, connected, replacement_material, selection_mask, self, stream, slice_axis, slice_index):
+		var slice_count := edit_context.slice_count if edit_context else 1
+		if not VoxelRegionSearch.find(changes, source_frame, seed_cell, target_material, connected, replacement_material, selection_mask, self, stream, slice_axis, slice_index, slice_count):
 			return
 		matching_cells = changes
 		if apply_changes:

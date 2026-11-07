@@ -29,8 +29,10 @@ var origin_twice := Vector3i.ZERO
 var selection := {}
 ## The world axis of the writable slice, or -1 when every layer is writable.
 var slice_axis := -1
-## The cell index of the writable slice along [member slice_axis].
+## The first writable layer along [member slice_axis].
 var slice_index := 0
+## The number of writable layers from [member slice_index].
+var slice_count := 1
 ## The full material of every written cell.
 var material := PackedFloat32Array()
 ## The spot diameter in cells.
@@ -108,7 +110,7 @@ func run() -> void:
 	if slice_axis >= 0:
 		var kept: Array[Vector3i] = []
 		for cell in cells:
-			if cell[slice_axis] == slice_index:
+			if cell[slice_axis] >= slice_index and cell[slice_axis] < slice_index + slice_count:
 				kept.append(cell)
 		cells = kept
 	local_count = report.get("local", 0)

@@ -12,10 +12,16 @@ const NONE:Vector3i = Vector3i(Vector3.INF)
 
 ## Returns the press pick for a ray. A ray that hits the model targets the hit
 ## cell. A ray that misses targets the floor plane. When [param slice] is true,
-## the ray targets the floor layer instead, so a voxel on another layer cannot
-## block it.
+## only the cells inside the slice layers can be hit, so a voxel outside the slab
+## cannot block the pointer. An empty press targets the floor layer.
 static func start_pick(origin: Vector3, dir: Vector3, frame: VoxelFrame, forward: Vector3, slice := false) -> PickResult:
 	if slice:
+		var sliced := ray_voxel(origin, dir, frame, AABB(), State.floor_axis, State.slice_first(), State.slice_layers)
+		if sliced.hit != VoxelPicking.NONE:
+			sliced.target = sliced.hit
+			sliced.add_target = sliced.hit + sliced.entry
+			sliced.plane = view_plane(sliced.target, origin, forward)
+			return sliced
 		return slice_pick(origin, dir, frame)
 	var res := ray_voxel(origin, dir, frame)
 	if res.hit != VoxelPicking.NONE:
@@ -130,8 +136,9 @@ static func view_plane_through(point: Vector3, forward: Vector3) -> StrokePlane:
 ## Returns the first occupied cell along a ray. It uses the DDA method. The
 ## traversal clips to the supplied bounds, or to the frame bounds when they are
 ## not given. The bounds extent sets the step count, so a far ray needs no
-## distance or iteration cap.
-static func ray_voxel(origin: Vector3, dir: Vector3, frame: VoxelFrame, supplied_bounds := AABB()) -> PickResult:
+## distance or iteration cap. A [param slice_axis] of zero or more keeps only the
+## cells inside the slice layers, and a cell outside them does not stop the ray.
+static func ray_voxel(origin: Vector3, dir: Vector3, frame: VoxelFrame, supplied_bounds := AABB(), slice_axis := -1, slice_first := 0, slice_count := 0) -> PickResult:
 	var res := PickResult.new()
 	if frame == null:
 		return res
@@ -202,7 +209,7 @@ static func ray_voxel(origin: Vector3, dir: Vector3, frame: VoxelFrame, supplied
 	var extent := cell_max - cell_min + Vector3i.ONE
 	var max_steps := extent.x + extent.y + extent.z + 2
 	for i in max_steps:
-		if frame.has(cell):
+		if frame.has(cell) and (slice_axis < 0 or (cell[slice_axis] >= slice_first and cell[slice_axis] < slice_first + slice_count)):
 			res.hit = cell
 			res.entry = entry
 			return res

@@ -51,8 +51,10 @@ class MatteJob extends VoxelFrame.EditJob:
 	var frame: VoxelFrame
 	## The world axis that the slice limits.
 	var slice_axis := 1
-	## The cell index of the slice layer.
-	var slice_index := 0
+	## The first layer of the slice.
+	var slice_first := 0
+	## The number of slice layers.
+	var slice_count := 1
 	## The world axis of the matte texture u coordinate.
 	var u_axis := 0
 	## The world axis of the matte texture v coordinate.
@@ -99,12 +101,14 @@ class MatteJob extends VoxelFrame.EditJob:
 		_compose()
 		build_us = Time.get_ticks_usec() - started
 
-	# Walks the rows of one chunk and records the nearest off-slice cell on each
-	# side of the plane, per plane column.
+	# Walks the rows of one chunk and records the nearest off-slab cell on each
+	# side, per plane column.
 	func _scan_chunk(chunk: VoxelFrame.Chunk, chunk_size: int) -> void:
 		var rows := chunk.occupancy_rows()
 		var origin := chunk.origin()
-		var slice_local := slice_index - origin[slice_axis]
+		var first_local := slice_first - origin[slice_axis]
+		var last_local := first_local + slice_count - 1
+		var slice_last := slice_first + slice_count - 1
 		if slice_axis == 0:
 			for z in chunk_size:
 				var world_u := origin.z + z
@@ -113,20 +117,22 @@ class MatteJob extends VoxelFrame.EditJob:
 					if mask == 0:
 						continue
 					var world_v := origin.y + y
-					if slice_local < 0:
-						_note(world_u, world_v, origin.x + _lowest_bit(mask) - slice_index, true)
-					elif slice_local >= chunk_size:
-						_note(world_u, world_v, slice_index - (origin.x + _highest_bit(mask)), false)
+					if first_local >= chunk_size:
+						_note(world_u, world_v, origin.x + _lowest_bit(mask) - slice_last, true)
+					elif last_local < 0:
+						_note(world_u, world_v, slice_first - (origin.x + _highest_bit(mask)), false)
 					else:
-						var below_mask := mask & ((1 << slice_local) - 1)
-						if below_mask != 0:
-							_note(world_u, world_v, slice_local - _highest_bit(below_mask), false)
-						var above_mask := mask >> (slice_local + 1)
-						if above_mask != 0:
-							_note(world_u, world_v, _lowest_bit(above_mask) + 1, true)
+						if first_local > 0:
+							var below_mask := mask & ((1 << mini(first_local, chunk_size)) - 1)
+							if below_mask != 0:
+								_note(world_u, world_v, first_local - _highest_bit(below_mask), false)
+						if last_local < chunk_size - 1:
+							var above_mask := mask >> (last_local + 1)
+							if above_mask != 0:
+								_note(world_u, world_v, _lowest_bit(above_mask) + 1, true)
 			return
-		# The rows hold x bits. Walk the layer axis outward from the slice layer,
-		# and drop the x bits that a closer layer already claimed.
+		# The rows hold x bits. Walk the layer axis outward from the slab, and
+		# drop the x bits that a closer layer already claimed.
 		for line in chunk_size:
 			for zone in 2:
 				var above := zone == 0
@@ -134,9 +140,9 @@ class MatteJob extends VoxelFrame.EditJob:
 				var layer := 0
 				var direction := 1
 				if above:
-					layer = maxi(0, slice_local + 1)
+					layer = maxi(0, last_local + 1)
 				else:
-					layer = mini(chunk_size - 1, slice_local - 1)
+					layer = mini(chunk_size - 1, first_local - 1)
 					direction = -1
 				for step_index in chunk_size:
 					if layer < 0 or layer >= chunk_size:
@@ -151,7 +157,8 @@ class MatteJob extends VoxelFrame.EditJob:
 						plane = origin.y + line
 					var mask := rows.masks[row] & remaining
 					if mask != 0:
-						var distance := absi(origin[slice_axis] + layer - slice_index)
+						var world := origin[slice_axis] + layer
+						var distance := world - slice_last if above else slice_first - world
 						for x in chunk_size:
 							if (mask & (1 << x)) != 0:
 								_note(origin.x + x, plane, distance, above)
@@ -353,7 +360,8 @@ func _start_build() -> void:
 	var job := MatteJob.new()
 	job.frame = frame.copy_frame()
 	job.slice_axis = axis
-	job.slice_index = State.floor_index
+	job.slice_first = State.slice_first()
+	job.slice_count = State.slice_layers
 	job.u_axis = u_axis
 	job.v_axis = v_axis
 	job.min_u = min_u

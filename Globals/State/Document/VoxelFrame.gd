@@ -110,14 +110,17 @@ class EditContext extends RefCounted:
 	var selection := {}
 	## The world axis of the writable slice, or -1 when every layer is writable.
 	var slice_axis := -1
-	## The cell index of the writable slice along [member slice_axis].
+	## The first writable layer along [member slice_axis].
 	var slice_index := 0
+	## The number of writable layers from [member slice_index]. It is 1 or more
+	## when the slice is on.
+	var slice_count := 1
 
 	## Returns [code]true[/code] when this context permits a write to
 	## [param cell]. The slice is a spatial limit. An empty selection allows
 	## every cell.
 	func allows(cell: Vector3i) -> bool:
-		if slice_axis >= 0 and cell[slice_axis] != slice_index:
+		if slice_axis >= 0 and (cell[slice_axis] < slice_index or cell[slice_axis] >= slice_index + slice_count):
 			return false
 		return selection.is_empty() or selection.has(cell)
 
@@ -130,6 +133,7 @@ class EditContext extends RefCounted:
 		copy.selection = selection
 		copy.slice_axis = slice_axis
 		copy.slice_index = slice_index
+		copy.slice_count = slice_count
 		return copy
 
 	## Returns [param cells] without the cells that this context forbids. It

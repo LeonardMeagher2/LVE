@@ -104,6 +104,7 @@ class BatchToken extends RefCounted:
 	var selection := {}
 	var slice_axis := -1
 	var slice_index := 0
+	var slice_count := 1
 
 var _paint_settings: PaintToolSettings
 var _rng := RandomNumberGenerator.new()
@@ -148,6 +149,7 @@ var _batch_origin := Vector3i.ZERO
 var _batch_selection := {}
 var _batch_slice_axis := -1
 var _batch_slice_index := 0
+var _batch_slice_count := 1
 # The frame the batch sampled from. A document or frame change makes the batch
 # stale, because its cells belong to the old frame.
 var _batch_frame: VoxelFrame
@@ -600,6 +602,7 @@ func _ensure_batch(center: Vector3i, frame: VoxelFrame, context: VoxelFrame.Edit
 	_batch_selection = context.selection
 	_batch_slice_axis = context.slice_axis
 	_batch_slice_index = context.slice_index
+	_batch_slice_count = context.slice_count
 	_batch_token = _make_batch_token(frame, center, context)
 	_batch_cells = _sample(center, frame, context)
 	_snapshot_batch_chunks(frame)
@@ -845,6 +848,7 @@ func _make_batch_token(frame: VoxelFrame, center: Vector3i, context: VoxelFrame.
 	token.selection = context.selection
 	token.slice_axis = context.slice_axis
 	token.slice_index = context.slice_index
+	token.slice_count = context.slice_count
 	return token
 
 
@@ -860,6 +864,7 @@ func _adopt_batch(frame: VoxelFrame, center: Vector3i, context: VoxelFrame.EditC
 	_batch_selection = context.selection
 	_batch_slice_axis = context.slice_axis
 	_batch_slice_index = context.slice_index
+	_batch_slice_count = context.slice_count
 	_batch_token = _make_batch_token(frame, center, context)
 	_batch_cells = cells
 	_batch_payload = payload
@@ -905,7 +910,7 @@ func _teardown_hover_sample() -> void:
 # sampled with. The slice changes the sampled cells, so it is part of the batch
 # identity.
 func _batch_matches(context: VoxelFrame.EditContext) -> bool:
-	return context.axes == _batch_axes and context.origin_twice == _batch_origin and context.slice_axis == _batch_slice_axis and context.slice_index == _batch_slice_index and _same_selection(context.selection, _batch_selection)
+	return context.axes == _batch_axes and context.origin_twice == _batch_origin and context.slice_axis == _batch_slice_axis and context.slice_index == _batch_slice_index and context.slice_count == _batch_slice_count and _same_selection(context.selection, _batch_selection)
 
 
 # Returns true when every cell of the batch still exists in the frame. The check
@@ -1018,7 +1023,7 @@ func _shown_owned_by_press(token: Variant) -> bool:
 		return false
 	if owner.center != pick.hit or owner.frame != _source_frame or _edit_context == null:
 		return false
-	return owner.axes == _edit_context.axes and owner.origin_twice == _edit_context.origin_twice and owner.slice_axis == _edit_context.slice_axis and owner.slice_index == _edit_context.slice_index and _same_selection(owner.selection, _edit_context.selection)
+	return owner.axes == _edit_context.axes and owner.origin_twice == _edit_context.origin_twice and owner.slice_axis == _edit_context.slice_axis and owner.slice_index == _edit_context.slice_index and owner.slice_count == _edit_context.slice_count and _same_selection(owner.selection, _edit_context.selection)
 
 
 # Returns true when every displayed cell still exists and the display context
@@ -1081,6 +1086,7 @@ func _build_sample_job(frame: VoxelFrame, center: Vector3i, context: VoxelFrame.
 	job.selection = context.selection
 	job.slice_axis = context.slice_axis
 	job.slice_index = context.slice_index
+	job.slice_count = context.slice_count
 	job.material = material.duplicate()
 	job.spot_size = use_spot
 	job.search_size = use_search

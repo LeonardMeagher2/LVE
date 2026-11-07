@@ -118,6 +118,19 @@ func _slice_mesh() -> void:
 				on_layer = false
 		expect(on_layer, "every vertex of the slice build lies on layer 2")
 	)
+	step("Then a slab build keeps only its layer range", func():
+		var frame := VoxelFrame.new()
+		for y in [1, 2, 3, 4]:
+			frame.set_cell(Vector3i(0, y, 0), VoxelFrame.material(Color.RED))
+		var slab := _build_slice_mesh(frame, Vector3.Axis.AXIS_Y, 1, 3)
+		var vertices: PackedVector3Array = slab[Mesh.ARRAY_VERTEX]
+		var inside := true
+		for vertex: Vector3 in vertices:
+			if vertex.y < 0.5 or vertex.y > 3.5:
+				inside = false
+		expect(inside, "every vertex of the slab build lies between layers 1 and 3")
+		expect(_highest_vertex(slab) == 3.5, "the slab build closes on its top layer")
+	)
 
 
 func _highest_vertex(arrays: Array) -> float:
@@ -127,12 +140,13 @@ func _highest_vertex(arrays: Array) -> float:
 	return highest
 
 
-func _build_slice_mesh(frame: VoxelFrame, slice_axis: int, slice_index: int) -> Array:
+func _build_slice_mesh(frame: VoxelFrame, slice_axis: int, slice_index: int, slice_count := 1) -> Array:
 	var builder := VoxelMeshBuilder.new()
 	builder.source_frame = frame
 	builder.chunk_location = Vector3i.ZERO
 	builder.slice_axis = slice_axis
 	builder.slice_index = slice_index
+	builder.slice_count = slice_count
 	builder.run()
 	return builder.surface_arrays
 

@@ -67,7 +67,8 @@ func begin_paste(pattern: Dictionary, selection_pattern: Dictionary, center: Vec
 	_edit_context = VoxelFrame.EditContext.new()
 	if State.slice_enabled:
 		_edit_context.slice_axis = State.floor_axis
-		_edit_context.slice_index = State.floor_index
+		_edit_context.slice_index = State.slice_first()
+		_edit_context.slice_count = State.slice_layers
 	_placement_operation_id = State.begin_operation("Placing pasted voxels", -1, true, self)
 	_update_endpoint(center)
 

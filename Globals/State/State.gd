@@ -187,16 +187,34 @@ var floor_index := 0:
 		floor_index = value
 		floor_plane_changed.emit()
 
-## Whether the slice limits every edit to the floor layer.
-##
-## The slice reuses [member floor_axis] and [member floor_index]. The writable
-## layer is cell index [member floor_index], the layer above the grid line.
-var slice_enabled := false:
+## Whether the slice limits every edit. It is a view of [member slice_layers],
+## so 0 layers means every layer is writable.
+var slice_enabled: bool:
+	get:
+		return slice_layers > 0
 	set(value):
-		if value == slice_enabled:
+		slice_layers = 1 if value else 0
+
+## The number of writable and visible layers, centered on the floor layer. 0
+## shows every layer. 1 keeps only the floor layer. An even count puts the extra
+## layer above the floor.
+var slice_layers := 0:
+	set(value):
+		value = maxi(value, 0)
+		if value == slice_layers:
 			return
-		slice_enabled = value
+		slice_layers = value
 		slice_changed.emit()
+
+
+## Returns the first layer of the slice.
+func slice_first() -> int:
+	return floor_index - (slice_layers - 1) / 2
+
+
+## Returns the last layer of the slice.
+func slice_last() -> int:
+	return slice_first() + slice_layers - 1
 
 
 ## Returns the world level of the slice plane.
@@ -394,7 +412,8 @@ func _live_context() -> VoxelFrame.EditContext:
 	context.selection.make_read_only()
 	if slice_enabled:
 		context.slice_axis = floor_axis
-		context.slice_index = floor_index
+		context.slice_index = slice_first()
+		context.slice_count = slice_layers
 	return context
 
 
