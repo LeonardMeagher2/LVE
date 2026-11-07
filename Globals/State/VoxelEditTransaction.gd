@@ -23,6 +23,7 @@ var edit_context: VoxelFrame.EditContext
 var _selection: VoxelSelection
 var _start_chunks := {}
 var _start_selection := {}
+var _start_selection_masks := {}
 var _closed := false
 
 # Phase counters of the terrain benchmark. The benchmark resets them by direct
@@ -42,10 +43,14 @@ class Change extends RefCounted:
 	var undo_chunks: Dictionary
 	## The selection snapshot before the edit.
 	var undo_selection: Dictionary
+	## The selection masks before the edit.
+	var undo_selection_masks: Dictionary
 	## The chunk snapshot after the edit.
 	var redo_chunks: Dictionary
 	## The selection snapshot after the edit.
 	var redo_selection: Dictionary
+	## The selection masks after the edit.
+	var redo_selection_masks: Dictionary
 
 
 # The frozen start snapshots of one rolled-back edit.
@@ -57,6 +62,8 @@ class Rollback extends RefCounted:
 	var chunks: Dictionary
 	## The selection snapshot to restore.
 	var selection: Dictionary
+	## The selection masks to restore.
+	var selection_masks: Dictionary
 
 
 ## Begins one owned edit. The transaction captures the start snapshots and
@@ -71,6 +78,9 @@ static func begin(edited_document: VoxelDocument, edited_frame: VoxelFrame, edit
 	# write copies before it mutates and these snapshots stay frozen.
 	transaction._start_chunks = edited_frame.capture()
 	transaction._start_selection = edited_selection.capture()
+	# The masks travel with the selection, so an undo or redo installs both
+	# without a rebuild. An empty selection captures nothing.
+	transaction._start_selection_masks = edited_selection.mask_snapshot()
 	return transaction
 
 
@@ -90,15 +100,21 @@ func finish() -> Change:
 		return null
 	_closed = true
 	var end_chunks := frame.capture()
-	var changed := not _chunks_equal(_start_chunks, end_chunks) or _start_selection != _selection.all_cells()
+	# The masks follow the cells, so two equal mask sets mean an equal selection.
+	# Comparing the masks costs one pass over the chunk grids, not one compare per
+	# cell, and the same snapshots serve the history record.
+	var end_selection_masks := _selection.mask_snapshot()
+	var changed := not _chunks_equal(_start_chunks, end_chunks) or not _masks_equal(_start_selection_masks, end_selection_masks)
 	var change: Change = null
 	if changed:
 		change = Change.new()
 		change.frame = frame
 		change.undo_chunks = _start_chunks
 		change.undo_selection = _start_selection
+		change.undo_selection_masks = _start_selection_masks
 		change.redo_chunks = end_chunks
 		change.redo_selection = _selection.capture()
+		change.redo_selection_masks = end_selection_masks
 	_release()
 	return change
 
@@ -115,6 +131,7 @@ func cancel() -> Rollback:
 	rollback.frame = frame
 	rollback.chunks = _start_chunks
 	rollback.selection = _start_selection
+	rollback.selection_masks = _start_selection_masks
 	_release()
 	return rollback
 
@@ -137,6 +154,22 @@ func _release() -> void:
 	_selection = null
 	_start_chunks = {}
 	_start_selection = {}
+	_start_selection_masks = {}
+
+
+# Compare two mask snapshots. The packed grids compare by content, and the loop
+# runs once per chunk, not once per cell.
+static func _masks_equal(first_masks: Dictionary, second_masks: Dictionary) -> bool:
+	if first_masks.size() != second_masks.size():
+		return false
+	for location in first_masks:
+		var second_grids = second_masks.get(location)
+		if second_grids == null:
+			return false
+		var first_grids: Array = first_masks[location]
+		if first_grids[0] != second_grids[0] or first_grids[1] != second_grids[1] or first_grids[2] != second_grids[2]:
+			return false
+	return true
 
 
 # Compare by content. Two equal chunks can number their ids differently. This is

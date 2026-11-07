@@ -276,12 +276,14 @@ func _replace_partial_excludes_prior() -> void:
 	var marker_seen := false
 	var installs := 0
 	var longest_frame_us := 0
+	var rebuilds := 0
 	step("Given a large scattered frame, a prior marker, and the wand", func():
 		_wand_fixture()
 		_build_grid()
 		expect(_grid_total > 4096, "the frame is large enough to stream")
 		State.selection.add(MARKER)
 		State.selection_changed.emit()
+		rebuilds = VoxelSelection._profile_rebuild_calls
 		expect(State.selection.count() == 1, "the prior marker is the whole selection")
 	)
 	step("When the user selects every matching voxel in replace mode", func():
@@ -315,6 +317,11 @@ func _replace_partial_excludes_prior() -> void:
 		expect(installed_while_running, "a partial outline mesh installed while the wand worker still ran")
 		expect(installs > 0, "at least one intermediate outline installed")
 		expect(first_partial > 0 and first_partial < final_length, "the first partial outline is smaller than the final outline")
+		# The stream applies every batch, so the finish must keep the live masks
+		# and publish through the progressive outline. A strict request would
+		# cancel the running stream and rebuild the same outline.
+		expect(VoxelSelection._profile_rebuild_calls == rebuilds, "the streamed finish rebuilds no masks")
+		expect(not selection_preview._strict_alive, "no strict outline request follows the stream")
 		# The merge budget covers only the merge. The publication copy and the
 		# installed surface are outside it, so the longest frame is reported as is.
 		print("MEASURE wand partial: cells %d, first partial %d, final %d, frames_with_outline %d, longest_frame %d us" % [_grid_total, first_partial, final_length, installs, longest_frame_us])

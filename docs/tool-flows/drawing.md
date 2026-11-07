@@ -154,6 +154,7 @@ A Pencil stroke uses the add target in front of the clicked face.
 - Prepare: [`StrokeTool._apply_pick`](../../plugins/brush/StrokeTool.gd) calls `_settings.pattern`, `PixelPerfectStroke.feed`, or `StrokeLine.cells`.
 - Apply: [`StrokeTool._run_stroke`](../../plugins/brush/StrokeTool.gd) builds `BrushJob` and uses `State.run_edit_job` above `INLINE_EDIT_LIMIT`.
 - Worker body: [`BrushJob.run`](../../plugins/brush/StrokeTool.gd) calls `apply_cells`, `EditContext.expand`, and `VoxelFrame.set_cells`.
+- Write gate: [`VoxelFrame.set_cells`](../../Globals/State/Document/VoxelFrame.gd) applies `EditContext.filter` when the job carries a context. The filter holds the selection and the floor slice. A write with no job is never limited.
 - Publish: [`StrokeTool._finish_edit`](../../plugins/brush/StrokeTool.gd) calls `VoxelFrame.apply_published` and `State.chunks_changed.emit`.
 - Commit: [`StrokeTool.close_stroke`](../../plugins/brush/StrokeTool.gd) calls `State.finish_edit` with `Stroke` or `Erase`.
 - Cancel: [`StrokeTool._cancel_edit`](../../plugins/brush/StrokeTool.gd) calls `abort_stroke`, which calls `State.cancel_edit`.
@@ -361,7 +362,7 @@ flowchart TB
 - `INT` is the accepted queue. `_pending_intents` keeps captured settings and order. A repeat of the last sample is compacted. Other accepted cells stay. `_run_intents` processes one item at a time. A tool switch does not drop the queue.
 - `SW` samples one intent. `_commit_sample_state` commits the random state after the result passes its checks.
 - `WRITE` is `_queue_centers`. It feeds `StrokeTool._run_stroke`. The write is inline at or below 4096 estimated work. A larger write uses `BrushJob` on the worker.
-- `BrushJob.centers_are_final` is true for the Spray write. The stamp skips the second `EditContext.expand` only. It still applies the selection mask, the existing-only filter, and the captured material.
+- `BrushJob.centers_are_final` is true for the Spray write. The stamp skips the second `EditContext.expand` only. It still applies the existing-only filter and the captured material. The write gate applies the selection and the floor slice.
 - `PUB` publishes the written chunks with `VoxelFrame.apply_published` and emits `chunks_changed`.
 - `REL` is the release. `COM` waits for `_sample_job` null, `_pending_intents` empty, and the last write batch. Release is not sample completion.
 - `CAN` cancels samples, invalidates the batch, clears the cursor preview, and calls `super._cancel_edit`.
@@ -440,11 +441,11 @@ flowchart LR
 
 | Tool | Snapshot | Selection | Symmetry | Material |
 | --- | --- | --- | --- | --- |
-| Brush | `BrushJob.edited_frame` shares the source frame. Publish writes the changed chunks. | `tx.edit_context.selection` is read-only. `BrushJob.selection_mask` filters writes. | `EditContext.expand` in `apply_cells`. The cursor mirrors the pattern. | `_stroke_material` at open. Pattern colors for a selection brush. Eraser uses a transparent material. |
+| Brush | `BrushJob.edited_frame` shares the source frame. Publish writes the changed chunks. | `tx.edit_context.selection` is read-only. The write gate filters the selection and the floor slice. | `EditContext.expand` in `apply_cells`. The cursor mirrors the pattern. | `_stroke_material` at open. Pattern colors for a selection brush. Eraser uses a transparent material. |
 | Paint Brush | Same as Brush. | Same as Brush. `paint_existing` also filters to occupied cells. | Same as Brush. | Same as Brush. The write replaces the material. |
 | Line | `_line_snapshot` is one frame copy. The preview job shares it. Commit publishes the changed chunks. | `State.selection.capture` at `_begin_line`. The job uses its captured context. | `State.drawing_context` at begin. `EditContext.expand` in the job. The preview shows the expanded cells, so the cursor adds no mirror. | `_stroke_material` at begin. A selection brush keeps its copied materials. A color or settings change requests a new preview. |
 | Fill | The live frame and one copy per seed. Inline publishes the changed chunks. Streaming writes slices into the live frame. | `State.selection.capture` when each seed is processed for the search. `_edit.edit_context` for expansion. | `EditContext.expand` per batch. An identity context skips the redundant check. The cursor shows no mirror. | `State.current_material` at the first seed. The target material comes from each seed. |
-| Spray | The worker uses a local `copy_chunks` ROI for the search and spot box. The write job shares the frame. Publish writes the changed chunks. | Hover uses the live context. A stroke uses `_edit_context`. The `BatchToken` records center, frame, axes, origin, and selection. A lagging surface of the same cell and context is allowed. A different cell never paints. One read-only selection index serves the editor snapshot. A mutable selection resamples. | `SpraySampler` expands symmetry. The write sets `centers_are_final`, so it skips the second expansion. It still applies the selection, existing-only, and material filters. | `_stroke_material` at open. The preview payload uses one solid color. |
+| Spray | The worker uses a local `copy_chunks` ROI for the search and spot box. The write job shares the frame. Publish writes the changed chunks. | Hover uses the live context. A stroke uses `_edit_context`. The `BatchToken` records center, frame, axes, origin, selection, and the floor slice. A lagging surface of the same cell and context is allowed. A different cell never paints. One read-only selection index serves the editor snapshot. A mutable selection resamples. | `SpraySampler` expands symmetry. The write sets `centers_are_final`, so it skips the second expansion. The sampler drops sampled cells off the floor slice. The write gate filters the selection and the slice again. | `_stroke_material` at open. The preview payload uses one solid color. |
 
 ### Undo, cancel, release, and thread
 
@@ -468,7 +469,7 @@ flowchart LR
 | Spray | The search counts and ranks occupied rows. It does not gather the full reach volume or build a candidate array. | Wide searches must not pay a full volume scan. |
 | Spray | The inline gate uses row work and excludes the cold index build. | Cold build cost is reported separately, not fixed in milliseconds. |
 | Spray | A worker captures a local ROI and resolves accepted sizes once. | A later live crop or settings change must not alter accepted work. |
-| Spray | The sample expands symmetry. The write skips the second expansion with `centers_are_final`. | The sampled set is closed under the captured context. The write still filters selection, existing cells, and material. |
+| Spray | The sample expands symmetry. The write skips the second expansion with `centers_are_final`. | The sampled set is closed under the captured context. The sampler drops cells off the floor slice. The write gate filters the selection, the slice, existing cells, and material. |
 | Spray | The press can paint a lagging installed surface only when its `BatchToken` matches the press cell and context. | A surface of another cell never paints. |
 | Brush, Paint Brush, Fill, Spray | A switch keeps or finishes accepted work. | The accepted edit must not be lost. |
 | Line | A switch drops the pending preview. | A line is not committed until the user confirms it. |

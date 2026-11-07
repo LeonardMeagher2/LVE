@@ -93,9 +93,33 @@ func _run() -> void:
 		State.undo_redo.undo()
 		expect(State.selection.capture() == source_selection, "undo restores the full source square")
 	)
+	await get_tree().process_frame
+	step("Given a selection with one voxel inside the slab and one below it", func():
+		_setup(Vector3i(2, 1, 0))
+		State.floor_axis = Vector3.Axis.AXIS_Y
+		State.floor_index = 1
+		State.slice_layers = 1
+		frame.set_cell(Vector3i(0, -1, 0), VoxelFrame.material(Color.BLUE))
+		State.selection.add(Vector3i(0, -1, 0))
+		State.selection_changed.emit()
+		select_toolbar_item("transform", "Move")
+	)
+	step("When the user moves the selection one cell up", func():
+		_drag(Vector3(0.5, 0.5, 0), Vector3(0.5, 1.5, 0))
+	)
+	step("Then the off-slice source stays and does not copy into the slab", func():
+		expect(frame.get_color(Vector3i(0, -1, 0)) == Color.BLUE, "the off-slice source is not cleared")
+		expect(frame.get_color(Vector3i(0, 1, 0)) == Color.RED, "the inside voxel moves up one layer")
+		expect(not frame.has(Vector3i(0, 0, 0)), "the off-slice source does not copy into the vacated cell")
+		_press_option("Cancel")
+		State.slice_enabled = false
+	)
 
 
 func _setup(last_corner: Vector3i) -> void:
+	State.slice_enabled = false
+	State.floor_axis = Vector3.Axis.AXIS_Y
+	State.floor_index = 0
 	State.document = VoxelDocument.new()
 	frame = State.get_current_voxel_frame()
 	frame.set_cell(Vector3i.ZERO, VoxelFrame.material(Color.RED))

@@ -41,7 +41,6 @@ var _stroke_material := VoxelFrame.material(Color.WHITE)
 var _stroke_existing_only := false
 # Whether the running stroke erases its footprint.
 var _stroke_erases := false
-var _selection_mask := {}
 var _edit_context: VoxelFrame.EditContext
 var _job: BrushJob
 var _operation_id := 0
@@ -87,9 +86,6 @@ class BrushJob extends VoxelFrame.EditJob:
 	var paint_existing := false
 	## Whether the stamp erases the footprint.
 	var erase_existing := false
-	## The selection cells that the stamp may change. An empty mask allows every
-	## cell.
-	var selection_mask := {}
 	## The frame snapshot to write.
 	var edited_frame: VoxelFrame
 	## The cells to write, keyed by cell position.
@@ -112,13 +108,10 @@ class BrushJob extends VoxelFrame.EditJob:
 		# A shape brush paints one material. A selection brush and a paste keep materials.
 		var uniform := not replace_materials and shape != StampSettings.BrushShape.SELECTION
 		var uniform_material := VoxelFrame.material(Color.TRANSPARENT) if erase_existing else material
-		# These tests do not change inside the loop, and the loop runs once per
-		# pattern cell per center.
-		var mask_empty: bool = selection_mask.is_empty()
+		# This test does not change inside the loop, and the loop runs once per
+		# pattern cell per center. The edit scope filters the selection and the
+		# slice at the write gate, so the stamp tests only the existing-only rule.
 		var existing_only := paint_existing
-		# A final batch still passes the selection and existing-only filters. It
-		# only skips the symmetry expansion that its producer already ran.
-		var every_cell := (edit_context != null and not centers_are_final) or (mask_empty and not existing_only)
 		# A shape brush paints one material, so an offset that wrote a cell leaves
 		# the same material behind. That makes it safe to skip the offsets the
 		# previous center already covered, which leaves the new edge alone. A
@@ -147,7 +140,7 @@ class BrushJob extends VoxelFrame.EditJob:
 			previous = center
 			for offset: Vector3i in use:
 				var cell_position := center + offset
-				if every_cell or ((mask_empty or selection_mask.has(cell_position)) and (not existing_only or edited_frame.has(cell_position))):
+				if not existing_only or edited_frame.has(cell_position):
 					if erase_existing or uniform:
 						cell_materials[cell_position] = uniform_material
 					else:
@@ -342,10 +335,9 @@ func open_stroke() -> VoxelEditTransaction:
 	# this stroke writes. The switch still ends the stroke.
 	_stroke_erases = _erases()
 	_stroke_existing_only = _paints_existing() or _stroke_erases
-	# Reuse the context the transaction froze at begin. Its selection is a read-only
-	# snapshot, so the job can filter on it without copying the selection again.
+	# Reuse the context the transaction froze at begin. Its selection and slice are
+	# a read-only snapshot, so the write gate filters on it without a copy.
 	_edit_context = tx.edit_context
-	_selection_mask = tx.edit_context.selection
 	return tx
 
 
@@ -417,7 +409,6 @@ func _build_job() -> BrushJob:
 	job.material = _stroke_material
 	job.paint_existing = _stroke_existing_only
 	job.erase_existing = _stroke_erases
-	job.selection_mask = _selection_mask
 	job.edit_context = _edit_context
 	# The batch writes its own frame. `job_frame` shares the chunk objects and
 	# copies a chunk only when the batch writes it. The stroke owns the edit, so
@@ -540,7 +531,8 @@ func _pick_start(origin: Vector3, dir: Vector3) -> PickResult:
 	if not _pick_adds() or pick.add_target == VoxelPicking.NONE:
 		return pick
 	pick.target = pick.add_target
-	pick.plane = VoxelPicking.view_plane(pick.target, origin, _forward())
+	if not State.slice_enabled:
+		pick.plane = VoxelPicking.view_plane(pick.target, origin, _forward())
 	return pick
 
 

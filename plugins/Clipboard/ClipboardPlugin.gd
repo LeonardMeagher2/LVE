@@ -235,6 +235,8 @@ func _copy_voxels(cut_source: bool) -> void:
 	job.source_frame = frame.copy_frame()
 	job.selection_mask = State.selection.capture()
 	job.cut_source = cut_source
+	# A cut is an edit, so the slice limits its writes.
+	job.edit_context = State.drawing_context()
 	_copy_job = job
 	var source_count := job.selection_mask.size() if not job.selection_mask.is_empty() else frame.count()
 	var operation_id := State.begin_operation("Cutting voxels" if cut_source else "Copying voxels", source_count, true, self)

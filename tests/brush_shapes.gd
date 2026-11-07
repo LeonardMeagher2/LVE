@@ -9,6 +9,32 @@ var axis := 1
 
 func _ready() -> void:
 	test("cube and sphere brushes paint volumes and retain copied colors", _run)
+	test("the mirrored brush cursor flips its normals", _mirror_cursor_normals, "mirror_cursor_normals")
+
+
+func _mirror_cursor_normals() -> void:
+	step("Given the brush cursor with edit symmetry", func():
+		State.symmetry_axes = 0
+		var cursor = plugin("BrushPlugin")._tool.get_node("Cursor")
+		expect(cursor._mirror_lit_material != null, "the cursor holds a mirrored lit material")
+		expect(cursor._mirror_lit_material.get_shader_parameter("flip_normal") == true, "the mirrored material flips the normal")
+		expect(cursor._lit_material.get_shader_parameter("flip_normal") == false, "the main cursor keeps its normal")
+		expect(cursor._mirror_lit_material.get_shader_parameter("flip_front") == true, "the mirrored material keeps its outside faces")
+		expect(cursor._lit_material.get_shader_parameter("flip_front") == false, "the main cursor keeps its outside faces")
+	)
+	step("When the X symmetry mirror is on", func():
+		State.symmetry_axes = 1
+		var cursor = plugin("BrushPlugin")._tool.get_node("Cursor")
+		cursor.show_voxels({Vector3i.ZERO: Color.RED}, Color.RED, false, 1, false)
+		expect(cursor.is_settled(), "the box cursor lands at once")
+		cursor._process(0.0)
+		var mirror: MeshInstance3D = cursor.get_node("Mirror1")
+		expect(mirror.visible, "the mirror cursor is visible")
+		expect(mirror.material_override == cursor._mirror_lit_material, "the mirror cursor uses the flipped material")
+	)
+	step("Then the symmetry resets", func():
+		State.symmetry_axes = 0
+	)
 
 
 func _run() -> void:

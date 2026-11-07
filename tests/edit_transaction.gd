@@ -23,6 +23,7 @@ var old_context: VoxelFrame.EditContext
 var refs: Array[WeakRef] = []
 var before_data := PackedByteArray()
 var before_count := 0
+var scope: VoxelFrame.EditContext
 var _default_color := Color.BLACK
 var _default_mode := BrushToolSettings.BrushMode.PENCIL
 var _defaults_ready := false
@@ -32,6 +33,7 @@ func _ready() -> void:
 	timeout = 30.0
 	test("a no-op edit records no history", _noop, "noop")
 	test("a selection-only change records one undo", _selection_only, "selection_only")
+	test("undo and redo install the selection masks and keep them frozen", _selection_masks, "selection_masks")
 	test("an edit keeps the full material of a changed cell", _changed_material, "changed_material")
 	test("a cancel restores the frame bounds and the selection", _cancel_restores, "cancel_restores")
 	test("a nested begin is refused and leaves the active edit intact", _nested_begin_refused, "nested_begin_refused")
@@ -47,6 +49,7 @@ func _ready() -> void:
 	test("a same-tool transform cancel keeps the new stroke", _same_tool_reentrant_transform_cancel, "same_tool_reentrant_transform_cancel")
 	test("a tool reacquires an edit after a document reset", _tool_reacquire_after_document, "tool_reacquire_after_document")
 	test("closed transactions are released while history keeps the frame", _transaction_release, "transaction_release")
+	test("one edit scope limits the selection, the slice, and the writes", _scope_filter, "scope_filter")
 
 
 func _setup_test() -> void:
@@ -60,6 +63,9 @@ func _setup_test() -> void:
 	_brush_settings.mode = _default_mode
 	State.symmetry_axes = 0
 	State.symmetry_origin = State.DEFAULT_SYMMETRY_ORIGIN
+	State.slice_enabled = false
+	State.floor_axis = Vector3.Axis.AXIS_Y
+	State.floor_index = 0
 	State.clear_selection()
 	State.undo_redo.clear_history()
 	edit = null
@@ -133,6 +139,49 @@ func _selection_only() -> void:
 		State.undo_redo.redo()
 		expect(State.selection.contains(Vector3i(3, 0, 3)), "redo restores the added cell")
 	)
+
+
+func _selection_masks() -> void:
+	var first_chunk_cell := Vector3i(1, 2, 3)
+	var second_chunk_cell := Vector3i(20, 1, 1)
+	var added_cell := Vector3i(33, 4, 5)
+	var after_undo_cell := Vector3i(-2, 0, 2)
+	step("Given a selection in two chunks and an open edit", func():
+		State.selection.add(first_chunk_cell)
+		State.selection.add(second_chunk_cell)
+		edit = State.begin_edit()
+		expect(edit != null, "the edit opens")
+	)
+	step("When the edit adds a cell in a third chunk", func():
+		State.selection.add(added_cell)
+		State.finish_edit(edit, "Select")
+		edit = null
+	)
+	step("Then undo installs the recorded masks without a rebuild", func():
+		var rebuilds := VoxelSelection._profile_rebuild_calls
+		State.undo_redo.undo()
+		expect(VoxelSelection._profile_rebuild_calls == rebuilds, "the undo adopts the recorded masks")
+		expect(_masks_match_cells(), "the undo masks describe the restored cells")
+	)
+	step("When a later write changes the restored selection", func():
+		State.selection.add(after_undo_cell)
+		expect(State.selection.contains(after_undo_cell), "the write lands")
+	)
+	step("Then redo installs the exact recorded masks", func():
+		var rebuilds := VoxelSelection._profile_rebuild_calls
+		State.undo_redo.redo()
+		expect(VoxelSelection._profile_rebuild_calls == rebuilds, "the redo adopts the recorded masks")
+		expect(State.selection.contains(added_cell), "redo restores the added cell")
+		expect(not State.selection.contains(after_undo_cell), "redo drops the later cell")
+		expect(_masks_match_cells(), "the redo masks describe the restored cells")
+	)
+
+
+# True when the live masks agree with the masks of a fresh rebuild.
+func _masks_match_cells() -> bool:
+	var rebuilt := VoxelSelection.new()
+	rebuilt.cells = State.selection.all_cells().duplicate()
+	return VoxelEditTransaction._masks_equal(State.selection.mask_chunks(), rebuilt.mask_chunks())
 
 
 func _changed_material() -> void:
@@ -362,6 +411,60 @@ func _captured_context() -> void:
 		expect(frame.has(Vector3i(2, 0, 0)), "the source cell is written")
 		expect(frame.has(Vector3i(-2, 0, 0)), "the captured reflection is written")
 		expect(not frame.has(Vector3i(198, 0, 0)), "the changed origin is not used")
+	)
+
+
+# One frozen scope holds every writable-cell rule. The write gate applies it to
+# any job that carries it, and a job without one writes everything.
+func _scope_filter() -> void:
+	step("Given a scope with a Y slice and one selected cell", func():
+		scope = VoxelFrame.EditContext.new()
+		scope.slice_axis = Vector3.Axis.AXIS_Y
+		scope.slice_index = 2
+		scope.selection[Vector3i(0, 2, 0)] = true
+		expect(scope.allows(Vector3i(0, 2, 0)), "the selected slice cell is allowed")
+		expect(not scope.allows(Vector3i(0, 3, 0)), "a cell off the slice is refused")
+		expect(not scope.allows(Vector3i(1, 2, 0)), "a cell outside the selection is refused")
+		var copy := scope.duplicate()
+		expect(copy.slice_axis == Vector3.Axis.AXIS_Y and copy.slice_index == 2, "the copy keeps the slice")
+		expect(copy.allows(Vector3i(0, 2, 0)), "the copy keeps the selection")
+	)
+	step("When a job with the scope writes a batch", func():
+		var frame := State.get_current_voxel_frame()
+		var job := VoxelFrame.EditJob.new()
+		job.edit_context = scope
+		frame.set_cells({
+			Vector3i(0, 2, 0): VoxelFrame.material(Color.RED),
+			Vector3i(0, 3, 0): VoxelFrame.material(Color.GREEN),
+			Vector3i(1, 2, 0): VoxelFrame.material(Color.BLUE),
+		}, job)
+		expect(frame.has(Vector3i(0, 2, 0)), "the allowed cell is written")
+		expect(not frame.has(Vector3i(0, 3, 0)), "the off-slice cell is not written")
+		expect(not frame.has(Vector3i(1, 2, 0)), "the unselected cell is not written")
+		expect(job.applied_cells.size() == 1, "the job reports only the written cell")
+	)
+	step("When a job without a scope writes the same batch", func():
+		var frame := State.get_current_voxel_frame()
+		frame.set_cells({
+			Vector3i(0, 3, 0): VoxelFrame.material(Color.GREEN),
+			Vector3i(1, 2, 0): VoxelFrame.material(Color.BLUE),
+		}, VoxelFrame.EditJob.new())
+		expect(frame.has(Vector3i(0, 3, 0)) and frame.has(Vector3i(1, 2, 0)), "an unscoped job writes every cell")
+	)
+	step("When a sliced edit is undone", func():
+		State.document = VoxelDocument.new()
+		State.slice_enabled = true
+		State.floor_index = 2
+		var frame := State.get_current_voxel_frame()
+		frame.set_cell(Vector3i(0, 5, 0), VoxelFrame.material(Color.RED))
+		var tx := State.begin_edit()
+		expect(tx != null, "the sliced edit opens")
+		State.paint(Vector3i(0, 2, 0), VoxelFrame.material(Color.BLUE))
+		State.finish_edit(tx)
+		expect(frame.has(Vector3i(0, 2, 0)), "the sliced edit writes the layer")
+		State.undo_redo.undo()
+		expect(not frame.has(Vector3i(0, 2, 0)), "undo removes the sliced edit")
+		expect(frame.has(Vector3i(0, 5, 0)), "undo restores the whole chunk, not only the slice")
 	)
 
 

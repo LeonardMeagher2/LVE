@@ -35,6 +35,8 @@ signal default_palette_changed()
 signal selection_changed()
 ## Emitted when the floor axis or the floor index changes.
 signal floor_plane_changed()
+## Emitted when the slice option changes.
+signal slice_changed()
 ## Emitted when the symmetry axes or the symmetry origin change.
 signal symmetry_changed()
 ## Emitted when a tag property changes.
@@ -184,6 +186,48 @@ var floor_index := 0:
 			return
 		floor_index = value
 		floor_plane_changed.emit()
+
+## Whether the slice limits every edit. It is a view of [member slice_layers],
+## so 0 layers means every layer is writable.
+var slice_enabled: bool:
+	get:
+		return slice_layers > 0
+	set(value):
+		slice_layers = 1 if value else 0
+
+## The largest slice layer count on each side.
+const MAX_SLICE_LAYERS := 8
+
+## The number of writable and visible layers on each side of the floor plane. 0
+## shows every layer. 1 keeps one layer on each side of the plane.
+var slice_layers := 0:
+	set(value):
+		value = clampi(value, 0, MAX_SLICE_LAYERS)
+		if value == slice_layers:
+			return
+		slice_layers = value
+		slice_changed.emit()
+
+
+## Returns the first layer of the slice.
+func slice_first() -> int:
+	return floor_index - slice_layers
+
+
+## Returns the last layer of the slice.
+func slice_last() -> int:
+	return floor_index + slice_layers - 1 if slice_layers > 0 else floor_index
+
+
+## Returns the number of layers in the slice. The floor plane splits the slab
+## evenly, so the floor layer is the first layer above it.
+func slice_count() -> int:
+	return slice_layers * 2 if slice_layers > 0 else 1
+
+
+## Returns the world level of the slice plane.
+func slice_level() -> float:
+	return float(floor_index) - 0.5
 
 ## The symmetry axes as a bit mask. Bit 0 is X, bit 1 is Y, and bit 2 is Z.
 var symmetry_axes := 0:
@@ -347,9 +391,9 @@ func remove_plugin(plugin: VoxelPlugin) -> void:
 
 
 ## Paints one cell with the current edit context. It expands the cell through
-## symmetry and the selection.
+## symmetry and maps it through the selection and the slice.
 func paint(position: Vector3i, cell_material: PackedFloat32Array) -> void:
-	if symmetry_axes == 0 and _active_edit == null:
+	if symmetry_axes == 0 and not slice_enabled and _active_edit == null:
 		document.paint(current_frame, position, cell_material)
 		return
 	var context := drawing_context()
@@ -374,6 +418,10 @@ func _live_context() -> VoxelFrame.EditContext:
 	context.origin_twice = Vector3i(symmetry_origin * 2.0)
 	context.selection = selection.capture()
 	context.selection.make_read_only()
+	if slice_enabled:
+		context.slice_axis = floor_axis
+		context.slice_index = slice_first()
+		context.slice_count = slice_count()
 	return context
 
 
@@ -386,13 +434,11 @@ func symmetry_transform(mask: int, origin: Vector3) -> Transform3D:
 	return Transform3D(Basis.from_scale(reflection), origin - origin * reflection)
 
 
-## Returns an edit context that carries the symmetry only. The selection filter
-## is not applied.
+## Returns an edit context that carries the symmetry and the slice, but not the
+## selection filter.
 func selection_context() -> VoxelFrame.EditContext:
-	var drawing := drawing_context()
-	var context := VoxelFrame.EditContext.new()
-	context.axes = drawing.axes
-	context.origin_twice = drawing.origin_twice
+	var context := drawing_context().duplicate()
+	context.selection = {}
 	return context
 
 
@@ -585,8 +631,8 @@ func finish_edit(tx: VoxelEditTransaction, action: String = "Stroke") -> void:
 		edit_state_changed.emit()
 		return
 	undo_redo.create_action(action)
-	undo_redo.add_undo_method(_restore_chunks.bind(change.frame, change.undo_chunks, change.undo_selection))
-	undo_redo.add_do_method(_restore_chunks.bind(change.frame, change.redo_chunks, change.redo_selection))
+	undo_redo.add_undo_method(_restore_chunks.bind(change.frame, change.undo_chunks, change.undo_selection, change.undo_selection_masks))
+	undo_redo.add_do_method(_restore_chunks.bind(change.frame, change.redo_chunks, change.redo_selection, change.redo_selection_masks))
 	_commit_history(false)
 	edit_state_changed.emit()
 
@@ -604,7 +650,7 @@ func cancel_edit(tx: VoxelEditTransaction) -> void:
 	if rollback == null:
 		edit_state_changed.emit()
 		return
-	_restore_chunks(rollback.frame, rollback.chunks, rollback.selection)
+	_restore_chunks(rollback.frame, rollback.chunks, rollback.selection, rollback.selection_masks)
 	edit_state_changed.emit()
 
 
@@ -617,14 +663,14 @@ func _abandon_active_edit() -> void:
 	_active_edit = null
 
 
-func _restore_chunks(edited_frame: VoxelFrame, chunk_snapshot: Dictionary, selection_snapshot: Dictionary) -> void:
+func _restore_chunks(edited_frame: VoxelFrame, chunk_snapshot: Dictionary, selection_snapshot: Dictionary, selection_snapshot_masks: Dictionary = {}) -> void:
 	var frame_index := document.frames.find(edited_frame)
 	if frame_index == -1:
 		return
 	var cells_restored := edited_frame.chunks != chunk_snapshot
 	edited_frame.restore(chunk_snapshot)
 	document._bounds_dirty = true
-	selection.restore(selection_snapshot)
+	selection.restore(selection_snapshot, selection_snapshot_masks)
 	if cells_restored:
 		var affected_cells: Array[Vector3i] = []
 		cells_changed.emit(frame_index, affected_cells)
@@ -1012,6 +1058,8 @@ func erase_selection() -> void:
 	var job := EraseJob.new()
 	job.edited_frame = VoxelFrame.job_frame(edited_frame)
 	job.selection_mask = selection.capture()
+	# The erase is an edit, so the slice limits it like every other write.
+	job.edit_context = _erase_edit.edit_context
 	_erase_job = job
 	var operation_id := begin_operation("Erasing selection", selection.count(), true, self, _interrupt_erase)
 	_erase_operation_id = operation_id

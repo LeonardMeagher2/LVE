@@ -110,16 +110,19 @@ func handle_input(event: InputEvent, pos: Vector2) -> bool:
 
 
 func _pick_start(origin: Vector3, dir: Vector3) -> PickResult:
-	var pick := VoxelPicking.start_pick(origin, dir, State.get_current_voxel_frame(), _forward())
+	var pick := VoxelPicking.start_pick(origin, dir, State.get_current_voxel_frame(), _forward(), State.slice_enabled)
 	if pick.add_target != VoxelPicking.NONE:
 		pick.target = pick.add_target
-		pick.plane = VoxelPicking.view_plane(pick.target, origin, _forward())
+		if not State.slice_enabled:
+			pick.plane = VoxelPicking.view_plane(pick.target, origin, _forward())
 	return pick
 
 
-## Returns the drag pick on the plane through the anchor.
+## Returns the drag pick on the plane through the anchor. The slice plane stays
+## the drag plane while the slice is on.
 func pick_drag(request: PickRequest) -> PickResult:
-	_plane = VoxelPicking.view_plane(_anchor, request.origin, request.forward)
+	if not State.slice_enabled:
+		_plane = VoxelPicking.view_plane(_anchor, request.origin, request.forward)
 	return VoxelPicking.drag_pick(request.origin, request.dir, request.frame, _plane)
 
 
@@ -147,7 +150,6 @@ func _begin_line(pick: PickResult) -> void:
 	_stroke_pattern_size = _settings.estimated_size()
 	_stroke_color = State.current_color
 	_stroke_material = State.current_material.duplicate()
-	_selection_mask = State.selection.capture()
 	_edit_context = State.drawing_context()
 	_update_endpoint(_anchor)
 
@@ -180,7 +182,6 @@ func _start_preview() -> void:
 	_job.diameter = _stroke_diameter
 	_job.shape = _stroke_shape
 	_job.material = _stroke_material
-	_job.selection_mask = _selection_mask
 	_job.edit_context = _edit_context
 	# The preview writes its own frame. `job_frame` shares the frozen line
 	# snapshot, so a preview costs the cells it writes, not the whole frame.

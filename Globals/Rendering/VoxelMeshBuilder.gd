@@ -29,6 +29,14 @@ var chunk_location := Vector3i.ZERO
 var smooth_normals := false
 ## Whether the mesh uses the texture atlas instead of vertex colors.
 var texture_materials := true
+## The world axis of the writable slice, or -1 when the mesh holds every layer.
+## A slice build keeps only the cells inside the slice layers, so a renderer can
+## show the floor slab alone.
+var slice_axis := -1
+## The first cell index of the slice along [member slice_axis].
+var slice_index := 0
+## The number of layers in the slice from [member slice_index].
+var slice_count := 1
 ## The worker pool task id, or -1 when no worker runs.
 var worker_task_id := -1
 ## The built mesh arrays, indexed by [enum Mesh.ArrayType].
@@ -85,13 +93,13 @@ func run() -> void:
 	# The enclosed shortcut runs before any snapshot work. Every other chunk falls
 	# through to the normal body, so the geometry, the materials, and the shading
 	# are unchanged.
-	if enclosed_shortcut and frame != null and _enclosed(frame, chunk_location):
+	if enclosed_shortcut and slice_axis < 0 and frame != null and _enclosed(frame, chunk_location):
 		enclosed_culled = true
 		source_frame = null
 		_finish_enclosed(frame)
 		return
 	var snapshot_started_us := Time.get_ticks_usec() if profile else 0
-	var snapshot := _snapshot(source_frame, chunk_location, smooth_normals, profile)
+	var snapshot := _snapshot(source_frame, chunk_location, smooth_normals, profile, slice_axis, slice_index, slice_count)
 	var padded_cell_colors: PackedColorArray = snapshot[0]
 	var padded_cell_materials: PackedInt32Array = snapshot[1]
 	var materials: PackedFloat32Array = snapshot[2]
@@ -412,7 +420,7 @@ static func _corner_normal(corner: Vector3i, padded_cell_colors: PackedColorArra
 # marks an occupied cell for the whole padded volume, including the border. The
 # smooth corner normals read occupancy from that map, so they match
 # `VoxelFrame.has` for every stored voxel.
-static func _snapshot(frame: VoxelFrame, location: Vector3i, use_smooth_normals: bool, count_reads := false) -> Array:
+static func _snapshot(frame: VoxelFrame, location: Vector3i, use_smooth_normals: bool, count_reads := false, slice_axis := -1, slice_index := 0, slice_count := 1) -> Array:
 	var padded_cell_colors := PackedColorArray()
 	padded_cell_colors.resize(PADDED_CHUNK_SIZE * PADDED_CHUNK_SIZE * PADDED_CHUNK_SIZE)
 	padded_cell_colors.fill(Color.TRANSPARENT)
@@ -446,6 +454,34 @@ static func _snapshot(frame: VoxelFrame, location: Vector3i, use_smooth_normals:
 		var y_last := mini(CHUNK_SIZE, PADDED_CHUNK_SIZE - origin_delta.y)
 		var z_first := maxi(0, -origin_delta.z)
 		var z_last := mini(CHUNK_SIZE, PADDED_CHUNK_SIZE - origin_delta.z)
+		if slice_axis >= 0:
+			# A slice keeps a range of world layers, so this neighbor contributes
+			# only its own part of that range. A neighbor outside it is skipped.
+			var chunk_base := (location[slice_axis] + offset[slice_axis]) * CHUNK_SIZE
+			var local_first := slice_index - chunk_base
+			var local_last := local_first + slice_count
+			match slice_axis:
+				0:
+					var x_from := maxi(x_first, local_first)
+					var x_to := mini(x_last, local_last)
+					if x_from >= x_to:
+						continue
+					x_first = x_from
+					x_last = x_to
+				1:
+					var y_from := maxi(y_first, local_first)
+					var y_to := mini(y_last, local_last)
+					if y_from >= y_to:
+						continue
+					y_first = y_from
+					y_last = y_to
+				_:
+					var z_from := maxi(z_first, local_first)
+					var z_to := mini(z_last, local_last)
+					if z_from >= z_to:
+						continue
+					z_first = z_from
+					z_last = z_to
 		if count_reads:
 			chunks_read += 1
 			cells_read += (x_last - x_first) * (y_last - y_first) * (z_last - z_first)

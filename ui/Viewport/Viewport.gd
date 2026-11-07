@@ -8,6 +8,8 @@ extends Node3D
 ## Emitted after the lighting settings change.
 signal lighting_changed()
 
+const SLICE_MATTE_SCRIPT := preload("res://ui/Viewport/SliceMatte.gd")
+
 ## Whether the lighting settings load from and save to the document.
 @export var document_lighting := true
 
@@ -57,6 +59,24 @@ func _ready() -> void:
 		lighting_changed.connect(_save_document_lighting)
 		State.document_changed.connect(_restore_document_lighting)
 		_restore_document_lighting()
+	State.slice_changed.connect(_on_slice_changed)
+	State.floor_plane_changed.connect(_on_slice_changed)
+	var slice_matte: MeshInstance3D = SLICE_MATTE_SCRIPT.new()
+	slice_matte.name = "SliceMatte"
+	add_child(slice_matte)
+	_on_slice_changed()
+
+
+# Shows only the slice slab while the slice is on. The renderer keeps its mesh
+# cache; the slice is part of the surface key, so a layer move rebuilds only the
+# slice rows.
+func _on_slice_changed() -> void:
+	var renderer: VoxelRenderer = $VoxelRenderer
+	renderer.set_slice(
+		State.floor_axis if State.slice_enabled else -1,
+		State.slice_first(),
+		State.slice_count() if State.slice_enabled else 1,
+	)
 
 
 func _save_document_lighting() -> void:

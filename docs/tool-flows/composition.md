@@ -108,7 +108,7 @@ The jobs own their frame snapshots and their job inputs.
 ### Current signatures
 
 - `VoxelPreview.show_voxels(colors: Dictionary, color: Color, outline: bool = false, cube_diameter: int = 0, use_voxel_colors: bool = true, token: Variant = null) -> void`
-- `VoxelPreview._request(cells: Dictionary, style: PreviewStyle, use_voxel_colors: bool = false, color_key: Color = Color.WHITE, token: Variant = null) -> void`
+- `VoxelPreview._request(cells: Dictionary, style: PreviewStyle, use_voxel_colors: bool = false, color_key: Color = Color.WHITE, token: Variant = null, mask_chunks: Dictionary = {}) -> void`
 - `VoxelPreview.SolidPayload.token: Variant`
 - `VoxelPreview.PreviewJob.token: Variant`
 - `VoxelPreview.installed_token() -> Variant`

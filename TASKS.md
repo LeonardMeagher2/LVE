@@ -31,6 +31,19 @@ See [GLTF_EXPORT.md](GLTF_EXPORT.md) for the mesh export format and import setti
 
 ## Tools
 
+- [ ] Finish the floor-plane slice
+  - [x] The slice is a layer count, not a toggle. N is the number of layers on each side of the floor plane, so the slab is 2N layers. The plane splits the slab evenly, and the floor layer is the first layer above it. 0 shows every layer, and the count stops at 8 each side. The whole slab is writable. The ray pick ignores cells outside the slab and empty space still uses the floor plane. Test `floor_plane.slice_slab`.
+  - [ ] Make Terrain slice-aware. Its per-column surface tracking must plan only the layer. A write filter desyncs the next dab.
+  - [ ] Add the arrow-key nudge. Godot consumes bare arrows for focus navigation, so route it before the GUI, or use a modifier.
+  - [ ] Ask the user to test the slice option manually with Brush, Paint, Line, Spray, Fill, Transform, Cut, and Erase Selection.
+  - [x] Add the slice context cue: a projected matte of the off-slice cells on the slice plane. The plate hides it where the slice layer holds cells. Above the plane reads light blue, below reads dark amber, and the distance sets the strength. A slice-layer write does not rebuild it. Test `slice_matte`.
+  - [x] The matte reads the correct side on the X axis. A chunk entirely above or below the slab used the opposite branch, and its negative distance wrapped. Test `slice_matte.slice_matte_x`.
+  - [ ] A Terrain stroke does not refresh the matte. Terrain stays outside the write gate, and it publishes through `chunks_changed`, while the matte listens to `cells_changed`. Connect it only if Terrain stays outside the gate.
+  - [x] The brush cursor shows the full 3D stamp while the slice is on. The stroke writes the stamp on every slab layer, so a one-layer cross-section under-reported it.
+  - [x] A transform moves only the source cells inside the slab. A source outside it cannot be cleared, so moving it would leave a copy. Test the final case in `transform_selection`.
+  - [x] The viewport applies the slice in one rebuild, so a layer-count drag pays one rebuild per step.
+  - [ ] Optional: a static selection-line wire of the layers around the slice, if the matte reads too flat.
+
 - [ ] Add the Extrude tool
   - Extrude selected voxels along the plane normal.
   - Set the distance with a drag.

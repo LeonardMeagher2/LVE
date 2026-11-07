@@ -32,4 +32,4 @@ func _paints_existing() -> bool:
 ## Returns the drag pick. A paint drag picks the surface cell, so the pointer
 ## stays on the surface.
 func pick_drag(request: PickRequest) -> PickResult:
-	return VoxelPicking.start_pick(request.origin, request.dir, request.frame, request.forward)
+	return VoxelPicking.start_pick(request.origin, request.dir, request.frame, request.forward, State.slice_enabled)

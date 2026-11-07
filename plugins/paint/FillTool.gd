@@ -95,10 +95,14 @@ class FillJob extends VoxelFrame.EditJob:
 	func run() -> void:
 		stage("Finding connected voxels" if connected else "Finding matching voxels", -1 if connected else source_frame.count())
 		# The shared search writes the replacement material straight into the change
-		# map, so the result needs no second conversion pass.
+		# map, so the result needs no second conversion pass. The slice bounds the
+		# flood: a fill must not cross a layer.
 		var changes := {}
 		var stream: Callable = Callable(self, "_stream_batch") if batch_queue != null else Callable()
-		if not VoxelRegionSearch.find(changes, source_frame, seed_cell, target_material, connected, replacement_material, selection_mask, self, stream):
+		var slice_axis := edit_context.slice_axis if edit_context else -1
+		var slice_index := edit_context.slice_index if edit_context else 0
+		var slice_count := edit_context.slice_count if edit_context else 1
+		if not VoxelRegionSearch.find(changes, source_frame, seed_cell, target_material, connected, replacement_material, selection_mask, self, stream, slice_axis, slice_index, slice_count):
 			return
 		matching_cells = changes
 		if apply_changes:
@@ -109,6 +113,7 @@ class FillJob extends VoxelFrame.EditJob:
 			applied_uniform = replacement_material
 			# An identity context writes exactly what `apply_cells` writes, minus the
 			# redundant per-cell filter. The non-identity path keeps the base method.
+			# The write gate applies the selection and the slice either way.
 			if _context_is_identity():
 				applied_cells = changes
 				if not checkpoint(0):
@@ -380,7 +385,9 @@ func _apply_fill_slice(keys: Array, start: int, end: int, search_job: FillJob, f
 	for index in range(start, end):
 		slice[keys[index]] = search_job.replacement_material
 	var slice_started_us := Time.get_ticks_usec()
-	_mark_changed(_source_frame.set_cells(slice, null, search_job.replacement_material))
+	# The job carries the frozen scope, so the write gate applies the selection and
+	# the slice to every streamed batch.
+	_mark_changed(_source_frame.set_cells(slice, search_job, search_job.replacement_material))
 	_retune_slice(end - start, Time.get_ticks_usec() - slice_started_us)
 	return true
 
