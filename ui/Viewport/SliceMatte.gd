@@ -214,6 +214,8 @@ func _on_cells_changed(frame_index: int, affected: Array[Vector3i]) -> void:
 
 func _invalidate() -> void:
 	_generation += 1
+	if _job:
+		_job.cancel()
 	if not State.slice_enabled:
 		_pending = false
 		visible = false
