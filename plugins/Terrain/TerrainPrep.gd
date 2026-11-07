@@ -134,9 +134,8 @@ static func smooth_surface_frame(frame: VoxelFrame, stroke_frame: TerrainFrame, 
 static func smooth_fields(center_point: Vector3, radius: int, falloff: float, context: VoxelFrame.EditContext, selection: Dictionary, job: VoxelFrame.EditJob = null) -> Array:
 	var use_context := context
 	if use_context != null and not is_same(use_context.selection, selection):
-		var copy := VoxelFrame.EditContext.new()
-		copy.axes = use_context.axes
-		copy.origin_twice = use_context.origin_twice
-		copy.selection = selection
-		use_context = copy
+		# A duplicate keeps the slice and the document size limit. A manual copy
+		# dropped both.
+		use_context = use_context.duplicate()
+		use_context.selection = selection
 	return TerrainPreview.compute_smooth_fields(center_point, radius, falloff, use_context, job)

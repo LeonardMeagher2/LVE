@@ -35,6 +35,7 @@ func _run() -> void:
 		for mode in 4:
 			source.add_tag("Tag %s 🦩" % mode, 0, 2, mode, mode)
 		source.smooth_normals = true
+		source.size = Vector3i(5, 6, 7)
 		source.lighting_settings = {"basis": Basis(Vector3.UP, 0.5), "color": Color(1, 0.5, 0.25, 0.75), "ambient_color": Color(0.2, 0.3, 0.4, 0.5)}
 		source.export_settings = {"view": 7, "sprite_ortho": false, "sprite_center": false, "automatic_size": true, "frame_size": 64.0, "turntable": false, "views": 12.0, "metadata": true, "center": false, "model_tag": 1, "sheet_tag": 2,
 			"lighting": {"basis": Basis.IDENTITY, "color": Color.WHITE, "ambient_color": Color.BLUE, "energy": 0.5, "ambient_energy": 0.25, "shadows": false, "shaded": true, "view_locked": true, "view_basis": Basis.IDENTITY},
@@ -64,6 +65,7 @@ func _run() -> void:
 			expect(loaded != null, "the %s document loads" % suffix)
 			if loaded:
 				expect(loaded.document_data() == source.document_data(), "the %s file preserves every document field" % suffix)
+				expect(loaded.size == source.size, "the file preserves the centered document size")
 				expect(not loaded.export_settings.sprite_center, "the file preserves the sprite Center choice")
 				expect(loaded.export_settings.automatic_size, "the file retains compatible legacy export settings")
 				expect(loaded.frames[1].count() == 0, "the empty frame retains its position")
@@ -121,6 +123,8 @@ func _run() -> void:
 	step("When shared files contain invalid document data", _check_invalid_documents)
 	step("Then failed document opening preserves the current document and undo history", func():
 		var previous := State.document
+		# This case proves history preservation, not the document size limit.
+		State.document.size = Vector3i.ZERO
 		var tx := State.begin_edit()
 		State.paint(Vector3i(100, 0, 0), VoxelFrame.material(Color.GREEN))
 		State.finish_edit(tx)

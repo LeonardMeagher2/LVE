@@ -1,0 +1,63 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://ui/MenuBar/DocumentSettingsModal.gd" id="1_script"]
+
+[node name="DocumentSettingsModal" type="ConfirmationDialog"]
+title = "Document Properties"
+size = Vector2i(360, 130)
+script = ExtResource("1_script")
+
+[node name="Layout" type="VBoxContainer" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 8.0
+offset_top = 8.0
+offset_right = -8.0
+offset_bottom = -44.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="SmoothNormals" type="CheckBox" parent="Layout"]
+layout_mode = 2
+text = "Smooth normals"
+
+[node name="SizeRow" type="HBoxContainer" parent="Layout"]
+layout_mode = 2
+
+[node name="SizeLabel" type="Label" parent="Layout/SizeRow"]
+layout_mode = 2
+text = "Size"
+
+[node name="SizeX" type="SpinBox" parent="Layout/SizeRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 0.0
+max_value = 4096.0
+step = 1.0
+rounded = true
+prefix = "X "
+
+[node name="SizeY" type="SpinBox" parent="Layout/SizeRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 0.0
+max_value = 4096.0
+step = 1.0
+rounded = true
+prefix = "Y "
+
+[node name="SizeZ" type="SpinBox" parent="Layout/SizeRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 0.0
+max_value = 4096.0
+step = 1.0
+rounded = true
+prefix = "Z "
+
+[node name="Fit" type="Button" parent="Layout/SizeRow"]
+layout_mode = 2
+tooltip_text = "Fit the size to the bounds of all frames"
+text = "Fit"
+

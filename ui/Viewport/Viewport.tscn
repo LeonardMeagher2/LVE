@@ -16,6 +16,8 @@
 [ext_resource type="Shader" uid="uid://darib2qppk3b3" path="res://ui/Viewport/Grid.gdshader" id="17_grid"]
 [ext_resource type="Texture2D" uid="uid://denrh23gr1h18" path="res://icons/light.svg" id="18_light"]
 [ext_resource type="Material" uid="uid://dv7wwwbfihlej" path="res://plugins/cursor_material.tres" id="19_handle"]
+[ext_resource type="Shader" path="res://ui/Viewport/outside_shade.gdshader" id="20_outside"]
+[ext_resource type="Script" path="res://ui/Viewport/OutsideShade.gd" id="21_outside_script"]
 
 [sub_resource type="SphereMesh" id="SphereMesh_light"]
 radial_segments = 24
@@ -39,6 +41,13 @@ render_priority = -1
 shader = ExtResource("17_grid")
 shader_parameter/line_color = Color(0.65, 0.65, 0.65, 0.8)
 shader_parameter/floor_axis = 1
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_outside"]
+resource_local_to_scene = true
+shader = ExtResource("20_outside")
+shader_parameter/box_min = Vector3(0, 0, 0)
+shader_parameter/box_max = Vector3(0, 0, 0)
+shader_parameter/shade_color = Color(0, 0, 0, 0.4)
 
 [sub_resource type="InputEventAction" id="InputEventAction_view_menu"]
 action = &"view_menu"
@@ -112,6 +121,20 @@ grow_horizontal = 2
 grow_vertical = 2
 texture = ExtResource("2_gu70n")
 stretch_mode = 1
+
+[node name="OutsideShadeLayer" type="CanvasLayer" parent="PanelContainer/SubViewportContainer/Viewport"]
+layer = 1
+
+[node name="OutsideShade" type="ColorRect" parent="PanelContainer/SubViewportContainer/Viewport/OutsideShadeLayer"]
+unique_name_in_owner = true
+material = SubResource("ShaderMaterial_outside")
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("21_outside_script")
 
 [node name="ViewportScene" type="Node3D" parent="PanelContainer/SubViewportContainer/Viewport" unique_id=1818999807]
 unique_name_in_owner = true

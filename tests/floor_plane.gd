@@ -9,6 +9,11 @@ func _ready() -> void:
 	test("the floor plane picks from any side, changes axis, and moves with the plane tool", _run)
 	test("the slice option targets the floor layer and shows it alone", _slice_run, "slice_plane")
 	test("a slice slab covers the layers around the floor", _slab_run, "slice_slab")
+	test("the centered document size bounds drawing but not selection or delete", _size_bounds_run, "size_bounds")
+	test("the document size sets the floor grid extent", _size_grid_run, "size_grid")
+	test("the outside shade darkens only the area outside the document", _size_shade_run, "size_shade")
+	test("the document settings modal edits the centered size", _size_dialog_run, "size_dialog")
+	test("the document settings modal fits the size to all frames", _size_fit_run, "size_fit")
 
 
 func _setup_test() -> void:
@@ -260,6 +265,219 @@ func _axis_button(label: String) -> Button:
 		if b and b.toggle_mode and b.text == label:
 			return b
 	return null
+
+
+func _size_bounds_run() -> void:
+	step("Given a document with a centered three-cell X size", func():
+		State.set_size(Vector3i(3, 0, 0))
+		expect(State.document.size == Vector3i(3, 0, 0), "the document stores the centered size")
+		expect(State.document.axis_cell_range(0) == Vector2i(-1, 2), "an odd size centers on cell zero")
+		expect(State.document.axis_cell_range(1) == Vector2i.ZERO, "a zero axis is infinite")
+	)
+	step("Then the drawing context keeps the bounded X and free Y and Z", func():
+		var context := State.drawing_context()
+		expect(context.allows(Vector3i(-1, 9, 9)), "the first bounded cell is writable")
+		expect(context.allows(Vector3i(1, -9, -9)), "the last bounded cell is writable")
+		expect(not context.allows(Vector3i(2, 0, 0)), "a cell past the size is refused")
+		expect(not context.allows(Vector3i(-2, 0, 0)), "a cell before the size is refused")
+		var selection_context := State.selection_context()
+		expect(selection_context.allows(Vector3i(4, 0, 0)), "selection and transform can work outside the size")
+	)
+	step("When the user paints inside and outside", func():
+		State.paint(Vector3i(0, 0, 0), VoxelFrame.material(Color.RED))
+		State.paint(Vector3i(2, 0, 0), VoxelFrame.material(Color.BLUE))
+	)
+	step("Then only the inside cell exists", func():
+		expect(State.document.has_cell(0, Vector3i(0, 0, 0)), "the inside cell is painted")
+		expect(not State.document.has_cell(0, Vector3i(2, 0, 0)), "the outside cell is refused")
+	)
+	step("When a voxel outside the size is selected and deleted", func():
+		State.document.set_cell(0, Vector3i(4, 0, 0), VoxelFrame.material(Color.GREEN))
+		State.selection.add(Vector3i(4, 0, 0))
+		State.erase_selection()
+	)
+	step("Then the outside voxel is gone", func():
+		expect(not State.document.has_cell(0, Vector3i(4, 0, 0)), "delete removes a selected voxel outside the size")
+	)
+	step("When the user changes the size and undoes it", func():
+		State.set_size(Vector3i(2, 0, 0))
+		expect(State.document.axis_cell_range(0) == Vector2i(-1, 1), "an even size centers between cells")
+		State.undo()
+		expect(State.document.size == Vector3i(3, 0, 0), "undo restores the previous size")
+		State.redo()
+		expect(State.document.size == Vector3i(2, 0, 0), "redo restores the changed size")
+	)
+
+
+func _size_grid_run() -> void:
+	step("Given a sized document and the floor grid", func():
+		viewport = editor_viewport()
+		grid = viewport.get_node("ViewportScene/Grid")
+		State.floor_axis = Vector3.Axis.AXIS_Y
+		State.floor_index = 0
+		State.set_size(Vector3i(32, 24, 48))
+		grid.rebuild()
+	)
+	step("Then the grid covers the X and Z size", func():
+		expect(grid.position == Vector3(-16.5, -0.5, -24.5), "the grid starts on the centered X and Z faces")
+		var vertices: PackedVector3Array = grid.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+		expect(vertices.has(Vector3(32, 0, 48)), "the grid spans the X and Z size")
+		expect(vertices.has(Vector3(0, 0, 48)), "the grid spans the full Z size")
+		var shade: ColorRect = viewport.get_node("OutsideShadeLayer/OutsideShade")
+		shade.refresh()
+		expect(shade.visible, "the outside shade is visible")
+		expect(shade.box_min == Vector3(-16.5, -12.5, -24.5), "the shade starts at the centered low corner")
+		expect(shade.box_max == Vector3(15.5, 11.5, 23.5), "the shade ends at the centered high corner")
+	)
+	step("When the floor faces X", func():
+		State.floor_axis = Vector3.Axis.AXIS_X
+		State.floor_index = 4
+		grid.rebuild()
+	)
+	step("Then the grid covers the Y and Z size", func():
+		expect(grid.position == Vector3(3.5, -12.5, -24.5), "the grid starts on the centered Y and Z faces")
+		var vertices: PackedVector3Array = grid.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+		expect(vertices.has(Vector3(0, 24, 48)), "the grid spans the Y and Z size")
+	)
+	step("When only X is bounded", func():
+		State.floor_axis = Vector3.Axis.AXIS_Y
+		State.floor_index = 0
+		State.set_size(Vector3i(32, 0, 0))
+		grid.rebuild()
+	)
+	step("Then Z falls back to the empty content span", func():
+		expect(grid.position == Vector3(-16.5, -0.5, -4.5), "the bounded X keeps its exact face")
+		var vertices: PackedVector3Array = grid.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+		expect(vertices.has(Vector3(32, 0, 8)), "the infinite Z uses the default span")
+	)
+
+
+func _size_shade_run() -> void:
+	step("Given a sized document in the top view", func():
+		viewport = editor_viewport()
+		viewport.get_parent().stretch = false
+		viewport.size = Vector2i(800, 500)
+		State.floor_axis = Vector3.Axis.AXIS_Y
+		State.floor_index = 0
+		State.set_size(Vector3i(8, 8, 8))
+		camera_rig().is_orthogonal = true
+		camera_rig().set_view("top")
+		camera_rig().center_on(State.document.workspace_bounds())
+	)
+	var shade: ColorRect = viewport.get_node("OutsideShadeLayer/OutsideShade")
+	shade.refresh()
+	await RenderingServer.frame_post_draw
+	var shaded := viewport.get_texture().get_image()
+	step("When the outside shade is hidden", func():
+		shade.set_process(false)
+		shade.visible = false
+	)
+	await RenderingServer.frame_post_draw
+	var plain := viewport.get_texture().get_image()
+	step("Then the corners are darker and the center is unchanged", func():
+		var corner := Vector2i(20, 20)
+		var center := Vector2i(viewport.size.x / 2, viewport.size.y / 2)
+		var corner_shaded := shaded.get_pixelv(corner)
+		var corner_plain := plain.get_pixelv(corner)
+		var center_shaded := shaded.get_pixelv(center)
+		var center_plain := plain.get_pixelv(center)
+		expect(corner_shaded.get_luminance() < corner_plain.get_luminance() - 0.05, "the corner outside the box is darker")
+		expect(absf(center_shaded.get_luminance() - center_plain.get_luminance()) < 0.02, "the center inside the box keeps its brightness")
+		shade.set_process(true)
+		shade.refresh()
+	)
+
+
+func _size_dialog_run() -> void:
+	step("Given the document settings button", func():
+		var menu := main.get_node("%MenuBar")
+		var dialog: ConfirmationDialog = menu.get_node("DocumentSettingsModal")
+		expect(menu.get_node("ModelSettingsBtn") is Button, "the gear is a document settings button")
+		expect(dialog.has_node("Layout/SmoothNormals"), "the modal holds the smooth normals option")
+		expect(dialog.has_node("Layout/SizeRow/SizeX") and dialog.has_node("Layout/SizeRow/SizeY") and dialog.has_node("Layout/SizeRow/SizeZ"), "the size fields share one row")
+	)
+	step("When the user opens the modal and edits the size", func():
+		var menu := main.get_node("%MenuBar")
+		menu.get_node("ModelSettingsBtn").pressed.emit()
+		var dialog: ConfirmationDialog = menu.get_node("DocumentSettingsModal")
+		expect(dialog.visible, "the gear opens the document settings modal")
+		expect((dialog.get_node("Layout/SizeRow/Fit") as Button).disabled, "the fit button is disabled without frames")
+		(dialog.get_node("Layout/SizeRow/SizeX") as SpinBox).value = 32
+		(dialog.get_node("Layout/SizeRow/SizeY") as SpinBox).value = 24
+		(dialog.get_node("Layout/SizeRow/SizeZ") as SpinBox).value = 48
+	)
+	step("Then the document previews the new size before confirm", func():
+		expect(State.document.size == Vector3i(32, 24, 48), "the size field updates the document immediately")
+	)
+	step("When the user confirms the size", func():
+		var menu := main.get_node("%MenuBar")
+		var dialog: ConfirmationDialog = menu.get_node("DocumentSettingsModal")
+		dialog.confirmed.emit()
+		dialog.hide()
+	)
+	step("Then the document stores the size as one history action", func():
+		expect(State.document.size == Vector3i(32, 24, 48), "the modal keeps the previewed size")
+		State.undo()
+		expect(State.document.size == Vector3i.ZERO, "one undo restores the size from before the modal")
+		State.redo()
+		expect(State.document.size == Vector3i(32, 24, 48), "one redo restores the committed size")
+	)
+	step("When the user cancels a later size edit", func():
+		var menu := main.get_node("%MenuBar")
+		menu.get_node("ModelSettingsBtn").pressed.emit()
+		var dialog: ConfirmationDialog = menu.get_node("DocumentSettingsModal")
+		(dialog.get_node("Layout/SizeRow/SizeX") as SpinBox).value = 8
+		expect(State.document.size.x == 8, "the canceled value previews first")
+		dialog.canceled.emit()
+		dialog.hide()
+	)
+	step("Then the preview rolls back", func():
+		expect(State.document.size == Vector3i(32, 24, 48), "cancel restores the size from before the modal")
+	)
+	step("When the user clears every axis", func():
+		var menu := main.get_node("%MenuBar")
+		menu.get_node("ModelSettingsBtn").pressed.emit()
+		var dialog: ConfirmationDialog = menu.get_node("DocumentSettingsModal")
+		(dialog.get_node("Layout/SizeRow/SizeX") as SpinBox).value = 0
+		(dialog.get_node("Layout/SizeRow/SizeY") as SpinBox).value = 0
+		(dialog.get_node("Layout/SizeRow/SizeZ") as SpinBox).value = 0
+		dialog.confirmed.emit()
+		dialog.hide()
+	)
+	step("Then no axis is bounded", func():
+		expect(State.document.size == Vector3i.ZERO and not State.document.has_size(), "zero on every axis removes the bound")
+	)
+
+
+func _size_fit_run() -> void:
+	step("Given a document with cells in two frames", func():
+		State.document = VoxelDocument.new()
+		State.document.frames[0].set_cell(Vector3i(-5, -1, 0), VoxelFrame.material(Color.RED))
+		State.document.frames[0].set_cell(Vector3i(2, 3, 0), VoxelFrame.material(Color.RED))
+		State.document.add_frame()
+		State.document.frames[1].set_cell(Vector3i(0, 0, 5), VoxelFrame.material(Color.BLUE))
+		State.document._bounds_dirty = true
+		expect(State.document.bounds().has_volume(), "the frames hold content")
+	)
+	step("When the user presses Fit", func():
+		var menu := main.get_node("%MenuBar")
+		menu.get_node("ModelSettingsBtn").pressed.emit()
+		var dialog: ConfirmationDialog = menu.get_node("DocumentSettingsModal")
+		var fit: Button = dialog.get_node("Layout/SizeRow/Fit")
+		expect(not fit.disabled, "the fit button is enabled for content")
+		fit.pressed.emit()
+		expect(State.document.size == Vector3i(10, 7, 11), "fit covers the centered frame bounds")
+		expect((dialog.get_node("Layout/SizeRow/SizeX") as SpinBox).value == 10.0, "the X field shows the fitted size")
+	)
+	step("Then confirm keeps the fitted size", func():
+		var menu := main.get_node("%MenuBar")
+		var dialog: ConfirmationDialog = menu.get_node("DocumentSettingsModal")
+		dialog.confirmed.emit()
+		dialog.hide()
+		expect(State.document.size == Vector3i(10, 7, 11), "the confirmed size is the fitted size")
+		State.undo()
+		expect(State.document.size == Vector3i.ZERO, "one undo restores the size from before fit")
+	)
 
 
 func _slab_run() -> void:

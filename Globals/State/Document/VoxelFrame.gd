@@ -115,13 +115,24 @@ class EditContext extends RefCounted:
 	## The number of writable layers from [member slice_index]. It is 1 or more
 	## when the slice is on.
 	var slice_count := 1
+	## The axes that the centered document size limits. Bit 0 is X, bit 1 is Y,
+	## and bit 2 is Z. An axis with a size of zero is infinite.
+	var bounded_axes := 0
+	## The first writable cell on each bounded axis.
+	var bounds_min := Vector3i.ZERO
+	## The first cell after the last writable cell on each bounded axis.
+	var bounds_max := Vector3i.ZERO
 
 	## Returns [code]true[/code] when this context permits a write to
-	## [param cell]. The slice is a spatial limit. An empty selection allows
-	## every cell.
+	## [param cell]. The slice and the document size are spatial limits. An
+	## empty selection allows every cell.
 	func allows(cell: Vector3i) -> bool:
 		if slice_axis >= 0 and (cell[slice_axis] < slice_index or cell[slice_axis] >= slice_index + slice_count):
 			return false
+		if bounded_axes != 0:
+			for axis in 3:
+				if bounded_axes & (1 << axis) and (cell[axis] < bounds_min[axis] or cell[axis] >= bounds_max[axis]):
+					return false
 		return selection.is_empty() or selection.has(cell)
 
 	# The selection snapshot is read-only, so a copy shares it.
@@ -134,13 +145,16 @@ class EditContext extends RefCounted:
 		copy.slice_axis = slice_axis
 		copy.slice_index = slice_index
 		copy.slice_count = slice_count
+		copy.bounded_axes = bounded_axes
+		copy.bounds_min = bounds_min
+		copy.bounds_max = bounds_max
 		return copy
 
 	## Returns [param cells] without the cells that this context forbids. It
 	## returns the same dictionary when nothing is limited, so an edit without a
 	## selection or a slice pays no copy.
 	func filter(cells: Dictionary) -> Dictionary:
-		if slice_axis < 0 and selection.is_empty():
+		if slice_axis < 0 and selection.is_empty() and bounded_axes == 0:
 			return cells
 		var kept := {}
 		for cell: Vector3i in cells:
@@ -153,7 +167,7 @@ class EditContext extends RefCounted:
 	## [param matching_material] keeps only cells with that full material. The
 	## optional [param job] supplies the cancel checkpoints.
 	func expand(changes: Dictionary, frame: VoxelFrame, existing_only: bool, matching_material: Variant, job: EditJob = null) -> Dictionary:
-		if axes == 0 and selection.is_empty() and slice_axis < 0 and not existing_only and matching_material == null:
+		if axes == 0 and selection.is_empty() and slice_axis < 0 and bounded_axes == 0 and not existing_only and matching_material == null:
 			return changes
 		var expanded := {}
 		var masks: Array[int] = []

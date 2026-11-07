@@ -19,6 +19,8 @@ const FILE_SIGNATURE := [76, 86, 69, 0]
 const FORMAT_VERSION := 3
 ## The maximum file size in bytes.
 const MAX_FILE_BYTES := 64 * 1024 * 1024
+## The maximum document size on one axis.
+const MAX_DOCUMENT_SIZE := 4096
 ## The maximum frame count.
 const MAX_FRAMES := 10000
 ## The maximum tag count.
@@ -48,6 +50,9 @@ static var _profile_rescan_us := 0
 @export var lighting_settings: Dictionary = {}
 ## The export workspace settings. See `docs/DOCUMENT_FORMAT.md` for the keys.
 @export var export_settings: Dictionary = {}
+## The centered document size in cells. Zero on an axis means that axis is
+## infinite. The box is centered on the origin.
+@export var size := Vector3i.ZERO
 
 ## The path of the last save or load. The document data does not store it.
 var file_path := "":
@@ -83,7 +88,7 @@ func document_data() -> Dictionary:
 	var tag_data := []
 	for tag in tags:
 		tag_data.append({"name": tag.name, "from": tag.from, "to": tag.to, "loop_mode": tag.loop_mode, "repeats": tag.repeats})
-	return {"palette": palette_data, "frames": frame_data, "tags": tag_data, "smooth_normals": smooth_normals, "lighting": _storage_settings(lighting_settings), "export": _storage_settings(export_settings)}
+	return {"palette": palette_data, "frames": frame_data, "tags": tag_data, "smooth_normals": smooth_normals, "lighting": _storage_settings(lighting_settings), "export": _storage_settings(export_settings), "size": size}
 
 
 static func _storage_settings(settings: Dictionary) -> Dictionary:
@@ -200,6 +205,9 @@ static func decode_document(data: PackedByteArray) -> VoxelDocument:
 	document.smooth_normals = fields.smooth_normals
 	document.lighting_settings = fields.lighting
 	document.export_settings = fields.export
+	var stored_size: Variant = fields.get("size")
+	if stored_size is Vector3i:
+		document.size = stored_size
 	return document
 
 
@@ -355,7 +363,19 @@ static func _valid_document_data(data: Variant) -> bool:
 			return false
 		if not _integer_in(tag.get("loop_mode"), 0, 3) or not _integer_in(tag.get("repeats"), 0, 1000000):
 			return false
-	return data.get("smooth_normals") is bool and _valid_lighting(data.get("lighting"), false) and _valid_export(data.get("export"), data.tags.size())
+	return data.get("smooth_normals") is bool and _valid_document_size(data.get("size")) and _valid_lighting(data.get("lighting"), false) and _valid_export(data.get("export"), data.tags.size())
+
+
+static func _valid_document_size(value: Variant) -> bool:
+	if value == null:
+		return true
+	if not value is Vector3i:
+		return false
+	var stored: Vector3i = value
+	for axis in 3:
+		if stored[axis] < 0 or stored[axis] > MAX_DOCUMENT_SIZE:
+			return false
+	return true
 
 
 ## Returns the palette with duplicate entries removed. The first occurrence
@@ -561,6 +581,37 @@ func get_tag(i:int) -> AnimationTag:
 func remove_tag(i: int) -> void:
 	if i >= 0 and i < tags.size():
 		tags.remove_at(i)
+
+
+## Returns [code]true[/code] when at least one axis has a finite document size.
+func has_size() -> bool:
+	return size.x > 0 or size.y > 0 or size.z > 0
+
+
+## Returns the cell range of one axis as [first, last_exclusive]. An infinite
+## axis returns [constant Vector2i.ZERO].
+func axis_cell_range(axis: int) -> Vector2i:
+	var extent := size[axis]
+	if extent <= 0:
+		return Vector2i.ZERO
+	var first := -(extent >> 1)
+	return Vector2i(first, first + extent)
+
+
+## Returns the finite box that the grid and the viewport use. A bounded axis
+## uses [member size]. An infinite axis uses the content bounds plus one cell.
+func workspace_bounds() -> AABB:
+	var content := bounds()
+	var box := AABB(Vector3.ONE * -4.5, Vector3.ONE * 8.0)
+	if content.has_volume():
+		box = AABB(content.position - Vector3.ONE, content.size + Vector3.ONE * 2.0)
+	for axis in 3:
+		if size[axis] <= 0:
+			continue
+		var cell_range := axis_cell_range(axis)
+		box.position[axis] = float(cell_range.x) - 0.5
+		box.size[axis] = float(size[axis])
+	return box
 
 
 ## Returns the bounds of every frame in cell units.
