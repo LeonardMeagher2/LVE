@@ -301,7 +301,7 @@ func _pixel_perfect_tool() -> void:
 
 
 func _slice_stroke() -> void:
-	step("Given a solid block, a diameter-3 brush, and a slice at layer 2", func():
+	step("Given a solid block, a diameter-5 brush, and one slice layer each side of layer 2", func():
 		_view_setup()
 		var cells := {}
 		for y in 6:
@@ -310,31 +310,31 @@ func _slice_stroke() -> void:
 					cells[Vector3i(x, y, z)] = VoxelFrame.material(Color.from_rgba8(90, 90, 90))
 		State.get_current_voxel_frame().set_cells(cells)
 		sync_viewport()
-		_brush_settings.diameter = 3
+		_brush_settings.diameter = 5
 		State.floor_axis = Vector3.Axis.AXIS_Y
 		State.floor_index = 2
-		State.slice_enabled = true
+		State.slice_layers = 1
 		before_count = State.get_current_voxel_frame().count()
 	)
-	step("Then the center aim targets the floor layer", func():
+	step("Then the center aim targets the top slab layer", func():
 		var req := pick_request(center)
 		var target := VoxelPicking.start_pick(req.origin, req.dir, req.frame, req.forward, true).target
-		expect(target.y == 2, "the press aim lands on the slice layer")
+		expect(target.y == 3, "the press aim lands on the top slab layer")
 	)
 	step("When the user presses and releases on the model", func():
 		_click(center)
 	)
-	step("Then every written cell is on the slice layer", func():
+	step("Then every written cell is inside the slab", func():
 		var frame: VoxelFrame = State.get_current_voxel_frame()
 		var written := 0
 		var off_layer := 0
 		for c in frame.positions():
 			if frame.get_color(c) != Color.from_rgba8(90, 90, 90):
 				written += 1
-				if c.y != 2:
+				if c.y < 1 or c.y > 3:
 					off_layer += 1
-		expect(written > 0, "the stroke writes cells on the layer")
-		expect(off_layer == 0, "the diameter-3 stamp writes no cell above or below the layer")
+		expect(written > 0, "the stroke writes cells inside the slab")
+		expect(off_layer == 0, "the diameter-5 stamp writes no cell outside the slab")
 	)
 	step("When the user undoes the stroke", func():
 		State.undo_redo.undo()

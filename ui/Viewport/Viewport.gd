@@ -74,7 +74,7 @@ func _on_slice_changed() -> void:
 	var renderer: VoxelRenderer = $VoxelRenderer
 	renderer.slice_axis = State.floor_axis if State.slice_enabled else -1
 	renderer.slice_index = State.slice_first()
-	renderer.slice_count = State.slice_layers if State.slice_enabled else 1
+	renderer.slice_count = State.slice_count() if State.slice_enabled else 1
 
 
 func _save_document_lighting() -> void:

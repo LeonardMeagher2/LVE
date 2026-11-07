@@ -195,9 +195,8 @@ var slice_enabled: bool:
 	set(value):
 		slice_layers = 1 if value else 0
 
-## The number of writable and visible layers, centered on the floor layer. 0
-## shows every layer. 1 keeps only the floor layer. An even count puts the extra
-## layer above the floor.
+## The number of writable and visible layers on each side of the floor layer. 0
+## shows every layer. 1 keeps the floor layer and one layer on each side.
 var slice_layers := 0:
 	set(value):
 		value = maxi(value, 0)
@@ -209,12 +208,17 @@ var slice_layers := 0:
 
 ## Returns the first layer of the slice.
 func slice_first() -> int:
-	return floor_index - (slice_layers - 1) / 2
+	return floor_index - slice_layers
 
 
 ## Returns the last layer of the slice.
 func slice_last() -> int:
-	return slice_first() + slice_layers - 1
+	return floor_index + slice_layers
+
+
+## Returns the number of layers in the slice.
+func slice_count() -> int:
+	return slice_layers * 2 + 1
 
 
 ## Returns the world level of the slice plane.
@@ -413,7 +417,7 @@ func _live_context() -> VoxelFrame.EditContext:
 	if slice_enabled:
 		context.slice_axis = floor_axis
 		context.slice_index = slice_first()
-		context.slice_count = slice_layers
+		context.slice_count = slice_count()
 	return context
 
 

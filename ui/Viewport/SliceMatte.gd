@@ -308,8 +308,11 @@ func _on_cells_changed(frame_index: int, affected: Array[Vector3i]) -> void:
 		_invalidate()
 		return
 	var axis := int(State.floor_axis)
+	var first := State.slice_first()
+	var last := State.slice_last()
 	for cell_position in affected:
-		if cell_position[axis] != State.floor_index:
+		var layer := cell_position[axis]
+		if layer < first or layer > last:
 			_invalidate()
 			return
 
@@ -361,7 +364,7 @@ func _start_build() -> void:
 	job.frame = frame.copy_frame()
 	job.slice_axis = axis
 	job.slice_first = State.slice_first()
-	job.slice_count = State.slice_layers
+	job.slice_count = State.slice_count()
 	job.u_axis = u_axis
 	job.v_axis = v_axis
 	job.min_u = min_u

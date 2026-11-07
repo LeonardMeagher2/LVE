@@ -35,7 +35,7 @@ text = "Z"
 
 [node name="Layers" parent="." unique_id=72182485 instance=ExtResource("2_value")]
 layout_mode = 2
-tooltip_text = "Number of slice layers around the floor plane. 0 shows every layer. An even count puts the extra layer above the floor."
+tooltip_text = "Number of slice layers on each side of the floor plane. 0 shows every layer. 1 shows the floor layer and one layer on each side."
 icon = ExtResource("3_layers")
 min_value = 0.0
 max_value = 64.0

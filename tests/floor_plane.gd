@@ -75,7 +75,7 @@ func _slice_run() -> void:
 		await get_tree().process_frame
 	await get_tree().process_frame
 	step("Then the view draws only the chunk row that holds the slice", func():
-		expect(renderer.slice_axis == Vector3.Axis.AXIS_Y and renderer.slice_index == 2, "the viewport applies the slice")
+		expect(renderer.slice_axis == Vector3.Axis.AXIS_Y and renderer.slice_index == 1 and renderer.slice_count == 3, "the viewport applies the slice slab")
 		var slice_row := VoxelFrame.chunk_position(Vector3i(0, 2, 0)).y
 		var only_slice_row := true
 		for location: Vector3i in renderer._chunk_instances:
@@ -261,16 +261,18 @@ func _axis_button(label: String) -> Button:
 			return b
 	return null
 
+
 func _slab_run() -> void:
-	step("Given cells above and below a floor layer and a three-layer slab", func():
+	step("Given cells above and below a floor layer and one layer each side", func():
 		State.floor_axis = Vector3.Axis.AXIS_Y
 		State.floor_index = 2
 		var frame := State.get_current_voxel_frame()
-		for y in [1, 2, 3, 4]:
+		for y in [0, 1, 2, 3, 4, 5]:
 			frame.set_cell(Vector3i(0, y, 0), VoxelFrame.material(Color.RED))
 		State.document._bounds_dirty = true
-		State.slice_layers = 3
-		expect(State.slice_first() == 1 and State.slice_last() == 3, "the slab is the floor layer plus one each side")
+		State.slice_layers = 1
+		expect(State.slice_first() == 1 and State.slice_last() == 3, "one layer each side is three layers")
+		expect(State.slice_count() == 3, "the slice count is the floor layer plus both sides")
 	)
 	step("Then the ray picks the top cell inside the slab", func():
 		var pick := VoxelPicking.start_pick(Vector3(0.5, 20.0, 0.5), Vector3(0, -1, 0), State.get_current_voxel_frame(), Vector3(0, 1, 0), true)
@@ -282,13 +284,18 @@ func _slab_run() -> void:
 		expect(context.allows(Vector3i(0, 1, 0)), "the layer below the floor is writable")
 		expect(context.allows(Vector3i(0, 2, 0)), "the floor layer is writable")
 		expect(context.allows(Vector3i(0, 3, 0)), "the layer above the floor is writable")
-		expect(not context.allows(Vector3i(0, 4, 0)), "a layer above the slab is refused")
-		expect(not context.allows(Vector3i(0, 0, 0)), "a layer below the slab is refused")
+		expect(not context.allows(Vector3i(0, 4, 0)), "a layer two above the floor is refused")
+		expect(not context.allows(Vector3i(0, 0, 0)), "a layer two below the floor is refused")
 	)
-	step("When the slab holds one layer", func():
-		State.slice_layers = 1
-		expect(State.slice_first() == 2 and State.slice_last() == 2, "one layer keeps the floor layer")
+	step("When the slab holds two layers each side", func():
+		State.slice_layers = 2
+		expect(State.slice_first() == 0 and State.slice_last() == 4, "two each side is five layers")
 		var pick := VoxelPicking.start_pick(Vector3(0.5, 20.0, 0.5), Vector3(0, -1, 0), State.get_current_voxel_frame(), Vector3(0, 1, 0), true)
-		expect(pick.target == Vector3i(0, 2, 0), "the floor layer is the target")
-		expect(not State.drawing_context().allows(Vector3i(0, 3, 0)), "the layer above the one-layer slice is refused")
+		expect(pick.target == Vector3i(0, 4, 0), "the top cell of the wider slab is the target")
+		expect(not State.drawing_context().allows(Vector3i(0, 5, 0)), "a layer above the wider slab is refused")
+	)
+	step("When the slice is off", func():
+		State.slice_layers = 0
+		expect(not State.slice_enabled, "zero layers shows every layer")
+		expect(State.drawing_context().allows(Vector3i(0, 5, 0)), "every layer is writable again")
 	)

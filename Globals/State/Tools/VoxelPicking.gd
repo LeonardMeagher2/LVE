@@ -16,7 +16,7 @@ const NONE:Vector3i = Vector3i(Vector3.INF)
 ## cannot block the pointer. An empty press targets the floor layer.
 static func start_pick(origin: Vector3, dir: Vector3, frame: VoxelFrame, forward: Vector3, slice := false) -> PickResult:
 	if slice:
-		var sliced := ray_voxel(origin, dir, frame, AABB(), State.floor_axis, State.slice_first(), State.slice_layers)
+		var sliced := ray_voxel(origin, dir, frame, AABB(), State.floor_axis, State.slice_first(), State.slice_count())
 		if sliced.hit != VoxelPicking.NONE:
 			sliced.target = sliced.hit
 			sliced.add_target = sliced.hit + sliced.entry

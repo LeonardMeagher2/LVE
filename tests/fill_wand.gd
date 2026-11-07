@@ -104,7 +104,7 @@ func _empty_screen_pos() -> Vector2:
 
 
 func _slice_fill() -> void:
-	step("Given a red stack on the floor and a slice at layer 0", func():
+	step("Given a red stack on the floor and one slice layer each side", func():
 		_view_setup()
 		select_toolbar_item("paint", "Bucket Fill")
 		State.set_color(Color.BLUE)
@@ -116,22 +116,24 @@ func _slice_fill() -> void:
 		f.set_cell(seed + Vector3i(0, 1, 0), VoxelFrame.material(Color.RED))
 		f.set_cell(seed + Vector3i(0, 2, 0), VoxelFrame.material(Color.RED))
 		f.set_cell(seed + Vector3i(0, -1, 0), VoxelFrame.material(Color.RED))
+		f.set_cell(seed + Vector3i(0, -2, 0), VoxelFrame.material(Color.RED))
 		State.floor_index = seed.y
-		State.slice_enabled = true
+		State.slice_layers = 1
 		sync_viewport()
 	)
-	step("When the user fills the slice cell", func():
-		var pos := _slice_screen_pos_of(seed)
-		expect(pos != Vector2.INF, "the slice cell is visible")
+	step("When the user fills the slab", func():
+		var pos := _slice_screen_pos_of(seed + Vector3i(0, 1, 0))
+		expect(pos != Vector2.INF, "the top slab cell is visible")
 		_click(pos)
 	)
-	step("Then the fill stays on the layer", func():
+	step("Then the fill stays inside the slab", func():
 		var f: VoxelFrame = State.document.frames[State.current_frame]
-		expect(f.get_color(seed) == Color.BLUE, "the clicked slice cell takes the fill color")
-		expect(f.get_color(seed + Vector3i(1, 0, 0)) == Color.BLUE, "a connected cell on the layer takes the fill color")
-		expect(f.get_color(seed + Vector3i(0, 1, 0)) == Color.RED, "the cell above the layer keeps its color")
-		expect(f.get_color(seed + Vector3i(0, 2, 0)) == Color.RED, "a farther cell above the layer keeps its color")
-		expect(f.get_color(seed + Vector3i(0, -1, 0)) == Color.RED, "the cell below the layer keeps its color")
+		expect(f.get_color(seed) == Color.BLUE, "the floor layer takes the fill color")
+		expect(f.get_color(seed + Vector3i(1, 0, 0)) == Color.BLUE, "a connected cell on the floor layer takes the fill color")
+		expect(f.get_color(seed + Vector3i(0, 1, 0)) == Color.BLUE, "the cell above the floor is inside the slab")
+		expect(f.get_color(seed + Vector3i(0, -1, 0)) == Color.BLUE, "the cell below the floor is inside the slab")
+		expect(f.get_color(seed + Vector3i(0, 2, 0)) == Color.RED, "a cell above the slab keeps its color")
+		expect(f.get_color(seed + Vector3i(0, -2, 0)) == Color.RED, "a cell below the slab keeps its color")
 	)
 
 
