@@ -45,7 +45,6 @@ var _edit_context: VoxelFrame.EditContext
 var _job: BrushJob
 var _operation_id := 0
 var _cursor_axis := -1
-var _cursor_slice := false
 var _last_pick: PickResult
 var _hover_job
 var _hover_operation_id := 0
@@ -547,7 +546,7 @@ func update_visual(pick: PickResult) -> void:
 		visible = false
 		return
 	var axis := _plane.axis if _stroke_active else pick.plane.axis
-	if axis != _cursor_axis or State.slice_enabled != _cursor_slice:
+	if axis != _cursor_axis:
 		_show_brush_shape(axis)
 	position = Vector3(pick.target)
 	visible = true
@@ -569,15 +568,6 @@ func _show_brush_shape(axis: int) -> void:
 	# matches, so its preview always stays per-cell, however long that takes. The
 	# selection shape keeps its own materials and already debounces.
 	var cube_diameter: int = _settings.diameter if _settings.shape == _settings.BrushShape.CUBE else 0
-	if State.slice_enabled and not use_voxel_colors:
-		# The stroke writes only the layer, so the cursor shows the layer
-		# cross-section of the pattern. A box preview would not match it.
-		var kept := {}
-		for offset: Vector3i in pattern:
-			if offset[State.floor_axis] == 0:
-				kept[offset] = pattern[offset]
-		pattern = kept
-		cube_diameter = 0
 	$Cursor.set_brush_material(State.current_material)
 	if use_voxel_colors and _settings.selection_material_pattern.size() == pattern.size():
 		pattern = _settings.selection_material_pattern
@@ -589,7 +579,6 @@ func _show_brush_shape(axis: int) -> void:
 			pattern[cell] = _settings.selection_material_pattern.get(cell, fallback)
 	$Cursor.show_voxels(pattern, Color.WHITE if use_voxel_colors else State.current_color, _erases(), cube_diameter, use_voxel_colors)
 	_cursor_axis = axis
-	_cursor_slice = State.slice_enabled
 
 
 func _update_hover() -> void:

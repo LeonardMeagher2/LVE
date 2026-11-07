@@ -406,6 +406,15 @@ func _press(origin: Vector3, dir: Vector3) -> void:
 		_colors = job.cell_colors
 		_materials = job.cell_materials
 		_source_bounds = job.bounds
+		# The slice limits the cells that the transform can clear. A source outside
+		# it must stay put, or the refused clear would leave a copy at a writable
+		# destination.
+		if _symmetry_scope.slice_axis >= 0:
+			_keep_slice_sources()
+			if _cells.is_empty():
+				_grab_waiting = false
+				_cancel()
+				return
 	_was_pending = _pending
 	if not _was_pending:
 		_stash_grab_baseline()
@@ -417,6 +426,30 @@ func _press(origin: Vector3, dir: Vector3) -> void:
 	if _commit_requested:
 		_commit()
 	_disconnect_context_if_idle()
+
+
+# Keeps only the source cells that the slice allows to be cleared. The slice
+# limits every write, so a source outside the slab cannot be cleared. Moving it
+# anyway would write a copy at a destination inside the slab.
+func _keep_slice_sources() -> void:
+	var kept: Array[Vector3i] = []
+	var kept_colors := {}
+	var kept_materials := {}
+	var bounds := AABB()
+	for cell_position in _cells:
+		if not _symmetry_scope.allows(cell_position):
+			continue
+		kept.append(cell_position)
+		if _colors.has(cell_position):
+			kept_colors[cell_position] = _colors[cell_position]
+		if _materials.has(cell_position):
+			kept_materials[cell_position] = _materials[cell_position]
+		var cell_bounds := AABB(Vector3(cell_position) - Vector3.ONE * 0.5, Vector3.ONE)
+		bounds = bounds.merge(cell_bounds) if bounds.has_volume() else cell_bounds
+	_cells = kept
+	_colors = kept_colors
+	_materials = kept_materials
+	_source_bounds = bounds
 
 
 func _resume_queued_drag() -> void:

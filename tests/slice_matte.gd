@@ -17,6 +17,7 @@ var builds := 0
 func _ready() -> void:
 	timeout = 30.0
 	test("the slice matte projects the off-slice model onto the slice plane", _run, "slice_matte")
+	test("the slice matte reads the sides on the X axis", _run_x_axis, "slice_matte_x")
 
 
 func _setup_test() -> void:
@@ -127,3 +128,29 @@ func _settle() -> void:
 func _idle() -> void:
 	for frame in 4:
 		await get_tree().process_frame
+
+
+# The X slice uses its own chunk scan. A chunk row entirely above or below the
+# slab must keep its side and its near cell.
+func _run_x_axis() -> void:
+	var below := Vector3i(-1, 0, 0)
+	var above := Vector3i(30, 0, 5)
+	step("Given off-slab cells on whole chunk rows of the X axis", func():
+		State.floor_axis = Vector3.Axis.AXIS_X
+		State.floor_index = 12
+		var cells := {}
+		cells[below] = VoxelFrame.material(Color.RED)
+		cells[above] = VoxelFrame.material(Color.RED)
+		State.get_current_voxel_frame().set_cells(cells)
+		State.document._bounds_dirty = true
+		State.slice_layers = 1
+		matte = MATTE_SCRIPT.new()
+		main.add_child(matte)
+	)
+	await _settle()
+	step("Then the below cell reads warm and the above cell reads cool", func():
+		var below_color: Color = matte.color_at(below)
+		var above_color: Color = matte.color_at(above)
+		expect(below_color.r > below_color.b, "an X-axis cell below the slab reads warm")
+		expect(above_color.b > above_color.r, "an X-axis cell above the slab reads cool")
+	)

@@ -118,9 +118,13 @@ class MatteJob extends VoxelFrame.EditJob:
 						continue
 					var world_v := origin.y + y
 					if first_local >= chunk_size:
-						_note(world_u, world_v, origin.x + _lowest_bit(mask) - slice_last, true)
-					elif last_local < 0:
+						# The chunk lies entirely below the slab. The highest bit
+						# is the cell nearest the slab.
 						_note(world_u, world_v, slice_first - (origin.x + _highest_bit(mask)), false)
+					elif last_local < 0:
+						# The chunk lies entirely above the slab. The lowest bit
+						# is the cell nearest the slab.
+						_note(world_u, world_v, origin.x + _lowest_bit(mask) - slice_last, true)
 					else:
 						if first_local > 0:
 							var below_mask := mask & ((1 << mini(first_local, chunk_size)) - 1)

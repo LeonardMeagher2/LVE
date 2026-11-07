@@ -37,6 +37,10 @@ See [GLTF_EXPORT.md](GLTF_EXPORT.md) for the mesh export format and import setti
   - [ ] Add the arrow-key nudge. Godot consumes bare arrows for focus navigation, so route it before the GUI, or use a modifier.
   - [ ] Ask the user to test the slice option manually with Brush, Paint, Line, Spray, Fill, Transform, Cut, and Erase Selection.
   - [x] Add the slice context cue: a projected matte of the off-slice cells on the slice plane. The plate hides it where the slice layer holds cells. Above the plane reads light blue, below reads dark amber, and the distance sets the strength. A slice-layer write does not rebuild it. Test `slice_matte`.
+  - [x] The matte reads the correct side on the X axis. A chunk entirely above or below the slab used the opposite branch, and its negative distance wrapped. Test `slice_matte.slice_matte_x`.
+  - [x] The brush cursor shows the full 3D stamp while the slice is on. The stroke writes the stamp on every slab layer, so a one-layer cross-section under-reported it.
+  - [x] A transform moves only the source cells inside the slab. A source outside it cannot be cleared, so moving it would leave a copy. Test the final case in `transform_selection`.
+  - [x] The viewport applies the slice in one rebuild, so a layer-count drag pays one rebuild per step.
   - [ ] Optional: a static selection-line wire of the layers around the slice, if the matte reads too flat.
 
 - [ ] Add the Extrude tool

@@ -67,14 +67,16 @@ func _ready() -> void:
 	_on_slice_changed()
 
 
-# Shows only the slice layer while the slice is on. The renderer keeps its mesh
+# Shows only the slice slab while the slice is on. The renderer keeps its mesh
 # cache; the slice is part of the surface key, so a layer move rebuilds only the
-# slice row.
+# slice rows.
 func _on_slice_changed() -> void:
 	var renderer: VoxelRenderer = $VoxelRenderer
-	renderer.slice_axis = State.floor_axis if State.slice_enabled else -1
-	renderer.slice_index = State.slice_first()
-	renderer.slice_count = State.slice_count() if State.slice_enabled else 1
+	renderer.set_slice(
+		State.floor_axis if State.slice_enabled else -1,
+		State.slice_first(),
+		State.slice_count() if State.slice_enabled else 1,
+	)
 
 
 func _save_document_lighting() -> void:

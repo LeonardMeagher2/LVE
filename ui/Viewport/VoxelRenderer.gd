@@ -66,7 +66,7 @@ var slice_axis := -1:
 		if value == slice_axis:
 			return
 		slice_axis = value
-		if is_inside_tree():
+		if is_inside_tree() and not _slice_setting:
 			_rebuild()
 ## The first cell index of the slice along [member slice_axis].
 var slice_index := 0:
@@ -74,7 +74,7 @@ var slice_index := 0:
 		if value == slice_index:
 			return
 		slice_index = value
-		if is_inside_tree():
+		if is_inside_tree() and not _slice_setting:
 			_rebuild()
 ## The number of slice layers from [member slice_index].
 var slice_count := 1:
@@ -83,8 +83,27 @@ var slice_count := 1:
 		if value == slice_count:
 			return
 		slice_count = value
-		if is_inside_tree():
+		if is_inside_tree() and not _slice_setting:
 			_rebuild()
+# Whether one slice request is assigning its three values. A batch request
+# rebuilds once, so a layer-count drag pays one rebuild per step.
+var _slice_setting := false
+
+
+## Applies one slice in one rebuild. The three values are one request, so a
+## layer-count drag pays one rebuild per step, not one per property.
+func set_slice(axis: int, index: int, count: int) -> void:
+	count = maxi(count, 1)
+	if axis == slice_axis and index == slice_index and count == slice_count:
+		return
+	_slice_setting = true
+	slice_axis = axis
+	slice_index = index
+	slice_count = count
+	_slice_setting = false
+	if is_inside_tree():
+		_rebuild()
+
 var _chunk_instances: Dictionary = {}
 var _displayed_surface_keys: Dictionary = {}
 var _pending_surface_keys: Dictionary = {}
