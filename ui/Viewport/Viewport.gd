@@ -8,6 +8,8 @@ extends Node3D
 ## Emitted after the lighting settings change.
 signal lighting_changed()
 
+const SLICE_MATTE_SCRIPT := preload("res://ui/Viewport/SliceMatte.gd")
+
 ## Whether the lighting settings load from and save to the document.
 @export var document_lighting := true
 
@@ -59,6 +61,9 @@ func _ready() -> void:
 		_restore_document_lighting()
 	State.slice_changed.connect(_on_slice_changed)
 	State.floor_plane_changed.connect(_on_slice_changed)
+	var slice_matte: MeshInstance3D = SLICE_MATTE_SCRIPT.new()
+	slice_matte.name = "SliceMatte"
+	add_child(slice_matte)
 	_on_slice_changed()
 
 
