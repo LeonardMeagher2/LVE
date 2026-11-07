@@ -35,7 +35,7 @@ See [GLTF_EXPORT.md](GLTF_EXPORT.md) for the mesh export format and import setti
   - [ ] Make Terrain slice-aware. Its per-column surface tracking must plan only the layer. A write filter desyncs the next dab.
   - [ ] Add the arrow-key nudge. Godot consumes bare arrows for focus navigation, so route it before the GUI, or use a modifier.
   - [ ] Ask the user to test the slice option manually with Brush, Paint, Line, Spray, Fill, Transform, Cut, and Erase Selection.
-  - [x] Add the slice context cue: a projected matte of the off-slice cells on the slice plane. The plate hides it where the slice layer holds cells. A slice-layer write does not rebuild it. Test `slice_matte`.
+  - [x] Add the slice context cue: a projected matte of the off-slice cells on the slice plane. The plate hides it where the slice layer holds cells. Above the plane reads light blue, below reads dark amber, and the distance sets the strength. A slice-layer write does not rebuild it. Test `slice_matte`.
   - [ ] Optional: a static selection-line wire of the layers around the slice, if the matte reads too flat.
 
 - [ ] Add the Extrude tool

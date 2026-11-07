@@ -4,17 +4,26 @@ extends MeshInstance3D
 ##
 ## It projects every off-slice cell along the slice axis onto the slice plane.
 ## One texel covers one world column, or a few columns for a large model. The
-## slice layer itself is skipped, because the solid plate owns that area. The
-## matte is static. It has no lines and no animation.
+## slice layer itself is skipped, because the solid plate owns that area. A
+## column above the plane reads light and cool. A column below reads dark and
+## warm. The nearer the nearest cell, the stronger the matte. The matte is
+## static. It has no lines and no animation.
 
 ## The largest texture side. A larger footprint downsamples each texel.
 const MAX_SIDE := 1024
 ## The gap below the slice plane. The plate then hides the matte where it holds cells.
 const SLICE_GAP := 0.02
-## The matte color.
-const TINT := Color(0.62, 0.78, 1.0)
-## The matte alpha of a covered column.
-const ALPHA := 0.32
+## The color of the cells above the plane.
+const ABOVE_TINT := Color(0.62, 0.82, 1.0)
+## The color of the cells below the plane.
+const BELOW_TINT := Color(0.95, 0.55, 0.28)
+## The alpha at one layer from the plane, and at [constant FADE_LAYERS] or more.
+const NEAR_ALPHA := 0.45
+const FAR_ALPHA := 0.12
+## The layer distance that reaches [constant FAR_ALPHA].
+const FADE_LAYERS := 8
+## The largest stored layer distance. The color blend needs no exact far value.
+const MAX_DISTANCE := 32
 
 ## The number of builds that started. A test reads it to prove a skipped rebuild.
 var build_count := 0
@@ -65,79 +74,149 @@ class MatteJob extends VoxelFrame.EditJob:
 	## The build microseconds.
 	var build_us := 0
 
+	var _above := PackedByteArray()
+	var _below := PackedByteArray()
+	var _touched := PackedInt32Array()
+
 	## Projects the off-slice cells into the texture. This is the worker body.
 	func run() -> void:
 		var started := Time.get_ticks_usec()
-		pixels = PackedByteArray()
-		pixels.resize(resolution.x * resolution.y * 4)
+		var texels := resolution.x * resolution.y
+		_above = PackedByteArray()
+		_above.resize(texels)
+		_below = PackedByteArray()
+		_below.resize(texels)
+		_touched = PackedInt32Array()
 		var chunk_size := VoxelFrame.CHUNK_SIZE
-		var tint_r := int(round(TINT.r * 255.0))
-		var tint_g := int(round(TINT.g * 255.0))
-		var tint_b := int(round(TINT.b * 255.0))
-		var alpha_byte := int(round(ALPHA * 255.0))
 		var completed := 0
 		for location: Vector3i in frame.chunks:
 			var chunk: VoxelFrame.Chunk = frame.chunks[location]
 			if chunk.occupied_count > 0:
-				var rows := chunk.occupancy_rows()
-				var origin := chunk.origin()
-				var slice_local := -1
-				if slice_index >= origin[slice_axis] and slice_index < origin[slice_axis] + chunk_size:
-					slice_local = slice_index - origin[slice_axis]
-				# A row holds the x bits of one local (y, z). Collapse the slice
-				# axis into one plane bit per texel, so the chunk costs one pass
-				# over its rows, not one pass over its cells.
-				match slice_axis:
-					0:
-						for z in chunk_size:
-							for y in chunk_size:
-								var mask := rows.masks[y + chunk_size * z]
-								if slice_local >= 0:
-									mask &= ~(1 << slice_local)
-								if mask != 0:
-									_write_texel(origin.z + z, origin.y + y, tint_r, tint_g, tint_b, alpha_byte)
-					1:
-						for z in chunk_size:
-							var union := 0
-							for y in chunk_size:
-								if y != slice_local:
-									union |= rows.masks[y + chunk_size * z]
-							if union == 0:
-								continue
-							for x in chunk_size:
-								if (union & (1 << x)) != 0:
-									_write_texel(origin.x + x, origin.z + z, tint_r, tint_g, tint_b, alpha_byte)
-					_:
-						for y in chunk_size:
-							var union := 0
-							for z in chunk_size:
-								if z != slice_local:
-									union |= rows.masks[y + chunk_size * z]
-							if union == 0:
-								continue
-							for x in chunk_size:
-								if (union & (1 << x)) != 0:
-									_write_texel(origin.x + x, origin.y + y, tint_r, tint_g, tint_b, alpha_byte)
+				_scan_chunk(chunk, chunk_size)
 			completed += 1
 			if completed % 32 == 0 and not checkpoint(completed):
 				return
+		_compose()
 		build_us = Time.get_ticks_usec() - started
 
+	# Walks the rows of one chunk and records the nearest off-slice cell on each
+	# side of the plane, per plane column.
+	func _scan_chunk(chunk: VoxelFrame.Chunk, chunk_size: int) -> void:
+		var rows := chunk.occupancy_rows()
+		var origin := chunk.origin()
+		var slice_local := slice_index - origin[slice_axis]
+		if slice_axis == 0:
+			for z in chunk_size:
+				var world_u := origin.z + z
+				for y in chunk_size:
+					var mask := rows.masks[y + chunk_size * z]
+					if mask == 0:
+						continue
+					var world_v := origin.y + y
+					if slice_local < 0:
+						_note(world_u, world_v, origin.x + _lowest_bit(mask) - slice_index, true)
+					elif slice_local >= chunk_size:
+						_note(world_u, world_v, slice_index - (origin.x + _highest_bit(mask)), false)
+					else:
+						var below_mask := mask & ((1 << slice_local) - 1)
+						if below_mask != 0:
+							_note(world_u, world_v, slice_local - _highest_bit(below_mask), false)
+						var above_mask := mask >> (slice_local + 1)
+						if above_mask != 0:
+							_note(world_u, world_v, _lowest_bit(above_mask) + 1, true)
+			return
+		# The rows hold x bits. Walk the layer axis outward from the slice layer,
+		# and drop the x bits that a closer layer already claimed.
+		for line in chunk_size:
+			for zone in 2:
+				var above := zone == 0
+				var remaining := 0xFFFF
+				var layer := 0
+				var direction := 1
+				if above:
+					layer = maxi(0, slice_local + 1)
+				else:
+					layer = mini(chunk_size - 1, slice_local - 1)
+					direction = -1
+				for step_index in chunk_size:
+					if layer < 0 or layer >= chunk_size:
+						break
+					var row := 0
+					var plane := 0
+					if slice_axis == 1:
+						row = layer + chunk_size * line
+						plane = origin.z + line
+					else:
+						row = line + chunk_size * layer
+						plane = origin.y + line
+					var mask := rows.masks[row] & remaining
+					if mask != 0:
+						var distance := absi(origin[slice_axis] + layer - slice_index)
+						for x in chunk_size:
+							if (mask & (1 << x)) != 0:
+								_note(origin.x + x, plane, distance, above)
+						remaining &= ~mask
+						if remaining == 0:
+							break
+					layer += direction
 
-	# Writes one covered texel. A texel outside the texture is skipped.
-	func _write_texel(world_u: int, world_v: int, tint_r: int, tint_g: int, tint_b: int, alpha_byte: int) -> void:
+	# Records one plane column. The nearest cell on each side wins.
+	func _note(world_u: int, world_v: int, distance: int, above: bool) -> void:
 		var tu := (world_u - min_u) / step
 		var tv := (world_v - min_v) / step
 		if tu < 0 or tu >= resolution.x or tv < 0 or tv >= resolution.y:
 			return
-		var base := (tv * resolution.x + tu) * 4
-		if pixels[base + 3] != 0:
-			return
-		pixels[base] = tint_r
-		pixels[base + 1] = tint_g
-		pixels[base + 2] = tint_b
-		pixels[base + 3] = alpha_byte
-		covered += 1
+		var index := tv * resolution.x + tu
+		var capped := mini(distance, MAX_DISTANCE)
+		var old_above := _above[index]
+		var old_below := _below[index]
+		if above:
+			if old_above == 0 or capped < old_above:
+				_above[index] = capped
+		else:
+			if old_below == 0 or capped < old_below:
+				_below[index] = capped
+		if old_above == 0 and old_below == 0:
+			_touched.append(index)
+
+	# Blends the two sides and fades by the nearest distance.
+	func _compose() -> void:
+		pixels = PackedByteArray()
+		pixels.resize(resolution.x * resolution.y * 4)
+		for index in _touched:
+			var above_distance := _above[index]
+			var below_distance := _below[index]
+			var above_weight := (1.0 / float(above_distance)) if above_distance > 0 else 0.0
+			var below_weight := (1.0 / float(below_distance)) if below_distance > 0 else 0.0
+			var total := above_weight + below_weight
+			var red := (ABOVE_TINT.r * above_weight + BELOW_TINT.r * below_weight) / total
+			var green := (ABOVE_TINT.g * above_weight + BELOW_TINT.g * below_weight) / total
+			var blue := (ABOVE_TINT.b * above_weight + BELOW_TINT.b * below_weight) / total
+			var nearest := above_distance
+			if below_distance > 0 and (above_distance == 0 or below_distance < above_distance):
+				nearest = below_distance
+			var amount := clampf(float(nearest - 1) / float(FADE_LAYERS - 1), 0.0, 1.0)
+			var alpha := lerpf(NEAR_ALPHA, FAR_ALPHA, amount)
+			var base := index * 4
+			pixels[base] = int(round(red * 255.0))
+			pixels[base + 1] = int(round(green * 255.0))
+			pixels[base + 2] = int(round(blue * 255.0))
+			pixels[base + 3] = int(round(alpha * 255.0))
+			covered += 1
+
+	# Returns the lowest set bit index of a non-zero mask.
+	static func _lowest_bit(mask: int) -> int:
+		var index := 0
+		while (mask & (1 << index)) == 0:
+			index += 1
+		return index
+
+	# Returns the highest set bit index of a non-zero mask.
+	static func _highest_bit(mask: int) -> int:
+		var index := VoxelFrame.CHUNK_SIZE - 1
+		while (mask & (1 << index)) == 0:
+			index -= 1
+		return index
 
 
 func _ready() -> void:
@@ -180,13 +259,29 @@ func is_settled() -> bool:
 ## Returns the installed matte alpha at one world cell, from 0 to 1. A test reads
 ## it to check the coverage without a screen readback.
 func coverage_at(cell_position: Vector3i) -> float:
+	var index := _texel_at(cell_position)
+	return 0.0 if index < 0 else _pixels[index * 4 + 3] / 255.0
+
+
+## Returns the installed matte color at one world cell. A test reads it to check
+## the side that the column belongs to.
+func color_at(cell_position: Vector3i) -> Color:
+	var index := _texel_at(cell_position)
+	if index < 0:
+		return Color(0, 0, 0, 0)
+	var base := index * 4
+	return Color(_pixels[base] / 255.0, _pixels[base + 1] / 255.0, _pixels[base + 2] / 255.0, _pixels[base + 3] / 255.0)
+
+
+# Returns the installed texture index of one world cell, or -1.
+func _texel_at(cell_position: Vector3i) -> int:
 	if _pixels.is_empty():
-		return 0.0
+		return -1
 	var tu := (cell_position[_u_axis] - _min_u) / texel_step
 	var tv := (cell_position[_v_axis] - _min_v) / texel_step
 	if tu < 0 or tu >= resolution.x or tv < 0 or tv >= resolution.y:
-		return 0.0
-	return _pixels[(tv * resolution.x + tu) * 4 + 3] / 255.0
+		return -1
+	return tv * resolution.x + tu
 
 
 func _on_slice_state_changed() -> void:

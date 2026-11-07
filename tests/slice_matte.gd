@@ -4,7 +4,11 @@ const MATTE_SCRIPT := preload("res://ui/Viewport/SliceMatte.gd")
 const SLICE_CELL := Vector3i(2, 0, 0)
 const ABOVE := Vector3i(1, 2, 1)
 const BELOW := Vector3i(5, -3, 5)
-const EMPTY_CELL := Vector3i(9, 2, 9)
+const NEAR_ABOVE := Vector3i(9, 1, 9)
+const FAR_ABOVE := Vector3i(11, 7, 11)
+const BOTH_BELOW := Vector3i(13, -2, 13)
+const BOTH_ABOVE := Vector3i(13, 4, 13)
+const EMPTY_CELL := Vector3i(20, 2, 20)
 
 var matte: MeshInstance3D
 var builds := 0
@@ -41,6 +45,10 @@ func _run() -> void:
 			SLICE_CELL: VoxelFrame.material(Color.RED),
 			ABOVE: VoxelFrame.material(Color.RED),
 			BELOW: VoxelFrame.material(Color.RED),
+			NEAR_ABOVE: VoxelFrame.material(Color.RED),
+			FAR_ABOVE: VoxelFrame.material(Color.RED),
+			BOTH_BELOW: VoxelFrame.material(Color.RED),
+			BOTH_ABOVE: VoxelFrame.material(Color.RED),
 		})
 		State.document._bounds_dirty = true
 		State.floor_index = 0
@@ -57,6 +65,19 @@ func _run() -> void:
 		expect(matte.coverage_at(EMPTY_CELL) == 0.0, "an empty column is clear")
 		expect(is_equal_approx(matte.plane_coordinate, State.slice_level() - MATTE_SCRIPT.SLICE_GAP), "the matte sits on the slice plane")
 		expect(matte.resolution.x > 0 and matte.resolution.y > 0, "the matte holds a texture")
+	)
+	step("Then the side of the plane sets the color", func():
+		var above: Color = matte.color_at(ABOVE)
+		var below: Color = matte.color_at(BELOW)
+		expect(above.b > above.r, "a column above the plane reads cool")
+		expect(below.r > below.b, "a column below the plane reads warm")
+	)
+	step("Then a nearer cell reads stronger", func():
+		expect(matte.coverage_at(NEAR_ABOVE) > matte.coverage_at(FAR_ABOVE), "the near column is stronger than the far one")
+	)
+	step("Then a column with both sides leans to the nearer one", func():
+		var both: Color = matte.color_at(BOTH_BELOW)
+		expect(both.r > both.b, "the closer below cell wins the blend")
 	)
 	step("When the slice layer changes", func():
 		builds = matte.build_count
