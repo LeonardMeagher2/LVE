@@ -42,7 +42,9 @@ func _run() -> void:
 		# A large wand selection publishes as it streams, so it sends more than one.
 		expect(notifications >= 1, "the wand publishes at least one selection notification")
 		expect(source.get_color(Vector3i.ZERO) == Color.RED and source.count() == 5834, "the wand preserves the source voxels")
+		var rebuilds := VoxelSelection._profile_rebuild_calls
 		State.undo_redo.undo()
+		expect(VoxelSelection._profile_rebuild_calls == rebuilds, "the undo installs its masks without a rebuild")
 		expect(State.selection.count() == 1 and State.selection.contains(MARKER), "one undo restores the prior selection")
 		State.undo_redo.clear_history()
 	)

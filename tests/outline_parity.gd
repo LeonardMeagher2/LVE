@@ -3,10 +3,11 @@ extends "res://tests/test.gd"
 # Differential and performance test for the selection outline builder.
 #
 # `tests/outline_reference.gd` freezes the original builder and calls no
-# production code. Every shape here is built with both builders and compared as
-# exact vertex order and as a canonical segment set. The A/B measurement
-# alternates the two implementations in one process and reports medians with
-# their sample counts, so no result rests on a single minimum.
+# production code. Every shape here is built with both builders and compared as a
+# canonical segment set. The live builder emits lines in mask order, so the vertex
+# order is not the reference order; a repeated live build must be identical. The
+# A/B measurement alternates the implementations in one process and reports
+# medians with their sample counts, so no result rests on a single minimum.
 #
 #   godot --path . res://tests/outline_parity.tscn
 
@@ -110,7 +111,7 @@ var leaving: MeshInstance3D
 var _sink := 0
 var _compared := 0
 var _geometry_mismatches := 0
-var _order_mismatches := 0
+var _determinism_mismatches := 0
 var _first_mismatch := ""
 var _ab_fixtures := {}
 var _ab_order: Array[String] = []
@@ -121,6 +122,7 @@ var _inline_selection: VoxelSelection
 var _mid_selection: VoxelSelection
 var _large_selection: VoxelSelection
 var _leaving_selection: VoxelSelection
+var _mask_selection: VoxelSelection
 var _large_mesh: Mesh
 var _large_revision := 0
 
@@ -128,6 +130,60 @@ var _large_revision := 0
 func _ready() -> void:
 	timeout = 60.0
 	test("the outline builder matches its frozen reference and costs less", _run, "outline_parity")
+	test("the selection masks follow add, erase, and a restore", _mask_cache_run, "outline_masks")
+
+
+func _mask_cache_run() -> void:
+	step("Given a selection with one built chunk mask", func():
+		_mask_selection = VoxelSelection.new()
+		_mask_selection.add(Vector3i(0, 0, 0))
+		var chunk: Array = _mask_selection.mask_chunks()[Vector3i.ZERO]
+		var x_grid: PackedInt32Array = chunk[0]
+		var y_grid: PackedInt32Array = chunk[1]
+		var z_grid: PackedInt32Array = chunk[2]
+		expect(x_grid[0] & 1, "the x row holds the cell")
+		expect(y_grid[0] & 1, "the y row holds the cell")
+		expect(z_grid[0] & 1, "the z row holds the cell")
+	)
+	step("When a cell is added and another is erased", func():
+		_mask_selection.add(Vector3i(1, 0, 0))
+		var chunk: Array = _mask_selection.mask_chunks()[Vector3i.ZERO]
+		var x_grid: PackedInt32Array = chunk[0]
+		expect(x_grid[0] & 2, "the x row holds the new bit")
+		_mask_selection.erase(Vector3i(0, 0, 0))
+		expect(not (x_grid[0] & 1), "the erased bit is clear")
+	)
+	step("When the selection is replaced from a box", func():
+		_mask_selection.from_box(Vector3i(2, 2, 2), Vector3i(3, 3, 3))
+		var chunk: Array = _mask_selection.mask_chunks()[Vector3i.ZERO]
+		var x_grid: PackedInt32Array = chunk[0]
+		expect(x_grid[2 * 16 + 2] & 0b1100, "the box bits replace the old selection")
+		expect(not (x_grid[0] & 1), "the old bit is gone")
+	)
+	step("When a captured selection is restored", func():
+		var snapshot := _mask_selection.capture()
+		var masks := _mask_selection.mask_snapshot()
+		_mask_selection.clear()
+		expect(_mask_selection.mask_chunks().is_empty(), "a clear leaves no masks")
+		_mask_selection.restore(snapshot)
+		var chunk: Array = _mask_selection.mask_chunks()[Vector3i.ZERO]
+		var x_grid: PackedInt32Array = chunk[0]
+		expect(x_grid[2 * 16 + 2] & 0b1100, "the restored selection rebuilds its masks")
+		_mask_selection.clear()
+		_mask_selection.restore(snapshot, masks)
+		var adopted: Array = _mask_selection.mask_chunks()[Vector3i.ZERO]
+		expect(adopted[0] == chunk[0] and adopted[1] == chunk[1] and adopted[2] == chunk[2], "the adopted masks equal the rebuilt masks")
+	)
+	step("Then a one-bit mask difference is detected", func():
+		var reference := VoxelSelection.new()
+		reference.from_box(Vector3i(2, 2, 2), Vector3i(3, 3, 3))
+		var changed := VoxelSelection.new()
+		changed.from_box(Vector3i(2, 2, 2), Vector3i(3, 3, 3))
+		changed.add(Vector3i(4, 2, 2))
+		expect(VoxelEditTransaction._masks_equal(reference.mask_chunks(), reference.mask_chunks()), "equal masks compare equal")
+		expect(not VoxelEditTransaction._masks_equal(reference.mask_chunks(), changed.mask_chunks()), "a one-bit difference compares different")
+	)
+	expect(_mask_selection.count() == 8, "the box holds eight cells")
 
 
 func _run() -> void:
@@ -230,7 +286,7 @@ func _expect_frozen_reference() -> void:
 	var single := VoxelSelection.new()
 	single.add(Vector3i.ZERO)
 	expect(REFERENCE.outline_vertices(single).size() == 24, "the frozen reference gives a single cell twelve segments")
-	expect(REFERENCE.outline_vertices(single) == PREVIEW_SCRIPT._outline_vertices(single), "both builders agree on one cell")
+	expect(_canonical_counts(REFERENCE.outline_vertices(single)) == _canonical_counts(PREVIEW_SCRIPT._outline_vertices(single)), "both builders agree on one cell")
 
 
 func _compare_all(selections: Array) -> void:
@@ -241,11 +297,12 @@ func _compare_all(selections: Array) -> void:
 func _compare(selection: VoxelSelection) -> void:
 	var reference := REFERENCE.outline_vertices(selection)
 	var production := PREVIEW_SCRIPT._outline_vertices(selection)
+	var repeated := PREVIEW_SCRIPT._outline_vertices(selection)
 	_compared += 1
-	if reference != production:
-		_order_mismatches += 1
+	if production != repeated:
+		_determinism_mismatches += 1
 		if _first_mismatch == "":
-			_first_mismatch = "order %d vs %d vertices" % [reference.size(), production.size()]
+			_first_mismatch = "nondeterministic %d vs %d vertices" % [production.size(), repeated.size()]
 	if _canonical_counts(reference) != _canonical_counts(production):
 		_geometry_mismatches += 1
 		if _first_mismatch == "":
@@ -254,7 +311,7 @@ func _compare(selection: VoxelSelection) -> void:
 
 func _expect_no_mismatches(label: String) -> void:
 	expect(_geometry_mismatches == 0, "%s keep the exact segment set%s" % [label, "" if _first_mismatch == "" else " (first: %s)" % _first_mismatch])
-	expect(_order_mismatches == 0, "%s keep the exact vertex order" % label)
+	expect(_determinism_mismatches == 0, "%s build the same output twice" % label)
 	expect(_compared > 0, "%s compare at least one shape" % label)
 
 
@@ -314,6 +371,11 @@ func _representative_selections() -> Array:
 	out.append(_box_selection(Vector3i(-1, -1, -1), Vector3i(1, 1, 1)))
 	# A box across a chunk boundary.
 	out.append(_box_selection(Vector3i(14, 14, 14), Vector3i(17, 17, 17)))
+	# A box that spans several chunks on every axis.
+	out.append(_box_selection(Vector3i(0, 0, 0), Vector3i(19, 19, 19)))
+	# A shell and a gap that span several chunks.
+	out.append(_shell_selection(Vector3i(-2, -2, -2), Vector3i(19, 19, 19)))
+	out.append(_box_with_gap(Vector3i(0, 0, 0), Vector3i(19, 19, 19), Vector3i(7, 7, 7), Vector3i(12, 12, 12)))
 	# A stepped diagonal.
 	out.append(_stair_selection())
 	# Near the inline limit.

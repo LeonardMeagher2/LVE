@@ -33,6 +33,7 @@ func _ready() -> void:
 	timeout = 30.0
 	test("a no-op edit records no history", _noop, "noop")
 	test("a selection-only change records one undo", _selection_only, "selection_only")
+	test("undo and redo install the selection masks and keep them frozen", _selection_masks, "selection_masks")
 	test("an edit keeps the full material of a changed cell", _changed_material, "changed_material")
 	test("a cancel restores the frame bounds and the selection", _cancel_restores, "cancel_restores")
 	test("a nested begin is refused and leaves the active edit intact", _nested_begin_refused, "nested_begin_refused")
@@ -138,6 +139,49 @@ func _selection_only() -> void:
 		State.undo_redo.redo()
 		expect(State.selection.contains(Vector3i(3, 0, 3)), "redo restores the added cell")
 	)
+
+
+func _selection_masks() -> void:
+	var first_chunk_cell := Vector3i(1, 2, 3)
+	var second_chunk_cell := Vector3i(20, 1, 1)
+	var added_cell := Vector3i(33, 4, 5)
+	var after_undo_cell := Vector3i(-2, 0, 2)
+	step("Given a selection in two chunks and an open edit", func():
+		State.selection.add(first_chunk_cell)
+		State.selection.add(second_chunk_cell)
+		edit = State.begin_edit()
+		expect(edit != null, "the edit opens")
+	)
+	step("When the edit adds a cell in a third chunk", func():
+		State.selection.add(added_cell)
+		State.finish_edit(edit, "Select")
+		edit = null
+	)
+	step("Then undo installs the recorded masks without a rebuild", func():
+		var rebuilds := VoxelSelection._profile_rebuild_calls
+		State.undo_redo.undo()
+		expect(VoxelSelection._profile_rebuild_calls == rebuilds, "the undo adopts the recorded masks")
+		expect(_masks_match_cells(), "the undo masks describe the restored cells")
+	)
+	step("When a later write changes the restored selection", func():
+		State.selection.add(after_undo_cell)
+		expect(State.selection.contains(after_undo_cell), "the write lands")
+	)
+	step("Then redo installs the exact recorded masks", func():
+		var rebuilds := VoxelSelection._profile_rebuild_calls
+		State.undo_redo.redo()
+		expect(VoxelSelection._profile_rebuild_calls == rebuilds, "the redo adopts the recorded masks")
+		expect(State.selection.contains(added_cell), "redo restores the added cell")
+		expect(not State.selection.contains(after_undo_cell), "redo drops the later cell")
+		expect(_masks_match_cells(), "the redo masks describe the restored cells")
+	)
+
+
+# True when the live masks agree with the masks of a fresh rebuild.
+func _masks_match_cells() -> bool:
+	var rebuilt := VoxelSelection.new()
+	rebuilt.cells = State.selection.all_cells().duplicate()
+	return VoxelEditTransaction._masks_equal(State.selection.mask_chunks(), rebuilt.mask_chunks())
 
 
 func _changed_material() -> void:

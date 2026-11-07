@@ -254,12 +254,10 @@ func _drain_selection_batches(job: WandJob) -> void:
 func _apply_selection_slice(keys: Array, start: int, end: int, job: WandJob) -> bool:
 	if not _selection_current(job):
 		return false
-	for index in range(start, end):
-		var cell_position: Vector3i = keys[index]
-		if job.mode == 2:
-			State.selection.erase(cell_position)
-		else:
-			State.selection.add(cell_position)
+	if job.mode == 2:
+		State.selection.erase_range(keys, start, end)
+	else:
+		State.selection.add_range(keys, start, end)
 	return true
 
 
@@ -309,29 +307,51 @@ func _reap_retired_jobs() -> void:
 
 func _finish_selection() -> void:
 	var job := _job
-	_job = null
 	if job == null:
 		return
+	var streamed := job.batch_cursor != null
 	var committed := job.checkpoint(0) and State.document == _source_document and State.get_current_voxel_frame() == _source_frame
 	# Capture the handle, the operation, and the source before the history and
 	# selection signals. A handler that starts a new selection on this tool keeps
 	# its own, so this cleanup must consume only the captured state.
 	var tx := _edit
-	_edit = null
 	var operation_id := _operation_id
 	_operation_id = 0
 	_source_document = null
 	_source_frame = null
-	if committed:
-		if tx == null:
-			tx = State.begin_edit()
+	if not committed:
+		_job = null
+		_edit = null
 		if tx != null:
-			State.selection.restore(job.result)
-			State.finish_edit(tx, "Wand selection")
-			_publish_selection()
-	elif tx != null:
-		# A stale result never stays, so release the handle the tool still owns.
-		State.cancel_edit(tx)
+			# A stale result never stays, so release the handle the tool still owns.
+			State.cancel_edit(tx)
+		State.finish_operation(operation_id)
+		return
+	if tx == null:
+		tx = State.begin_edit()
+	if tx == null:
+		_job = null
+		_edit = null
+		State.finish_operation(operation_id)
+		return
+	# A completed stream already applied every batch, so the live masks are the
+	# result masks. A restore would rebuild them one cell at a time. The count
+	# check is constant time and falls back to the exact restore.
+	if not streamed or State.selection.count() != job.result.size():
+		State.selection.restore(job.result)
+	if streamed:
+		# Publish while this tool still reports the stream, so the exact final
+		# snapshot takes the progressive outline path. A strict request here
+		# would cancel the running stream and rebuild the same outline.
+		_publish_selection()
+		_job = null
+		_edit = null
+		State.finish_edit(tx, "Wand selection")
+	else:
+		_job = null
+		_edit = null
+		State.finish_edit(tx, "Wand selection")
+		_publish_selection()
 	State.finish_operation(operation_id)
 
 

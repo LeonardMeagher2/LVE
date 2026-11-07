@@ -381,6 +381,26 @@ flowchart LR
 The cache limit is 64 MB and 16 entries.
 The source is [`VoxelPreview.gd`](../../Globals/Rendering/VoxelPreview.gd).
 
+A selection outline reads dense masks, not the cell dictionary.
+`VoxelSelection.mask_chunks` holds one 16-bit row per chunk row and edge axis.
+Every selection mutation keeps the masks current.
+A worker gets `mask_snapshot`, so it never reads the live selection.
+The snapshot copies the chunk dictionary, each three-grid entry, and each grid.
+A packed array that two array elements share does not detach on a write, so a shared grid is not safe.
+A chunk entry also holds the chunk cell count. A chunk that reaches zero leaves the mask set.
+A box fills its masks in row runs. A streamed batch groups its cells by chunk and writes each grid once.
+The outline builder reads the cell row, the two side rows, and the diagonal row of one line.
+A side or diagonal cell on a chunk border comes from the neighbor chunk mask.
+The source is [`VoxelSelection.gd`](../../Globals/State/VoxelSelection.gd) and [`VoxelPreview.gd`](../../Globals/Rendering/VoxelPreview.gd).
+
+An edit transaction captures the selection masks with the selection.
+`VoxelEditTransaction` stores them in the undo change, and `State._restore_chunks` passes them to `restore`.
+An undo or redo then installs the recorded grids, so it does not rebuild them.
+A completed streamed selection holds the result masks already, so the wand finish does not restore them again.
+The finish publishes through the progressive outline path.
+A strict request there would cancel the running stream and rebuild the same outline.
+The source is [`VoxelEditTransaction.gd`](../../Globals/State/VoxelEditTransaction.gd) and [`WandSelectTool.gd`](../../plugins/selection/tools/WandSelectTool.gd).
+
 `show_voxels` and `_request` accept an optional opaque token.
 `SolidPayload.token` and `PreviewJob.token` carry it.
 The caller owns the token and captures it before submit. Do not mutate it while a job is in flight or a surface is installed.

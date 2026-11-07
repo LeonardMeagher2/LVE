@@ -604,8 +604,8 @@ func finish_edit(tx: VoxelEditTransaction, action: String = "Stroke") -> void:
 		edit_state_changed.emit()
 		return
 	undo_redo.create_action(action)
-	undo_redo.add_undo_method(_restore_chunks.bind(change.frame, change.undo_chunks, change.undo_selection))
-	undo_redo.add_do_method(_restore_chunks.bind(change.frame, change.redo_chunks, change.redo_selection))
+	undo_redo.add_undo_method(_restore_chunks.bind(change.frame, change.undo_chunks, change.undo_selection, change.undo_selection_masks))
+	undo_redo.add_do_method(_restore_chunks.bind(change.frame, change.redo_chunks, change.redo_selection, change.redo_selection_masks))
 	_commit_history(false)
 	edit_state_changed.emit()
 
@@ -623,7 +623,7 @@ func cancel_edit(tx: VoxelEditTransaction) -> void:
 	if rollback == null:
 		edit_state_changed.emit()
 		return
-	_restore_chunks(rollback.frame, rollback.chunks, rollback.selection)
+	_restore_chunks(rollback.frame, rollback.chunks, rollback.selection, rollback.selection_masks)
 	edit_state_changed.emit()
 
 
@@ -636,14 +636,14 @@ func _abandon_active_edit() -> void:
 	_active_edit = null
 
 
-func _restore_chunks(edited_frame: VoxelFrame, chunk_snapshot: Dictionary, selection_snapshot: Dictionary) -> void:
+func _restore_chunks(edited_frame: VoxelFrame, chunk_snapshot: Dictionary, selection_snapshot: Dictionary, selection_snapshot_masks: Dictionary = {}) -> void:
 	var frame_index := document.frames.find(edited_frame)
 	if frame_index == -1:
 		return
 	var cells_restored := edited_frame.chunks != chunk_snapshot
 	edited_frame.restore(chunk_snapshot)
 	document._bounds_dirty = true
-	selection.restore(selection_snapshot)
+	selection.restore(selection_snapshot, selection_snapshot_masks)
 	if cells_restored:
 		var affected_cells: Array[Vector3i] = []
 		cells_changed.emit(frame_index, affected_cells)

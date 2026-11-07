@@ -15,11 +15,11 @@ enum PreviewStyle {
 	SOLID,
 }
 
-# An inline outline runs inside the request on the main thread. The measured scan
-# costs about 2 us per selected cell on a dense shape and about 12 us on a
-# scattered one. The shared work slice is 3000 us, so the conservative limit is
-# about 250 cells. A larger outline goes to a worker and installs a frame later
-# instead of stalling the frame that asked for it.
+# An inline outline runs inside the request on the main thread. The mask builder
+# costs about 1.5 us per selected cell to build the selection masks once, then
+# about 3 ms per touched chunk for the boundary scan. A small selection stays
+# inside the 3000 us work slice. A larger outline goes to a worker and installs a
+# frame later instead of stalling the frame that asked for it.
 ## The largest outline that builds inline on the main thread.
 const INLINE_OUTLINE_LIMIT := 256
 # The delay that debounces a large outline is separate from the inline budget. A
@@ -30,6 +30,10 @@ const OUTLINE_DELAY_LIMIT := 4096
 const CACHE_LIMIT_BYTES := 64 * 1024 * 1024
 ## The mesh cache entry limit.
 const CACHE_LIMIT_ENTRIES := 16
+## The chunk edge length of the outline mask.
+const OUTLINE_CHUNK := VoxelFrame.CHUNK_SIZE
+## The cell bits of one mask row.
+const OUTLINE_CELL_BITS := 0xFFFF
 
 ## Whether a new request keeps the running worker instead of cancelling it. A
 ## live cursor opts in, so it installs a bounded-latency snapshot in request
@@ -47,6 +51,11 @@ static var _install_time_us := 0
 
 var _single_cell_outline: ArrayMesh
 var _requested_cells := {}
+var _requested_masks := {}
+var _requested_mask_hash := -1
+var _requested_outline := false
+var _requested_source: VoxelSelection
+var _requested_source_revision := -1
 var _requested_style := PreviewStyle.OUTLINE
 var _requested_voxel_colors := false
 var _requested_smooth_normals := false
@@ -77,6 +86,8 @@ var _installed_token: Variant = null
 # opt-in, so the brush and cursor keep the strict latest-only behavior.
 var _stream_job: PreviewJob
 var _stream_source: VoxelSelection
+var _stream_queued_source: VoxelSelection
+var _stream_queued_revision := -1
 var _stream_has_pending := false
 # Bumped when a clear or a strict request supersedes the stream. A running stream
 # outline installs only while its epoch still matches.
@@ -194,14 +205,24 @@ class PreviewJob extends VoxelFrame.EditJob:
 	var geometry_bytes := 0
 	## The callable that builds an outline from a selection.
 	var outline_builder: Callable
+	## The callable that builds an outline from a mask snapshot.
+	var mask_outline_builder: Callable
+	## The per-chunk selection masks of an outline. A snapshot from the caller is
+	## read on the worker, so no live selection is touched.
+	var mask_chunks := {}
 
 	## Builds the mesh arrays. This is the worker body.
 	func run() -> void:
 		if style == PreviewStyle.OUTLINE:
-			var selection := VoxelSelection.new()
-			selection.restore(cells)
-			stage("Building preview outline", cells.size())
-			var outline_vertices: PackedVector3Array = outline_builder.call(selection, self)
+			var outline_vertices: PackedVector3Array
+			if mask_chunks.is_empty():
+				var selection := VoxelSelection.new()
+				selection.restore(cells)
+				stage("Building preview outline", cells.size())
+				outline_vertices = outline_builder.call(selection, self)
+			else:
+				stage("Building preview outline", cells.size())
+				outline_vertices = mask_outline_builder.call(mask_chunks, self)
 			arrays.resize(Mesh.ARRAY_MAX)
 			arrays[Mesh.ARRAY_VERTEX] = outline_vertices
 			geometry_bytes = outline_vertices.size() * 12
@@ -417,11 +438,24 @@ func show_selection(selection: VoxelSelection, progressive := false) -> void:
 		return
 	material_override = _outline_material
 	if progressive:
+		# A publish that did not change the cells queues nothing. The revision
+		# makes that test one integer compare, not a full set compare.
+		if selection == _stream_queued_source and selection.revision == _stream_queued_revision:
+			return
+		_stream_queued_source = selection
+		_stream_queued_revision = selection.revision
 		_queue_stream(selection)
 		return
+	# The same selection at the same revision needs no copy, hash, or rebuild. A
+	# stream or a cell preview owns the surface in between, so the strict flag
+	# must say this request still owns it.
+	if selection == _requested_source and selection.revision == _requested_source_revision and _strict_alive and _requested_style == PreviewStyle.OUTLINE:
+		return
+	_requested_source = selection
+	_requested_source_revision = selection.revision
 	# `all_cells` hands out the live cells without marking the selection shared, so
 	# the request copy below does not force a second copy on the next add.
-	_request(selection.all_cells(), PreviewStyle.OUTLINE)
+	_request(selection.all_cells(), PreviewStyle.OUTLINE, false, Color.WHITE, null, selection.mask_snapshot(), selection)
 
 
 # Queue the newest snapshot for the progressive path. The stream takes over the
@@ -450,10 +484,13 @@ func _start_stream() -> void:
 		# job is joined and discarded, so the stream result is not lost.
 		return
 	var job := _new_job()
-	# Snapshot the live selection now, so the worker reads a stable set. The copy
-	# happens once per started outline, not once per publish.
-	job.cells = _stream_source.all_cells().duplicate()
+	# The mask snapshot owns its grids, so the worker reads a set that no main
+	# thread write can change. The cells are not copied: a stream job needs them
+	# only when no mask snapshot exists, and the installed cells of a progressive
+	# outline are not part of the selection tool path.
+	job.mask_chunks = _stream_source.mask_snapshot()
 	job.outline_builder = _outline_vertices
+	job.mask_outline_builder = _outline_from_masks
 	job.style = PreviewStyle.OUTLINE
 	job.stream_epoch = _stream_epoch
 	_stream_has_pending = false
@@ -478,20 +515,27 @@ func _cancel_stream() -> void:
 	_stream_epoch += 1
 	_stream_has_pending = false
 	_stream_source = null
+	_stream_queued_source = null
+	_stream_queued_revision = -1
 	if _stream_job:
 		_stream_job.cancel()
 
 
-func _request(cells: Dictionary, style: PreviewStyle, use_voxel_colors: bool = false, color_key: Color = Color.WHITE, token: Variant = null) -> void:
+func _request(cells: Dictionary, style: PreviewStyle, use_voxel_colors: bool = false, color_key: Color = Color.WHITE, token: Variant = null, mask_chunks: Dictionary = {}, source: VoxelSelection = null) -> void:
 	_cancel_stream()
 	var colored := style == PreviewStyle.SOLID and use_voxel_colors
 	var smooth_normals := style == PreviewStyle.SOLID and State.document.smooth_normals
+	var outline := style == PreviewStyle.OUTLINE and not mask_chunks.is_empty()
+	var mask_hash := _mask_hash(mask_chunks) if outline else 0
 	# The dedupe trusts the requested set only while the strict request still owns
 	# the preview. A stream publish clears that ownership, so a strict request
 	# repeated after a stream reinstalls its exact result. A deduped request keeps
-	# the token of the surface that is already installed.
-	if _strict_alive and style == _requested_style and use_voxel_colors == _requested_voxel_colors and smooth_normals == _requested_smooth_normals and color_key == _requested_color_key and _same_cells(_requested_cells, cells, colored):
-		return
+	# the token of the surface that is already installed. An outline compares the
+	# mask hash, so it never hashes or scans the cell dictionary.
+	if _strict_alive and style == _requested_style and use_voxel_colors == _requested_voxel_colors and smooth_normals == _requested_smooth_normals and color_key == _requested_color_key:
+		var same := (_requested_outline and mask_hash == _requested_mask_hash) if outline else _same_cells(_requested_cells, cells, colored)
+		if same:
+			return
 	_request_revision += 1
 	_strict_alive = true
 	# A coalescing caller wants the newest snapshot, not a restart. It keeps the
@@ -504,20 +548,36 @@ func _request(cells: Dictionary, style: PreviewStyle, use_voxel_colors: bool = f
 	_requested_voxel_colors = use_voxel_colors
 	_requested_smooth_normals = smooth_normals
 	_requested_color_key = color_key
-	_requested_cells = cells if cells.is_read_only() else cells.duplicate(true)
-	_requested_cells.make_read_only()
+	_requested_masks = mask_chunks if outline else {}
+	_requested_mask_hash = mask_hash
+	_requested_outline = outline
 	_pending_cells = {}
 	_request_due_ms = 0
-	var cache_key := _cache_key(_requested_cells, style, colored, color_key, smooth_normals)
+	var cell_hash := mask_hash if outline else _cell_hash(cells, colored)
+	var cache_key := _key_from_hash(style, colored, cell_hash, color_key, smooth_normals, "m" if outline else "")
 	_requested_cache_key = cache_key
 	var cached: Dictionary = _mesh_cache.get(cache_key, {})
-	if not cached.is_empty() and cached.color_key == color_key and _same_cells(cached.cells, _requested_cells, colored):
+	if not cached.is_empty() and cached.color_key == color_key and (outline or _same_cells(cached.cells, cells, colored)):
 		_install_cached(cache_key, cached)
 		return
+	# The request schedules a job. An outline shares the selection dictionary and
+	# makes it read-only, so the next selection write copies it once. The other
+	# paths copy the cell set now.
+	_requested_cells = source.capture() if outline and source != null else (cells if cells.is_read_only() else cells.duplicate(true))
+	_requested_cells.make_read_only()
 	_pending_cells = _requested_cells
 	_request_due_ms = Time.get_ticks_msec() + 100 if style == PreviewStyle.OUTLINE and cells.size() > OUTLINE_DELAY_LIMIT else 0
 	_start_activity()
 	_start_preview()
+
+
+## Returns the content hash of one mask snapshot.
+static func _mask_hash(masks: Dictionary) -> int:
+	var combined := 0
+	for location in masks:
+		var grids: Array = masks[location]
+		combined = hash([combined, location, hash(grids[0]), hash(grids[1]), hash(grids[2])])
+	return combined
 
 
 ## Shows a solid preview from a payload that a worker built.
@@ -599,10 +659,6 @@ static func _same_cells(first: Dictionary, second: Dictionary, colored: bool) ->
 	return true
 
 
-static func _cache_key(cells: Dictionary, style: PreviewStyle, colored: bool, color_key: Color, smooth_normals: bool) -> String:
-	return _key_from_hash(style, colored, _cell_hash(cells, colored), color_key, smooth_normals)
-
-
 # The hash of the requested cells. A colored solid reads the values, so its hash
 # covers them. Every other shape reads the keys alone.
 static func _cell_hash(cells: Dictionary, colored: bool) -> int:
@@ -612,8 +668,8 @@ static func _cell_hash(cells: Dictionary, colored: bool) -> int:
 # The exact cache key from one cell hash and the flags that change the surface. A
 # worker computes the cell hash, and the main thread formats the key with the live
 # smooth setting, so a prepared payload needs no main-thread key hash.
-static func _key_from_hash(style: int, colored: bool, cell_hash: int, color_key: Color, smooth_normals: bool) -> String:
-	return "%d:%s:%d:%s:%s" % [style, colored, cell_hash, color_key, smooth_normals]
+static func _key_from_hash(style: int, colored: bool, cell_hash: int, color_key: Color, smooth_normals: bool, kind := "") -> String:
+	return "%s%d:%s:%d:%s:%s" % [kind, style, colored, cell_hash, color_key, smooth_normals]
 
 
 func _clear_request() -> void:
@@ -626,6 +682,11 @@ func _clear_request() -> void:
 	_requested_token = null
 	_strict_alive = false
 	_requested_cells = {}
+	_requested_masks = {}
+	_requested_mask_hash = -1
+	_requested_outline = false
+	_requested_source = null
+	_requested_source_revision = -1
 	_pending_cells = {}
 	_request_due_ms = 0
 	if _preview_job:
@@ -667,17 +728,168 @@ static func _mesh_from_vertices(outline_vertices: PackedVector3Array) -> ArrayMe
 
 
 static func _outline_vertices(selection: VoxelSelection, job: VoxelFrame.EditJob = null) -> PackedVector3Array:
-	# Each cell edge goes straight onto the line it lies on. The old scan built one
-	# array of five-element arrays, then grouped it again. The run on a line is the
-	# edge start alone, because an edge is always two units long.
+	# The selection keeps one dense mask per chunk, so the neighbor tests read
+	# words instead of the cell dictionary. A worker receives a mask snapshot.
+	return _outline_from_masks(selection.mask_chunks(), job)
+
+
+## Returns the outline of one set of per-chunk selection masks. A worker calls
+## this with a [method VoxelSelection.mask_snapshot].
+static func _outline_from_masks(masks: Dictionary, job: VoxelFrame.EditJob = null) -> PackedVector3Array:
+	if job and not job.checkpoint(0):
+		return PackedVector3Array()
 	var runs_by_line := {}
-	var completed := 0
-	for cell_position in selection.all_cells():
-		_collect_boundary_runs(runs_by_line, cell_position, selection)
-		completed += 1
-		if job and completed % 4096 == 0 and not job.checkpoint(completed):
+	for location: Vector3i in masks:
+		if job and not job.checkpoint(0):
 			return PackedVector3Array()
+		_collect_chunk_runs(runs_by_line, masks, location)
 	return _merged_outline(runs_by_line, job)
+
+
+# Extracts the boundary runs of one chunk from its own masks. Each axis reads the
+# cell row, the two side rows, and the diagonal row of a line, so the four edges
+# of a line cost four word reads. A side or diagonal cell on a chunk border comes
+# from the neighbor mask.
+static func _collect_chunk_runs(runs_by_line: Dictionary, masks: Dictionary, location: Vector3i) -> void:
+	var chunk_masks: Array = masks[location]
+	var x_grid: PackedInt32Array = chunk_masks[0]
+	var y_grid: PackedInt32Array = chunk_masks[1]
+	var z_grid: PackedInt32Array = chunk_masks[2]
+	var signs: Array[int] = [-1, 1]
+	# The masks hold local coordinates. A line key and a run are in half units, so
+	# one chunk step is 32 of them.
+	var offset_x := location.x * 32
+	var offset_y := location.y * 32
+	var offset_z := location.z * 32
+	# Edge axis 0 runs along x, so its side axes are y and z.
+	for y in OUTLINE_CHUNK:
+		var py := y + 1
+		var row := y * OUTLINE_CHUNK
+		var y_inner := py > 1 and py < OUTLINE_CHUNK
+		for z in OUTLINE_CHUNK:
+			var cell := x_grid[row + z]
+			if cell == 0:
+				continue
+			var pz := z + 1
+			var z_inner := pz > 1 and pz < OUTLINE_CHUNK
+			for y_sign in signs:
+				var first_y := py + y_sign
+				for z_sign in signs:
+					var second_z := pz + z_sign
+					if y_inner and z_inner:
+						_collect_mask_runs(runs_by_line, 0, offset_y + y * 2 + y_sign, offset_z + z * 2 + z_sign, offset_x, cell,
+							x_grid[(first_y - 1) * OUTLINE_CHUNK + z],
+							x_grid[row + second_z - 1],
+							x_grid[(first_y - 1) * OUTLINE_CHUNK + second_z - 1])
+					else:
+						_collect_mask_runs(runs_by_line, 0, offset_y + y * 2 + y_sign, offset_z + z * 2 + z_sign, offset_x, cell,
+							_mask_at(masks, location, 0, x_grid, first_y, pz, 1, 2),
+							_mask_at(masks, location, 0, x_grid, py, second_z, 1, 2),
+							_mask_at(masks, location, 0, x_grid, first_y, second_z, 1, 2))
+	# Edge axis 1 runs along y, so its side axes are z and x.
+	for z in OUTLINE_CHUNK:
+		var pz := z + 1
+		var row := z * OUTLINE_CHUNK
+		var z_inner := pz > 1 and pz < OUTLINE_CHUNK
+		for x in OUTLINE_CHUNK:
+			var cell := y_grid[row + x]
+			if cell == 0:
+				continue
+			var px := x + 1
+			var x_inner := px > 1 and px < OUTLINE_CHUNK
+			for z_sign in signs:
+				var first_z := pz + z_sign
+				for x_sign in signs:
+					var second_x := px + x_sign
+					if z_inner and x_inner:
+						_collect_mask_runs(runs_by_line, 1, offset_z + z * 2 + z_sign, offset_x + x * 2 + x_sign, offset_y, cell,
+							y_grid[(first_z - 1) * OUTLINE_CHUNK + x],
+							y_grid[row + second_x - 1],
+							y_grid[(first_z - 1) * OUTLINE_CHUNK + second_x - 1])
+					else:
+						_collect_mask_runs(runs_by_line, 1, offset_z + z * 2 + z_sign, offset_x + x * 2 + x_sign, offset_y, cell,
+							_mask_at(masks, location, 1, y_grid, first_z, px, 2, 0),
+							_mask_at(masks, location, 1, y_grid, pz, second_x, 2, 0),
+							_mask_at(masks, location, 1, y_grid, first_z, second_x, 2, 0))
+	# Edge axis 2 runs along z, so its side axes are x and y.
+	for x in OUTLINE_CHUNK:
+		var px := x + 1
+		var row := x * OUTLINE_CHUNK
+		var x_inner := px > 1 and px < OUTLINE_CHUNK
+		for y in OUTLINE_CHUNK:
+			var cell := z_grid[row + y]
+			if cell == 0:
+				continue
+			var py := y + 1
+			var y_inner := py > 1 and py < OUTLINE_CHUNK
+			for x_sign in signs:
+				var first_x := px + x_sign
+				for y_sign in signs:
+					var second_y := py + y_sign
+					if x_inner and y_inner:
+						_collect_mask_runs(runs_by_line, 2, offset_x + x * 2 + x_sign, offset_y + y * 2 + y_sign, offset_z, cell,
+							z_grid[(first_x - 1) * OUTLINE_CHUNK + y],
+							z_grid[row + second_y - 1],
+							z_grid[(first_x - 1) * OUTLINE_CHUNK + second_y - 1])
+					else:
+						_collect_mask_runs(runs_by_line, 2, offset_x + x * 2 + x_sign, offset_y + y * 2 + y_sign, offset_z, cell,
+							_mask_at(masks, location, 2, z_grid, first_x, py, 0, 1),
+							_mask_at(masks, location, 2, z_grid, px, second_y, 0, 1),
+							_mask_at(masks, location, 2, z_grid, first_x, second_y, 0, 1))
+
+
+# Returns one row mask of one chunk in padded coordinates. A coordinate in 1
+# through 16 reads the own grid. A 0 or 17 reads the border row of the neighbor
+# chunk that holds that cell. A missing chunk reads empty.
+static func _mask_at(masks: Dictionary, location: Vector3i, grid_index: int, own_grid: PackedInt32Array, first: int, second: int, first_axis: int, second_axis: int) -> int:
+	if first > 0 and first <= OUTLINE_CHUNK and second > 0 and second <= OUTLINE_CHUNK:
+		return own_grid[(first - 1) * OUTLINE_CHUNK + (second - 1)]
+	var neighbor := location
+	var first_own := first - 1
+	var second_own := second - 1
+	if first == 0:
+		neighbor[first_axis] -= 1
+		first_own = OUTLINE_CHUNK - 1
+	elif first == OUTLINE_CHUNK + 1:
+		neighbor[first_axis] += 1
+		first_own = 0
+	if second == 0:
+		neighbor[second_axis] -= 1
+		second_own = OUTLINE_CHUNK - 1
+	elif second == OUTLINE_CHUNK + 1:
+		neighbor[second_axis] += 1
+		second_own = 0
+	var chunk_masks = masks.get(neighbor)
+	if chunk_masks == null:
+		return 0
+	var grid: PackedInt32Array = chunk_masks[grid_index]
+	return grid[first_own * OUTLINE_CHUNK + second_own]
+
+
+# Emits the runs of one line from its own cell mask, its two side masks, and its
+# diagonal mask. An edge needs its cell set. A bit set in both sides hides the
+# edge. With exactly one side set, the diagonal must be set, which is the same
+# rule as the per-cell builder. [param run_offset] moves the local half-unit run
+# to world coordinates.
+static func _collect_mask_runs(runs_by_line: Dictionary, edge_axis: int, first_coord: int, second_coord: int, run_offset: int, cell: int, first: int, second: int, diagonal: int) -> void:
+	var bits := cell & (~(first & second)) & ((~(first ^ second)) | diagonal) & OUTLINE_CELL_BITS
+	if bits == 0:
+		return
+	var line_key := Vector3i(edge_axis, first_coord, second_coord)
+	var line_runs = runs_by_line.get(line_key)
+	if line_runs == null:
+		line_runs = []
+		runs_by_line[line_key] = line_runs
+	var bit := 0
+	while bit < OUTLINE_CHUNK:
+		if bits & (1 << bit) == 0:
+			bit += 1
+			continue
+		var run_start := bit
+		while bit + 1 < OUTLINE_CHUNK and bits & (1 << (bit + 1)) != 0:
+			bit += 1
+		line_runs.append(Vector2i(run_offset + run_start * 2 - 1, run_offset + bit * 2 + 1))
+		bit += 1
 
 
 func _start_preview() -> void:
@@ -685,7 +897,9 @@ func _start_preview() -> void:
 		return
 	_preview_job = _new_job()
 	_preview_job.cells = _pending_cells
+	_preview_job.mask_chunks = _requested_masks
 	_preview_job.outline_builder = _outline_vertices
+	_preview_job.mask_outline_builder = _outline_from_masks
 	_preview_job.style = _requested_style
 	_preview_job.use_voxel_colors = _requested_voxel_colors
 	_preview_job.smooth_normals = _requested_smooth_normals
@@ -894,76 +1108,8 @@ func is_settled() -> bool:
 	return _pending_cells.is_empty() and _preview_job == null and _stream_job == null and not _stream_has_pending
 
 
-# One lookup per face neighbor, shared by the four edge tests of an axis. The old
-# scan read the same neighbor up to four times. The diagonal is read only when
-# exactly one side face is present, which is the only case that needs it.
-static func _collect_boundary_runs(runs_by_line: Dictionary, cell_position: Vector3i, selection: VoxelSelection) -> void:
-	var x := cell_position.x
-	var y := cell_position.y
-	var z := cell_position.z
-	var x_before := selection.contains(Vector3i(x - 1, y, z))
-	var x_after := selection.contains(Vector3i(x + 1, y, z))
-	var y_before := selection.contains(Vector3i(x, y - 1, z))
-	var y_after := selection.contains(Vector3i(x, y + 1, z))
-	var z_before := selection.contains(Vector3i(x, y, z - 1))
-	var z_after := selection.contains(Vector3i(x, y, z + 1))
-	# A cell with every face neighbor present has no boundary edge. The shared
-	# interior of a large model is most of the scan, so skip it before any edge test.
-	if x_before and x_after and y_before and y_after and z_before and z_after:
-		return
-	# Two present side faces hide the edge between them, so that test never runs.
-	# Edge axis 0 runs along x, so its side axes are y and z.
-	if not (y_before and z_before):
-		_append_boundary_edge(runs_by_line, 0, cell_position, 1, -1, 2, -1, y_before, z_before, selection)
-	if not (y_before and z_after):
-		_append_boundary_edge(runs_by_line, 0, cell_position, 1, -1, 2, 1, y_before, z_after, selection)
-	if not (y_after and z_before):
-		_append_boundary_edge(runs_by_line, 0, cell_position, 1, 1, 2, -1, y_after, z_before, selection)
-	if not (y_after and z_after):
-		_append_boundary_edge(runs_by_line, 0, cell_position, 1, 1, 2, 1, y_after, z_after, selection)
-	# Edge axis 1 runs along y, so its side axes are z and x.
-	if not (z_before and x_before):
-		_append_boundary_edge(runs_by_line, 1, cell_position, 2, -1, 0, -1, z_before, x_before, selection)
-	if not (z_before and x_after):
-		_append_boundary_edge(runs_by_line, 1, cell_position, 2, -1, 0, 1, z_before, x_after, selection)
-	if not (z_after and x_before):
-		_append_boundary_edge(runs_by_line, 1, cell_position, 2, 1, 0, -1, z_after, x_before, selection)
-	if not (z_after and x_after):
-		_append_boundary_edge(runs_by_line, 1, cell_position, 2, 1, 0, 1, z_after, x_after, selection)
-	# Edge axis 2 runs along z, so its side axes are x and y.
-	if not (x_before and y_before):
-		_append_boundary_edge(runs_by_line, 2, cell_position, 0, -1, 1, -1, x_before, y_before, selection)
-	if not (x_before and y_after):
-		_append_boundary_edge(runs_by_line, 2, cell_position, 0, -1, 1, 1, x_before, y_after, selection)
-	if not (x_after and y_before):
-		_append_boundary_edge(runs_by_line, 2, cell_position, 0, 1, 1, -1, x_after, y_before, selection)
-	if not (x_after and y_after):
-		_append_boundary_edge(runs_by_line, 2, cell_position, 0, 1, 1, 1, x_after, y_after, selection)
-
-
-# One cell edge, keyed by the line it lies on. The caller already dropped the
-# tests whose two side faces are both present. A single present side face keeps
-# the edge only when the diagonal is present.
-static func _append_boundary_edge(runs_by_line: Dictionary, edge_axis: int, cell_position: Vector3i, first_side_axis: int, first_side_sign: int, second_side_axis: int, second_side_sign: int, first_side: bool, second_side: bool, selection: VoxelSelection) -> void:
-	if first_side != second_side:
-		var diagonal_neighbor := _shifted(_shifted(cell_position, first_side_axis, first_side_sign), second_side_axis, second_side_sign)
-		if not selection.contains(diagonal_neighbor):
-			return
-	var line_key := Vector3i(edge_axis, cell_position[first_side_axis] * 2 + first_side_sign, cell_position[second_side_axis] * 2 + second_side_sign)
-	if not runs_by_line.has(line_key):
-		runs_by_line[line_key] = []
-	runs_by_line[line_key].append(cell_position[edge_axis] * 2 - 1)
-
-
-static func _shifted(cell_position: Vector3i, axis: int, offset: int) -> Vector3i:
-	var neighbor_position := cell_position
-	neighbor_position[axis] += offset
-	return neighbor_position
-
-
-# Runs on one line merge when the next start touches the open end. An edge is
-# always two units long, so the end is the start plus two. The native sort keeps
-# the ascending start order the old comparator produced.
+# Runs on one line merge when the next start touches the open end. The native
+# sort keeps the ascending start order. A run is a half-unit start and end.
 static func _merged_outline(runs_by_line: Dictionary, job: VoxelFrame.EditJob = null) -> PackedVector3Array:
 	var outline_vertices := PackedVector3Array()
 	var completed := 0
@@ -973,17 +1119,15 @@ static func _merged_outline(runs_by_line: Dictionary, job: VoxelFrame.EditJob = 
 		var line_runs: Array = runs_by_line[line_key]
 		completed += line_runs.size()
 		line_runs.sort()
-		var merged_start: int = line_runs[0]
-		var merged_end := merged_start + 2
+		var merged_run: Vector2i = line_runs[0]
 		for run_index in range(1, line_runs.size()):
-			var next_start: int = line_runs[run_index]
-			if next_start <= merged_end:
-				merged_end = next_start + 2
+			var next_run: Vector2i = line_runs[run_index]
+			if next_run.x <= merged_run.y:
+				merged_run.y = maxi(merged_run.y, next_run.y)
 			else:
-				_emit_run(outline_vertices, line_key.x, line_key.y, line_key.z, Vector2i(merged_start, merged_end))
-				merged_start = next_start
-				merged_end = next_start + 2
-		_emit_run(outline_vertices, line_key.x, line_key.y, line_key.z, Vector2i(merged_start, merged_end))
+				_emit_run(outline_vertices, line_key.x, line_key.y, line_key.z, merged_run)
+				merged_run = next_run
+		_emit_run(outline_vertices, line_key.x, line_key.y, line_key.z, merged_run)
 	return outline_vertices
 
 
