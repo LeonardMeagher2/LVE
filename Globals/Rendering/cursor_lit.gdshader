@@ -12,6 +12,9 @@ uniform vec4 emission_color : source_color = vec4(0.0);
 uniform float metallic = 0.0;
 uniform float roughness = 1.0;
 uniform bool use_vertex_color = true;
+// A mirrored instance has a negative scale, so the mesh normal points inward.
+// The mirror cursor flips it back before the lighting runs.
+uniform bool flip_normal = false;
 // The depth step as a fraction of the view distance. A relative step stays
 // above the depth resolution at every zoom.
 uniform float depth_bias = 0.00001;
@@ -30,6 +33,9 @@ void vertex() {
 }
 
 void fragment() {
+	if (flip_normal) {
+		NORMAL = -NORMAL;
+	}
 	vec3 albedo = cursor_color.rgb;
 	if (use_vertex_color) {
 		albedo *= srgb_to_linear(COLOR.rgb);
