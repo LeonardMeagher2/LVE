@@ -49,20 +49,33 @@ var active_tag := 0:
 			_restart()
 		tag_changed.emit()
 
+## The maximum playback steps one [method update] applies. A long frame or a
+## paused process catches up in order, but a very long stall drops the excess
+## time instead of running an unbounded loop.
+const MAX_STEPS_PER_UPDATE := 256
+
 var _play_dir := 1
 var _play_passes := 0
 var _play_elapsed := 0.0
 
 
-## Advances the playback by one time step. Call it once per frame. It advances
-## the frame when the elapsed time reaches the frame duration.
+## Advances the playback by one time step. Call it once per frame. It applies
+## every frame duration that the elapsed time covers, so the playback speed does
+## not depend on the render frame rate. It keeps the remainder for the next call.
 func update(delta: float) -> void:
 	if not is_playing:
 		return
 	_play_elapsed += delta
-	if _play_elapsed >= _current_delay():
-		_play_elapsed = 0.0
+	var steps := 0
+	while is_playing and _play_elapsed >= _current_delay():
+		_play_elapsed -= _current_delay()
 		advance()
+		steps += 1
+		if steps >= MAX_STEPS_PER_UPDATE:
+			# A stall this long cannot be caught up within one frame. Drop the
+			# excess instead of growing the backlog forever.
+			_play_elapsed = 0.0
+			break
 
 
 func _restart() -> void:
@@ -107,6 +120,11 @@ func advance() -> void:
 		_restart()
 		return
 	if first_frame() == last_frame():
+		# A one-frame tag still completes one pass per frame duration. Without
+		# this count a finite repeat never finishes and the playback stays on.
+		_play_passes += 1
+		if _finished():
+			is_playing = false
 		return
 	match _play_mode():
 		AnimationTag.LoopMode.FORWARD:

@@ -316,6 +316,11 @@ func _print_line(raw: PackedByteArray) -> void:
 
 static func is_engine_error(line: String) -> bool:
 	var text := line.strip_edges()
+	# The Windows clipboard can be locked by another process. Godot prints this
+	# platform error, and the clipboard poll retries on its next tick. The scene
+	# did not fail, so it must not fail the child run.
+	if text.begins_with("ERROR: Unable to open clipboard."):
+		return false
 	return text.begins_with("SCRIPT ERROR:") or text.begins_with("ERROR:")
 
 

@@ -178,8 +178,13 @@ func _run() -> void:
 		exporter._model_pending_frame = 0
 		exporter._model_back_renderer._pending_surface_keys[Vector3i.ZERO] = PackedInt64Array([1])
 		expect(not exporter._model_back_renderer.is_settled(), "the test holds an unfinished frame build")
+		# A correct playback clock applies every elapsed frame duration. With a
+		# two-frame loop and a full second the frame index can wrap back to zero,
+		# so count the frame changes instead of one final index.
+		var frames_seen := [0]
+		exporter._model_playback.frame_changed.connect(func() -> void: frames_seen[0] += 1, CONNECT_ONE_SHOT)
 		exporter._process(1.0)
-		expect(exporter._model_playback.current_frame != 0, "the preview clock runs while a frame build is pending")
+		expect(frames_seen[0] > 0, "the preview clock runs while a frame build is pending")
 		exporter._model_back_renderer._pending_surface_keys.clear()
 		exporter._model.get_node("AnimationRow/Play").button_pressed = false
 	)

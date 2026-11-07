@@ -101,6 +101,7 @@ func _engine_errors() -> void:
 		expect(RUNNER.is_engine_error("  ERROR: invalid resource"), "an indented engine error is recognized")
 		expect(not RUNNER.is_engine_error("TEST OK"), "a pass marker is not an engine error")
 		expect(not RUNNER.is_engine_error("WARNING: optional reference is absent"), "a warning is not an engine error")
+		expect(not RUNNER.is_engine_error("ERROR: Unable to open clipboard."), "a busy OS clipboard is not a scene error")
 	)
 
 

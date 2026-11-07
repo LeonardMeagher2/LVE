@@ -48,6 +48,9 @@ signal edit_context_changing()
 signal model_settings_changed()
 ## Emitted after an undo or redo, and after each history commit.
 signal history_changed()
+## Emitted when an owned edit opens or closes. A history change is refused while
+## an edit is open, so observers use this signal to refresh the history controls.
+signal edit_state_changed()
 
 ## The main-thread work slice in microseconds for one pumped frame.
 const WORK_SLICE_US := 3000
@@ -298,6 +301,9 @@ func set_document(value:VoxelDocument) -> void:
 	palette_changed.emit()
 	frames_changed.emit()
 	current_frame = 0
+	# Emit after the replacement. A handler that opens a new edit then uses the
+	# new document, not the captured frame that the abandon released.
+	edit_state_changed.emit()
 
 
 func _commit_history(execute: bool = true) -> void:
@@ -306,8 +312,12 @@ func _commit_history(execute: bool = true) -> void:
 
 
 ## Undoes the last history action. Returns [code]true[/code] when an action was
-## undone.
+## undone. It returns [code]false[/code] while an edit is open: the edit captured
+## a start snapshot that a history change would invalidate, so the edit must close
+## first.
 func undo() -> bool:
+	if _active_edit != null:
+		return false
 	var undone := undo_redo.undo()
 	if undone:
 		history_changed.emit()
@@ -315,8 +325,11 @@ func undo() -> bool:
 
 
 ## Redoes the last undone action. Returns [code]true[/code] when an action was
-## redone.
+## redone. It returns [code]false[/code] while an edit is open, for the same
+## reason as [method undo].
 func redo() -> bool:
+	if _active_edit != null:
+		return false
 	var redone := undo_redo.redo()
 	if redone:
 		history_changed.emit()
@@ -546,6 +559,7 @@ func begin_edit() -> VoxelEditTransaction:
 	if frame == null:
 		return null
 	_active_edit = VoxelEditTransaction.begin(document, frame, selection, _live_context())
+	edit_state_changed.emit()
 	return _active_edit
 
 
@@ -568,11 +582,13 @@ func finish_edit(tx: VoxelEditTransaction, action: String = "Stroke") -> void:
 	_active_edit = null
 	var change := tx.finish()
 	if change == null:
+		edit_state_changed.emit()
 		return
 	undo_redo.create_action(action)
 	undo_redo.add_undo_method(_restore_chunks.bind(change.frame, change.undo_chunks, change.undo_selection))
 	undo_redo.add_do_method(_restore_chunks.bind(change.frame, change.redo_chunks, change.redo_selection))
 	_commit_history(false)
+	edit_state_changed.emit()
 
 
 # Roll one owned edit back to its start snapshots. A stale handle does nothing.
@@ -586,8 +602,10 @@ func cancel_edit(tx: VoxelEditTransaction) -> void:
 	_active_edit = null
 	var rollback := tx.cancel()
 	if rollback == null:
+		edit_state_changed.emit()
 		return
 	_restore_chunks(rollback.frame, rollback.chunks, rollback.selection)
+	edit_state_changed.emit()
 
 
 # Close an edit whose document is replaced. The replacement discards the captured
@@ -1256,9 +1274,10 @@ func get_active_tag() -> AnimationTag:
 func get_tag(i: int) -> AnimationTag:
 	return document.get_tag(i)
 
-## Removes the active tag. The last remaining tag is kept.
+## Removes the active tag. The last remaining tag is kept. An empty tag
+## selection is refused: there is no tag to remove.
 func remove_tag() -> void:
-	if document.tags.size() <= 1:
+	if document.tags.size() <= 1 or active_tag < 0 or active_tag >= document.tags.size():
 		return
 	var index := active_tag
 	var tag := document.get_tag(index)

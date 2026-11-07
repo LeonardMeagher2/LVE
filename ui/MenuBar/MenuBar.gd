@@ -26,11 +26,14 @@ func _ready() -> void:
 	_sync_model_settings()
 	State.history_changed.connect(_sync_history_buttons)
 	State.activity_changed.connect(_sync_history_buttons)
+	State.edit_state_changed.connect(_sync_history_buttons)
 	_sync_history_buttons()
 
 
 func _sync_history_buttons() -> void:
-	var busy := State.edit_busy()
+	# An open edit captured a start snapshot that a history change would
+	# invalidate, so the controls stay disabled until the edit closes.
+	var busy := State.edit_busy() or State.active_edit() != null
 	%UndoBtn.disabled = busy or not State.undo_redo.has_undo()
 	%RedoBtn.disabled = busy or not State.undo_redo.has_redo()
 
