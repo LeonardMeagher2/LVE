@@ -319,7 +319,7 @@ func _slice_stroke() -> void:
 	step("Then the center aim targets the top slab layer", func():
 		var req := pick_request(center)
 		var target := VoxelPicking.start_pick(req.origin, req.dir, req.frame, req.forward, true).target
-		expect(target.y == 3, "the press aim lands on the top slab layer")
+		expect(target.y == 2, "the press aim lands on the top slab layer")
 	)
 	step("When the user presses and releases on the model", func():
 		_click(center)
@@ -331,7 +331,7 @@ func _slice_stroke() -> void:
 		for c in frame.positions():
 			if frame.get_color(c) != Color.from_rgba8(90, 90, 90):
 				written += 1
-				if c.y < 1 or c.y > 3:
+				if c.y < 1 or c.y > 2:
 					off_layer += 1
 		expect(written > 0, "the stroke writes cells inside the slab")
 		expect(off_layer == 0, "the diameter-5 stamp writes no cell outside the slab")

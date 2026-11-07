@@ -75,7 +75,7 @@ func _slice_run() -> void:
 		await get_tree().process_frame
 	await get_tree().process_frame
 	step("Then the view draws only the chunk row that holds the slice", func():
-		expect(renderer.slice_axis == Vector3.Axis.AXIS_Y and renderer.slice_index == 1 and renderer.slice_count == 3, "the viewport applies the slice slab")
+		expect(renderer.slice_axis == Vector3.Axis.AXIS_Y and renderer.slice_index == 1 and renderer.slice_count == 2, "the viewport applies the slice slab")
 		var slice_row := VoxelFrame.chunk_position(Vector3i(0, 2, 0)).y
 		var only_slice_row := true
 		for location: Vector3i in renderer._chunk_instances:
@@ -263,7 +263,7 @@ func _axis_button(label: String) -> Button:
 
 
 func _slab_run() -> void:
-	step("Given cells above and below a floor layer and one layer each side", func():
+	step("Given cells on both sides of a floor layer and one layer each side", func():
 		State.floor_axis = Vector3.Axis.AXIS_Y
 		State.floor_index = 2
 		var frame := State.get_current_voxel_frame()
@@ -271,28 +271,30 @@ func _slab_run() -> void:
 			frame.set_cell(Vector3i(0, y, 0), VoxelFrame.material(Color.RED))
 		State.document._bounds_dirty = true
 		State.slice_layers = 1
-		expect(State.slice_first() == 1 and State.slice_last() == 3, "one layer each side is three layers")
-		expect(State.slice_count() == 3, "the slice count is the floor layer plus both sides")
+		expect(State.slice_first() == 1 and State.slice_last() == 2, "one layer each side is two layers")
+		expect(State.slice_count() == 2, "the slice count is two for one layer each side")
+		var center := (float(State.slice_first()) - 0.5 + float(State.slice_last()) + 0.5) * 0.5
+		expect(is_equal_approx(center, State.slice_level()), "the floor plane is the center of the slab")
 	)
 	step("Then the ray picks the top cell inside the slab", func():
 		var pick := VoxelPicking.start_pick(Vector3(0.5, 20.0, 0.5), Vector3(0, -1, 0), State.get_current_voxel_frame(), Vector3(0, 1, 0), true)
-		expect(pick.target == Vector3i(0, 3, 0), "the top cell of the slab is the target")
-		expect(pick.hit == Vector3i(0, 3, 0), "a cell above the slab does not block")
+		expect(pick.target == Vector3i(0, 2, 0), "the top cell of the slab is the target")
+		expect(pick.hit == Vector3i(0, 2, 0), "a cell above the slab does not block")
 	)
 	step("Then the write gate keeps the slab range", func():
 		var context := State.drawing_context()
-		expect(context.allows(Vector3i(0, 1, 0)), "the layer below the floor is writable")
-		expect(context.allows(Vector3i(0, 2, 0)), "the floor layer is writable")
-		expect(context.allows(Vector3i(0, 3, 0)), "the layer above the floor is writable")
-		expect(not context.allows(Vector3i(0, 4, 0)), "a layer two above the floor is refused")
-		expect(not context.allows(Vector3i(0, 0, 0)), "a layer two below the floor is refused")
+		expect(context.allows(Vector3i(0, 1, 0)), "the layer below the plane is writable")
+		expect(context.allows(Vector3i(0, 2, 0)), "the layer above the plane is writable")
+		expect(not context.allows(Vector3i(0, 3, 0)), "a layer two above the plane is refused")
+		expect(not context.allows(Vector3i(0, 0, 0)), "a layer two below the plane is refused")
 	)
 	step("When the slab holds two layers each side", func():
 		State.slice_layers = 2
-		expect(State.slice_first() == 0 and State.slice_last() == 4, "two each side is five layers")
+		expect(State.slice_first() == 0 and State.slice_last() == 3, "two each side is four layers")
 		var pick := VoxelPicking.start_pick(Vector3(0.5, 20.0, 0.5), Vector3(0, -1, 0), State.get_current_voxel_frame(), Vector3(0, 1, 0), true)
-		expect(pick.target == Vector3i(0, 4, 0), "the top cell of the wider slab is the target")
-		expect(not State.drawing_context().allows(Vector3i(0, 5, 0)), "a layer above the wider slab is refused")
+		expect(pick.target == Vector3i(0, 3, 0), "the top cell of the wider slab is the target")
+		expect(not State.drawing_context().allows(Vector3i(0, 4, 0)), "a layer above the wider slab is refused")
+		expect(not State.drawing_context().allows(Vector3i(0, -1, 0)), "a layer below the wider slab is refused")
 	)
 	step("When the slice is off", func():
 		State.slice_layers = 0

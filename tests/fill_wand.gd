@@ -122,17 +122,17 @@ func _slice_fill() -> void:
 		sync_viewport()
 	)
 	step("When the user fills the slab", func():
-		var pos := _slice_screen_pos_of(seed + Vector3i(0, 1, 0))
-		expect(pos != Vector2.INF, "the top slab cell is visible")
+		var pos := _slice_screen_pos_of(seed)
+		expect(pos != Vector2.INF, "the slice cell is visible")
 		_click(pos)
 	)
 	step("Then the fill stays inside the slab", func():
 		var f: VoxelFrame = State.document.frames[State.current_frame]
-		expect(f.get_color(seed) == Color.BLUE, "the floor layer takes the fill color")
-		expect(f.get_color(seed + Vector3i(1, 0, 0)) == Color.BLUE, "a connected cell on the floor layer takes the fill color")
-		expect(f.get_color(seed + Vector3i(0, 1, 0)) == Color.BLUE, "the cell above the floor is inside the slab")
-		expect(f.get_color(seed + Vector3i(0, -1, 0)) == Color.BLUE, "the cell below the floor is inside the slab")
-		expect(f.get_color(seed + Vector3i(0, 2, 0)) == Color.RED, "a cell above the slab keeps its color")
+		expect(f.get_color(seed) == Color.BLUE, "the top slab cell takes the fill color")
+		expect(f.get_color(seed + Vector3i(1, 0, 0)) == Color.BLUE, "a connected cell on the top slab layer takes the fill color")
+		expect(f.get_color(seed + Vector3i(0, -1, 0)) == Color.BLUE, "the cell below the plane is inside the slab")
+		expect(f.get_color(seed + Vector3i(0, 1, 0)) == Color.RED, "a cell above the slab keeps its color")
+		expect(f.get_color(seed + Vector3i(0, 2, 0)) == Color.RED, "a farther cell above the slab keeps its color")
 		expect(f.get_color(seed + Vector3i(0, -2, 0)) == Color.RED, "a cell below the slab keeps its color")
 	)
 

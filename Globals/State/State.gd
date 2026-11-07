@@ -213,12 +213,13 @@ func slice_first() -> int:
 
 ## Returns the last layer of the slice.
 func slice_last() -> int:
-	return floor_index + slice_layers
+	return floor_index + slice_layers - 1 if slice_layers > 0 else floor_index
 
 
-## Returns the number of layers in the slice.
+## Returns the number of layers in the slice. The floor plane splits the slab
+## evenly, so the floor layer is the first layer above it.
 func slice_count() -> int:
-	return slice_layers * 2 + 1
+	return slice_layers * 2 if slice_layers > 0 else 1
 
 
 ## Returns the world level of the slice plane.
