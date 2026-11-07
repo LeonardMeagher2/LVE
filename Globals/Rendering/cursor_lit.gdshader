@@ -15,6 +15,10 @@ uniform bool use_vertex_color = true;
 // A mirrored instance has a negative scale, so the mesh normal points inward.
 // The mirror cursor flips it back before the lighting runs.
 uniform bool flip_normal = false;
+// Drop the faces that point away from the camera. A cursor that surrounds the
+// camera would otherwise fill the screen with its inner walls. A mirrored
+// instance has reversed winding, so its outside is the GPU back face.
+uniform bool flip_front = false;
 // The depth step as a fraction of the view distance. A relative step stays
 // above the depth resolution at every zoom.
 uniform float depth_bias = 0.00001;
@@ -33,6 +37,9 @@ void vertex() {
 }
 
 void fragment() {
+	if (FRONT_FACING == flip_front) {
+		discard;
+	}
 	if (flip_normal) {
 		NORMAL = -NORMAL;
 	}

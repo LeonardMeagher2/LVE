@@ -17,6 +17,7 @@ func _ready() -> void:
 	super._ready()
 	_mirror_lit_material = _lit_material.duplicate()
 	_mirror_lit_material.set_shader_parameter("flip_normal", true)
+	_mirror_lit_material.set_shader_parameter("flip_front", true)
 	if apply_edit_symmetry:
 		_solid_material.cull_mode = BaseMaterial3D.CULL_DISABLED
 		_primitive_material.cull_mode = BaseMaterial3D.CULL_DISABLED

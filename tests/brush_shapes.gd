@@ -19,6 +19,8 @@ func _mirror_cursor_normals() -> void:
 		expect(cursor._mirror_lit_material != null, "the cursor holds a mirrored lit material")
 		expect(cursor._mirror_lit_material.get_shader_parameter("flip_normal") == true, "the mirrored material flips the normal")
 		expect(cursor._lit_material.get_shader_parameter("flip_normal") == false, "the main cursor keeps its normal")
+		expect(cursor._mirror_lit_material.get_shader_parameter("flip_front") == true, "the mirrored material keeps its outside faces")
+		expect(cursor._lit_material.get_shader_parameter("flip_front") == false, "the main cursor keeps its outside faces")
 	)
 	step("When the X symmetry mirror is on", func():
 		State.symmetry_axes = 1
