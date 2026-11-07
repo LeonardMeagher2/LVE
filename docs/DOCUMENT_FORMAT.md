@@ -31,7 +31,8 @@ The Variant encoding is Godot-specific.
 ## Payload schema
 
 The payload is an untyped dictionary with string keys.
-All document fields are required.
+All document fields are required, except `size`, which older version 3 files omit.
+A missing `size` means no document bound.
 
 | Key | Type | Contents |
 | --- | --- | --- |
@@ -41,6 +42,7 @@ All document fields are required.
 | `smooth_normals` | Boolean | Model shading option |
 | `lighting` | Untyped dictionary | Editor lighting settings |
 | `export` | Untyped dictionary | Export workspace settings |
+| `size` | `Vector3i` | Optional centered document size. Zero on an axis means that axis is infinite. |
 
 Each frame has these fields.
 
@@ -104,6 +106,10 @@ Export camera settings support `yaw`, `pitch`, `distance`, `initial_distance`, `
 Settings dictionaries can be empty when the document uses defaults.
 If export lighting exists, its required fields must be present.
 
+The document size is centered on the origin and uses whole cells.
+A size of `32` on an axis covers the cells `-16` through `15`.
+A size of `33` covers `-16` through `16`.
+A size of zero on an axis means that axis is infinite.
 The file excludes script references, resources, source paths, geometry caches, selection, and undo history.
 
 ## PNG container

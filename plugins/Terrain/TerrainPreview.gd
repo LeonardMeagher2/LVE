@@ -177,7 +177,7 @@ static func compute_smooth_fields(center_point: Vector3, radius: int, falloff: f
 		var cells := []
 		var weights := {}
 		for cell: Vector3i in region:
-			if TerrainGeometry.allows(selection, cell):
+			if TerrainGeometry.allows(selection, cell) and (context == null or context.allows(cell)):
 				cells.append(cell)
 				weights[cell] = float(region[cell])
 		cells.sort_custom(func(a: Vector3i, b: Vector3i) -> bool: return a.y < b.y if a.y != b.y else (a.z < b.z if a.z != b.z else a.x < b.x))

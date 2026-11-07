@@ -449,7 +449,8 @@ class TerrainTickJob extends VoxelFrame.EditJob:
 			return VoxelPicking.NONE
 		var hit := VoxelPicking.NONE
 		if prep_ray_origin != Vector3.INF and prep_ray_dir != Vector3.INF:
-			var pick := VoxelPicking.start_pick(prep_ray_origin, prep_ray_dir, edited_frame, prep_forward)
+			var use_slice := prep_context != null and prep_context.slice_axis >= 0
+			var pick := VoxelPicking.start_pick(prep_ray_origin, prep_ray_dir, edited_frame, prep_forward, use_slice)
 			hit = pick.hit
 		if hit == VoxelPicking.NONE:
 			return TerrainPreview.center_surface(samples, center_point)
@@ -473,10 +474,19 @@ class TerrainTickJob extends VoxelFrame.EditJob:
 		var cells: Array = action["cells"]
 		if cells.is_empty():
 			return null
+		# The slice and the document size limit the plan, not the write. A cell
+		# that the limit refuses stops the column before the tracked surface can
+		# move past it.
+		for cell: Vector3i in cells:
+			if prep_context != null and not prep_context.allows(cell):
+				return null
+		var next: Vector3i = action["next"]
+		if next != VoxelPicking.NONE and prep_context != null and not prep_context.allows(next):
+			return VoxelPicking.NONE
 		var value := material if add else VoxelFrame.material(Color.TRANSPARENT)
 		for cell: Vector3i in cells:
 			changes[cell] = value
-		return action["next"]
+		return next
 
 	func _flatten_step(sample: Dictionary, surface: Vector3i, changes: Dictionary) -> Variant:
 		var normal: Vector3 = sample["normal"]
@@ -485,11 +495,15 @@ class TerrainTickJob extends VoxelFrame.EditJob:
 		var cell: Vector3i = action["cell"]
 		if cell == VoxelPicking.NONE:
 			return null
+		if prep_context != null and not prep_context.allows(cell):
+			return null
 		if action.get("add", false):
 			changes[cell] = _fill_material(surface, changes)
 			return cell
 		changes[cell] = VoxelFrame.material(Color.TRANSPARENT)
 		var inward := TerrainGeometry.dominant_step(surface, normal, -1)
+		if prep_context != null and not prep_context.allows(inward):
+			return VoxelPicking.NONE
 		if TerrainGeometry.is_occupied(edited_frame, changes, inward):
 			return inward
 		return VoxelPicking.NONE
@@ -530,6 +544,8 @@ class GrabJob extends VoxelFrame.EditJob:
 	var sources := {}
 	## The selected cells. An empty dictionary allows every cell.
 	var selection := {}
+	## The frozen edit context that limits the slice and the document size.
+	var context: VoxelFrame.EditContext
 	## The chunk locations that the drag changed.
 	var changed_chunks: Array[Vector3i] = []
 
@@ -583,6 +599,8 @@ class GrabJob extends VoxelFrame.EditJob:
 		return edited_frame.has(cell) and not sources.has(cell)
 
 	func _allows(cell: Vector3i) -> bool:
+		if context != null:
+			return context.allows(cell)
 		return selection.is_empty() or selection.has(cell)
 
 
@@ -904,6 +922,10 @@ func _enter_tree() -> void:
 		State.selection_changed.connect(_mark_preview_dirty)
 	if not State.floor_plane_changed.is_connected(_mark_preview_dirty):
 		State.floor_plane_changed.connect(_mark_preview_dirty)
+	if not State.slice_changed.is_connected(_mark_preview_dirty):
+		State.slice_changed.connect(_mark_preview_dirty)
+	if not State.size_changed.is_connected(_mark_preview_dirty):
+		State.size_changed.connect(_mark_preview_dirty)
 	if not State.chunks_changed.is_connected(_on_frame_cells_changed):
 		State.chunks_changed.connect(_on_frame_cells_changed)
 	if not State.cells_changed.is_connected(_on_frame_cells_changed):
@@ -986,6 +1008,10 @@ func _disconnect_preview_signals() -> void:
 		State.selection_changed.disconnect(_mark_preview_dirty)
 	if State.floor_plane_changed.is_connected(_mark_preview_dirty):
 		State.floor_plane_changed.disconnect(_mark_preview_dirty)
+	if State.slice_changed.is_connected(_mark_preview_dirty):
+		State.slice_changed.disconnect(_mark_preview_dirty)
+	if State.size_changed.is_connected(_mark_preview_dirty):
+		State.size_changed.disconnect(_mark_preview_dirty)
 	if State.chunks_changed.is_connected(_on_frame_cells_changed):
 		State.chunks_changed.disconnect(_on_frame_cells_changed)
 	if State.cells_changed.is_connected(_on_frame_cells_changed):
@@ -1747,7 +1773,8 @@ func _ground_surface(center_point: Vector3) -> Vector3i:
 	var hit := VoxelPicking.NONE
 	if _ray_origin != Vector3.INF and _ray_dir != Vector3.INF:
 		var forward := _stroke_forward if _stroke_forward != Vector3.ZERO else _forward()
-		var pick := VoxelPicking.start_pick(_ray_origin, _ray_dir, _active_frame(), forward)
+		var use_slice := _stroke_context != null and _stroke_context.slice_axis >= 0
+		var pick := VoxelPicking.start_pick(_ray_origin, _ray_dir, _active_frame(), forward, use_slice)
 		hit = pick.hit
 	if hit == VoxelPicking.NONE:
 		return TerrainPreview.center_surface(_samples, center_point)
@@ -1851,6 +1878,7 @@ func _run_tick() -> void:
 	job.threshold = FLATTEN_THRESHOLD
 	job.material = _stroke_material
 	job.selection = _stroke_selection
+	job.prep_context = _stroke_context
 	var work := 0
 	for column in columns:
 		work += int(column["steps"])
@@ -1966,6 +1994,8 @@ func _capture_grab(anchor: Vector3i) -> void:
 
 
 func _allows_selection(cell: Vector3i) -> bool:
+	if _stroke_context != null:
+		return _stroke_context.allows(cell)
 	return _stroke_selection.is_empty() or _stroke_selection.has(cell)
 
 
@@ -2029,6 +2059,7 @@ func _run_grab(delta: Vector3i) -> void:
 	job.moves = moves
 	job.sources = _grab_source_cells
 	job.selection = _stroke_selection
+	job.context = _stroke_context
 	var work := 0
 	for move in moves:
 		var offset: Vector3i = move["delta"]
@@ -2500,7 +2531,10 @@ func _hide_footprint() -> void:
 
 
 func _pick_start(origin: Vector3, dir: Vector3) -> PickResult:
-	var pick := VoxelPicking.start_pick(origin, dir, State.get_current_voxel_frame(), _forward())
+	var use_slice := State.slice_enabled
+	if _edit != null and _stroke_context != null:
+		use_slice = _stroke_context.slice_axis >= 0
+	var pick := VoxelPicking.start_pick(origin, dir, State.get_current_voxel_frame(), _forward(), use_slice)
 	# The pointer ray is the spacing reference of the stroke. A press records it,
 	# so the first motion at the same pointer position is not a movement and
 	# adds no dab.

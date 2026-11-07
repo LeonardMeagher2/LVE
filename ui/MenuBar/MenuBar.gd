@@ -18,8 +18,6 @@ func _ready() -> void:
 	_save_format.item_selected.connect(_on_save_format_selected)
 	_save_format.hide()
 	%FileDialog.get_vbox().add_child(_save_format)
-	%ModelSettingsBtn.get_popup().id_pressed.connect(_on_model_setting_selected)
-	%ModelSettingsBtn.about_to_popup.connect(_sync_model_settings)
 	State.document_changed.connect(_sync_model_settings)
 	State.model_settings_changed.connect(_sync_model_settings)
 	State.activity_changed.connect(_sync_model_settings)
@@ -39,16 +37,11 @@ func _sync_history_buttons() -> void:
 
 
 func _sync_model_settings() -> void:
-	var popup: PopupMenu = %ModelSettingsBtn.get_popup()
-	popup.set_item_checked(0, State.document.smooth_normals)
-	popup.set_item_disabled(0, State.edit_busy())
 	%ModelSettingsBtn.disabled = State.edit_busy()
 
 
-func _on_model_setting_selected(id: int) -> void:
-	if id == 0:
-		State.set_smooth_normals(not State.document.smooth_normals)
-	_sync_model_settings()
+func _on_model_settings_pressed() -> void:
+	%DocumentSettingsModal.open(State.document.size, State.document.smooth_normals)
 
 
 ## Saves the document to one path and returns the error code. A PNG path also

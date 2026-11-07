@@ -37,6 +37,8 @@ signal selection_changed()
 signal floor_plane_changed()
 ## Emitted when the slice option changes.
 signal slice_changed()
+## Emitted when the centered document size changes.
+signal size_changed()
 ## Emitted when the symmetry axes or the symmetry origin change.
 signal symmetry_changed()
 ## Emitted when a tag property changes.
@@ -229,6 +231,85 @@ func slice_count() -> int:
 func slice_level() -> float:
 	return float(floor_index) - 0.5
 
+
+## Returns [code]true[/code] when the document limits at least one axis.
+func has_size() -> bool:
+	return document.has_size()
+
+
+## Sets the centered document size and records one history action. Zero on an
+## axis leaves that axis infinite.
+func set_size(value: Vector3i, record_history := true) -> void:
+	if edit_busy():
+		return
+	value = _clamp_size(value)
+	if value == document.size:
+		return
+	var before := document.size
+	_apply_size(value)
+	if not record_history:
+		return
+	undo_redo.create_action("Set Document Size")
+	undo_redo.add_undo_method(_apply_size.bind(before))
+	undo_redo.add_do_method(_apply_size.bind(value))
+	_commit_history(false)
+
+
+## Applies the smooth normals option and the document size. A live preview
+## passes [param record_history] as [code]false[/code] and commits once with
+## [method commit_document_properties].
+func set_document_properties(smooth_normals: bool, size: Vector3i, record_history := true) -> void:
+	if edit_busy():
+		return
+	size = _clamp_size(size)
+	if document.smooth_normals == smooth_normals and document.size == size:
+		return
+	if record_history:
+		var before_smooth := document.smooth_normals
+		var before_size := document.size
+		undo_redo.create_action("Set Document Properties")
+		undo_redo.add_undo_method(_apply_document_properties.bind(before_smooth, before_size))
+		undo_redo.add_do_method(_apply_document_properties.bind(smooth_normals, size))
+		_commit_history(false)
+	_apply_document_properties(smooth_normals, size)
+
+
+## Records one history action for the difference from [param before_smooth]
+## and [param before_size] to the current document settings.
+func commit_document_properties(before_smooth: bool, before_size: Vector3i) -> void:
+	var after_smooth := document.smooth_normals
+	var after_size := document.size
+	if before_smooth == after_smooth and before_size == after_size:
+		return
+	undo_redo.create_action("Set Document Properties")
+	undo_redo.add_undo_method(_apply_document_properties.bind(before_smooth, before_size))
+	undo_redo.add_do_method(_apply_document_properties.bind(after_smooth, after_size))
+	_commit_history(false)
+
+
+func _apply_document_properties(smooth_normals: bool, size: Vector3i) -> void:
+	var smooth_changed := document.smooth_normals != smooth_normals
+	var size_was_changed := document.size != size
+	document.smooth_normals = smooth_normals
+	document.size = size
+	if smooth_changed:
+		model_settings_changed.emit()
+	if size_was_changed:
+		size_changed.emit()
+
+
+func _apply_size(value: Vector3i) -> void:
+	document.size = value
+	size_changed.emit()
+
+
+static func _clamp_size(value: Vector3i) -> Vector3i:
+	return Vector3i(
+		clampi(value.x, 0, VoxelDocument.MAX_DOCUMENT_SIZE),
+		clampi(value.y, 0, VoxelDocument.MAX_DOCUMENT_SIZE),
+		clampi(value.z, 0, VoxelDocument.MAX_DOCUMENT_SIZE),
+	)
+
 ## The symmetry axes as a bit mask. Bit 0 is X, bit 1 is Y, and bit 2 is Z.
 var symmetry_axes := 0:
 	set(value):
@@ -342,6 +423,7 @@ func set_document(value:VoxelDocument) -> void:
 	active_tag = 0
 		
 	document_changed.emit()
+	size_changed.emit()
 	palette_changed.emit()
 	frames_changed.emit()
 	current_frame = 0
@@ -393,7 +475,7 @@ func remove_plugin(plugin: VoxelPlugin) -> void:
 ## Paints one cell with the current edit context. It expands the cell through
 ## symmetry and maps it through the selection and the slice.
 func paint(position: Vector3i, cell_material: PackedFloat32Array) -> void:
-	if symmetry_axes == 0 and not slice_enabled and _active_edit == null:
+	if symmetry_axes == 0 and not slice_enabled and not document.has_size() and _active_edit == null:
 		document.paint(current_frame, position, cell_material)
 		return
 	var context := drawing_context()
@@ -422,6 +504,14 @@ func _live_context() -> VoxelFrame.EditContext:
 		context.slice_axis = floor_axis
 		context.slice_index = slice_first()
 		context.slice_count = slice_count()
+	if document.has_size():
+		for axis in 3:
+			if document.size[axis] <= 0:
+				continue
+			var cell_range := document.axis_cell_range(axis)
+			context.bounded_axes |= 1 << axis
+			context.bounds_min[axis] = cell_range.x
+			context.bounds_max[axis] = cell_range.y
 	return context
 
 
@@ -439,6 +529,8 @@ func symmetry_transform(mask: int, origin: Vector3) -> Transform3D:
 func selection_context() -> VoxelFrame.EditContext:
 	var context := drawing_context().duplicate()
 	context.selection = {}
+	# Selection and transform are not limited by the document size.
+	context.bounded_axes = 0
 	return context
 
 
@@ -1058,8 +1150,10 @@ func erase_selection() -> void:
 	var job := EraseJob.new()
 	job.edited_frame = VoxelFrame.job_frame(edited_frame)
 	job.selection_mask = selection.capture()
-	# The erase is an edit, so the slice limits it like every other write.
-	job.edit_context = _erase_edit.edit_context
+	# The erase is an edit, so the slice limits it. The document size does not:
+	# a selected voxel outside the size can still be deleted.
+	job.edit_context = _erase_edit.edit_context.duplicate()
+	job.edit_context.bounded_axes = 0
 	_erase_job = job
 	var operation_id := begin_operation("Erasing selection", selection.count(), true, self, _interrupt_erase)
 	_erase_operation_id = operation_id

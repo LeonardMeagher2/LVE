@@ -2,8 +2,9 @@ extends MeshInstance3D
 
 ## Draws the floor grid plane.
 ##
-## The grid follows the floor axis, the floor index, and the document bounds.
-## It rebuilds only when one of those changes.
+## The grid follows the floor axis, the floor index, and the document size.
+## A bounded axis uses the centered size. An infinite axis uses the content
+## bounds plus one cell. It rebuilds only when one of those changes.
 
 var _last_bounds: AABB
 var _last_axis := -1
@@ -16,10 +17,12 @@ func _ready() -> void:
 	State.chunks_changed.connect(func(_frame, _affected): rebuild())
 	State.document_changed.connect(rebuild)
 	State.floor_plane_changed.connect(rebuild)
+	State.size_changed.connect(rebuild)
 
-## Rebuilds the grid when the floor plane or the bounds changed.
+## Rebuilds the grid when the floor plane, the document size, or the content
+## bounds changed.
 func rebuild() -> void:
-	var bounds := State.document.bounds()
+	var bounds := State.document.workspace_bounds()
 	var axis := State.floor_axis
 	var index := State.floor_index
 	if _built and bounds == _last_bounds and axis == _last_axis and index == _last_index:
@@ -32,8 +35,8 @@ func rebuild() -> void:
 	var v := (axis + 2) % 3
 	var lo := span_lo(bounds)
 	var hi := span_hi(bounds)
-	var nu := int(hi[u] - lo[u])
-	var nv := int(hi[v] - lo[v])
+	var nu := ceili(hi[u] - lo[u])
+	var nv := ceili(hi[v] - lo[v])
 
 	var vertices := PackedVector3Array([
 		_vec(u, v, 0.0, 0.0),
@@ -61,14 +64,14 @@ func rebuild() -> void:
 ## span.
 static func span_lo(bounds: AABB) -> Vector3:
 	if bounds.has_volume():
-		return bounds.position - Vector3.ONE * 1.0
+		return bounds.position
 	return Vector3.ONE * -4.5
 
 
 ## Returns the high corner of the grid span.
 static func span_hi(bounds: AABB) -> Vector3:
 	if bounds.has_volume():
-		return span_lo(bounds) + bounds.size + Vector3.ONE * 2.0
+		return bounds.end
 	return Vector3.ONE * 3.5
 
 

@@ -235,8 +235,12 @@ func _copy_voxels(cut_source: bool) -> void:
 	job.source_frame = frame.copy_frame()
 	job.selection_mask = State.selection.capture()
 	job.cut_source = cut_source
-	# A cut is an edit, so the slice limits its writes.
+	# A cut is an edit, so the slice limits its writes. The document size does
+	# not: a selected voxel outside the size can still be cut.
 	job.edit_context = State.drawing_context()
+	if cut_source:
+		job.edit_context = job.edit_context.duplicate()
+		job.edit_context.bounded_axes = 0
 	_copy_job = job
 	var source_count := job.selection_mask.size() if not job.selection_mask.is_empty() else frame.count()
 	var operation_id := State.begin_operation("Cutting voxels" if cut_source else "Copying voxels", source_count, true, self)

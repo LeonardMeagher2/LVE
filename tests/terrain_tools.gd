@@ -29,6 +29,8 @@ var edge_height := 0
 
 func _ready() -> void:
 	test("grow adds voxels outward on an empty floor", _build_empty_floor, "build_empty_floor")
+	test("Build stops at the centered document size", _build_stops_at_document_edge, "build_stops_at_document_edge")
+	test("Build stops at the slice boundary", _build_stops_at_slice, "build_stops_at_slice")
 	test("an angled press seeds the floor cell under the pointer", _build_empty_floor_angle, "build_empty_floor_angle")
 	test("a press from below seeds the cell below the floor plane", _build_empty_floor_below, "build_empty_floor_below")
 	test("a flatten stroke that leaves the model fills on its own plane", _flatten_leaves_model, "flatten_leaves_model")
@@ -66,6 +68,8 @@ func _ready() -> void:
 	test("grab drags on the true camera-facing plane", _grab_oblique, "grab_oblique")
 	test("grab stretches voxels, keeps materials, and preserves unrelated geometry", _grab_stretch, "grab_stretch")
 	test("grab keeps a source whose destination leaves the selection", _grab_selection_destination, "grab_selection_destination")
+	test("grab ignores sources and destinations outside the document size", _grab_stops_at_document_edge, "grab_stops_at_document_edge")
+	test("smooth fields stay inside the document size", _smooth_stops_at_document_edge, "smooth_stops_at_document_edge")
 	test("grab without a source changes nothing", _grab_empty, "grab_empty")
 	test("a large grab runs on the worker pool and publishes once", _grab_worker, "grab_worker")
 	test("a grab honors the shared radius bound past the old cap", _grab_shared_radius, "grab_shared_radius")
@@ -87,6 +91,7 @@ func _setup_test() -> void:
 	State.symmetry_origin = State.DEFAULT_SYMMETRY_ORIGIN
 	State.current_color = Color.from_rgba8(200, 60, 60)
 	State.floor_index = 0
+	State.slice_layers = 0
 	_settings.tool = _settings.Tools.BUILD
 	_settings.build_mode = _settings.BuildMode.ADD
 	_settings.radius = 5
@@ -290,6 +295,57 @@ func _build_empty_floor() -> void:
 		expect(frame.has(target), "the seed cell appears on the floor")
 		expect(frame.has(target + Vector3i(0, 1, 0)), "the growth continues outward")
 		expect(State.undo_redo.has_undo(), "the stroke records one history action")
+	)
+
+
+func _build_stops_at_document_edge() -> void:
+	step("Given Build on an empty floor with a four-cell Y size", func():
+		_settings.tool = _settings.Tools.BUILD
+		_settings.build_mode = _settings.BuildMode.ADD
+		_settings.radius = 1
+		_settings.falloff = 0.0
+		_settings.strength = 1.0
+		_view("top")
+		State.floor_index = 0
+		State.set_size(Vector3i(0, 4, 0))
+		press = _pos(Vector3.ZERO)
+		target = aim(press).target
+		expect(State.document.axis_cell_range(1) == Vector2i(-2, 2), "the Y size covers cells minus two through one")
+	)
+	step("When the user presses three times", func():
+		for _press_index in 3:
+			_press(press)
+			_release(press)
+	)
+	step("Then the column stops at the top bound", func():
+		expect(frame.has(Vector3i(target.x, 1, target.z)), "the last writable layer is built")
+		expect(not frame.has(Vector3i(target.x, 2, target.z)), "the layer past the size is refused")
+	)
+
+
+func _build_stops_at_slice() -> void:
+	step("Given Build on an empty floor with one slice layer each side", func():
+		_settings.tool = _settings.Tools.BUILD
+		_settings.build_mode = _settings.BuildMode.ADD
+		_settings.radius = 1
+		_settings.falloff = 0.0
+		_settings.strength = 1.0
+		_view("top")
+		State.floor_index = 0
+		State.slice_layers = 1
+		State.set_size(Vector3i.ZERO)
+		press = _pos(Vector3.ZERO)
+		target = aim(press).target
+		expect(State.slice_first() == -1 and State.slice_last() == 0, "the slab holds one layer each side")
+	)
+	step("When the user presses three times", func():
+		for _press_index in 3:
+			_press(press)
+			_release(press)
+	)
+	step("Then the column stops at the slice top", func():
+		expect(frame.has(Vector3i(target.x, 0, target.z)), "the floor layer is built")
+		expect(not frame.has(Vector3i(target.x, 1, target.z)), "the layer above the slab is refused")
 	)
 
 
@@ -1380,6 +1436,54 @@ func _grab_selection_destination() -> void:
 		expect(frame.has(anchor), "the blocked source stays in place")
 		expect(frame.has(anchor + Vector3i(1, 0, 0)), "the second source stays in place")
 		expect(frame.count() == 5, "no destination leaves the selection")
+	)
+
+
+func _grab_stops_at_document_edge() -> void:
+	step("Given a line of voxels with a four-cell X size", func():
+		_settings.tool = _settings.Tools.GRAB
+		_settings.radius = 9
+		_settings.falloff = 0.0
+		_view("top")
+		press = _pos(Vector3.ZERO)
+		anchor = aim(press).target
+		for x in range(0, 5):
+			frame.set_cell(anchor + Vector3i(x, 0, 0), VoxelFrame.material(Color.WHITE))
+		sync_viewport()
+		State.set_size(Vector3i(4, 0, 0))
+		press = _pos(Vector3(anchor))
+		expect(State.document.axis_cell_range(0) == Vector2i(-2, 2), "the X size covers cells minus two through one")
+	)
+	step("When the user presses and drags outside the size", func():
+		_press(press)
+		expect(not tool._grab_empty, "the press captures the inside source voxels")
+		expect(tool._grab_sources.size() == 2, "only the two inside voxels join the drag")
+		var drag_pos := _pos(Vector3(anchor + Vector3i(3, 0, 0)))
+		_motion(drag_pos, drag_pos - press)
+		_release(drag_pos)
+	)
+	step("Then no voxel moves outside the size", func():
+		expect(frame.count() == 5, "the outside destinations are refused")
+		expect(frame.has(anchor), "the first source stays in place")
+		expect(frame.has(anchor + Vector3i(1, 0, 0)), "the second source stays in place")
+	)
+
+
+func _smooth_stops_at_document_edge() -> void:
+	step("Given a smooth field with a four-cell X size", func():
+		State.set_size(Vector3i(4, 0, 0))
+		var context := State.drawing_context()
+		var fields := TerrainPreview.compute_smooth_fields(Vector3(0, 0, 0), 7, 0.0, context)
+		var inside := 0
+		var outside := 0
+		for field in fields:
+			for cell: Vector3i in field["cells"]:
+				if context.allows(cell):
+					inside += 1
+				else:
+					outside += 1
+		expect(inside > 0, "the smooth field keeps the inside cells")
+		expect(outside == 0, "the smooth field drops every outside cell")
 	)
 
 

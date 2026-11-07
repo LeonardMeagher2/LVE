@@ -6,7 +6,8 @@ const SHEET_PATH := "user://smooth_normals_test.png"
 const SEAM_CORNER := Vector3(15.5, 15.5, -0.5)
 
 var bar: Node
-var settings: PopupMenu
+var dialog: ConfirmationDialog
+var smooth_check: CheckBox
 var renderer: VoxelRenderer
 var preview: MeshInstance3D
 var source_colors := {}
@@ -35,7 +36,8 @@ func _run() -> void:
 		State.get_current_voxel_frame().set_cells(materials)
 		State.frames_changed.emit()
 		bar = main.get_node("%MenuBar")
-		settings = bar.get_node("ModelSettingsBtn").get_popup()
+		dialog = bar.get_node("DocumentSettingsModal")
+		smooth_check = dialog.get_node("Layout/SmoothNormals")
 		renderer = editor_viewport().get_node("ViewportScene/VoxelRenderer")
 		exporter = plugin("ExportPlugin")
 		preview = load("res://plugins/selection/SelectionPreview.tscn").instantiate()
@@ -43,28 +45,30 @@ func _run() -> void:
 		preview.show_voxels(source_colors, Color.WHITE)
 	)
 	await _settle()
-	step("When the user opens model settings with the gear button", func():
+	step("When the user opens document settings with the gear button", func():
 		flat_mesh = renderer._chunk_instances[Vector3i.ZERO].mesh
-		bar.get_node("ModelSettingsBtn").show_popup()
+		bar.get_node("ModelSettingsBtn").pressed.emit()
 	)
 	await get_tree().process_frame
-	step("Then the dropdown shows the document's flat shading default", func():
-		expect(settings.visible and settings.item_count == 1, "the gear opens a compact model settings dropdown")
-		expect(settings.get_item_text(0) == "Smooth normals" and settings.is_item_checkable(0), "the dropdown contains a smooth normals checkbox item")
+	step("Then the modal shows the document's flat shading default", func():
+		expect(dialog.visible, "the gear opens the document settings modal")
+		expect(smooth_check is CheckBox, "the modal contains a smooth normals checkbox")
+		expect(dialog.has_node("Layout/SizeRow/SizeX"), "the modal holds the document size row")
 		expect(bar.get_node("ModelSettingsBtn").icon is DPITexture, "the gear supports display-scale rasterization")
 		var gear: Button = bar.get_node("ModelSettingsBtn")
-		expect(gear.get_index() == bar.get_node("SaveAsBtn").get_index() + 1, "model settings sits beside the document file controls")
-		expect(gear.get_index() < bar.get_node("Sep1").get_index(), "model settings belongs to the document controls before undo and redo")
-		expect(not settings.is_item_checked(0) and not State.document.smooth_normals, "new documents start with smooth normals off")
+		expect(gear.get_index() == bar.get_node("SaveAsBtn").get_index() + 1, "document settings sits beside the document file controls")
+		expect(gear.get_index() < bar.get_node("Sep1").get_index(), "document settings belongs to the document controls before undo and redo")
+		expect(not smooth_check.button_pressed and not State.document.smooth_normals, "new documents start with smooth normals off")
 		expect(not _has_smooth_normals(flat_mesh), "the default model has flat face normals")
 		if DisplayServer.get_name() != "headless":
 			RenderingServer.force_draw()
-			settings.get_texture().get_image().save_png(_dir() + "/model_settings.png")
+			dialog.get_texture().get_image().save_png(_dir() + "/model_settings.png")
 			get_tree().root.get_texture().get_image().save_png(_dir() + "/document_toolbar.png")
 	)
 	step("When the user enables smooth normals", func():
-		settings.id_pressed.emit(0)
-		settings.hide()
+		smooth_check.button_pressed = true
+		dialog.confirmed.emit()
+		dialog.hide()
 	)
 	await _settle()
 	step("Then the model and its solid preview have smooth shading", func():
@@ -81,19 +85,27 @@ func _run() -> void:
 		State.undo_redo.undo()
 	)
 	await _settle()
-	step("Then flat shading returns in the document and dropdown", func():
-		expect(not State.document.smooth_normals and not settings.is_item_checked(0), "undo clears the saved option and menu checkmark")
+	step("Then flat shading returns in the document and modal", func():
+		bar.get_node("ModelSettingsBtn").pressed.emit()
+		expect(not State.document.smooth_normals and not smooth_check.button_pressed, "undo clears the saved option and the modal checkbox")
+		dialog.hide()
 		expect(renderer._chunk_instances[Vector3i.ZERO].mesh == flat_mesh, "undo reuses the original flat mesh")
 		expect(not _has_smooth_normals(preview.mesh), "undo restores flat shading in the solid preview")
 	)
 	step("When the user redoes smooth shading and quickly toggles it off and on", func():
 		State.undo_redo.redo()
-		settings.id_pressed.emit(0)
-		settings.id_pressed.emit(0)
+		bar.get_node("ModelSettingsBtn").pressed.emit()
+		smooth_check.button_pressed = false
+		dialog.confirmed.emit()
+		dialog.hide()
+		bar.get_node("ModelSettingsBtn").pressed.emit()
+		smooth_check.button_pressed = true
+		dialog.confirmed.emit()
+		dialog.hide()
 	)
 	await _settle()
 	step("Then only the selected shading is displayed", func():
-		expect(State.document.smooth_normals and settings.is_item_checked(0), "the latest smooth shading choice stays selected")
+		expect(State.document.smooth_normals and smooth_check.button_pressed, "the latest smooth shading choice stays selected")
 		expect(renderer._chunk_instances[Vector3i.ZERO].mesh == smooth_mesh, "the selected smooth mesh is reused")
 	)
 	step("When the user erases a voxel in a diagonally adjacent chunk", func():
@@ -120,7 +132,9 @@ func _run() -> void:
 		bar.save_doc(DOCUMENT_PATH)
 		loaded = VoxelDocument.load_file(DOCUMENT_PATH)
 		bar.get_node("NewBtn").pressed.emit()
-		expect(not settings.is_item_checked(0), "a new document resets the menu item to flat shading")
+		bar.get_node("ModelSettingsBtn").pressed.emit()
+		expect(not smooth_check.button_pressed, "a new document resets the modal checkbox to flat shading")
+		dialog.hide()
 	)
 	step("When the user loads the saved document", func():
 		expect(loaded != null, "the document loads from disk")
@@ -129,7 +143,9 @@ func _run() -> void:
 	)
 	await _settle()
 	step("Then the saved shading choice is restored", func():
-		expect(State.document.smooth_normals and settings.is_item_checked(0), "save and load preserve smooth shading and its menu checkmark")
+		bar.get_node("ModelSettingsBtn").pressed.emit()
+		expect(State.document.smooth_normals and smooth_check.button_pressed, "save and load preserve smooth shading and its modal checkbox")
+		dialog.hide()
 		expect(_has_smooth_normals(renderer._chunk_instances[Vector3i.ZERO].mesh), "the loaded document renders with smooth normals")
 		_expect_source_colors()
 	)
@@ -161,7 +177,9 @@ func _run() -> void:
 		State.document = load("res://tests/fixtures/legacy_document.tres")
 	)
 	step("Then the existing document uses flat shading", func():
-		expect(not State.document.smooth_normals and not settings.is_item_checked(0), "existing documents default to flat shading")
+		bar.get_node("ModelSettingsBtn").pressed.emit()
+		expect(not State.document.smooth_normals and not smooth_check.button_pressed, "existing documents default to flat shading")
+		dialog.hide()
 	)
 	for path in [DOCUMENT_PATH, MODEL_PATH, SHEET_PATH]:
 		if FileAccess.file_exists(path):
@@ -223,7 +241,10 @@ func _check_sheet_shading() -> void:
 		sheet_pixels = image.get_data()
 	)
 	step("When the user switches to flat shading", func():
-		settings.id_pressed.emit(0)
+		bar.get_node("ModelSettingsBtn").pressed.emit()
+		smooth_check.button_pressed = false
+		dialog.confirmed.emit()
+		dialog.hide()
 	)
 	export_error = await exporter.export_sprite_sheet(SHEET_PATH, 0, 0, 64, 1, false)
 	step("Then sprite export follows the document's shading choice", func():

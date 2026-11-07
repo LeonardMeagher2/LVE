@@ -526,13 +526,35 @@ The source is [`VoxelPicking.gd:28`](../../Globals/State/Tools/VoxelPicking.gd#L
 
 #### Write scope
 
-`EditContext` holds the symmetry, the selection, and the floor slice.
+`EditContext` holds the symmetry, the selection, the floor slice, and the centered document size.
 `State._live_context` fills it, and `State.begin_edit` freezes it.
 [`VoxelFrame.set_cells`](../../Globals/State/Document/VoxelFrame.gd) is the one write gate.
 It applies `EditContext.filter` when the job carries a context.
 A document load, an import, and a history restore pass no job, so they are never limited.
 A new writable-cell rule is one predicate in `EditContext`, not one check per tool.
-Terrain does not pass a context yet. Its per-column surface tracking must become slice-aware first.
+Terrain does not pass `edit_context` to the write gate.
+It uses the frozen context while it plans each step, so its per-column surface tracking stops at the slice and size boundary.
+
+### Document size
+
+The Document settings button opens a modal.
+The modal holds the smooth normals option and the centered document size.
+The size is a `Vector3i` in the document.
+Zero on an axis means that axis is infinite.
+A size of `32` covers cells `-16` through `15`.
+The X, Y, and Z fields share one row.
+The source is [`DocumentSettingsModal.gd`](../../ui/MenuBar/DocumentSettingsModal.gd).
+
+The viewport darkens the scene outside `VoxelDocument.workspace_bounds`.
+The floor grid uses the same box.
+A bounded axis uses the exact size.
+An infinite axis uses the content bounds plus one cell.
+
+Drawing tools pass the size through `EditContext`.
+Delete and cut clear the size limit so a selected voxel outside the size can be removed.
+Selection and Transform also clear it.
+Transform can move voxels outside the size.
+Terrain clips its planning at the slice and size boundary.
 
 ### Symmetry
 

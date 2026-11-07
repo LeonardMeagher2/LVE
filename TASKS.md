@@ -33,7 +33,7 @@ See [GLTF_EXPORT.md](GLTF_EXPORT.md) for the mesh export format and import setti
 
 - [ ] Finish the floor-plane slice
   - [x] The slice is a layer count, not a toggle. N is the number of layers on each side of the floor plane, so the slab is 2N layers. The plane splits the slab evenly, and the floor layer is the first layer above it. 0 shows every layer, and the count stops at 8 each side. The whole slab is writable. The ray pick ignores cells outside the slab and empty space still uses the floor plane. Test `floor_plane.slice_slab`.
-  - [ ] Make Terrain slice-aware. Its per-column surface tracking must plan only the layer. A write filter desyncs the next dab.
+  - [x] Make Terrain slice-aware. Its per-column surface tracking plans only the layer. The step planner checks the frozen `EditContext` before it writes, so a refused cell stops the column. The same plan also clips the centered document size. Tests: `terrain_tools.build_stops_at_slice`, `terrain_tools.build_stops_at_document_edge`, `terrain_tools.grab_stops_at_document_edge`, `terrain_tools.smooth_stops_at_document_edge`.
   - [ ] Add the arrow-key nudge. Godot consumes bare arrows for focus navigation, so route it before the GUI, or use a modifier.
   - [ ] Ask the user to test the slice option manually with Brush, Paint, Line, Spray, Fill, Transform, Cut, and Erase Selection.
   - [x] Add the slice context cue: a projected matte of the off-slice cells on the slice plane. The plate hides it where the slice layer holds cells. Above the plane reads light blue, below reads dark amber, and the distance sets the strength. A slice-layer write does not rebuild it. Test `slice_matte`.
