@@ -195,11 +195,14 @@ var slice_enabled: bool:
 	set(value):
 		slice_layers = 1 if value else 0
 
-## The number of writable and visible layers on each side of the floor layer. 0
-## shows every layer. 1 keeps the floor layer and one layer on each side.
+## The largest slice layer count on each side.
+const MAX_SLICE_LAYERS := 8
+
+## The number of writable and visible layers on each side of the floor plane. 0
+## shows every layer. 1 keeps one layer on each side of the plane.
 var slice_layers := 0:
 	set(value):
-		value = maxi(value, 0)
+		value = clampi(value, 0, MAX_SLICE_LAYERS)
 		if value == slice_layers:
 			return
 		slice_layers = value

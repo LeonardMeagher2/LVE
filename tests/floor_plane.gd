@@ -296,6 +296,11 @@ func _slab_run() -> void:
 		expect(not State.drawing_context().allows(Vector3i(0, 4, 0)), "a layer above the wider slab is refused")
 		expect(not State.drawing_context().allows(Vector3i(0, -1, 0)), "a layer below the wider slab is refused")
 	)
+	step("Then a count above the limit clamps", func():
+		State.slice_layers = 99
+		expect(State.slice_layers == 8, "the count stops at eight layers each side")
+		State.slice_layers = 0
+	)
 	step("When the slice is off", func():
 		State.slice_layers = 0
 		expect(not State.slice_enabled, "zero layers shows every layer")

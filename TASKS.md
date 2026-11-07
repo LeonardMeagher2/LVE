@@ -32,7 +32,7 @@ See [GLTF_EXPORT.md](GLTF_EXPORT.md) for the mesh export format and import setti
 ## Tools
 
 - [ ] Finish the floor-plane slice
-  - [x] The slice is a layer count, not a toggle. N is the number of layers on each side of the floor plane, so the slab is 2N layers. The plane splits the slab evenly, and the floor layer is the first layer above it. 0 shows every layer. The whole slab is writable. The ray pick ignores cells outside the slab and empty space still uses the floor plane. Test `floor_plane.slice_slab`.
+  - [x] The slice is a layer count, not a toggle. N is the number of layers on each side of the floor plane, so the slab is 2N layers. The plane splits the slab evenly, and the floor layer is the first layer above it. 0 shows every layer, and the count stops at 8 each side. The whole slab is writable. The ray pick ignores cells outside the slab and empty space still uses the floor plane. Test `floor_plane.slice_slab`.
   - [ ] Make Terrain slice-aware. Its per-column surface tracking must plan only the layer. A write filter desyncs the next dab.
   - [ ] Add the arrow-key nudge. Godot consumes bare arrows for focus navigation, so route it before the GUI, or use a modifier.
   - [ ] Ask the user to test the slice option manually with Brush, Paint, Line, Spray, Fill, Transform, Cut, and Erase Selection.
