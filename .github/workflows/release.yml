@@ -221,6 +221,7 @@ jobs:
 
       - name: Export and package ${{ matrix.asset }}
         shell: pwsh
+        working-directory: ${{ github.workspace }}
         env:
           PRESET: ${{ matrix.preset }}
           EXPORT_PATH: ${{ matrix.export_path }}
@@ -294,12 +295,15 @@ jobs:
             }
           }
           if (-not (Test-Path $out)) { throw "The package step did not write $out." }
+          Write-Output "Workspace: $PWD"
+          Write-Output "Release file: $out"
+          Get-ChildItem -Path $releaseDir -Force | Select-Object Name, Length | Out-String | Write-Output
 
       - name: Store ${{ matrix.asset }}
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.asset }}
-          path: release/${{ matrix.asset }}
+          path: ${{ github.workspace }}/release/${{ matrix.asset }}
           if-no-files-found: error
 
   publish:
