@@ -194,7 +194,7 @@ jobs:
           Expand-Archive -LiteralPath $zip -DestinationPath $tools
 
           if ($env:RUNNER_OS -eq 'Windows') {
-            $godot = Join-Path $tools "Godot_v$godotVersion-stable_win64.exe"
+            $godot = Join-Path $tools "Godot_v$godotVersion-stable_win64_console.exe"
           } elseif ($env:RUNNER_OS -eq 'macOS') {
             $godot = Join-Path $tools 'Godot.app/Contents/MacOS/Godot'
           } else {
@@ -237,9 +237,9 @@ jobs:
           if ($parent) { New-Item -ItemType Directory -Force $parent | Out-Null }
 
           & $env:GODOT --headless --path . --import
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ($null -ne $LASTEXITCODE -and $LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & $env:GODOT --headless --path . --export-release $env:PRESET $exportPath
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ($null -ne $LASTEXITCODE -and $LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if (-not (Test-Path $exportPath)) {
             Get-ChildItem -Path $parent -Force | Out-String | Write-Output
             throw "The export did not write $exportPath."
