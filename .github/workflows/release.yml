@@ -138,7 +138,7 @@ jobs:
             throw "Two presets produce the same release asset: $names."
           }
 
-          $matrix = ConvertTo-Json -InputObject @($entries) -Depth 5 -Compress
+          $matrix = @{ include = @($entries) } | ConvertTo-Json -Depth 5 -Compress
           Write-Output "Release matrix: $matrix"
           "version=$version" >> $env:GITHUB_OUTPUT
           "tag=v$version" >> $env:GITHUB_OUTPUT
@@ -167,8 +167,7 @@ jobs:
     name: Build ${{ matrix.preset }}
     strategy:
       fail-fast: false
-      matrix:
-        include: ${{ fromJson(needs.prepare.outputs.matrix) }}
+      matrix: ${{ fromJson(needs.prepare.outputs.matrix) }}
     steps:
       - name: Check out the repository
         uses: actions/checkout@v5
