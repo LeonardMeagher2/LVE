@@ -22,16 +22,6 @@ Export a low-poly glTF mesh or a sprite sheet.
 - Export glTF, GLB, and sprite sheets.
 - Save compact `.lve` documents or `.lve.png` files with a preview.
 
-## Download and run
-
-1. Download the build for your platform.
-2. Extract the archive.
-3. Run `LVE.exe` on Windows or `LVE` on Linux.
-
-The builds are standalone. You do not need Godot to run the editor.
-
-Windows and Linux builds are available now.
-
 ## Document files
 
 - `.lve` is a compact binary document.
@@ -41,22 +31,12 @@ Windows and Linux builds are available now.
 
 See [docs/DOCUMENT_FORMAT.md](docs/DOCUMENT_FORMAT.md) for the format.
 
-## Feedback
-
-Open an issue for bugs and feature requests:
-<https://github.com/LeonardMeagher2/LVE/issues>
-
 ## Development
 
 LVE uses Godot 4.7.2. Godot is the only toolchain.
 
 1. Import `project.godot` in Godot 4.7.2.
 2. Run the main scene.
-
-### Working with agents
-
-Read [AGENTS.md](AGENTS.md) before you change the project.
-The [agent notes](docs/agents/README.md) hold the roadmap, verified facts, design audit, and tool research.
 
 ### Tests
 
@@ -71,18 +51,6 @@ Run the full suite:
 ```text
 godot --headless --path . -s res://tests/run_all.gd
 ```
-
-### Releases
-
-The version in `project.godot` is the release source of truth.
-Set `application/config/version` and push the change to `main`.
-The release workflow exports every runnable preset in `export_presets.cfg`.
-It skips a version that already has a release.
-Add a platform preset in Godot and mark it runnable to include it.
-
-### Icon
-
-The vector icon in `icon.svg` preserves the source image's pixel edges, colors, and transparency.
 
 ## License
 

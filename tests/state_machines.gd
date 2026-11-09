@@ -1,6 +1,6 @@
 extends "res://tests/test.gd"
 
-# Regression tests for the state machines in docs/agents/STATE_MACHINES.md.
+# Regression tests for the editor state machines.
 #
 # Each case locks one invariant that a transition, a retry, or a concurrent
 # worker could otherwise break. The cases run in one process.

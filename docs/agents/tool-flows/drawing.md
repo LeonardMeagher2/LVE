@@ -582,7 +582,7 @@ Each candidate lists the existing mechanism, the migration users, the preserved 
 The five flows above are the current shipped path.
 The following items are not solved by this map.
 
-- Maximum-size Spray preview and rendering gaps are open in [TASKS.md](../TASKS.md). The open work asks for visible cursor updates during sustained drags and smaller model installation gaps. This map does not claim a fix.
+- Maximum-size Spray preview and rendering gaps are open in [TASKS.md](../../../TASKS.md). The open work asks for visible cursor updates during sustained drags and smaller model installation gaps. This map does not claim a fix.
 - Fill has no region preview. Its cursor is a static outline. This is the current policy, not a TODO.
 - Line discards a pending preview on a tool switch. Brush, Paint Brush, Fill, and Spray keep or finish accepted work on a switch. This is the current policy.
 - No performance result in this map is measured. The maps show control flow only.

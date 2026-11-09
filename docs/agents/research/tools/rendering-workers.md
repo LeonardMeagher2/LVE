@@ -571,7 +571,7 @@ S9 documents one editor. It does not prove that every editor uses one cursor des
 
 - `../../tool-flows/composition.md`, sections A to H.
 - `../../tool-flows/shared-and-utilities.md`, model render and preview paths.
-- `../../MEMORY.md`, entries dated 2026-10-17 through 2026-10-24.
+- `../../../../MEMORY.md`, entries dated 2026-10-17 through 2026-10-24.
 - `ui/Viewport/VoxelRenderer.gd`, symbols `_launch_surface`, `_update_surfaces`, `_build_material`, `_install`, `_retire`, `is_settled`, `_job_limit`, `_surface_jobs`, `_profile`.
 - `Globals/State/State.gd`, symbols `WORK_SLICE_US`, `run_edit_job`, `finish_edit`.
 - `Globals/Rendering/VoxelMeshBuilder.gd`, symbol `run`.

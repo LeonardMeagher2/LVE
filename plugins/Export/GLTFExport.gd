@@ -3,8 +3,7 @@ extends RefCounted
 ## Exports the document as a glTF binary file.
 ##
 ## Each frame becomes one child mesh. A scale animation hides every other
-## frame, so the exporter writes a flipbook animation per tag. See
-## `GLTF_EXPORT.md` for the mesh format and the import settings.
+## frame, so the exporter writes a flipbook animation per tag.
 
 ## The plugin node that owns this export. The export cancels with it.
 var host: Node

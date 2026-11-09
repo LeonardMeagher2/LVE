@@ -4,7 +4,7 @@ extends VoxelPlugin
 ##
 ## It adds the Export tab and the menu item. The tab previews the model and the
 ## sprite sheet. The plugin exports a GLB model or a PNG sprite sheet with a
-## JSON sidecar. See `GLTF_EXPORT.md` for the mesh format.
+## JSON sidecar.
 
 const GLTF_EXPORT := preload("./GLTFExport.gd")
 ## The camera view names of the sprite sheet.

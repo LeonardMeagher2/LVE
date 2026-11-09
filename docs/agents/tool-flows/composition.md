@@ -407,7 +407,7 @@ A cell change, a document change, an undo or redo, or a clear drops the cache.
 A repeat of one cell costs about 10 microseconds.
 A crossed cell refits at the full radius, on the worker pool.
 The ring keeps its fallback pose while the idle fit runs, so a move stays cheap.
-The press fit costs about 55 milliseconds at radius 32. That cost is an open task in `../TASKS.md`.
+The press fit costs about 55 milliseconds at radius 32. That cost is an open task in `../../../TASKS.md`.
 The idle pose uses the entered face or floor and the fitted surface plane.
 A Surface source fits the surface. A Face source and Grab use the exact entered face.
 A floor miss uses the floor plane.
