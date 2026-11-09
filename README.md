@@ -46,3 +46,7 @@ See [tool research](docs/research/tools/README.md) for evidence reviews and boun
 ## Icon
 
 The vector icon in `icon.svg` preserves the source image's pixel edges, colors, and transparency.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
