@@ -156,6 +156,7 @@ jobs:
             "publish=true" >> $env:GITHUB_OUTPUT
             Write-Output "Release v$version is new."
           }
+          exit 0
 
   build:
     needs: prepare
