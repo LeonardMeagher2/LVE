@@ -542,7 +542,13 @@ The modal holds the smooth normals option and the centered document size.
 The size is a `Vector3i` in the document.
 Zero on an axis means that axis is infinite.
 A size of `32` covers cells `-16` through `15`.
-The X, Y, and Z fields share one row.
+The X, Y, and Z fields share the row with the fit button.
+The bounds label names that row.
+The fit button shows an icon.
+It sets the bounds from the content of all frames.
+The button is disabled when no frame has content.
+The normals row offers flat and smooth modes as icon buttons in one exclusive group.
+The normals label names that row.
 The source is [`DocumentSettingsModal.gd`](../../ui/MenuBar/DocumentSettingsModal.gd).
 
 The viewport darkens the scene outside `VoxelDocument.workspace_bounds`.

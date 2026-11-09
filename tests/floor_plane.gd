@@ -393,18 +393,20 @@ func _size_dialog_run() -> void:
 		var menu := main.get_node("%MenuBar")
 		var dialog: ConfirmationDialog = menu.get_node("DocumentSettingsModal")
 		expect(menu.get_node("ModelSettingsBtn") is Button, "the gear is a document settings button")
-		expect(dialog.has_node("Layout/SmoothNormals"), "the modal holds the smooth normals option")
-		expect(dialog.has_node("Layout/SizeRow/SizeX") and dialog.has_node("Layout/SizeRow/SizeY") and dialog.has_node("Layout/SizeRow/SizeZ"), "the size fields share one row")
+		expect(dialog.has_node("Margin/Layout/NormalsRow/Smooth"), "the modal holds the smooth normals option")
+		expect(dialog.has_node("Margin/Layout/SizeRow/SizeX") and dialog.has_node("Margin/Layout/SizeRow/SizeY") and dialog.has_node("Margin/Layout/SizeRow/SizeZ"), "the size fields share one row")
+		var fit: Button = dialog.get_node("Margin/Layout/SizeRow/Fit")
+		expect(fit.icon is DPITexture and fit.text.is_empty(), "the fit button shows an icon and no text")
 	)
 	step("When the user opens the modal and edits the size", func():
 		var menu := main.get_node("%MenuBar")
 		menu.get_node("ModelSettingsBtn").pressed.emit()
 		var dialog: ConfirmationDialog = menu.get_node("DocumentSettingsModal")
 		expect(dialog.visible, "the gear opens the document settings modal")
-		expect((dialog.get_node("Layout/SizeRow/Fit") as Button).disabled, "the fit button is disabled without frames")
-		(dialog.get_node("Layout/SizeRow/SizeX") as SpinBox).value = 32
-		(dialog.get_node("Layout/SizeRow/SizeY") as SpinBox).value = 24
-		(dialog.get_node("Layout/SizeRow/SizeZ") as SpinBox).value = 48
+		expect((dialog.get_node("Margin/Layout/SizeRow/Fit") as Button).disabled, "the fit button is disabled without frames")
+		(dialog.get_node("Margin/Layout/SizeRow/SizeX") as SpinBox).value = 32
+		(dialog.get_node("Margin/Layout/SizeRow/SizeY") as SpinBox).value = 24
+		(dialog.get_node("Margin/Layout/SizeRow/SizeZ") as SpinBox).value = 48
 	)
 	step("Then the document previews the new size before confirm", func():
 		expect(State.document.size == Vector3i(32, 24, 48), "the size field updates the document immediately")
@@ -426,7 +428,7 @@ func _size_dialog_run() -> void:
 		var menu := main.get_node("%MenuBar")
 		menu.get_node("ModelSettingsBtn").pressed.emit()
 		var dialog: ConfirmationDialog = menu.get_node("DocumentSettingsModal")
-		(dialog.get_node("Layout/SizeRow/SizeX") as SpinBox).value = 8
+		(dialog.get_node("Margin/Layout/SizeRow/SizeX") as SpinBox).value = 8
 		expect(State.document.size.x == 8, "the canceled value previews first")
 		dialog.canceled.emit()
 		dialog.hide()
@@ -438,9 +440,9 @@ func _size_dialog_run() -> void:
 		var menu := main.get_node("%MenuBar")
 		menu.get_node("ModelSettingsBtn").pressed.emit()
 		var dialog: ConfirmationDialog = menu.get_node("DocumentSettingsModal")
-		(dialog.get_node("Layout/SizeRow/SizeX") as SpinBox).value = 0
-		(dialog.get_node("Layout/SizeRow/SizeY") as SpinBox).value = 0
-		(dialog.get_node("Layout/SizeRow/SizeZ") as SpinBox).value = 0
+		(dialog.get_node("Margin/Layout/SizeRow/SizeX") as SpinBox).value = 0
+		(dialog.get_node("Margin/Layout/SizeRow/SizeY") as SpinBox).value = 0
+		(dialog.get_node("Margin/Layout/SizeRow/SizeZ") as SpinBox).value = 0
 		dialog.confirmed.emit()
 		dialog.hide()
 	)
@@ -463,11 +465,11 @@ func _size_fit_run() -> void:
 		var menu := main.get_node("%MenuBar")
 		menu.get_node("ModelSettingsBtn").pressed.emit()
 		var dialog: ConfirmationDialog = menu.get_node("DocumentSettingsModal")
-		var fit: Button = dialog.get_node("Layout/SizeRow/Fit")
+		var fit: Button = dialog.get_node("Margin/Layout/SizeRow/Fit")
 		expect(not fit.disabled, "the fit button is enabled for content")
 		fit.pressed.emit()
 		expect(State.document.size == Vector3i(10, 7, 11), "fit covers the centered frame bounds")
-		expect((dialog.get_node("Layout/SizeRow/SizeX") as SpinBox).value == 10.0, "the X field shows the fitted size")
+		expect((dialog.get_node("Margin/Layout/SizeRow/SizeX") as SpinBox).value == 10.0, "the X field shows the fitted size")
 	)
 	step("Then confirm keeps the fitted size", func():
 		var menu := main.get_node("%MenuBar")

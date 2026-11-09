@@ -2,15 +2,16 @@ extends ConfirmationDialog
 
 ## Edits the document settings.
 ##
-## The modal holds the smooth normals option and the centered document size.
+## The modal holds the normals mode and the centered document size.
 ## A size of zero on an axis means that axis is infinite. Changes preview live
 ## and commit as one history action when the user confirms.
 
-@onready var _smooth_normals: CheckBox = $Layout/SmoothNormals
-@onready var _size_x: SpinBox = $Layout/SizeRow/SizeX
-@onready var _size_y: SpinBox = $Layout/SizeRow/SizeY
-@onready var _size_z: SpinBox = $Layout/SizeRow/SizeZ
-@onready var _fit: Button = $Layout/SizeRow/Fit
+@onready var _flat: Button = $Margin/Layout/NormalsRow/Flat
+@onready var _smooth: Button = $Margin/Layout/NormalsRow/Smooth
+@onready var _size_x: SpinBox = $Margin/Layout/SizeRow/SizeX
+@onready var _size_y: SpinBox = $Margin/Layout/SizeRow/SizeY
+@onready var _size_z: SpinBox = $Margin/Layout/SizeRow/SizeZ
+@onready var _fit: Button = $Margin/Layout/SizeRow/Fit
 
 var _before_smooth := false
 var _before_size := Vector3i.ZERO
@@ -18,7 +19,8 @@ var _syncing := false
 
 
 func _ready() -> void:
-	_smooth_normals.toggled.connect(_on_smooth_toggled)
+	_flat.toggled.connect(_on_normals_toggled)
+	_smooth.toggled.connect(_on_normals_toggled)
 	_size_x.value_changed.connect(_on_size_changed)
 	_size_y.value_changed.connect(_on_size_changed)
 	_size_z.value_changed.connect(_on_size_changed)
@@ -32,7 +34,8 @@ func open(current_size: Vector3i, smooth_normals: bool) -> void:
 	_before_smooth = smooth_normals
 	_before_size = current_size
 	_syncing = true
-	_smooth_normals.set_pressed_no_signal(smooth_normals)
+	_flat.set_pressed_no_signal(not smooth_normals)
+	_smooth.set_pressed_no_signal(smooth_normals)
 	_size_x.set_value_no_signal(current_size.x)
 	_size_y.set_value_no_signal(current_size.y)
 	_size_z.set_value_no_signal(current_size.z)
@@ -41,7 +44,7 @@ func open(current_size: Vector3i, smooth_normals: bool) -> void:
 	popup_centered()
 
 
-func _on_smooth_toggled(_pressed: bool) -> void:
+func _on_normals_toggled(_pressed: bool) -> void:
 	_apply_preview()
 
 
@@ -52,7 +55,7 @@ func _on_size_changed(_value: float) -> void:
 func _apply_preview() -> void:
 	if _syncing:
 		return
-	State.set_document_properties(_smooth_normals.button_pressed, _current_size(), false)
+	State.set_document_properties(_smooth.button_pressed, _current_size(), false)
 
 
 func _on_confirmed() -> void:
