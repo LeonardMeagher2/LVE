@@ -149,19 +149,19 @@ A Pencil stroke uses the add target in front of the clicked face.
 
 ### Brush and Paint Brush source edges
 
-- Input gate: [`VoxelTool._unhandled_input`](../../Globals/State/Tools/VoxelTool.gd) calls `handle_input` after `State.edit_busy`.
-- Capture: [`StrokeTool.open_stroke`](../../plugins/brush/StrokeTool.gd) calls `State.begin_edit` and reads `tx.edit_context`.
-- Prepare: [`StrokeTool._apply_pick`](../../plugins/brush/StrokeTool.gd) calls `_settings.pattern`, `PixelPerfectStroke.feed`, or `StrokeLine.cells`.
-- Apply: [`StrokeTool._run_stroke`](../../plugins/brush/StrokeTool.gd) builds `BrushJob` and uses `State.run_edit_job` above `INLINE_EDIT_LIMIT`.
-- Worker body: [`BrushJob.run`](../../plugins/brush/StrokeTool.gd) calls `apply_cells`, `EditContext.expand`, and `VoxelFrame.set_cells`.
-- Write gate: [`VoxelFrame.set_cells`](../../Globals/State/Document/VoxelFrame.gd) applies `EditContext.filter` when the job carries a context. The filter holds the selection and the floor slice. A write with no job is never limited.
-- Publish: [`StrokeTool._finish_edit`](../../plugins/brush/StrokeTool.gd) calls `VoxelFrame.apply_published` and `State.chunks_changed.emit`.
-- Commit: [`StrokeTool.close_stroke`](../../plugins/brush/StrokeTool.gd) calls `State.finish_edit` with `Stroke` or `Erase`.
-- Cancel: [`StrokeTool._cancel_edit`](../../plugins/brush/StrokeTool.gd) calls `abort_stroke`, which calls `State.cancel_edit`.
-- Preview: [`StrokeTool._show_brush_shape`](../../plugins/brush/StrokeTool.gd) calls `VoxelPreview.show_voxels`.
-- Selection pattern: [`Options._on_selection_pressed`](../../plugins/brush/Options.gd) builds `StampCopyJob` and calls `use_selection`.
-- Switch: [`BrushPlugin.deactivate_tool`](../../plugins/brush/BrushPlugin.gd) calls `finish_on_switch`.
-- Paint policy: [`PaintBrushTool`](../../plugins/paint/PaintBrushTool.gd) returns false from `_pick_adds` and true from `_paints_existing`.
+- Input gate: [`VoxelTool._unhandled_input`](../../../Globals/State/Tools/VoxelTool.gd) calls `handle_input` after `State.edit_busy`.
+- Capture: [`StrokeTool.open_stroke`](../../../plugins/brush/StrokeTool.gd) calls `State.begin_edit` and reads `tx.edit_context`.
+- Prepare: [`StrokeTool._apply_pick`](../../../plugins/brush/StrokeTool.gd) calls `_settings.pattern`, `PixelPerfectStroke.feed`, or `StrokeLine.cells`.
+- Apply: [`StrokeTool._run_stroke`](../../../plugins/brush/StrokeTool.gd) builds `BrushJob` and uses `State.run_edit_job` above `INLINE_EDIT_LIMIT`.
+- Worker body: [`BrushJob.run`](../../../plugins/brush/StrokeTool.gd) calls `apply_cells`, `EditContext.expand`, and `VoxelFrame.set_cells`.
+- Write gate: [`VoxelFrame.set_cells`](../../../Globals/State/Document/VoxelFrame.gd) applies `EditContext.filter` when the job carries a context. The filter holds the selection and the floor slice. A write with no job is never limited.
+- Publish: [`StrokeTool._finish_edit`](../../../plugins/brush/StrokeTool.gd) calls `VoxelFrame.apply_published` and `State.chunks_changed.emit`.
+- Commit: [`StrokeTool.close_stroke`](../../../plugins/brush/StrokeTool.gd) calls `State.finish_edit` with `Stroke` or `Erase`.
+- Cancel: [`StrokeTool._cancel_edit`](../../../plugins/brush/StrokeTool.gd) calls `abort_stroke`, which calls `State.cancel_edit`.
+- Preview: [`StrokeTool._show_brush_shape`](../../../plugins/brush/StrokeTool.gd) calls `VoxelPreview.show_voxels`.
+- Selection pattern: [`Options._on_selection_pressed`](../../../plugins/brush/Options.gd) builds `StampCopyJob` and calls `use_selection`.
+- Switch: [`BrushPlugin.deactivate_tool`](../../../plugins/brush/BrushPlugin.gd) calls `finish_on_switch`.
+- Paint policy: [`PaintBrushTool`](../../../plugins/paint/PaintBrushTool.gd) returns false from `_pick_adds` and true from `_paints_existing`.
 
 ## Line
 
@@ -211,15 +211,15 @@ flowchart TB
 
 ### Line source edges
 
-- Input: [`LineTool.handle_input`](../../plugins/brush/LineTool.gd) handles the anchor, endpoint, commit, and Escape.
-- Capture: [`LineTool._begin_line`](../../plugins/brush/LineTool.gd) copies `_line_snapshot` and captures `State.drawing_context`.
-- Prepare: [`LineTool._start_preview`](../../plugins/brush/LineTool.gd) builds `BrushJob` with `_preview_centers`.
-- Preview: [`LineTool._finish_preview`](../../plugins/brush/LineTool.gd) checks `job.revision` and calls `$Cursor.show_voxels`.
-- Runner: [`LineTool._start_preview`](../../plugins/brush/LineTool.gd) awaits `State.run_edit_job` with `_cancel_preview_if_stale`. The Line `_process` override calls `_update_hover` only when no anchor is open. The base `_process` is unconditional.
-- Operation: [`LineTool._begin_preview_operation`](../../plugins/brush/LineTool.gd) and [`LineTool._finish_preview_operation`](../../plugins/brush/LineTool.gd) report the preview progress. Paste overrides them to share its placement operation. They are a narrow status seam, not a general hook framework.
-- Commit: [`LineTool._commit_line`](../../plugins/brush/LineTool.gd) calls `State.begin_edit`, `frame.apply_published`, and `State.finish_edit`.
-- Cancel: [`LineTool._cancel_edit`](../../plugins/brush/LineTool.gd) cancels `_job` and clears the preview state.
-- Switch: [`LineTool.finish_on_switch`](../../plugins/brush/LineTool.gd) calls `_cancel_edit`.
+- Input: [`LineTool.handle_input`](../../../plugins/brush/LineTool.gd) handles the anchor, endpoint, commit, and Escape.
+- Capture: [`LineTool._begin_line`](../../../plugins/brush/LineTool.gd) copies `_line_snapshot` and captures `State.drawing_context`.
+- Prepare: [`LineTool._start_preview`](../../../plugins/brush/LineTool.gd) builds `BrushJob` with `_preview_centers`.
+- Preview: [`LineTool._finish_preview`](../../../plugins/brush/LineTool.gd) checks `job.revision` and calls `$Cursor.show_voxels`.
+- Runner: [`LineTool._start_preview`](../../../plugins/brush/LineTool.gd) awaits `State.run_edit_job` with `_cancel_preview_if_stale`. The Line `_process` override calls `_update_hover` only when no anchor is open. The base `_process` is unconditional.
+- Operation: [`LineTool._begin_preview_operation`](../../../plugins/brush/LineTool.gd) and [`LineTool._finish_preview_operation`](../../../plugins/brush/LineTool.gd) report the preview progress. Paste overrides them to share its placement operation. They are a narrow status seam, not a general hook framework.
+- Commit: [`LineTool._commit_line`](../../../plugins/brush/LineTool.gd) calls `State.begin_edit`, `frame.apply_published`, and `State.finish_edit`.
+- Cancel: [`LineTool._cancel_edit`](../../../plugins/brush/LineTool.gd) cancels `_job` and clears the preview state.
+- Switch: [`LineTool.finish_on_switch`](../../../plugins/brush/LineTool.gd) calls `_cancel_edit`.
 
 ## Fill
 
@@ -274,15 +274,15 @@ flowchart TB
 
 ### Fill source edges
 
-- Input: [`FillTool.handle_input`](../../plugins/paint/FillTool.gd) queues seeds and sets `_release_pending`.
-- Capture: [`FillTool._queue_seed`](../../plugins/paint/FillTool.gd) calls `open_stroke` and captures `_replacement_material` and `_stroke_connected`. It does not capture the search selection.
-- Prepare: [`FillTool._process_seeds`](../../plugins/paint/FillTool.gd) builds `FillJob` and chooses inline or streaming work. It sets `selection_mask` from `State.selection.capture` for each seed.
-- Inline: [`FillJob.run`](../../plugins/paint/FillTool.gd) calls `VoxelRegionSearch.find`, `apply_cells`, or `set_cells`.
-- Stream: [`FillJob._stream_batch`](../../plugins/paint/FillTool.gd) pushes to `VoxelRegionSearch.BatchQueue`.
-- Drain: [`FillTool._drain_fill_batches`](../../plugins/paint/FillTool.gd) applies slices and calls `_flush_chunk_notifications`.
-- Commit: [`FillTool._finish_fill_stroke`](../../plugins/paint/FillTool.gd) calls `_end`, which calls `close_stroke`.
-- Cancel: [`FillTool._interrupt_fill`](../../plugins/paint/FillTool.gd) cancels jobs and calls `abort_stroke`.
-- Switch: [`FillTool.finish_on_switch`](../../plugins/paint/FillTool.gd) sets `_release_pending` and commits after the fill is idle.
+- Input: [`FillTool.handle_input`](../../../plugins/paint/FillTool.gd) queues seeds and sets `_release_pending`.
+- Capture: [`FillTool._queue_seed`](../../../plugins/paint/FillTool.gd) calls `open_stroke` and captures `_replacement_material` and `_stroke_connected`. It does not capture the search selection.
+- Prepare: [`FillTool._process_seeds`](../../../plugins/paint/FillTool.gd) builds `FillJob` and chooses inline or streaming work. It sets `selection_mask` from `State.selection.capture` for each seed.
+- Inline: [`FillJob.run`](../../../plugins/paint/FillTool.gd) calls `VoxelRegionSearch.find`, `apply_cells`, or `set_cells`.
+- Stream: [`FillJob._stream_batch`](../../../plugins/paint/FillTool.gd) pushes to `VoxelRegionSearch.BatchQueue`.
+- Drain: [`FillTool._drain_fill_batches`](../../../plugins/paint/FillTool.gd) applies slices and calls `_flush_chunk_notifications`.
+- Commit: [`FillTool._finish_fill_stroke`](../../../plugins/paint/FillTool.gd) calls `_end`, which calls `close_stroke`.
+- Cancel: [`FillTool._interrupt_fill`](../../../plugins/paint/FillTool.gd) cancels jobs and calls `abort_stroke`.
+- Switch: [`FillTool.finish_on_switch`](../../../plugins/paint/FillTool.gd) sets `_release_pending` and commits after the fill is idle.
 
 ## Spray
 
@@ -371,27 +371,27 @@ flowchart TB
 
 ### Spray source edges
 
-- Input: [`SprayTool.handle_input`](../../plugins/paint/SprayTool.gd) handles the press, drag, and lost release.
-- Hover: [`SprayTool._ensure_hover_batch`](../../plugins/paint/SprayTool.gd) samples inline or stores `_hover_request`.
-- Work gate: [`SprayTool.INLINE_SAMPLE_LIMIT`](../../plugins/paint/SprayTool.gd) is 2200. [`SpraySampler.work_estimate`](../../plugins/paint/SpraySampler.gd) supplies the row estimate.
-- Index: [`SprayOccupancyIndex.build_candidates`](../../plugins/paint/SprayOccupancyIndex.gd) counts and ranks exposed rows. [`SpraySampler.sample`](../../plugins/paint/SpraySampler.gd) keeps the lazy Fisher-Yates and RNG draws.
-- ROI: [`SpraySampler.capture_chunks`](../../plugins/paint/SpraySampler.gd) builds the local chunk box and the six neighbor chunks. [`VoxelFrame.copy_chunks`](../../Globals/State/Document/VoxelFrame.gd) returns the frozen subset.
-- Hover worker: [`SprayTool._start_hover_sample`](../../plugins/paint/SprayTool.gd) adds `SpraySamplingJob.run` to the worker pool.
-- Hover install: [`SprayTool._pump_hover_sample`](../../plugins/paint/SprayTool.gd) joins the job and calls `_install_hover`.
-- Press: [`SprayTool._apply_offered`](../../plugins/paint/SprayTool.gd) reads `$Cursor.installed_cells` and `$Cursor.installed_token`. A valid owned surface calls `_queue_centers`. No valid surface samples the cell. A large estimate calls `_accept_intent`.
-- Token: [`SprayTool._make_batch_token`](../../plugins/paint/SprayTool.gd) records the center, frame, axes, origin, and selection. [`SprayTool._shown_owned_by_press`](../../plugins/paint/SprayTool.gd) compares the installed token to the press and its edit context.
-- Display check: [`SprayTool._offered_cells_valid`](../../plugins/paint/SprayTool.gd) checks occupancy and selection. The token check decides ownership.
-- Selection cache: [`SprayTool._cached_selection_index`](../../plugins/paint/SprayTool.gd) reuses one read-only snapshot. A mutable selection resamples.
-- Reference: [`tests/spray_reference.gd`](../../tests/spray_reference.gd) is unchanged. It remains the pure semantic oracle.
-- Direct write: [`SprayTool._queue_centers`](../../plugins/paint/SprayTool.gd) bypasses the intent queue and feeds `StrokeTool._run_stroke`.
-- Final centers: [`SprayTool._build_job`](../../plugins/paint/SprayTool.gd) sets `centers_are_final`. [`StrokeTool.BrushJob.run`](../../plugins/brush/StrokeTool.gd) skips `apply_cells` and writes the final set with `set_cells`.
-- Publish: [`StrokeTool._finish_edit`](../../plugins/brush/StrokeTool.gd) publishes `job.changed_chunks` with `VoxelFrame.apply_published` and emits `chunks_changed`.
-- Release: [`SprayTool._close_if_idle`](../../plugins/paint/SprayTool.gd) waits for the sample queue. `StrokeTool._run_stroke` closes after the last write.
-- Coalescing: [`VoxelPreview._request`](../../Globals/Rendering/VoxelPreview.gd) keeps the running worker when `coalesce_requests` is true. It installs completed results in request order.
-- Accepted queue: [`SprayTool._accept_intent`](../../plugins/paint/SprayTool.gd) appends `Intent` and `_run_intents` calls `State.run_edit_job`.
-- Sample commit: [`SprayTool._commit_sample_state`](../../plugins/paint/SprayTool.gd) copies `result_state` after `rng_epoch` passes.
-- Cancel: [`SprayTool._cancel_edit`](../../plugins/paint/SprayTool.gd) calls `_cancel_samples`, `_invalidate_batch`, `_clear_cursor_preview`, and `super._cancel_edit`.
-- Switch: [`StrokeTool.finish_on_switch`](../../plugins/brush/StrokeTool.gd) calls the Spray `_end` path. Accepted work still commits.
+- Input: [`SprayTool.handle_input`](../../../plugins/paint/SprayTool.gd) handles the press, drag, and lost release.
+- Hover: [`SprayTool._ensure_hover_batch`](../../../plugins/paint/SprayTool.gd) samples inline or stores `_hover_request`.
+- Work gate: [`SprayTool.INLINE_SAMPLE_LIMIT`](../../../plugins/paint/SprayTool.gd) is 2200. [`SpraySampler.work_estimate`](../../../plugins/paint/SpraySampler.gd) supplies the row estimate.
+- Index: [`SprayOccupancyIndex.build_candidates`](../../../plugins/paint/SprayOccupancyIndex.gd) counts and ranks exposed rows. [`SpraySampler.sample`](../../../plugins/paint/SpraySampler.gd) keeps the lazy Fisher-Yates and RNG draws.
+- ROI: [`SpraySampler.capture_chunks`](../../../plugins/paint/SpraySampler.gd) builds the local chunk box and the six neighbor chunks. [`VoxelFrame.copy_chunks`](../../../Globals/State/Document/VoxelFrame.gd) returns the frozen subset.
+- Hover worker: [`SprayTool._start_hover_sample`](../../../plugins/paint/SprayTool.gd) adds `SpraySamplingJob.run` to the worker pool.
+- Hover install: [`SprayTool._pump_hover_sample`](../../../plugins/paint/SprayTool.gd) joins the job and calls `_install_hover`.
+- Press: [`SprayTool._apply_offered`](../../../plugins/paint/SprayTool.gd) reads `$Cursor.installed_cells` and `$Cursor.installed_token`. A valid owned surface calls `_queue_centers`. No valid surface samples the cell. A large estimate calls `_accept_intent`.
+- Token: [`SprayTool._make_batch_token`](../../../plugins/paint/SprayTool.gd) records the center, frame, axes, origin, and selection. [`SprayTool._shown_owned_by_press`](../../../plugins/paint/SprayTool.gd) compares the installed token to the press and its edit context.
+- Display check: [`SprayTool._offered_cells_valid`](../../../plugins/paint/SprayTool.gd) checks occupancy and selection. The token check decides ownership.
+- Selection cache: [`SprayTool._cached_selection_index`](../../../plugins/paint/SprayTool.gd) reuses one read-only snapshot. A mutable selection resamples.
+- Reference: [`tests/spray_reference.gd`](../../../tests/spray_reference.gd) is unchanged. It remains the pure semantic oracle.
+- Direct write: [`SprayTool._queue_centers`](../../../plugins/paint/SprayTool.gd) bypasses the intent queue and feeds `StrokeTool._run_stroke`.
+- Final centers: [`SprayTool._build_job`](../../../plugins/paint/SprayTool.gd) sets `centers_are_final`. [`StrokeTool.BrushJob.run`](../../../plugins/brush/StrokeTool.gd) skips `apply_cells` and writes the final set with `set_cells`.
+- Publish: [`StrokeTool._finish_edit`](../../../plugins/brush/StrokeTool.gd) publishes `job.changed_chunks` with `VoxelFrame.apply_published` and emits `chunks_changed`.
+- Release: [`SprayTool._close_if_idle`](../../../plugins/paint/SprayTool.gd) waits for the sample queue. `StrokeTool._run_stroke` closes after the last write.
+- Coalescing: [`VoxelPreview._request`](../../../Globals/Rendering/VoxelPreview.gd) keeps the running worker when `coalesce_requests` is true. It installs completed results in request order.
+- Accepted queue: [`SprayTool._accept_intent`](../../../plugins/paint/SprayTool.gd) appends `Intent` and `_run_intents` calls `State.run_edit_job`.
+- Sample commit: [`SprayTool._commit_sample_state`](../../../plugins/paint/SprayTool.gd) copies `result_state` after `rng_epoch` passes.
+- Cancel: [`SprayTool._cancel_edit`](../../../plugins/paint/SprayTool.gd) calls `_cancel_samples`, `_invalidate_batch`, `_clear_cursor_preview`, and `super._cancel_edit`.
+- Switch: [`StrokeTool.finish_on_switch`](../../../plugins/brush/StrokeTool.gd) calls the Spray `_end` path. Accepted work still commits.
 
 ## Release, commit, and mesh install
 
@@ -524,7 +524,7 @@ The cache clears on a document change, selection change, or exit.
 
 `tests/spray_reference.gd` stays unchanged.
 It remains the pure semantic oracle.
-Sources: [`SprayOccupancyIndex.build_candidates`](../../plugins/paint/SprayOccupancyIndex.gd), [`SpraySampler.work_estimate`](../../plugins/paint/SpraySampler.gd), and [`VoxelFrame.copy_chunks`](../../Globals/State/Document/VoxelFrame.gd).
+Sources: [`SprayOccupancyIndex.build_candidates`](../../../plugins/paint/SprayOccupancyIndex.gd), [`SpraySampler.work_estimate`](../../../plugins/paint/SpraySampler.gd), and [`VoxelFrame.copy_chunks`](../../../Globals/State/Document/VoxelFrame.gd).
 No maximum-size performance claim is made.
 
 ### Spray preview token and final centers
@@ -582,7 +582,7 @@ Each candidate lists the existing mechanism, the migration users, the preserved 
 The five flows above are the current shipped path.
 The following items are not solved by this map.
 
-- Maximum-size Spray preview and rendering gaps are open in [TASKS.md](../../TASKS.md). The open work asks for visible cursor updates during sustained drags and smaller model installation gaps. This map does not claim a fix.
+- Maximum-size Spray preview and rendering gaps are open in [TASKS.md](../TASKS.md). The open work asks for visible cursor updates during sustained drags and smaller model installation gaps. This map does not claim a fix.
 - Fill has no region preview. Its cursor is a static outline. This is the current policy, not a TODO.
 - Line discards a pending preview on a tool switch. Brush, Paint Brush, Fill, and Spray keep or finish accepted work on a switch. This is the current policy.
 - No performance result in this map is measured. The maps show control flow only.
@@ -602,32 +602,32 @@ Use these checks when you compare the maps with the code.
 
 ## Source index
 
-- [`VoxelTool`](../../Globals/State/Tools/VoxelTool.gd)
-- [`StrokeTool`](../../plugins/brush/StrokeTool.gd)
-- [`BrushTool`](../../plugins/brush/BrushTool.gd)
-- [`LineTool`](../../plugins/brush/LineTool.gd)
-- [`PaintBrushTool`](../../plugins/paint/PaintBrushTool.gd)
-- [`FillTool`](../../plugins/paint/FillTool.gd)
-- [`SprayTool`](../../plugins/paint/SprayTool.gd)
-- [`SpraySamplingJob`](../../plugins/paint/SpraySamplingJob.gd)
-- [`SpraySampler`](../../plugins/paint/SpraySampler.gd)
-- [`StampToolSettings`](../../plugins/brush/StampToolSettings.gd)
-- [`BrushToolSettings`](../../plugins/brush/BrushToolSettings.gd)
-- [`PaintToolSettings`](../../plugins/paint/PaintToolSettings.gd)
-- [`StampPatternJob`](../../plugins/brush/StampPatternJob.gd)
-- [`StampCopyJob`](../../plugins/brush/StampCopyJob.gd)
-- [`BrushPreview`](../../plugins/brush/BrushPreview.gd)
-- [`PixelPerfectStroke`](../../Globals/State/Tools/PixelPerfectStroke.gd)
-- [`StrokeLine`](../../Globals/State/Tools/StrokeLine.gd)
-- [`VoxelBrushSize`](../../Globals/State/Tools/VoxelBrushSize.gd)
-- [`VoxelPicking`](../../Globals/State/Tools/VoxelPicking.gd)
-- [`VoxelEditTransaction`](../../Globals/State/VoxelEditTransaction.gd)
-- [`VoxelFrame`](../../Globals/State/Document/VoxelFrame.gd)
-- [`VoxelRegionSearch`](../../Globals/State/VoxelRegionSearch.gd)
-- [`State`](../../Globals/State/State.gd)
-- [`VoxelPreview`](../../Globals/Rendering/VoxelPreview.gd)
-- [`VoxelRenderer`](../../ui/Viewport/VoxelRenderer.gd)
-- [`BrushPlugin`](../../plugins/brush/BrushPlugin.gd)
-- [`Brush Options`](../../plugins/brush/Options.gd)
-- [`PaintPlugin`](../../plugins/paint/PaintPlugin.gd)
-- [`Paint Options`](../../plugins/paint/Options.gd)
+- [`VoxelTool`](../../../Globals/State/Tools/VoxelTool.gd)
+- [`StrokeTool`](../../../plugins/brush/StrokeTool.gd)
+- [`BrushTool`](../../../plugins/brush/BrushTool.gd)
+- [`LineTool`](../../../plugins/brush/LineTool.gd)
+- [`PaintBrushTool`](../../../plugins/paint/PaintBrushTool.gd)
+- [`FillTool`](../../../plugins/paint/FillTool.gd)
+- [`SprayTool`](../../../plugins/paint/SprayTool.gd)
+- [`SpraySamplingJob`](../../../plugins/paint/SpraySamplingJob.gd)
+- [`SpraySampler`](../../../plugins/paint/SpraySampler.gd)
+- [`StampToolSettings`](../../../plugins/brush/StampToolSettings.gd)
+- [`BrushToolSettings`](../../../plugins/brush/BrushToolSettings.gd)
+- [`PaintToolSettings`](../../../plugins/paint/PaintToolSettings.gd)
+- [`StampPatternJob`](../../../plugins/brush/StampPatternJob.gd)
+- [`StampCopyJob`](../../../plugins/brush/StampCopyJob.gd)
+- [`BrushPreview`](../../../plugins/brush/BrushPreview.gd)
+- [`PixelPerfectStroke`](../../../Globals/State/Tools/PixelPerfectStroke.gd)
+- [`StrokeLine`](../../../Globals/State/Tools/StrokeLine.gd)
+- [`VoxelBrushSize`](../../../Globals/State/Tools/VoxelBrushSize.gd)
+- [`VoxelPicking`](../../../Globals/State/Tools/VoxelPicking.gd)
+- [`VoxelEditTransaction`](../../../Globals/State/VoxelEditTransaction.gd)
+- [`VoxelFrame`](../../../Globals/State/Document/VoxelFrame.gd)
+- [`VoxelRegionSearch`](../../../Globals/State/VoxelRegionSearch.gd)
+- [`State`](../../../Globals/State/State.gd)
+- [`VoxelPreview`](../../../Globals/Rendering/VoxelPreview.gd)
+- [`VoxelRenderer`](../../../ui/Viewport/VoxelRenderer.gd)
+- [`BrushPlugin`](../../../plugins/brush/BrushPlugin.gd)
+- [`Brush Options`](../../../plugins/brush/Options.gd)
+- [`PaintPlugin`](../../../plugins/paint/PaintPlugin.gd)
+- [`Paint Options`](../../../plugins/paint/Options.gd)

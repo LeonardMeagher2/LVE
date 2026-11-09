@@ -49,14 +49,14 @@ They read job inputs such as samples, fields, or moves.
 
 Source:
 
-- [`TerrainToolSettings`](../../plugins/Terrain/TerrainToolSettings.gd#L42-L95)
-- [`Toolbar._select_id`](../../plugins/Terrain/Toolbar.gd#L25-L33)
-- [`Options._sync`](../../plugins/Terrain/Options.gd#L38-L52)
-- [`TerrainTool.open_stroke`](../../plugins/Terrain/TerrainTool.gd)
-- [`TerrainTool.StrokeInputs`](../../plugins/Terrain/TerrainTool.gd)
-- [`TerrainPreview.footprint_depth`](../../plugins/Terrain/TerrainPreview.gd)
-- [`State.drawing_context`](../../Globals/State/State.gd#L350-L355)
-- [`TerrainPrep`](../../plugins/Terrain/TerrainPrep.gd#L1-L191)
+- [`TerrainToolSettings`](../../../plugins/Terrain/TerrainToolSettings.gd#L42-L95)
+- [`Toolbar._select_id`](../../../plugins/Terrain/Toolbar.gd#L25-L33)
+- [`Options._sync`](../../../plugins/Terrain/Options.gd#L38-L52)
+- [`TerrainTool.open_stroke`](../../../plugins/Terrain/TerrainTool.gd)
+- [`TerrainTool.StrokeInputs`](../../../plugins/Terrain/TerrainTool.gd)
+- [`TerrainPreview.footprint_depth`](../../../plugins/Terrain/TerrainPreview.gd)
+- [`State.drawing_context`](../../../Globals/State/State.gd#L350-L355)
+- [`TerrainPrep`](../../../plugins/Terrain/TerrainPrep.gd#L1-L191)
 
 ## Reused definitions
 
@@ -153,21 +153,21 @@ A long motion therefore holds one queue entry per real motion, not one entry per
 
 Source:
 
-- [`TerrainTool.handle_input`](../../plugins/Terrain/TerrainTool.gd)
-- [`TerrainTool.update_visual`](../../plugins/Terrain/TerrainTool.gd)
-- [`TerrainTool._pose_footprint`](../../plugins/Terrain/TerrainTool.gd)
-- [`TerrainTool._footprint_frame`](../../plugins/Terrain/TerrainTool.gd)
-- [`TerrainTool._hide_footprint`](../../plugins/Terrain/TerrainTool.gd)
-- [`TerrainTool._set_preview`](../../plugins/Terrain/TerrainTool.gd)
-- [`TerrainPreview.hover_frame`](../../plugins/Terrain/TerrainPreview.gd)
-- [`TerrainPreview.HoverJob`](../../plugins/Terrain/TerrainTool.gd)
-- [`TerrainTool._invalidate_idle_pose`](../../plugins/Terrain/TerrainTool.gd)
-- [`TerrainTool.open_stroke`](../../plugins/Terrain/TerrainTool.gd)
-- [`TerrainTool._pick_start`](../../plugins/Terrain/TerrainTool.gd)
-- [`TerrainTool._frame_for_pick`](../../plugins/Terrain/TerrainTool.gd)
-- [`TerrainTool._apply_pick`](../../plugins/Terrain/TerrainTool.gd)
-- [`TerrainTool._enqueue_segment`](../../plugins/Terrain/TerrainTool.gd)
-- [`TerrainTool.DabPath`](../../plugins/Terrain/TerrainTool.gd)
+- [`TerrainTool.handle_input`](../../../plugins/Terrain/TerrainTool.gd)
+- [`TerrainTool.update_visual`](../../../plugins/Terrain/TerrainTool.gd)
+- [`TerrainTool._pose_footprint`](../../../plugins/Terrain/TerrainTool.gd)
+- [`TerrainTool._footprint_frame`](../../../plugins/Terrain/TerrainTool.gd)
+- [`TerrainTool._hide_footprint`](../../../plugins/Terrain/TerrainTool.gd)
+- [`TerrainTool._set_preview`](../../../plugins/Terrain/TerrainTool.gd)
+- [`TerrainPreview.hover_frame`](../../../plugins/Terrain/TerrainPreview.gd)
+- [`TerrainPreview.HoverJob`](../../../plugins/Terrain/TerrainTool.gd)
+- [`TerrainTool._invalidate_idle_pose`](../../../plugins/Terrain/TerrainTool.gd)
+- [`TerrainTool.open_stroke`](../../../plugins/Terrain/TerrainTool.gd)
+- [`TerrainTool._pick_start`](../../../plugins/Terrain/TerrainTool.gd)
+- [`TerrainTool._frame_for_pick`](../../../plugins/Terrain/TerrainTool.gd)
+- [`TerrainTool._apply_pick`](../../../plugins/Terrain/TerrainTool.gd)
+- [`TerrainTool._enqueue_segment`](../../../plugins/Terrain/TerrainTool.gd)
+- [`TerrainTool.DabPath`](../../../plugins/Terrain/TerrainTool.gd)
 
 ## Press surface placement
 
@@ -202,17 +202,17 @@ The request snapshot holds only the chunks in the read box.
 The box reaches `watch_half(radius) + radius + 1` cells around the picked cell.
 A hover then costs the read box, not the whole frame.
 The press read still costs about 55 milliseconds at size 32.
-That press read cost is an open task in `TASKS.md`.
+That press read cost is an open task in `../TASKS.md`.
 
 Source:
 
-- [`TerrainTool._frame_for_pick`](../../plugins/Terrain/TerrainTool.gd)
-- [`TerrainTool._pick_start`](../../plugins/Terrain/TerrainTool.gd)
-- [`TerrainFrame.from_surface`](../../plugins/Terrain/TerrainFrame.gd#L67-L84)
-- [`TerrainFrame.from_face`](../../plugins/Terrain/TerrainFrame.gd#L33-L44)
-- [`TerrainFrame.from_floor`](../../plugins/Terrain/TerrainFrame.gd#L50-L58)
-- [`TerrainPreview.watch_chunks`](../../plugins/Terrain/TerrainPreview.gd)
-- [`VoxelFrame.copy_chunks`](../../Globals/State/Document/VoxelFrame.gd)
+- [`TerrainTool._frame_for_pick`](../../../plugins/Terrain/TerrainTool.gd)
+- [`TerrainTool._pick_start`](../../../plugins/Terrain/TerrainTool.gd)
+- [`TerrainFrame.from_surface`](../../../plugins/Terrain/TerrainFrame.gd#L67-L84)
+- [`TerrainFrame.from_face`](../../../plugins/Terrain/TerrainFrame.gd#L33-L44)
+- [`TerrainFrame.from_floor`](../../../plugins/Terrain/TerrainFrame.gd#L50-L58)
+- [`TerrainPreview.watch_chunks`](../../../plugins/Terrain/TerrainPreview.gd)
+- [`VoxelFrame.copy_chunks`](../../../Globals/State/Document/VoxelFrame.gd)
 
 ## Build
 
@@ -365,25 +365,25 @@ No preview calls these rules.
 
 Source:
 
-- [`TerrainTool._run_dab`](../../plugins/Terrain/TerrainTool.gd)
-- [`TerrainTool._plane_point`](../../plugins/Terrain/TerrainTool.gd)
-- [`TerrainTool._apply_dab_at`](../../plugins/Terrain/TerrainTool.gd)
-- [`TerrainTool._start_prep_batch`](../../plugins/Terrain/TerrainTool.gd)
-- [`VoxelFrame.apply_published`](../../Globals/State/Document/VoxelFrame.gd)
-- [`VoxelFrame.job_frame`](../../Globals/State/Document/VoxelFrame.gd)
-- [`TerrainTool._run_tick`](../../plugins/Terrain/TerrainTool.gd)
-- [`TerrainPreview.footprint_depth`](../../plugins/Terrain/TerrainPreview.gd)
-- [`TerrainTool._sample_map`](../../plugins/Terrain/TerrainTool.gd)
-- [`TerrainTool.TerrainTickJob._build_step`](../../plugins/Terrain/TerrainTool.gd)
-- [`TerrainGeometry.dominant_step`](../../plugins/Terrain/TerrainGeometry.gd)
-- [`TerrainGeometry.build_layer_cells`](../../plugins/Terrain/TerrainGeometry.gd)
-- [`TerrainPreview.center_surface`](../../plugins/Terrain/TerrainPreview.gd)
-- [`TerrainFrame.recenter_to`](../../plugins/Terrain/TerrainFrame.gd)
-- [`TerrainPrep.progress_key`](../../plugins/Terrain/TerrainPrep.gd#L52-L55)
-- [`TerrainPrep.collect_steps`](../../plugins/Terrain/TerrainPrep.gd#L91-L112)
-- [`TerrainTool._setup_footprint`](../../plugins/Terrain/TerrainTool.gd)
-- [`TerrainTool._pose_footprint`](../../plugins/Terrain/TerrainTool.gd)
-- [`TerrainRing.legacy_plane_ring`](../../plugins/Terrain/TerrainRing.gd)
+- [`TerrainTool._run_dab`](../../../plugins/Terrain/TerrainTool.gd)
+- [`TerrainTool._plane_point`](../../../plugins/Terrain/TerrainTool.gd)
+- [`TerrainTool._apply_dab_at`](../../../plugins/Terrain/TerrainTool.gd)
+- [`TerrainTool._start_prep_batch`](../../../plugins/Terrain/TerrainTool.gd)
+- [`VoxelFrame.apply_published`](../../../Globals/State/Document/VoxelFrame.gd)
+- [`VoxelFrame.job_frame`](../../../Globals/State/Document/VoxelFrame.gd)
+- [`TerrainTool._run_tick`](../../../plugins/Terrain/TerrainTool.gd)
+- [`TerrainPreview.footprint_depth`](../../../plugins/Terrain/TerrainPreview.gd)
+- [`TerrainTool._sample_map`](../../../plugins/Terrain/TerrainTool.gd)
+- [`TerrainTool.TerrainTickJob._build_step`](../../../plugins/Terrain/TerrainTool.gd)
+- [`TerrainGeometry.dominant_step`](../../../plugins/Terrain/TerrainGeometry.gd)
+- [`TerrainGeometry.build_layer_cells`](../../../plugins/Terrain/TerrainGeometry.gd)
+- [`TerrainPreview.center_surface`](../../../plugins/Terrain/TerrainPreview.gd)
+- [`TerrainFrame.recenter_to`](../../../plugins/Terrain/TerrainFrame.gd)
+- [`TerrainPrep.progress_key`](../../../plugins/Terrain/TerrainPrep.gd#L52-L55)
+- [`TerrainPrep.collect_steps`](../../../plugins/Terrain/TerrainPrep.gd#L91-L112)
+- [`TerrainTool._setup_footprint`](../../../plugins/Terrain/TerrainTool.gd)
+- [`TerrainTool._pose_footprint`](../../../plugins/Terrain/TerrainTool.gd)
+- [`TerrainRing.legacy_plane_ring`](../../../plugins/Terrain/TerrainRing.gd)
 
 ## Flatten
 
@@ -439,11 +439,11 @@ No preview calls this action rule.
 
 Source:
 
-- [`TerrainTool.FLATTEN_THRESHOLD`](../../plugins/Terrain/TerrainTool.gd)
-- [`TerrainTool.TerrainTickJob._flatten_step`](../../plugins/Terrain/TerrainTool.gd)
-- [`TerrainTool.TerrainTickJob._fill_material`](../../plugins/Terrain/TerrainTool.gd)
-- [`TerrainPrep.progress_key`](../../plugins/Terrain/TerrainPrep.gd#L52-L55)
-- [`TerrainGeometry.flatten_action`](../../plugins/Terrain/TerrainGeometry.gd#L411-L435)
+- [`TerrainTool.FLATTEN_THRESHOLD`](../../../plugins/Terrain/TerrainTool.gd)
+- [`TerrainTool.TerrainTickJob._flatten_step`](../../../plugins/Terrain/TerrainTool.gd)
+- [`TerrainTool.TerrainTickJob._fill_material`](../../../plugins/Terrain/TerrainTool.gd)
+- [`TerrainPrep.progress_key`](../../../plugins/Terrain/TerrainPrep.gd#L52-L55)
+- [`TerrainGeometry.flatten_action`](../../../plugins/Terrain/TerrainGeometry.gd#L411-L435)
 
 ## Smooth
 
@@ -507,16 +507,16 @@ A camera change during the stroke ends the gesture.
 
 Source:
 
-- [`TerrainTool._apply_pick`](../../plugins/Terrain/TerrainTool.gd)
-- [`TerrainTool._run_smooth_dab`](../../plugins/Terrain/TerrainTool.gd)
-- [`TerrainTool._next_dab_cell`](../../plugins/Terrain/TerrainTool.gd)
-- [`TerrainTool._smooth_surface_frame`](../../plugins/Terrain/TerrainTool.gd)
-- [`TerrainTool._build_smooth_fields`](../../plugins/Terrain/TerrainTool.gd)
-- [`TerrainTool.SmoothJob._prepare`](../../plugins/Terrain/TerrainTool.gd)
-- [`TerrainPrep.smooth_surface_frame`](../../plugins/Terrain/TerrainPrep.gd#L134-L150)
-- [`TerrainPreview.compute_smooth_fields`](../../plugins/Terrain/TerrainPreview.gd)
-- [`TerrainGeometry.sphere_offsets`](../../plugins/Terrain/TerrainGeometry.gd)
-- [`TerrainTool._frame_drag`](../../plugins/Terrain/TerrainTool.gd)
+- [`TerrainTool._apply_pick`](../../../plugins/Terrain/TerrainTool.gd)
+- [`TerrainTool._run_smooth_dab`](../../../plugins/Terrain/TerrainTool.gd)
+- [`TerrainTool._next_dab_cell`](../../../plugins/Terrain/TerrainTool.gd)
+- [`TerrainTool._smooth_surface_frame`](../../../plugins/Terrain/TerrainTool.gd)
+- [`TerrainTool._build_smooth_fields`](../../../plugins/Terrain/TerrainTool.gd)
+- [`TerrainTool.SmoothJob._prepare`](../../../plugins/Terrain/TerrainTool.gd)
+- [`TerrainPrep.smooth_surface_frame`](../../../plugins/Terrain/TerrainPrep.gd#L134-L150)
+- [`TerrainPreview.compute_smooth_fields`](../../../plugins/Terrain/TerrainPreview.gd)
+- [`TerrainGeometry.sphere_offsets`](../../../plugins/Terrain/TerrainGeometry.gd)
+- [`TerrainTool._frame_drag`](../../../plugins/Terrain/TerrainTool.gd)
 
 ## Grab
 
@@ -579,15 +579,15 @@ Grab strength is not used, so the option bar hides it.
 
 Source:
 
-- [`TerrainTool._pick_start`](../../plugins/Terrain/TerrainTool.gd)
-- [`TerrainTool._pose_footprint`](../../plugins/Terrain/TerrainTool.gd)
-- [`TerrainTool._capture_grab`](../../plugins/Terrain/TerrainTool.gd)
-- [`TerrainTool._update_grab`](../../plugins/Terrain/TerrainTool.gd)
-- [`TerrainTool._run_grab`](../../plugins/Terrain/TerrainTool.gd)
-- [`TerrainTool._finish_grab`](../../plugins/Terrain/TerrainTool.gd)
-- [`TerrainTool._view_drag`](../../plugins/Terrain/TerrainTool.gd)
-- [`TerrainTool.GrabJob`](../../plugins/Terrain/TerrainTool.gd)
-- [`Options._sync`](../../plugins/Terrain/Options.gd#L38-L52)
+- [`TerrainTool._pick_start`](../../../plugins/Terrain/TerrainTool.gd)
+- [`TerrainTool._pose_footprint`](../../../plugins/Terrain/TerrainTool.gd)
+- [`TerrainTool._capture_grab`](../../../plugins/Terrain/TerrainTool.gd)
+- [`TerrainTool._update_grab`](../../../plugins/Terrain/TerrainTool.gd)
+- [`TerrainTool._run_grab`](../../../plugins/Terrain/TerrainTool.gd)
+- [`TerrainTool._finish_grab`](../../../plugins/Terrain/TerrainTool.gd)
+- [`TerrainTool._view_drag`](../../../plugins/Terrain/TerrainTool.gd)
+- [`TerrainTool.GrabJob`](../../../plugins/Terrain/TerrainTool.gd)
+- [`Options._sync`](../../../plugins/Terrain/Options.gd#L38-L52)
 
 ## Release, drain, commit, and visible surfaces
 
@@ -637,13 +637,13 @@ The undo action still covers the whole stroke.
 
 Source:
 
-- [`TerrainTool._end`](../../plugins/Terrain/TerrainTool.gd)
-- [`TerrainTool._settle_dabs`](../../plugins/Terrain/TerrainTool.gd)
-- [`TerrainTool._finish_stroke`](../../plugins/Terrain/TerrainTool.gd)
-- [`TerrainTool._finish_tick`](../../plugins/Terrain/TerrainTool.gd)
-- [`TerrainTool._finish_smooth`](../../plugins/Terrain/TerrainTool.gd)
-- [`State.finish_edit`](../../Globals/State/State.gd#L563-L575)
-- [`VoxelRenderer`](../../ui/Viewport/VoxelRenderer.gd#L93-L102)
+- [`TerrainTool._end`](../../../plugins/Terrain/TerrainTool.gd)
+- [`TerrainTool._settle_dabs`](../../../plugins/Terrain/TerrainTool.gd)
+- [`TerrainTool._finish_stroke`](../../../plugins/Terrain/TerrainTool.gd)
+- [`TerrainTool._finish_tick`](../../../plugins/Terrain/TerrainTool.gd)
+- [`TerrainTool._finish_smooth`](../../../plugins/Terrain/TerrainTool.gd)
+- [`State.finish_edit`](../../../Globals/State/State.gd#L563-L575)
+- [`VoxelRenderer`](../../../ui/Viewport/VoxelRenderer.gd#L93-L102)
 
 ## Cancel ownership
 
@@ -700,18 +700,18 @@ The release path commits only when the same token still owns the stroke.
 
 Source:
 
-- [`TerrainTool._cancel_edit`](../../plugins/Terrain/TerrainTool.gd)
-- [`TerrainTool._job_is_current`](../../plugins/Terrain/TerrainTool.gd)
-- [`TerrainTool._settle_dabs`](../../plugins/Terrain/TerrainTool.gd)
-- [`State.begin_operation`](../../Globals/State/State.gd#L397-L412)
-- [`State.cancel_activity`](../../Globals/State/State.gd#L436-L448)
-- [`State.cancel_operation`](../../Globals/State/State.gd#L419-L433)
-- [`TerrainTool._run_tick`](../../plugins/Terrain/TerrainTool.gd)
-- [`TerrainTool._start_prep_dab`](../../plugins/Terrain/TerrainTool.gd)
-- [`TerrainTool._run_grab`](../../plugins/Terrain/TerrainTool.gd)
-- [`TerrainTool._run_smooth`](../../plugins/Terrain/TerrainTool.gd)
-- [`State.cancel_edit`](../../Globals/State/State.gd#L581-L590)
-- [`VoxelTool.abort_stroke`](../../Globals/State/Tools/VoxelTool.gd)
+- [`TerrainTool._cancel_edit`](../../../plugins/Terrain/TerrainTool.gd)
+- [`TerrainTool._job_is_current`](../../../plugins/Terrain/TerrainTool.gd)
+- [`TerrainTool._settle_dabs`](../../../plugins/Terrain/TerrainTool.gd)
+- [`State.begin_operation`](../../../Globals/State/State.gd#L397-L412)
+- [`State.cancel_activity`](../../../Globals/State/State.gd#L436-L448)
+- [`State.cancel_operation`](../../../Globals/State/State.gd#L419-L433)
+- [`TerrainTool._run_tick`](../../../plugins/Terrain/TerrainTool.gd)
+- [`TerrainTool._start_prep_dab`](../../../plugins/Terrain/TerrainTool.gd)
+- [`TerrainTool._run_grab`](../../../plugins/Terrain/TerrainTool.gd)
+- [`TerrainTool._run_smooth`](../../../plugins/Terrain/TerrainTool.gd)
+- [`State.cancel_edit`](../../../Globals/State/State.gd#L581-L590)
+- [`VoxelTool.abort_stroke`](../../../Globals/State/Tools/VoxelTool.gd)
 
 ## Mode matrix
 
@@ -737,7 +737,7 @@ The ring shows the footprint, not the edit.
 - The ring keeps its fallback pose while an idle read runs, so a full-size hover keeps the main thread free.
 - The ring is the whole cursor. It has no idle map and no terrain prediction.
 - All press reads run on the main thread at the full size. The Grab press uses the exact face and runs no surface read.
-- The press read costs about 55 milliseconds at size 32. That press read cost is an open task in `TASKS.md`.
+- The press read costs about 55 milliseconds at size 32. That press read cost is an open task in `../TASKS.md`.
 - The `TerrainPreview` helpers accept a `TerrainQueryContext`. The tool never constructs one.
 - The column walk at maximum size on sparse models remains a pending measurement.
 - This page does not assert a shared 1 through 64 size range.
@@ -746,10 +746,10 @@ The ring shows the footprint, not the edit.
 
 Source:
 
-- [`TerrainToolSettings.radius`](../../plugins/Terrain/TerrainToolSettings.gd#L51-L58)
-- [`TerrainTool.GRAB_MAX_DISTANCE`](../../plugins/Terrain/TerrainTool.gd)
-- [`TerrainTool.DABS_PER_DRAIN`](../../plugins/Terrain/TerrainTool.gd)
-- [`TerrainQueryContext`](../../plugins/Terrain/TerrainQueryContext.gd)
+- [`TerrainToolSettings.radius`](../../../plugins/Terrain/TerrainToolSettings.gd#L51-L58)
+- [`TerrainTool.GRAB_MAX_DISTANCE`](../../../plugins/Terrain/TerrainTool.gd)
+- [`TerrainTool.DABS_PER_DRAIN`](../../../plugins/Terrain/TerrainTool.gd)
+- [`TerrainQueryContext`](../../../plugins/Terrain/TerrainQueryContext.gd)
 
 ## Implemented mechanisms
 

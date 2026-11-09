@@ -43,7 +43,7 @@ This page does not assume C++ SIMD or GPU results apply to GDScript.
 - **Fact (logic)** means the statement follows from a definition or a proof.
 - **Fact (arithmetic)** means the statement follows from a calculation.
 - **Fact (GDScript)** means the statement comes from a checked Godot 4.7.2 behavior.
-- **Fact (project guide)** means the statement comes from `docs/tool-flows/composition.md`.
+- **Fact (project guide)** means the statement comes from `../../tool-flows/composition.md`.
 - **Inference** means this page reasons from facts. It is not measured.
 - **Mixed** means the statement has a fact part and an inference part. The text names each part.
 - **Unknown** means a measurement is necessary.

@@ -37,7 +37,7 @@ Use these words with the same meaning in every diagram.
 `State._ready` adds eleven plugins in a fixed order.
 The toolbar follows the plugin order for the eight toolbar plugins.
 The toolbar order is Brush, Eyedropper, Paint, Terrain, Selection, Transform, Symmetry, and Plane.
-The source is [`State.gd:252`](../../Globals/State/State.gd#L252).
+The source is [`State.gd:252`](../../../Globals/State/State.gd#L252).
 
 | Plugin | UI registration | Options | Tool node | Start state |
 | --- | --- | --- | --- | --- |
@@ -55,7 +55,7 @@ The source is [`State.gd:252`](../../Globals/State/State.gd#L252).
 
 The plugin base class supplies the registration helpers.
 The helpers are `add_tool_bar_item`, `add_option_bar_item`, `add_editor_node`, `add_menu_bar_item`, and `add_tab`.
-The source is [`VoxelPlugin.gd`](../../VoxelPlugin.gd).
+The source is [`VoxelPlugin.gd`](../../../VoxelPlugin.gd).
 
 ### Input actions
 
@@ -80,7 +80,7 @@ The source is [`VoxelPlugin.gd`](../../VoxelPlugin.gd).
 | `tool_plane` | M | `plugins/Plane/Toolbar.tscn` |
 
 `ToolMenuButton._shortcut_input` selects a mode and calls `accept_event`.
-The source is [`ToolMenuButton.gd:21`](../../plugins/ToolMenuButton.gd#L21).
+The source is [`ToolMenuButton.gd:21`](../../../plugins/ToolMenuButton.gd#L21).
 
 ### Registration gaps
 
@@ -102,7 +102,7 @@ This page does not map it.
 
 The editor viewport handles navigation before a tool sees the event.
 `ViewportScene._input` handles the camera, the light handle, and the view drags.
-The source is [`Viewport.gd:310`](../../ui/Viewport/Viewport.gd#L310).
+The source is [`Viewport.gd:310`](../../../ui/Viewport/Viewport.gd#L310).
 
 ```mermaid
 flowchart TD
@@ -136,7 +136,7 @@ flowchart TD
 `VoxelTool._unhandled_input` rejects events that `_accepts` does not allow.
 The base `_accepts` allows mouse buttons, mouse motion, and keys.
 A busy gate consumes the event and stops the path.
-The source is [`VoxelTool.gd`](../../Globals/State/Tools/VoxelTool.gd) and [`VoxelTool.gd`](../../Globals/State/Tools/VoxelTool.gd).
+The source is [`VoxelTool.gd`](../../../Globals/State/Tools/VoxelTool.gd) and [`VoxelTool.gd`](../../../Globals/State/Tools/VoxelTool.gd).
 
 The event gate is common.
 The lifecycle after `handle_input` is tool-specific.
@@ -156,7 +156,7 @@ A press calls `open_stroke` before the pick.
 A failed pick calls `abort_stroke`.
 The base path is the stroke example.
 It is not the path for every tool.
-The source is [`VoxelTool.gd`](../../Globals/State/Tools/VoxelTool.gd).
+The source is [`VoxelTool.gd`](../../../Globals/State/Tools/VoxelTool.gd).
 
 ### Accepted input scope
 
@@ -176,9 +176,9 @@ The camera claims these events before the tools.
 | View preset key | `ViewportScene._unhandled_key_input` | Set view | No |
 | Escape | `State._input` | Cancel a foreground operation | Only when no operation owns Escape |
 
-The drag decision is in [`Viewport.gd:282`](../../ui/Viewport/Viewport.gd#L282).
-The light drag is in [`Viewport.gd:209`](../../ui/Viewport/Viewport.gd#L209).
-The camera moves are in [`CameraRig.gd:140`](../../ui/Viewport/CameraRig.gd#L140) and [`CameraRig.gd:147`](../../ui/Viewport/CameraRig.gd#L147).
+The drag decision is in [`Viewport.gd:282`](../../../ui/Viewport/Viewport.gd#L282).
+The light drag is in [`Viewport.gd:209`](../../../ui/Viewport/Viewport.gd#L209).
+The camera moves are in [`CameraRig.gd:140`](../../../ui/Viewport/CameraRig.gd#L140) and [`CameraRig.gd:147`](../../../ui/Viewport/CameraRig.gd#L147).
 
 ### Release, calculated, published, committed, installed
 
@@ -193,11 +193,11 @@ These words name different moments in one operation.
 | Installed | The visible result is applied. | Not applicable | `_install_surface` sets `mesh` | `_install` sets the chunk `MeshInstance3D` |
 | Rejected | A gate discards the result. | `checkpoint(0)` is false | Revision or epoch mismatch | In-flight key was cleared |
 
-The stroke batch publish is in [`StrokeTool.gd`](../../plugins/brush/StrokeTool.gd).
+The stroke batch publish is in [`StrokeTool.gd`](../../../plugins/brush/StrokeTool.gd).
 `StrokeTool._finish_edit` does not call `State.finish_edit`.
-The stroke commit is in [`StrokeTool.gd`](../../plugins/brush/StrokeTool.gd) and [`State.gd:563`](../../Globals/State/State.gd#L563).
-The preview gate is in [`VoxelPreview.gd`](../../Globals/Rendering/VoxelPreview.gd).
-The renderer install is in [`VoxelRenderer.gd:499`](../../ui/Viewport/VoxelRenderer.gd#L499).
+The stroke commit is in [`StrokeTool.gd`](../../../plugins/brush/StrokeTool.gd) and [`State.gd:563`](../../../Globals/State/State.gd#L563).
+The preview gate is in [`VoxelPreview.gd`](../../../Globals/Rendering/VoxelPreview.gd).
+The renderer install is in [`VoxelRenderer.gd:499`](../../../ui/Viewport/VoxelRenderer.gd#L499).
 
 ### Captured requests and shared settings
 
@@ -206,14 +206,14 @@ The operation must keep the values it needs and must not depend on later shared 
 
 | Item | Lifetime | Owner | Evidence |
 | --- | --- | --- | --- |
-| `settings.tres` | Whole session | Tool plugin and options | `BrushPlugin._settings` at [`BrushPlugin.gd:13`](../../plugins/brush/BrushPlugin.gd#L13) |
-| Stroke diameter, shape, and mode | One stroke | `StrokeTool` | `_stroke_diameter` and `_stroke_shape` at [`StrokeTool.gd`](../../plugins/brush/StrokeTool.gd) |
-| Stroke material pattern | One stroke | `StrokeTool` | `_stroke_material` and `_stroke_material_pattern` at [`StrokeTool.gd`](../../plugins/brush/StrokeTool.gd) |
-| Edit context | One edit | `VoxelEditTransaction` | `edit_context` at [`VoxelEditTransaction.gd:22`](../../Globals/State/VoxelEditTransaction.gd#L22) |
-| Frame snapshot | One job | `BrushJob` | `edited_frame` at [`StrokeTool.gd`](../../plugins/brush/StrokeTool.gd) |
-| Requested preview cells | One request | `VoxelPreview` | `_requested_cells` at [`VoxelPreview.gd`](../../Globals/Rendering/VoxelPreview.gd) |
-| Prepared solid payload | One submit | `SolidPayload` | `spots` at [`VoxelPreview.gd`](../../Globals/Rendering/VoxelPreview.gd) |
-| Document preview frame | One render | `VoxelImageRenderer` | `copy_frame` at [`VoxelImageRenderer.gd:172`](../../Globals/VoxelImageRenderer/VoxelImageRenderer.gd#L172) |
+| `settings.tres` | Whole session | Tool plugin and options | `BrushPlugin._settings` at [`BrushPlugin.gd:13`](../../../plugins/brush/BrushPlugin.gd#L13) |
+| Stroke diameter, shape, and mode | One stroke | `StrokeTool` | `_stroke_diameter` and `_stroke_shape` at [`StrokeTool.gd`](../../../plugins/brush/StrokeTool.gd) |
+| Stroke material pattern | One stroke | `StrokeTool` | `_stroke_material` and `_stroke_material_pattern` at [`StrokeTool.gd`](../../../plugins/brush/StrokeTool.gd) |
+| Edit context | One edit | `VoxelEditTransaction` | `edit_context` at [`VoxelEditTransaction.gd:22`](../../../Globals/State/VoxelEditTransaction.gd#L22) |
+| Frame snapshot | One job | `BrushJob` | `edited_frame` at [`StrokeTool.gd`](../../../plugins/brush/StrokeTool.gd) |
+| Requested preview cells | One request | `VoxelPreview` | `_requested_cells` at [`VoxelPreview.gd`](../../../Globals/Rendering/VoxelPreview.gd) |
+| Prepared solid payload | One submit | `SolidPayload` | `spots` at [`VoxelPreview.gd`](../../../Globals/Rendering/VoxelPreview.gd) |
+| Document preview frame | One render | `VoxelImageRenderer` | `copy_frame` at [`VoxelImageRenderer.gd:172`](../../../Globals/VoxelImageRenderer/VoxelImageRenderer.gd#L172) |
 
 `job.centers` is an owned array, not a read-only container.
 `_requested_cells` and `SolidPayload.spots` are made read-only.
@@ -221,11 +221,11 @@ The operation must keep the values it needs and must not depend on later shared 
 The jobs use those captured values.
 The first stamp reads `_settings.pattern()`, so the pattern cache stays a shared setting.
 A mode change ends the stroke through the plugin.
-The source is [`StrokeTool.gd`](../../plugins/brush/StrokeTool.gd).
+The source is [`StrokeTool.gd`](../../../plugins/brush/StrokeTool.gd).
 
 `VoxelPreview._request` keeps a read-only cell set.
 It duplicates the cells when the input is not already read-only.
-The source is [`VoxelPreview.gd`](../../Globals/Rendering/VoxelPreview.gd).
+The source is [`VoxelPreview.gd`](../../../Globals/Rendering/VoxelPreview.gd).
 
 ### Local frame snapshots and occupancy rows
 
@@ -234,31 +234,31 @@ It keeps the same chunk objects and marks the source chunks shared before the su
 Existing shared entries stay shared, so an older full or subset snapshot stays frozen.
 It does not copy the whole chunk dictionary. The cost follows the requested locations.
 Its consumers are the Spray worker ROI and the Flatten and Smooth hover fit and map snapshots.
-The source is [`VoxelFrame.copy_chunks`](../../Globals/State/Document/VoxelFrame.gd).
+The source is [`VoxelFrame.copy_chunks`](../../../Globals/State/Document/VoxelFrame.gd).
 
 `Chunk.occupancy_rows()` builds lazy immutable row masks and counts per `occupancy_revision`.
 A material-only write keeps the revision, so the rows survive a repaint.
 A copy-on-write copy shares the rows. A snapshot restore keeps them correct.
-The source is [`Chunk.occupancy_rows`](../../Globals/State/Document/VoxelFrame.gd).
+The source is [`Chunk.occupancy_rows`](../../../Globals/State/Document/VoxelFrame.gd).
 
 `VoxelFrame.get_bounds()` caches between API writes.
 A cache hit checks the raw chunk count. A raw change that keeps the count must call `invalidate_bounds()`.
 `invalidate_bounds()` repairs the bounds only. It does not repair a raw grid write or copy-on-write metadata.
 The cache adds metadata only. The storage version and model transparency do not change.
-The sources are [`VoxelFrame.get_bounds`](../../Globals/State/Document/VoxelFrame.gd) and [`VoxelFrame.invalidate_bounds`](../../Globals/State/Document/VoxelFrame.gd).
+The sources are [`VoxelFrame.get_bounds`](../../../Globals/State/Document/VoxelFrame.gd) and [`VoxelFrame.invalidate_bounds`](../../../Globals/State/Document/VoxelFrame.gd).
 
 ### Worker cancellation and undo scope
 
 `VoxelFrame.EditJob.cancel` sets a flag.
 `checkpoint` reads the flag and returns false.
 The worker body must call `checkpoint` often.
-The source is [`VoxelFrame.gd`](../../Globals/State/Document/VoxelFrame.gd).
+The source is [`VoxelFrame.gd`](../../../Globals/State/Document/VoxelFrame.gd).
 
 `State.run_edit_job` starts the worker, pumps progress, and joins the worker before it returns.
 It calls `on_frame` before each progress update.
 The runner joins exactly once.
 A caller that waits itself retires the task id, so the runner stops without a second wait.
-The source is [`State.gd:492`](../../Globals/State/State.gd#L492).
+The source is [`State.gd:492`](../../../Globals/State/State.gd#L492).
 
 | Path | Cancel source | Join | Result gate | Undo scope |
 | --- | --- | --- | --- | --- |
@@ -276,15 +276,15 @@ The source is [`State.gd:492`](../../Globals/State/State.gd#L492).
 
 `State.begin_edit` allows one active edit.
 A second call returns null.
-The source is [`State.gd:542`](../../Globals/State/State.gd#L542).
+The source is [`State.gd:542`](../../../Globals/State/State.gd#L542).
 
 `State.finish_edit` records one history action when the transaction changed.
 `State.cancel_edit` restores the start snapshots and records no action.
-The source is [`State.gd:563`](../../Globals/State/State.gd#L563) and [`State.gd:581`](../../Globals/State/State.gd#L581).
+The source is [`State.gd:563`](../../../Globals/State/State.gd#L563) and [`State.gd:581`](../../../Globals/State/State.gd#L581).
 
 `VoxelEditTransaction.finish` compares the start and end snapshots.
 It returns null when the frame and the selection did not change.
-The source is [`VoxelEditTransaction.gd:83`](../../Globals/State/VoxelEditTransaction.gd#L83).
+The source is [`VoxelEditTransaction.gd:83`](../../../Globals/State/VoxelEditTransaction.gd#L83).
 
 ## Model and output paths
 
@@ -309,8 +309,8 @@ The solid paths use `VoxelMeshBuilder` and `VoxelAtlas`.
 A stroke batch can install visible chunks before the final commit.
 The renderer can install an intermediate chunk mesh while a batch is published.
 `close_stroke` commits later.
-The sources are [`VoxelRenderer.gd:93`](../../ui/Viewport/VoxelRenderer.gd#L93), [`VoxelRenderer.gd:167`](../../ui/Viewport/VoxelRenderer.gd#L167), and [`VoxelRenderer.gd:499`](../../ui/Viewport/VoxelRenderer.gd#L499).
-The request and build sources are [`VoxelRenderer.gd:186`](../../ui/Viewport/VoxelRenderer.gd#L186), [`VoxelRenderer.gd:208`](../../ui/Viewport/VoxelRenderer.gd#L208), and [`VoxelRenderer.gd:255`](../../ui/Viewport/VoxelRenderer.gd#L255).
+The sources are [`VoxelRenderer.gd:93`](../../../ui/Viewport/VoxelRenderer.gd#L93), [`VoxelRenderer.gd:167`](../../../ui/Viewport/VoxelRenderer.gd#L167), and [`VoxelRenderer.gd:499`](../../../ui/Viewport/VoxelRenderer.gd#L499).
+The request and build sources are [`VoxelRenderer.gd:186`](../../../ui/Viewport/VoxelRenderer.gd#L186), [`VoxelRenderer.gd:208`](../../../ui/Viewport/VoxelRenderer.gd#L208), and [`VoxelRenderer.gd:255`](../../../ui/Viewport/VoxelRenderer.gd#L255).
 
 ```mermaid
 flowchart LR
@@ -340,7 +340,7 @@ flowchart LR
 
 The off-screen `VoxelRenderer` uses the same static `_surface_cache` and `_surface_jobs`.
 The key includes the smooth setting, the neighbor chunk instance ids, and the neighbor voxel revisions.
-The cache and job sources are [`VoxelRenderer.gd:22`](../../ui/Viewport/VoxelRenderer.gd#L22) and [`VoxelRenderer.gd:365`](../../ui/Viewport/VoxelRenderer.gd#L365).
+The cache and job sources are [`VoxelRenderer.gd:22`](../../../ui/Viewport/VoxelRenderer.gd#L22) and [`VoxelRenderer.gd:365`](../../../ui/Viewport/VoxelRenderer.gd#L365).
 
 ### Interactive preview
 
@@ -349,7 +349,7 @@ It builds a cursor or selection mesh from a captured cell set.
 A strict request cancels the running job.
 A coalescing request keeps the running job and installs a completed snapshot in request order.
 Preview consumers are `BrushPreview`, `LineTool`, `PasteTool`, `SprayTool`, `TerrainTool`, and `SelectionPlugin`.
-The source is [`VoxelPreview.gd`](../../Globals/Rendering/VoxelPreview.gd).
+The source is [`VoxelPreview.gd`](../../../Globals/Rendering/VoxelPreview.gd).
 
 ```mermaid
 flowchart LR
@@ -379,7 +379,7 @@ flowchart LR
 ```
 
 The cache limit is 64 MB and 16 entries.
-The source is [`VoxelPreview.gd`](../../Globals/Rendering/VoxelPreview.gd).
+The source is [`VoxelPreview.gd`](../../../Globals/Rendering/VoxelPreview.gd).
 
 A selection outline reads dense masks, not the cell dictionary.
 `VoxelSelection.mask_chunks` holds one 16-bit row per chunk row and edge axis.
@@ -391,7 +391,7 @@ A chunk entry also holds the chunk cell count. A chunk that reaches zero leaves 
 A box fills its masks in row runs. A streamed batch groups its cells by chunk and writes each grid once.
 The outline builder reads the cell row, the two side rows, and the diagonal row of one line.
 A side or diagonal cell on a chunk border comes from the neighbor chunk mask.
-The source is [`VoxelSelection.gd`](../../Globals/State/VoxelSelection.gd) and [`VoxelPreview.gd`](../../Globals/Rendering/VoxelPreview.gd).
+The source is [`VoxelSelection.gd`](../../../Globals/State/VoxelSelection.gd) and [`VoxelPreview.gd`](../../../Globals/Rendering/VoxelPreview.gd).
 
 An edit transaction captures the selection masks with the selection.
 `VoxelEditTransaction` stores them in the undo change, and `State._restore_chunks` passes them to `restore`.
@@ -399,7 +399,7 @@ An undo or redo then installs the recorded grids, so it does not rebuild them.
 A completed streamed selection holds the result masks already, so the wand finish does not restore them again.
 The finish publishes through the progressive outline path.
 A strict request there would cancel the running stream and rebuild the same outline.
-The source is [`VoxelEditTransaction.gd`](../../Globals/State/VoxelEditTransaction.gd) and [`WandSelectTool.gd`](../../plugins/selection/tools/WandSelectTool.gd).
+The source is [`VoxelEditTransaction.gd`](../../../Globals/State/VoxelEditTransaction.gd) and [`WandSelectTool.gd`](../../../plugins/selection/tools/WandSelectTool.gd).
 
 `show_voxels` and `_request` accept an optional opaque token.
 `SolidPayload.token` and `PreviewJob.token` carry it.
@@ -411,7 +411,7 @@ Other callers leave the token null.
 The progressive selection path uses `_stream_epoch`.
 A clear or a strict request increments the epoch.
 An old stream result cannot install after the epoch changes.
-The source is [`VoxelPreview.gd`](../../Globals/Rendering/VoxelPreview.gd).
+The source is [`VoxelPreview.gd`](../../../Globals/Rendering/VoxelPreview.gd).
 
 ### Offscreen image consumer
 
@@ -420,7 +420,7 @@ It owns a hidden `SubViewport` with a `VoxelRenderer`.
 It debounces frame requests and renders one frame at a time.
 It waits for `VoxelRenderer.is_settled` before it draws.
 Off-screen consumers are `AnimationFrame`, `MenuBar`, and `ExportPlugin`.
-The source is [`VoxelImageRenderer.gd:60`](../../Globals/VoxelImageRenderer/VoxelImageRenderer.gd#L60).
+The source is [`VoxelImageRenderer.gd:60`](../../../Globals/VoxelImageRenderer/VoxelImageRenderer.gd#L60).
 
 ```mermaid
 flowchart LR
@@ -450,15 +450,15 @@ flowchart LR
 The cache limit is 64 MB and 1024 entries.
 The off-screen renderer uses the same chunk build and cache code as the visible renderer.
 Its `source_frame` can be a copy, so cache keys can differ.
-The source is [`VoxelRenderer.gd:22`](../../ui/Viewport/VoxelRenderer.gd#L22).
+The source is [`VoxelRenderer.gd:22`](../../../ui/Viewport/VoxelRenderer.gd#L22).
 
 A renderer does not cancel a running surface job on a rebuild.
 It clears the in-flight keys, so a result from the old context cannot install.
-The source is [`VoxelRenderer.gd:145`](../../ui/Viewport/VoxelRenderer.gd#L145).
+The source is [`VoxelRenderer.gd:145`](../../../ui/Viewport/VoxelRenderer.gd#L145).
 
 `render_document_preview` uses a temporary viewport and a copied first frame.
 It returns null in a headless run or when the document changes.
-The source is [`VoxelImageRenderer.gd:165`](../../Globals/VoxelImageRenderer/VoxelImageRenderer.gd#L165).
+The source is [`VoxelImageRenderer.gd:165`](../../../Globals/VoxelImageRenderer/VoxelImageRenderer.gd#L165).
 
 ## Utility tools
 
@@ -472,14 +472,14 @@ The Plane tool moves the floor plane.
 A drag sets `State.floor_index`.
 The X, Y, and Z keys set `State.floor_axis`.
 The option bar has a Slice toggle.
-The source is [`PlaneTool.gd:36`](../../plugins/Plane/PlaneTool.gd#L36).
+The source is [`PlaneTool.gd:36`](../../../plugins/Plane/PlaneTool.gd#L36).
 
 The slice limits every edit to the floor layer.
 The layer is cell index `State.floor_index`, the layer above the grid line.
 The edit context freezes the axis and the index at begin.
 One write gate applies the limit. See [Write scope](#write-scope).
 The view also draws only the slice layer while the option is on.
-The source is [`VoxelRenderer.gd:63`](../../ui/Viewport/VoxelRenderer.gd#L63).
+The source is [`VoxelRenderer.gd:63`](../../../ui/Viewport/VoxelRenderer.gd#L63).
 
 ```mermaid
 flowchart LR
@@ -515,20 +515,20 @@ flowchart LR
 The plane tool overrides `handle_input`.
 It does not call `open_stroke`.
 It does not write cells and it does not add an undo action.
-The source is [`PlaneTool.gd:36`](../../plugins/Plane/PlaneTool.gd#L36).
+The source is [`PlaneTool.gd:36`](../../../plugins/Plane/PlaneTool.gd#L36).
 
 The grid follows `floor_plane_changed`.
-The source is [`GridRenderer.gd:18`](../../ui/Viewport/GridRenderer.gd#L18).
+The source is [`GridRenderer.gd:18`](../../../ui/Viewport/GridRenderer.gd#L18).
 
 The floor pick uses `State.floor_axis` and `State.floor_index`.
 A slice pick meets the slice plane, so a voxel on another layer cannot block it.
-The source is [`VoxelPicking.gd:28`](../../Globals/State/Tools/VoxelPicking.gd#L28).
+The source is [`VoxelPicking.gd:28`](../../../Globals/State/Tools/VoxelPicking.gd#L28).
 
 #### Write scope
 
 `EditContext` holds the symmetry, the selection, the floor slice, and the centered document size.
 `State._live_context` fills it, and `State.begin_edit` freezes it.
-[`VoxelFrame.set_cells`](../../Globals/State/Document/VoxelFrame.gd) is the one write gate.
+[`VoxelFrame.set_cells`](../../../Globals/State/Document/VoxelFrame.gd) is the one write gate.
 It applies `EditContext.filter` when the job carries a context.
 A document load, an import, and a history restore pass no job, so they are never limited.
 A new writable-cell rule is one predicate in `EditContext`, not one check per tool.
@@ -549,7 +549,7 @@ It sets the bounds from the content of all frames.
 The button is disabled when no frame has content.
 The normals row offers flat and smooth modes as icon buttons in one exclusive group.
 The normals label names that row.
-The source is [`DocumentSettingsModal.gd`](../../ui/MenuBar/DocumentSettingsModal.gd).
+The source is [`DocumentSettingsModal.gd`](../../../ui/MenuBar/DocumentSettingsModal.gd).
 
 The viewport darkens the scene outside `VoxelDocument.workspace_bounds`.
 The floor grid uses the same box.
@@ -567,7 +567,7 @@ Terrain clips its planning at the slice and size boundary.
 The Symmetry tool shows the mirror planes and moves their origin.
 The X, Y, and Z keys toggle one axis.
 A drag moves the origin.
-The source is [`SymmetryTool.gd:91`](../../plugins/Symmetry/SymmetryTool.gd#L91).
+The source is [`SymmetryTool.gd:91`](../../../plugins/Symmetry/SymmetryTool.gd#L91).
 
 ```mermaid
 flowchart LR
@@ -602,24 +602,24 @@ flowchart LR
 
 The symmetry tool overrides `handle_input`.
 It does not open an edit and it does not add an undo action.
-The source is [`SymmetryTool.gd:91`](../../plugins/Symmetry/SymmetryTool.gd#L91).
+The source is [`SymmetryTool.gd:91`](../../../plugins/Symmetry/SymmetryTool.gd#L91).
 
 Drawing tools consume the symmetry through `State.drawing_context`.
 An open edit supplies its frozen context.
 A later symmetry change cannot alter that stroke.
-The source is [`State.gd:350`](../../Globals/State/State.gd#L350).
+The source is [`State.gd:350`](../../../Globals/State/State.gd#L350).
 
 `VoxelFrame.EditContext.expand` applies the axis mask and the selection filter.
-The source is [`VoxelFrame.gd`](../../Globals/State/Document/VoxelFrame.gd).
+The source is [`VoxelFrame.gd`](../../../Globals/State/Document/VoxelFrame.gd).
 
 The symmetry origin snaps to half units.
-The source is [`State.gd:195`](../../Globals/State/State.gd#L195).
+The source is [`State.gd:195`](../../../Globals/State/State.gd#L195).
 
 ### Eyedropper
 
 The Eyedropper copies the full material of one cell to the current material.
 It changes no cell.
-The source is [`EyedropperTool.gd:10`](../../plugins/Eyedropper/EyedropperTool.gd#L10).
+The source is [`EyedropperTool.gd:10`](../../../plugins/Eyedropper/EyedropperTool.gd#L10).
 
 ```mermaid
 flowchart LR
@@ -650,19 +650,19 @@ The base press opens an empty edit before the pick.
 A false result returns before `applied_cells`, so the base publishes no `cells_changed`.
 No `cells_changed` means no playback stop.
 The edit closes with no change, so it adds no stroke history action.
-The source is [`VoxelTool.gd`](../../Globals/State/Tools/VoxelTool.gd) and [`VoxelTool.gd`](../../Globals/State/Tools/VoxelTool.gd).
+The source is [`VoxelTool.gd`](../../../Globals/State/Tools/VoxelTool.gd) and [`VoxelTool.gd`](../../../Globals/State/Tools/VoxelTool.gd).
 
 Current base contract: `apply(target, hit) -> bool` reports whether the tool changed the model.
 `_apply_pick` publishes `applied_cells` only after `true`.
-The source is [`VoxelTool.gd`](../../Globals/State/Tools/VoxelTool.gd).
+The source is [`VoxelTool.gd`](../../../Globals/State/Tools/VoxelTool.gd).
 
 `State.set_material` records one `Set Material` action with `MERGE_ENDS`.
-The source is [`State.gd:660`](../../Globals/State/State.gd#L660).
+The source is [`State.gd:660`](../../../Globals/State/State.gd#L660).
 
 The palette does not change.
 An exact palette match selects the matching swatch.
 An absent material selects no swatch.
-The source is [`State.gd:672`](../../Globals/State/State.gd#L672).
+The source is [`State.gd:672`](../../../Globals/State/State.gd#L672).
 
 ## Implemented mechanisms
 
@@ -694,7 +694,7 @@ The verification history is in the composition guide.
 - Fill policy: adaptive slices from 64 to 512 cells, one 2000 us budget shared by the seeds of a frame, coalesced chunk notifications at three frames and 20 ms, `open_stroke`, and `abort_stroke`. Revision, operation id, seed queues, cancel, and one `Stroke` action stay local.
 - Wand policy: fixed 256-cell slices, one 2000 us budget per frame, one `State.begin_edit`, one final `Wand selection` action, and a local retire and join path.
 - Preserved contract: These callers apply every found key once. A stale callback leaves the slice pending for the next attempt. A cancelled owner discards its own cursor. The producer stops on cancel. The consumer does not wait on a full queue.
-- Evidence: [`VoxelRegionSearch.BatchCursor`](../../Globals/State/VoxelRegionSearch.gd), [`FillTool._drain_fill_batches`](../../plugins/paint/FillTool.gd), and [`WandSelectTool._drain_selection_batches`](../../plugins/selection/tools/WandSelectTool.gd).
+- Evidence: [`VoxelRegionSearch.BatchCursor`](../../../Globals/State/VoxelRegionSearch.gd), [`FillTool._drain_fill_batches`](../../../plugins/paint/FillTool.gd), and [`WandSelectTool._drain_selection_batches`](../../../plugins/selection/tools/WandSelectTool.gd).
 
 ### E. Base pick publication gate
 
@@ -702,7 +702,7 @@ The verification history is in the composition guide.
 - Current mechanism: `VoxelTool._apply_pick` calls `apply(target, hit) -> bool`. A `false` result returns before `applied_cells`, so it publishes no cell change. A `true` result appends `applied_cells` and flushes them.
 - Eyedropper: `EyedropperTool.apply` copies the full material through `State.set_material` and returns `false`. It publishes no `cells_changed`, so it does not stop playback. The empty edit remains. No state-only flag was added.
 - Preserved contract: A tool that returns `false` changes no cells. A tool that writes cells returns `true`. `Set Material` remains one undo action.
-- Evidence: [`VoxelTool._apply_pick`](../../Globals/State/Tools/VoxelTool.gd), [`VoxelTool.apply`](../../Globals/State/Tools/VoxelTool.gd), and [`VoxelTool.applied_cells`](../../Globals/State/Tools/VoxelTool.gd).
+- Evidence: [`VoxelTool._apply_pick`](../../../Globals/State/Tools/VoxelTool.gd), [`VoxelTool.apply`](../../../Globals/State/Tools/VoxelTool.gd), and [`VoxelTool.applied_cells`](../../../Globals/State/Tools/VoxelTool.gd).
 
 ### F. Publish by chunk location
 
@@ -728,7 +728,7 @@ Each one lists the consumers, the contract to preserve, the existing mechanism, 
 - Existing mechanism: `VoxelMeshBuilder` sets `atlas` and `atlas_size` together. `VoxelAtlas.create_material` builds the textures and the channels.
 - Tradeoff: The raw-array fallback has no production caller. `tests/renderer_progress.gd` sets `atlas_size` and the raw arrays directly. Removing the fallback needs a test change. Keeping it needs a comment that names the test path.
 
-Evidence: [`VoxelPreview.gd`](../../Globals/Rendering/VoxelPreview.gd), [`VoxelRenderer.gd:464`](../../ui/Viewport/VoxelRenderer.gd#L464), [`VoxelAtlas.gd:164`](../../Globals/Rendering/VoxelAtlas.gd#L164), and [`renderer_progress.gd:768`](../../tests/renderer_progress.gd#L768).
+Evidence: [`VoxelPreview.gd`](../../../Globals/Rendering/VoxelPreview.gd), [`VoxelRenderer.gd:464`](../../../ui/Viewport/VoxelRenderer.gd#L464), [`VoxelAtlas.gd:164`](../../../Globals/Rendering/VoxelAtlas.gd#L164), and [`renderer_progress.gd:768`](../../../tests/renderer_progress.gd#L768).
 
 ### 2. Share single-tool mount and unmount in `VoxelPlugin`
 
@@ -737,7 +737,7 @@ Evidence: [`VoxelPreview.gd`](../../Globals/Rendering/VoxelPreview.gd), [`VoxelR
 - Existing mechanism: `VoxelPlugin.add_tool_bar_item`, `add_editor_node`, `add_option_bar_item`, `_safe_add`, and `_safe_remove`.
 - Tradeoff: A helper that also calls `finish_on_switch` would change Line and Selection behavior. It would not fit Transform. A helper for mount and unmount only is safe. Symmetry needs a separate active flag.
 
-Evidence: [`PlanePlugin.gd:26`](../../plugins/Plane/PlanePlugin.gd#L26), [`EyedropperPlugin.gd:24`](../../plugins/Eyedropper/EyedropperPlugin.gd#L24), [`LineTool.gd`](../../plugins/brush/LineTool.gd), [`SelectTool.gd:149`](../../plugins/selection/tools/SelectTool.gd#L149), and [`TransformTool.gd:290`](../../plugins/Transform/tools/TransformTool.gd#L290).
+Evidence: [`PlanePlugin.gd:26`](../../../plugins/Plane/PlanePlugin.gd#L26), [`EyedropperPlugin.gd:24`](../../../plugins/Eyedropper/EyedropperPlugin.gd#L24), [`LineTool.gd`](../../../plugins/brush/LineTool.gd), [`SelectTool.gd:149`](../../../plugins/selection/tools/SelectTool.gd#L149), and [`TransformTool.gd:290`](../../../plugins/Transform/tools/TransformTool.gd#L290).
 
 ### 3. Add an explicit state-only tool flag
 
@@ -747,7 +747,7 @@ Evidence: [`PlanePlugin.gd:26`](../../plugins/Plane/PlanePlugin.gd#L26), [`Eyedr
 - Existing mechanism: `VoxelTool.handle_input` opens an edit before the pick. `VoxelEditTransaction.finish` returns null when nothing changed. Plane and Symmetry already override `handle_input`.
 - Tradeoff: A flag would remove the empty edit. It must not change Plane or Symmetry. It needs tests for Escape and busy states.
 
-Evidence: [`VoxelTool.gd`](../../Globals/State/Tools/VoxelTool.gd) and [`VoxelEditTransaction.gd:83`](../../Globals/State/VoxelEditTransaction.gd#L83).
+Evidence: [`VoxelTool.gd`](../../../Globals/State/Tools/VoxelTool.gd) and [`VoxelEditTransaction.gd:83`](../../../Globals/State/VoxelEditTransaction.gd#L83).
 
 ### 4. Use one bounded mesh cache policy
 
@@ -756,7 +756,7 @@ Evidence: [`VoxelTool.gd`](../../Globals/State/Tools/VoxelTool.gd) and [`VoxelEd
 - Existing mechanism: Static dictionaries, `_cache_order` and `_surface_use_order`, byte counters, and eviction loops.
 - Tradeoff: The keys differ. Preview keys include style, color, smooth normals, and a cell hash. Renderer keys are packed chunk signatures. A generic cache needs a key type and a size function. The duplication is small but real.
 
-Evidence: [`VoxelPreview.gd`](../../Globals/Rendering/VoxelPreview.gd) and [`VoxelRenderer.gd:439`](../../ui/Viewport/VoxelRenderer.gd#L439).
+Evidence: [`VoxelPreview.gd`](../../../Globals/Rendering/VoxelPreview.gd) and [`VoxelRenderer.gd:439`](../../../ui/Viewport/VoxelRenderer.gd#L439).
 
 ## Behavior evidence
 
@@ -765,16 +765,16 @@ The verification history covers the selected scenes. It is not a full suite.
 
 | Test | Evidence |
 | --- | --- |
-| [`tests/symmetry.gd`](../../tests/symmetry.gd) | Symmetry planes, origin drag, no undo action for origin setup, and one undo action for mirrored drawing |
-| [`tests/floor_plane.gd`](../../tests/floor_plane.gd) | Floor picks from both sides, axis keys and buttons, plane drag, and grid follow |
-| [`tests/material_painting.gd`](../../tests/material_painting.gd) | Eyedropper samples the full material and preserves the palette and existing voxels. The older test does not assert the undo count or the cell notification |
-| [`tests/preview_schedule.gd`](../../tests/preview_schedule.gd) | Coalescing, strict latest-only installs, and immutable installed cells |
-| [`tests/tool_switch_finish.gd`](../../tests/tool_switch_finish.gd) | Pencil worker stroke commits on a tool switch, Escape rollback, and frame change cancel |
-| [`tests/worker_coordination.gd`](../../tests/worker_coordination.gd) | A worker joins after the caller detaches and the operation lifecycle clears |
-| [`tests/chunk_rebuild_scope.gd`](../../tests/chunk_rebuild_scope.gd) | An edit reports only the chunks whose mesher input changed |
-| [`tests/drawing_visibility.gd`](../../tests/drawing_visibility.gd) | Completed surfaces stay visible until replacement meshes are ready |
-| [`tests/surface_rendering.gd`](../../tests/surface_rendering.gd) | Merged faces, closed seams, and cached frame meshes |
-| [`tests/renderer_progress.gd`](../../tests/renderer_progress.gd) | Renderer surface phases, shared snapshots, and work slice truncation |
+| [`tests/symmetry.gd`](../../../tests/symmetry.gd) | Symmetry planes, origin drag, no undo action for origin setup, and one undo action for mirrored drawing |
+| [`tests/floor_plane.gd`](../../../tests/floor_plane.gd) | Floor picks from both sides, axis keys and buttons, plane drag, and grid follow |
+| [`tests/material_painting.gd`](../../../tests/material_painting.gd) | Eyedropper samples the full material and preserves the palette and existing voxels. The older test does not assert the undo count or the cell notification |
+| [`tests/preview_schedule.gd`](../../../tests/preview_schedule.gd) | Coalescing, strict latest-only installs, and immutable installed cells |
+| [`tests/tool_switch_finish.gd`](../../../tests/tool_switch_finish.gd) | Pencil worker stroke commits on a tool switch, Escape rollback, and frame change cancel |
+| [`tests/worker_coordination.gd`](../../../tests/worker_coordination.gd) | A worker joins after the caller detaches and the operation lifecycle clears |
+| [`tests/chunk_materials.gd`](../../../tests/chunk_materials.gd) | An edit reports only the chunks whose mesher input changed |
+| [`tests/drawing_visibility.gd`](../../../tests/drawing_visibility.gd) | Completed surfaces stay visible until replacement meshes are ready |
+| [`tests/surface_rendering.gd`](../../../tests/surface_rendering.gd) | Merged faces, closed seams, and cached frame meshes |
+| [`tests/renderer_progress.gd`](../../../tests/renderer_progress.gd) | Renderer surface phases, shared snapshots, and work slice truncation |
 
 ## Current code and unconnected helpers
 

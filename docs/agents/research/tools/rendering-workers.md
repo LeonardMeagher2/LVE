@@ -37,7 +37,7 @@ They are the baseline for every experiment below.
 | Mechanism | Current behavior | Evidence |
 | --- | --- | --- |
 | Edit job | `State.run_edit_job` starts one high-priority pool task, pumps progress, and joins once. The join is idempotent. | `State.gd`, `MEMORY.md` 2026-10-23 |
-| Input classes | An accepted stroke queue, a replaceable hover, and absolute Grab targets are separate. | `docs/tool-flows/composition.md` B and H |
+| Input classes | An accepted stroke queue, a replaceable hover, and absolute Grab targets are separate. | `../../tool-flows/composition.md` B and H |
 | Preview identity | The preview token is not the mesh key. The mesh cache keys exact content. A cache hit reports the requesting token. | `VoxelPreview.gd`, `MEMORY.md` 2026-10-23 |
 | Frame snapshots | `VoxelFrame.copy_chunks` keeps chunk references and marks them copy-on-write. | `VoxelFrame.gd`, `MEMORY.md` 2026-10-24 |
 | Chunk requests | Each chunk has one in-flight request and one latest-pending slot. | `VoxelRenderer._inflight_surface_keys`, `_pending_surface_keys` |
@@ -569,9 +569,9 @@ S9 documents one editor. It does not prove that every editor uses one cursor des
 
 ## Project evidence
 
-- `docs/tool-flows/composition.md`, sections A to H.
-- `docs/tool-flows/shared-and-utilities.md`, model render and preview paths.
-- `MEMORY.md`, entries dated 2026-10-17 through 2026-10-24.
+- `../../tool-flows/composition.md`, sections A to H.
+- `../../tool-flows/shared-and-utilities.md`, model render and preview paths.
+- `../../MEMORY.md`, entries dated 2026-10-17 through 2026-10-24.
 - `ui/Viewport/VoxelRenderer.gd`, symbols `_launch_surface`, `_update_surfaces`, `_build_material`, `_install`, `_retire`, `is_settled`, `_job_limit`, `_surface_jobs`, `_profile`.
 - `Globals/State/State.gd`, symbols `WORK_SLICE_US`, `run_edit_job`, `finish_edit`.
 - `Globals/Rendering/VoxelMeshBuilder.gd`, symbol `run`.

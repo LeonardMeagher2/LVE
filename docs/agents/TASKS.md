@@ -6,7 +6,7 @@ max_active: 1
 
 Keep one active task at a time. Keep all remaining features until the scope review.
 Use Git history for completed work. See [MEMORY.md](MEMORY.md) for verified engine and workflow facts.
-See [GLTF_EXPORT.md](GLTF_EXPORT.md) for the mesh export format and import settings.
+See [GLTF_EXPORT.md](../../GLTF_EXPORT.md) for the mesh export format and import settings.
 
 ## Verification
 
@@ -26,7 +26,7 @@ See [GLTF_EXPORT.md](GLTF_EXPORT.md) for the mesh export format and import setti
   - The measured facts: a windowed child pays about 3.7 s before its first check. The suite now runs 152 scenes and takes 15.2 min with every scene green.
   - [x] Fix the terrain suite. The probes read removed `_stroke` fields, the ring was never posed, and Grab kept a 12-voxel cap. The full suite passes.
   - [ ] Merge the material, export, large, dialog, and selection scenes. Keep each scene below 25 s.
-- [ ] Audit the coverage against `docs/tool-flows/*.md`
+- [ ] Audit the coverage against `tool-flows/*.md`
 - [ ] Check orthographic rays and long-distance occlusion in the selection depth test.
 
 ## Tools

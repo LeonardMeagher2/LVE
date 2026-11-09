@@ -4,12 +4,15 @@ Leonard's Voxel Editor is a Godot voxel-animation editor. Godot is the only tool
 
 ## Workflow
 
-- Use [TASKS.md](TASKS.md) for the roadmap.
+- Use [docs/agents/TASKS.md](docs/agents/TASKS.md) for the roadmap.
 - Read adjacent files before editing. Follow their structure and style.
 - Reuse suitable resources, utilities, and engine features.
 - Add abstractions only for a concrete need. Explain non-obvious choices and their tradeoffs.
 - When committing, prefer whole-file staging over partial staging.
-- Record verified engine and workflow learnings in [MEMORY.md](MEMORY.md) during the task that finds them.
+- Record verified engine and workflow learnings in [docs/agents/MEMORY.md](docs/agents/MEMORY.md) during the task that finds them.
+- Read [docs/agents/PLAN.md](docs/agents/PLAN.md) for the product-lens audit.
+- Use [docs/agents/tool-flows/README.md](docs/agents/tool-flows/README.md) for current tool behavior.
+- Use [docs/agents/research/tools/README.md](docs/agents/research/tools/README.md) for evidence and design notes.
 
 ## Documentation
 

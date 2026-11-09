@@ -77,7 +77,7 @@ Current LVE settings add these exact values:
 - Transform rotate snap: quarter turns, or 1 degree steps with a 2 degree magnetic pull.
 - Symmetry origin snaps to half units.
 
-Evidence: [StampToolSettings](../../../plugins/brush/StampToolSettings.gd), [PaintToolSettings](../../../plugins/paint/PaintToolSettings.gd), [SelectionToolSettings](../../../plugins/selection/SelectionToolSettings.gd), [TransformToolSettings](../../../plugins/Transform/TransformToolSettings.gd), [State](../../../Globals/State/State.gd).
+Evidence: [StampToolSettings](../../../../plugins/brush/StampToolSettings.gd), [PaintToolSettings](../../../../plugins/paint/PaintToolSettings.gd), [SelectionToolSettings](../../../../plugins/selection/SelectionToolSettings.gd), [TransformToolSettings](../../../../plugins/Transform/TransformToolSettings.gd), [State](../../../../Globals/State/State.gd).
 
 ## Top findings
 
@@ -228,7 +228,7 @@ This is a useful comparison for LVE Box, Lasso, and Wand.
 
 Visibility and depth:
 
-- LVE Box and Lasso have `depth_test` true by default [SelectionToolSettings](../../../plugins/selection/SelectionToolSettings.gd). Hidden voxels behind visible voxels drop out.
+- LVE Box and Lasso have `depth_test` true by default [SelectionToolSettings](../../../../plugins/selection/SelectionToolSettings.gd). Hidden voxels behind visible voxels drop out.
 - LVE Box and Lasso have `include_empty` false by default. A true value keeps empty cells inside the frame bounds.
 - LVE Wand ignores both options.
 - Blender uses X-Ray to select occluded geometry [S6]. X-Ray is a view mode, not a per-tool option.
@@ -332,7 +332,7 @@ It also has axis modes and a diagonal symmetry command [S1].
 VoxEdit has mirror toggles for X, Y, and Z [S3].
 
 LVE matches the axis toggles and the visible planes.
-The LVE option bar also has origin spin boxes and a Reset button [Symmetry options](../../../plugins/Symmetry/Options.gd).
+The LVE option bar also has origin spin boxes and a Reset button [Symmetry options](../../../../plugins/Symmetry/Options.gd).
 Aseprite documents a reset action and a draggable axis [S4].
 Difference: LVE Symmetry records no undo action.
 This is a state-only policy, not a missing control.
@@ -530,7 +530,7 @@ Check the hint on Move, Rotate, and Scale.
 
 **Evidence.** Krita names the spray area, particle amount, and spacing [S5].
 GIMP names Motion only, Rate, and Flow [S7].
-LVE uses numeric fields with icons and tooltips for spot diameter, search width, and speed [Paint options](../../../plugins/paint/Options.gd).
+LVE uses numeric fields with icons and tooltips for spot diameter, search width, and speed [Paint options](../../../../plugins/paint/Options.gd).
 The tooltips already give the exact definitions.
 
 **Fit to current flow.** Add one read-only summary label to the Spray section.

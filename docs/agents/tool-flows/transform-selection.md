@@ -136,17 +136,17 @@ The preview therefore writes the live frame inside the open edit.
 
 ### Transform source edges
 
-- Input: [`TransformTool.handle_input`](../../plugins/Transform/tools/TransformTool.gd) routes mouse and key events.
-- Capture: [`TransformTool._press`](../../plugins/Transform/tools/TransformTool.gd) calls `open_stroke` and `State.begin_operation`. It then calls `VoxelFrame.copy_frame` and `State.selection.capture`.
-- Source worker: [`TransformTool._press`](../../plugins/Transform/tools/TransformTool.gd) sets `_grab_waiting` before the source job. Above `INLINE_EDIT_LIMIT`, it awaits `State.run_edit_job`.
-- Deferred release: [`TransformTool._release`](../../plugins/Transform/tools/TransformTool.gd) returns while `_grab_waiting`. [`TransformTool._resume_queued_drag`](../../plugins/Transform/tools/TransformTool.gd) releases after the grab.
-- Prepare: [`TransformTool.SourceJob.run`](../../plugins/Transform/tools/TransformTool.gd) reads the selected cells or the whole frame.
-- Preview: [`TransformTool._apply_preview`](../../plugins/Transform/tools/TransformTool.gd) builds `TransformJob`, uses `State.run_edit_job` above `INLINE_EDIT_LIMIT`, and calls `VoxelFrame.restore`.
-- Apply: [`TransformTool.TransformJob.run`](../../plugins/Transform/tools/TransformTool.gd) calls `compute_destination`, `_mirror_destination`, and `VoxelFrame.set_cells`.
-- Release: [`TransformTool._release`](../../plugins/Transform/tools/TransformTool.gd) sets `_pending`.
-- Commit: [`TransformTool._commit_now`](../../plugins/Transform/tools/TransformTool.gd) calls `_end`, which calls `VoxelTool.close_stroke`.
-- Cancel: [`TransformTool._cancel`](../../plugins/Transform/tools/TransformTool.gd) calls `abort_stroke` and `State.finish_operation`.
-- Variants: [`MoveTool._update_params`](../../plugins/Transform/tools/MoveTool.gd), [`RotateTool.RotateJob.compute_destination`](../../plugins/Transform/tools/RotateTool.gd), and [`ScaleTool.ScaleJob.compute_destination`](../../plugins/Transform/tools/ScaleTool.gd).
+- Input: [`TransformTool.handle_input`](../../../plugins/Transform/tools/TransformTool.gd) routes mouse and key events.
+- Capture: [`TransformTool._press`](../../../plugins/Transform/tools/TransformTool.gd) calls `open_stroke` and `State.begin_operation`. It then calls `VoxelFrame.copy_frame` and `State.selection.capture`.
+- Source worker: [`TransformTool._press`](../../../plugins/Transform/tools/TransformTool.gd) sets `_grab_waiting` before the source job. Above `INLINE_EDIT_LIMIT`, it awaits `State.run_edit_job`.
+- Deferred release: [`TransformTool._release`](../../../plugins/Transform/tools/TransformTool.gd) returns while `_grab_waiting`. [`TransformTool._resume_queued_drag`](../../../plugins/Transform/tools/TransformTool.gd) releases after the grab.
+- Prepare: [`TransformTool.SourceJob.run`](../../../plugins/Transform/tools/TransformTool.gd) reads the selected cells or the whole frame.
+- Preview: [`TransformTool._apply_preview`](../../../plugins/Transform/tools/TransformTool.gd) builds `TransformJob`, uses `State.run_edit_job` above `INLINE_EDIT_LIMIT`, and calls `VoxelFrame.restore`.
+- Apply: [`TransformTool.TransformJob.run`](../../../plugins/Transform/tools/TransformTool.gd) calls `compute_destination`, `_mirror_destination`, and `VoxelFrame.set_cells`.
+- Release: [`TransformTool._release`](../../../plugins/Transform/tools/TransformTool.gd) sets `_pending`.
+- Commit: [`TransformTool._commit_now`](../../../plugins/Transform/tools/TransformTool.gd) calls `_end`, which calls `VoxelTool.close_stroke`.
+- Cancel: [`TransformTool._cancel`](../../../plugins/Transform/tools/TransformTool.gd) calls `abort_stroke` and `State.finish_operation`.
+- Variants: [`MoveTool._update_params`](../../../plugins/Transform/tools/MoveTool.gd), [`RotateTool.RotateJob.compute_destination`](../../../plugins/Transform/tools/RotateTool.gd), and [`ScaleTool.ScaleJob.compute_destination`](../../../plugins/Transform/tools/ScaleTool.gd).
 
 ## Clipboard copy, cut, and paste
 
@@ -192,11 +192,11 @@ The caller installs only after the runner returns and the document, frame, and c
 
 #### Copy and cut source edges
 
-- Command: [`ClipboardPlugin.copy_voxels`](../../plugins/Clipboard/ClipboardPlugin.gd) and [`cut_voxels`](../../plugins/Clipboard/ClipboardPlugin.gd) call `_copy_voxels`.
-- Context signal: [`ClipboardPlugin._copy_voxels`](../../plugins/Clipboard/ClipboardPlugin.gd) emits `State.edit_context_changing` before the capture.
-- Capture: [`ClipboardPlugin._copy_voxels`](../../plugins/Clipboard/ClipboardPlugin.gd) calls `VoxelFrame.copy_frame` and `VoxelSelection.capture`.
-- Worker: [`ClipboardCopyJob.run`](../../plugins/Clipboard/ClipboardPlugin.gd) calls `StampCopyJob.CopyJob.run`. A cut then calls `VoxelFrame.set_cells`.
-- Install: [`ClipboardPlugin._copy_voxels`](../../plugins/Clipboard/ClipboardPlugin.gd) stores read-only patterns and calls `DisplayServer.clipboard_set`.
+- Command: [`ClipboardPlugin.copy_voxels`](../../../plugins/Clipboard/ClipboardPlugin.gd) and [`cut_voxels`](../../../plugins/Clipboard/ClipboardPlugin.gd) call `_copy_voxels`.
+- Context signal: [`ClipboardPlugin._copy_voxels`](../../../plugins/Clipboard/ClipboardPlugin.gd) emits `State.edit_context_changing` before the capture.
+- Capture: [`ClipboardPlugin._copy_voxels`](../../../plugins/Clipboard/ClipboardPlugin.gd) calls `VoxelFrame.copy_frame` and `VoxelSelection.capture`.
+- Worker: [`ClipboardCopyJob.run`](../../../plugins/Clipboard/ClipboardPlugin.gd) calls `StampCopyJob.CopyJob.run`. A cut then calls `VoxelFrame.set_cells`.
+- Install: [`ClipboardPlugin._copy_voxels`](../../../plugins/Clipboard/ClipboardPlugin.gd) stores read-only patterns and calls `DisplayServer.clipboard_set`.
 - Cut: the same method calls `State.begin_edit`, `VoxelFrame.restore`, `State.clear_selection`, and `State.finish_edit`.
 - Cancel: the runner calls the context callback, which calls `job.cancel` when the document or frame changes. The runner joins exactly once.
 
@@ -254,15 +254,15 @@ They are not a general hook framework.
 
 #### Paste source edges
 
-- Command: [`ClipboardPlugin.paste_voxels`](../../plugins/Clipboard/ClipboardPlugin.gd) reads the clipboard and starts the import.
-- Import: [`ClipboardImportJob.run`](../../plugins/Clipboard/ClipboardPlugin.gd) parses and validates the JSON. `ClipboardPlugin.paste_voxels` awaits `State.run_edit_job` for the import.
-- Begin: [`PasteTool.begin_paste`](../../plugins/Clipboard/PasteTool.gd) captures `_line_snapshot` and starts the placement operation.
-- Preview: [`LineTool._start_preview`](../../plugins/brush/LineTool.gd) builds `PasteJob` and awaits `State.run_edit_job` above `INLINE_EDIT_LIMIT` with `_cancel_preview_if_stale`.
-- Operation: [`PasteTool._begin_preview_operation`](../../plugins/Clipboard/PasteTool.gd) returns `_placement_operation_id`. [`PasteTool._finish_preview_operation`](../../plugins/Clipboard/PasteTool.gd) keeps it open.
-- Preview output: [`PasteTool._show_preview`](../../plugins/Clipboard/PasteTool.gd) calls `$Cursor.show_voxels`.
-- Worker body: [`PasteJob.run`](../../plugins/Clipboard/PasteTool.gd) calls `BrushJob.run` and builds `pasted_selection`.
-- Commit: [`PasteTool._commit_line`](../../plugins/Clipboard/PasteTool.gd) calls `State.begin_edit`, `VoxelFrame.restore`, `State.selection.restore`, and `State.finish_edit`.
-- Cancel: [`PasteTool._cancel_edit`](../../plugins/Clipboard/PasteTool.gd) finishes `_placement_operation_id` once and calls `LineTool._cancel_edit`.
+- Command: [`ClipboardPlugin.paste_voxels`](../../../plugins/Clipboard/ClipboardPlugin.gd) reads the clipboard and starts the import.
+- Import: [`ClipboardImportJob.run`](../../../plugins/Clipboard/ClipboardPlugin.gd) parses and validates the JSON. `ClipboardPlugin.paste_voxels` awaits `State.run_edit_job` for the import.
+- Begin: [`PasteTool.begin_paste`](../../../plugins/Clipboard/PasteTool.gd) captures `_line_snapshot` and starts the placement operation.
+- Preview: [`LineTool._start_preview`](../../../plugins/brush/LineTool.gd) builds `PasteJob` and awaits `State.run_edit_job` above `INLINE_EDIT_LIMIT` with `_cancel_preview_if_stale`.
+- Operation: [`PasteTool._begin_preview_operation`](../../../plugins/Clipboard/PasteTool.gd) returns `_placement_operation_id`. [`PasteTool._finish_preview_operation`](../../../plugins/Clipboard/PasteTool.gd) keeps it open.
+- Preview output: [`PasteTool._show_preview`](../../../plugins/Clipboard/PasteTool.gd) calls `$Cursor.show_voxels`.
+- Worker body: [`PasteJob.run`](../../../plugins/Clipboard/PasteTool.gd) calls `BrushJob.run` and builds `pasted_selection`.
+- Commit: [`PasteTool._commit_line`](../../../plugins/Clipboard/PasteTool.gd) calls `State.begin_edit`, `VoxelFrame.restore`, `State.selection.restore`, and `State.finish_edit`.
+- Cancel: [`PasteTool._cancel_edit`](../../../plugins/Clipboard/PasteTool.gd) finishes `_placement_operation_id` once and calls `LineTool._cancel_edit`.
 
 ## Selection Box, Lasso, and Wand
 
@@ -320,15 +320,15 @@ Escape or a context change cancels the job.
 
 #### Box and Lasso source edges
 
-- Input: [`SelectTool.handle_input`](../../plugins/selection/tools/SelectTool.gd) routes mouse and key events.
-- Press: [`SelectTool._screen_button`](../../plugins/selection/tools/SelectTool.gd) calls `open_stroke` and stores `_screen_press` and `_last_pos`.
-- Shape: [`BoxSelectTool._commit_shape`](../../plugins/selection/tools/BoxSelectTool.gd) sends a rectangle. [`LassoSelectTool._commit_shape`](../../plugins/selection/tools/LassoSelectTool.gd) sends a polygon.
-- Job capture: [`SelectTool._commit_screen`](../../plugins/selection/tools/SelectTool.gd) calls `ScreenSelection.view_of`, `State.selection_context`, and `State.selection.capture`.
-- Job: [`SelectTool._commit_screen`](../../plugins/selection/tools/SelectTool.gd) builds `ScreenSelection.Job` and uses `State.run_edit_job` above `IMMEDIATE_LIMIT`.
-- Filter: [`ScreenSelection.Job.run`](../../plugins/selection/ScreenSelection.gd) calls `_covers`, `_visible`, `EditContext.expand`, and the mode step.
-- Install: [`SelectTool._finish_screen_selection`](../../plugins/selection/tools/SelectTool.gd) calls `State.begin_edit`, `VoxelSelection.restore`, and `State.finish_edit`.
-- Cancel: [`SelectTool._cancel_screen_job`](../../plugins/selection/tools/SelectTool.gd) cancels the job and finishes the operation.
-- Switch: [`SelectionPlugin.deactivate_tool`](../../plugins/selection/SelectionPlugin.gd) calls `finish_on_switch`.
+- Input: [`SelectTool.handle_input`](../../../plugins/selection/tools/SelectTool.gd) routes mouse and key events.
+- Press: [`SelectTool._screen_button`](../../../plugins/selection/tools/SelectTool.gd) calls `open_stroke` and stores `_screen_press` and `_last_pos`.
+- Shape: [`BoxSelectTool._commit_shape`](../../../plugins/selection/tools/BoxSelectTool.gd) sends a rectangle. [`LassoSelectTool._commit_shape`](../../../plugins/selection/tools/LassoSelectTool.gd) sends a polygon.
+- Job capture: [`SelectTool._commit_screen`](../../../plugins/selection/tools/SelectTool.gd) calls `ScreenSelection.view_of`, `State.selection_context`, and `State.selection.capture`.
+- Job: [`SelectTool._commit_screen`](../../../plugins/selection/tools/SelectTool.gd) builds `ScreenSelection.Job` and uses `State.run_edit_job` above `IMMEDIATE_LIMIT`.
+- Filter: [`ScreenSelection.Job.run`](../../../plugins/selection/ScreenSelection.gd) calls `_covers`, `_visible`, `EditContext.expand`, and the mode step.
+- Install: [`SelectTool._finish_screen_selection`](../../../plugins/selection/tools/SelectTool.gd) calls `State.begin_edit`, `VoxelSelection.restore`, and `State.finish_edit`.
+- Cancel: [`SelectTool._cancel_screen_job`](../../../plugins/selection/tools/SelectTool.gd) cancels the job and finishes the operation.
+- Switch: [`SelectionPlugin.deactivate_tool`](../../../plugins/selection/SelectionPlugin.gd) calls `finish_on_switch`.
 
 ### Wand
 
@@ -374,15 +374,15 @@ See the [composition guide](composition.md) for signatures, ownership, and reuse
 
 #### Wand source edges
 
-- Input: [`WandSelectTool.handle_input`](../../plugins/selection/tools/WandSelectTool.gd) calls `_pick_start` and `_commit`.
-- Capture: [`WandSelectTool._commit`](../../plugins/selection/tools/WandSelectTool.gd) calls `VoxelFrame.copy_frame`, `State.selection.capture`, and `State.selection_context`.
-- Worker: [`WandJob.run`](../../plugins/selection/tools/WandSelectTool.gd) calls `VoxelRegionSearch.find`, `EditContext.expand`, and the mode step.
-- Service: [`WandSelectTool._service_selection`](../../plugins/selection/tools/WandSelectTool.gd) drains `BatchCursor` and awaits frames.
-- Stream: [`WandSelectTool._drain_selection_batches`](../../plugins/selection/tools/WandSelectTool.gd) calls `State.selection.add` or `erase`.
-- Publish: [`WandSelectTool._publish_selection`](../../plugins/selection/tools/WandSelectTool.gd) emits `State.selection_changed`.
-- Finish: [`WandSelectTool._finish_selection`](../../plugins/selection/tools/WandSelectTool.gd) calls `VoxelSelection.restore` and `State.finish_edit`.
-- Cancel: [`WandSelectTool._cancel_selection`](../../plugins/selection/tools/WandSelectTool.gd) calls `_retire_job`, `State.cancel_edit`, and `_publish_selection`.
-- Reaper: [`WandSelectTool._reap_retired_jobs`](../../plugins/selection/tools/WandSelectTool.gd) joins retired workers.
+- Input: [`WandSelectTool.handle_input`](../../../plugins/selection/tools/WandSelectTool.gd) calls `_pick_start` and `_commit`.
+- Capture: [`WandSelectTool._commit`](../../../plugins/selection/tools/WandSelectTool.gd) calls `VoxelFrame.copy_frame`, `State.selection.capture`, and `State.selection_context`.
+- Worker: [`WandJob.run`](../../../plugins/selection/tools/WandSelectTool.gd) calls `VoxelRegionSearch.find`, `EditContext.expand`, and the mode step.
+- Service: [`WandSelectTool._service_selection`](../../../plugins/selection/tools/WandSelectTool.gd) drains `BatchCursor` and awaits frames.
+- Stream: [`WandSelectTool._drain_selection_batches`](../../../plugins/selection/tools/WandSelectTool.gd) calls `State.selection.add` or `erase`.
+- Publish: [`WandSelectTool._publish_selection`](../../../plugins/selection/tools/WandSelectTool.gd) emits `State.selection_changed`.
+- Finish: [`WandSelectTool._finish_selection`](../../../plugins/selection/tools/WandSelectTool.gd) calls `VoxelSelection.restore` and `State.finish_edit`.
+- Cancel: [`WandSelectTool._cancel_selection`](../../../plugins/selection/tools/WandSelectTool.gd) calls `_retire_job`, `State.cancel_edit`, and `_publish_selection`.
+- Reaper: [`WandSelectTool._reap_retired_jobs`](../../../plugins/selection/tools/WandSelectTool.gd) joins retired workers.
 
 ### Selection combine modes
 
@@ -452,13 +452,13 @@ The inventory lists the exact files used for the claims above.
 
 | Area | Files read |
 | --- | --- |
-| Registration | [`project.godot`](../../project.godot), [`VoxelPlugin.gd`](../../VoxelPlugin.gd), [`State.gd`](../../Globals/State/State.gd) |
-| Transform | [`TransformPlugin.gd`](../../plugins/Transform/TransformPlugin.gd), [`TransformTool.gd`](../../plugins/Transform/tools/TransformTool.gd), [`MoveTool.gd`](../../plugins/Transform/tools/MoveTool.gd), [`RotateTool.gd`](../../plugins/Transform/tools/RotateTool.gd), [`ScaleTool.gd`](../../plugins/Transform/tools/ScaleTool.gd), [`TransformDialog.gd`](../../plugins/Transform/tools/TransformDialog.gd), [`TransformToolSettings.gd`](../../plugins/Transform/TransformToolSettings.gd), [`Options.gd`](../../plugins/Transform/Options.gd), [`RotSprite.gd`](../../plugins/Transform/RotSprite.gd), [`settings.tres`](../../plugins/Transform/settings.tres) |
-| Transform scenes | [`MoveTool.tscn`](../../plugins/Transform/tools/MoveTool.tscn), [`RotateTool.tscn`](../../plugins/Transform/tools/RotateTool.tscn), [`ScaleTool.tscn`](../../plugins/Transform/tools/ScaleTool.tscn), [`TransformDialog.tscn`](../../plugins/Transform/tools/TransformDialog.tscn), [`Options.tscn`](../../plugins/Transform/Options.tscn) |
-| Clipboard | [`ClipboardPlugin.gd`](../../plugins/Clipboard/ClipboardPlugin.gd), [`PasteTool.gd`](../../plugins/Clipboard/PasteTool.gd), [`PasteTool.tscn`](../../plugins/Clipboard/PasteTool.tscn), [`LineTool.gd`](../../plugins/brush/LineTool.gd), [`BrushTool.gd`](../../plugins/brush/BrushTool.gd), [`StrokeTool.gd`](../../plugins/brush/StrokeTool.gd), [`StampCopyJob.gd`](../../plugins/brush/StampCopyJob.gd), [`BrushToolSettings.gd`](../../plugins/brush/BrushToolSettings.gd) |
-| Selection | [`SelectionPlugin.gd`](../../plugins/selection/SelectionPlugin.gd), [`SelectTool.gd`](../../plugins/selection/tools/SelectTool.gd), [`BoxSelectTool.gd`](../../plugins/selection/tools/BoxSelectTool.gd), [`LassoSelectTool.gd`](../../plugins/selection/tools/LassoSelectTool.gd), [`WandSelectTool.gd`](../../plugins/selection/tools/WandSelectTool.gd), [`ScreenSelection.gd`](../../plugins/selection/ScreenSelection.gd), [`ScreenBand.gd`](../../plugins/selection/ScreenBand.gd), [`SelectionToolSettings.gd`](../../plugins/selection/SelectionToolSettings.gd), [`Options.gd`](../../plugins/selection/Options.gd), [`settings.tres`](../../plugins/selection/settings.tres) |
-| Selection scenes | [`BoxSelectTool.tscn`](../../plugins/selection/tools/BoxSelectTool.tscn), [`LassoSelectTool.tscn`](../../plugins/selection/tools/LassoSelectTool.tscn), [`WandSelectTool.tscn`](../../plugins/selection/tools/WandSelectTool.tscn), [`SelectionPreview.tscn`](../../plugins/selection/SelectionPreview.tscn), [`Options.tscn`](../../plugins/selection/Options.tscn) |
-| Shared state | [`VoxelEditTransaction.gd`](../../Globals/State/VoxelEditTransaction.gd), [`VoxelSelection.gd`](../../Globals/State/VoxelSelection.gd), [`VoxelRegionSearch.gd`](../../Globals/State/VoxelRegionSearch.gd), [`VoxelFrame.gd`](../../Globals/State/Document/VoxelFrame.gd), [`VoxelTool.gd`](../../Globals/State/Tools/VoxelTool.gd) |
+| Registration | [`project.godot`](../../../project.godot), [`VoxelPlugin.gd`](../../../VoxelPlugin.gd), [`State.gd`](../../../Globals/State/State.gd) |
+| Transform | [`TransformPlugin.gd`](../../../plugins/Transform/TransformPlugin.gd), [`TransformTool.gd`](../../../plugins/Transform/tools/TransformTool.gd), [`MoveTool.gd`](../../../plugins/Transform/tools/MoveTool.gd), [`RotateTool.gd`](../../../plugins/Transform/tools/RotateTool.gd), [`ScaleTool.gd`](../../../plugins/Transform/tools/ScaleTool.gd), [`TransformDialog.gd`](../../../plugins/Transform/tools/TransformDialog.gd), [`TransformToolSettings.gd`](../../../plugins/Transform/TransformToolSettings.gd), [`Options.gd`](../../../plugins/Transform/Options.gd), [`RotSprite.gd`](../../../plugins/Transform/RotSprite.gd), [`settings.tres`](../../../plugins/Transform/settings.tres) |
+| Transform scenes | [`MoveTool.tscn`](../../../plugins/Transform/tools/MoveTool.tscn), [`RotateTool.tscn`](../../../plugins/Transform/tools/RotateTool.tscn), [`ScaleTool.tscn`](../../../plugins/Transform/tools/ScaleTool.tscn), [`TransformDialog.tscn`](../../../plugins/Transform/tools/TransformDialog.tscn), [`Options.tscn`](../../../plugins/Transform/Options.tscn) |
+| Clipboard | [`ClipboardPlugin.gd`](../../../plugins/Clipboard/ClipboardPlugin.gd), [`PasteTool.gd`](../../../plugins/Clipboard/PasteTool.gd), [`PasteTool.tscn`](../../../plugins/Clipboard/PasteTool.tscn), [`LineTool.gd`](../../../plugins/brush/LineTool.gd), [`BrushTool.gd`](../../../plugins/brush/BrushTool.gd), [`StrokeTool.gd`](../../../plugins/brush/StrokeTool.gd), [`StampCopyJob.gd`](../../../plugins/brush/StampCopyJob.gd), [`BrushToolSettings.gd`](../../../plugins/brush/BrushToolSettings.gd) |
+| Selection | [`SelectionPlugin.gd`](../../../plugins/selection/SelectionPlugin.gd), [`SelectTool.gd`](../../../plugins/selection/tools/SelectTool.gd), [`BoxSelectTool.gd`](../../../plugins/selection/tools/BoxSelectTool.gd), [`LassoSelectTool.gd`](../../../plugins/selection/tools/LassoSelectTool.gd), [`WandSelectTool.gd`](../../../plugins/selection/tools/WandSelectTool.gd), [`ScreenSelection.gd`](../../../plugins/selection/ScreenSelection.gd), [`ScreenBand.gd`](../../../plugins/selection/ScreenBand.gd), [`SelectionToolSettings.gd`](../../../plugins/selection/SelectionToolSettings.gd), [`Options.gd`](../../../plugins/selection/Options.gd), [`settings.tres`](../../../plugins/selection/settings.tres) |
+| Selection scenes | [`BoxSelectTool.tscn`](../../../plugins/selection/tools/BoxSelectTool.tscn), [`LassoSelectTool.tscn`](../../../plugins/selection/tools/LassoSelectTool.tscn), [`WandSelectTool.tscn`](../../../plugins/selection/tools/WandSelectTool.tscn), [`SelectionPreview.tscn`](../../../plugins/selection/SelectionPreview.tscn), [`Options.tscn`](../../../plugins/selection/Options.tscn) |
+| Shared state | [`VoxelEditTransaction.gd`](../../../Globals/State/VoxelEditTransaction.gd), [`VoxelSelection.gd`](../../../Globals/State/VoxelSelection.gd), [`VoxelRegionSearch.gd`](../../../Globals/State/VoxelRegionSearch.gd), [`VoxelFrame.gd`](../../../Globals/State/Document/VoxelFrame.gd), [`VoxelTool.gd`](../../../Globals/State/Tools/VoxelTool.gd) |
 
 `SelectionPreview.tscn` is listed because `SelectionPlugin` instantiates it.
 Its script internals are not part of the claims above.

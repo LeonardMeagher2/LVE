@@ -53,6 +53,11 @@ LVE uses Godot 4.7.2. Godot is the only toolchain.
 1. Import `project.godot` in Godot 4.7.2.
 2. Run the main scene.
 
+### Working with agents
+
+Read [AGENTS.md](AGENTS.md) before you change the project.
+The [agent notes](docs/agents/README.md) hold the roadmap, verified facts, design audit, and tool research.
+
 ### Tests
 
 Run one behavior test:

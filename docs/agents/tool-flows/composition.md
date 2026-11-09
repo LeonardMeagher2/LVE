@@ -407,7 +407,7 @@ A cell change, a document change, an undo or redo, or a clear drops the cache.
 A repeat of one cell costs about 10 microseconds.
 A crossed cell refits at the full radius, on the worker pool.
 The ring keeps its fallback pose while the idle fit runs, so a move stays cheap.
-The press fit costs about 55 milliseconds at radius 32. That cost is an open task in `TASKS.md`.
+The press fit costs about 55 milliseconds at radius 32. That cost is an open task in `../TASKS.md`.
 The idle pose uses the entered face or floor and the fitted surface plane.
 A Surface source fits the surface. A Face source and Grab use the exact entered face.
 A floor miss uses the floor plane.
@@ -456,24 +456,24 @@ There is no new framework.
 
 ## Source files
 
-- [`State.gd`](../../Globals/State/State.gd)
-- [`VoxelTool.gd`](../../Globals/State/Tools/VoxelTool.gd)
-- [`EyedropperTool.gd`](../../plugins/Eyedropper/EyedropperTool.gd)
-- [`ClipboardPlugin.gd`](../../plugins/Clipboard/ClipboardPlugin.gd)
-- [`LineTool.gd`](../../plugins/brush/LineTool.gd)
-- [`PasteTool.gd`](../../plugins/Clipboard/PasteTool.gd)
-- [`VoxelFrame.gd`](../../Globals/State/Document/VoxelFrame.gd)
-- [`TerrainTool.gd`](../../plugins/Terrain/TerrainTool.gd)
-- [`TerrainPreview.gd`](../../plugins/Terrain/TerrainPreview.gd)
-- [`TerrainRing.gd`](../../plugins/Terrain/TerrainRing.gd)
-- [`VoxelPreview.gd`](../../Globals/Rendering/VoxelPreview.gd)
-- [`VoxelRegionSearch.gd`](../../Globals/State/VoxelRegionSearch.gd)
-- [`StrokeTool.gd`](../../plugins/brush/StrokeTool.gd)
-- [`SprayTool.gd`](../../plugins/paint/SprayTool.gd)
-- [`SpraySampler.gd`](../../plugins/paint/SpraySampler.gd)
-- [`SprayOccupancyIndex.gd`](../../plugins/paint/SprayOccupancyIndex.gd)
-- [`FillTool.gd`](../../plugins/paint/FillTool.gd)
-- [`WandSelectTool.gd`](../../plugins/selection/tools/WandSelectTool.gd)
+- [`State.gd`](../../../Globals/State/State.gd)
+- [`VoxelTool.gd`](../../../Globals/State/Tools/VoxelTool.gd)
+- [`EyedropperTool.gd`](../../../plugins/Eyedropper/EyedropperTool.gd)
+- [`ClipboardPlugin.gd`](../../../plugins/Clipboard/ClipboardPlugin.gd)
+- [`LineTool.gd`](../../../plugins/brush/LineTool.gd)
+- [`PasteTool.gd`](../../../plugins/Clipboard/PasteTool.gd)
+- [`VoxelFrame.gd`](../../../Globals/State/Document/VoxelFrame.gd)
+- [`TerrainTool.gd`](../../../plugins/Terrain/TerrainTool.gd)
+- [`TerrainPreview.gd`](../../../plugins/Terrain/TerrainPreview.gd)
+- [`TerrainRing.gd`](../../../plugins/Terrain/TerrainRing.gd)
+- [`VoxelPreview.gd`](../../../Globals/Rendering/VoxelPreview.gd)
+- [`VoxelRegionSearch.gd`](../../../Globals/State/VoxelRegionSearch.gd)
+- [`StrokeTool.gd`](../../../plugins/brush/StrokeTool.gd)
+- [`SprayTool.gd`](../../../plugins/paint/SprayTool.gd)
+- [`SpraySampler.gd`](../../../plugins/paint/SpraySampler.gd)
+- [`SprayOccupancyIndex.gd`](../../../plugins/paint/SprayOccupancyIndex.gd)
+- [`FillTool.gd`](../../../plugins/paint/FillTool.gd)
+- [`WandSelectTool.gd`](../../../plugins/selection/tools/WandSelectTool.gd)
 
 ## Verification
 
