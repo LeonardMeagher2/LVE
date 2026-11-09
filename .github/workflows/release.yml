@@ -219,11 +219,13 @@ jobs:
           New-Item -ItemType Directory -Force $templateDir | Out-Null
           Copy-Item -Path (Join-Path $templateRoot 'templates/*') -Destination $templateDir -Recurse -Force
 
-      - name: Export ${{ matrix.preset }}
+      - name: Export and package ${{ matrix.asset }}
         shell: pwsh
         env:
           PRESET: ${{ matrix.preset }}
           EXPORT_PATH: ${{ matrix.export_path }}
+          PACKAGE: ${{ matrix.package }}
+          ASSET: ${{ matrix.asset }}
         run: |
           $ErrorActionPreference = 'Stop'
           $exportPath = $env:EXPORT_PATH
@@ -237,20 +239,11 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & $env:GODOT --headless --path . --export-release $env:PRESET $exportPath
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          if (-not (Test-Path $exportPath)) { throw "The export did not write $exportPath." }
-
-      - name: Package ${{ matrix.asset }}
-        shell: pwsh
-        env:
-          PACKAGE: ${{ matrix.package }}
-          EXPORT_PATH: ${{ matrix.export_path }}
-          ASSET: ${{ matrix.asset }}
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $exportPath = $env:EXPORT_PATH
-          if (-not [System.IO.Path]::IsPathRooted($exportPath)) {
-            $exportPath = Join-Path $PWD $exportPath
+          if (-not (Test-Path $exportPath)) {
+            Get-ChildItem -Path $parent -Force | Out-String | Write-Output
+            throw "The export did not write $exportPath."
           }
+
           $releaseDir = Join-Path $PWD 'release'
           New-Item -ItemType Directory -Force $releaseDir | Out-Null
           $out = Join-Path $releaseDir $env:ASSET
