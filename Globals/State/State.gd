@@ -392,6 +392,8 @@ func _init() -> void:
 	playback.is_playing_toggled.connect(is_playing_toggled.emit)
 	playback.tag_changed.connect(tag_changed.emit)
 	_active_document = VoxelDocument.new()
+	# The startup document skips _adopt_document, so it needs the default tag.
+	_active_document.add_tag("Default", 0, _active_document.frames.size() - 1)
 	tabs.append(_active_document)
 	playback.document = _active_document
 
