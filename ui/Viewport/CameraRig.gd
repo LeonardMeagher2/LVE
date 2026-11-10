@@ -38,6 +38,10 @@ signal view_changed
 ## document bounds.
 var bounds_provider: Callable
 
+## Whether the camera keeps its pose on the active document. The export preview
+## has its own camera, so it must not overwrite the editor pose.
+@export var stores_document_pose := true
+
 var _yaw := deg_to_rad(-90.0)
 var _pitch := deg_to_rad(45.0)
 var _dist := 24.0
@@ -47,7 +51,8 @@ var _init_dist := 24.0
 func _ready() -> void:
 	configure()
 	State.document_changed.connect(configure)
-	State.document_deactivating.connect(_save_pose)
+	if stores_document_pose:
+		State.document_deactivating.connect(_save_pose)
 	set_view("default")
 
 ## Frames the document or the provided bounds. A document with a saved pose
@@ -55,7 +60,7 @@ func _ready() -> void:
 func configure() -> void:
 	var bounds: AABB = bounds_provider.call() if bounds_provider.is_valid() else State.document.bounds()
 	_init_dist = maxf(bounds.size.length(), 16.0) * 1.25
-	var pose: Dictionary = State.document.edit_camera
+	var pose: Dictionary = State.document.edit_camera if stores_document_pose else {}
 	if pose.is_empty():
 		_dist = _init_dist
 		_target = bounds.get_center()
@@ -70,7 +75,7 @@ func configure() -> void:
 
 # Stores the view on the document that is about to be inactive.
 func _save_pose() -> void:
-	if not State.document:
+	if not stores_document_pose or not State.document:
 		return
 	State.document.edit_camera = {
 		"yaw": _yaw,

@@ -76,6 +76,9 @@ func _ready() -> void:
 	_model_playback.frame_changed.connect(_show_model_frame)
 	_model_playback.is_playing_toggled.connect(_on_model_playing_changed)
 	_model_camera = _model_viewport.get_node("ViewportScene/CameraRig")
+	# The preview camera keeps its own pose. Only the editor camera writes the
+	# document pose, otherwise the last camera to deactivate would win.
+	_model_camera.stores_document_pose = false
 	_model_camera.bounds_provider = _model_bounds
 	var view_group: ButtonGroup = _model.get_node("Viewport/ControlBar/PanToggle").button_group.duplicate()
 	for button in ["PanToggle", "RotateToggle", "LightToggle"]:
