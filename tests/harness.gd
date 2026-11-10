@@ -12,6 +12,8 @@ func _ready() -> void:
 	test("a whole group dominates its case names in any order", _whole_group, "whole_group")
 	test("several case names deduplicate to one run", _case_dedup, "case_dedup")
 	test("a test owns its own result and check list", _own_result, "own_result")
+	test("a test carries its own config", _config, "config", {"timeout": 20.0, "allow_no_checks": true})
+	test("the runner honors a declared child budget", _budget, "budget")
 	test("engine errors cannot pass as successful output", _engine_errors, "engine_errors")
 	test("every registered name resolves to its scene", _name_resolution, "name_resolution")
 
@@ -92,6 +94,35 @@ func _own_result() -> void:
 		expect(str(last["name"]) == "own_result", "the result carries this test name")
 		expect(is_same(last["checks"], _checks), "the result holds this test's checks")
 		expect(is_same(last["steps"], _steps), "the result holds this test's steps")
+	)
+
+
+func _config() -> void:
+	step("Then the registered entry carries its config", func():
+		var found := false
+		for entry in _tests:
+			if entry["name"] != "config":
+				continue
+			found = true
+			expect(float(entry["timeout"]) == 20.0, "a config timeout replaces the harness default")
+			expect(bool(entry["empty_ok"]), "a config allow_no_checks replaces the harness flag")
+			expect(float(entry["config"].get("timeout", 0.0)) == 20.0, "the entry keeps its config")
+		expect(found, "the config test is registered")
+	)
+
+
+func _budget() -> void:
+	step("Then the runner reads a declared budget", func():
+		expect(is_equal_approx(RUNNER.parse_budget("TEST BUDGET: 110.000"), 110.0), "a plain budget line parses")
+		expect(is_equal_approx(RUNNER.parse_budget("  TEST BUDGET: 220.5  "), 220.5), "surrounding space is ignored")
+		expect(RUNNER.parse_budget("TEST OK") == 0.0, "a pass marker is not a budget")
+		expect(RUNNER.parse_budget("TEST BUDGET: no") == 0.0, "an invalid budget is ignored")
+	)
+	step("Then a declared budget extends the scene deadline", func():
+		expect(is_equal_approx(RUNNER.extended_timeout(30.0, 110.0), 120.0), "the declared budget wins over the default")
+		expect(is_equal_approx(RUNNER.extended_timeout(125.0, 110.0), 125.0), "a longer static deadline stays")
+		expect(is_equal_approx(RUNNER.extended_timeout(30.0, 0.0), 30.0), "no declaration keeps the default")
+		expect(is_equal_approx(RUNNER.extended_timeout(30.0, 5000.0), 1800.0), "the scene deadline is capped")
 	)
 
 

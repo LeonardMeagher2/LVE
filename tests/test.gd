@@ -22,6 +22,7 @@ var _tests: Array = []
 var _results: Array = []
 var _scheduled := false
 var _test_open := false
+var _plan := {}
 
 
 func _init() -> void:
@@ -40,14 +41,32 @@ func add_main() -> Node:
 
 
 func _arm_deadman() -> void:
-	var budget := timeout if _tests.is_empty() else 0.0
-	for entry in _tests:
-		budget += float(entry["timeout"])
+	_plan = selected_budget()
+	var budget := float(_plan["budget"])
+	# The runner reads this line and allows the declared budget for the scene.
+	# The default scene deadline is shorter than a slow benchmark.
+	print("TEST BUDGET: %.3f" % budget)
 	var t := get_tree().create_timer(budget + 5.0)
 	t.timeout.connect(_deadman_fire)
 	if not _scheduled and not _finished:
 		_scheduled = true
 		_run_tests.call_deferred()
+
+
+# The selection plan and its total timeout. The runner gives the scene the same
+# budget, so a per-test timeout is a real deadline, not only a local watchdog.
+func selected_budget() -> Dictionary:
+	var requested: Array = []
+	for argument in OS.get_cmdline_user_args():
+		requested.append(argument)
+	var choice := select_tests(requested, _tests)
+	var selected: Array = choice["selected"]
+	var budget := timeout
+	if not selected.is_empty():
+		budget = 0.0
+		for entry in selected:
+			budget += float(entry["timeout"])
+	return {"budget": budget, "selected": selected, "unknown": choice["unknown"]}
 
 
 func _deadman_fire() -> void:
@@ -88,8 +107,9 @@ func _fail_hard(msg: String) -> void:
 # Register one test. A file can register several tests. Each test runs in turn
 # with its own report section, timeout, and pass or fail result. The command
 # line user arguments after `--` name the tests to run. With no names, every
-# registered test runs.
-func test(description: String, c: Callable, test_name := "") -> void:
+# registered test runs. `config` can hold `timeout` and `allow_no_checks`; they
+# default to the harness properties.
+func test(description: String, c: Callable, test_name := "", config := {}) -> void:
 	var name := test_name
 	if name.is_empty():
 		name = _method_name(c)
@@ -99,9 +119,10 @@ func test(description: String, c: Callable, test_name := "") -> void:
 			_test_loc = loc
 			_fail_hard("duplicate test name: %s" % name)
 			return
-	var empty_ok := allow_no_checks
+	var empty_ok := bool(config.get("allow_no_checks", allow_no_checks))
 	allow_no_checks = false
-	_tests.append({"name": name, "description": description, "callable": c, "loc": loc, "timeout": timeout, "empty_ok": empty_ok})
+	var test_timeout := float(config.get("timeout", timeout))
+	_tests.append({"name": name, "description": description, "callable": c, "loc": loc, "timeout": test_timeout, "empty_ok": empty_ok, "config": config})
 	if not _scheduled:
 		_scheduled = true
 		_run_tests.call_deferred()
@@ -140,18 +161,16 @@ func _run_tests() -> void:
 	if _tests.is_empty():
 		_fail_hard("no tests registered")
 		return
-	var requested: Array = []
-	for argument in OS.get_cmdline_user_args():
-		requested.append(argument)
-	var choice: Dictionary = select_tests(requested, _tests)
-	var unknown: Array = choice["unknown"]
+	if _plan.is_empty():
+		_plan = selected_budget()
+	var unknown: Array = _plan["unknown"]
 	if not unknown.is_empty():
 		var names := PackedStringArray()
 		for name in unknown:
 			names.append(str(name))
 		_fail_hard("unknown test: %s" % ", ".join(names))
 		return
-	var selected: Array = choice["selected"]
+	var selected: Array = _plan["selected"]
 	if selected.is_empty():
 		_fail_hard("no tests selected")
 		return
