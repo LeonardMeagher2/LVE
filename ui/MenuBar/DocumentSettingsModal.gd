@@ -8,12 +8,14 @@ extends ConfirmationDialog
 
 @onready var _flat: Button = $Margin/Layout/NormalsRow/Flat
 @onready var _smooth: Button = $Margin/Layout/NormalsRow/Smooth
+@onready var _ao = $Margin/Layout/AoRow/AO
 @onready var _size_x: SpinBox = $Margin/Layout/SizeRow/SizeX
 @onready var _size_y: SpinBox = $Margin/Layout/SizeRow/SizeY
 @onready var _size_z: SpinBox = $Margin/Layout/SizeRow/SizeZ
 @onready var _fit: Button = $Margin/Layout/SizeRow/Fit
 
 var _before_smooth := false
+var _before_ao := 1.0
 var _before_size := Vector3i.ZERO
 var _syncing := false
 
@@ -21,6 +23,7 @@ var _syncing := false
 func _ready() -> void:
 	_flat.toggled.connect(_on_normals_toggled)
 	_smooth.toggled.connect(_on_normals_toggled)
+	_ao.value_changed.connect(_on_ao_changed)
 	_size_x.value_changed.connect(_on_size_changed)
 	_size_y.value_changed.connect(_on_size_changed)
 	_size_z.value_changed.connect(_on_size_changed)
@@ -30,12 +33,14 @@ func _ready() -> void:
 
 
 ## Shows the modal with the current values.
-func open(current_size: Vector3i, smooth_normals: bool) -> void:
+func open(current_size: Vector3i, smooth_normals: bool, ao_strength := 1.0) -> void:
 	_before_smooth = smooth_normals
+	_before_ao = ao_strength
 	_before_size = current_size
 	_syncing = true
 	_flat.set_pressed_no_signal(not smooth_normals)
 	_smooth.set_pressed_no_signal(smooth_normals)
+	_ao.set_value_no_signal(ao_strength)
 	_size_x.set_value_no_signal(current_size.x)
 	_size_y.set_value_no_signal(current_size.y)
 	_size_z.set_value_no_signal(current_size.z)
@@ -48,6 +53,10 @@ func _on_normals_toggled(_pressed: bool) -> void:
 	_apply_preview()
 
 
+func _on_ao_changed(_value: float) -> void:
+	_apply_preview()
+
+
 func _on_size_changed(_value: float) -> void:
 	_apply_preview()
 
@@ -56,15 +65,18 @@ func _apply_preview() -> void:
 	if _syncing:
 		return
 	State.set_document_properties(_smooth.button_pressed, _current_size(), false)
+	State.set_ao_strength(_ao.value, false)
 
 
 func _on_confirmed() -> void:
 	State.commit_document_properties(_before_smooth, _before_size)
+	State.commit_ao_strength(_before_ao)
 
 
 func _on_canceled() -> void:
 	_syncing = true
 	State.set_document_properties(_before_smooth, _before_size, false)
+	State.set_ao_strength(_before_ao, false)
 	_syncing = false
 
 

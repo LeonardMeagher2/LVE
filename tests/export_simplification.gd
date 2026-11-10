@@ -53,7 +53,8 @@ func _run() -> void:
 			expect(raw_mesh.get_surface_count() == 1, "each nonempty frame has one textured surface")
 			for surface_index in raw_mesh.get_surface_count():
 				var arrays := raw_mesh.get_surface_arrays(surface_index)
-				expect(arrays[Mesh.ARRAY_COLOR] == null, "the raw frame has no vertex colors")
+				var colors: Variant = arrays[Mesh.ARRAY_COLOR]
+				expect(colors is PackedColorArray and colors.size() == arrays[Mesh.ARRAY_VERTEX].size() and _valid_shade(colors), "the raw frame keeps its ambient occlusion colors")
 				expect(arrays[Mesh.ARRAY_TEX_UV] is PackedVector2Array, "the raw frame has atlas UVs")
 		imported_scene = document.generate_scene(state, 30, false, false)
 		expect(imported_scene != null, "the asset creates a scene")
@@ -218,6 +219,13 @@ func _sharp_normals(mesh: Mesh) -> bool:
 			var c := positions[indices[index + 2]]
 			if (b - a).cross(c - a).dot(normals[indices[index]]) >= 0.0:
 				return false
+	return true
+
+
+func _valid_shade(colors: PackedColorArray) -> bool:
+	for color: Color in colors:
+		if color.r < 0.0 or color.r > 1.0 or not is_equal_approx(color.r, color.g) or not is_equal_approx(color.r, color.b):
+			return false
 	return true
 
 

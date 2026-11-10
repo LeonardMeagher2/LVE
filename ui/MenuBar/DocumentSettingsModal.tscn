@@ -4,6 +4,8 @@
 [ext_resource type="Texture2D" uid="uid://denrh23gr1h2a" path="res://icons/size.svg" id="2_fit"]
 [ext_resource type="Texture2D" uid="uid://dtgqku4g3l22e" path="res://icons/cube.svg" id="3_flat"]
 [ext_resource type="Texture2D" uid="uid://broaps7lc7g1u" path="res://icons/sphere.svg" id="4_smooth"]
+[ext_resource type="Texture2D" uid="uid://denrh23gr1h22" path="res://icons/shadow.svg" id="5_ao"]
+[ext_resource type="PackedScene" uid="uid://kxi223occ3vl" path="res://ui/ValueButton/ValueButton.tscn" id="6_value"]
 
 [sub_resource type="ButtonGroup" id="ButtonGroup_normals"]
 
@@ -85,3 +87,22 @@ toggle_mode = true
 button_group = SubResource("ButtonGroup_normals")
 icon = ExtResource("4_smooth")
 icon_alignment = 1
+
+[node name="AoLabel" type="Label" parent="Margin/Layout"]
+layout_mode = 2
+vertical_alignment = 1
+text = "Ambient Occlusion"
+
+[node name="AoRow" type="HBoxContainer" parent="Margin/Layout"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="AO" parent="Margin/Layout/AoRow" instance=ExtResource("6_value")]
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "Ambient occlusion strength, from 0 to 1. Zero disables it. Drag left/right to adjust. Click to type."
+icon = ExtResource("5_ao")
+min_value = 0.0
+max_value = 1.0
+step = 0.05
+value = 1.0

@@ -40,6 +40,7 @@ A missing `size` means no document bound.
 | `frames` | Untyped array | Frame dictionaries |
 | `tags` | Untyped array | Animation tag dictionaries |
 | `smooth_normals` | Boolean | Model shading option |
+| `ao` | Float from 0 to 1 | Ambient occlusion strength. Zero disables it. |
 | `lighting` | Untyped dictionary | Editor lighting settings |
 | `export` | Untyped dictionary | Export workspace settings |
 | `size` | `Vector3i` | Optional centered document size. Zero on an axis means that axis is infinite. |
@@ -99,6 +100,7 @@ Export settings support these keys.
 - `turntable`, `views`, `metadata`, and `center`
 - `model_tag` and `sheet_tag`, with `-1` for all tags
 - `lighting` and `camera`
+- `unlit` and `ao`, where `ao` is a float from 0 to 1
 
 Export lighting requires `basis`, `color`, `energy`, `ambient_color`, `ambient_energy`, `shadows`, and `shaded`.
 It also supports `view_locked` and `view_basis`.

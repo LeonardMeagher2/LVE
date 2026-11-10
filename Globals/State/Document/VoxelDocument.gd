@@ -46,6 +46,8 @@ static var _profile_rescan_us := 0
 @export var tags: Array[AnimationTag] = []
 ## The smooth normals model option.
 @export var smooth_normals := false
+## The viewport and model preview ambient occlusion strength, from 0 to 1.
+@export var ao_strength := 1.0
 ## The editor lighting settings. See `docs/DOCUMENT_FORMAT.md` for the keys.
 @export var lighting_settings: Dictionary = {}
 ## The export workspace settings. See `docs/DOCUMENT_FORMAT.md` for the keys.
@@ -88,7 +90,7 @@ func document_data() -> Dictionary:
 	var tag_data := []
 	for tag in tags:
 		tag_data.append({"name": tag.name, "from": tag.from, "to": tag.to, "loop_mode": tag.loop_mode, "repeats": tag.repeats})
-	return {"palette": palette_data, "frames": frame_data, "tags": tag_data, "smooth_normals": smooth_normals, "lighting": _storage_settings(lighting_settings), "export": _storage_settings(export_settings), "size": size}
+	return {"palette": palette_data, "frames": frame_data, "tags": tag_data, "smooth_normals": smooth_normals, "ao": ao_strength, "lighting": _storage_settings(lighting_settings), "export": _storage_settings(export_settings), "size": size}
 
 
 static func _storage_settings(settings: Dictionary) -> Dictionary:
@@ -203,6 +205,8 @@ static func decode_document(data: PackedByteArray) -> VoxelDocument:
 	for tag_data in fields.tags:
 		document.add_tag(tag_data.name, tag_data.from, tag_data.to, tag_data.loop_mode, tag_data.repeats)
 	document.smooth_normals = fields.smooth_normals
+	var stored_ao: Variant = fields.get("ao", 1.0)
+	document.ao_strength = 1.0 if stored_ao is bool else float(stored_ao)
 	document.lighting_settings = fields.lighting
 	document.export_settings = fields.export
 	var stored_size: Variant = fields.get("size")
@@ -363,6 +367,9 @@ static func _valid_document_data(data: Variant) -> bool:
 			return false
 		if not _integer_in(tag.get("loop_mode"), 0, 3) or not _integer_in(tag.get("repeats"), 0, 1000000):
 			return false
+	var ao: Variant = data.get("ao")
+	if ao != null and not _number_in(ao, 0.0, 1.0):
+		return false
 	return data.get("smooth_normals") is bool and _valid_document_size(data.get("size")) and _valid_lighting(data.get("lighting"), false) and _valid_export(data.get("export"), data.tags.size())
 
 
@@ -465,8 +472,10 @@ static func _valid_export(data: Variant, tag_count: int) -> bool:
 				if not _valid_lighting(data[key], true): return false
 			"camera":
 				if not _valid_camera(data[key]): return false
-			"sprite_ortho", "sprite_center", "automatic_size", "turntable", "metadata", "center":
+			"sprite_ortho", "sprite_center", "automatic_size", "turntable", "metadata", "center", "unlit":
 				if not data[key] is bool: return false
+			"ao":
+				if not _number_in(data[key], 0.0, 1.0): return false
 	return true
 
 

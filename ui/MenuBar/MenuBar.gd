@@ -41,7 +41,7 @@ func _sync_model_settings() -> void:
 
 
 func _on_model_settings_pressed() -> void:
-	%DocumentSettingsModal.open(State.document.size, State.document.smooth_normals)
+	%DocumentSettingsModal.open(State.document.size, State.document.smooth_normals, State.document.ao_strength)
 
 
 ## Saves the document to one path and returns the error code. A PNG path also

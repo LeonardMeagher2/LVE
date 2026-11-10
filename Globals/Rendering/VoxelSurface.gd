@@ -13,6 +13,10 @@ const REGION := preload("./VoxelPlanarRegion.gd")
 # read the padded material map with this stride.
 ## The padded chunk edge length, with one border cell on each side.
 const PADDED_CHUNK_SIZE := VoxelFrame.CHUNK_SIZE + 2
+## The linear vertex color of each ambient occlusion level, from enclosed to
+## free. The strength scales the occlusion, so an unoccluded corner always
+## stays at one.
+const AO_LEVELS: Array[float] = [0.0, 1.0 / 3.0, 2.0 / 3.0, 1.0]
 ## The built mesh arrays, indexed by [enum Mesh.ArrayType].
 var arrays: Array = []
 ## The baked atlas, or null before a run.
@@ -24,11 +28,11 @@ var error: Error = OK
 
 ## Builds one surface from a greedy mesh. [param origin] offsets the mesh in
 ## world space. [param checkpoint] cancels the work.
-func run(source_arrays: Array, frame: VoxelFrame, origin := Vector3.ZERO, checkpoint := Callable(), smooth_normals := false) -> void:
+func run(source_arrays: Array, frame: VoxelFrame, origin := Vector3.ZERO, checkpoint := Callable(), smooth_normals := false, ao_strength := 0.0) -> void:
 	atlas = ATLAS.new()
 	error = OK
 	checkpoint = _latched_checkpoint(checkpoint)
-	arrays = _build(source_arrays, frame, origin, atlas, checkpoint, smooth_normals)
+	arrays = _build(source_arrays, frame, origin, atlas, checkpoint, smooth_normals, ao_strength)
 	if arrays.is_empty():
 		error = ERR_UNAVAILABLE
 		return
@@ -44,11 +48,11 @@ func run(source_arrays: Array, frame: VoxelFrame, origin := Vector3.ZERO, checkp
 ## Builds one surface from groups that a caller collected from a frame.
 ## [param corner_occupancy] supplies the padded occupancy map for the smooth
 ## normals.
-func run_groups(groups: Dictionary, frame: VoxelFrame, origin := Vector3.ZERO, checkpoint := Callable(), smooth_normals := false, corner_occupancy: Variant = null) -> void:
+func run_groups(groups: Dictionary, frame: VoxelFrame, origin := Vector3.ZERO, checkpoint := Callable(), smooth_normals := false, corner_occupancy: Variant = null, ao_strength := 0.0) -> void:
 	atlas = ATLAS.new()
 	error = OK
 	checkpoint = _latched_checkpoint(checkpoint)
-	arrays = _finish(groups, frame, origin, atlas, checkpoint, smooth_normals, corner_occupancy)
+	arrays = _finish(groups, frame, origin, atlas, checkpoint, smooth_normals, corner_occupancy, ao_strength)
 	if arrays.is_empty():
 		error = ERR_UNAVAILABLE
 		return
@@ -63,7 +67,7 @@ func run_groups(groups: Dictionary, frame: VoxelFrame, origin := Vector3.ZERO, c
 static func merge(source_arrays: Array, checkpoint := Callable()) -> Array:
 	checkpoint = _latched_checkpoint(checkpoint)
 	var bake := ATLAS.new()
-	var result := _build(source_arrays, null, Vector3.ZERO, bake, checkpoint, false)
+	var result := _build(source_arrays, null, Vector3.ZERO, bake, checkpoint, false, 0.0)
 	if result.is_empty() or bake.bake(checkpoint) != OK:
 		return []
 	if not _finish_uvs(result, bake, checkpoint):
@@ -79,19 +83,20 @@ static func _latched_checkpoint(checkpoint: Callable) -> Callable:
 		return not state.cancelled
 
 
-static func _build(source_arrays: Array, frame: VoxelFrame, world_origin: Vector3, bake: RefCounted, checkpoint: Callable, smooth_normals: bool) -> Array:
+static func _build(source_arrays: Array, frame: VoxelFrame, world_origin: Vector3, bake: RefCounted, checkpoint: Callable, smooth_normals: bool, ao_strength := 0.0) -> Array:
 	if not checkpoint.call(0):
 		return []
-	var groups: Variant = _groups_from_arrays(source_arrays, frame, world_origin, checkpoint, smooth_normals)
+	var groups: Variant = _groups_from_arrays(source_arrays, frame, world_origin, checkpoint, smooth_normals, ao_strength)
 	if groups == null:
 		return []
-	return _finish(groups, frame, world_origin, bake, checkpoint, smooth_normals)
+	return _finish(groups, frame, world_origin, bake, checkpoint, smooth_normals, null, ao_strength)
 
 
 # Group the exposed faces of a greedy mesh by plane and material. A null result
 # marks cancellation.
-static func _groups_from_arrays(source_arrays: Array, frame: VoxelFrame, world_origin: Vector3, checkpoint: Callable, smooth_normals: bool) -> Variant:
+static func _groups_from_arrays(source_arrays: Array, frame: VoxelFrame, world_origin: Vector3, checkpoint: Callable, smooth_normals: bool, ao_strength := 0.0) -> Variant:
 	var use_corner_normals := smooth_normals and frame != null
+	var use_ao := ao_strength > 0.0 and frame != null
 	var groups := {}
 	# Sparse face masks merge chunk boundaries without scanning empty frame bounds.
 	if not source_arrays.is_empty():
@@ -124,21 +129,28 @@ static func _groups_from_arrays(source_arrays: Array, frame: VoxelFrame, world_o
 				for x in width:
 					var point := start + Vector2i(x, y)
 					var material: PackedFloat32Array
+					var cell := Vector3i.ZERO
 					if frame:
 						var sample := origin + world_origin
 						sample[axis] -= plane.y * 0.5
 						sample[column_axis] += x + 0.5
 						sample[row_axis] += y + 0.5
-						var cell := Vector3i(sample.round())
+						cell = Vector3i(sample.round())
 						var chunk: VoxelFrame.Chunk = frame.chunks[VoxelFrame.chunk_position(cell)]
 						material = chunk.get_material(cell)
 					else:
 						material = VoxelFrame.material(source_arrays[Mesh.ARRAY_COLOR][first])
-					var key := [plane, material]
+					# The AO is part of the key, so cells with a different corner
+					# shade split into their own group. The merge then stays inside
+					# one shade, and the color no longer smears across a large quad.
+					var ao_code := _face_ao_code(frame, plane, cell) if use_ao else -1
+					var key := [plane, material, ao_code] if use_ao else [plane, material]
 					if not groups.has(key):
-						groups[key] = {"plane": plane, "material": material, "cells": {}, "normals": {}}
+						groups[key] = {"plane": plane, "material": material, "cells": {}, "normals": {}, "corners": {}}
 					var group: Dictionary = groups[key]
 					group.cells[point] = true
+					if use_ao:
+						_store_ao_corners(group.corners, point, ao_code)
 					if not use_corner_normals:
 						for corner in 4:
 							var corner_offset := Vector2i(1 if corner in [1, 2] else 0, 1 if corner in [2, 3] else 0)
@@ -149,16 +161,20 @@ static func _groups_from_arrays(source_arrays: Array, frame: VoxelFrame, world_o
 
 # Clean up the groups and emit one mesh. Shared by the greedy round trip and the
 # direct collection from a frame.
-static func _finish(groups: Dictionary, frame: VoxelFrame, world_origin: Vector3, bake: RefCounted, checkpoint: Callable, smooth_normals: bool, corner_occupancy: Variant = null) -> Array:
+static func _finish(groups: Dictionary, frame: VoxelFrame, world_origin: Vector3, bake: RefCounted, checkpoint: Callable, smooth_normals: bool, corner_occupancy: Variant = null, ao_strength := 0.0) -> Array:
 	# A smooth normal depends only on the corner of the voxel lattice, so the
 	# cleanup reads it from the frame instead of a merged quad's interpolation.
 	# A direct build passes the padded snapshot, which carries the same occupancy
 	# and avoids one frame lookup per corner.
 	var use_corner_normals := smooth_normals and (frame != null or corner_occupancy != null)
+	# The AO needs the occupancy around the vertex corner. The frame snapshot has
+	# every chunk, so the AO is correct across diagonal chunk borders.
+	var use_ao := ao_strength > 0.0 and frame != null
 	var result := []
 	result.resize(Mesh.ARRAY_MAX)
 	var positions := PackedVector3Array()
 	var normals := PackedVector3Array()
+	var colors := PackedColorArray()
 	var indices := PackedInt32Array()
 	var patch_ids := PackedInt32Array()
 	var protected := _protect_groups(groups, checkpoint)
@@ -184,16 +200,27 @@ static func _finish(groups: Dictionary, frame: VoxelFrame, world_origin: Vector3
 			return []
 		var fallback_normal := Vector3.ZERO
 		fallback_normal[plane.x] = plane.y
+		var corners: Dictionary = group.get("corners", {})
 		for polygon: Dictionary in group.polygons:
 			var vertex_map := PackedInt32Array()
 			for point: Vector2 in polygon.points:
 				var position := _position(plane, point)
 				var normal: Vector3 = _vertex_normal(group, frame, use_corner_normals, point, position + world_origin, position, fallback_normal, corner_occupancy, corner_cache)
-				var key := [Vector3i((position * 2).round()), normal, patch]
+				var ao := 1.0
+				if use_ao:
+					# The face cell stored one level per lattice corner. Every
+					# group cell that holds this vertex agrees, because the level
+					# depends only on the corner and the face plane.
+					var level: int = corners.get(Vector2i(roundi(point.x), roundi(point.y)), 3)
+					ao = 1.0 - (1.0 - AO_LEVELS[level]) * ao_strength
+				# The AO is part of the key. The same corner on two faces can hold
+				# different AO, so the vertices must stay separate.
+				var key := [Vector3i((position * 2).round()), normal, patch, roundi(ao * 255.0)]
 				if not vertices.has(key):
 					vertices[key] = positions.size()
 					positions.append(position)
 					normals.append(normal)
+					colors.append(Color(ao, ao, ao, 1.0))
 					patch_ids.append(patch)
 				vertex_map.append(vertices[key])
 			for offset in range(0, polygon.indices.size(), 3):
@@ -202,6 +229,8 @@ static func _finish(groups: Dictionary, frame: VoxelFrame, world_origin: Vector3
 				indices.append(vertex_map[polygon.indices[offset + (1 if plane.y > 0 else 2)]])
 	result[Mesh.ARRAY_VERTEX] = positions
 	result[Mesh.ARRAY_NORMAL] = normals
+	if use_ao:
+		result[Mesh.ARRAY_COLOR] = colors
 	result[Mesh.ARRAY_INDEX] = indices
 	# Replace the temporary patch ids with UV coordinates after atlas packing.
 	result[Mesh.ARRAY_TEX_UV] = patch_ids
@@ -285,6 +314,54 @@ static func _vertex_normal(group: Dictionary, frame: VoxelFrame, use_corner_norm
 			normal = _corner_normal(frame, world_position)
 			corner_cache[corner] = normal
 	return fallback_normal if normal.is_zero_approx() else normal
+
+
+# The classic voxel ambient occlusion level for one face corner. The two cells
+# that share an edge with the face cell and the cell that touches only the corner
+# darken it. A fully enclosed corner reaches zero, and a free corner reaches
+# three. The four levels map to colors through [constant AO_LEVELS].
+static func _ao_level(first: bool, second: bool, diagonal: bool) -> int:
+	if first and second:
+		return 0
+	return 3 - (1 if first else 0) - (1 if second else 0) - (1 if diagonal else 0)
+
+
+# The ambient occlusion code of one cell face. The code holds the four corner
+# levels, two bits each, in this order: low tangent1 and low tangent2, high
+# tangent1 and low tangent2, low tangent1 and high tangent2, both high. Two
+# cells with the same code may merge, so the greedy pass keeps the shade exact.
+#
+# [param cell] is the face cell centre in world cell coordinates. The cell
+# directly in front of the face is never sampled, because an exposed face always
+# has an empty direct neighbour.
+static func _face_ao_code(frame: VoxelFrame, plane: Vector3i, cell: Vector3i) -> int:
+	var axis := plane.x
+	var tangent1 := (axis + 1) % 3
+	var tangent2 := (axis + 2) % 3
+	var outside := cell
+	outside[axis] += plane.y
+	var code := 0
+	for index in 4:
+		var far1 := -1 if (index & 1) == 0 else 1
+		var far2 := -1 if (index & 2) == 0 else 1
+		var side1 := outside
+		side1[tangent1] += far1
+		var side2 := outside
+		side2[tangent2] += far2
+		var diagonal := outside
+		diagonal[tangent1] += far1
+		diagonal[tangent2] += far2
+		code |= _ao_level(frame.has(side1), frame.has(side2), frame.has(diagonal)) << (index * 2)
+	return code
+
+
+# Writes the four corner levels of one cell into the group map. [param point] is
+# the low corner of the cell in face tangent index space.
+static func _store_ao_corners(corners: Dictionary, point: Vector2i, code: int) -> void:
+	corners[point] = code & 3
+	corners[point + Vector2i(1, 0)] = (code >> 2) & 3
+	corners[point + Vector2i(0, 1)] = (code >> 4) & 3
+	corners[point + Vector2i(1, 1)] = (code >> 6) & 3
 
 
 # Average the occupied cells that meet at one voxel corner. A corner normal

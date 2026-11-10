@@ -59,6 +59,7 @@ var _requested_source_revision := -1
 var _requested_style := PreviewStyle.OUTLINE
 var _requested_voxel_colors := false
 var _requested_smooth_normals := false
+var _requested_ao_strength := 0.0
 var _requested_color_key := Color.WHITE
 var _requested_cache_key := ""
 var _request_revision := 0
@@ -173,6 +174,8 @@ class PreviewJob extends VoxelFrame.EditJob:
 	var use_voxel_colors := false
 	## Whether a solid mesh uses smooth normals.
 	var smooth_normals := false
+	## The ambient occlusion strength of a solid mesh, from 0 to 1.
+	var ao_strength := 0.0
 	## The color that replaces a transparent cell color.
 	var color_key := Color.WHITE
 	## The strict request id that the job belongs to.
@@ -279,6 +282,7 @@ class PreviewJob extends VoxelFrame.EditJob:
 			job.source_frame = frame
 			job.chunk_location = chunk_location
 			job.smooth_normals = smooth_normals
+			job.ao_strength = ao_strength
 			job.texture_materials = use_material_atlas
 			var build_started_us := Time.get_ticks_usec()
 			job.run()
@@ -525,6 +529,7 @@ func _request(cells: Dictionary, style: PreviewStyle, use_voxel_colors: bool = f
 	_cancel_stream()
 	var colored := style == PreviewStyle.SOLID and use_voxel_colors
 	var smooth_normals := style == PreviewStyle.SOLID and State.document.smooth_normals
+	var ao_strength := State.document.ao_strength if style == PreviewStyle.SOLID else 0.0
 	var outline := style == PreviewStyle.OUTLINE and not mask_chunks.is_empty()
 	var mask_hash := _mask_hash(mask_chunks) if outline else 0
 	# The dedupe trusts the requested set only while the strict request still owns
@@ -532,7 +537,7 @@ func _request(cells: Dictionary, style: PreviewStyle, use_voxel_colors: bool = f
 	# repeated after a stream reinstalls its exact result. A deduped request keeps
 	# the token of the surface that is already installed. An outline compares the
 	# mask hash, so it never hashes or scans the cell dictionary.
-	if _strict_alive and style == _requested_style and use_voxel_colors == _requested_voxel_colors and smooth_normals == _requested_smooth_normals and color_key == _requested_color_key:
+	if _strict_alive and style == _requested_style and use_voxel_colors == _requested_voxel_colors and smooth_normals == _requested_smooth_normals and is_equal_approx(ao_strength, _requested_ao_strength) and color_key == _requested_color_key:
 		var same := (_requested_outline and mask_hash == _requested_mask_hash) if outline else _same_cells(_requested_cells, cells, colored)
 		if same:
 			return
@@ -547,6 +552,7 @@ func _request(cells: Dictionary, style: PreviewStyle, use_voxel_colors: bool = f
 	_requested_style = style
 	_requested_voxel_colors = use_voxel_colors
 	_requested_smooth_normals = smooth_normals
+	_requested_ao_strength = ao_strength
 	_requested_color_key = color_key
 	_requested_masks = mask_chunks if outline else {}
 	_requested_mask_hash = mask_hash
@@ -554,7 +560,7 @@ func _request(cells: Dictionary, style: PreviewStyle, use_voxel_colors: bool = f
 	_pending_cells = {}
 	_request_due_ms = 0
 	var cell_hash := mask_hash if outline else _cell_hash(cells, colored)
-	var cache_key := _key_from_hash(style, colored, cell_hash, color_key, smooth_normals, "m" if outline else "")
+	var cache_key := _key_from_hash(style, colored, cell_hash, color_key, smooth_normals, "m" if outline else "", ao_strength)
 	_requested_cache_key = cache_key
 	var cached: Dictionary = _mesh_cache.get(cache_key, {})
 	if not cached.is_empty() and cached.color_key == color_key and (outline or _same_cells(cached.cells, cells, colored)):
@@ -597,6 +603,7 @@ func submit_prepared(payload: SolidPayload) -> void:
 	_requested_token = payload.token
 	var colored := payload.use_voxel_colors
 	var smooth_normals := State.document.smooth_normals
+	var ao_strength := State.document.ao_strength
 	# A uniform color payload uses the brush material, exactly like the default
 	# solid path of `show_voxels`. A colored payload keeps the neutral material.
 	if colored:
@@ -614,11 +621,12 @@ func submit_prepared(payload: SolidPayload) -> void:
 	_requested_style = PreviewStyle.SOLID
 	_requested_voxel_colors = colored
 	_requested_smooth_normals = smooth_normals
+	_requested_ao_strength = ao_strength
 	_requested_color_key = payload.color_key
 	_requested_cells = payload.spots
 	_pending_cells = {}
 	_request_due_ms = 0
-	var cache_key := _key_from_hash(PreviewStyle.SOLID, colored, payload.cell_hash, payload.color_key, smooth_normals)
+	var cache_key := _key_from_hash(PreviewStyle.SOLID, colored, payload.cell_hash, payload.color_key, smooth_normals, "", ao_strength)
 	_requested_cache_key = cache_key
 	var cached: Dictionary = _mesh_cache.get(cache_key, {})
 	if not cached.is_empty() and cached.color_key == payload.color_key and _same_cells(cached.cells, _requested_cells, colored):
@@ -668,8 +676,8 @@ static func _cell_hash(cells: Dictionary, colored: bool) -> int:
 # The exact cache key from one cell hash and the flags that change the surface. A
 # worker computes the cell hash, and the main thread formats the key with the live
 # smooth setting, so a prepared payload needs no main-thread key hash.
-static func _key_from_hash(style: int, colored: bool, cell_hash: int, color_key: Color, smooth_normals: bool, kind := "") -> String:
-	return "%s%d:%s:%d:%s:%s" % [kind, style, colored, cell_hash, color_key, smooth_normals]
+static func _key_from_hash(style: int, colored: bool, cell_hash: int, color_key: Color, smooth_normals: bool, kind := "", ao_strength := 0.0) -> String:
+	return "%s%d:%s:%d:%s:%s:%d" % [kind, style, colored, cell_hash, color_key, smooth_normals, roundi(ao_strength * 1000.0)]
 
 
 func _clear_request() -> void:
@@ -903,6 +911,7 @@ func _start_preview() -> void:
 	_preview_job.style = _requested_style
 	_preview_job.use_voxel_colors = _requested_voxel_colors
 	_preview_job.smooth_normals = _requested_smooth_normals
+	_preview_job.ao_strength = _requested_ao_strength
 	_preview_job.color_key = _requested_color_key
 	_preview_job.revision = _request_revision
 	_preview_job.token = _requested_token
@@ -1034,23 +1043,27 @@ static func _surface_material() -> StandardMaterial3D:
 static func _atlas_material(job: VoxelMeshBuilder) -> StandardMaterial3D:
 	var material := _surface_material()
 	if job.atlas:
-		return job.atlas.create_material(material)
-	material.vertex_color_use_as_albedo = false
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
-	material.specular_mode = BaseMaterial3D.SPECULAR_SCHLICK_GGX
-	material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
-	material.albedo_texture = _atlas_texture(job.atlas_size, job.atlas_albedo)
-	var material_texture := _atlas_texture(job.atlas_size, job.atlas_orm)
-	# StandardMaterial3D reads separate metallic and roughness texture slots.
-	material.metallic_texture = material_texture
-	material.metallic_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_BLUE
-	material.roughness_texture = material_texture
-	material.roughness_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_GREEN
-	material.metallic = 1.0
-	material.roughness = 1.0
-	material.emission_enabled = true
-	material.emission = Color.BLACK
-	material.emission_texture = _atlas_texture(job.atlas_size, job.atlas_emission)
+		material = job.atlas.create_material(material)
+	else:
+		material.vertex_color_use_as_albedo = false
+		material.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
+		material.specular_mode = BaseMaterial3D.SPECULAR_SCHLICK_GGX
+		material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+		material.albedo_texture = _atlas_texture(job.atlas_size, job.atlas_albedo)
+		var material_texture := _atlas_texture(job.atlas_size, job.atlas_orm)
+		# StandardMaterial3D reads separate metallic and roughness texture slots.
+		material.metallic_texture = material_texture
+		material.metallic_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_BLUE
+		material.roughness_texture = material_texture
+		material.roughness_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_GREEN
+		material.metallic = 1.0
+		material.roughness = 1.0
+		material.emission_enabled = true
+		material.emission = Color.BLACK
+		material.emission_texture = _atlas_texture(job.atlas_size, job.atlas_emission)
+	if job.ao_strength > 0.0:
+		material.vertex_color_use_as_albedo = true
+		material.vertex_color_is_srgb = false
 	return material
 
 

@@ -244,7 +244,7 @@ func _request(active_frame: VoxelFrame, chunk_location: Vector3i) -> void:
 			_inflight_surface_keys.erase(chunk_location)
 			_retire(chunk_location)
 			return
-	var surface_key := _signature(active_frame, chunk_location, State.document.smooth_normals, slice_axis, slice_index, slice_count)
+	var surface_key := _signature(active_frame, chunk_location, State.document.smooth_normals, slice_axis, slice_index, slice_count, State.document.ao_strength)
 	if _displayed_surface_keys.get(chunk_location) == surface_key:
 		# The exact wanted surface is already on screen, so no result may replace
 		# it. Drop the newest request and any in-flight eligibility with it.
@@ -281,13 +281,19 @@ func _update_chunks(updated_frame: int, chunk_positions: Array[Vector3i]) -> voi
 #
 # A packed array passes by reference. Never write to a key after a dictionary
 # holds it, or the key's hash and content disagree.
-static func _signature(active_frame: VoxelFrame, chunk_location: Vector3i, smooth_normals: bool, slice_axis := -1, slice_index := 0, slice_count := 1) -> PackedInt64Array:
-	var offsets := VoxelMeshBuilder.neighbor_offsets(smooth_normals)
+static func _signature(active_frame: VoxelFrame, chunk_location: Vector3i, smooth_normals: bool, slice_axis := -1, slice_index := 0, slice_count := 1, ao_strength := 0.0) -> PackedInt64Array:
+	# AO reads the corner neighbors for every face vertex, so the key must watch
+	# the diagonal chunks too.
+	var ao_enabled := ao_strength > 0.0
+	var offsets := VoxelMeshBuilder.neighbor_offsets(smooth_normals or ao_enabled)
 	var surface_key := PackedInt64Array()
 	# A slice build appends its layers, so a normal key keeps its exact length.
 	var tail := 4 if slice_axis >= 0 else 0
-	surface_key.resize(1 + offsets.size() * 2 + tail)
-	surface_key[0] = 1 if smooth_normals else 0
+	# The strength is appended only when AO is on, so a build without AO keeps the
+	# original key length.
+	var extra := 1 if ao_enabled else 0
+	surface_key.resize(1 + offsets.size() * 2 + tail + extra)
+	surface_key[0] = (1 if smooth_normals else 0) | (2 if ao_enabled else 0)
 	var index := 1
 	for offset: Vector3i in offsets:
 		var chunk: VoxelFrame.Chunk = active_frame.chunks.get(chunk_location + offset)
@@ -300,6 +306,9 @@ static func _signature(active_frame: VoxelFrame, chunk_location: Vector3i, smoot
 		surface_key[index + 1] = slice_axis
 		surface_key[index + 2] = slice_index
 		surface_key[index + 3] = slice_count
+		index += 4
+	if ao_enabled:
+		surface_key[index] = roundi(ao_strength * 1000.0)
 	return surface_key
 
 
@@ -454,6 +463,7 @@ func _launch_surface(chunk_location: Vector3i, active_frame: VoxelFrame) -> void
 	surface_job.source_frame = _snapshot_for_launch(active_frame)
 	surface_job.chunk_location = chunk_location
 	surface_job.smooth_normals = State.document.smooth_normals
+	surface_job.ao_strength = State.document.ao_strength
 	surface_job.slice_axis = slice_axis
 	surface_job.slice_index = slice_index
 	surface_job.slice_count = slice_count
@@ -530,29 +540,35 @@ func _build_material(surface_job: VoxelMeshBuilder) -> StandardMaterial3D:
 	if surface_job.atlas_size.x == 0:
 		return null
 	var shared_material: Material = mesh.surface_get_material(0) if mesh and mesh.get_surface_count() > 0 else null
+	var material: StandardMaterial3D
 	if surface_job.atlas:
-		return surface_job.atlas.create_material(shared_material as StandardMaterial3D)
-	var material: StandardMaterial3D = shared_material.duplicate() if shared_material is StandardMaterial3D else StandardMaterial3D.new()
-	var finish_texture := _atlas_texture(surface_job.atlas_size, surface_job.atlas_orm)
-	material.albedo_texture = _atlas_texture(surface_job.atlas_size, surface_job.atlas_albedo)
-	# A StandardMaterial3D ignores `orm_texture`. Bind the packed atlas to the
-	# metallic and the roughness slot, and pick the blue and the green channel.
-	material.metallic_texture = finish_texture
-	material.metallic_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_BLUE
-	material.roughness_texture = finish_texture
-	material.roughness_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_GREEN
-	material.emission_texture = _atlas_texture(surface_job.atlas_size, surface_job.atlas_emission)
-	# The default add operator sums the emission color and the emission texture.
-	# A black color adds no light, so the texture alone carries the emission.
-	material.emission_enabled = true
-	material.emission = Color.BLACK
-	material.emission_energy_multiplier = 1.0
-	material.metallic = 1.0
-	material.roughness = 1.0
-	material.vertex_color_use_as_albedo = false
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
-	material.specular_mode = BaseMaterial3D.SPECULAR_SCHLICK_GGX
-	material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+		material = surface_job.atlas.create_material(shared_material as StandardMaterial3D)
+	else:
+		material = shared_material.duplicate() if shared_material is StandardMaterial3D else StandardMaterial3D.new()
+		var finish_texture := _atlas_texture(surface_job.atlas_size, surface_job.atlas_orm)
+		material.albedo_texture = _atlas_texture(surface_job.atlas_size, surface_job.atlas_albedo)
+		# A StandardMaterial3D ignores `orm_texture`. Bind the packed atlas to the
+		# metallic and the roughness slot, and pick the blue and the green channel.
+		material.metallic_texture = finish_texture
+		material.metallic_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_BLUE
+		material.roughness_texture = finish_texture
+		material.roughness_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_GREEN
+		material.emission_texture = _atlas_texture(surface_job.atlas_size, surface_job.atlas_emission)
+		# The default add operator sums the emission color and the emission texture.
+		# A black color adds no light, so the texture alone carries the emission.
+		material.emission_enabled = true
+		material.emission = Color.BLACK
+		material.emission_energy_multiplier = 1.0
+		material.metallic = 1.0
+		material.roughness = 1.0
+		material.vertex_color_use_as_albedo = false
+		material.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
+		material.specular_mode = BaseMaterial3D.SPECULAR_SCHLICK_GGX
+		material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	if surface_job.ao_strength > 0.0:
+		# The vertex color is a linear AO multiplier on the atlas albedo.
+		material.vertex_color_use_as_albedo = true
+		material.vertex_color_is_srgb = false
 	return material
 
 
