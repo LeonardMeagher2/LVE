@@ -11,6 +11,9 @@ extends Node
 
 ## Emitted when the document is replaced.
 signal document_changed()
+## Emitted before the active document is replaced. Observers save their view
+## state for the document that is still active.
+signal document_deactivating()
 ## Emitted when cells in a frame change. [param frame] is the frame index.
 ## [param affected] lists the changed cells.
 signal cells_changed(frame: int, affected: Array[Vector3i])
@@ -55,6 +58,10 @@ signal history_changed()
 ## Emitted when an owned edit opens or closes. A history change is refused while
 ## an edit is open, so observers use this signal to refresh the history controls.
 signal edit_state_changed()
+## Emitted when a tab is added or removed.
+signal tabs_changed()
+## Emitted when the active tab changes.
+signal active_tab_changed()
 
 ## The main-thread work slice in microseconds for one pumped frame.
 const WORK_SLICE_US := 3000
@@ -149,8 +156,16 @@ class EraseJob extends VoxelFrame.EditJob:
 
 ## The animation playback state.
 var playback := AnimationPlayback.new()
-## The current document. A write replaces the document and resets the history.
-var document: VoxelDocument : set=set_document
+## The open documents, one per tab.
+var tabs: Array[VoxelDocument] = []
+## The index of the active tab.
+var active_tab := 0
+## The document of the active tab. A write replaces that tab's document.
+var document: VoxelDocument:
+	get:
+		return _active_document
+	set(value):
+		set_document(value)
 
 ## The index of the current frame.
 var current_frame: int:
@@ -351,10 +366,19 @@ var current_color: Color:
 		_apply_material(material)
 var _material_edit_document: VoxelDocument
 var _material_edit_before := PackedFloat32Array()
-## The current cell selection.
-var selection := VoxelSelection.new()
-## The undo and redo history of the current document.
-var undo_redo := UndoRedo.new()
+## The cell selection of the active document.
+var selection: VoxelSelection:
+	get:
+		return _active_document.edit_selection
+## The undo and redo history of the active document.
+var undo_redo: UndoRedo:
+	get:
+		return _active_document.edit_history
+# The document of the active tab.
+var _active_document: VoxelDocument
+# Whether a document is being installed. It keeps adoption from marking the
+# incoming document dirty.
+var _adopting := false
 # The one open edit, or null. It supplies the frozen edit context to drawing and
 # holds the identity a commit or a cancel must match. The owner holds the handle.
 var _active_edit: VoxelEditTransaction
@@ -367,7 +391,11 @@ func _init() -> void:
 	playback.frame_changed.connect(frame_changed.emit)
 	playback.is_playing_toggled.connect(is_playing_toggled.emit)
 	playback.tag_changed.connect(tag_changed.emit)
-	document = VoxelDocument.new()
+	_active_document = VoxelDocument.new()
+	# The startup document skips _adopt_document, so it needs the default tag.
+	_active_document.add_tag("Default", 0, _active_document.frames.size() - 1)
+	tabs.append(_active_document)
+	playback.document = _active_document
 
 func _ready() -> void:
 	load_default_palette()
@@ -376,6 +404,12 @@ func _ready() -> void:
 	edit_context_changing.connect(_interrupt_erase)
 	cells_changed.connect(func(_frame, _affected): stop())
 	chunks_changed.connect(func(_frame, _affected): stop())
+	cells_changed.connect(func(_frame, _affected): _mark_dirty())
+	chunks_changed.connect(func(_frame, _affected): _mark_dirty())
+	frames_changed.connect(_mark_dirty)
+	size_changed.connect(_mark_dirty)
+	model_settings_changed.connect(_mark_dirty)
+	palette_changed.connect(_mark_dirty)
 	
 	add_plugin(load("res://plugins/brush/BrushPlugin.gd").new())
 	add_plugin(load("res://plugins/Eyedropper/EyedropperPlugin.gd").new())
@@ -391,11 +425,107 @@ func _ready() -> void:
 	
 
 
-## Replaces the document and resets the history and the selection. A value that
-## is not a [VoxelDocument] creates a new empty document.
-func set_document(value:VoxelDocument) -> void:
-	if value == document:
+## Returns a new empty document with the default palette. Use it for New.
+func new_document() -> VoxelDocument:
+	var document := VoxelDocument.new()
+	document.palette = _copy_palette(default_palette)
+	return document
+
+
+## Replaces the active tab's document. A value that is not a [VoxelDocument]
+## creates a new empty document.
+func set_document(value: VoxelDocument) -> void:
+	var created := not (value is VoxelDocument)
+	var next: VoxelDocument = value if not created else new_document()
+	if next == _active_document:
 		return
+	if tabs.is_empty():
+		tabs.append(next)
+		active_tab = 0
+	else:
+		tabs[active_tab] = next
+	_adopt_document(next)
+	if created:
+		select_palette_entry(0)
+	tabs_changed.emit()
+
+
+## Adds one document as a tab and returns its index. A document that is already
+## open returns its index.
+func add_tab(value: VoxelDocument) -> int:
+	var next: VoxelDocument = value if value is VoxelDocument else new_document()
+	var existing := tabs.find(next)
+	if existing >= 0:
+		return existing
+	tabs.append(next)
+	tabs_changed.emit()
+	return tabs.size() - 1
+
+
+## Adds one document and makes it the active tab.
+func open_tab(value: VoxelDocument) -> int:
+	var index := add_tab(value)
+	activate_tab(index)
+	return index
+
+
+## Replaces every tab with [param documents] and activates [param index]. It
+## restores a session in one step, without an empty startup tab.
+func set_tabs(documents: Array[VoxelDocument], index: int = 0) -> void:
+	if documents.is_empty():
+		documents.append(new_document())
+	tabs.clear()
+	tabs.append_array(documents)
+	active_tab = clampi(index, 0, documents.size() - 1)
+	_adopt_document(tabs[active_tab])
+	tabs_changed.emit()
+	active_tab_changed.emit()
+
+
+## Makes one tab active. Returns [code]false[/code] while an edit is open.
+func activate_tab(index: int) -> bool:
+	if index < 0 or index >= tabs.size() or index == active_tab:
+		return false
+	if edit_busy() or _active_edit != null:
+		return false
+	_adopt_document(tabs[index])
+	active_tab = index
+	active_tab_changed.emit()
+	return true
+
+
+## Removes one tab. Returns [code]false[/code] while an edit is open.
+func close_tab(index: int) -> bool:
+	if index < 0 or index >= tabs.size():
+		return false
+	if edit_busy() or _active_edit != null:
+		return false
+	var was_active := index == active_tab
+	var closed := tabs[index]
+	tabs.remove_at(index)
+	if was_active:
+		if tabs.is_empty():
+			tabs.append(new_document())
+		var next := mini(index, tabs.size() - 1)
+		_adopt_document(tabs[next])
+		active_tab = next
+	elif index < active_tab:
+		active_tab -= 1
+	# UndoRedo is an Object, so free it with the tab. Empty the actions first.
+	closed.edit_history.clear_history()
+	closed.edit_history.free()
+	closed.edit_history = null
+	tabs_changed.emit()
+	if was_active:
+		active_tab_changed.emit()
+	return true
+
+
+# Installs one document as the active document. The caller keeps [member tabs]
+# current. The frame, tag, selection, and history live on the document, so a
+# switch restores them without a copy.
+func _adopt_document(value: VoxelDocument) -> void:
+	document_deactivating.emit()
 	_material_edit_document = null
 	_material_edit_before = PackedFloat32Array()
 	edit_context_changing.emit()
@@ -404,32 +534,38 @@ func set_document(value:VoxelDocument) -> void:
 	activity_changed.emit()
 	# The owners cancel or finish their own edit on the signal above. An owner that
 	# is not connected leaves its transaction open, so close it here. The captured
-	# frame belongs to the replaced document and must not touch the replacement.
+	# frame belongs to the previous document and must not touch the replacement.
 	_abandon_active_edit()
-	selection.clear()
-	selection_changed.emit()
-	undo_redo.clear_history()
-	history_changed.emit()
-	if value is VoxelDocument:
-		document = value
-	else:
-		document = VoxelDocument.new()
-		document.palette = _copy_palette(default_palette)
-		_apply_material(default_palette[0])
+	_adopting = true
+	_active_document = value
 	_apply_material(_current_material)
-	if document.tags.is_empty():
-		document.add_tag("Default", 0, document.frames.size() - 1)
-	playback.document = document
-	active_tag = 0
-		
+	if _active_document.tags.is_empty():
+		_active_document.add_tag("Default", 0, _active_document.frames.size() - 1)
+	_active_document.edit_frame = clampi(_active_document.edit_frame, 0, _active_document.frames.size() - 1)
+	_active_document.edit_tag = clampi(_active_document.edit_tag, -1, _active_document.tags.size() - 1)
+	playback.document = _active_document
+	playback.is_playing = false
 	document_changed.emit()
 	size_changed.emit()
 	palette_changed.emit()
 	frames_changed.emit()
-	current_frame = 0
+	frame_changed.emit()
+	tag_changed.emit()
+	selection_changed.emit()
+	history_changed.emit()
+	_adopting = false
 	# Emit after the replacement. A handler that opens a new edit then uses the
 	# new document, not the captured frame that the abandon released.
 	edit_state_changed.emit()
+
+
+# Marks the active document dirty after an edit. Adoption emits some of the same
+# signals, so it is guarded.
+func _mark_dirty() -> void:
+	if _adopting or tabs.is_empty() or _active_document.edit_dirty:
+		return
+	_active_document.edit_dirty = true
+	tabs_changed.emit()
 
 
 func _commit_history(execute: bool = true) -> void:
@@ -981,15 +1117,16 @@ func _record_palette_action(action_name: String, before: Dictionary) -> void:
 	if before == after:
 		return
 	undo_redo.create_action(action_name)
-	undo_redo.add_undo_method(_restore_palette.bind(document, before))
-	undo_redo.add_do_method(_restore_palette.bind(document, after))
+	# The history belongs to the document, so the action always applies to the
+	# active document. Do not bind the document here: the resulting
+	# document -> history -> callable -> document cycle would never free.
+	undo_redo.add_undo_method(_restore_palette.bind(before))
+	undo_redo.add_do_method(_restore_palette.bind(after))
 	_commit_history(false)
 	palette_changed.emit()
 
 
-func _restore_palette(edited_document: VoxelDocument, snapshot: Dictionary) -> void:
-	if document != edited_document:
-		return
+func _restore_palette(snapshot: Dictionary) -> void:
 	document.palette = _copy_palette(snapshot.palette)
 	_apply_material(snapshot.material)
 	palette_changed.emit()
@@ -1084,6 +1221,52 @@ func last_document_path(config_path: String = SESSION_PATH) -> String:
 		return ""
 	var path: Variant = config.get_value("files", "last_document", "")
 	return path if path is String else ""
+
+
+## Returns the saved tab paths, or an empty array.
+func last_tabs(config_path: String = SESSION_PATH) -> PackedStringArray:
+	var config := ConfigFile.new()
+	if config.load(config_path) != OK:
+		return PackedStringArray()
+	var stored: Variant = config.get_value("files", "tabs", PackedStringArray())
+	if stored is PackedStringArray:
+		return stored
+	var paths := PackedStringArray()
+	if stored is Array:
+		for value in stored:
+			if value is String:
+				paths.append(value)
+	return paths
+
+
+## Returns the saved active tab index, or zero.
+func last_tab_index(config_path: String = SESSION_PATH) -> int:
+	var config := ConfigFile.new()
+	if config.load(config_path) != OK:
+		return 0
+	return int(config.get_value("files", "active", 0))
+
+
+## Writes the open documents that have a path, and the active index. A tab that
+## was never saved has no path, so a restart cannot reopen it.
+func remember_session(config_path: String = SESSION_PATH) -> void:
+	var config := ConfigFile.new()
+	config.load(config_path)
+	var paths := PackedStringArray()
+	var active := 0
+	for index in tabs.size():
+		var document := tabs[index]
+		var path := document.edit_save_path if not document.edit_save_path.is_empty() else document.file_path
+		if path.is_empty():
+			continue
+		if index == active_tab:
+			active = paths.size()
+		paths.append(path)
+	config.set_value("files", "tabs", paths)
+	config.set_value("files", "active", active)
+	if not paths.is_empty():
+		config.set_value("files", "last_document", paths[active])
+	config.save(config_path)
 
 
 ## Returns [code]true[/code] when the current scene is the application Main

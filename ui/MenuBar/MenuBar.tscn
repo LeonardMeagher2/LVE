@@ -7,8 +7,9 @@
 [ext_resource type="Texture2D" uid="uid://bsdc6hsaxlttw" path="res://icons/save_as.svg" id="5_save_as"]
 [ext_resource type="Texture2D" uid="uid://by28nxj3x7ily" path="res://icons/undo.svg" id="6_undo"]
 [ext_resource type="Texture2D" uid="uid://b4jrotar1sqwf" path="res://icons/redo.svg" id="7_redo"]
-[ext_resource type="Texture2D" path="res://icons/settings.svg" id="8_settings"]
+[ext_resource type="Texture2D" uid="uid://c81cs740xdoji" path="res://icons/settings.svg" id="8_settings"]
 [ext_resource type="PackedScene" path="res://ui/MenuBar/DocumentSettingsModal.tscn" id="9_dialog"]
+[ext_resource type="PackedScene" path="res://ui/MenuBar/document_tabs.tscn" id="10_tabs"]
 
 [sub_resource type="InputEventAction" id="InputEventAction_new"]
 action = &"new_file"
@@ -94,7 +95,6 @@ unique_name_in_owner = true
 layout_mode = 2
 tooltip_text = "Document settings"
 icon = ExtResource("8_settings")
-flat = false
 icon_alignment = 1
 
 [node name="Sep1" type="VSeparator" parent="." unique_id=2069431167]
@@ -116,20 +116,34 @@ shortcut = SubResource("Shortcut_redo")
 icon = ExtResource("7_redo")
 icon_alignment = 1
 
-[node name="DocumentSettingsModal" parent="." instance=ExtResource("9_dialog")]
+[node name="Sep2" type="VSeparator" parent="." unique_id=796811744]
+layout_mode = 2
+
+[node name="DocumentTabs" parent="." unique_id=661415462 instance=ExtResource("10_tabs")]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="DocumentSettingsModal" parent="." unique_id=1428296697 instance=ExtResource("9_dialog")]
 unique_name_in_owner = true
 
 [node name="FileDialog" type="FileDialog" parent="." unique_id=2039805265]
 unique_name_in_owner = true
 
-[node name="FileError" type="AcceptDialog" parent="."]
+[node name="FileError" type="AcceptDialog" parent="." unique_id=35225235]
 unique_name_in_owner = true
 title = "Leonard's Voxel Editor"
 
-[connection signal="pressed" from="ModelSettingsBtn" to="." method="_on_model_settings_pressed"]
+[node name="CloseTabDialog" type="ConfirmationDialog" parent="." unique_id=1679877157]
+unique_name_in_owner = true
+title = "Unsaved document"
+ok_button_text = "Save"
+dialog_text = "Save the changes to this document?"
+
 [connection signal="pressed" from="NewBtn" to="." method="_on_new_btn_pressed"]
 [connection signal="pressed" from="OpenBtn" to="." method="_on_open_btn_pressed"]
 [connection signal="pressed" from="SaveBtn" to="." method="_on_save_btn_pressed"]
 [connection signal="pressed" from="SaveAsBtn" to="." method="_on_save_as_btn_pressed"]
+[connection signal="pressed" from="ModelSettingsBtn" to="." method="_on_model_settings_pressed"]
 [connection signal="pressed" from="UndoBtn" to="." method="_on_undo_btn_pressed"]
 [connection signal="pressed" from="RedoBtn" to="." method="_on_redo_btn_pressed"]

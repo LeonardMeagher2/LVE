@@ -16,11 +16,13 @@ var _title_document: VoxelDocument
 
 func _enter_tree() -> void:
 	State.document_changed.connect(_on_document_changed)
+	State.tabs_changed.connect(_update_window_title)
 	_on_document_changed()
 
 
 func _exit_tree() -> void:
 	State.document_changed.disconnect(_on_document_changed)
+	State.tabs_changed.disconnect(_update_window_title)
 	if _title_document:
 		_title_document.file_path_changed.disconnect(_update_window_title)
 	_title_document = null
@@ -35,7 +37,10 @@ func _on_document_changed() -> void:
 
 
 func _update_window_title() -> void:
-	get_window().title = "%s - %s" % [State.document.get_file_name(), VoxelDocument.APP_NAME]
+	var title := State.document.get_file_name()
+	if State.document.edit_dirty:
+		title += " *"
+	get_window().title = "%s - %s" % [title, VoxelDocument.APP_NAME]
 
 
 func _ready() -> void:
@@ -65,11 +70,29 @@ func _restore_startup_document(force: bool = false, session_path: String = "") -
 		return
 	if session_path.is_empty():
 		session_path = State.SESSION_PATH
+	var saved_active := State.last_tab_index(session_path)
+	var paths := State.last_tabs(session_path)
+	var documents: Array[VoxelDocument] = []
+	var active := 0
+	for index in paths.size():
+		var path := paths[index]
+		if not FileAccess.file_exists(path):
+			continue
+		var document := VoxelDocument.load_file(path)
+		if document == null:
+			continue
+		document.edit_save_path = path
+		if index == saved_active:
+			active = documents.size()
+		documents.append(document)
+	if not documents.is_empty():
+		State.set_tabs(documents, active)
+		return
 	var last := State.last_document_path(session_path)
-	if not last.is_empty() and FileAccess.file_exists(last) and %MenuBar.open_document(last, true):
+	if not last.is_empty() and FileAccess.file_exists(last) and %MenuBar.open_document(last, true, true):
 		return
 	if FileAccess.file_exists(STARTUP_DOCUMENT):
-		%MenuBar.open_document(STARTUP_DOCUMENT, false)
+		%MenuBar.open_document(STARTUP_DOCUMENT, false, true)
 
 
 ## Sets the UI scale. A zero value uses the automatic scale. When [param save]
