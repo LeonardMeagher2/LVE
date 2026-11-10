@@ -3,6 +3,7 @@
 [ext_resource type="Shader" uid="uid://fbl8lfka8" path="res://Globals/Rendering/cursor_lit.gdshader" id="1_cursor"]
 
 [resource]
+render_priority = 0
 shader = ExtResource("1_cursor")
 shader_parameter/cursor_color = Color(1, 1, 1, 1)
 shader_parameter/emission_color = Color(0, 0, 0, 1)

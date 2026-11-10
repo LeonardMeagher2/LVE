@@ -235,7 +235,7 @@ func _atlas_run() -> void:
 		expect(material.emission_operator == BaseMaterial3D.EMISSION_OP_MULTIPLY, "the emission texture multiplies the white emission color")
 		var energy := maxf(1.0, maxf(ATLAS_MATERIAL.emission.r, maxf(ATLAS_MATERIAL.emission.g, ATLAS_MATERIAL.emission.b)))
 		expect(is_equal_approx(material.emission_energy_multiplier, energy), "the emission energy retains the HDR strength")
-		expect(not material.vertex_color_use_as_albedo, "the atlas supplies the color without vertex colors")
+		expect(material.vertex_color_use_as_albedo and not material.vertex_color_is_srgb, "the atlas multiplies the baked ambient occlusion")
 		expect(material.albedo_texture.get_image().get_format() == Image.FORMAT_RGBA8, "the albedo atlas retains alpha")
 		expect(material.roughness_texture.get_image().get_format() == Image.FORMAT_RGB8, "the finish atlas uses three channels")
 		expect(material.metallic == 1.0 and material.roughness == 1.0, "the textures supply the metallic and roughness values")

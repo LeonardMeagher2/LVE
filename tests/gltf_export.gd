@@ -269,12 +269,12 @@ func _check_json(data: Dictionary, embedded: bool) -> void:
 		primitives_valid = primitives.size() == 1 and primitives_valid
 		for primitive in primitives:
 			var attributes: Dictionary = primitive.get("attributes", {})
-			attributes_valid = not attributes.has("COLOR_0") and attributes.has("TEXCOORD_0") and attributes_valid
+			attributes_valid = attributes.has("COLOR_0") and attributes.has("TEXCOORD_0") and attributes_valid
 			var material_index := int(primitive.get("material", -1))
 			material_bindings_valid = material_index >= 0 and material_index < materials.size() and material_bindings_valid
 			used_materials[material_index] = true
 	expect(primitives_valid, "each nonempty frame has one glTF primitive")
-	expect(attributes_valid, "all primitives use atlas UVs instead of vertex colors")
+	expect(attributes_valid, "all primitives carry ambient occlusion colors and atlas UVs")
 	expect(material_bindings_valid and used_materials.size() == 2, "all primitives bind distinct valid frame materials")
 	var texture_owners := {}
 	var strengths: Array[float] = []
@@ -358,7 +358,7 @@ func _check_samples() -> void:
 		if mesh.get_surface_count() != 1:
 			continue
 		var arrays := mesh.get_surface_arrays(0)
-		arrays_valid = arrays[Mesh.ARRAY_COLOR] == null and arrays[Mesh.ARRAY_TEX_UV] is PackedVector2Array and arrays_valid
+		arrays_valid = arrays[Mesh.ARRAY_COLOR] is PackedColorArray and arrays[Mesh.ARRAY_TEX_UV] is PackedVector2Array and arrays_valid
 		var material := mesh.get_surface_material(0) as StandardMaterial3D
 		materials_valid = material != null and materials_valid
 		if material == null or material.albedo_texture == null or material.roughness_texture == null or material.emission_texture == null:
@@ -393,7 +393,7 @@ func _check_samples() -> void:
 			var normalized := Color(glow.r / energy, glow.g / energy, glow.b / energy).linear_to_srgb()
 			emission_valid = _color_close(_texel(emission, uv), normalized, false) and emission_valid
 	expect(surfaces_valid, "both raw frames have one surface")
-	expect(arrays_valid, "both raw meshes use atlas UV arrays instead of color arrays")
+	expect(arrays_valid, "both raw meshes keep ambient occlusion colors and atlas UV arrays")
 	expect(materials_valid, "both raw meshes have standard materials")
 	expect(images_valid, "all atlas images are readable and albedo uses RGBA8")
 	expect(uvs_valid, "all sampled face interiors have interpolated atlas UVs")

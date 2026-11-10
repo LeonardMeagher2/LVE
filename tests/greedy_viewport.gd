@@ -29,7 +29,7 @@ func _run() -> void:
 		_expect_same_mesh(12, 24)
 		var material: StandardMaterial3D = renderer._chunk_instances[Vector3i.ZERO].material_override
 		expect(material.albedo_texture != null and material.metallic_texture != null and material.emission_texture != null, "the viewport keeps every material channel in textures")
-		expect(not material.vertex_color_use_as_albedo, "the viewport samples its material from textures instead of vertex colors")
+		expect(material.vertex_color_use_as_albedo and not material.vertex_color_is_srgb, "the viewport multiplies the baked ambient occlusion")
 	)
 	step("When the user enables smooth normals", func():
 		State.document.smooth_normals = true

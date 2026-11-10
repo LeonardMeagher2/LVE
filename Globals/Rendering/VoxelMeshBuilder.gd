@@ -27,6 +27,8 @@ var source_frame: VoxelFrame
 var chunk_location := Vector3i.ZERO
 ## Whether the mesh uses smooth corner normals.
 var smooth_normals := false
+## The ambient occlusion strength, from 0 to 1. Zero disables it.
+var ao_strength := 0.0
 ## Whether the mesh uses the texture atlas instead of vertex colors.
 var texture_materials := true
 ## The world axis of the writable slice, or -1 when the mesh holds every layer.
@@ -118,7 +120,7 @@ func run() -> void:
 		# Collect the exposed faces straight from the snapshot. The greedy pass
 		# would merge them only for the cleanup to split them into single cells.
 		var collect_started_us := Time.get_ticks_usec() if profile else 0
-		var groups := _collect_groups(padded_cell_colors, padded_cell_materials, materials, occupied_planes)
+		var groups := _collect_groups(padded_cell_colors, padded_cell_materials, materials, occupied_planes, ao_strength)
 		if profile:
 			scan_us += Time.get_ticks_usec() - collect_started_us
 			group_count += groups.size()
@@ -127,7 +129,7 @@ func run() -> void:
 		# The padded material map already holds occupancy for the chunk and its
 		# neighbor border, so the smooth corner normals read it there instead of
 		# hashing the frame once per corner.
-		surface.run_groups(groups, frame, Vector3(chunk_location * CHUNK_SIZE), Callable(), smooth_normals, padded_cell_materials)
+		surface.run_groups(groups, frame, Vector3(chunk_location * CHUNK_SIZE), Callable(), smooth_normals, padded_cell_materials, ao_strength)
 		if profile:
 			finish_us += Time.get_ticks_usec() - surface_started_us
 		surface_arrays = surface.arrays
@@ -137,7 +139,7 @@ func run() -> void:
 			atlas_albedo = atlas.albedo.get_data()
 			atlas_orm = atlas.orm.get_data()
 			atlas_emission = atlas.emission.get_data()
-		geometry_bytes = surface_arrays[Mesh.ARRAY_VERTEX].size() * 32 + surface_arrays[Mesh.ARRAY_INDEX].size() * 4
+		geometry_bytes = surface_arrays[Mesh.ARRAY_VERTEX].size() * (48 if ao_strength > 0.0 else 32) + surface_arrays[Mesh.ARRAY_INDEX].size() * 4
 		return
 	var vertex_positions := PackedVector3Array()
 	var vertex_normals := PackedVector3Array()
@@ -233,7 +235,7 @@ func run() -> void:
 		# Use the same seam-bounded planar cleanup and bake as the full-frame exporter.
 		var surface_started_us := Time.get_ticks_usec() if profile else 0
 		var surface := SURFACE.new()
-		surface.run(surface_arrays, frame, Vector3(chunk_location * CHUNK_SIZE), Callable(), smooth_normals)
+		surface.run(surface_arrays, frame, Vector3(chunk_location * CHUNK_SIZE), Callable(), smooth_normals, ao_strength)
 		if profile:
 			finish_us += Time.get_ticks_usec() - surface_started_us
 		surface_arrays = surface.arrays
@@ -243,7 +245,7 @@ func run() -> void:
 			atlas_albedo = atlas.albedo.get_data()
 			atlas_orm = atlas.orm.get_data()
 			atlas_emission = atlas.emission.get_data()
-		geometry_bytes = surface_arrays[Mesh.ARRAY_VERTEX].size() * 32 + surface_arrays[Mesh.ARRAY_INDEX].size() * 4
+		geometry_bytes = surface_arrays[Mesh.ARRAY_VERTEX].size() * (48 if ao_strength > 0.0 else 32) + surface_arrays[Mesh.ARRAY_INDEX].size() * 4
 
 
 # Finishes one enclosed chunk with the exact empty result that a normal face-free
@@ -255,7 +257,7 @@ func _finish_enclosed(frame: VoxelFrame) -> void:
 		# No face exists, so the group set is empty. The shared surface build then
 		# returns the same empty arrays and the same empty atlas as a face-free run.
 		var surface := SURFACE.new()
-		surface.run_groups({}, frame, Vector3(chunk_location * CHUNK_SIZE), Callable(), smooth_normals, null)
+		surface.run_groups({}, frame, Vector3(chunk_location * CHUNK_SIZE), Callable(), smooth_normals, null, ao_strength)
 		surface_arrays = surface.arrays
 		atlas = surface.atlas
 		atlas_size = atlas.size
@@ -263,7 +265,7 @@ func _finish_enclosed(frame: VoxelFrame) -> void:
 			atlas_albedo = atlas.albedo.get_data()
 			atlas_orm = atlas.orm.get_data()
 			atlas_emission = atlas.emission.get_data()
-		geometry_bytes = surface_arrays[Mesh.ARRAY_VERTEX].size() * 32 + surface_arrays[Mesh.ARRAY_INDEX].size() * 4
+		geometry_bytes = surface_arrays[Mesh.ARRAY_VERTEX].size() * (48 if ao_strength > 0.0 else 32) + surface_arrays[Mesh.ARRAY_INDEX].size() * 4
 		return
 	surface_arrays.resize(Mesh.ARRAY_MAX)
 	surface_arrays[Mesh.ARRAY_VERTEX] = PackedVector3Array()
@@ -273,7 +275,7 @@ func _finish_enclosed(frame: VoxelFrame) -> void:
 	geometry_bytes = 0
 	if texture_materials:
 		var surface := SURFACE.new()
-		surface.run(surface_arrays, frame, Vector3(chunk_location * CHUNK_SIZE), Callable(), smooth_normals)
+		surface.run(surface_arrays, frame, Vector3(chunk_location * CHUNK_SIZE), Callable(), smooth_normals, ao_strength)
 		surface_arrays = surface.arrays
 		atlas = surface.atlas
 		atlas_size = atlas.size
@@ -281,7 +283,7 @@ func _finish_enclosed(frame: VoxelFrame) -> void:
 			atlas_albedo = atlas.albedo.get_data()
 			atlas_orm = atlas.orm.get_data()
 			atlas_emission = atlas.emission.get_data()
-		geometry_bytes = surface_arrays[Mesh.ARRAY_VERTEX].size() * 32 + surface_arrays[Mesh.ARRAY_INDEX].size() * 4
+		geometry_bytes = surface_arrays[Mesh.ARRAY_VERTEX].size() * (48 if ao_strength > 0.0 else 32) + surface_arrays[Mesh.ARRAY_INDEX].size() * 4
 
 
 # Returns true when the chunk cannot emit any face.
@@ -346,9 +348,10 @@ static func _opaque_materials(chunk: VoxelFrame.Chunk) -> bool:
 # Collect the exposed faces of this chunk straight from the padded snapshot,
 # grouped by plane and material. The scan follows the greedy pass, so the
 # groups are created in the same order and the mesh matches vertex for vertex.
-func _collect_groups(padded_cell_colors: PackedColorArray, padded_cell_materials: PackedInt32Array, materials: PackedFloat32Array, occupied_planes: PackedInt32Array) -> Dictionary:
+func _collect_groups(padded_cell_colors: PackedColorArray, padded_cell_materials: PackedInt32Array, materials: PackedFloat32Array, occupied_planes: PackedInt32Array, ao_strength := 0.0) -> Dictionary:
 	var groups := {}
 	var material_cache := {}
+	var use_ao := ao_strength > 0.0
 	for face_axis in 3:
 		var column_stride: int = PADDED_AXIS_STRIDE[(face_axis + 1) % 3]
 		var row_stride: int = PADDED_AXIS_STRIDE[(face_axis + 2) % 3]
@@ -378,11 +381,16 @@ func _collect_groups(padded_cell_colors: PackedColorArray, padded_cell_materials
 							material = materials.slice(material_id * VoxelFrame.MATERIAL_STRIDE, (material_id + 1) * VoxelFrame.MATERIAL_STRIDE)
 							material_cache[material_id] = material
 						var plane := Vector3i(face_axis, face_sign, 2 * layer_index + face_sign)
-						var key := [plane, material]
+						var ao_code := -1
+						if use_ao:
+							ao_code = _face_ao_code(padded_cell_materials, sample_index + neighbor_step, column_stride, row_stride)
+						var key := [plane, material, ao_code] if use_ao else [plane, material]
 						if not groups.has(key):
-							groups[key] = {"plane": plane, "material": material, "cells": {}, "normals": {}}
+							groups[key] = {"plane": plane, "material": material, "cells": {}, "normals": {}, "corners": {}}
 						var group: Dictionary = groups[key]
 						group.cells[Vector2i(column, row)] = true
+						if use_ao:
+							SURFACE._store_ao_corners(group.corners, Vector2i(column, row), ao_code)
 	return groups
 
 
@@ -400,6 +408,23 @@ static func neighbor_offsets(use_smooth_normals: bool) -> Array[Vector3i]:
 				if offset != Vector3i.ZERO:
 					offsets.append(offset)
 	return offsets
+
+
+# The ambient occlusion code of one face, read from the padded material map. A
+# nonzero padded material id marks an occupied cell, so this matches
+# VoxelFrame.has for the stored voxels, including stored transparent voxels.
+# [param outside] is the padded index of the cell in front of the face.
+static func _face_ao_code(padded_cell_materials: PackedInt32Array, outside: int, column_stride: int, row_stride: int) -> int:
+	var code := 0
+	for index in 4:
+		var far_column := -1 if (index & 1) == 0 else 1
+		var far_row := -1 if (index & 2) == 0 else 1
+		var side1 := outside + column_stride * far_column
+		var side2 := outside + row_stride * far_row
+		var diagonal := outside + column_stride * far_column + row_stride * far_row
+		var level: int = SURFACE._ao_level(padded_cell_materials[side1] != 0, padded_cell_materials[side2] != 0, padded_cell_materials[diagonal] != 0)
+		code |= level << (index * 2)
+	return code
 
 
 static func _corner_normal(corner: Vector3i, padded_cell_colors: PackedColorArray) -> Vector3:

@@ -184,7 +184,10 @@ func _expect_atlas(preview: MeshInstance3D) -> void:
 		var arrays := preview.mesh.surface_get_arrays(surface)
 		var material: StandardMaterial3D = preview.mesh.surface_get_material(surface)
 		matches = matches and material.cull_mode == BaseMaterial3D.CULL_DISABLED
-		expect(arrays[Mesh.ARRAY_COLOR] == null, "the material surface omits vertex colors")
+		var colors: Variant = arrays[Mesh.ARRAY_COLOR]
+		var has_ao: bool = colors is PackedColorArray and colors.size() == arrays[Mesh.ARRAY_VERTEX].size()
+		expect(has_ao, "the material surface carries one ambient occlusion color for each vertex")
+		matches = matches and has_ao and material.vertex_color_use_as_albedo and not material.vertex_color_is_srgb
 		expect(material.albedo_texture != null and material.emission_texture != null and material.roughness_texture != null, "every chunk retains all atlas textures")
 		if material.albedo_texture == null or material.emission_texture == null or material.roughness_texture == null:
 			matches = false
@@ -203,7 +206,6 @@ func _expect_atlas(preview: MeshInstance3D) -> void:
 		matches = matches and material.emission == Color.WHITE
 		matches = matches and material.emission_operator == BaseMaterial3D.EMISSION_OP_MULTIPLY
 		matches = matches and is_equal_approx(material.emission_energy_multiplier, energy)
-		matches = matches and not material.vertex_color_use_as_albedo
 		matches = matches and material.metallic_texture == material.roughness_texture
 		matches = matches and material.metallic_texture_channel == BaseMaterial3D.TEXTURE_CHANNEL_BLUE
 		matches = matches and material.roughness_texture_channel == BaseMaterial3D.TEXTURE_CHANNEL_GREEN

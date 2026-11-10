@@ -1253,6 +1253,37 @@ func _apply_smooth_normals(value: bool) -> void:
 	model_settings_changed.emit()
 
 
+## Sets the document ambient occlusion strength. A live preview passes
+## [code]false[/code] for [param record_history].
+func set_ao_strength(value: float, record_history := true) -> void:
+	value = clampf(value, 0.0, 1.0)
+	if edit_busy() or is_equal_approx(value, document.ao_strength):
+		return
+	if record_history:
+		undo_redo.create_action("Set Ambient Occlusion")
+		undo_redo.add_undo_method(_apply_ao_strength.bind(document.ao_strength))
+		undo_redo.add_do_method(_apply_ao_strength.bind(value))
+		_commit_history(false)
+	_apply_ao_strength(value)
+
+
+## Records one history action for the difference from [param before] to the
+## current document AO strength.
+func commit_ao_strength(before: float) -> void:
+	var after := document.ao_strength
+	if is_equal_approx(before, after):
+		return
+	undo_redo.create_action("Set Ambient Occlusion")
+	undo_redo.add_undo_method(_apply_ao_strength.bind(before))
+	undo_redo.add_do_method(_apply_ao_strength.bind(after))
+	_commit_history(false)
+
+
+func _apply_ao_strength(value: float) -> void:
+	document.ao_strength = value
+	model_settings_changed.emit()
+
+
 ## Returns one frame by index, or null when the index is out of range.
 func get_voxel_frame(frame:int) -> VoxelFrame:
 	if frame < 0 or frame >= document.frames.size():

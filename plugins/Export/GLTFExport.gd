@@ -39,6 +39,10 @@ class ExportJob extends VoxelFrame.EditJob:
 	var center_origin := true
 	## Whether the mesh uses smooth normals.
 	var smooth_normals := false
+	## The ambient occlusion strength baked into vertex colors, from 0 to 1.
+	var ao_strength := 1.0
+	## Whether the exported material is unlit.
+	var unlit := false
 
 	## Builds and welds every frame mesh. This is the worker body.
 	func run() -> void:
@@ -62,6 +66,7 @@ class ExportJob extends VoxelFrame.EditJob:
 				mesh_job.source_frame = frame
 				mesh_job.chunk_location = chunk_location
 				mesh_job.smooth_normals = smooth_normals
+				mesh_job.ao_strength = ao_strength
 				mesh_job.texture_materials = false
 				mesh_job.run()
 				var first_vertex := positions.size()
@@ -91,7 +96,7 @@ class ExportJob extends VoxelFrame.EditJob:
 				return
 			stage("Preparing frame %d/%d surfaces" % [frame_index + 1, frames.size()], -1)
 			var surface := SURFACE.new()
-			surface.run(welded, frames[frame_index], Vector3.ZERO, checkpoint, smooth_normals)
+			surface.run(welded, frames[frame_index], Vector3.ZERO, checkpoint, smooth_normals, ao_strength)
 			error = surface.error
 			if error != OK:
 				return
@@ -193,6 +198,8 @@ func export_gltf(path: String, center_origin := true, tag_index := -1) -> Error:
 	var job := ExportJob.new()
 	job.center_origin = center_origin
 	job.smooth_normals = State.document.smooth_normals
+	job.ao_strength = State.document.ao_strength
+	job.unlit = bool(State.document.export_settings.get("unlit", false))
 	var selected_tag := State.document.get_tag(tag_index)
 	var first := selected_tag.from if selected_tag else 0
 	var last := selected_tag.to if selected_tag else State.get_frame_count() - 1
@@ -240,6 +247,13 @@ func export_gltf(path: String, center_origin := true, tag_index := -1) -> Error:
 		var arrays := job.frame_surfaces[frame_index]
 		if not arrays[Mesh.ARRAY_VERTEX].is_empty():
 			var material: StandardMaterial3D = job.frame_atlases[frame_index].create_material()
+			if job.unlit:
+				material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			if job.ao_strength > 0.0:
+				# The glTF mesh carries COLOR_0. The material reads it as a
+				# multiplier on the atlas albedo, not as a second color.
+				material.vertex_color_use_as_albedo = true
+				material.vertex_color_is_srgb = false
 			var frame_mesh := ArrayMesh.new()
 			# Godot 4.7 reads the first primitive's colors after it configures the material.
 			# Two real surfaces enable vertex colors on their shared material during import.

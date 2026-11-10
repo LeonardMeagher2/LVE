@@ -120,6 +120,8 @@ func _ready() -> void:
 	_sheet_settings.get_node("TurntableRow/Turntable").toggled.connect(_sheet_settings_changed.unbind(1))
 	_sheet_settings.get_node("TurntableRow/Metadata").toggled.connect(_save_export_settings.unbind(1))
 	_model.get_node("AnimationRow/Center").toggled.connect(_model_settings_changed.unbind(1))
+	_model.get_node("ModelOptions/Lit").toggled.connect(_on_model_lit_toggled)
+	_model.get_node("ModelOptions/AO").value_changed.connect(_on_model_ao_changed)
 	_model.get_node("AnimationRow/Tags").item_selected.connect(_on_model_tag_selected)
 	_model.get_node("AnimationRow/Play").toggled.connect(_on_play_toggled)
 	_model_camera.view_changed.connect(_on_preview_camera_changed)
@@ -138,6 +140,20 @@ func _ready() -> void:
 	_sync()
 
 
+func _on_model_lit_toggled(pressed: bool) -> void:
+	# The model preview shows the material the GLB will use. The sprite sheet keeps
+	# its own lighting controls.
+	_model_viewport.debug_draw = Viewport.DEBUG_DRAW_DISABLED if pressed else Viewport.DEBUG_DRAW_UNSHADED
+	_save_export_settings()
+
+
+func _on_model_ao_changed(value: float) -> void:
+	# AO belongs to the document. The editor, the model preview, and the export all
+	# read the same setting.
+	State.set_ao_strength(value, false)
+	_save_export_settings()
+
+
 func _capture_export_camera() -> Dictionary:
 	return {"yaw": _model_camera._yaw, "pitch": _model_camera._pitch, "distance": _model_camera._dist, "initial_distance": _model_camera._init_dist, "target": _model_camera._target, "orthographic": _model_camera.is_orthogonal, "fov": _model_camera.fov}
 
@@ -154,6 +170,8 @@ func _save_export_settings() -> void:
 		"views": _sheet_settings.get_node("TurntableRow/Views").value,
 		"metadata": _sheet_settings.get_node("TurntableRow/Metadata").button_pressed,
 		"center": _model.get_node("AnimationRow/Center").button_pressed,
+		"unlit": not _model.get_node("ModelOptions/Lit").button_pressed,
+		"ao": State.document.ao_strength,
 		"model_tag": State.document.tags.find(_selected_tag),
 		"sheet_tag": State.document.tags.find(_sheet_tag),
 		"lighting": _sheet_lighting(),
@@ -177,6 +195,10 @@ func _restore_export_settings() -> void:
 	_sheet_settings.get_node("TurntableRow/Views").set_value_no_signal(saved.get("views", 8))
 	_sheet_settings.get_node("TurntableRow/Metadata").set_pressed_no_signal(saved.get("metadata", true))
 	_model.get_node("AnimationRow/Center").set_pressed_no_signal(saved.get("center", true))
+	var lit: bool = not saved.get("unlit", false)
+	_model.get_node("ModelOptions/Lit").set_pressed_no_signal(lit)
+	_model_viewport.debug_draw = Viewport.DEBUG_DRAW_DISABLED if lit else Viewport.DEBUG_DRAW_UNSHADED
+	_model.get_node("ModelOptions/AO").set_value_no_signal(State.document.ao_strength)
 	var lighting: Dictionary = saved.get("lighting", _default_lighting)
 	var controls: HBoxContainer = _controls.get_node("LightingOptions")
 	controls.get_node("Shadows").set_pressed_no_signal(lighting.shadows)
@@ -248,8 +270,13 @@ func _on_workspace_visibility_changed() -> void:
 
 func _source_changed() -> void:
 	_sync_tags()
+	_sync_model_options()
 	_model_dirty = true
 	_sheet_settings_changed()
+
+
+func _sync_model_options() -> void:
+	_model.get_node("ModelOptions/AO").set_value_no_signal(State.document.ao_strength)
 
 
 func _on_document_changed() -> void:

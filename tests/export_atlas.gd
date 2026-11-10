@@ -32,7 +32,9 @@ func _run() -> void:
 		flat_index_count = arrays[Mesh.ARRAY_INDEX].size()
 		expect(flat_index_count == 312, "fifty-two exposed material faces produce one hundred four triangles")
 		expect(arrays[Mesh.ARRAY_VERTEX].size() < flat_index_count, "the indexed triangles share welded vertices")
-		expect(arrays[Mesh.ARRAY_COLOR] == null, "the mesh needs no vertex colors")
+		var colors: PackedColorArray = arrays[Mesh.ARRAY_COLOR]
+		expect(colors.size() == arrays[Mesh.ARRAY_VERTEX].size(), "every vertex carries an ambient occlusion color")
+		expect(_all_bright(colors), "a convex box stays fully lit")
 		_expect_samples()
 	)
 	step("When the same frame uses smooth normals", func():
@@ -110,6 +112,13 @@ func _expect_samples() -> void:
 			samples += 1
 	expect(samples == 52, "every exposed voxel face is sampled on all six sides")
 	expect(samples_match, "the UVs preserve albedo, roughness, metallic, and HDR emission at every sample")
+
+
+func _all_bright(colors: PackedColorArray) -> bool:
+	for color: Color in colors:
+		if not is_equal_approx(color.r, 1.0):
+			return false
+	return true
 
 
 func _near_color(actual: Color, expected: Color, tolerance: float, alpha := true) -> bool:

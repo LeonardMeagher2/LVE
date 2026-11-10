@@ -528,7 +528,7 @@ func _view_key(view: VoxelRenderer, location: Vector3i) -> PackedInt64Array:
 	var active: VoxelFrame = view._get_frame()
 	if active == null or State.document == null or not active.chunks.has(location):
 		return PackedInt64Array()
-	return VoxelRenderer._signature(active, location, State.document.smooth_normals)
+	return VoxelRenderer._signature(active, location, State.document.smooth_normals, -1, 0, 1, State.document.ao_strength)
 
 
 # The exact wanted key of one chunk in the frame the editor view draws.
