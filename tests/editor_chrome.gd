@@ -66,6 +66,12 @@ func _status_run() -> void:
 	step("Then the empty document shows zero dimensions", func():
 		expect(status.get_node("StatusRight").text.begins_with("0×0×0"), "the empty document shows zero dimensions")
 	)
+	step("Then the version link opens the releases page", func():
+		var link: LinkButton = status.get_node("Version")
+		var version := str(ProjectSettings.get_setting("application/config/version", ""))
+		expect(link.text == "v" + version, "the status bar shows the application version")
+		expect(link.uri == EditorStatusBar.RELEASES_URL, "the version link opens the releases page")
+	)
 	step("When a voxel is painted", func():
 		State.document.set_cell(0, Vector3i.ZERO, VoxelFrame.material(Color.RED))
 		var affected: Array[Vector3i] = []
