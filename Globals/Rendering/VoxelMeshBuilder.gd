@@ -115,12 +115,19 @@ func run() -> void:
 		snapshot_cells += reads[1]
 		snapshot_decodes += reads[2]
 		scan_queries += _scan_query_count(occupied_planes)
+	var chunk: VoxelFrame.Chunk = frame.chunks.get(chunk_location) if frame != null else null
+	var sparse := chunk != null and chunk.is_sparse()
+	var sparse_layers: Array = _sparse_layers(chunk) if sparse else []
 	source_frame = null
 	if texture_materials and frame != null:
 		# Collect the exposed faces straight from the snapshot. The greedy pass
 		# would merge them only for the cleanup to split them into single cells.
 		var collect_started_us := Time.get_ticks_usec() if profile else 0
-		var groups := _collect_groups(padded_cell_colors, padded_cell_materials, materials, occupied_planes, ao_strength)
+		var groups: Dictionary
+		if sparse:
+			groups = _collect_groups_sparse(sparse_layers, padded_cell_colors, padded_cell_materials, materials, occupied_planes, ao_strength)
+		else:
+			groups = _collect_groups(padded_cell_colors, padded_cell_materials, materials, occupied_planes, ao_strength)
 		if profile:
 			scan_us += Time.get_ticks_usec() - collect_started_us
 			group_count += groups.size()
@@ -141,6 +148,43 @@ func run() -> void:
 			atlas_emission = atlas.emission.get_data()
 		geometry_bytes = surface_arrays[Mesh.ARRAY_VERTEX].size() * (48 if ao_strength > 0.0 else 32) + surface_arrays[Mesh.ARRAY_INDEX].size() * 4
 		return
+	var greedy_started_us := Time.get_ticks_usec() if profile else 0
+	var greedy: Array
+	if sparse:
+		greedy = _greedy_sparse(chunk, sparse_layers, padded_cell_colors, padded_cell_materials, materials, occupied_planes)
+	else:
+		greedy = _greedy_dense(padded_cell_colors, padded_cell_materials, materials, occupied_planes)
+	if profile:
+		scan_us += Time.get_ticks_usec() - greedy_started_us
+	var vertex_positions: PackedVector3Array = greedy[0]
+	var vertex_normals: PackedVector3Array = greedy[1]
+	var vertex_colors: PackedColorArray = greedy[2]
+	var triangle_indices: PackedInt32Array = greedy[3]
+	surface_arrays.resize(Mesh.ARRAY_MAX)
+	surface_arrays[Mesh.ARRAY_VERTEX] = vertex_positions
+	surface_arrays[Mesh.ARRAY_NORMAL] = vertex_normals
+	surface_arrays[Mesh.ARRAY_COLOR] = vertex_colors
+	surface_arrays[Mesh.ARRAY_INDEX] = triangle_indices
+	geometry_bytes = vertex_positions.size() * 40 + triangle_indices.size() * 4
+	if texture_materials:
+		# Use the same seam-bounded planar cleanup and bake as the full-frame exporter.
+		var surface_started_us := Time.get_ticks_usec() if profile else 0
+		var surface := SURFACE.new()
+		surface.run(surface_arrays, frame, Vector3(chunk_location * CHUNK_SIZE), Callable(), smooth_normals, ao_strength)
+		if profile:
+			finish_us += Time.get_ticks_usec() - surface_started_us
+		surface_arrays = surface.arrays
+		atlas = surface.atlas
+		atlas_size = atlas.size
+		if atlas.albedo:
+			atlas_albedo = atlas.albedo.get_data()
+			atlas_orm = atlas.orm.get_data()
+			atlas_emission = atlas.emission.get_data()
+		geometry_bytes = surface_arrays[Mesh.ARRAY_VERTEX].size() * (48 if ao_strength > 0.0 else 32) + surface_arrays[Mesh.ARRAY_INDEX].size() * 4
+
+
+# Build the greedy vertex-color mesh from the padded snapshot.
+func _greedy_dense(padded_cell_colors: PackedColorArray, padded_cell_materials: PackedInt32Array, materials: PackedFloat32Array, occupied_planes: PackedInt32Array) -> Array:
 	var vertex_positions := PackedVector3Array()
 	var vertex_normals := PackedVector3Array()
 	var vertex_colors := PackedColorArray()
@@ -148,7 +192,6 @@ func run() -> void:
 	var face_materials := PackedInt32Array()
 	var corner_normals := {}
 	face_materials.resize(CHUNK_SIZE * CHUNK_SIZE)
-	var greedy_started_us := Time.get_ticks_usec() if profile else 0
 	for face_axis in 3:
 		var column_axis := (face_axis + 1) % 3
 		var row_axis := (face_axis + 2) % 3
@@ -191,61 +234,164 @@ func run() -> void:
 									break
 							if row_matches:
 								quad_height += 1
-						var face_origin := Vector3.ZERO
-						face_origin[face_axis] = layer_index + face_sign * 0.5
-						face_origin[column_axis] = column - 0.5
-						face_origin[row_axis] = row - 0.5
-						var column_edge := Vector3.ZERO
-						var row_edge := Vector3.ZERO
-						column_edge[column_axis] = quad_width
-						row_edge[row_axis] = quad_height
-						var first_vertex := vertex_positions.size()
-						var base := material_id * VoxelFrame.MATERIAL_STRIDE
-						var face_color := Color(materials[base], materials[base + 1], materials[base + 2], materials[base + 3])
-						vertex_positions.append_array(PackedVector3Array([face_origin, face_origin + column_edge, face_origin + column_edge + row_edge, face_origin + row_edge]))
-						for vertex_corner in 4:
-							var normal := face_normal
-							if smooth_normals:
-								var corner := Vector3i(vertex_positions[first_vertex + vertex_corner].floor())
-								if not corner_normals.has(corner):
-									corner_normals[corner] = _corner_normal(corner, padded_cell_colors)
-								normal = corner_normals[corner]
-								if normal.is_zero_approx():
-									normal = face_normal
-							vertex_normals.append(normal)
-							vertex_colors.append(face_color)
-						if face_sign > 0:
-							triangle_indices.append_array(PackedInt32Array([first_vertex, first_vertex + 2, first_vertex + 1, first_vertex, first_vertex + 3, first_vertex + 2]))
-						else:
-							triangle_indices.append_array(PackedInt32Array([first_vertex, first_vertex + 1, first_vertex + 2, first_vertex, first_vertex + 2, first_vertex + 3]))
+						_emit_quad(face_axis, face_sign, layer_index, column_axis, row_axis, column, row, quad_width, quad_height, material_id, face_normal, materials, padded_cell_colors, corner_normals, vertex_positions, vertex_normals, vertex_colors, triangle_indices)
 						for row_offset in quad_height:
 							for column_offset in quad_width:
 								face_materials[column + column_offset + CHUNK_SIZE * (row + row_offset)] = 0
 						column += quad_width
 					row += 1
-	if profile:
-		scan_us += Time.get_ticks_usec() - greedy_started_us
-	surface_arrays.resize(Mesh.ARRAY_MAX)
-	surface_arrays[Mesh.ARRAY_VERTEX] = vertex_positions
-	surface_arrays[Mesh.ARRAY_NORMAL] = vertex_normals
-	surface_arrays[Mesh.ARRAY_COLOR] = vertex_colors
-	surface_arrays[Mesh.ARRAY_INDEX] = triangle_indices
-	geometry_bytes = vertex_positions.size() * 40 + triangle_indices.size() * 4
-	if texture_materials:
-		# Use the same seam-bounded planar cleanup and bake as the full-frame exporter.
-		var surface_started_us := Time.get_ticks_usec() if profile else 0
-		var surface := SURFACE.new()
-		surface.run(surface_arrays, frame, Vector3(chunk_location * CHUNK_SIZE), Callable(), smooth_normals, ao_strength)
-		if profile:
-			finish_us += Time.get_ticks_usec() - surface_started_us
-		surface_arrays = surface.arrays
-		atlas = surface.atlas
-		atlas_size = atlas.size
-		if atlas.albedo:
-			atlas_albedo = atlas.albedo.get_data()
-			atlas_orm = atlas.orm.get_data()
-			atlas_emission = atlas.emission.get_data()
-		geometry_bytes = surface_arrays[Mesh.ARRAY_VERTEX].size() * (48 if ao_strength > 0.0 else 32) + surface_arrays[Mesh.ARRAY_INDEX].size() * 4
+	return [vertex_positions, vertex_normals, vertex_colors, triangle_indices]
+
+
+# Build the greedy vertex-color mesh from the occupied slots alone.
+func _greedy_sparse(chunk: VoxelFrame.Chunk, layers: Array, padded_cell_colors: PackedColorArray, padded_cell_materials: PackedInt32Array, materials: PackedFloat32Array, occupied_planes: PackedInt32Array) -> Array:
+	var vertex_positions := PackedVector3Array()
+	var vertex_normals := PackedVector3Array()
+	var vertex_colors := PackedColorArray()
+	var triangle_indices := PackedInt32Array()
+	var face_materials := PackedInt32Array()
+	var face_mask := PackedInt32Array()
+	var corner_normals := {}
+	face_materials.resize(CHUNK_SIZE * CHUNK_SIZE)
+	face_mask.resize(CHUNK_SIZE)
+	for face_axis in 3:
+		var column_axis := (face_axis + 1) % 3
+		var row_axis := (face_axis + 2) % 3
+		var column_stride: int = PADDED_AXIS_STRIDE[column_axis]
+		var row_stride: int = PADDED_AXIS_STRIDE[row_axis]
+		var face_stride: int = PADDED_AXIS_STRIDE[face_axis]
+		var layer_cells: Dictionary = layers[face_axis]
+		for face_sign: int in [-1, 1]:
+			var neighbor_step := face_sign * face_stride
+			var face_normal := Vector3.ZERO
+			face_normal[face_axis] = face_sign
+			for layer_index in CHUNK_SIZE:
+				if occupied_planes[face_axis] & (1 << (layer_index + 1)) == 0:
+					continue
+				var cells: Array = layer_cells.get(layer_index, [])
+				if cells.is_empty():
+					continue
+				face_mask.fill(0)
+				for cell: Vector3i in cells:
+					if not _cell_in_slice(cell):
+						continue
+					var sample_index := PADDED_ORIGIN + cell.x * PADDED_AXIS_STRIDE[0] + cell.y * PADDED_AXIS_STRIDE[1] + cell.z * PADDED_AXIS_STRIDE[2]
+					var voxel_color := padded_cell_colors[sample_index]
+					if voxel_color == Color.TRANSPARENT:
+						continue
+					var neighbor_color := padded_cell_colors[sample_index + neighbor_step]
+					if not (neighbor_color.a < 1.0 and neighbor_color != voxel_color):
+						continue
+					var material_id := padded_cell_materials[sample_index]
+					if material_id == 0:
+						continue
+					var column := cell[column_axis]
+					var row := cell[row_axis]
+					face_materials[column + CHUNK_SIZE * row] = material_id
+					face_mask[row] |= 1 << column
+				var row := 0
+				while row < CHUNK_SIZE:
+					var row_mask := face_mask[row]
+					if row_mask == 0:
+						row += 1
+						continue
+					var column := 0
+					while column < CHUNK_SIZE:
+						var remaining := row_mask >> column
+						if remaining == 0:
+							break
+						column += VoxelFrame.Chunk.first_column(remaining)
+						var material_id := face_materials[column + CHUNK_SIZE * row]
+						var quad_width := 1
+						while column + quad_width < CHUNK_SIZE and face_materials[column + quad_width + CHUNK_SIZE * row] == material_id:
+							quad_width += 1
+						var quad_height := 1
+						var row_matches := true
+						while row + quad_height < CHUNK_SIZE and row_matches:
+							for column_offset in quad_width:
+								var next_material := face_materials[column + column_offset + CHUNK_SIZE * (row + quad_height)]
+								if next_material != material_id:
+									row_matches = false
+									break
+							if row_matches:
+								quad_height += 1
+						_emit_quad(face_axis, face_sign, layer_index, column_axis, row_axis, column, row, quad_width, quad_height, material_id, face_normal, materials, padded_cell_colors, corner_normals, vertex_positions, vertex_normals, vertex_colors, triangle_indices)
+						for row_offset in quad_height:
+							for column_offset in quad_width:
+								face_materials[column + column_offset + CHUNK_SIZE * (row + row_offset)] = 0
+								face_mask[row + row_offset] &= ~(1 << (column + column_offset))
+						column += quad_width
+					row += 1
+	return [vertex_positions, vertex_normals, vertex_colors, triangle_indices]
+
+
+# Emit one greedy quad. The dense and sparse scans share the same vertex order.
+func _emit_quad(face_axis: int, face_sign: int, layer_index: int, column_axis: int, row_axis: int, column: int, row: int, quad_width: int, quad_height: int, material_id: int, face_normal: Vector3, materials: PackedFloat32Array, padded_cell_colors: PackedColorArray, corner_normals: Dictionary, vertex_positions: PackedVector3Array, vertex_normals: PackedVector3Array, vertex_colors: PackedColorArray, triangle_indices: PackedInt32Array) -> void:
+	var face_origin := Vector3.ZERO
+	face_origin[face_axis] = layer_index + face_sign * 0.5
+	face_origin[column_axis] = column - 0.5
+	face_origin[row_axis] = row - 0.5
+	var column_edge := Vector3.ZERO
+	var row_edge := Vector3.ZERO
+	column_edge[column_axis] = quad_width
+	row_edge[row_axis] = quad_height
+	var first_vertex := vertex_positions.size()
+	var base := material_id * VoxelFrame.MATERIAL_STRIDE
+	var face_color := Color(materials[base], materials[base + 1], materials[base + 2], materials[base + 3])
+	vertex_positions.append_array(PackedVector3Array([face_origin, face_origin + column_edge, face_origin + column_edge + row_edge, face_origin + row_edge]))
+	for vertex_corner in 4:
+		var normal := face_normal
+		if smooth_normals:
+			var corner := Vector3i(vertex_positions[first_vertex + vertex_corner].floor())
+			if not corner_normals.has(corner):
+				corner_normals[corner] = _corner_normal(corner, padded_cell_colors)
+			normal = corner_normals[corner]
+			if normal.is_zero_approx():
+				normal = face_normal
+		vertex_normals.append(normal)
+		vertex_colors.append(face_color)
+	if face_sign > 0:
+		triangle_indices.append_array(PackedInt32Array([first_vertex, first_vertex + 2, first_vertex + 1, first_vertex, first_vertex + 3, first_vertex + 2]))
+	else:
+		triangle_indices.append_array(PackedInt32Array([first_vertex, first_vertex + 1, first_vertex + 2, first_vertex, first_vertex + 2, first_vertex + 3]))
+
+
+# One entry per face axis and layer, in row then column order.
+static func _sparse_layers(chunk: VoxelFrame.Chunk) -> Array:
+	var layers: Array = [{}, {}, {}]
+	var rows := chunk.occupancy_rows()
+	for row in rows.masks.size():
+		var mask := rows.masks[row]
+		if mask == 0:
+			continue
+		var local_y := row % CHUNK_SIZE
+		var local_z := row / CHUNK_SIZE
+		while mask != 0:
+			var local_x := VoxelFrame.Chunk.first_column(mask)
+			mask &= mask - 1
+			var cell := Vector3i(local_x, local_y, local_z)
+			for axis in 3:
+				var layer: int = cell[axis]
+				var cells: Array = layers[axis].get(layer, [])
+				cells.append(cell)
+				layers[axis][layer] = cells
+	for axis in 3:
+		var row_axis := (axis + 2) % 3
+		var column_axis := (axis + 1) % 3
+		for layer in layers[axis]:
+			layers[axis][layer].sort_custom(func(first: Vector3i, second: Vector3i) -> bool:
+				if first[row_axis] != second[row_axis]:
+					return first[row_axis] < second[row_axis]
+				return first[column_axis] < second[column_axis]
+			)
+	return layers
+
+
+func _cell_in_slice(cell: Vector3i) -> bool:
+	if slice_axis < 0:
+		return true
+	var layer := cell[slice_axis]
+	return layer >= slice_index and layer < slice_index + slice_count
 
 
 # Finishes one enclosed chunk with the exact empty result that a normal face-free
@@ -394,6 +540,58 @@ func _collect_groups(padded_cell_colors: PackedColorArray, padded_cell_materials
 	return groups
 
 
+# Collect the exposed faces from the occupied layers alone. The order follows
+# `_collect_groups`, so the atlas and vertex arrays match the dense build.
+func _collect_groups_sparse(layers: Array, padded_cell_colors: PackedColorArray, padded_cell_materials: PackedInt32Array, materials: PackedFloat32Array, occupied_planes: PackedInt32Array, ao_strength := 0.0) -> Dictionary:
+	var groups := {}
+	var material_cache := {}
+	var use_ao := ao_strength > 0.0
+	for face_axis in 3:
+		var column_axis := (face_axis + 1) % 3
+		var row_axis := (face_axis + 2) % 3
+		var column_stride: int = PADDED_AXIS_STRIDE[column_axis]
+		var row_stride: int = PADDED_AXIS_STRIDE[row_axis]
+		var face_stride: int = PADDED_AXIS_STRIDE[face_axis]
+		var layer_cells: Dictionary = layers[face_axis]
+		for face_sign: int in [-1, 1]:
+			var neighbor_step := face_sign * face_stride
+			for layer_index in CHUNK_SIZE:
+				if occupied_planes[face_axis] & (1 << (layer_index + 1)) == 0:
+					continue
+				var cells: Array = layer_cells.get(layer_index, [])
+				for cell: Vector3i in cells:
+					if not _cell_in_slice(cell):
+						continue
+					var sample_index := PADDED_ORIGIN + cell.x * PADDED_AXIS_STRIDE[0] + cell.y * PADDED_AXIS_STRIDE[1] + cell.z * PADDED_AXIS_STRIDE[2]
+					var voxel_color := padded_cell_colors[sample_index]
+					if voxel_color == Color.TRANSPARENT:
+						continue
+					var neighbor_color := padded_cell_colors[sample_index + neighbor_step]
+					if not (neighbor_color.a < 1.0 and neighbor_color != voxel_color):
+						continue
+					var material_id := padded_cell_materials[sample_index]
+					if material_id == 0:
+						continue
+					var material: PackedFloat32Array
+					if material_cache.has(material_id):
+						material = material_cache[material_id]
+					else:
+						material = materials.slice(material_id * VoxelFrame.MATERIAL_STRIDE, (material_id + 1) * VoxelFrame.MATERIAL_STRIDE)
+						material_cache[material_id] = material
+					var plane := Vector3i(face_axis, face_sign, 2 * layer_index + face_sign)
+					var ao_code := -1
+					if use_ao:
+						ao_code = _face_ao_code(padded_cell_materials, sample_index + neighbor_step, column_stride, row_stride)
+					var key := [plane, material, ao_code] if use_ao else [plane, material]
+					if not groups.has(key):
+						groups[key] = {"plane": plane, "material": material, "cells": {}, "normals": {}, "corners": {}}
+					var group: Dictionary = groups[key]
+					group.cells[Vector2i(cell[column_axis], cell[row_axis])] = true
+					if use_ao:
+						SURFACE._store_ao_corners(group.corners, Vector2i(cell[column_axis], cell[row_axis]), ao_code)
+	return groups
+
+
 ## Returns the chunk offsets that a mesh of this chunk reads. A smooth mesh
 ## reads all 26 neighbors. A flat mesh reads only the six face neighbors.
 static func neighbor_offsets(use_smooth_normals: bool) -> Array[Vector3i]:
@@ -509,6 +707,51 @@ static func _snapshot(frame: VoxelFrame, location: Vector3i, use_smooth_normals:
 					z_last = z_to
 		if count_reads:
 			chunks_read += 1
+		if neighbor.is_sparse():
+			# A sparse chunk stores only its occupied slots. Its row masks visit
+			# those alone and write the same padded samples the dense walk writes.
+			var rows := neighbor.occupancy_rows()
+			for row in rows.masks.size():
+				var mask := rows.masks[row]
+				if mask == 0:
+					continue
+				var local_y := row % CHUNK_SIZE
+				var local_z := row / CHUNK_SIZE
+				if local_y < y_first or local_y >= y_last or local_z < z_first or local_z >= z_last:
+					continue
+				while mask != 0:
+					var local_x := VoxelFrame.Chunk.first_column(mask)
+					mask &= mask - 1
+					if local_x < x_first or local_x >= x_last:
+						continue
+					var id := neighbor.cell_id_at_slot(row * CHUNK_SIZE + local_x)
+					if count_reads:
+						cells_read += 1
+						decodes += 1
+					var x_row := origin_delta.x + local_x
+					var y_row := origin_delta.y + local_y
+					var z_row := origin_delta.z + local_z
+					var sample_index := x_row + PADDED_CHUNK_SIZE * (y_row + PADDED_CHUNK_SIZE * z_row)
+					var base := (id - 1) * VoxelFrame.MATERIAL_STRIDE
+					padded_cell_colors[sample_index] = Color(neighbor_materials[base], neighbor_materials[base + 1], neighbor_materials[base + 2], neighbor_materials[base + 3])
+					if offset != Vector3i.ZERO:
+						padded_cell_materials[sample_index] = 1
+						continue
+					occupied_planes[0] |= 1 << (origin_delta.x + local_x)
+					occupied_planes[1] |= 1 << (origin_delta.y + local_y)
+					occupied_planes[2] |= 1 << (origin_delta.z + local_z)
+					var material_id: int = row_ids.get(id, -1)
+					if material_id < 0:
+						var cell_material := neighbor_materials.slice(base, base + VoxelFrame.MATERIAL_STRIDE)
+						material_id = material_ids.get(cell_material, -1)
+						if material_id < 0:
+							material_id = materials.size() / VoxelFrame.MATERIAL_STRIDE
+							material_ids[cell_material] = material_id
+							materials.append_array(cell_material)
+						row_ids[id] = material_id
+					padded_cell_materials[sample_index] = material_id
+			continue
+		if count_reads:
 			cells_read += (x_last - x_first) * (y_last - y_first) * (z_last - z_first)
 		for local_z in range(z_first, z_last):
 			var z_row := origin_delta.z + local_z

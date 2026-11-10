@@ -36,6 +36,10 @@ func _ready() -> void:
 	test("an edit reports only the chunks whose mesher input changed", _rebuild_scope_run, "chunk_rebuild_scope")
 	timeout = 30.0
 	test("large edits restore chunk versions and save uniform regions as compact octrees", _storage_run, "chunk_storage")
+	timeout = 20.0
+	test("a loaded chunk keeps one table entry per distinct material", _palette_run, "chunk_palette")
+	timeout = 30.0
+	test("a low-occupancy chunk loads sparse and meshes like a dense chunk", _sparse_run, "chunk_sparse")
 	timeout = 10.0
 	test("a published job keeps every snapshot chunk frozen", _publish_run, "chunk_publish")
 
@@ -106,6 +110,7 @@ func _run() -> void:
 		expect(loaded.get_metallic(Vector3i(3, 0, 0)) == 1.0 and loaded.get_roughness(Vector3i(3, 0, 0)) == 0.25, "the metal voxel keeps its metallic and roughness")
 		expect(loaded.get_color(Vector3i.ZERO) == Color.RED, "the plain voxel keeps its color")
 		expect(loaded.get_emission(Vector3i.ZERO) == Color.BLACK and loaded.get_metallic(Vector3i.ZERO) == 0.0 and loaded.get_roughness(Vector3i.ZERO) == 1.0, "the plain voxel uses the default values")
+		expect(loaded.chunks[Vector3i.ZERO].materials.size() == 2 * VoxelFrame.MATERIAL_STRIDE, "the loaded chunk keeps one entry per distinct material")
 	)
 	step("Then the chunk stores one table for all material values", func():
 		var record: Array = loaded.storage_data()[1][0]
@@ -495,6 +500,12 @@ func _storage_run() -> void:
 			expect(storage_restored.count() == 4097, "the file restores all occupied cells")
 			expect(storage_restored.get_color(Vector3i(15, 15, 15)) == Color.BLUE, "the solid region keeps its blue color")
 			expect(storage_restored.get_color(Vector3i(-17, 3, -1)) == Color(0.25, 0.5, 0.75, 0.5), "the sparse voxel keeps its position and alpha")
+			var solid: VoxelFrame.Chunk = storage_restored.chunks[Vector3i.ZERO]
+			expect(solid.materials.size() == VoxelFrame.MATERIAL_STRIDE, "the loaded solid chunk holds one material entry")
+			expect(solid.shared_materials, "the loaded solid chunk shares its one entry")
+			var sparse: VoxelFrame.Chunk = storage_restored.chunks[Vector3i(-2, 0, -1)]
+			expect(sparse.materials.size() == VoxelFrame.MATERIAL_STRIDE, "the loaded sparse chunk holds one material entry")
+			print("Chunk storage: solid table %d bytes, sparse table %d bytes" % [solid.materials.size() * 4, sparse.materials.size() * 4])
 		expect(storage_original.get_color(Vector3i.ZERO) == Color.RED, "redo leaves the original frame red")
 		print("Chunk history: undo %s us, redo %s us, storage %s bytes" % [storage_undo_us, storage_redo_us, storage_data.size()])
 	)
@@ -539,3 +550,118 @@ func _storage_run() -> void:
 		var repainted: VoxelFrame.Chunk = storage_frame.chunks[Vector3i.ZERO]
 		expect(repainted.materials.size() / VoxelFrame.MATERIAL_STRIDE <= repainted.occupied_count * 2, "repeated repaints keep the material table bounded")
 	)
+
+
+func _palette_run() -> void:
+	step("Given a chunk with four materials in a checkerboard", func():
+		var colors: Array[Color] = [Color.RED, Color.GREEN, Color.BLUE, Color.YELLOW]
+		var cells := {}
+		for z in VoxelFrame.CHUNK_SIZE:
+			for y in VoxelFrame.CHUNK_SIZE:
+				for x in VoxelFrame.CHUNK_SIZE:
+					cells[Vector3i(x, y, z)] = VoxelFrame.material(colors[(x + y + z) % colors.size()])
+		frame = VoxelFrame.new()
+		frame.set_cells(cells)
+		var chunk: VoxelFrame.Chunk = frame.chunks[Vector3i.ZERO]
+		expect(chunk.materials.size() == cells.size() * VoxelFrame.MATERIAL_STRIDE, "the per-cell write starts with one entry per cell")
+		var table_bytes_before := chunk.materials.size() * 4
+		chunk._compact()
+		var table_bytes_after := chunk.materials.size() * 4
+		expect(chunk.materials.size() == colors.size() * VoxelFrame.MATERIAL_STRIDE, "compaction merges equal materials")
+		expect(chunk.shared_materials, "compaction marks the shared entries")
+		print("Chunk palette: table %d bytes before, %d after; grid %d bytes" % [table_bytes_before, table_bytes_after, chunk.grid.size() * 4])
+		var mismatches := 0
+		for z in VoxelFrame.CHUNK_SIZE:
+			for y in VoxelFrame.CHUNK_SIZE:
+				for x in VoxelFrame.CHUNK_SIZE:
+					if frame.get_color(Vector3i(x, y, z)) != colors[(x + y + z) % colors.size()]:
+						mismatches += 1
+		expect(mismatches == 0, "compaction keeps every cell color")
+	)
+	step("When the compacted frame saves and loads", func():
+		var restored := VoxelFrame.new()
+		restored.restore_storage(frame.storage_data())
+		var chunk: VoxelFrame.Chunk = restored.chunks[Vector3i.ZERO]
+		expect(chunk.materials.size() == 4 * VoxelFrame.MATERIAL_STRIDE, "the loaded chunk keeps one entry per distinct material")
+		expect(chunk.shared_materials, "the loaded chunk marks the shared entries")
+		var mismatches := 0
+		for z in VoxelFrame.CHUNK_SIZE:
+			for y in VoxelFrame.CHUNK_SIZE:
+				for x in VoxelFrame.CHUNK_SIZE:
+					if restored.get_color(Vector3i(x, y, z)) != frame.get_color(Vector3i(x, y, z)):
+						mismatches += 1
+		expect(mismatches == 0, "the loaded chunk keeps every cell color")
+	)
+
+
+func _sparse_run() -> void:
+	var colors: Array[Color] = [Color.RED, Color.GREEN, Color.BLUE]
+	var cells := {}
+	for index in 44:
+		var x := index % 8
+		var y := (index / 8) % 8
+		var z := index / 64
+		cells[Vector3i(x, y, z)] = VoxelFrame.material(colors[index % colors.size()])
+	var dense := VoxelFrame.new()
+	dense.set_cells(cells)
+	var sparse := VoxelFrame.new()
+	sparse.restore_storage(dense.storage_data())
+	var dense_chunk: VoxelFrame.Chunk = dense.chunks[Vector3i.ZERO]
+	var sparse_chunk: VoxelFrame.Chunk = sparse.chunks[Vector3i.ZERO]
+	expect(sparse_chunk.is_sparse(), "the loaded chunk is sparse")
+	expect(sparse_chunk.grid.is_empty(), "the sparse chunk holds no dense grid")
+	expect(sparse.count() == 44, "the sparse chunk keeps every occupied cell")
+	var dense_rows := dense_chunk.occupancy_rows()
+	var sparse_rows := sparse_chunk.occupancy_rows()
+	expect(sparse_rows.masks == dense_rows.masks and sparse_rows.counts == dense_rows.counts, "the sparse row masks match the dense rows")
+	expect(sparse_chunk.world_cells() == dense_chunk.world_cells(), "the sparse cells match the dense cells")
+	expect(sparse.get_bounds() == dense.get_bounds(), "the sparse bounds match the dense bounds")
+	var mismatches := 0
+	for cell: Vector3i in cells:
+		if not sparse.matches(cell, dense.get_material(cell)) or sparse.get_color(cell) != dense.get_color(cell):
+			mismatches += 1
+	expect(mismatches == 0, "the sparse frame keeps every cell material and color")
+	expect(sparse.occupancy_rows_at(Vector3i.ZERO) != null, "the frame exposes the sparse row index")
+	for texture_materials in [false, true]:
+		for smooth in [false, true]:
+			for ao in [0.0, 1.0]:
+				var dense_arrays := _mesh_arrays(dense, texture_materials, smooth, ao, -1, 0, 1)
+				var sparse_arrays := _mesh_arrays(sparse, texture_materials, smooth, ao, -1, 0, 1)
+				expect(sparse_arrays == dense_arrays, "the sparse mesh matches the dense mesh (atlas %s, smooth %s, ao %s)" % [texture_materials, smooth, ao])
+	for texture_materials in [false, true]:
+		for slice_count in [1, 5]:
+			var dense_arrays := _mesh_arrays(dense, texture_materials, false, 0.0, 0, 0, slice_count)
+			var sparse_arrays := _mesh_arrays(sparse, texture_materials, false, 0.0, 0, 0, slice_count)
+			expect(sparse_arrays == dense_arrays, "the sparse slice mesh matches the dense mesh (atlas %s, layers %d)" % [texture_materials, slice_count])
+	var target := VoxelFrame.material(Color.RED)
+	var seed: Vector3i = cells.keys()[0]
+	var dense_result := {}
+	var sparse_result := {}
+	VoxelRegionSearch.find(dense_result, dense, seed, target, false)
+	VoxelRegionSearch.find(sparse_result, sparse, seed, target, false)
+	var same := dense_result.size() == sparse_result.size()
+	if same:
+		for cell: Vector3i in dense_result:
+			if not sparse_result.has(cell):
+				same = false
+				break
+	expect(same, "the sparse region search matches the dense search")
+	sparse.set_cell(Vector3i(15, 15, 15), VoxelFrame.material(Color.YELLOW))
+	var edited: VoxelFrame.Chunk = sparse.chunks[Vector3i.ZERO]
+	expect(not edited.is_sparse(), "a write expands the sparse chunk")
+	expect(sparse.count() == 45, "the write adds one cell")
+	expect(sparse.get_color(Vector3i(15, 15, 15)) == Color.YELLOW, "the written cell keeps its color")
+
+
+func _mesh_arrays(frame: VoxelFrame, texture: bool, smooth: bool, ao: float, slice_axis: int, slice_index: int, slice_count: int) -> Array:
+	var builder := VoxelMeshBuilder.new()
+	builder.source_frame = frame
+	builder.chunk_location = Vector3i.ZERO
+	builder.texture_materials = texture
+	builder.smooth_normals = smooth
+	builder.ao_strength = ao
+	builder.slice_axis = slice_axis
+	builder.slice_index = slice_index
+	builder.slice_count = slice_count
+	builder.run()
+	return builder.surface_arrays

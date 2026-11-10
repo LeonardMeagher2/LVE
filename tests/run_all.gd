@@ -9,6 +9,11 @@ const TEST_SCREEN := 0
 # it needs its own deadline. Every other scene keeps the default.
 const DRAW_LATENCY_PATH := "res://tests/draw_latency.tscn"
 const DRAW_LATENCY_TIMEOUT_S := 125.0
+# A child prints the sum of its selected test timeouts as `TEST BUDGET: N`.
+# The runner allows that budget plus a small margin, capped for a hung child.
+const BUDGET_PREFIX := "TEST BUDGET:"
+const DECLARED_BUDGET_MARGIN_S := 10.0
+const MAX_SCENE_TIMEOUT_S := 1800.0
 # A grouped scene runs several named tests in one process. The runner reads each
 # scene's case names from the `test()` calls in its script, so a named run needs
 # no hand-kept table. The pattern matches a literal description, a plain method
@@ -20,6 +25,7 @@ var _pending := {}
 var _saw_ok := false
 var _saw_error := false
 var _timings: Array = []
+var _declared_budget_s := 0.0
 
 
 func _init() -> void:
@@ -198,14 +204,35 @@ func _requested() -> Dictionary:
 	return names
 
 
-# The deadline for one scene. A named scene can need longer than the default.
+# The static deadline for one scene. A child-declared budget can extend it.
 func _timeout_for(path: String) -> float:
 	return DRAW_LATENCY_TIMEOUT_S if path == DRAW_LATENCY_PATH else TEST_TIMEOUT_S
+
+
+# Returns the declared budget from a child line, or zero when the line is not a
+# budget line.
+static func parse_budget(line: String) -> float:
+	var text := line.strip_edges()
+	if not text.begins_with(BUDGET_PREFIX):
+		return 0.0
+	var value := text.trim_prefix(BUDGET_PREFIX).strip_edges()
+	if not value.is_valid_float():
+		return 0.0
+	return float(value)
+
+
+# Returns the scene deadline for a static deadline and a child-declared budget.
+# The margin lets the child report its own failure before the runner kills it.
+static func extended_timeout(base: float, declared: float) -> float:
+	if declared <= 0.0:
+		return base
+	return minf(MAX_SCENE_TIMEOUT_S, maxf(base, declared + DECLARED_BUDGET_MARGIN_S))
 
 
 func _run_one(entry: Dictionary) -> Dictionary:
 	_saw_ok = false
 	_saw_error = false
+	_declared_budget_s = 0.0
 	var begin_ms := Time.get_ticks_msec()
 	var path: String = entry["path"]
 	_wipe_dir(_artifact_dir(path))
@@ -230,6 +257,7 @@ func _run_one(entry: Dictionary) -> Dictionary:
 	while OS.is_process_running(pid):
 		_pump(out)
 		_pump(err_out)
+		timeout_s = extended_timeout(timeout_s, _declared_budget_s)
 		if (Time.get_ticks_msec() - started) / 1000.0 >= timeout_s:
 			timed_out = true
 			OS.kill(pid)
@@ -306,6 +334,10 @@ func _flush(f: FileAccess) -> void:
 func _print_line(raw: PackedByteArray) -> void:
 	var line := raw.get_string_from_utf8().trim_suffix("\r")
 	if line.strip_edges() == "" or _is_engine_banner(line):
+		return
+	var budget := parse_budget(line)
+	if budget > 0.0:
+		_declared_budget_s = budget
 		return
 	if line.strip_edges() == "TEST OK":
 		_saw_ok = true

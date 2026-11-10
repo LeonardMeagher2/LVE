@@ -800,21 +800,28 @@ class SmoothJob extends VoxelFrame.EditJob:
 					if chunk == null:
 						continue
 					var origin := location * size
-					var grid := chunk.grid
 					var x0 := maxi(low.x - origin.x, 0)
 					var y0 := maxi(low.y - origin.y, 0)
 					var z0 := maxi(low.z - origin.z, 0)
 					var x1 := mini(high.x - origin.x, size - 1)
 					var y1 := mini(high.y - origin.y, size - 1)
 					var z1 := mini(high.z - origin.z, size - 1)
-					for local_z in range(z0, z1 + 1):
-						for local_y in range(y0, y1 + 1):
-							var base := size * (local_y + size * local_z)
-							var world_y := origin.y + local_y
-							var world_z := origin.z + local_z
-							for local_x in range(x0, x1 + 1):
-								if grid[base + local_x] > 0:
-									occupied[Vector3i(origin.x + local_x, world_y, world_z)] = true
+					if x1 < x0 or y1 < y0 or z1 < z0:
+						continue
+					var rows := chunk.occupancy_rows()
+					for row in rows.masks.size():
+						var mask := rows.masks[row]
+						if mask == 0:
+							continue
+						var local_y := row % size
+						var local_z := row / size
+						if local_y < y0 or local_y > y1 or local_z < z0 or local_z > z1:
+							continue
+						var x_mask := mask & (((1 << (x1 - x0 + 1)) - 1) << x0)
+						while x_mask != 0:
+							var local_x := VoxelFrame.Chunk.first_column(x_mask)
+							x_mask &= x_mask - 1
+							occupied[Vector3i(origin.x + local_x, origin.y + local_y, origin.z + local_z)] = true
 					reads += (x1 - x0 + 1) * (y1 - y0 + 1) * (z1 - z0 + 1)
 					if not checkpoint(reads * candidates / volume):
 						gather_reads = reads
