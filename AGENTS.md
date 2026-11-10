@@ -101,10 +101,11 @@ To select tests inside a scene, add their names after `--`. A scene name selects
 - Keep related tests in one file. Share fixtures and helpers without sharing execution state.
 - Override `_setup_test()` and `_cleanup_test()` to isolate each test. The harness awaits both hooks.
 - Keep each test selectable alone or in another order. The runner reads case names from the `test()` calls, so no alias table exists. Name each case after its old scene when a scene merges.
-- A case that records no check fails. Set `allow_no_checks` before `test()` only for a print-only probe.
+- A case that records no check fails. Set `allow_no_checks` before `test()` or pass `config.allow_no_checks` only for a print-only probe.
+- Pass `config` to `test()` for per-test settings. The keys are `timeout` and `allow_no_checks`.
 - Use `step("Given ...", func)`, `step("When ...", func)`, and `step("Then ...", func)` for setup, actions, and checks.
 - Use `expect(condition, message)` with an affirmative description of the required state.
 - Put waits in the test body, not step lambdas. Use member variables for state shared between steps.
 - The harness waits two frames before each test. Its per-test watchdog covers setup, the test body, and cleanup.
-- Set `timeout` before each registration when the default 10 seconds is insufficient. Each test keeps its registered deadline.
-- Keep the separate scene deadline unchanged.
+- Set the per-test timeout with `config.timeout` or the `timeout` property. The default is 10 seconds.
+- The child prints the selected total as `TEST BUDGET: N`. The runner extends the scene deadline to that budget plus a margin. Do not add a scene timeout table.

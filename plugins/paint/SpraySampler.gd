@@ -292,15 +292,15 @@ static func sample(center: Vector3i, frame: VoxelFrame, context: VoxelFrame.Edit
 
 ## A read view of the occupied cells of one frozen frame.
 ##
-## The view caches the raw material grid of every chunk it reads, including the
-## chunks that the frame does not hold. One lookup costs one chunk dictionary
-## read, one cached grid read, and one native array read, so a mirrored
+## The view caches the chunk of every coordinate it reads, including the
+## coordinates that the frame does not hold. One lookup costs one chunk
+## dictionary read, one cached chunk read, and one cell lookup, so a mirrored
 ## destination far outside the sampled region costs the same as a local one. The
 ## view is per job, and it reads no Node and no live frame.
 class Occupancy extends RefCounted:
 	## The frozen frame to read. The caller sets it before the first lookup.
 	var frame: VoxelFrame
-	## The cached grids, keyed by chunk coordinate. An empty grid marks a chunk
+	## The cached chunks, keyed by chunk coordinate. A stored null marks a chunk
 	## that the frame does not hold.
 	var grids := {}
 
@@ -322,15 +322,14 @@ class Occupancy extends RefCounted:
 	func _material_id(cell: Vector3i) -> int:
 		var location := VoxelFrame.chunk_position(cell)
 		var cached: Variant = grids.get(location)
-		if cached == null:
-			var chunk: VoxelFrame.Chunk = frame.chunks.get(location)
-			cached = chunk.grid if chunk != null else PackedInt32Array()
+		if cached == null and not grids.has(location):
+			cached = frame.chunks.get(location)
 			grids[location] = cached
-		var grid: PackedInt32Array = cached
-		if grid.is_empty():
+		if cached == null:
 			return 0
+		var chunk: VoxelFrame.Chunk = cached
 		var local := cell - location * VoxelFrame.CHUNK_SIZE
-		return grid[local.x + VoxelFrame.CHUNK_SIZE * (local.y + VoxelFrame.CHUNK_SIZE * local.z)]
+		return chunk.cell_id_at_slot(local.x + VoxelFrame.CHUNK_SIZE * (local.y + VoxelFrame.CHUNK_SIZE * local.z))
 
 
 ## Expands a change set through the symmetry and the selection with a raw
@@ -688,19 +687,25 @@ static func local_cells(center: Vector3i, reach: int, frame: VoxelFrame, context
 				if chunk == null:
 					continue
 				var origin := chunk.location * chunk_size
-				var grid: PackedInt32Array = chunk.grid
-				for slot in grid.size():
-					if grid[slot] == 0:
+				var rows := chunk.occupancy_rows()
+				for row in rows.masks.size():
+					var mask := rows.masks[row]
+					if mask == 0:
 						continue
-					var cell := origin + Vector3i(slot % chunk_size, (slot / chunk_size) % chunk_size, slot / (chunk_size * chunk_size))
-					if Vector3(cell - center).length_squared() > limit:
-						continue
-					if filtered and not selection.has(cell):
-						continue
-					cells.append(cell)
-					completed += 1
-					if job and completed % 4096 == 0 and not job.checkpoint(completed):
-						return []
+					var local_y := row % chunk_size
+					var local_z := row / chunk_size
+					while mask != 0:
+						var local_x := VoxelFrame.Chunk.first_column(mask)
+						mask &= mask - 1
+						var cell := origin + Vector3i(local_x, local_y, local_z)
+						if Vector3(cell - center).length_squared() > limit:
+							continue
+						if filtered and not selection.has(cell):
+							continue
+						cells.append(cell)
+						completed += 1
+						if job and completed % 4096 == 0 and not job.checkpoint(completed):
+							return []
 	return cells
 
 
