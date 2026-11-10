@@ -141,18 +141,23 @@ func _build(axis: int) -> Dictionary:
 	for location: Vector3i in _frame.chunks:
 		var chunk: VoxelFrame.Chunk = _frame.chunks[location]
 		var origin := location * size
-		var grid := chunk.grid
-		for slot in grid.size():
-			scanned += 1
-			if scanned % CHECKPOINT == 0 and not _checkpoint(scanned):
-				_cancelled = true
-				return {}
-			grid_reads += 1
-			if grid[slot] == 0:
+		var rows := chunk.occupancy_rows()
+		for row in rows.masks.size():
+			var mask := rows.masks[row]
+			if mask == 0:
 				continue
-			var local := Vector3i(slot % size, (slot / size) % size, slot / (size * size))
-			var world := origin + local
-			columns[Vector2i(world[u], world[v])] = true
+			var local_y := row % size
+			var local_z := row / size
+			while mask != 0:
+				var local_x := VoxelFrame.Chunk.first_column(mask)
+				mask &= mask - 1
+				scanned += 1
+				if scanned % CHECKPOINT == 0 and not _checkpoint(scanned):
+					_cancelled = true
+					return {}
+				grid_reads += 1
+				var world := origin + Vector3i(local_x, local_y, local_z)
+				columns[Vector2i(world[u], world[v])] = true
 	return columns
 
 

@@ -261,7 +261,6 @@ static func _find_connected(result: Dictionary, frame: VoxelFrame, seed_cell: Ve
 	var examined := 0
 	var current_location := Vector3i.MAX
 	var current_chunk: VoxelFrame.Chunk = null
-	var current_grid := PackedInt32Array()
 	var current_materials := PackedFloat32Array()
 	var current_origin := Vector3i.ZERO
 	var cached := false
@@ -273,7 +272,6 @@ static func _find_connected(result: Dictionary, frame: VoxelFrame, seed_cell: Ve
 			current_location = location
 			current_chunk = frame.chunks.get(location)
 			if current_chunk:
-				current_grid = current_chunk.grid
 				current_materials = current_chunk.materials
 				current_origin = location * CHUNK_SIZE
 			cached = _cache_pays(current_chunk)
@@ -294,10 +292,11 @@ static func _find_connected(result: Dictionary, frame: VoxelFrame, seed_cell: Ve
 			var local_z := neighbor.z - origin_z
 			if local_x >= 0 and local_y >= 0 and local_z >= 0 and local_x < CHUNK_SIZE and local_y < CHUNK_SIZE and local_z < CHUNK_SIZE:
 				var slot := local_x + CHUNK_SIZE * (local_y + CHUNK_SIZE * local_z)
+				var id := current_chunk.cell_id_at_slot(slot)
 				if cached:
-					if not _id_matches_cached(current_materials, current_grid[slot], target_material, matches):
+					if not _id_matches_cached(current_materials, id, target_material, matches):
 						continue
-				elif not _id_matches(current_materials, current_grid[slot], target_material):
+				elif not _id_matches(current_materials, id, target_material):
 					continue
 			else:
 				var neighbor_location := VoxelFrame.chunk_position(neighbor)
@@ -309,7 +308,7 @@ static func _find_connected(result: Dictionary, frame: VoxelFrame, seed_cell: Ve
 				var neighbor_local_y := neighbor.y - neighbor_origin.y
 				var neighbor_local_z := neighbor.z - neighbor_origin.z
 				var neighbor_slot := neighbor_local_x + CHUNK_SIZE * (neighbor_local_y + CHUNK_SIZE * neighbor_local_z)
-				if not _id_matches(neighbor_chunk.materials, neighbor_chunk.grid[neighbor_slot], target_material):
+				if not _id_matches(neighbor_chunk.materials, neighbor_chunk.cell_id_at_slot(neighbor_slot), target_material):
 					continue
 			result[neighbor] = value
 			pending.append(neighbor)
@@ -335,33 +334,38 @@ static func _find_occupied(result: Dictionary, frame: VoxelFrame, target_materia
 	var mask_active := not selection_mask.is_empty()
 	var examined := 0
 	for chunk: VoxelFrame.Chunk in frame.chunks.values():
-		# A sparse frame can hold one cell per chunk, so the slot walk would run a
-		# long way between occupied-cell checkpoints. The chunk boundary bounds that
-		# wait. `examined` still counts occupied cells, so the reported progress and
-		# its total stay consistent with the caller's stage total.
+		# The row masks visit set bits only, so a sparse chunk costs its occupied
+		# cells. The chunk boundary bounds the wait between checkpoints. `examined`
+		# counts occupied cells, so the reported progress stays in caller units.
 		if job and not job.checkpoint(examined):
 			return false
 		var origin := chunk.origin()
-		var grid := chunk.grid
 		var materials := chunk.materials
+		var rows := chunk.occupancy_rows()
 		var cached := _cache_pays(chunk)
 		var matches := {}
-		for slot in CHUNK_CELLS:
-			var id := grid[slot]
-			if id == 0:
+		for row in rows.masks.size():
+			var mask := rows.masks[row]
+			if mask == 0:
 				continue
-			var cell_position := origin + Vector3i(slot % CHUNK_SIZE, (slot / CHUNK_SIZE) % CHUNK_SIZE, slot / (CHUNK_SIZE * CHUNK_SIZE))
-			var hit := _id_matches_cached(materials, id, target_material, matches) if cached else _id_matches(materials, id, target_material)
-			if hit and (slice_axis < 0 or _in_slice(cell_position, slice_axis, slice_index, slice_count)) and (not mask_active or selection_mask.has(cell_position)):
-				result[cell_position] = value
-				if streaming:
-					batch.append(cell_position)
-					if batch.size() >= STREAM_BATCH:
-						stream.call(batch)
-						batch = []
-			examined += 1
-			if job and examined % 4096 == 0 and not job.checkpoint(examined):
-				return false
+			var local_y := row % CHUNK_SIZE
+			var local_z := row / CHUNK_SIZE
+			while mask != 0:
+				var local_x := VoxelFrame.Chunk.first_column(mask)
+				var id := chunk.cell_id_at_slot(row * CHUNK_SIZE + local_x)
+				var cell_position := origin + Vector3i(local_x, local_y, local_z)
+				var hit := _id_matches_cached(materials, id, target_material, matches) if cached else _id_matches(materials, id, target_material)
+				if hit and (slice_axis < 0 or _in_slice(cell_position, slice_axis, slice_index, slice_count)) and (not mask_active or selection_mask.has(cell_position)):
+					result[cell_position] = value
+					if streaming:
+						batch.append(cell_position)
+						if batch.size() >= STREAM_BATCH:
+							stream.call(batch)
+							batch = []
+				examined += 1
+				if job and examined % 4096 == 0 and not job.checkpoint(examined):
+					return false
+				mask &= mask - 1
 	if streaming and not batch.is_empty():
 		stream.call(batch)
 	return true

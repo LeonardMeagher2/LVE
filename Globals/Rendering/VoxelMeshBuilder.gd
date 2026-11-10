@@ -509,6 +509,51 @@ static func _snapshot(frame: VoxelFrame, location: Vector3i, use_smooth_normals:
 					z_last = z_to
 		if count_reads:
 			chunks_read += 1
+		if neighbor.is_sparse():
+			# A sparse chunk stores only its occupied slots. Its row masks visit
+			# those alone and write the same padded samples the dense walk writes.
+			var rows := neighbor.occupancy_rows()
+			for row in rows.masks.size():
+				var mask := rows.masks[row]
+				if mask == 0:
+					continue
+				var local_y := row % CHUNK_SIZE
+				var local_z := row / CHUNK_SIZE
+				if local_y < y_first or local_y >= y_last or local_z < z_first or local_z >= z_last:
+					continue
+				while mask != 0:
+					var local_x := VoxelFrame.Chunk.first_column(mask)
+					mask &= mask - 1
+					if local_x < x_first or local_x >= x_last:
+						continue
+					var id := neighbor.cell_id_at_slot(row * CHUNK_SIZE + local_x)
+					if count_reads:
+						cells_read += 1
+						decodes += 1
+					var x_row := origin_delta.x + local_x
+					var y_row := origin_delta.y + local_y
+					var z_row := origin_delta.z + local_z
+					var sample_index := x_row + PADDED_CHUNK_SIZE * (y_row + PADDED_CHUNK_SIZE * z_row)
+					var base := (id - 1) * VoxelFrame.MATERIAL_STRIDE
+					padded_cell_colors[sample_index] = Color(neighbor_materials[base], neighbor_materials[base + 1], neighbor_materials[base + 2], neighbor_materials[base + 3])
+					if offset != Vector3i.ZERO:
+						padded_cell_materials[sample_index] = 1
+						continue
+					occupied_planes[0] |= 1 << (origin_delta.x + local_x)
+					occupied_planes[1] |= 1 << (origin_delta.y + local_y)
+					occupied_planes[2] |= 1 << (origin_delta.z + local_z)
+					var material_id: int = row_ids.get(id, -1)
+					if material_id < 0:
+						var cell_material := neighbor_materials.slice(base, base + VoxelFrame.MATERIAL_STRIDE)
+						material_id = material_ids.get(cell_material, -1)
+						if material_id < 0:
+							material_id = materials.size() / VoxelFrame.MATERIAL_STRIDE
+							material_ids[cell_material] = material_id
+							materials.append_array(cell_material)
+						row_ids[id] = material_id
+					padded_cell_materials[sample_index] = material_id
+			continue
+		if count_reads:
 			cells_read += (x_last - x_first) * (y_last - y_first) * (z_last - z_first)
 		for local_z in range(z_first, z_last):
 			var z_row := origin_delta.z + local_z
