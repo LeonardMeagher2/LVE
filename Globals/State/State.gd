@@ -457,6 +457,19 @@ func open_tab(value: VoxelDocument) -> int:
 	return index
 
 
+## Replaces every tab with [param documents] and activates [param index]. It
+## restores a session in one step, without an empty startup tab.
+func set_tabs(documents: Array[VoxelDocument], index: int = 0) -> void:
+	if documents.is_empty():
+		documents.append(VoxelDocument.new())
+	tabs.clear()
+	tabs.append_array(documents)
+	active_tab = clampi(index, 0, documents.size() - 1)
+	_adopt_document(tabs[active_tab])
+	tabs_changed.emit()
+	active_tab_changed.emit()
+
+
 ## Makes one tab active. Returns [code]false[/code] while an edit is open.
 func activate_tab(index: int) -> bool:
 	if index < 0 or index >= tabs.size() or index == active_tab:
@@ -1199,6 +1212,52 @@ func last_document_path(config_path: String = SESSION_PATH) -> String:
 		return ""
 	var path: Variant = config.get_value("files", "last_document", "")
 	return path if path is String else ""
+
+
+## Returns the saved tab paths, or an empty array.
+func last_tabs(config_path: String = SESSION_PATH) -> PackedStringArray:
+	var config := ConfigFile.new()
+	if config.load(config_path) != OK:
+		return PackedStringArray()
+	var stored: Variant = config.get_value("files", "tabs", PackedStringArray())
+	if stored is PackedStringArray:
+		return stored
+	var paths := PackedStringArray()
+	if stored is Array:
+		for value in stored:
+			if value is String:
+				paths.append(value)
+	return paths
+
+
+## Returns the saved active tab index, or zero.
+func last_tab_index(config_path: String = SESSION_PATH) -> int:
+	var config := ConfigFile.new()
+	if config.load(config_path) != OK:
+		return 0
+	return int(config.get_value("files", "active", 0))
+
+
+## Writes the open documents that have a path, and the active index. A tab that
+## was never saved has no path, so a restart cannot reopen it.
+func remember_session(config_path: String = SESSION_PATH) -> void:
+	var config := ConfigFile.new()
+	config.load(config_path)
+	var paths := PackedStringArray()
+	var active := 0
+	for index in tabs.size():
+		var document := tabs[index]
+		var path := document.edit_save_path if not document.edit_save_path.is_empty() else document.file_path
+		if path.is_empty():
+			continue
+		if index == active_tab:
+			active = paths.size()
+		paths.append(path)
+	config.set_value("files", "tabs", paths)
+	config.set_value("files", "active", active)
+	if not paths.is_empty():
+		config.set_value("files", "last_document", paths[active])
+	config.save(config_path)
 
 
 ## Returns [code]true[/code] when the current scene is the application Main

@@ -9,6 +9,7 @@
 [ext_resource type="Texture2D" uid="uid://b4jrotar1sqwf" path="res://icons/redo.svg" id="7_redo"]
 [ext_resource type="Texture2D" path="res://icons/settings.svg" id="8_settings"]
 [ext_resource type="PackedScene" path="res://ui/MenuBar/DocumentSettingsModal.tscn" id="9_dialog"]
+[ext_resource type="PackedScene" path="res://ui/MenuBar/document_tabs.tscn" id="10_tabs"]
 
 [sub_resource type="InputEventAction" id="InputEventAction_new"]
 action = &"new_file"
@@ -116,6 +117,11 @@ shortcut = SubResource("Shortcut_redo")
 icon = ExtResource("7_redo")
 icon_alignment = 1
 
+[node name="DocumentTabs" parent="." instance=ExtResource("10_tabs")]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+
 [node name="DocumentSettingsModal" parent="." instance=ExtResource("9_dialog")]
 unique_name_in_owner = true
 
@@ -125,6 +131,13 @@ unique_name_in_owner = true
 [node name="FileError" type="AcceptDialog" parent="."]
 unique_name_in_owner = true
 title = "Leonard's Voxel Editor"
+
+[node name="CloseTabDialog" type="ConfirmationDialog" parent="."]
+unique_name_in_owner = true
+title = "Unsaved document"
+ok_button_text = "Save"
+cancel_button_text = "Cancel"
+dialog_text = "Save the changes to this document?"
 
 [connection signal="pressed" from="ModelSettingsBtn" to="." method="_on_model_settings_pressed"]
 [connection signal="pressed" from="NewBtn" to="." method="_on_new_btn_pressed"]
