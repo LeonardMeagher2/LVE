@@ -5,8 +5,12 @@ extends HBoxContainer
 ## It opens, saves, and creates documents. It also shows the undo and redo
 ## buttons and the model settings.
 
-## The path of the current document, or an empty string for a new document.
-var current_save_path:String = ""
+## The save path of the active document, or an empty string for a new document.
+var current_save_path: String:
+	get:
+		return State.document.edit_save_path
+	set(value):
+		State.document.edit_save_path = value
 var _save_format := OptionButton.new()
 
 
@@ -70,6 +74,8 @@ func save_doc(path: String) -> Error:
 		return err
 	current_save_path = path
 	document.file_path = path
+	document.edit_dirty = false
+	State.tabs_changed.emit()
 	if State.is_app_session():
 		State.remember_document(path)
 	return OK

@@ -47,15 +47,37 @@ var _init_dist := 24.0
 func _ready() -> void:
 	configure()
 	State.document_changed.connect(configure)
+	State.document_deactivating.connect(_save_pose)
 	set_view("default")
 
-## Frames the document or the provided bounds at the default distance.
+## Frames the document or the provided bounds. A document with a saved pose
+## restores it, so a tab switch keeps the view.
 func configure() -> void:
 	var bounds: AABB = bounds_provider.call() if bounds_provider.is_valid() else State.document.bounds()
 	_init_dist = maxf(bounds.size.length(), 16.0) * 1.25
-	_dist = _init_dist
-	_target = bounds.get_center()
+	var pose: Dictionary = State.document.edit_camera
+	if pose.is_empty():
+		_dist = _init_dist
+		_target = bounds.get_center()
+	else:
+		_yaw = float(pose.get("yaw", _yaw))
+		_pitch = float(pose.get("pitch", _pitch))
+		_dist = float(pose.get("dist", _init_dist))
+		_target = pose.get("target", bounds.get_center())
 	_update()
+	zoom_changed.emit(zoom_percent())
+
+
+# Stores the view on the document that is about to be inactive.
+func _save_pose() -> void:
+	if not State.document:
+		return
+	State.document.edit_camera = {
+		"yaw": _yaw,
+		"pitch": _pitch,
+		"dist": _dist,
+		"target": _target,
+	}
 
 
 ## Frames one box at the default distance.

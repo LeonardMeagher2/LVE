@@ -66,10 +66,34 @@ var file_path := "":
 var _bounds: AABB
 var _bounds_dirty := true
 
+# Runtime editor state. The editor keeps one document per tab, so this state
+# moves with the document. None of these fields are serialized.
+## The frame that the editor shows.
+var edit_frame := 0
+## The active animation tag index, or -1 when no tag is active.
+var edit_tag := 0
+## The cell selection of this document.
+var edit_selection := VoxelSelection.new()
+## The undo and redo history of this document.
+var edit_history := UndoRedo.new()
+## The path that Save writes to. Empty until the first save.
+var edit_save_path := ""
+## Whether the document changed since the last save.
+var edit_dirty := false
+## The saved editor camera pose. Empty before the first tab switch.
+var edit_camera := {}
+
 
 func _init() -> void:
 	if frames.is_empty():
 		frames.append(VoxelFrame.new())
+
+
+func _notification(what: int) -> void:
+	# UndoRedo is an Object, not a RefCounted value. Free it with the document.
+	if what == NOTIFICATION_PREDELETE and is_instance_valid(edit_history):
+		edit_history.free()
+		edit_history = null
 
 
 ## Returns the file name for display. It falls back to [code]Untitled[/code].
@@ -541,6 +565,8 @@ func remove_frame(i: int) -> void:
 	frames.remove_at(i)
 	_shift_tags_after_remove(i)
 	_bounds_dirty = true
+	edit_frame = clampi(edit_frame, 0, frames.size() - 1)
+	edit_tag = clampi(edit_tag, -1, tags.size() - 1)
 
 
 func _shift_tags_after_remove(i: int) -> void:
@@ -590,6 +616,7 @@ func get_tag(i:int) -> AnimationTag:
 func remove_tag(i: int) -> void:
 	if i >= 0 and i < tags.size():
 		tags.remove_at(i)
+		edit_tag = clampi(edit_tag, -1, tags.size() - 1)
 
 
 ## Returns [code]true[/code] when at least one axis has a finite document size.

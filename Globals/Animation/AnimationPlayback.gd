@@ -18,14 +18,17 @@ signal tag_changed()
 ## The document that supplies the frames and the tags.
 var document := VoxelDocument.new()
 
-## The current frame index. A write clamps to the frame range.
-var current_frame := 0:
+## The current frame index. It is stored on the document, so a tab switch
+## restores it. A write clamps to the frame range.
+var current_frame: int:
+	get:
+		return document.edit_frame
 	set(value):
 		value = clampi(value, 0, document.frames.size() - 1)
-		if value == current_frame:
+		if value == document.edit_frame:
 			return
 		frame_changing.emit()
-		current_frame = value
+		document.edit_frame = value
 		frame_changed.emit()
 
 ## Whether playback runs. Setting it to [code]true[/code] restarts the range.
@@ -38,13 +41,16 @@ var is_playing := false:
 			_restart()
 		is_playing_toggled.emit(is_playing)
 
-## The active tag index, or -1 when no tag is active.
-var active_tag := 0:
+## The active tag index, or -1 when no tag is active. It is stored on the
+## document, so a tab switch restores it.
+var active_tag: int:
+	get:
+		return document.edit_tag
 	set(value):
 		value = clampi(value, -1, document.tags.size() - 1)
-		if value == active_tag:
+		if value == document.edit_tag:
 			return
-		active_tag = value
+		document.edit_tag = value
 		if is_playing:
 			_restart()
 		tag_changed.emit()
