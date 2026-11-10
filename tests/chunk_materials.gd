@@ -623,17 +623,16 @@ func _sparse_run() -> void:
 	expect(mismatches == 0, "the sparse frame keeps every cell material and color")
 	expect(sparse.occupancy_rows_at(Vector3i.ZERO) != null, "the frame exposes the sparse row index")
 	for texture_materials in [false, true]:
-		var dense_builder := VoxelMeshBuilder.new()
-		dense_builder.source_frame = dense
-		dense_builder.chunk_location = Vector3i.ZERO
-		dense_builder.texture_materials = texture_materials
-		dense_builder.run()
-		var sparse_builder := VoxelMeshBuilder.new()
-		sparse_builder.source_frame = sparse
-		sparse_builder.chunk_location = Vector3i.ZERO
-		sparse_builder.texture_materials = texture_materials
-		sparse_builder.run()
-		expect(sparse_builder.surface_arrays == dense_builder.surface_arrays, "the sparse mesh matches the dense mesh (atlas %s)" % texture_materials)
+		for smooth in [false, true]:
+			for ao in [0.0, 1.0]:
+				var dense_arrays := _mesh_arrays(dense, texture_materials, smooth, ao, -1, 0, 1)
+				var sparse_arrays := _mesh_arrays(sparse, texture_materials, smooth, ao, -1, 0, 1)
+				expect(sparse_arrays == dense_arrays, "the sparse mesh matches the dense mesh (atlas %s, smooth %s, ao %s)" % [texture_materials, smooth, ao])
+	for texture_materials in [false, true]:
+		for slice_count in [1, 5]:
+			var dense_arrays := _mesh_arrays(dense, texture_materials, false, 0.0, 0, 0, slice_count)
+			var sparse_arrays := _mesh_arrays(sparse, texture_materials, false, 0.0, 0, 0, slice_count)
+			expect(sparse_arrays == dense_arrays, "the sparse slice mesh matches the dense mesh (atlas %s, layers %d)" % [texture_materials, slice_count])
 	var target := VoxelFrame.material(Color.RED)
 	var seed: Vector3i = cells.keys()[0]
 	var dense_result := {}
@@ -652,3 +651,17 @@ func _sparse_run() -> void:
 	expect(not edited.is_sparse(), "a write expands the sparse chunk")
 	expect(sparse.count() == 45, "the write adds one cell")
 	expect(sparse.get_color(Vector3i(15, 15, 15)) == Color.YELLOW, "the written cell keeps its color")
+
+
+func _mesh_arrays(frame: VoxelFrame, texture: bool, smooth: bool, ao: float, slice_axis: int, slice_index: int, slice_count: int) -> Array:
+	var builder := VoxelMeshBuilder.new()
+	builder.source_frame = frame
+	builder.chunk_location = Vector3i.ZERO
+	builder.texture_materials = texture
+	builder.smooth_normals = smooth
+	builder.ao_strength = ao
+	builder.slice_axis = slice_axis
+	builder.slice_index = slice_index
+	builder.slice_count = slice_count
+	builder.run()
+	return builder.surface_arrays
