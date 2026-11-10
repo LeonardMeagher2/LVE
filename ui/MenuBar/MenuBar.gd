@@ -5,6 +5,13 @@ extends HBoxContainer
 ## It opens, saves, and creates documents. It also shows the undo and redo
 ## buttons and the model settings.
 
+## The user path of the file dialog settings.
+const FILE_SETTINGS_PATH := "user://file_dialog.cfg"
+
+## The file that stores the favorites and the last folder. Tests set a temporary
+## path before the node enters the tree.
+var file_settings_path := FILE_SETTINGS_PATH
+
 ## The save path of the active document, or an empty string for a new document.
 var current_save_path: String:
 	get:
@@ -16,12 +23,16 @@ var _save_format := OptionButton.new()
 var _pending_close_index := -1
 # The tab to close after a successful Save As, or -1.
 var _close_after_save := -1
+# The last folder that the file dialog used.
+var _last_dir := ""
 
 
 func _ready() -> void:
 	%FileDialog.access = FileDialog.ACCESS_FILESYSTEM
 	%FileDialog.file_selected.connect(_on_file_selected)
 	%FileDialog.canceled.connect(_on_file_dialog_canceled)
+	%FileDialog.visibility_changed.connect(_on_file_dialog_visibility_changed)
+	_restore_file_dialog()
 	_save_format.add_item("LVE document (.lve)")
 	_save_format.add_item("LVE document with PNG preview (.lve.png)")
 	_save_format.item_selected.connect(_on_save_format_selected)
@@ -163,6 +174,43 @@ func _on_file_dialog_canceled() -> void:
 	_close_after_save = -1
 	_pending_close_index = -1
 
+
+# Restores the favorite folders and the last folder. The favorite list is
+# shared by all FileDialog nodes, so set it before the dialog is shown.
+func _restore_file_dialog() -> void:
+	var config := ConfigFile.new()
+	if config.load(file_settings_path) != OK:
+		return
+	var favorites: Variant = config.get_value("files", "favorites", PackedStringArray())
+	if favorites is PackedStringArray:
+		FileDialog.set_favorite_list(favorites)
+	var last_dir: Variant = config.get_value("files", "last_dir", "")
+	if last_dir is String and DirAccess.dir_exists_absolute(last_dir):
+		_last_dir = last_dir
+
+
+func _save_file_dialog() -> void:
+	var dialog: FileDialog = %FileDialog
+	var current := dialog.current_dir
+	if not current.is_empty() and DirAccess.dir_exists_absolute(current):
+		_last_dir = current
+	var config := ConfigFile.new()
+	config.load(file_settings_path)
+	config.set_value("files", "favorites", FileDialog.get_favorite_list())
+	config.set_value("files", "last_dir", _last_dir)
+	config.save(file_settings_path)
+
+
+func _on_file_dialog_visibility_changed() -> void:
+	if not %FileDialog.visible:
+		_save_file_dialog()
+
+
+func _show_file_dialog() -> void:
+	if not _last_dir.is_empty() and DirAccess.dir_exists_absolute(_last_dir):
+		%FileDialog.current_dir = _last_dir
+	%FileDialog.popup_centered()
+
 func _on_new_btn_pressed() -> void:
 	if State.edit_busy():
 		return
@@ -177,7 +225,7 @@ func _on_open_btn_pressed() -> void:
 	%FileDialog.clear_filters()
 	%FileDialog.add_filter("*.lve ; LVE document")
 	%FileDialog.add_filter(State.get_image_file_filter())
-	%FileDialog.popup_centered()
+	_show_file_dialog()
 
 ## Opens one document file and returns [code]true[/code] on success. When
 ## [param saved] is true, it records the path as the current save path. Open
@@ -239,7 +287,7 @@ func _on_save_as_btn_pressed() -> void:
 	_save_format.select(format_index)
 	%FileDialog.current_file = State.document.get_file_name()
 	_on_save_format_selected(format_index)
-	%FileDialog.popup_centered()
+	_show_file_dialog()
 
 
 func _on_save_format_selected(index: int) -> void:
