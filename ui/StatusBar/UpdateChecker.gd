@@ -2,9 +2,9 @@ extends Node
 
 ## Checks GitHub for the latest release when the app starts.
 ##
-## The result is cached in `user://`, so the status bar can show the last known
-## release before the request completes. The check runs only in release builds,
-## or when `LVE_UPDATE_CHECK=1` is set. Tests and the editor stay offline.
+## The check runs only in release builds, or when `LVE_UPDATE_CHECK=1` is set.
+## Tests and the editor stay offline. The status bar keeps its fallback release
+## page until the request returns.
 
 ## Emitted with the latest release tag, its page URL, and whether it is newer.
 signal latest_release(version: String, url: String, newer: bool)
@@ -13,18 +13,12 @@ signal latest_release(version: String, url: String, newer: bool)
 const ENDPOINT := "https://api.github.com/repos/LeonardMeagher2/LVE/releases/latest"
 ## The prefix that every release page URL must use.
 const RELEASES_PREFIX := "https://github.com/LeonardMeagher2/LVE/releases/"
-## The cache path for the last known release.
-const CACHE_PATH := "user://update_check.cfg"
 ## The request timeout in seconds.
 const REQUEST_TIMEOUT := 10.0
-
-## The cache path. Tests can set a temporary path before the node enters the tree.
-@export var cache_path := CACHE_PATH
 
 @onready var _request: HTTPRequest = $HTTPRequest
 
 var _current_version := ""
-var _latest := {}
 var _started := false
 
 
@@ -33,7 +27,6 @@ func _ready() -> void:
 	_request.use_threads = true
 	_request.request_completed.connect(_on_request_completed)
 	_current_version = str(ProjectSettings.get_setting("application/config/version", ""))
-	_latest = read_cache(cache_path)
 
 
 ## Starts one check. The status bar calls this after it connects the signal.
@@ -43,8 +36,6 @@ func start() -> void:
 	_started = true
 	if not _enabled() or _current_version.is_empty():
 		return
-	if not _latest.is_empty():
-		_emit(_latest["version"], _latest["url"])
 	var headers := PackedStringArray([
 		"User-Agent: LVE/%s" % _current_version,
 		"Accept: application/vnd.github+json",
@@ -72,8 +63,6 @@ func _on_request_completed(result: int, response_code: int, _headers: PackedStri
 		return
 	var version: String = release["version"]
 	var url: String = release["url"]
-	_latest = {"version": version, "url": url}
-	write_cache(cache_path, version, url)
 	_emit(version, url)
 
 
@@ -119,32 +108,6 @@ static func is_newer(latest: String, current: String) -> bool:
 	var latest_suffix: String = latest_parts["suffix"]
 	var current_suffix: String = current_parts["suffix"]
 	return latest_suffix.is_empty() and not current_suffix.is_empty()
-
-
-## Reads the last known release from [param path]. Returns an empty dictionary
-## when the file is missing or holds an invalid value.
-static func read_cache(path: String) -> Dictionary:
-	var config := ConfigFile.new()
-	if config.load(path) != OK:
-		return {}
-	var version_value: Variant = config.get_value("update", "version", "")
-	var url_value: Variant = config.get_value("update", "url", "")
-	if not version_value is String or not url_value is String:
-		return {}
-	var version := String(version_value)
-	var url := String(url_value)
-	if _parse_version(version).is_empty() or not url.begins_with(RELEASES_PREFIX):
-		return {}
-	return {"version": version, "url": url}
-
-
-## Writes the last known release to [param path]. Errors are ignored, so a
-## read-only user directory does not stop the check.
-static func write_cache(path: String, version: String, url: String) -> void:
-	var config := ConfigFile.new()
-	config.set_value("update", "version", version)
-	config.set_value("update", "url", url)
-	config.save(path)
 
 
 # Parses a version into three numbers and a suffix. Returns an empty dictionary

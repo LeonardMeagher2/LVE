@@ -1,12 +1,11 @@
 extends "res://tests/test.gd"
 
-## Checks the release version logic, the release payload parser, the cache, and
-## the status bar link. No case uses the network.
+## Checks the release version logic, the release payload parser, and the status
+## bar link. No case uses the network.
 
 const CHECKER := preload("res://ui/StatusBar/UpdateChecker.gd")
 const STATUS_SCENE := preload("res://ui/StatusBar/status_bar.tscn")
 const RELEASE_URL := "https://github.com/LeonardMeagher2/LVE/releases/tag/v0.3"
-const CACHE_PATH := "user://update_check_test.cfg"
 
 var status: EditorStatusBar
 
@@ -15,7 +14,6 @@ func _ready() -> void:
 	test("the version comparison uses numeric parts", _compare)
 	test("a release outranks its pre-release", _suffix)
 	test("the release parser accepts only published release pages", _parse)
-	test("the release cache accepts only release URLs", _cache)
 	test("the status bar links to the latest release", _status)
 
 
@@ -23,9 +21,6 @@ func _cleanup_test() -> void:
 	if is_instance_valid(status):
 		status.queue_free()
 		status = null
-	var directory := DirAccess.open("user://")
-	if directory:
-		directory.remove(CACHE_PATH.get_file())
 
 
 func _compare() -> void:
@@ -66,23 +61,6 @@ func _parse() -> void:
 		expect(CHECKER.parse_release({"tag_name": "nightly", "html_url": RELEASE_URL}).is_empty(), "an invalid tag is rejected")
 		expect(CHECKER.parse_release({"tag_name": "v0.3", "html_url": "https://example.com/release"}).is_empty(), "a foreign page is rejected")
 		expect(CHECKER.parse_release({"html_url": RELEASE_URL}).is_empty(), "a missing tag is rejected")
-	)
-
-
-func _cache() -> void:
-	step("Given a cached release", func():
-		CHECKER.write_cache(CACHE_PATH, "v0.3", RELEASE_URL)
-	)
-	step("Then the cache returns the tag and page", func():
-		var cached := CHECKER.read_cache(CACHE_PATH)
-		expect(cached.get("version") == "v0.3", "the cached tag is kept")
-		expect(cached.get("url") == RELEASE_URL, "the cached page is kept")
-	)
-	step("When the cache holds a foreign URL", func():
-		CHECKER.write_cache(CACHE_PATH, "v0.3", "https://example.com/release")
-	)
-	step("Then the cache rejects it", func():
-		expect(CHECKER.read_cache(CACHE_PATH).is_empty(), "a foreign cached page is rejected")
 	)
 
 
