@@ -184,6 +184,9 @@ func _restore_file_dialog() -> void:
 	var favorites: Variant = config.get_value("files", "favorites", PackedStringArray())
 	if favorites is PackedStringArray:
 		FileDialog.set_favorite_list(favorites)
+	var recents: Variant = config.get_value("files", "recent", PackedStringArray())
+	if recents is PackedStringArray:
+		FileDialog.set_recent_list(recents)
 	var last_dir: Variant = config.get_value("files", "last_dir", "")
 	if last_dir is String and DirAccess.dir_exists_absolute(last_dir):
 		_last_dir = last_dir
@@ -197,6 +200,7 @@ func _save_file_dialog() -> void:
 	var config := ConfigFile.new()
 	config.load(file_settings_path)
 	config.set_value("files", "favorites", FileDialog.get_favorite_list())
+	config.set_value("files", "recent", FileDialog.get_recent_list())
 	config.set_value("files", "last_dir", _last_dir)
 	config.save(file_settings_path)
 
@@ -215,6 +219,7 @@ func _on_new_btn_pressed() -> void:
 	if State.edit_busy():
 		return
 	State.open_tab(State.new_document())
+	State.select_palette_entry(0)
 	_remember_session()
 
 func _on_open_btn_pressed() -> void:

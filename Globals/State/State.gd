@@ -433,7 +433,8 @@ func new_document() -> VoxelDocument:
 ## Replaces the active tab's document. A value that is not a [VoxelDocument]
 ## creates a new empty document.
 func set_document(value: VoxelDocument) -> void:
-	var next: VoxelDocument = value if value is VoxelDocument else new_document()
+	var created := not (value is VoxelDocument)
+	var next: VoxelDocument = value if not created else new_document()
 	if next == _active_document:
 		return
 	if tabs.is_empty():
@@ -442,6 +443,8 @@ func set_document(value: VoxelDocument) -> void:
 	else:
 		tabs[active_tab] = next
 	_adopt_document(next)
+	if created:
+		select_palette_entry(0)
 	tabs_changed.emit()
 
 

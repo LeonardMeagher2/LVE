@@ -17,6 +17,7 @@ func _ready() -> void:
 
 func _setup_test() -> void:
 	FileDialog.set_favorite_list(PackedStringArray())
+	FileDialog.set_recent_list(PackedStringArray())
 	var directory := DirAccess.open("user://")
 	if directory:
 		directory.remove(SETTINGS_PATH.get_file())
@@ -41,14 +42,17 @@ func _run() -> void:
 	await get_tree().process_frame
 	step("When the dialog saves its settings", func():
 		FileDialog.set_favorite_list(PackedStringArray([favorite]))
+		FileDialog.set_recent_list(PackedStringArray([favorite]))
 		menu.get_node("%FileDialog").current_dir = favorite
 		saved_dir = menu.get_node("%FileDialog").current_dir
 		menu._save_file_dialog()
 	)
 	step("Then a new dialog restores them", func():
 		FileDialog.set_favorite_list(PackedStringArray())
+		FileDialog.set_recent_list(PackedStringArray())
 		menu._last_dir = ""
 		menu._restore_file_dialog()
 		expect(FileDialog.get_favorite_list() == PackedStringArray([favorite]), "the favorites are restored")
+		expect(FileDialog.get_recent_list() == PackedStringArray([favorite]), "the recent folders are restored")
 		expect(menu._last_dir == saved_dir, "the last folder is restored")
 	)
