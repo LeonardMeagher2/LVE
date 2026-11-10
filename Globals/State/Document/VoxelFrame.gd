@@ -312,8 +312,8 @@ class OccupancyRows extends RefCounted:
 ## an empty cell. Table id k reads entry k - 1 of the material table.
 class Chunk extends RefCounted:
 	# One grid slot holds one material id. Id 0 is an empty cell, so an erase
-	# leaves no hole. Each occupied cell owns its table entry, so a write
-	# changes one cell. Table id k reads entry k - 1 of the material table.
+	# leaves no hole. A table entry can serve many cells; a write to a shared
+	# entry gives that cell its own entry. Table id k reads entry k - 1.
 	## The chunk coordinate.
 	var location := Vector3i.ZERO
 	## The dense grid of material ids, one slot per local cell.
@@ -808,8 +808,9 @@ class Chunk extends RefCounted:
 				bits |= 1 << (axis * 2 + 1)
 		return bits
 
-	# Drop the table entries no slot uses. The grid remaps to the used ids.
-	# The remap walks the ids in order, so equal chunks save equal bytes.
+	# Drop the table entries no slot uses and merge equal materials. The grid
+	# remaps to the used ids. The remap walks the ids in order, so equal chunks
+	# save equal bytes.
 	func _compact() -> void:
 		var used_ids: Array = []
 		var seen := {}
@@ -822,21 +823,35 @@ class Chunk extends RefCounted:
 		var remap := PackedInt32Array()
 		remap.resize(materials.size() / MATERIAL_STRIDE + 1)
 		remap.fill(0)
+		var compacted := PackedFloat32Array()
+		var unique := {}
 		var next_id := 1
 		for id: int in used_ids:
-			remap[id] = next_id
-			next_id += 1
-		var compacted := PackedFloat32Array()
-		compacted.resize((next_id - 1) * MATERIAL_STRIDE)
-		var write := 0
-		for id: int in used_ids:
 			var base: int = (id - 1) * MATERIAL_STRIDE
-			for offset in MATERIAL_STRIDE:
-				compacted[write + offset] = materials[base + offset]
-			write += MATERIAL_STRIDE
+			var key := materials.slice(base, base + MATERIAL_STRIDE)
+			var existing: int = unique.get(key, -1)
+			if existing < 0:
+				existing = next_id
+				unique[key] = existing
+				compacted.append_array(key)
+				next_id += 1
+			remap[id] = existing
+		var usage := PackedInt32Array()
+		usage.resize(next_id)
 		for slot in grid.size():
-			grid[slot] = remap[grid[slot]]
+			var remapped := remap[grid[slot]]
+			grid[slot] = remapped
+			if remapped > 0:
+				usage[remapped] += 1
+		var shared := false
+		for id in range(1, usage.size()):
+			if usage[id] > 1:
+				shared = true
+				break
+		# A cached record stores content, not these ids, so it stays valid after
+		# a representation-only remap. Do not clear it here.
 		materials = compacted
+		shared_materials = shared
 
 	## Returns the color of one cell, or [constant Color.TRANSPARENT] for an
 	## empty cell.
@@ -1380,13 +1395,21 @@ static func _encode_chunk(chunk: Chunk, chunk_location: Vector3i) -> Array:
 	var material_table := material(Color.TRANSPARENT)
 	var material_ids := {}
 	material_ids[material_table.slice(0, MATERIAL_STRIDE)] = 0
+	# A compact table uses the same id many times. Slice each entry once instead
+	# of once per occupied cell.
+	var material_values := {}
 	var cell_ids := PackedInt32Array()
 	cell_ids.resize(CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE)
 	for slot in chunk.grid.size():
 		var id := chunk.grid[slot]
 		if id == 0:
 			continue
-		var cell_material := chunk.materials.slice((id - 1) * MATERIAL_STRIDE, id * MATERIAL_STRIDE)
+		var cell_material: PackedFloat32Array
+		if material_values.has(id):
+			cell_material = material_values[id]
+		else:
+			cell_material = chunk.materials.slice((id - 1) * MATERIAL_STRIDE, id * MATERIAL_STRIDE)
+			material_values[id] = cell_material
 		var material_id: int = material_ids.get(cell_material, -1)
 		if material_id < 0:
 			material_id = material_table.size() / MATERIAL_STRIDE
@@ -1439,7 +1462,18 @@ func restore_storage(serialized_frame: Array) -> void:
 		var chunk_origin := chunk_location * CHUNK_SIZE
 		var octree_nodes: PackedInt32Array = serialized_chunk[serialized_chunk.size() - 1]
 		if version == STORAGE_VERSION:
-			_decode_materials(octree_nodes, [0], serialized_chunk[1], chunk_origin, CHUNK_SIZE, chunk)
+			var material_table: PackedFloat32Array = serialized_chunk[1]
+			# The stored table already holds one entry per distinct material. Install
+			# it directly instead of expanding one entry per cell, so a solid or a
+			# checkerboard chunk keeps a small table.
+			chunk.materials = material_table.slice(MATERIAL_STRIDE)
+			var usage := PackedInt32Array()
+			usage.resize(chunk.materials.size() / MATERIAL_STRIDE + 1)
+			_decode_materials(octree_nodes, [0], chunk_origin, CHUNK_SIZE, chunk, usage)
+			for material_id in range(1, usage.size()):
+				if usage[material_id] > 1:
+					chunk.shared_materials = true
+					break
 		else:
 			var emission_table := PackedColorArray()
 			var finish_table := PackedColorArray()
@@ -1600,21 +1634,38 @@ static func _decode_region(octree_nodes: PackedInt32Array, node_cursor: Array, c
 		_decode_region(octree_nodes, node_cursor, color_table, emission_table, finish_table, region_origin + child_offset, child_size, chunk)
 
 
-# Version 3 stores one material id per cell. Every cell gets its own table
-# entry, so a later write changes one cell at a time.
-static func _decode_materials(octree_nodes: PackedInt32Array, node_cursor: Array, material_table: PackedFloat32Array, region_origin: Vector3i, region_size: int, chunk: Chunk) -> void:
+# Version 3 stores one material id per cell. The stored table is already unique,
+# so the decoder installs it directly and fills each region with its id.
+static func _decode_materials(octree_nodes: PackedInt32Array, node_cursor: Array, region_origin: Vector3i, region_size: int, chunk: Chunk, usage: PackedInt32Array) -> void:
 	var material_id := octree_nodes[node_cursor[0]]
 	node_cursor[0] += 1
 	if material_id == 0:
 		return
 	if material_id > 0:
-		var cell_material := material_table.slice(material_id * MATERIAL_STRIDE, (material_id + 1) * MATERIAL_STRIDE)
-		_fill_cells(chunk, region_origin, region_size, cell_material)
+		_fill_material_region(chunk, region_origin, region_size, material_id, usage)
 		return
 	var child_size := region_size >> 1
 	for child_index in 8:
 		var child_offset := Vector3i(child_index & 1, (child_index >> 1) & 1, (child_index >> 2) & 1) * child_size
-		_decode_materials(octree_nodes, node_cursor, material_table, region_origin + child_offset, child_size, chunk)
+		_decode_materials(octree_nodes, node_cursor, region_origin + child_offset, child_size, chunk, usage)
+
+
+# Fill one uniform octree region with one material id. The table is already
+# installed, so this only writes the grid and counts the cells.
+static func _fill_material_region(chunk: Chunk, region_origin: Vector3i, region_size: int, material_id: int, usage: PackedInt32Array) -> void:
+	var local_origin := region_origin - chunk.origin()
+	var z_step := CHUNK_SIZE * CHUNK_SIZE
+	var y_step := CHUNK_SIZE
+	for z in region_size:
+		var z_base := (local_origin.z + z) * z_step
+		for y in region_size:
+			var row_start := z_base + (local_origin.y + y) * y_step + local_origin.x
+			for x in region_size:
+				chunk.grid[row_start + x] = material_id
+	var volume := region_size * region_size * region_size
+	chunk.occupied_count += volume
+	if material_id < usage.size():
+		usage[material_id] += volume
 
 
 # Store one material for every cell of a uniform octree region.
