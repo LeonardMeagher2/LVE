@@ -423,10 +423,17 @@ func _ready() -> void:
 	
 
 
+## Returns a new empty document with the default palette. Use it for New.
+func new_document() -> VoxelDocument:
+	var document := VoxelDocument.new()
+	document.palette = _copy_palette(default_palette)
+	return document
+
+
 ## Replaces the active tab's document. A value that is not a [VoxelDocument]
 ## creates a new empty document.
 func set_document(value: VoxelDocument) -> void:
-	var next: VoxelDocument = value if value is VoxelDocument else VoxelDocument.new()
+	var next: VoxelDocument = value if value is VoxelDocument else new_document()
 	if next == _active_document:
 		return
 	if tabs.is_empty():
@@ -441,7 +448,7 @@ func set_document(value: VoxelDocument) -> void:
 ## Adds one document as a tab and returns its index. A document that is already
 ## open returns its index.
 func add_tab(value: VoxelDocument) -> int:
-	var next: VoxelDocument = value if value is VoxelDocument else VoxelDocument.new()
+	var next: VoxelDocument = value if value is VoxelDocument else new_document()
 	var existing := tabs.find(next)
 	if existing >= 0:
 		return existing
@@ -461,7 +468,7 @@ func open_tab(value: VoxelDocument) -> int:
 ## restores a session in one step, without an empty startup tab.
 func set_tabs(documents: Array[VoxelDocument], index: int = 0) -> void:
 	if documents.is_empty():
-		documents.append(VoxelDocument.new())
+		documents.append(new_document())
 	tabs.clear()
 	tabs.append_array(documents)
 	active_tab = clampi(index, 0, documents.size() - 1)
@@ -493,7 +500,7 @@ func close_tab(index: int) -> bool:
 	tabs.remove_at(index)
 	if was_active:
 		if tabs.is_empty():
-			tabs.append(VoxelDocument.new())
+			tabs.append(new_document())
 		var next := mini(index, tabs.size() - 1)
 		_adopt_document(tabs[next])
 		active_tab = next
@@ -526,9 +533,6 @@ func _adopt_document(value: VoxelDocument) -> void:
 	_abandon_active_edit()
 	_adopting = true
 	_active_document = value
-	if _active_document.palette.is_empty():
-		_active_document.palette = _copy_palette(default_palette)
-		_apply_material(default_palette[0])
 	_apply_material(_current_material)
 	if _active_document.tags.is_empty():
 		_active_document.add_tag("Default", 0, _active_document.frames.size() - 1)

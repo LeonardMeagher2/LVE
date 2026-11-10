@@ -214,7 +214,7 @@ func _show_file_dialog() -> void:
 func _on_new_btn_pressed() -> void:
 	if State.edit_busy():
 		return
-	State.open_tab(VoxelDocument.new())
+	State.open_tab(State.new_document())
 	_remember_session()
 
 func _on_open_btn_pressed() -> void:
