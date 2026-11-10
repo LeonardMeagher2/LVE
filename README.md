@@ -31,6 +31,10 @@ Export a low-poly glTF mesh or a sprite sheet.
 
 See [docs/DOCUMENT_FORMAT.md](docs/DOCUMENT_FORMAT.md) for the format.
 
+## Agent access
+
+An agent can use the editor through a local MCP server. Start the app with `--mcp`. See [docs/MCP.md](docs/MCP.md) to connect a harness.
+
 ## Development
 
 LVE uses Godot 4.7.2. Godot is the only toolchain.

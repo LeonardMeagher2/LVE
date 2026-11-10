@@ -16,6 +16,7 @@ config/version="0.2"
 run/main_scene="res://Main.tscn"
 config/features=PackedStringArray("4.7")
 config/icon="res://icon.svg"
+run/flush_stdout_on_print=true
 
 [autoload]
 

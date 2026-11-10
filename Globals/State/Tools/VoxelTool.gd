@@ -253,3 +253,82 @@ func update_visual(pick: PickResult) -> void:
 	visible = true
 
 
+# --- External driver --------------------------------------------------------
+# These methods let a remote driver feed a cell-space gesture into the real
+# tool. They use the same pick, write, and close paths as pointer input, so the
+# tool keeps its pattern, symmetry, selection, slice, and undo rules.
+
+## Returns a cursor plane that faces the view for one cell.
+func driver_plane(cell: Vector3i) -> StrokePlane:
+	var axis := 1
+	var view := get_viewport()
+	if view != null:
+		var camera := view.get_camera_3d()
+		if camera != null:
+			var forward := -camera.global_transform.basis.z
+			var amount := Vector3(absf(forward.x), absf(forward.y), absf(forward.z))
+			if amount.x >= amount.y and amount.x >= amount.z:
+				axis = 0
+			elif amount.z >= amount.y:
+				axis = 2
+	var plane := StrokePlane.new()
+	plane.axis = axis
+	plane.idx = cell[axis]
+	plane.point = Vector3(cell)
+	plane.normal = Vector3.ZERO
+	plane.normal[axis] = 1.0
+	return plane
+
+
+## Moves the tool cursor to one cell without changing the model.
+func driver_show_cursor(cell: Vector3i, hit: Vector3i) -> void:
+	if cell == VoxelPicking.NONE:
+		visible = false
+		return
+	var pick := PickResult.new()
+	pick.target = cell
+	pick.hit = hit
+	pick.plane = _plane if _plane != null else driver_plane(cell)
+	update_visual(pick)
+
+
+## Opens this tool's stroke at one cell. [param hit] is the occupied cell under
+## the pointer, or [constant VoxelPicking.NONE] for an add target. Returns
+## [code]false[/code] while another edit is active.
+func driver_begin_stroke(cell: Vector3i, hit: Vector3i) -> bool:
+	if open_stroke() == null:
+		return false
+	_stroke_active = true
+	_plane = driver_plane(cell)
+	_last_target = cell
+	_apply_pick(cell, hit)
+	driver_show_cursor(cell, hit)
+	return true
+
+
+## Extends the open stroke to one cell. It uses the tool's own stroke path.
+func driver_stroke_to(cell: Vector3i) -> void:
+	if _edit == null:
+		return
+	_apply_stroke_to(cell)
+	_last_target = cell
+	driver_show_cursor(cell, cell if _paints_existing() else VoxelPicking.NONE)
+
+
+## Ends the open stroke like a pointer release.
+func driver_end_stroke() -> void:
+	if _edit == null:
+		return
+	_end()
+
+
+## Returns [code]true[/code] while the tool holds an edit or publishes a stroke.
+func driver_is_busy() -> bool:
+	return _edit != null
+
+
+## Returns [code]true[/code] when the tool changes only cells that already exist.
+func _paints_existing() -> bool:
+	return false
+
+

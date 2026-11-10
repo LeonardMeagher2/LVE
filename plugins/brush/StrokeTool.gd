@@ -594,3 +594,8 @@ func _update_hover() -> void:
 	if _last_pick and _edit == null:
 		_cursor_axis = -1
 		update_visual(_last_pick)
+
+
+## Returns [code]true[/code] while a stroke batch is still publishing.
+func driver_is_busy() -> bool:
+	return _edit != null or _job != null

@@ -12,6 +12,7 @@ Leonard's Voxel Editor is a Godot voxel-animation editor. Godot is the only tool
 - Record verified engine and workflow learnings in [MEMORY.md](MEMORY.md) during the task that finds them.
 - Use [docs/agents/tool-flows/README.md](docs/agents/tool-flows/README.md) for current tool behavior.
 - Use [docs/agents/research/tools/README.md](docs/agents/research/tools/README.md) for evidence and design notes.
+- Keep MCP responses compact. Follow the forms in [docs/MCP.md](docs/MCP.md).
 
 ## Documentation
 
