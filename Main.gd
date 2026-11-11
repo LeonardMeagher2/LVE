@@ -5,6 +5,9 @@ extends Control
 ## It restores the last document, tracks the window title, and applies the UI
 ## scale. It also disables the inactive tab, so only the current tab processes.
 
+## The MCP server started or stopped.
+signal mcp_changed(enabled: bool, port: int)
+
 ## The user path of the saved interface settings.
 const UI_SETTINGS_PATH := "user://interface.cfg"
 ## The document that opens when no last document exists.
@@ -14,13 +17,23 @@ const MCP_SERVER_SCRIPT := preload("res://Globals/MCP/MCPServer.gd")
 const MCP_BRIDGE_SCRIPT := preload("res://Globals/MCP/MCPBridge.gd")
 ## The default loopback MCP port.
 const MCP_PORT := 17373
+## The interface settings file. Tests point it at a temporary file.
+var interface_settings_path := UI_SETTINGS_PATH
+## The MCP port. Tests set zero to take a free port.
+var mcp_port := MCP_PORT
+## Tests turn this off, so a saved state cannot bind a port in the test process.
+var restore_saved_agent := true
 var _ui_scale := 0.0
 var _scale_check_elapsed := 0.0
 var _title_document: VoxelDocument
 var _mcp: Node = null
+var _mcp_http_mode := true
 
 
 func _enter_tree() -> void:
+	# Seed the port before the status bar reads it in its own _ready.
+	mcp_port = _mcp_port_setting()
+	_mcp_http_mode = not _has_user_arg("--mcp-line")
 	State.document_changed.connect(_on_document_changed)
 	State.tabs_changed.connect(_update_window_title)
 	_on_document_changed()
@@ -58,10 +71,9 @@ func _ready() -> void:
 	# and every tool paints that chord. Take each event instead, so a stroke
 	# follows the pointer even when a frame runs long.
 	Input.use_accumulated_input = false
-	var settings := ConfigFile.new()
-	if settings.load(UI_SETTINGS_PATH) == OK:
-		var saved_scale := float(settings.get_value("interface", "scale", 0.0))
-		_ui_scale = 0.0 if saved_scale == 0.0 else clampf(saved_scale, 1.0, 3.0)
+	var settings := _read_interface_settings()
+	var saved_scale := float(settings.get_value("interface", "scale", 0.0))
+	_ui_scale = 0.0 if saved_scale == 0.0 else clampf(saved_scale, 1.0, 3.0)
 	get_window().dpi_changed.connect(_apply_ui_scale)
 	_apply_ui_scale()
 	if DisplayServer.get_name() != "headless":
@@ -71,7 +83,10 @@ func _ready() -> void:
 		window.move_to_center()
 	%TabContainer.tab_changed.connect(_on_tab_changed)
 	_on_tab_changed(%TabContainer.current_tab)
-	if _has_user_arg("--mcp"):
+	var start_agent := _has_user_arg("--mcp")
+	if not start_agent and restore_saved_agent and not _has_user_arg("--no-mcp"):
+		start_agent = bool(settings.get_value("agent", "mcp_enabled", false))
+	if start_agent:
 		_start_mcp()
 	_restore_startup_document.call_deferred()
 
@@ -112,9 +127,23 @@ func set_ui_scale(value: float, save: bool = true) -> void:
 	_ui_scale = 0.0 if value == 0.0 else clampf(value, 1.0, 3.0)
 	_apply_ui_scale()
 	if save:
-		var settings := ConfigFile.new()
-		settings.set_value("interface", "scale", _ui_scale)
-		settings.save(UI_SETTINGS_PATH)
+		_write_setting("interface", "scale", _ui_scale)
+
+
+## Reads the interface settings. A missing file gives default values.
+func _read_interface_settings() -> ConfigFile:
+	var settings := ConfigFile.new()
+	settings.load(interface_settings_path)
+	return settings
+
+
+## Writes one interface setting and keeps the other sections.
+func _write_setting(section: String, key: String, value: Variant) -> void:
+	var settings := _read_interface_settings()
+	settings.set_value(section, key, value)
+	var error := settings.save(interface_settings_path)
+	if error != OK:
+		push_warning("Cannot save the interface settings: %s" % error_string(error))
 
 
 func _automatic_ui_scale() -> float:
@@ -163,7 +192,7 @@ func _has_user_arg(argument: String) -> bool:
 
 
 ## Returns the MCP port from `--mcp-port=N`, or the default port.
-func _mcp_port() -> int:
+func _mcp_port_setting() -> int:
 	for argument in OS.get_cmdline_user_args():
 		if argument.begins_with("--mcp-port="):
 			var value := argument.substr("--mcp-port=".length())
@@ -172,24 +201,61 @@ func _mcp_port() -> int:
 	return MCP_PORT
 
 
-## Starts the in-app MCP server.
+## Starts or stops the in-app MCP server. The state is saved only when
+## [param persist] is true. A failed start returns the listen error and keeps
+## the server off.
+func set_mcp_enabled(value: bool, persist := false) -> Error:
+	if value == is_mcp_enabled():
+		if persist:
+			_write_setting("agent", "mcp_enabled", value)
+		return OK
+	if value:
+		if _mcp == null:
+			_mcp = MCP_SERVER_SCRIPT.new()
+			add_child(_mcp)
+		var error_value: Variant = _mcp.call("start", mcp_port, _mcp_http_mode)
+		var error: Error = error_value if error_value is int else ERR_UNAVAILABLE
+		if error != OK:
+			return error
+	else:
+		_mcp.call("stop")
+	if persist:
+		_write_setting("agent", "mcp_enabled", value)
+	mcp_changed.emit(is_mcp_enabled(), int(_mcp.call("local_port")))
+	return OK
+
+
+## Returns [code]true[/code] while the MCP server listens.
+func is_mcp_enabled() -> bool:
+	return _mcp != null and int(_mcp.call("local_port")) > 0
+
+
+## Returns the port that the MCP server listens on, or zero when it is off.
+func mcp_local_port() -> int:
+	return int(_mcp.call("local_port")) if _mcp != null else 0
+
+
+## Returns the HTTP endpoint, or an empty string in line mode or before a
+## free-port start.
+func mcp_url() -> String:
+	if not _mcp_http_mode:
+		return ""
+	var port := mcp_port
+	if is_mcp_enabled():
+		port = int(_mcp.call("local_port"))
+	if port <= 0:
+		return ""
+	return "http://127.0.0.1:%d/mcp" % port
+
+
+## Starts the in-app MCP server for the command line flags.
 func _start_mcp() -> void:
-	if _mcp != null:
-		return
-	var server: Node = MCP_SERVER_SCRIPT.new()
-	add_child(server)
-	var http_mode := not _has_user_arg("--mcp-line")
-	var error_value: Variant = server.call("start", _mcp_port(), http_mode)
-	var error: Error = error_value if error_value is int else ERR_UNAVAILABLE
-	if error != OK:
-		server.queue_free()
-		return
-	_mcp = server
+	set_mcp_enabled(true, false)
 
 
 ## Runs the stdio bridge until stdin closes, then quits.
 func _run_bridge() -> void:
 	var bridge: RefCounted = MCP_BRIDGE_SCRIPT.new()
-	var code_value: Variant = bridge.call("run", _mcp_port())
+	var code_value: Variant = bridge.call("run", mcp_port)
 	var code: int = int(code_value) if code_value is int else 1
 	get_tree().quit(code)

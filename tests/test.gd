@@ -36,6 +36,8 @@ func _enter_tree() -> void:
 func add_main() -> Node:
 	var scene: PackedScene = load(MAIN_SCENE)
 	var inst := scene.instantiate()
+	# A saved MCP on state must not bind a port in the test process.
+	inst.set("restore_saved_agent", false)
 	get_tree().root.add_child.call_deferred(inst)
 	return inst
 

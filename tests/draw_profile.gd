@@ -5,7 +5,7 @@ extends "res://tests/test.gd"
 # the numbers stay isolated.
 #
 # With no environment set it runs a small configuration that the full suite can
-# afford. Run one configuration on the second monitor with:
+# afford. Run one configuration in its own window with:
 #
 #   $env:LVE_PROF_DIAMETER="64"; $env:LVE_PROF_SHAPE="cube"
 #   godot --path . --screen 0 res://tests/draw_profile.tscn

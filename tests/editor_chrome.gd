@@ -16,6 +16,12 @@ var undo_btn: Button
 var redo_btn: Button
 var operation := 0
 var camera_menu_btn: MenuButton
+var mcp_status: EditorStatusBar
+var mcp_blocker: TCPServer
+var mcp_client: StreamPeerTCP
+var mcp_settings_path := ""
+var mcp_saved_path := ""
+var mcp_saved_port := 0
 
 
 func _ready() -> void:
@@ -26,6 +32,8 @@ func _ready() -> void:
 	test("the editor reopens the last document or the Flamingo sample", _startup_run, "startup_document")
 	test("the menu bar undo and redo buttons follow the edit history", _history_run, "history")
 	test("the camera menu drives views, projection, and shading", _camera_menu_run, "control_bar_views")
+	test("the status bar toggles the MCP server and saves the state", _mcp_toggle_run, "mcp_toggle")
+	test("a busy MCP port keeps the server off", _mcp_bind_failure_run, "mcp_bind_failure")
 
 
 # Each case starts from a clean document and history. The cases share one
@@ -46,6 +54,24 @@ func _cleanup_test() -> void:
 	if is_instance_valid(status):
 		status.queue_free()
 		status = null
+	if is_instance_valid(mcp_status):
+		mcp_status.queue_free()
+		mcp_status = null
+	if mcp_blocker != null:
+		mcp_blocker.stop()
+		mcp_blocker = null
+	if mcp_client != null:
+		mcp_client.disconnect_from_host()
+		mcp_client = null
+	if not mcp_settings_path.is_empty():
+		DirAccess.remove_absolute(mcp_settings_path)
+		mcp_settings_path = ""
+	if is_instance_valid(main) and not mcp_saved_path.is_empty():
+		main.call("set_mcp_enabled", false, false)
+		main.set("interface_settings_path", mcp_saved_path)
+		main.set("mcp_port", mcp_saved_port)
+		main.set_ui_scale(0.0, false)
+		mcp_saved_path = ""
 	if is_instance_valid(brush_button) and brush_button.get_popup().visible:
 		brush_button.get_popup().hide()
 	if is_instance_valid(camera_menu_btn) and camera_menu_btn.get_popup().visible:
@@ -64,7 +90,11 @@ func _status_run() -> void:
 	)
 	await get_tree().process_frame
 	step("Then the empty document shows zero dimensions", func():
-		expect(status.get_node("StatusRight").text.begins_with("0×0×0"), "the empty document shows zero dimensions")
+		var text: String = status.get_node("StatusLeft").text
+		expect(text.begins_with("#" + State.current_color.to_html(false)), "the color comes first")
+		expect(text.contains("0×0×0"), "the empty document shows zero dimensions")
+		expect(text.contains("#1/1"), "the frame number uses a hash")
+		expect(not text.contains("Frame "), "the status bar omits the word Frame")
 	)
 	step("Then the version link opens the releases page", func():
 		var link: LinkButton = status.get_node("Version")
@@ -79,7 +109,7 @@ func _status_run() -> void:
 	)
 	await get_tree().process_frame
 	step("Then the status bar shows the new dimensions", func():
-		expect(status.get_node("StatusRight").text.begins_with("1×1×1"), "painting a voxel updates the shown dimensions")
+		expect(status.get_node("StatusLeft").text.contains("1×1×1"), "painting a voxel updates the shown dimensions")
 	)
 	step("When the only voxel is erased", func():
 		State.document.erase(0, Vector3i.ZERO)
@@ -88,8 +118,108 @@ func _status_run() -> void:
 	)
 	await get_tree().process_frame
 	step("Then the status bar returns to zero dimensions", func():
-		expect(status.get_node("StatusRight").text.begins_with("0×0×0"), "erasing the last voxel shrinks the shown dimensions")
+		expect(status.get_node("StatusLeft").text.contains("0×0×0"), "erasing the last voxel shrinks the shown dimensions")
 	)
+
+
+func _mcp_toggle_run() -> void:
+	mcp_saved_path = str(main.get("interface_settings_path"))
+	mcp_saved_port = int(main.get("mcp_port"))
+	mcp_settings_path = "user://mcp_toggle_test.cfg"
+	DirAccess.remove_absolute(mcp_settings_path)
+	step("Given a free port and a temporary settings file", func():
+		main.set("interface_settings_path", mcp_settings_path)
+		main.set("mcp_port", 0)
+		expect(not bool(main.call("is_mcp_enabled")), "the server starts off")
+		mcp_status = load("res://ui/StatusBar/status_bar.tscn").instantiate()
+		main.add_child(mcp_status)
+	)
+	await get_tree().process_frame
+	var button: Button = mcp_status.get_node("%MCP")
+	step("Then the status icon is visible and off", func():
+		expect(button.visible, "the MCP icon is visible")
+		expect(button.tooltip_text.contains("off"), "the tooltip says the server is off")
+	)
+	step("When the user clicks the status icon", func():
+		button.pressed.emit()
+	)
+	await get_tree().process_frame
+	step("Then the server listens and saves the on state", func():
+		expect(bool(main.call("is_mcp_enabled")), "the server starts")
+		var port := int(main.call("mcp_local_port"))
+		expect(port > 0, "the server has a port")
+		expect(button.tooltip_text.contains("127.0.0.1"), "the tooltip shows the endpoint")
+		var settings := ConfigFile.new()
+		settings.load(mcp_settings_path)
+		expect(bool(settings.get_value("agent", "mcp_enabled", false)), "the on state is saved")
+		mcp_client = StreamPeerTCP.new()
+		expect(mcp_client.connect_to_host("127.0.0.1", port) == OK, "a client can reach the port")
+	)
+	await _wait_client(mcp_client)
+	step("Then the server accepts the client", func():
+		expect(mcp_client.get_status() == StreamPeerTCP.STATUS_CONNECTED, "the server accepts the client")
+		mcp_client.disconnect_from_host()
+		mcp_client = null
+	)
+	step("When the user clicks the status icon again", func():
+		button.pressed.emit()
+	)
+	await get_tree().process_frame
+	step("Then the server stops and saves the off state", func():
+		expect(not bool(main.call("is_mcp_enabled")), "the server stops")
+		expect(int(main.call("mcp_local_port")) == 0, "the port is free")
+		var settings := ConfigFile.new()
+		settings.load(mcp_settings_path)
+		expect(not bool(settings.get_value("agent", "mcp_enabled", true)), "the off state is saved")
+	)
+	step("When the UI scale changes", func():
+		var settings := ConfigFile.new()
+		settings.set_value("agent", "mcp_enabled", true)
+		settings.save(mcp_settings_path)
+		main.call("set_ui_scale", 1.0, true)
+	)
+	step("Then the scale write keeps the agent state", func():
+		var settings := ConfigFile.new()
+		settings.load(mcp_settings_path)
+		expect(bool(settings.get_value("agent", "mcp_enabled", false)), "the agent state survives the scale write")
+		expect(is_equal_approx(float(settings.get_value("interface", "scale", 0.0)), 1.0), "the scale is saved")
+	)
+
+
+func _mcp_bind_failure_run() -> void:
+	mcp_saved_path = str(main.get("interface_settings_path"))
+	mcp_saved_port = int(main.get("mcp_port"))
+	mcp_settings_path = "user://mcp_toggle_test.cfg"
+	DirAccess.remove_absolute(mcp_settings_path)
+	mcp_blocker = TCPServer.new()
+	step("Given a blocked port and the status bar", func():
+		expect(mcp_blocker.listen(0, "127.0.0.1") == OK, "the blocker listens")
+		main.set("interface_settings_path", mcp_settings_path)
+		main.set("mcp_port", mcp_blocker.get_local_port())
+		mcp_status = load("res://ui/StatusBar/status_bar.tscn").instantiate()
+		main.add_child(mcp_status)
+	)
+	await get_tree().process_frame
+	step("When the user clicks the status icon", func():
+		var button: Button = mcp_status.get_node("%MCP")
+		button.pressed.emit()
+	)
+	await get_tree().process_frame
+	step("Then the server stays off and the dialog explains why", func():
+		expect(not bool(main.call("is_mcp_enabled")), "the server stays off")
+		var dialog: AcceptDialog = mcp_status.get_node("%MCPError")
+		expect(dialog.visible, "the error dialog is shown")
+		expect(dialog.dialog_text.contains("127.0.0.1"), "the dialog names the address")
+		dialog.hide()
+	)
+
+
+func _wait_client(client: StreamPeerTCP) -> void:
+	for _frame in 100:
+		client.poll()
+		if client.get_status() == StreamPeerTCP.STATUS_CONNECTED:
+			return
+		await get_tree().process_frame
 
 
 func _thumbnail_run() -> void:

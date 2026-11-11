@@ -3,9 +3,10 @@ extends HBoxContainer
 
 ## The application status bar.
 ##
-## It shows the current color, the model size, the frame, and the zoom. It also
-## shows the application version and the latest release link. A context provider
-## can replace the text for one workspace. It hosts the job status widget.
+## It shows the current color, the model size, the frame, and the zoom on the
+## left. It also shows the MCP server toggle, the application version, and the
+## latest release link. A context provider can replace the text for one
+## workspace. It hosts the job status widget.
 
 # The widget script is preloaded as a type alias. A new class_name is not in the
 # global class cache until the editor regenerates it.
@@ -21,11 +22,13 @@ const UPDATE_COLOR := Color(1, 1, 1, 0.7)
 
 @onready var _left: Label = $StatusLeft
 @onready var _right: Label = $StatusRight
+@onready var _mcp: Button = $MCP
 @onready var _activity: JobStatusWidget = $Activity
 @onready var _version: LinkButton = $Version
 @onready var _checker: UpdateCheckerScript = $UpdateChecker
 
 var _editor_camera: EditorCameraRig
+var _main: Node
 var _context: Callable
 var _current_version := ""
 
@@ -46,6 +49,13 @@ func _ready() -> void:
 	_version.visible = not _current_version.is_empty()
 	_checker.latest_release.connect(show_latest)
 	_checker.start.call_deferred()
+	_mcp.pressed.connect(_on_mcp_pressed)
+	_main = get_node_or_null("/root/Main")
+	if _main == null or not _main.has_signal("mcp_changed"):
+		_mcp.visible = false
+	else:
+		_main.connect("mcp_changed", _on_mcp_changed)
+		_sync_mcp()
 	_refresh_status()
 
 
@@ -57,11 +67,44 @@ func _refresh_status() -> void:
 		return
 	var bounds_size := State.document.bounds().size
 	var zoom_percent := roundi(_editor_camera.zoom_percent()) if _editor_camera else 100
-	_left.text = "#%s" % State.current_color.to_html(false)
-	_right.text = "%d×%d×%d   Frame %d/%d   %d%%" % [
+	_left.text = "#%s   %d×%d×%d   #%d/%d   %d%%" % [
+		State.current_color.to_html(false),
 		roundi(bounds_size.x), roundi(bounds_size.y), roundi(bounds_size.z),
 		State.current_frame + 1, State.document.frames.size(), zoom_percent,
 	]
+	_right.text = ""
+
+
+## Shows the MCP server state and the endpoint in the tooltip.
+func _sync_mcp() -> void:
+	if _main == null:
+		return
+	var enabled := bool(_main.call("is_mcp_enabled"))
+	var color := Color(1, 1, 1, 0.9) if enabled else TEXT_COLOR
+	_mcp.add_theme_color_override("icon_normal_color", color)
+	_mcp.add_theme_color_override("icon_pressed_color", color)
+	var url := str(_main.call("mcp_url"))
+	var place := " in line mode" if url.is_empty() else " at %s" % url
+	if enabled:
+		_mcp.tooltip_text = "MCP server on%s. Any local program can use the editor tools. Click to stop." % place
+	else:
+		_mcp.tooltip_text = "MCP server off. Click to start%s." % place
+
+
+func _on_mcp_changed(_enabled: bool, _port: int) -> void:
+	_sync_mcp()
+
+
+func _on_mcp_pressed() -> void:
+	if _main == null:
+		return
+	var result: Variant = _main.call("set_mcp_enabled", not bool(_main.call("is_mcp_enabled")), true)
+	var error: Error = result if result is int else ERR_UNAVAILABLE
+	_sync_mcp()
+	if error == OK or DisplayServer.get_name() == "headless":
+		return
+	%MCPError.dialog_text = "Cannot start the MCP server on 127.0.0.1:%d. Another program may use this port." % int(_main.get("mcp_port"))
+	%MCPError.popup_centered()
 
 
 ## Points the version link at the latest release and marks a newer one.

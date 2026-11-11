@@ -2,7 +2,8 @@
 
 [ext_resource type="Script" uid="uid://bjdwtcqqauyrc" path="res://ui/StatusBar/status_bar.gd" id="1_status"]
 [ext_resource type="PackedScene" path="res://ui/JobStatus/job_status.tscn" id="2_activity"]
-[ext_resource type="Script" path="res://ui/StatusBar/UpdateChecker.gd" id="3_checker"]
+[ext_resource type="Script" uid="uid://b6ftsx1bsjljf" path="res://ui/StatusBar/UpdateChecker.gd" id="3_checker"]
+[ext_resource type="Texture2D" uid="uid://dv12omtwdaffd" path="res://icons/server.svg" id="4_server"]
 
 [sub_resource type="LabelSettings" id="LabelSettings_denks"]
 font_color = Color(1, 1, 1, 0.3372549)
@@ -24,6 +25,17 @@ layout_mode = 2
 [node name="StatusRight" type="Label" parent="." unique_id=424105243]
 layout_mode = 2
 label_settings = SubResource("LabelSettings_denks")
+
+[node name="MCP" type="Button" parent="." unique_id=144040755]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "MCP server off. Click to start."
+theme_override_colors/icon_normal_color = Color(1, 1, 1, 0.3372549)
+theme_override_colors/icon_hover_color = Color(1, 1, 1, 0.7)
+theme_override_colors/icon_pressed_color = Color(1, 1, 1, 0.7)
+flat = true
+icon = ExtResource("4_server")
+icon_alignment = 1
 
 [node name="UIScale" type="OptionButton" parent="." unique_id=144040754]
 unique_name_in_owner = true
@@ -67,5 +79,10 @@ text = "v0.2"
 script = ExtResource("3_checker")
 
 [node name="HTTPRequest" type="HTTPRequest" parent="UpdateChecker"]
+
+[node name="MCPError" type="AcceptDialog" parent="." unique_id=144040756]
+unique_name_in_owner = true
+title = "MCP server"
+dialog_autowrap = true
 
 [connection signal="item_selected" from="UIScale" to="." method="_on_ui_scale_item_selected"]

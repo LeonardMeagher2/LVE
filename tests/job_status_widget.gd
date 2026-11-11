@@ -483,12 +483,12 @@ func _long_label() -> void:
 	)
 	await get_tree().process_frame
 	await get_tree().process_frame
-	step("Then the right status stays inside the narrow bar", func():
-		var right: Label = _status.get_node("StatusRight")
+	step("Then the status text stays inside the narrow bar", func():
+		var left: Label = _status.get_node("StatusLeft")
 		var scale: OptionButton = _status.get_node("%UIScale")
-		expect(right.get_global_rect().end.x <= 520.5, "the right status stays inside the narrow bar")
+		expect(left.get_global_rect().end.x <= 520.5, "the status text stays inside the narrow bar")
 		expect(scale.get_global_rect().end.x <= 520.5, "the UI scale stays inside the narrow bar")
-		expect(right.get_global_rect().size.x > 0.0, "the right status keeps a visible size")
+		expect(left.get_global_rect().size.x > 0.0, "the status text keeps a visible size")
 	)
 	step("Then the long job caps its width and trims the text", func():
 		var job: Control = _status.get_node("Activity/Job")
@@ -526,13 +526,13 @@ func _long_label() -> void:
 	)
 	await get_tree().process_frame
 	await get_tree().process_frame
-	step("Then the long job reaches its cap and the right status stays inside", func():
+	step("Then the long job reaches its cap and the status text stays inside", func():
 		var job: Control = _status.get_node("Activity/Job")
-		var right: Label = _status.get_node("StatusRight")
+		var left: Label = _status.get_node("StatusLeft")
 		expect(job.custom_maximum_size.x <= JobStatusWidget.MAX_CONTENT_WIDTH + 0.5, "the wide bar caps the long job")
 		expect(job.size.x <= job.custom_maximum_size.x + 1.0, "the long job stays within its cap")
 		expect(job.size.x > 200.0, "the long job uses the available width")
-		expect(right.get_global_rect().end.x <= 1000.5, "the right status stays inside the wide bar")
+		expect(left.get_global_rect().end.x <= 1000.5, "the status text stays inside the wide bar")
 	)
 	step("When the user clicks the cancel button", func():
 		var cancel: Button = _status.get_node("Activity/Cancel")

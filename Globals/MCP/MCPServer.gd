@@ -313,7 +313,7 @@ func start(port: int = DEFAULT_PORT, http_mode := false) -> Error:
 	_http_mode = http_mode
 	var error := _server.listen(port, "127.0.0.1")
 	if error != OK:
-		push_error("LVE MCP: cannot listen on 127.0.0.1:%d: %s" % [port, error_string(error)])
+		push_warning("LVE MCP: cannot listen on 127.0.0.1:%d: %s" % [port, error_string(error)])
 		return error
 	print("LVE MCP: listening on 127.0.0.1:%d (%s)" % [_server.get_local_port(), "HTTP" if http_mode else "line"])
 	_log("start %d %s" % [_server.get_local_port(), "http" if http_mode else "line"])
@@ -332,9 +332,9 @@ func stop() -> void:
 	set_process(false)
 
 
-## Returns the port that the server listens on.
+## Returns the port that the server listens on, or zero when it is closed.
 func local_port() -> int:
-	return _server.get_local_port()
+	return _server.get_local_port() if _server.is_listening() else 0
 
 
 func _process(_delta: float) -> void:

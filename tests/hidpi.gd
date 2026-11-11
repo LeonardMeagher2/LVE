@@ -13,7 +13,7 @@ func _run() -> void:
 	step("Given the editor at one hundred percent scale", func():
 		main.set_ui_scale(1.0, false)
 		_window_size = get_window().size
-		_font_size = main.get_node("%StatusBar").get_node("StatusRight").get_theme_font_size("font_size")
+		_font_size = main.get_node("%StatusBar").get_node("StatusLeft").get_theme_font_size("font_size")
 		print("Display scale: %s, DPI: %s, automatic UI scale: %s" % [DisplayServer.screen_get_scale(), DisplayServer.screen_get_dpi(), main._automatic_ui_scale()])
 	)
 	await get_tree().process_frame
@@ -37,7 +37,7 @@ func _run() -> void:
 	step("Then text and icons use the same display scale", func():
 		expect(get_window().content_scale_factor == 2.0, "the complete interface uses double scale")
 		expect(get_window().size == _window_size, "changing UI scale keeps the physical window size")
-		expect(main.get_node("%StatusBar").get_node("StatusRight").get_theme_font_size("font_size") == _font_size, "text keeps its logical font size")
+		expect(main.get_node("%StatusBar").get_node("StatusLeft").get_theme_font_size("font_size") == _font_size, "text keeps its logical font size")
 		expect(main.get_node("%MenuBar").get_node("NewBtn").size == _button_size, "icons keep their logical button size")
 		var selector: OptionButton = main.get_node("%StatusBar").get_node("%UIScale")
 		expect(selector.get_item_id(selector.selected) == 200, "the scale selector shows two hundred percent")

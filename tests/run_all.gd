@@ -5,8 +5,8 @@ const TEST_TIMEOUT_S := 30.0
 const POLL_INTERVAL_S := 0.01
 const MAX_FAILURES := 3
 const TEST_SCREEN := 0
-# `draw_latency` runs visible maximum-diameter strokes on the second monitor, so
-# it needs its own deadline. Every other scene keeps the default.
+# `draw_latency` runs visible maximum-diameter strokes on screen 0, so it needs
+# its own deadline. Every other scene keeps the default.
 const DRAW_LATENCY_PATH := "res://tests/draw_latency.tscn"
 const DRAW_LATENCY_TIMEOUT_S := 125.0
 # A child prints the sum of its selected test timeouts as `TEST BUDGET: N`.
@@ -238,7 +238,7 @@ func _run_one(entry: Dictionary) -> Dictionary:
 	_wipe_dir(_artifact_dir(path))
 	# Select the deadline once, so the wait and the note agree.
 	var timeout_s: float = _timeout_for(path)
-	# Godot numbers screens from zero. Open test windows on the second screen.
+	# Godot numbers screens from zero. Open test windows on the configured screen.
 	var args := PackedStringArray(["--screen", str(TEST_SCREEN), "--path", ProjectSettings.globalize_path("res://"), path])
 	# A grouped scene reads its case names from the user arguments after `--`.
 	var cases: Array = entry["cases"]

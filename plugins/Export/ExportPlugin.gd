@@ -558,7 +558,16 @@ func _export_status() -> Dictionary:
 	var frame_range := _selected_frames()
 	var count := frame_range.y - frame_range.x + 1
 	var layout := sheet_layout(count * _view_count(), int(_sheet_settings.get_node("SizeRow/Size").value))
-	return {"left": _result_message if not _result_message.is_empty() else "%d × %d pixels · %d frames × %d views" % [layout.size.x, layout.size.y, count, _view_count()], "right": "Frame %d/%d   %d%%" % [_model_step + 1, maxi(1, _model_frames.size()), roundi(_model_camera.zoom_percent())]}
+	var message := _result_message if not _result_message.is_empty() else "%d × %d pixels · %d frames × %d views" % [layout.size.x, layout.size.y, count, _view_count()]
+	return {
+		"left": "%s   #%d/%d   %d%%" % [
+			message,
+			_model_step + 1,
+			maxi(1, _model_frames.size()),
+			roundi(_model_camera.zoom_percent()),
+		],
+		"right": "",
+	}
 
 
 func _refresh_export_status() -> void:
