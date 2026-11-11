@@ -23,6 +23,8 @@ var interface_settings_path := UI_SETTINGS_PATH
 var mcp_port := MCP_PORT
 ## Tests turn this off, so a saved state cannot bind a port in the test process.
 var restore_saved_agent := true
+## Tests turn this off, so a quit signal cannot end the test process.
+var quit_on_confirmed := true
 var _ui_scale := 0.0
 var _scale_check_elapsed := 0.0
 var _title_document: VoxelDocument
@@ -62,6 +64,19 @@ func _update_window_title() -> void:
 	get_window().title = "%s - %s" % [title, VoxelDocument.APP_NAME]
 
 
+func _on_window_close_requested() -> void:
+	var menu := get_node_or_null("%MenuBar")
+	if menu != null and menu.has_method("request_quit"):
+		menu.call("request_quit")
+	else:
+		get_tree().quit()
+
+
+func _on_quit_confirmed() -> void:
+	if quit_on_confirmed:
+		get_tree().quit()
+
+
 func _ready() -> void:
 	if _has_user_arg("--mcp-bridge"):
 		_run_bridge()
@@ -83,6 +98,12 @@ func _ready() -> void:
 		window.move_to_center()
 	%TabContainer.tab_changed.connect(_on_tab_changed)
 	_on_tab_changed(%TabContainer.current_tab)
+	var window := get_window()
+	if not window.close_requested.is_connected(_on_window_close_requested):
+		window.close_requested.connect(_on_window_close_requested)
+	var menu := get_node_or_null("%MenuBar")
+	if menu != null and menu.has_signal("quit_confirmed") and not menu.quit_confirmed.is_connected(_on_quit_confirmed):
+		menu.quit_confirmed.connect(_on_quit_confirmed)
 	var start_agent := _has_user_arg("--mcp")
 	if not start_agent and restore_saved_agent and not _has_user_arg("--no-mcp"):
 		start_agent = bool(settings.get_value("agent", "mcp_enabled", false))

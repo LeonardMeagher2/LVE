@@ -5,6 +5,9 @@ extends HBoxContainer
 ## It opens, saves, and creates documents. It also shows the undo and redo
 ## buttons and the model settings.
 
+## Emitted when every edited document has been saved or discarded for a quit.
+signal quit_confirmed()
+
 ## The user path of the file dialog settings.
 const FILE_SETTINGS_PATH := "user://file_dialog.cfg"
 
@@ -23,6 +26,14 @@ var _save_format := OptionButton.new()
 var _pending_close_index := -1
 # The tab to close after a successful Save As, or -1.
 var _close_after_save := -1
+# Whether the quit flow is active.
+var _quit_active := false
+# The edited tab indices that the quit flow must visit.
+var _quit_indices: Array[int] = []
+# The next entry in `_quit_indices` to show.
+var _quit_position := 0
+# Whether a Save As dialog must continue the quit flow after it saves.
+var _quit_after_save := false
 # The last folder that the file dialog used.
 var _last_dir := ""
 
@@ -116,9 +127,92 @@ func _on_file_selected(path: String) -> void:
 	var close_index := _close_after_save
 	_close_after_save = -1
 	var error := await save_doc(path)
+	if _quit_after_save:
+		_quit_after_save = false
+		if error == OK:
+			_advance_quit()
+		else:
+			_cancel_quit()
+		return
 	if error == OK and close_index >= 0 and close_index < State.tabs.size():
 		State.close_tab(close_index)
 		_remember_session()
+
+
+## Starts the quit flow. It asks to save each edited document, one at a time.
+## It emits [signal quit_confirmed] when every document is handled.
+func request_quit() -> void:
+	if _quit_active or State.edit_busy():
+		return
+	var edited: Array[int] = []
+	for index in range(State.tabs.size()):
+		if State.tabs[index].edit_dirty:
+			edited.append(index)
+	if edited.is_empty():
+		_remember_session()
+		quit_confirmed.emit()
+		return
+	_quit_active = true
+	_quit_indices = edited
+	_quit_position = 0
+	_show_quit_dialog()
+
+
+func _show_quit_dialog() -> void:
+	while _quit_position < _quit_indices.size():
+		var index := _quit_indices[_quit_position]
+		if index < State.tabs.size() and State.tabs[index].edit_dirty:
+			_pending_close_index = index
+			var document := State.tabs[index]
+			%CloseTabDialog.dialog_text = "Save the changes to %s?" % document.get_file_name()
+			%CloseTabDialog.popup_centered()
+			return
+		_quit_position += 1
+	_finish_quit()
+
+
+func _advance_quit() -> void:
+	_pending_close_index = -1
+	_quit_position += 1
+	_show_quit_dialog()
+
+
+func _finish_quit() -> void:
+	_quit_active = false
+	_quit_indices.clear()
+	_quit_position = 0
+	_pending_close_index = -1
+	_quit_after_save = false
+	_remember_session()
+	quit_confirmed.emit()
+
+
+func _cancel_quit() -> void:
+	_quit_active = false
+	_quit_indices.clear()
+	_quit_position = 0
+	_pending_close_index = -1
+	_quit_after_save = false
+
+
+func _save_quit_document() -> void:
+	var index := _pending_close_index
+	if index < 0 or index >= State.tabs.size():
+		_cancel_quit()
+		return
+	if index != State.active_tab and not State.activate_tab(index):
+		_cancel_quit()
+		return
+	var document := State.document
+	if document.edit_save_path.is_empty():
+		_quit_after_save = true
+		_on_save_as_btn_pressed()
+		return
+	var error := await save_doc(document.edit_save_path)
+	if error != OK:
+		_cancel_quit()
+		return
+	_advance_quit()
 
 
 func _on_tab_close_requested(index: int) -> void:
@@ -135,6 +229,10 @@ func _on_tab_close_requested(index: int) -> void:
 
 
 func _on_close_tab_save() -> void:
+	%CloseTabDialog.hide()
+	if _quit_active:
+		await _save_quit_document()
+		return
 	var index := _pending_close_index
 	_pending_close_index = -1
 	if index < 0 or index >= State.tabs.size():
@@ -155,6 +253,10 @@ func _on_close_tab_save() -> void:
 func _on_close_tab_action(action: StringName) -> void:
 	if action != &"discard":
 		return
+	%CloseTabDialog.hide()
+	if _quit_active:
+		_advance_quit()
+		return
 	var index := _pending_close_index
 	_pending_close_index = -1
 	if index >= 0 and index < State.tabs.size():
@@ -163,10 +265,18 @@ func _on_close_tab_action(action: StringName) -> void:
 
 
 func _on_close_tab_cancel() -> void:
+	%CloseTabDialog.hide()
+	if _quit_active:
+		_cancel_quit()
+		return
 	_pending_close_index = -1
 
 
 func _on_file_dialog_canceled() -> void:
+	if _quit_after_save:
+		_quit_after_save = false
+		_cancel_quit()
+		return
 	_close_after_save = -1
 	_pending_close_index = -1
 

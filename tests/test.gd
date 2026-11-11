@@ -38,6 +38,8 @@ func add_main() -> Node:
 	var inst := scene.instantiate()
 	# A saved MCP on state must not bind a port in the test process.
 	inst.set("restore_saved_agent", false)
+	# A quit signal must not end the test process.
+	inst.set("quit_on_confirmed", false)
 	get_tree().root.add_child.call_deferred(inst)
 	return inst
 

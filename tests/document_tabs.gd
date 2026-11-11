@@ -10,6 +10,7 @@ const SESSION_PATH := "user://document_tabs_test.cfg"
 var tabs: TabBar
 var _first: VoxelDocument
 var _second: VoxelDocument
+var _quit_seen := false
 
 
 func _ready() -> void:
@@ -18,6 +19,7 @@ func _ready() -> void:
 	test("open reuses an empty tab and adds another for a second document", _open, "tab_open")
 	test("the session stores the open tab paths", _session, "tab_session")
 	test("the runtime editor state is not serialized", _serialize, "tab_serialize")
+	test("quitting asks to save each edited document", _quit, "quit_confirmation")
 
 
 func _setup_test() -> void:
@@ -27,6 +29,14 @@ func _setup_test() -> void:
 	State.tabs.append(document)
 	State.active_tab = 0
 	State.document = document
+	_quit_seen = false
+	if is_instance_valid(main):
+		var menu := main.get_node_or_null("%MenuBar")
+		if menu != null:
+			var dialog := menu.get_node_or_null("%CloseTabDialog")
+			if dialog != null:
+				dialog.hide()
+			menu.call("_cancel_quit")
 
 
 func _cleanup_test() -> void:
@@ -36,6 +46,7 @@ func _cleanup_test() -> void:
 	var directory := DirAccess.open("user://")
 	if directory:
 		directory.remove(SESSION_PATH.get_file())
+		directory.remove("quit_save_test.lve")
 
 
 func _state() -> void:
@@ -153,3 +164,69 @@ func _serialize() -> void:
 		expect(loaded.edit_save_path.is_empty(), "the save path is not stored")
 		expect(loaded.edit_selection.is_empty(), "the selection is not stored")
 	)
+
+
+func _quit() -> void:
+	var menu := main.get_node("%MenuBar")
+	menu.quit_confirmed.connect(_on_test_quit)
+	step("Given two edited documents", func():
+		_first = State.tabs[0]
+		_first.file_path = "user://first.lve"
+		_first.edit_dirty = true
+		_second = VoxelDocument.new()
+		_second.file_path = "user://second.lve"
+		_second.edit_dirty = true
+		State.open_tab(_second)
+		State.activate_tab(0)
+	)
+	step("When the window asks to close", func():
+		main.get_window().close_requested.emit()
+	)
+	step("Then the first edited document is prompted", func():
+		var dialog: ConfirmationDialog = menu.get_node("%CloseTabDialog")
+		expect(dialog.visible, "the save prompt opens")
+		expect(dialog.dialog_text.contains("first.lve"), "the prompt names the first document")
+	)
+	step("When the user discards the first document", func():
+		menu.get_node("%CloseTabDialog").custom_action.emit(&"discard")
+	)
+	step("Then the second edited document is prompted", func():
+		var dialog: ConfirmationDialog = menu.get_node("%CloseTabDialog")
+		expect(dialog.visible, "the next prompt opens")
+		expect(dialog.dialog_text.contains("second.lve"), "the prompt names the second document")
+	)
+	step("When the user discards the second document", func():
+		menu.get_node("%CloseTabDialog").custom_action.emit(&"discard")
+	)
+	step("Then the quit is confirmed", func():
+		expect(_quit_seen, "the quit signal fires")
+		expect(not menu.get_node("%CloseTabDialog").visible, "the prompt closes")
+	)
+	step("When the user cancels a later quit", func():
+		_first.edit_dirty = true
+		_second.edit_dirty = true
+		_quit_seen = false
+		menu.request_quit()
+		menu.get_node("%CloseTabDialog").canceled.emit()
+	)
+	step("Then the app stays open", func():
+		expect(not _quit_seen, "the quit is cancelled")
+		expect(not menu.get_node("%CloseTabDialog").visible, "the prompt closes")
+	)
+	step("When only the second document is edited", func():
+		_first.edit_dirty = false
+		_second.edit_dirty = true
+		_quit_seen = false
+		menu.request_quit()
+	)
+	step("Then the prompt skips the clean document", func():
+		var dialog: ConfirmationDialog = menu.get_node("%CloseTabDialog")
+		expect(dialog.visible, "the prompt opens")
+		expect(dialog.dialog_text.contains("second.lve"), "the prompt names the edited document")
+		menu.get_node("%CloseTabDialog").custom_action.emit(&"discard")
+		expect(_quit_seen, "the quit signal fires after the last document")
+	)
+
+
+func _on_test_quit() -> void:
+	_quit_seen = true
