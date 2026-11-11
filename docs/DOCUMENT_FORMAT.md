@@ -108,6 +108,16 @@ Export camera settings support `yaw`, `pitch`, `distance`, `initial_distance`, `
 Settings dictionaries can be empty when the document uses defaults.
 If export lighting exists, its required fields must be present.
 
+## Recovery copies
+
+The editor writes a recovery copy of each edited document.
+The copy sits next to the original with a `~` prefix, for example `~Pumpkin.lve`.
+The copy uses the normal `.lve` encoding, so you can open it by hand.
+A normal save or a discard deletes the copy.
+An unsaved document uses `user://recovery/~Untitled-<id>.lve`.
+A small manifest at `user://recovery/manifest.json` indexes the copies.
+The editor offers the copies for recovery on startup.
+
 The document size is centered on the origin and uses whole cells.
 A size of `32` on an axis covers the cells `-16` through `15`.
 A size of `33` covers `-16` through `16`.

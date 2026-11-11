@@ -40,6 +40,8 @@ func add_main() -> Node:
 	inst.set("restore_saved_agent", false)
 	# A quit signal must not end the test process.
 	inst.set("quit_on_confirmed", false)
+	# Recovery files must not be written in the test process.
+	inst.set("autosave_enabled", false)
 	get_tree().root.add_child.call_deferred(inst)
 	return inst
 

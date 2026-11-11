@@ -11,6 +11,7 @@ var tabs: TabBar
 var _first: VoxelDocument
 var _second: VoxelDocument
 var _quit_seen := false
+var _recovery_entries_seen: Array = []
 
 
 func _ready() -> void:
@@ -20,6 +21,7 @@ func _ready() -> void:
 	test("the session stores the open tab paths", _session, "tab_session")
 	test("the runtime editor state is not serialized", _serialize, "tab_serialize")
 	test("quitting asks to save each edited document", _quit, "quit_confirmation")
+	test("the recovery prompt lists unsaved documents", _recovery_dialog, "recovery_dialog")
 
 
 func _setup_test() -> void:
@@ -30,12 +32,16 @@ func _setup_test() -> void:
 	State.active_tab = 0
 	State.document = document
 	_quit_seen = false
+	_recovery_entries_seen = []
 	if is_instance_valid(main):
 		var menu := main.get_node_or_null("%MenuBar")
 		if menu != null:
 			var dialog := menu.get_node_or_null("%CloseTabDialog")
 			if dialog != null:
 				dialog.hide()
+			var recovery_dialog := menu.get_node_or_null("%RecoveryDialog")
+			if recovery_dialog != null:
+				recovery_dialog.hide()
 			menu.call("_cancel_quit")
 
 
@@ -233,3 +239,32 @@ func _quit() -> void:
 
 func _on_test_quit() -> void:
 	_quit_seen = true
+
+
+func _recovery_dialog() -> void:
+	var menu := main.get_node("%MenuBar")
+	menu.recovery_accepted.connect(_on_test_recovery_accepted)
+	var entries := [{
+		"name": "first.lve",
+		"file": "user://first.lve",
+		"path": "user://first.lve",
+	}]
+	step("When recovery files are offered", func():
+		menu.show_recovery(entries)
+	)
+	step("Then the prompt lists them", func():
+		var dialog: ConfirmationDialog = menu.get_node("%RecoveryDialog")
+		expect(dialog.visible, "the recovery prompt opens")
+		expect(dialog.dialog_text.contains("first.lve"), "the prompt names the file")
+	)
+	step("When the user recovers", func():
+		menu.get_node("%RecoveryDialog").confirmed.emit()
+	)
+	step("Then the entries are accepted", func():
+		expect(_recovery_entries_seen.size() == 1, "the recovery signal carries one entry")
+		expect(not menu.get_node("%RecoveryDialog").visible, "the prompt closes")
+	)
+
+
+func _on_test_recovery_accepted(entries: Array) -> void:
+	_recovery_entries_seen = entries

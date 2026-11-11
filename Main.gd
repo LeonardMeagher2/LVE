@@ -15,6 +15,7 @@ const STARTUP_DOCUMENT := "res://Flamingo.lve"
 ## The MCP server and bridge scripts.
 const MCP_SERVER_SCRIPT := preload("res://Globals/MCP/MCPServer.gd")
 const MCP_BRIDGE_SCRIPT := preload("res://Globals/MCP/MCPBridge.gd")
+const AUTOSAVE_SCRIPT := preload("res://Globals/Autosave/Autosave.gd")
 ## The default loopback MCP port.
 const MCP_PORT := 17373
 ## The interface settings file. Tests point it at a temporary file.
@@ -25,11 +26,14 @@ var mcp_port := MCP_PORT
 var restore_saved_agent := true
 ## Tests turn this off, so a quit signal cannot end the test process.
 var quit_on_confirmed := true
+## Tests turn this off, so recovery files are not written in the test process.
+var autosave_enabled := true
 var _ui_scale := 0.0
 var _scale_check_elapsed := 0.0
 var _title_document: VoxelDocument
 var _mcp: Node = null
 var _mcp_http_mode := true
+var autosave = null
 
 
 func _enter_tree() -> void:
@@ -80,6 +84,27 @@ func _on_quit_confirmed() -> void:
 		get_tree().quit()
 
 
+func _on_recovery_available(entries: Array) -> void:
+	var menu := get_node_or_null("%MenuBar")
+	if menu != null:
+		menu.call("show_recovery", entries)
+
+
+func _on_recovery_accepted(entries: Array) -> void:
+	if autosave != null:
+		autosave.call("recover", entries)
+
+
+func _on_recovery_discarded(entries: Array) -> void:
+	if autosave != null:
+		autosave.call("discard_entries", entries)
+
+
+func _on_document_discarded(document: VoxelDocument) -> void:
+	if autosave != null:
+		autosave.call("discard_document", document)
+
+
 func _ready() -> void:
 	if _has_user_arg("--mcp-bridge"):
 		_run_bridge()
@@ -107,12 +132,23 @@ func _ready() -> void:
 	var menu := get_node_or_null("%MenuBar")
 	if menu != null and menu.has_signal("quit_confirmed") and not menu.quit_confirmed.is_connected(_on_quit_confirmed):
 		menu.quit_confirmed.connect(_on_quit_confirmed)
+	if autosave_enabled:
+		autosave = AUTOSAVE_SCRIPT.new()
+		autosave.name = "Autosave"
+		add_child(autosave)
+		autosave.connect("recovery_available", _on_recovery_available)
+		if menu != null:
+			menu.connect("recovery_accepted", _on_recovery_accepted)
+			menu.connect("recovery_discarded", _on_recovery_discarded)
+			menu.connect("document_discarded", _on_document_discarded)
 	var start_agent := _has_user_arg("--mcp")
 	if not start_agent and restore_saved_agent and not _has_user_arg("--no-mcp"):
 		start_agent = bool(settings.get_value("agent", "mcp_enabled", false))
 	if start_agent:
 		_start_mcp()
 	_restore_startup_document.call_deferred()
+	if autosave != null:
+		autosave.call_deferred("check_recovery")
 
 
 func _restore_startup_document(force: bool = false, session_path: String = "") -> void:

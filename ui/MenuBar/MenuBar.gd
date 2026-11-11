@@ -7,6 +7,12 @@ extends HBoxContainer
 
 ## Emitted when every edited document has been saved or discarded for a quit.
 signal quit_confirmed()
+## Emitted when the user accepts the recovery prompt.
+signal recovery_accepted(entries: Array)
+## Emitted when the user discards the recovery prompt.
+signal recovery_discarded(entries: Array)
+## Emitted when a tab is closed without saving.
+signal document_discarded(document: VoxelDocument)
 
 ## The user path of the file dialog settings.
 const FILE_SETTINGS_PATH := "user://file_dialog.cfg"
@@ -34,6 +40,8 @@ var _quit_indices: Array[int] = []
 var _quit_position := 0
 # Whether a Save As dialog must continue the quit flow after it saves.
 var _quit_after_save := false
+# The entries shown by the recovery prompt.
+var _recovery_entries: Array = []
 # The last folder that the file dialog used.
 var _last_dir := ""
 
@@ -54,6 +62,10 @@ func _ready() -> void:
 	%CloseTabDialog.confirmed.connect(_on_close_tab_save)
 	%CloseTabDialog.custom_action.connect(_on_close_tab_action)
 	%CloseTabDialog.canceled.connect(_on_close_tab_cancel)
+	%RecoveryDialog.add_button("Discard", true, "discard")
+	%RecoveryDialog.confirmed.connect(_on_recovery_confirmed)
+	%RecoveryDialog.custom_action.connect(_on_recovery_action)
+	%RecoveryDialog.canceled.connect(_on_recovery_canceled)
 	State.document_changed.connect(_sync_model_settings)
 	State.model_settings_changed.connect(_sync_model_settings)
 	State.activity_changed.connect(_sync_model_settings)
@@ -255,11 +267,15 @@ func _on_close_tab_action(action: StringName) -> void:
 		return
 	%CloseTabDialog.hide()
 	if _quit_active:
+		var quit_index := _pending_close_index
+		if quit_index >= 0 and quit_index < State.tabs.size():
+			document_discarded.emit(State.tabs[quit_index])
 		_advance_quit()
 		return
 	var index := _pending_close_index
 	_pending_close_index = -1
 	if index >= 0 and index < State.tabs.size():
+		document_discarded.emit(State.tabs[index])
 		State.close_tab(index)
 		_remember_session()
 
@@ -279,6 +295,45 @@ func _on_file_dialog_canceled() -> void:
 		return
 	_close_after_save = -1
 	_pending_close_index = -1
+
+
+## Shows the recovery prompt for the entries that the autosave manager found.
+func show_recovery(entries: Array) -> void:
+	if entries.is_empty():
+		return
+	_recovery_entries = entries.duplicate()
+	var lines := PackedStringArray()
+	for value in entries:
+		if not (value is Dictionary):
+			continue
+		var entry: Dictionary = value
+		var name := str(entry.get("name", ""))
+		if name.is_empty():
+			name = "Untitled"
+		lines.append(name)
+	%RecoveryDialog.dialog_text = "Recover these unsaved documents?\n\n" + "\n".join(lines)
+	%RecoveryDialog.popup_centered()
+
+
+func _on_recovery_confirmed() -> void:
+	%RecoveryDialog.hide()
+	var entries := _recovery_entries
+	_recovery_entries = []
+	recovery_accepted.emit(entries)
+
+
+func _on_recovery_action(action: StringName) -> void:
+	if action != &"discard":
+		return
+	%RecoveryDialog.hide()
+	var entries := _recovery_entries
+	_recovery_entries = []
+	recovery_discarded.emit(entries)
+
+
+func _on_recovery_canceled() -> void:
+	%RecoveryDialog.hide()
+	_recovery_entries = []
 
 
 # Restores the favorite folders and the last folder. The favorite list is

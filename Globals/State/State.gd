@@ -17,6 +17,8 @@ signal document_deactivating()
 ## Emitted when cells in a frame change. [param frame] is the frame index.
 ## [param affected] lists the changed cells.
 signal cells_changed(frame: int, affected: Array[Vector3i])
+## Emitted when a document is saved to a path. The unsaved mark is already clear.
+signal document_saved(document: VoxelDocument)
 ## Emitted when chunks in a frame need a surface rebuild. [param frame] is the
 ## frame index. [param affected] lists one cell per changed chunk.
 signal chunks_changed(frame: int, affected: Array[Vector3i])
@@ -478,6 +480,7 @@ func record_saved(document: VoxelDocument, path: String) -> void:
 	tabs_changed.emit()
 	if is_app_session():
 		remember_session()
+	document_saved.emit(document)
 
 
 ## Records an opened document path in its tab and the session.
