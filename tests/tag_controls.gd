@@ -11,7 +11,7 @@ func _ready() -> void:
 
 
 # Each test starts from a fresh one-frame document with its default tag.
-func _setup_test() -> void:
+func before_test() -> void:
 	State.stop()
 	State.document = VoxelDocument.new()
 	State.current_frame = 0
@@ -20,7 +20,7 @@ func _setup_test() -> void:
 
 # An emitted rename signal leaves the dialog open, so close it before the next
 # test. Nothing else here changes focus, the pointer, or a popup.
-func _cleanup_test() -> void:
+func after_test() -> void:
 	var dialog: ConfirmationDialog = _tag_row().get_node_or_null("%TagRenameDialog")
 	if dialog != null and dialog.visible:
 		dialog.hide()

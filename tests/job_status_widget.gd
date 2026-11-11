@@ -43,7 +43,7 @@ func _ready() -> void:
 	test("the display delay survives a tree re-entry", _reentry_delay, "job_reentry_delay")
 
 
-func _setup_test() -> void:
+func before_test() -> void:
 	_cancel_count = 0
 	_first_id = 0
 	_second_id = 0
@@ -63,7 +63,7 @@ func _setup_test() -> void:
 	await get_tree().process_frame
 
 
-func _cleanup_test() -> void:
+func after_test() -> void:
 	if is_instance_valid(_viewport):
 		# Freeing the viewport frees the widget or status bar inside it.
 		_viewport.queue_free()

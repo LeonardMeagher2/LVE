@@ -47,13 +47,13 @@ LVE uses Godot 4.7.2. Godot is the only toolchain.
 Run one behavior test:
 
 ```text
-godot --path . res://tests/paint_strokes.tscn -- paint
+godot --path . res://tests/paint_strokes.test.tscn -- paint
 ```
 
 Run the full suite:
 
 ```text
-godot --headless --path . -s res://tests/run_all.gd
+godot --path . -s res://addons/test_kit/run.gd
 ```
 
 ## License

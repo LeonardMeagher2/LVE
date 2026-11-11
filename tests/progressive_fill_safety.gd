@@ -115,7 +115,7 @@ func _ready() -> void:
 
 
 # Each test starts from a fresh document, the default symmetry, and connected on.
-func _setup_test() -> void:
+func before_test() -> void:
 	State.stop()
 	State.document = VoxelDocument.new()
 	State.symmetry_axes = 0
@@ -128,7 +128,7 @@ func _setup_test() -> void:
 
 
 # Leave no worker or open stroke behind, so a test can run alone or in any order.
-func _cleanup_test() -> void:
+func after_test() -> void:
 	if State.chunks_changed.is_connected(_on_first_notification):
 		State.chunks_changed.disconnect(_on_first_notification)
 	if State.chunks_changed.is_connected(_count_flush):

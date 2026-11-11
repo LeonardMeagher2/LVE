@@ -17,6 +17,8 @@ func _ready() -> void:
 	test("a driven brush stroke writes cells and one undo action", _stroke, "stroke")
 	test("a driven fill uses the current material", _fill, "fill")
 	test("write_cells writes boxes and runs", _write, "write_cells")
+	test("write_cells accepts per-cell materials", _write_materials, "write_materials")
+	test("write_cells writes several frames as one undo", _write_frames, "write_frames")
 	test("get_cells returns compact runs", _read, "get_cells")
 	test("materials can glow", _emission, "emission")
 	test("documents save and open", _save_open, "save_open")
@@ -29,9 +31,16 @@ func _ready() -> void:
 	test("the HTTP transport answers a POST and opens an SSE stream", _http, "http")
 	test("a screenshot saves a file and returns an image on request", _screenshot, "screenshot")
 	test("the compact state stays small", _budget, "budget")
+	test("inspect_document summarizes frames and islands", _inspect, "inspect_document")
+	test("get_regions groups material and frame islands", _regions, "get_regions")
+	test("get_slice reads labeled planes", _slice, "get_slice")
+	test("get_map reads coarse blocks", _map, "get_map")
+	test("get_map falls back to chunk blocks", _chunk_map_fallback, "chunk_map")
+	test("get_changes returns the delta", _changes, "get_changes")
+	test("get_cells resumes with a cursor", _cursor, "cursor")
 
 
-func _setup_test() -> void:
+func before_test() -> void:
 	State.stop()
 	State.document = VoxelDocument.new()
 	State.undo_redo.clear_history()
@@ -49,7 +58,7 @@ func _setup_test() -> void:
 	expect(error == OK, "the MCP server starts on a free loopback port")
 
 
-func _cleanup_test() -> void:
+func after_test() -> void:
 	if peer != null:
 		peer.disconnect_from_host()
 		peer = null
@@ -193,6 +202,7 @@ func _stroke() -> void:
 		pass
 	)
 	var response := await _call("stroke", {"points": [[0, 0, 0], [0, 0, 2]]})
+	var data := _result_data(response)
 	step("Then the cells are painted and one undo action is recorded", func():
 		expect(not _is_error(response), "stroke succeeds")
 		var frame := State.get_current_voxel_frame()
@@ -201,6 +211,9 @@ func _stroke() -> void:
 		expect(frame.has(Vector3i(0, 0, 2)), "the last center is painted")
 		expect(frame.get_color(Vector3i(0, 0, 1)).r == 1.0 and frame.get_color(Vector3i(0, 0, 1)).g == 0.0, "the cells use the current material")
 		expect(State.undo_redo.get_history_count() == 1, "the whole stroke is one history action")
+		expect(int(data.get("revision", -1)) >= 0, "the stroke reports a revision")
+		expect(int(data.get("changed_chunks", 0)) >= 1, "the stroke reports the changed chunks")
+		expect(data.get("changed_bounds") != null, "the stroke reports changed bounds")
 	)
 
 
@@ -216,6 +229,7 @@ func _fill() -> void:
 	)
 	await _call("set_tool", {"tool": "fill", "connected": true})
 	var response := await _call("fill", {"seed": [0, 0, 0]})
+	var data := _result_data(response)
 	step("Then the connected region uses the green material", func():
 		expect(not _is_error(response), "fill succeeds")
 		var frame := State.get_current_voxel_frame()
@@ -227,6 +241,9 @@ func _fill() -> void:
 					green += 1
 		expect(green == 9, "the nine connected cells are green")
 		expect(State.undo_redo.get_history_count() == 1, "the fill is one history action")
+		expect(int(data.get("revision", -1)) >= 0, "the fill reports a revision")
+		expect(int(data.get("changed_chunks", 0)) >= 1, "the fill reports the changed chunks")
+		expect(data.get("changed_bounds") != null, "the fill reports changed bounds")
 	)
 
 
@@ -276,6 +293,76 @@ func _write() -> void:
 	var far_run := await _call("write_cells", {"runs": [[-7000000000000000000, 7000000000000000000, 0, 0]]})
 	step("Then a run outside the cell range is refused", func():
 		expect(_is_error(far_run), "the far run reports an error")
+	)
+
+
+func _write_materials() -> void:
+	step("Given a black current material", func():
+		State.set_material(VoxelFrame.material(Color.BLACK))
+		State.undo_redo.clear_history()
+	)
+	var response := await _call("write_cells", {
+		"materials": [{"color": "#ff0000"}, {"color": "#0000ff"}],
+		"boxes": [[-1, 0, -1, 1, 0, 1, 0], [3, 0, -1, 5, 0, 1, 1]],
+		"label": "Two colors",
+	})
+	var data := _result_data(response)
+	step("Then each box uses its material in one action", func():
+		expect(not _is_error(response), "the material write succeeds")
+		var frame := State.get_current_voxel_frame()
+		var red := frame.get_color(Vector3i(0, 0, 0))
+		var blue := frame.get_color(Vector3i(4, 0, 0))
+		expect(red.r == 1.0 and red.g == 0.0 and red.b == 0.0, "the first box is red")
+		expect(blue.b == 1.0 and blue.r == 0.0 and blue.g == 0.0, "the second box is blue")
+		expect(State.current_material == VoxelFrame.material(Color.BLACK), "the current material is unchanged")
+		expect(State.undo_redo.get_history_count() == 1, "the write is one history action")
+		expect(State.undo_redo.get_action_name(State.undo_redo.get_current_action()) == "Two colors", "the action uses the label")
+		expect(int(data.get("applied", 0)) == 18, "the write reports 18 cells")
+	)
+	var invalid := await _call("write_cells", {"materials": [{"color": "#ff0000"}], "cells": [[0, 0, 0, 2]]})
+	step("Then an unknown material index is refused", func():
+		expect(_is_error(invalid), "the unknown index reports an error")
+	)
+	var missing := await _call("write_cells", {"cells": [[0, 0, 0, 0]]})
+	step("Then a material index without a table is refused", func():
+		expect(_is_error(missing), "the missing table reports an error")
+	)
+
+
+func _write_frames() -> void:
+	step("Given three empty frames", func():
+		State.add_frame()
+		State.add_frame()
+		State.current_frame = 0
+		State.undo_redo.clear_history()
+	)
+	var response := await _call("write_cells", {
+		"frames": [0, 1, 2],
+		"materials": [{"color": "#00ff00"}],
+		"boxes": [[0, 0, 0, 1, 0, 1, 0]],
+		"label": "Three frames",
+	})
+	var data := _result_data(response)
+	step("Then every frame holds the cells in one action", func():
+		expect(not _is_error(response), "the multi-frame write succeeds")
+		for index in 3:
+			var frame := State.get_voxel_frame(index)
+			expect(frame.has(Vector3i(0, 0, 0)) and frame.has(Vector3i(1, 0, 1)), "frame %d holds the cells" % index)
+			var color := frame.get_color(Vector3i(0, 0, 0))
+			expect(color.g == 1.0 and color.r == 0.0, "frame %d uses the green material" % index)
+		expect(State.current_frame == 0, "the current frame stays the same")
+		expect(State.undo_redo.get_history_count() == 1, "three frames are one history action")
+		expect(State.undo_redo.get_action_name(State.undo_redo.get_current_action()) == "Three frames", "the action uses the label")
+		expect(int(data.get("applied", 0)) == 12, "the write reports 12 cells across frames")
+		var frames: Array = data.get("frames", [])
+		expect(frames.size() == 3, "the response lists three frames")
+	)
+	step("When the action is undone", func():
+		State.undo()
+	)
+	step("Then every frame is empty", func():
+		for index in 3:
+			expect(State.get_voxel_frame(index).count() == 0, "frame %d is empty" % index)
 	)
 
 
@@ -337,6 +424,268 @@ func _budget() -> void:
 	)
 
 
+func _inspect() -> void:
+	step("Given two red cells, a blue cell, and a far red cell", func():
+		var frame := State.get_current_voxel_frame()
+		frame.set_cell(Vector3i(0, 0, 0), VoxelFrame.material(Color.RED))
+		frame.set_cell(Vector3i(0, 1, 0), VoxelFrame.material(Color.RED))
+		frame.set_cell(Vector3i(1, 0, 0), VoxelFrame.material(Color.BLUE))
+		frame.set_cell(Vector3i(4, 0, 0), VoxelFrame.material(Color.RED))
+		State.document._bounds_dirty = true
+	)
+	var response := await _call("inspect_document", {"islands": true, "materials": true, "palette": true})
+	var data := _result_data(response)
+	step("Then the summary reports the frame, materials, and islands", func():
+		expect(not _is_error(response), "inspect_document succeeds")
+		expect(int(data.get("revision", -1)) >= 0, "the summary carries a revision")
+		expect(data.get("document", {}).has("palette"), "the palette is included on request")
+		var frames: Array = data.get("frames", [])
+		expect(frames.size() == 1, "the current frame is summarized")
+		if frames.size() == 1:
+			var frame: Dictionary = frames[0]
+			expect(int(frame.get("occupied", 0)) == 4, "the frame reports four cells")
+			var bounds: Dictionary = frame.get("bounds", {})
+			var min_bound: Array = bounds.get("min", [])
+			var max_bound: Array = bounds.get("max", [])
+			expect(min_bound.size() == 3 and int(min_bound[0]) == 0 and int(min_bound[1]) == 0 and int(min_bound[2]) == 0, "the bounds start at the origin")
+			expect(max_bound.size() == 3 and int(max_bound[0]) == 4 and int(max_bound[1]) == 1 and int(max_bound[2]) == 0, "the bounds cover the far cell")
+			var materials: Array = frame.get("materials", [])
+			expect(materials.size() == 2, "the summary lists two materials")
+			var islands: Array = frame.get("islands", [])
+			expect(int(frame.get("island_count", 0)) == 3, "the material scan finds three islands")
+			expect(islands.size() == 3, "the island list holds three entries")
+			if not islands.is_empty():
+				expect(int(islands[0].get("cells", 0)) == 2, "the largest island is the two-cell red run")
+	)
+	var default_response := await _call("inspect_document", {"islands": false, "materials": false})
+	var default_data := _result_data(default_response)
+	step("Then the default summary omits the palette", func():
+		expect(not default_data.get("document", {}).has("palette"), "the palette is opt-in")
+	)
+	step("Given a second frame with one blue cell", func():
+		State.add_frame()
+		var frame := State.get_current_voxel_frame()
+		frame.set_cell(Vector3i(5, 0, 0), VoxelFrame.material(Color.BLUE))
+		State.document._bounds_dirty = true
+	)
+	var transition_response := await _call("inspect_document", {"frames": [0, 1], "transitions": true, "islands": false, "materials": false})
+	var transition_data := _result_data(transition_response)
+	step("Then the transition reports the added and removed cells", func():
+		expect(not _is_error(transition_response), "the transition summary succeeds")
+		var frames: Array = transition_data.get("frames", [])
+		expect(frames.size() == 2, "the summary covers both frames")
+		var transitions: Array = transition_data.get("transitions", [])
+		expect(transitions.size() == 1, "one transition is returned")
+		if transitions.size() == 1:
+			var transition: Dictionary = transitions[0]
+			expect(int(transition.get("added", 0)) == 1, "the second frame adds one cell")
+			expect(int(transition.get("removed", 0)) == 4, "the second frame removes four cells")
+	)
+
+
+func _regions() -> void:
+	step("Given adjacent red and blue cells and a far red cell", func():
+		var frame := State.get_current_voxel_frame()
+		frame.set_cell(Vector3i(0, 0, 0), VoxelFrame.material(Color.RED))
+		frame.set_cell(Vector3i(1, 0, 0), VoxelFrame.material(Color.BLUE))
+		frame.set_cell(Vector3i(5, 0, 0), VoxelFrame.material(Color.RED))
+		State.document._bounds_dirty = true
+	)
+	var material_response := await _call("get_regions", {"group": "material"})
+	var frame_response := await _call("get_regions", {"group": "frame"})
+	step("Then material grouping separates the colors and frame grouping merges them", func():
+		var material_data := _result_data(material_response)
+		var frame_data := _result_data(frame_response)
+		expect(not _is_error(material_response), "material regions succeed")
+		expect(not _is_error(frame_response), "frame regions succeed")
+		expect(int(material_data.get("region_count", 0)) == 3, "material grouping keeps three regions")
+		expect(int(frame_data.get("region_count", 0)) == 2, "frame grouping merges the touching cells")
+		var regions: Array = frame_data.get("regions", [])
+		expect(regions.size() == 2, "frame grouping lists two regions")
+		if not regions.is_empty():
+			expect(int(regions[0].get("cells", 0)) == 2, "the merged region has two cells")
+	)
+
+
+func _slice() -> void:
+	step("Given a red floor row and a blue cell", func():
+		var frame := State.get_current_voxel_frame()
+		for x in 3:
+			frame.set_cell(Vector3i(x, 0, 0), VoxelFrame.material(Color.RED))
+		frame.set_cell(Vector3i(0, 0, 1), VoxelFrame.material(Color.BLUE))
+		State.document._bounds_dirty = true
+	)
+	var response := await _call("get_slice", {"axis": "y", "layers": [0], "mode": "materials", "scale": 1})
+	var data := _result_data(response)
+	step("Then the slice has labeled rows and a legend", func():
+		expect(not _is_error(response), "get_slice succeeds")
+		expect(str(data.get("columns", "")) == "x", "the columns are x")
+		expect(str(data.get("rows", "")) == "z", "the rows are z")
+		var slices: Array = data.get("slices", [])
+		expect(slices.size() == 1, "one layer is returned")
+		if slices.size() == 1:
+			var lines: Array = slices[0].get("lines", [])
+			expect(lines.size() == 2, "the slice has two rows")
+			if lines.size() == 2:
+				expect(str(lines[0]) == "###", "the first row is the red floor")
+				expect(str(lines[1]) == "+..", "the second row starts with the blue cell")
+		var legend: Array = data.get("legend", [])
+		expect(legend.size() == 2, "the legend lists two materials")
+	)
+	var height_response := await _call("get_slice", {"axis": "y", "mode": "height", "scale": 1})
+	var height_data := _result_data(height_response)
+	step("Then the height projection reports the top cell", func():
+		expect(not _is_error(height_response), "the height projection succeeds")
+		var values: Array = height_data.get("values", [])
+		expect(values.size() == 2, "the projection has two rows")
+		if not values.is_empty():
+			var first_row: Array = values[0]
+			var second_row: Array = values[1]
+			expect(first_row.size() == 3 and int(first_row[0]) == 0 and int(first_row[1]) == 0 and int(first_row[2]) == 0, "the first row is at height zero")
+			expect(second_row.size() == 3 and int(second_row[0]) == 0 and int(second_row[1]) == -1 and int(second_row[2]) == -1, "the second row only holds the blue column")
+	)
+
+
+func _map() -> void:
+	step("Given cells in two 16-cell blocks", func():
+		var frame := State.get_current_voxel_frame()
+		frame.set_cell(Vector3i(0, 0, 0), VoxelFrame.material(Color.RED))
+		frame.set_cell(Vector3i(15, 0, 0), VoxelFrame.material(Color.RED))
+		frame.set_cell(Vector3i(16, 0, 0), VoxelFrame.material(Color.BLUE))
+		State.document._bounds_dirty = true
+	)
+	var response := await _call("get_map", {"cell_size": 16})
+	var data := _result_data(response)
+	step("Then two blocks hold the cells", func():
+		expect(not _is_error(response), "get_map succeeds")
+		var blocks: Array = data.get("blocks", [])
+		expect(int(data.get("block_count", 0)) == 2, "two blocks are non-empty")
+		expect(blocks.size() == 2, "two blocks are listed")
+		if blocks.size() == 2:
+			expect(int(blocks[0][3]) == 2, "the first block holds two cells")
+			expect(int(blocks[1][3]) == 1, "the second block holds one cell")
+	)
+
+
+func _chunk_map_fallback() -> void:
+	step("Given two cells in different chunks", func():
+		var frame := State.get_current_voxel_frame()
+		frame.set_cell(Vector3i(0, 0, 0), VoxelFrame.material(Color.RED))
+		frame.set_cell(Vector3i(16, 0, 0), VoxelFrame.material(Color.RED))
+		State.document._bounds_dirty = true
+	)
+	var response: Variant = server.call("_chunk_map", State.get_current_voxel_frame(), 0, Vector3i(-1, -1, -1), Vector3i(20, 20, 20), 512)
+	step("Then the fallback lists chunk blocks", func():
+		expect(response is Dictionary, "the fallback returns a tool result")
+		if response is Dictionary:
+			var result: Dictionary = response
+			var content: Array = result.get("content", [])
+			var data: Variant = null
+			if not content.is_empty():
+				var entry: Dictionary = content[0]
+				data = JSON.parse_string(str(entry.get("text", "")))
+			expect(data is Dictionary, "the fallback returns JSON")
+			if data is Dictionary:
+				expect(bool(data.get("chunk_aligned", false)), "the map is chunk aligned")
+				expect(int(data.get("cell_size", 0)) == 16, "the chunk size is 16")
+				expect(int(data.get("block_count", 0)) == 2, "two chunks are listed")
+				var blocks: Array = data.get("blocks", [])
+				expect(blocks.size() == 2, "two blocks are returned")
+				if blocks.size() == 2:
+					expect(int(blocks[0][3]) == 1 and int(blocks[1][3]) == 1, "each chunk holds one cell")
+	)
+
+
+func _changes() -> void:
+	var write_response := await _call("write_cells", {"cells": [[0, 0, 0], [1, 0, 0]]})
+	var write_data := _result_data(write_response)
+	var revision := int(write_data.get("revision", -1))
+	step("When the agent writes two cells", func():
+		expect(not _is_error(write_response), "write_cells succeeds")
+		expect(revision >= 0, "the write reports a revision")
+		var changed_bounds: Dictionary = write_data.get("changed_bounds", {})
+		var min_bound: Array = changed_bounds.get("min", [])
+		var max_bound: Array = changed_bounds.get("max", [])
+		expect(min_bound.size() == 3 and int(min_bound[0]) == 0 and int(min_bound[1]) == 0 and int(min_bound[2]) == 0, "the write reports its start bounds")
+		expect(max_bound.size() == 3 and int(max_bound[0]) == 1 and int(max_bound[1]) == 0 and int(max_bound[2]) == 0, "the write reports its end bounds")
+	)
+	var second_response := await _call("write_cells", {"cells": [[5, 0, 0]]})
+	var second_data := _result_data(second_response)
+	var changes_response := await _call("get_changes", {"since": revision})
+	var changes_data := _result_data(changes_response)
+	step("Then get_changes returns only the later cell", func():
+		expect(not _is_error(changes_response), "get_changes succeeds")
+		expect(not bool(changes_data.get("full_refresh", true)), "the delta is available")
+		expect(int(changes_data.get("count", 0)) == 1, "one cell changed")
+		var changed: Array = _run_cells(changes_data.get("cells", []))
+		expect(changed == [Vector3i(5, 0, 0)], "the delta names the new cell")
+	)
+	var none_response := await _call("get_changes", {"since": int(second_data.get("revision", -1))})
+	var none_data := _result_data(none_response)
+	step("Then a current revision has no changes", func():
+		expect(int(none_data.get("count", -1)) == 0, "no cells changed after the last revision")
+		expect(not bool(none_data.get("full_refresh", true)), "the current revision is not stale")
+	)
+	var stale_response := await _call("get_changes", {"since": 999999})
+	var stale_data := _result_data(stale_response)
+	step("Then an impossible revision asks for a full read", func():
+		expect(bool(stale_data.get("full_refresh", false)), "the stale revision reports full_refresh")
+	)
+	var undone := State.undo()
+	var undo_response := await _call("get_changes", {"since": int(second_data.get("revision", -1))})
+	var undo_data := _result_data(undo_response)
+	step("Then an undo asks for a full read", func():
+		expect(undone, "the undo succeeds")
+		expect(bool(undo_data.get("full_refresh", false)), "the undo reports full_refresh")
+	)
+
+
+func _cursor() -> void:
+	var cells := []
+	for z in 3:
+		for y in 3:
+			for x in 3:
+				cells.append([x, y, z])
+	var write_response := await _call("write_cells", {"cells": cells})
+	expect(not _is_error(write_response), "the nine cells are written")
+	var all_response := await _call("get_cells", {})
+	var all_data := _result_data(all_response)
+	expect(int(all_data.get("count", 0)) == 27, "the default read covers the frame")
+	var collected := {}
+	var cursor: Variant = null
+	var pages := 0
+	while pages < 20:
+		var args := {"min": [0, 0, 0], "max": [2, 2, 2], "max_cells": 2}
+		if cursor != null:
+			args["cursor"] = cursor
+		var response := await _call("get_cells", args)
+		var data := _result_data(response)
+		expect(not _is_error(response), "a page succeeds")
+		for cell in _run_cells(data.get("runs", [])):
+			collected[cell] = true
+		if not bool(data.get("truncated", false)):
+			break
+		cursor = data.get("next", null)
+		expect(cursor is Array, "a truncated page returns a cursor")
+		pages += 1
+	step("Then the cursor pages cover every cell once", func():
+		expect(pages > 0, "the read used more than one page")
+		expect(collected.size() == 27, "all 27 cells are read")
+	)
+
+
+func _run_cells(runs: Array) -> Array:
+	var cells := []
+	for run in runs:
+		var x0: int = run[0]
+		var x1: int = run[1]
+		var y: int = run[2]
+		var z: int = run[3]
+		for x in range(x0, x1 + 1):
+			cells.append(Vector3i(x, y, z))
+	return cells
+
+
 func _emission() -> void:
 	var response := await _call("set_material", {"color": "#ff7a1a", "emission": "#ff7a1a", "metallic": 0.0, "roughness": 0.4})
 	var data := _result_data(response)
@@ -376,7 +725,7 @@ func _save_open() -> void:
 		DirAccess.remove_absolute(path)
 		DirAccess.remove_absolute(png_path)
 	)
-	var save_response := await _call("save_document", {"path": path})
+	var save_response := await _call("save_document", {"path": path, "copy": false})
 	var save_data := _result_data(save_response)
 	step("Then the document is written and the tab is marked saved", func():
 		expect(not _is_error(save_response), "save_document succeeds")
@@ -385,6 +734,21 @@ func _save_open() -> void:
 		expect(State.document.edit_save_path == path, "the save records the save path")
 		expect(State.document.file_path == path, "the document records the file path")
 		expect(not State.document.edit_dirty, "the save clears the unsaved mark")
+	)
+	var copy_path := "user://mcp_copy_test.lve"
+	step("Given the saved document is edited again", func():
+		State.document.edit_dirty = true
+		DirAccess.remove_absolute(copy_path)
+	)
+	var copy_response := await _call("save_document", {"path": copy_path})
+	var copy_data := _result_data(copy_response)
+	step("Then a copy save keeps the main path and unsaved mark", func():
+		expect(not _is_error(copy_response), "the copy save succeeds")
+		expect(FileAccess.file_exists(copy_path), "the copy file exists")
+		expect(bool(copy_data.get("copy", false)), "the result reports a copy")
+		expect(State.document.edit_save_path == path, "the main save path is unchanged")
+		expect(State.document.edit_dirty, "the unsaved mark stays")
+		DirAccess.remove_absolute(copy_path)
 	)
 	var open_response := await _call("open_document", {"path": path})
 	step("Then the document opens in a new tab", func():
@@ -692,6 +1056,31 @@ func _screenshot() -> void:
 	var current_focus := await _call("screenshot", {"view": "current", "focus": [0, 0, 0, 0, 0, 0]})
 	step("Then focus with the current view is refused", func():
 		expect(_is_error(current_focus), "the current view rejects focus")
+	)
+	step("Given a second frame with a blue cell", func():
+		State.add_frame()
+		var frame := State.get_current_voxel_frame()
+		frame.set_cell(Vector3i(4, 4, 4), VoxelFrame.material(Color.BLUE))
+		State.document._bounds_dirty = true
+	)
+	var views_response := await _call("screenshot", {"views": ["isometric", "front", "right", "top"], "size": 64})
+	var views_data := _result_data(views_response)
+	step("Then the contact sheet holds four tiles", func():
+		expect(not _is_error(views_response), "the contact sheet succeeds")
+		expect(int(views_data.get("columns", 0)) == 2, "the contact sheet uses two columns")
+		expect(int(views_data.get("rows", 0)) == 2, "the contact sheet uses two rows")
+		expect(int(views_data.get("width", 0)) == 132, "the contact sheet width includes the gap")
+		var views: Array = views_data.get("views", [])
+		expect(views.size() == 4, "the contact sheet names four views")
+	)
+	var story_response := await _call("screenshot", {"frames": [0, 1], "view": "isometric", "size": 64})
+	var story_data := _result_data(story_response)
+	step("Then the storyboard holds both frames", func():
+		expect(not _is_error(story_response), "the storyboard succeeds")
+		var frames: Array = story_data.get("frames", [])
+		expect(frames.size() == 2, "the storyboard names two frames")
+		expect(int(story_data.get("columns", 0)) == 2, "the storyboard uses two columns")
+		expect(int(story_data.get("rows", 0)) == 1, "the storyboard uses one row")
 	)
 
 

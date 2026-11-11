@@ -29,7 +29,7 @@ func _ready() -> void:
 	test("the indexed spray costs less than the frozen gather", _cost, "spray_cost")
 
 
-func _setup_test() -> void:
+func before_test() -> void:
 	State.stop()
 	State.document = VoxelDocument.new()
 	State.clear_selection()
@@ -39,7 +39,7 @@ func _setup_test() -> void:
 	await get_tree().process_frame
 
 
-func _cleanup_test() -> void:
+func after_test() -> void:
 	_reference = null
 
 

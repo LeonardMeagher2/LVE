@@ -32,7 +32,7 @@ func _ready() -> void:
 	test("a context change discards the running line preview", _context_change, "line_preview_context")
 
 
-func _setup_test() -> void:
+func before_test() -> void:
 	viewport = editor_viewport()
 	viewport.get_parent().stretch = false
 	viewport.size = Vector2i(800, 500)

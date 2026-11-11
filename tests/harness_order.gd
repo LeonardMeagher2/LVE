@@ -14,12 +14,12 @@ func _ready() -> void:
 
 
 # Both hooks await a frame, so the probe proves the runner waits for them.
-func _setup_test() -> void:
+func before_test() -> void:
 	await get_tree().process_frame
 	events.append("setup")
 
 
-func _cleanup_test() -> void:
+func after_test() -> void:
 	await get_tree().process_frame
 	events.append("cleanup")
 	expect(events == _expected_events(true), "every completed test awaits its cleanup")

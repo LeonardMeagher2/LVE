@@ -5,6 +5,15 @@ extends HBoxContainer
 ## It opens, saves, and creates documents. It also shows the undo and redo
 ## buttons and the model settings.
 
+## Emitted when every edited document has been saved or discarded for a quit.
+signal quit_confirmed()
+## Emitted when the user accepts the recovery prompt.
+signal recovery_accepted(entries: Array)
+## Emitted when the user discards the recovery prompt.
+signal recovery_discarded(entries: Array)
+## Emitted when a tab is closed without saving.
+signal document_discarded(document: VoxelDocument)
+
 ## The user path of the file dialog settings.
 const FILE_SETTINGS_PATH := "user://file_dialog.cfg"
 
@@ -23,6 +32,18 @@ var _save_format := OptionButton.new()
 var _pending_close_index := -1
 # The tab to close after a successful Save As, or -1.
 var _close_after_save := -1
+# Whether the quit flow is active.
+var _quit_active := false
+# The edited tab indices that the quit flow must visit.
+var _quit_indices: Array[int] = []
+# The next entry in `_quit_indices` to show.
+var _quit_position := 0
+# Whether a Save As dialog must continue the quit flow after it saves.
+var _quit_after_save := false
+# The entries shown by the recovery prompt.
+var _recovery_entries: Array = []
+# One checkbox per recovery entry.
+var _recovery_checkboxes: Array[CheckBox] = []
 # The last folder that the file dialog used.
 var _last_dir := ""
 
@@ -43,6 +64,10 @@ func _ready() -> void:
 	%CloseTabDialog.confirmed.connect(_on_close_tab_save)
 	%CloseTabDialog.custom_action.connect(_on_close_tab_action)
 	%CloseTabDialog.canceled.connect(_on_close_tab_cancel)
+	%RecoveryDialog.add_button("Discard all", true, "discard")
+	%RecoveryDialog.confirmed.connect(_on_recovery_confirmed)
+	%RecoveryDialog.custom_action.connect(_on_recovery_action)
+	%RecoveryDialog.canceled.connect(_on_recovery_canceled)
 	State.document_changed.connect(_sync_model_settings)
 	State.model_settings_changed.connect(_sync_model_settings)
 	State.activity_changed.connect(_sync_model_settings)
@@ -116,9 +141,92 @@ func _on_file_selected(path: String) -> void:
 	var close_index := _close_after_save
 	_close_after_save = -1
 	var error := await save_doc(path)
+	if _quit_after_save:
+		_quit_after_save = false
+		if error == OK:
+			_advance_quit()
+		else:
+			_cancel_quit()
+		return
 	if error == OK and close_index >= 0 and close_index < State.tabs.size():
 		State.close_tab(close_index)
 		_remember_session()
+
+
+## Starts the quit flow. It asks to save each edited document, one at a time.
+## It emits [signal quit_confirmed] when every document is handled.
+func request_quit() -> void:
+	if _quit_active or State.edit_busy():
+		return
+	var edited: Array[int] = []
+	for index in range(State.tabs.size()):
+		if State.tabs[index].edit_dirty:
+			edited.append(index)
+	if edited.is_empty():
+		_remember_session()
+		quit_confirmed.emit()
+		return
+	_quit_active = true
+	_quit_indices = edited
+	_quit_position = 0
+	_show_quit_dialog()
+
+
+func _show_quit_dialog() -> void:
+	while _quit_position < _quit_indices.size():
+		var index := _quit_indices[_quit_position]
+		if index < State.tabs.size() and State.tabs[index].edit_dirty:
+			_pending_close_index = index
+			var document := State.tabs[index]
+			%CloseTabDialog.dialog_text = "Save the changes to %s?" % document.get_file_name()
+			%CloseTabDialog.popup_centered()
+			return
+		_quit_position += 1
+	_finish_quit()
+
+
+func _advance_quit() -> void:
+	_pending_close_index = -1
+	_quit_position += 1
+	_show_quit_dialog()
+
+
+func _finish_quit() -> void:
+	_quit_active = false
+	_quit_indices.clear()
+	_quit_position = 0
+	_pending_close_index = -1
+	_quit_after_save = false
+	_remember_session()
+	quit_confirmed.emit()
+
+
+func _cancel_quit() -> void:
+	_quit_active = false
+	_quit_indices.clear()
+	_quit_position = 0
+	_pending_close_index = -1
+	_quit_after_save = false
+
+
+func _save_quit_document() -> void:
+	var index := _pending_close_index
+	if index < 0 or index >= State.tabs.size():
+		_cancel_quit()
+		return
+	if index != State.active_tab and not State.activate_tab(index):
+		_cancel_quit()
+		return
+	var document := State.document
+	if document.edit_save_path.is_empty():
+		_quit_after_save = true
+		_on_save_as_btn_pressed()
+		return
+	var error := await save_doc(document.edit_save_path)
+	if error != OK:
+		_cancel_quit()
+		return
+	_advance_quit()
 
 
 func _on_tab_close_requested(index: int) -> void:
@@ -135,6 +243,10 @@ func _on_tab_close_requested(index: int) -> void:
 
 
 func _on_close_tab_save() -> void:
+	%CloseTabDialog.hide()
+	if _quit_active:
+		await _save_quit_document()
+		return
 	var index := _pending_close_index
 	_pending_close_index = -1
 	if index < 0 or index >= State.tabs.size():
@@ -155,20 +267,116 @@ func _on_close_tab_save() -> void:
 func _on_close_tab_action(action: StringName) -> void:
 	if action != &"discard":
 		return
+	%CloseTabDialog.hide()
+	if _quit_active:
+		var quit_index := _pending_close_index
+		if quit_index >= 0 and quit_index < State.tabs.size():
+			document_discarded.emit(State.tabs[quit_index])
+		_advance_quit()
+		return
 	var index := _pending_close_index
 	_pending_close_index = -1
 	if index >= 0 and index < State.tabs.size():
+		document_discarded.emit(State.tabs[index])
 		State.close_tab(index)
 		_remember_session()
 
 
 func _on_close_tab_cancel() -> void:
+	%CloseTabDialog.hide()
+	if _quit_active:
+		_cancel_quit()
+		return
 	_pending_close_index = -1
 
 
 func _on_file_dialog_canceled() -> void:
+	if _quit_after_save:
+		_quit_after_save = false
+		_cancel_quit()
+		return
 	_close_after_save = -1
 	_pending_close_index = -1
+
+
+## Shows the recovery prompt for the entries that the autosave manager found.
+func show_recovery(entries: Array) -> void:
+	_recovery_entries = []
+	for value in entries:
+		if value is Dictionary:
+			_recovery_entries.append(value)
+	if _recovery_entries.is_empty():
+		return
+	_clear_recovery_options()
+	for entry in _recovery_entries:
+		var name := str(entry.get("name", ""))
+		if name.is_empty():
+			name = "Untitled"
+		var path := str(entry.get("path", ""))
+		var checkbox := CheckBox.new()
+		checkbox.text = name if not path.is_empty() else name + " (unsaved)"
+		checkbox.tooltip_text = path if not path.is_empty() else str(entry.get("file", ""))
+		checkbox.button_pressed = true
+		checkbox.clip_text = true
+		checkbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		checkbox.toggled.connect(_on_recovery_toggled)
+		%RecoveryOptions.add_child(checkbox)
+		_recovery_checkboxes.append(checkbox)
+	_update_recovery_buttons()
+	%RecoveryDialog.popup_centered()
+
+
+func _on_recovery_confirmed() -> void:
+	var selected: Array = []
+	for index in range(_recovery_checkboxes.size()):
+		if _recovery_checkboxes[index].button_pressed:
+			selected.append(_recovery_entries[index])
+	if selected.is_empty():
+		return
+	%RecoveryDialog.hide()
+	_recovery_entries = []
+	_clear_recovery_options()
+	recovery_accepted.emit(selected)
+
+
+func _on_recovery_action(action: StringName) -> void:
+	if action != &"discard":
+		return
+	%RecoveryDialog.hide()
+	var entries := _recovery_entries
+	_recovery_entries = []
+	_clear_recovery_options()
+	recovery_discarded.emit(entries)
+
+
+func _on_recovery_canceled() -> void:
+	%RecoveryDialog.hide()
+	_recovery_entries = []
+	_clear_recovery_options()
+
+
+func _on_recovery_toggled(_pressed: bool) -> void:
+	_update_recovery_buttons()
+
+
+func _update_recovery_buttons() -> void:
+	var any := false
+	for checkbox in _recovery_checkboxes:
+		if checkbox.button_pressed:
+			any = true
+			break
+	%RecoveryDialog.get_ok_button().disabled = not any
+
+
+func _clear_recovery_options() -> void:
+	for checkbox in _recovery_checkboxes:
+		if not is_instance_valid(checkbox):
+			continue
+		var parent := checkbox.get_parent()
+		if parent != null:
+			parent.remove_child(checkbox)
+		checkbox.queue_free()
+	_recovery_checkboxes.clear()
 
 
 # Restores the favorite folders and the last folder. The favorite list is

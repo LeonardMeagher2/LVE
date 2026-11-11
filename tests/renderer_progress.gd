@@ -784,7 +784,7 @@ func _completed_task() -> int:
 
 # --- Fixtures ----------------------------------------------------------------
 
-func _setup_test() -> void:
+func before_test() -> void:
 	State.stop()
 	State.document = VoxelDocument.new()
 	State.clear_selection()
@@ -796,7 +796,7 @@ func _setup_test() -> void:
 	_kept = {}
 
 
-func _cleanup_test() -> void:
+func after_test() -> void:
 	_measuring = false
 	VoxelRenderer._surface_job_limit = 0
 	if is_instance_valid(second):

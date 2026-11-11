@@ -15,6 +15,7 @@ const STARTUP_DOCUMENT := "res://Flamingo.lve"
 ## The MCP server and bridge scripts.
 const MCP_SERVER_SCRIPT := preload("res://Globals/MCP/MCPServer.gd")
 const MCP_BRIDGE_SCRIPT := preload("res://Globals/MCP/MCPBridge.gd")
+const AUTOSAVE_SCRIPT := preload("res://Globals/Autosave/Autosave.gd")
 ## The default loopback MCP port.
 const MCP_PORT := 17373
 ## The interface settings file. Tests point it at a temporary file.
@@ -22,15 +23,24 @@ var interface_settings_path := UI_SETTINGS_PATH
 ## The MCP port. Tests set zero to take a free port.
 var mcp_port := MCP_PORT
 ## Tests turn this off, so a saved state cannot bind a port in the test process.
-var restore_saved_agent := true
+@export var restore_saved_agent := true
+## Tests turn this off, so a quit signal cannot end the test process.
+@export var quit_on_confirmed := true
+## Tests turn this off, so recovery files are not written in the test process.
+@export var autosave_enabled := true
 var _ui_scale := 0.0
 var _scale_check_elapsed := 0.0
 var _title_document: VoxelDocument
 var _mcp: Node = null
 var _mcp_http_mode := true
+var autosave = null
 
 
 func _enter_tree() -> void:
+	add_to_group("main")
+	# The close request must wait for the save prompts. The SceneTree accepts a
+	# close request by default, so the dialog appears and the app still quits.
+	get_tree().auto_accept_quit = false
 	# Seed the port before the status bar reads it in its own _ready.
 	mcp_port = _mcp_port_setting()
 	_mcp_http_mode = not _has_user_arg("--mcp-line")
@@ -40,6 +50,7 @@ func _enter_tree() -> void:
 
 
 func _exit_tree() -> void:
+	remove_from_group("main")
 	State.document_changed.disconnect(_on_document_changed)
 	State.tabs_changed.disconnect(_update_window_title)
 	if _title_document:
@@ -62,10 +73,45 @@ func _update_window_title() -> void:
 	get_window().title = "%s - %s" % [title, VoxelDocument.APP_NAME]
 
 
+func _on_window_close_requested() -> void:
+	var menu := get_node_or_null("%MenuBar")
+	if menu != null and menu.has_method("request_quit"):
+		menu.call("request_quit")
+	else:
+		get_tree().quit()
+
+
+func _on_quit_confirmed() -> void:
+	if quit_on_confirmed:
+		get_tree().quit()
+
+
+func _on_recovery_available(entries: Array) -> void:
+	var menu := get_node_or_null("%MenuBar")
+	if menu != null:
+		menu.call("show_recovery", entries)
+
+
+func _on_recovery_accepted(entries: Array) -> void:
+	if autosave != null:
+		autosave.call("recover", entries)
+
+
+func _on_recovery_discarded(entries: Array) -> void:
+	if autosave != null:
+		autosave.call("discard_entries", entries)
+
+
+func _on_document_discarded(document: VoxelDocument) -> void:
+	if autosave != null:
+		autosave.call("discard_document", document)
+
+
 func _ready() -> void:
 	if _has_user_arg("--mcp-bridge"):
 		_run_bridge()
 		return
+	State.reset_plugins()
 	# Godot coalesces pointer motion to one event per render frame by default. A
 	# long frame then turns a curved drag into a chord between two far samples,
 	# and every tool paints that chord. Take each event instead, so a stroke
@@ -83,12 +129,29 @@ func _ready() -> void:
 		window.move_to_center()
 	%TabContainer.tab_changed.connect(_on_tab_changed)
 	_on_tab_changed(%TabContainer.current_tab)
+	var window := get_window()
+	if not window.close_requested.is_connected(_on_window_close_requested):
+		window.close_requested.connect(_on_window_close_requested)
+	var menu := get_node_or_null("%MenuBar")
+	if menu != null and menu.has_signal("quit_confirmed") and not menu.quit_confirmed.is_connected(_on_quit_confirmed):
+		menu.quit_confirmed.connect(_on_quit_confirmed)
+	if autosave_enabled:
+		autosave = AUTOSAVE_SCRIPT.new()
+		autosave.name = "Autosave"
+		add_child(autosave)
+		autosave.connect("recovery_available", _on_recovery_available)
+		if menu != null:
+			menu.connect("recovery_accepted", _on_recovery_accepted)
+			menu.connect("recovery_discarded", _on_recovery_discarded)
+			menu.connect("document_discarded", _on_document_discarded)
 	var start_agent := _has_user_arg("--mcp")
 	if not start_agent and restore_saved_agent and not _has_user_arg("--no-mcp"):
 		start_agent = bool(settings.get_value("agent", "mcp_enabled", false))
 	if start_agent:
 		_start_mcp()
 	_restore_startup_document.call_deferred()
+	if autosave != null:
+		autosave.call_deferred("check_recovery")
 
 
 func _restore_startup_document(force: bool = false, session_path: String = "") -> void:

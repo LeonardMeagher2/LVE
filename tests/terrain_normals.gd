@@ -21,7 +21,7 @@ func _ready() -> void:
 	test("Grab keeps the view plane drag", _grab_hidden, "grab_hidden")
 
 
-func _setup_test() -> void:
+func before_test() -> void:
 	State.stop()
 	State.document = VoxelDocument.new()
 	State.clear_selection()
@@ -55,7 +55,7 @@ func _setup_test() -> void:
 	await get_tree().process_frame
 
 
-func _cleanup_test() -> void:
+func after_test() -> void:
 	if is_instance_valid(_tool):
 		if _tool._edit != null:
 			_tool.finish_on_switch()

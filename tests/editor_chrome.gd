@@ -38,7 +38,7 @@ func _ready() -> void:
 
 # Each case starts from a clean document and history. The cases share one
 # process, so no case may inherit another case's document or undo stack.
-func _setup_test() -> void:
+func before_test() -> void:
 	State.stop()
 	State.document = VoxelDocument.new()
 	State.undo_redo.clear_history()
@@ -48,7 +48,7 @@ func _setup_test() -> void:
 	thumbnail_frame = null
 
 
-func _cleanup_test() -> void:
+func after_test() -> void:
 	if VoxelImageRenderer.frame_rendered.is_connected(_thumbnail_rendered):
 		VoxelImageRenderer.frame_rendered.disconnect(_thumbnail_rendered)
 	if is_instance_valid(status):

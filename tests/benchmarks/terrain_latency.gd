@@ -59,7 +59,7 @@ func _process(_delta: float) -> void:
 	_last_frame_us = now
 
 
-func _setup_test() -> void:
+func before_test() -> void:
 	State.stop()
 	State.document = VoxelDocument.new()
 	State.clear_selection()
@@ -103,7 +103,7 @@ func _setup_test() -> void:
 	await _settle()
 
 
-func _cleanup_test() -> void:
+func after_test() -> void:
 	_measuring = false
 	if is_instance_valid(_tool):
 		if _tool._edit != null:

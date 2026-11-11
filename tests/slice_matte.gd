@@ -20,7 +20,7 @@ func _ready() -> void:
 	test("the slice matte reads the sides on the X axis", _run_x_axis, "slice_matte_x")
 
 
-func _setup_test() -> void:
+func before_test() -> void:
 	State.stop()
 	State.document = VoxelDocument.new()
 	State.slice_enabled = false
@@ -32,7 +32,7 @@ func _setup_test() -> void:
 	await get_tree().process_frame
 
 
-func _cleanup_test() -> void:
+func after_test() -> void:
 	if is_instance_valid(matte):
 		matte.free()
 	matte = null

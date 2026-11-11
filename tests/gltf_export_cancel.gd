@@ -21,7 +21,7 @@ func _ready() -> void:
 	test("Escape cancels a running GLB export", _cancel_with_escape, "gltf_cancel_escape")
 
 
-func _setup_test() -> void:
+func before_test() -> void:
 	_result = OK
 	_done = false
 	_op_id = 0
@@ -34,7 +34,7 @@ func _setup_test() -> void:
 	exporter._menu_item.get_node("ExportBtn").button_pressed = true
 
 
-func _cleanup_test() -> void:
+func after_test() -> void:
 	# Own the job on every path, so a failed step leaves no worker or operation.
 	if is_instance_valid(exporter) and exporter._gltf != null and exporter._gltf._export_job != null:
 		exporter._gltf.cancel()

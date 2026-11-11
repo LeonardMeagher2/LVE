@@ -66,7 +66,7 @@ func _ready() -> void:
 	test("deleting an isolated tool joins its running worker and skips a disposed one", _worker_deletion, "transform_worker_deletion")
 
 
-func _setup_test() -> void:
+func before_test() -> void:
 	_capture_originals_once()
 	_release_held_press()
 	_stop_pending_transform()
@@ -85,7 +85,7 @@ func _setup_test() -> void:
 
 
 # Leave no worker or open stroke behind, so a test can run alone or in any order.
-func _cleanup_test() -> void:
+func after_test() -> void:
 	_release_held_press()
 	_stop_pending_transform()
 	var tool := _tool()

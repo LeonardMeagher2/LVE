@@ -29,7 +29,7 @@ func _ready() -> void:
 
 
 # Each test starts from fresh group state, so a test runs alone or in any order.
-func _setup_test() -> void:
+func before_test() -> void:
 	fixtures = []
 
 

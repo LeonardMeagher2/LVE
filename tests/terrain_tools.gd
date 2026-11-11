@@ -82,7 +82,7 @@ func _ready() -> void:
 	test("the Grab options keep the shared radius and hide strength", _grab_controls, "grab_controls")
 
 
-func _setup_test() -> void:
+func before_test() -> void:
 	State.stop()
 	State.document = VoxelDocument.new()
 	State.clear_selection()
@@ -110,7 +110,7 @@ func _setup_test() -> void:
 	await get_tree().process_frame
 
 
-func _cleanup_test() -> void:
+func after_test() -> void:
 	if tool != null and tool._edit != null:
 		tool.finish_on_switch()
 	State.stop()

@@ -72,7 +72,7 @@ func _ready() -> void:
 	test("the worker snapshot captures the base, mirror, and no distant chunk", _worker_roi, "spray_scale_worker_roi")
 
 
-func _setup_test() -> void:
+func before_test() -> void:
 	State.stop()
 	State.document = VoxelDocument.new()
 	State.clear_selection()
@@ -91,7 +91,7 @@ func _setup_test() -> void:
 	await get_tree().process_frame
 
 
-func _cleanup_test() -> void:
+func after_test() -> void:
 	_reference = null
 
 

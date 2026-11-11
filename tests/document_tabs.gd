@@ -10,6 +10,8 @@ const SESSION_PATH := "user://document_tabs_test.cfg"
 var tabs: TabBar
 var _first: VoxelDocument
 var _second: VoxelDocument
+var _quit_seen := false
+var _recovery_entries_seen: Array = []
 
 
 func _ready() -> void:
@@ -18,24 +20,39 @@ func _ready() -> void:
 	test("open reuses an empty tab and adds another for a second document", _open, "tab_open")
 	test("the session stores the open tab paths", _session, "tab_session")
 	test("the runtime editor state is not serialized", _serialize, "tab_serialize")
+	test("quitting asks to save each edited document", _quit, "quit_confirmation")
+	test("the recovery prompt lists unsaved documents", _recovery_dialog, "recovery_dialog")
 
 
-func _setup_test() -> void:
+func before_test() -> void:
 	State.stop()
 	State.tabs.clear()
 	var document := VoxelDocument.new()
 	State.tabs.append(document)
 	State.active_tab = 0
 	State.document = document
+	_quit_seen = false
+	_recovery_entries_seen = []
+	if is_instance_valid(main):
+		var menu := main.get_node_or_null("%MenuBar")
+		if menu != null:
+			var dialog := menu.get_node_or_null("%CloseTabDialog")
+			if dialog != null:
+				dialog.hide()
+			var recovery_dialog := menu.get_node_or_null("%RecoveryDialog")
+			if recovery_dialog != null:
+				recovery_dialog.hide()
+			menu.call("_cancel_quit")
 
 
-func _cleanup_test() -> void:
+func after_test() -> void:
 	if is_instance_valid(tabs):
 		tabs.queue_free()
 		tabs = null
 	var directory := DirAccess.open("user://")
 	if directory:
 		directory.remove(SESSION_PATH.get_file())
+		directory.remove("quit_save_test.lve")
 
 
 func _state() -> void:
@@ -97,6 +114,15 @@ func _strip() -> void:
 	step("Then the state follows", func():
 		expect(State.active_tab == 1, "selecting a tab activates its document")
 	)
+	step("When a long document name is edited", func():
+		State.tabs[0].file_path = "user://a_very_long_document_name_for_the_tab_test.lve"
+		State.tabs[0].edit_dirty = true
+		State.tabs_changed.emit()
+	)
+	await get_tree().process_frame
+	step("Then the unsaved marker starts the title", func():
+		expect(tabs.get_tab_title(0).begins_with("* "), "the marker is not clipped")
+	)
 
 
 func _open() -> void:
@@ -153,3 +179,115 @@ func _serialize() -> void:
 		expect(loaded.edit_save_path.is_empty(), "the save path is not stored")
 		expect(loaded.edit_selection.is_empty(), "the selection is not stored")
 	)
+
+
+func _quit() -> void:
+	var menu := main.get_node("%MenuBar")
+	menu.quit_confirmed.connect(_on_test_quit)
+	step("Then the tree waits for the quit flow", func():
+		expect(not get_tree().auto_accept_quit, "the tree does not accept the close request")
+	)
+	step("Given two edited documents", func():
+		_first = State.tabs[0]
+		_first.file_path = "user://first.lve"
+		_first.edit_dirty = true
+		_second = VoxelDocument.new()
+		_second.file_path = "user://second.lve"
+		_second.edit_dirty = true
+		State.open_tab(_second)
+		State.activate_tab(0)
+	)
+	step("When the window asks to close", func():
+		main.get_window().close_requested.emit()
+	)
+	step("Then the first edited document is prompted", func():
+		var dialog: ConfirmationDialog = menu.get_node("%CloseTabDialog")
+		expect(dialog.visible, "the save prompt opens")
+		expect(dialog.dialog_text.contains("first.lve"), "the prompt names the first document")
+	)
+	step("When the user discards the first document", func():
+		menu.get_node("%CloseTabDialog").custom_action.emit(&"discard")
+	)
+	step("Then the second edited document is prompted", func():
+		var dialog: ConfirmationDialog = menu.get_node("%CloseTabDialog")
+		expect(dialog.visible, "the next prompt opens")
+		expect(dialog.dialog_text.contains("second.lve"), "the prompt names the second document")
+	)
+	step("When the user discards the second document", func():
+		menu.get_node("%CloseTabDialog").custom_action.emit(&"discard")
+	)
+	step("Then the quit is confirmed", func():
+		expect(_quit_seen, "the quit signal fires")
+		expect(not menu.get_node("%CloseTabDialog").visible, "the prompt closes")
+	)
+	step("When the user cancels a later quit", func():
+		_first.edit_dirty = true
+		_second.edit_dirty = true
+		_quit_seen = false
+		menu.request_quit()
+		menu.get_node("%CloseTabDialog").canceled.emit()
+	)
+	step("Then the app stays open", func():
+		expect(not _quit_seen, "the quit is cancelled")
+		expect(not menu.get_node("%CloseTabDialog").visible, "the prompt closes")
+	)
+	step("When only the second document is edited", func():
+		_first.edit_dirty = false
+		_second.edit_dirty = true
+		_quit_seen = false
+		menu.request_quit()
+	)
+	step("Then the prompt skips the clean document", func():
+		var dialog: ConfirmationDialog = menu.get_node("%CloseTabDialog")
+		expect(dialog.visible, "the prompt opens")
+		expect(dialog.dialog_text.contains("second.lve"), "the prompt names the edited document")
+		menu.get_node("%CloseTabDialog").custom_action.emit(&"discard")
+		expect(_quit_seen, "the quit signal fires after the last document")
+	)
+
+
+func _on_test_quit() -> void:
+	_quit_seen = true
+
+
+func _recovery_dialog() -> void:
+	var menu := main.get_node("%MenuBar")
+	menu.recovery_accepted.connect(_on_test_recovery_accepted)
+	var entries := [
+		{"name": "first.lve", "file": "user://first.lve", "path": "user://first.lve"},
+		{"name": "second.lve", "file": "user://second.lve", "path": "user://second.lve"},
+	]
+	step("When recovery files are offered", func():
+		menu.show_recovery(entries)
+	)
+	step("Then the prompt lists one checkbox per document", func():
+		var dialog: ConfirmationDialog = menu.get_node("%RecoveryDialog")
+		var options: VBoxContainer = menu.get_node("%RecoveryOptions")
+		expect(dialog.visible, "the recovery prompt opens")
+		expect(options.get_child_count() == 2, "the prompt has two checkboxes")
+		if options.get_child_count() == 2:
+			var first := options.get_child(0) as CheckBox
+			var second := options.get_child(1) as CheckBox
+			expect(first.button_pressed, "the first checkbox starts checked")
+			expect(second.button_pressed, "the second checkbox starts checked")
+			expect(first.text.contains("first.lve"), "the first checkbox names the file")
+			expect(second.text.contains("second.lve"), "the second checkbox names the file")
+	)
+	step("When the user clears the second document", func():
+		var options: VBoxContainer = menu.get_node("%RecoveryOptions")
+		var second := options.get_child(1) as CheckBox
+		second.button_pressed = false
+	)
+	step("When the user recovers", func():
+		menu.get_node("%RecoveryDialog").confirmed.emit()
+	)
+	step("Then only the checked entry is accepted", func():
+		expect(_recovery_entries_seen.size() == 1, "the recovery signal carries one entry")
+		if _recovery_entries_seen.size() == 1:
+			expect(str(_recovery_entries_seen[0].get("name", "")) == "first.lve", "the checked entry is accepted")
+		expect(not menu.get_node("%RecoveryDialog").visible, "the prompt closes")
+	)
+
+
+func _on_test_recovery_accepted(entries: Array) -> void:
+	_recovery_entries_seen = entries

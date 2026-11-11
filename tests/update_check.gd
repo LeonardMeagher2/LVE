@@ -17,7 +17,7 @@ func _ready() -> void:
 	test("the status bar links to the latest release", _status)
 
 
-func _cleanup_test() -> void:
+func after_test() -> void:
 	if is_instance_valid(status):
 		status.queue_free()
 		status = null

@@ -21,21 +21,176 @@ const MAX_BOX_CELLS := 262144
 const MAX_GET_CELLS := 512
 ## The largest cell count that one write accepts.
 const MAX_WRITE_CELLS := 65536
+## The largest cell count that one multi-frame write accepts.
+const MAX_WRITE_TOTAL_CELLS := MAX_WRITE_CELLS * 4
+## The largest frame cell count that the semantic read tools scan.
+const MAX_SCAN_CELLS := 262144
+## The largest island count that one read lists.
+const MAX_INSPECT_ISLANDS := 256
+## The largest number of entries the change journal keeps.
+const MAX_JOURNAL_ENTRIES := 512
+## The largest number of changed cells the change journal keeps.
+const MAX_JOURNAL_CELLS := 262144
+## The six face neighbors used by the connected region scan.
+const REGION_NEIGHBORS := [
+	Vector3i(1, 0, 0), Vector3i(-1, 0, 0),
+	Vector3i(0, 1, 0), Vector3i(0, -1, 0),
+	Vector3i(0, 0, 1), Vector3i(0, 0, -1),
+]
+## The material slice characters. A slice with more materials uses "?".
+const SLICE_CHARS := [
+	"#", "+", "*", "o", "x", "=", "%", "&", "a", "b", "c", "d", "e", "f",
+	"g", "h", "i", "j", "k", "l", "m", "n", "p", "q", "r", "s", "t", "u",
+	"v", "w", "y", "z",
+]
 
 const TOOLS := [
 	{
 		"name": "get_state",
-		"description": "Return the document, active tool, material, selection, symmetry, slice, busy, and undo state.",
+		"description": "Return the document, revision, current frame bounds, active tool, material, selection, symmetry, slice, busy, and undo state.",
 		"inputSchema": {"type": "object", "additionalProperties": false},
 	},
 	{
+		"name": "inspect_document",
+		"description": "Read a semantic summary of one or more frames: integer cell bounds, occupied count, materials, connected islands, tags, and transitions between consecutive listed frames. Use this before get_cells.",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"frame": {"type": "integer", "minimum": 0, "description": "One frame to inspect. Defaults to the current frame."},
+				"frames": {
+					"type": "array",
+					"items": {"type": "integer", "minimum": 0},
+					"minItems": 1,
+					"maxItems": 64,
+					"description": "Frame indices to inspect. Overrides frame.",
+				},
+				"materials": {"type": "boolean", "description": "Include the material histogram. Defaults to true."},
+				"islands": {"type": "boolean", "description": "Include connected islands. Defaults to true."},
+				"transitions": {"type": "boolean", "description": "Include changed counts and bounds between adjacent frames. Defaults to false."},
+				"max_islands": {"type": "integer", "minimum": 1, "maximum": 256, "description": "Largest islands to list. Defaults to 32."},
+				"min_island_cells": {"type": "integer", "minimum": 1, "description": "Skip smaller islands. Defaults to 1."},
+				"group": {
+					"type": "string",
+					"enum": ["material", "frame"],
+					"description": "Island grouping. material connects same-material cells. frame connects any occupied cells. Defaults to material.",
+				},
+				"palette": {"type": "boolean", "description": "Include the document palette. Defaults to false."},
+			},
+			"additionalProperties": false,
+		},
+	},
+	{
+		"name": "get_regions",
+		"description": "List connected regions of one frame. Use it to target a part without reading cells.",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"frame": {"type": "integer", "minimum": 0},
+				"box": {
+					"type": "array",
+					"items": {"type": "integer"},
+					"minItems": 6,
+					"maxItems": 6,
+					"description": "Inclusive [x0, y0, z0, x1, y1, z1]. Connectivity is limited to the box.",
+				},
+				"group": {"type": "string", "enum": ["material", "frame"], "description": "Defaults to material."},
+				"material": {"type": "string", "description": "Only this color, for example #ff0000."},
+				"min_cells": {"type": "integer", "minimum": 1, "description": "Skip smaller regions. Defaults to 1."},
+				"max_regions": {"type": "integer", "minimum": 1, "maximum": 256, "description": "Defaults to 32."},
+			},
+			"additionalProperties": false,
+		},
+	},
+	{
+		"name": "get_slice",
+		"description": "Read labeled 2D slices or projections of one frame as text. Use it for exact shape and material layout.",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"frame": {"type": "integer", "minimum": 0},
+				"axis": {"type": "string", "enum": ["x", "y", "z"], "description": "Slice normal. Defaults to y."},
+				"layers": {
+					"type": "array",
+					"items": {"type": "integer"},
+					"minItems": 1,
+					"maxItems": 32,
+					"description": "Slice layers on the normal axis. Defaults to the middle layer.",
+				},
+				"mode": {
+					"type": "string",
+					"enum": ["occupancy", "materials", "height", "depth"],
+					"description": "Defaults to materials. height and depth are projections along the axis.",
+				},
+				"scale": {"type": "integer", "minimum": 1, "maximum": 16, "description": "Cells per character or grid step. Defaults to fit max_size."},
+				"max_size": {"type": "integer", "minimum": 8, "maximum": 256, "description": "Largest grid edge. Defaults to 64."},
+				"box": {
+					"type": "array",
+					"items": {"type": "integer"},
+					"minItems": 6,
+					"maxItems": 6,
+					"description": "Inclusive [x0, y0, z0, x1, y1, z1] to slice.",
+				},
+			},
+			"additionalProperties": false,
+		},
+	},
+	{
+		"name": "get_map",
+		"description": "Read a coarse occupancy grid of one frame. Use it to locate content before get_cells.",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"frame": {"type": "integer", "minimum": 0},
+				"cell_size": {"type": "integer", "minimum": 1, "maximum": 128, "description": "Block edge in cells. Defaults to 16."},
+				"box": {
+					"type": "array",
+					"items": {"type": "integer"},
+					"minItems": 6,
+					"maxItems": 6,
+					"description": "Inclusive [x0, y0, z0, x1, y1, z1].",
+				},
+				"max_blocks": {"type": "integer", "minimum": 1, "maximum": 4096, "description": "Largest block count. Defaults to 512."},
+			},
+			"additionalProperties": false,
+		},
+	},
+	{
+		"name": "get_changes",
+		"description": "Read cells changed since a revision. Use the revision from get_state, inspect_document, get_cells, or a write response.",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"since": {"type": "integer", "minimum": 0},
+				"frame": {"type": "integer", "minimum": 0, "description": "Defaults to the current frame."},
+				"box": {
+					"type": "array",
+					"items": {"type": "integer"},
+					"minItems": 6,
+					"maxItems": 6,
+					"description": "Inclusive [x0, y0, z0, x1, y1, z1].",
+				},
+				"max_cells": {"type": "integer", "minimum": 1, "maximum": 65536, "description": "Changed-cell cap. Defaults to 4096."},
+			},
+			"required": ["since"],
+			"additionalProperties": false,
+		},
+	},
+	{
 		"name": "get_cells",
-		"description": "Read occupied cells in an inclusive box as x-runs. The default cap is 512 cells. Set max_cells up to 4096.",
+		"description": "Read occupied cells in an inclusive box as x-runs. Omit min and max to read the frame bounds. When truncated, pass next back as cursor with the same box to continue.",
 		"inputSchema": {
 			"type": "object",
 			"properties": {
 				"min": {"type": "array", "items": {"type": "integer"}, "minItems": 3, "maxItems": 3},
 				"max": {"type": "array", "items": {"type": "integer"}, "minItems": 3, "maxItems": 3},
+				"cursor": {
+					"type": "array",
+					"items": {"type": "integer"},
+					"minItems": 3,
+					"maxItems": 3,
+					"description": "Inclusive scan start from a previous next. Use the same min and max.",
+				},
+				"material": {"type": "string", "description": "Only this color, for example #ff0000."},
 				"max_cells": {
 					"type": "integer",
 					"minimum": 1,
@@ -44,18 +199,32 @@ const TOOLS := [
 				},
 				"frame": {"type": "integer", "minimum": 0},
 			},
-			"required": ["min", "max"],
 			"additionalProperties": false,
 		},
 	},
 	{
 		"name": "screenshot",
-		"description": "Save a PNG of one frame. Set inline true to also return the image.",
+		"description": "Save a PNG of one frame, a multi-view contact sheet, or a frame storyboard. Set inline true to also return the image.",
 		"inputSchema": {
 			"type": "object",
 			"properties": {
 				"frame": {"type": "integer", "minimum": 0},
-				"size": {"type": "integer", "minimum": 64, "maximum": 1024},
+				"frames": {
+					"type": "array",
+					"items": {"type": "integer", "minimum": 0},
+					"minItems": 1,
+					"maxItems": 16,
+					"description": "Render a storyboard of these frames in one image. Uses the union of their bounds.",
+				},
+				"views": {
+					"type": "array",
+					"items": {"type": "string", "enum": ["isometric", "low", "front", "back", "left", "right", "top", "bottom"]},
+					"minItems": 1,
+					"maxItems": 6,
+					"description": "Render a contact sheet of these views in one image. Uses one shared bounds.",
+				},
+				"columns": {"type": "integer", "minimum": 1, "maximum": 8, "description": "Contact sheet columns. Defaults to a square grid."},
+				"size": {"type": "integer", "minimum": 64, "maximum": 1024, "description": "Tile edge in pixels. Defaults to 256."},
 				"view": {"type": "string", "enum": ["isometric", "low", "front", "back", "left", "right", "top", "bottom", "current"]},
 				"orthographic": {"type": "boolean"},
 				"inline": {"type": "boolean"},
@@ -77,10 +246,13 @@ const TOOLS := [
 	},
 	{
 		"name": "save_document",
-		"description": "Save the current document as .lve or .lve.png and return its absolute path. A .lve.png file also stores a preview.",
+		"description": "Save the current document as .lve or .lve.png and return its absolute path. It writes a copy by default and leaves the main document path and unsaved mark unchanged. Set copy false to save the main document. A .lve.png file also stores a preview.",
 		"inputSchema": {
 			"type": "object",
-			"properties": {"path": {"type": "string", "description": "A file name or user:// path ending in .lve or .lve.png."}},
+			"properties": {
+				"path": {"type": "string", "description": "A file name or user:// path ending in .lve or .lve.png."},
+				"copy": {"type": "boolean", "description": "Write a copy and keep the main path and unsaved mark. Defaults to true."},
+			},
 			"required": ["path"],
 			"additionalProperties": false,
 		},
@@ -316,31 +488,57 @@ const TOOLS := [
 	},
 	{
 		"name": "write_cells",
-		"description": "Write or erase cells with the current material. Provide cells, boxes, or runs. Each call is one undo action.",
+		"description": "Write or erase cells with per-cell materials and optional frames. Provide cells, boxes, or runs. Each call is one undo action, even across frames.",
 		"inputSchema": {
 			"type": "object",
 			"properties": {
 				"cells": {
 					"type": "array",
-					"items": {"type": "array", "items": {"type": "integer"}, "minItems": 3, "maxItems": 3},
+					"items": {"type": "array", "items": {"type": "integer"}, "minItems": 3, "maxItems": 4},
 					"minItems": 1,
 					"maxItems": 65536,
+					"description": "Inclusive [x, y, z] or [x, y, z, material_index].",
 				},
 				"boxes": {
 					"type": "array",
-					"items": {"type": "array", "items": {"type": "integer"}, "minItems": 6, "maxItems": 6},
+					"items": {"type": "array", "items": {"type": "integer"}, "minItems": 6, "maxItems": 7},
 					"minItems": 1,
 					"maxItems": 1024,
-					"description": "Inclusive [x0, y0, z0, x1, y1, z1].",
+					"description": "Inclusive [x0, y0, z0, x1, y1, z1] or [x0, y0, z0, x1, y1, z1, material_index].",
 				},
 				"runs": {
 					"type": "array",
-					"items": {"type": "array", "items": {"type": "integer"}, "minItems": 4, "maxItems": 4},
+					"items": {"type": "array", "items": {"type": "integer"}, "minItems": 4, "maxItems": 5},
 					"minItems": 1,
 					"maxItems": 65536,
-					"description": "Inclusive x span [x0, x1, y, z].",
+					"description": "Inclusive x span [x0, x1, y, z] or [x0, x1, y, z, material_index].",
+				},
+				"materials": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"properties": {
+							"color": {"type": "string", "description": "#rrggbb or #rrggbbaa"},
+							"emission": {"type": "string", "description": "#rrggbb or #rrggbbaa"},
+							"metallic": {"type": "number", "minimum": 0, "maximum": 1},
+							"roughness": {"type": "number", "minimum": 0, "maximum": 1},
+							"palette_index": {"type": "integer", "minimum": 0},
+						},
+						"additionalProperties": false,
+					},
+					"minItems": 1,
+					"maxItems": 256,
+					"description": "Material table for the shape material indices. A shape without an index uses the current material.",
+				},
+				"frames": {
+					"type": "array",
+					"items": {"type": "integer", "minimum": 0},
+					"minItems": 1,
+					"maxItems": 16,
+					"description": "Frame indices to write. Defaults to the current frame. One undo action covers every frame.",
 				},
 				"erase": {"type": "boolean"},
+				"label": {"type": "string", "description": "History action name. Defaults to Write Cells."},
 			},
 			"additionalProperties": false,
 		},
@@ -359,7 +557,7 @@ const TOOLS := [
 	},
 ]
 
-const INSTRUCTIONS := "LVE is a voxel editor. Cells are integers and Y is up. Read get_state once per task. write_cells takes cells, boxes, or runs and uses the current material. Each call is one undo action. Retry once when busy."
+const INSTRUCTIONS := "LVE is a voxel editor. Cells are integers and Y is up. Read get_state for identity and revision. Call inspect_document for bounds, materials, islands, and frame transitions. Use get_slice or get_map for shape. Use screenshot views or frames for visual checks. Use get_cells for exact cells and pass next back as cursor with the same box. write_cells accepts per-cell materials and frames. Each write_cells call is one undo action, even across frames. save_document writes a copy by default and keeps the unsaved mark. Set copy false to save the main document. Use get_changes since the last revision to verify the edit."
 
 ## One accepted bridge or HTTP client.
 class PeerState extends RefCounted:
@@ -374,6 +572,19 @@ var _server := TCPServer.new()
 var _peers: Array[PeerState] = []
 var _http_mode := false
 var _port := DEFAULT_PORT
+## The document content revision. The read tools report it.
+var _revision := 0
+## The bounded journal of cell and chunk changes since a revision.
+var _journal: Array[Dictionary] = []
+## The number of cells in the journal.
+var _journal_cells := 0
+## The oldest revision that the journal can describe.
+var _journal_floor := 0
+## The revision of the last cell or chunk signal. A history change with no new
+## content signal is an undo or redo that carries no cell list.
+var _last_content_revision := 0
+## Whether a cell or chunk signal arrived since the last history change.
+var _content_since_history := false
 
 
 ## One direct cell write job. It writes a batch through the edit context.
@@ -389,10 +600,123 @@ class WriteJob extends VoxelFrame.EditJob:
 
 func _ready() -> void:
 	set_process(false)
+	_connect_state()
 
 
 func _exit_tree() -> void:
+	_disconnect_state()
 	stop()
+
+
+func _connect_state() -> void:
+	if not State.cells_changed.is_connected(_on_cells_changed):
+		State.cells_changed.connect(_on_cells_changed)
+	if not State.chunks_changed.is_connected(_on_chunks_changed):
+		State.chunks_changed.connect(_on_chunks_changed)
+	if not State.history_changed.is_connected(_on_history_changed):
+		State.history_changed.connect(_on_history_changed)
+	if not State.document_changed.is_connected(_on_structure_changed):
+		State.document_changed.connect(_on_structure_changed)
+	if not State.frames_changed.is_connected(_on_structure_changed):
+		State.frames_changed.connect(_on_structure_changed)
+	if not State.frame_changed.is_connected(_on_structure_changed):
+		State.frame_changed.connect(_on_structure_changed)
+	if not State.palette_changed.is_connected(_on_structure_changed):
+		State.palette_changed.connect(_on_structure_changed)
+	if not State.tag_changed.is_connected(_on_structure_changed):
+		State.tag_changed.connect(_on_structure_changed)
+
+
+func _disconnect_state() -> void:
+	if State.cells_changed.is_connected(_on_cells_changed):
+		State.cells_changed.disconnect(_on_cells_changed)
+	if State.chunks_changed.is_connected(_on_chunks_changed):
+		State.chunks_changed.disconnect(_on_chunks_changed)
+	if State.history_changed.is_connected(_on_history_changed):
+		State.history_changed.disconnect(_on_history_changed)
+	if State.document_changed.is_connected(_on_structure_changed):
+		State.document_changed.disconnect(_on_structure_changed)
+	if State.frames_changed.is_connected(_on_structure_changed):
+		State.frames_changed.disconnect(_on_structure_changed)
+	if State.frame_changed.is_connected(_on_structure_changed):
+		State.frame_changed.disconnect(_on_structure_changed)
+	if State.palette_changed.is_connected(_on_structure_changed):
+		State.palette_changed.disconnect(_on_structure_changed)
+	if State.tag_changed.is_connected(_on_structure_changed):
+		State.tag_changed.disconnect(_on_structure_changed)
+
+
+func _on_cells_changed(frame: int, affected: Array[Vector3i]) -> void:
+	if affected.is_empty():
+		# A restore can change the model without listing the cells.
+		_reset_journal()
+		return
+	_record_cells_change(frame, affected)
+
+
+func _record_cells_change(frame: int, affected: Array) -> void:
+	if affected.is_empty():
+		_reset_journal()
+		return
+	_revision += 1
+	_last_content_revision = _revision
+	_content_since_history = true
+	var typed: Array[Vector3i] = []
+	typed.assign(affected)
+	_journal.append({"revision": _revision, "frame": frame, "cells": typed})
+	_journal_cells += typed.size()
+	_prune_journal()
+
+
+func _on_chunks_changed(frame: int, affected: Array[Vector3i]) -> void:
+	if affected.is_empty():
+		return
+	_revision += 1
+	_last_content_revision = _revision
+	_content_since_history = true
+	_journal.append({"revision": _revision, "frame": frame, "chunks": affected.duplicate()})
+	_prune_journal()
+
+
+func _on_history_changed() -> void:
+	# Undo and redo emit no cell list. A history change after a content signal
+	# belongs to that edit. A history change without one is opaque, so the next
+	# delta read must ask for a full read.
+	if _content_since_history:
+		_content_since_history = false
+		return
+	_reset_journal()
+
+
+func _on_structure_changed() -> void:
+	_reset_journal()
+
+
+func _reset_journal() -> void:
+	_revision += 1
+	_journal.clear()
+	_journal_cells = 0
+	_journal_floor = _revision
+	_last_content_revision = _revision
+	_content_since_history = false
+
+
+func _prune_journal() -> void:
+	while _journal.size() > MAX_JOURNAL_ENTRIES or _journal_cells > MAX_JOURNAL_CELLS:
+		if _journal.is_empty():
+			break
+		var removed: Dictionary = _journal.pop_front()
+		_journal_cells -= _entry_cell_count(removed)
+		_journal_floor = int(removed.get("revision", _journal_floor))
+	if _journal.is_empty():
+		_journal_floor = _revision
+
+
+func _entry_cell_count(entry: Dictionary) -> int:
+	var cells_value: Variant = entry.get("cells", [])
+	if cells_value is Array:
+		return (cells_value as Array).size()
+	return 0
 
 
 ## Starts the loopback server. A port of zero selects a free port. In HTTP mode
@@ -712,6 +1036,16 @@ func _call_tool(id: Variant, params: Dictionary) -> Dictionary:
 	match tool_name:
 		"get_state":
 			return _result_response(id, _get_state())
+		"inspect_document":
+			return _result_response(id, _inspect_document(args))
+		"get_regions":
+			return _result_response(id, _get_regions(args))
+		"get_slice":
+			return _result_response(id, _get_slice(args))
+		"get_map":
+			return _result_response(id, _get_map(args))
+		"get_changes":
+			return _result_response(id, _get_changes(args))
 		"get_cells":
 			return _result_response(id, _get_cells(args))
 		"screenshot":
@@ -820,6 +1154,7 @@ func _get_state() -> Dictionary:
 			"repeats": tag.repeats,
 		})
 	return _tool_ok({
+		"revision": _revision,
 		"document": {
 			"name": document.get_file_name(),
 			"frames": document.frames.size(),
@@ -827,6 +1162,7 @@ func _get_state() -> Dictionary:
 			"delay_ms": frame.delay_ms if frame != null else 0,
 			"palette": document.palette.size(),
 			"bounds": _aabb_json(document.bounds()),
+			"frame_bounds": _frame_bounds_array(frame),
 		},
 		"tags": tags,
 		"active_tag": State.active_tag,
@@ -841,26 +1177,6 @@ func _get_state() -> Dictionary:
 
 
 func _get_cells(args: Dictionary) -> Dictionary:
-	var min_value: Variant = _parse_cell(args.get("min", null))
-	if min_value == null:
-		return _tool_error("min must be [x, y, z].")
-	var max_value: Variant = _parse_cell(args.get("max", null))
-	if max_value == null:
-		return _tool_error("max must be [x, y, z].")
-	var min_cell: Vector3i = min_value
-	var max_cell: Vector3i = max_value
-	if min_cell.x > max_cell.x or min_cell.y > max_cell.y or min_cell.z > max_cell.z:
-		return _tool_error("min must not exceed max on any axis.")
-	var extent := max_cell - min_cell + Vector3i.ONE
-	if extent.x > MAX_BOX_CELLS or extent.y > MAX_BOX_CELLS or extent.z > MAX_BOX_CELLS:
-		return _tool_error("The box is too large. Scan at most %d cells." % MAX_BOX_CELLS)
-	var volume := extent.x * extent.y * extent.z
-	if volume > MAX_BOX_CELLS:
-		return _tool_error("The box is too large. Scan at most %d cells." % MAX_BOX_CELLS)
-	var limit := MAX_GET_CELLS
-	var limit_value: Variant = args.get("max_cells", MAX_GET_CELLS)
-	if limit_value is int or limit_value is float:
-		limit = clampi(int(limit_value), 1, 4096)
 	var frame_index := State.current_frame
 	var frame_value: Variant = args.get("frame", null)
 	if frame_value is int or frame_value is float:
@@ -868,6 +1184,64 @@ func _get_cells(args: Dictionary) -> Dictionary:
 	var frame: VoxelFrame = State.get_voxel_frame(frame_index)
 	if frame == null:
 		return _tool_error("The frame does not exist.")
+	var frame_bounds := _frame_cell_bounds(frame)
+	var min_value: Variant = _parse_cell(args.get("min", null))
+	var max_value: Variant = _parse_cell(args.get("max", null))
+	if args.has("min") and min_value == null:
+		return _tool_error("min must be [x, y, z].")
+	if args.has("max") and max_value == null:
+		return _tool_error("max must be [x, y, z].")
+	var min_cell: Vector3i
+	var max_cell: Vector3i
+	if min_value == null and max_value == null:
+		if frame_bounds.is_empty():
+			return _tool_ok({
+				"frame": frame_index,
+				"count": 0,
+				"truncated": false,
+				"runs": [],
+				"materials": [],
+				"bounds": null,
+			})
+		min_cell = frame_bounds[0]
+		max_cell = frame_bounds[1]
+	elif min_value == null:
+		if frame_bounds.is_empty():
+			return _tool_error("min is required for an empty frame.")
+		min_cell = frame_bounds[0]
+		max_cell = max_value
+	elif max_value == null:
+		if frame_bounds.is_empty():
+			return _tool_error("max is required for an empty frame.")
+		min_cell = min_value
+		max_cell = frame_bounds[1]
+	else:
+		min_cell = min_value
+		max_cell = max_value
+	if min_cell.x > max_cell.x or min_cell.y > max_cell.y or min_cell.z > max_cell.z:
+		return _tool_error("min must not exceed max on any axis.")
+	var extent := max_cell - min_cell + Vector3i.ONE
+	if extent.x > MAX_BOX_CELLS or extent.y > MAX_BOX_CELLS or extent.z > MAX_BOX_CELLS:
+		return _tool_error("The box is too large. Scan at most %d cells. Use get_map to locate content." % MAX_BOX_CELLS)
+	var volume := extent.x * extent.y * extent.z
+	if volume > MAX_BOX_CELLS:
+		return _tool_error("The box is too large. Scan at most %d cells. Use get_map to locate content." % MAX_BOX_CELLS)
+	var limit := MAX_GET_CELLS
+	var limit_value: Variant = args.get("max_cells", MAX_GET_CELLS)
+	if limit_value is int or limit_value is float:
+		limit = clampi(int(limit_value), 1, 4096)
+	var cursor_value: Variant = _parse_cell(args.get("cursor", null))
+	if args.has("cursor") and cursor_value == null:
+		return _tool_error("cursor must be [x, y, z].")
+	var has_cursor := cursor_value is Vector3i
+	var cursor: Vector3i = cursor_value if has_cursor else min_cell
+	var material_filter := ""
+	var material_value: Variant = args.get("material", null)
+	if material_value != null:
+		var material_color: Variant = _parse_color(material_value)
+		if material_color == null:
+			return _tool_error("material must be a color, for example #ff0000.")
+		material_filter = _hex_color(material_color)
 	var cells: Array = []
 	var materials: Array = []
 	var material_keys := {}
@@ -875,6 +1249,8 @@ func _get_cells(args: Dictionary) -> Dictionary:
 	var full := false
 	var done := false
 	var next_cell := Vector3i.ZERO
+	var returned_min := Vector3i.MAX
+	var returned_max := Vector3i.MIN
 	for z in range(min_cell.z, max_cell.z + 1):
 		if done:
 			break
@@ -883,23 +1259,32 @@ func _get_cells(args: Dictionary) -> Dictionary:
 				break
 			for x in range(min_cell.x, max_cell.x + 1):
 				var cell := Vector3i(x, y, z)
+				if has_cursor and _cell_before_cursor(cell, cursor):
+					continue
 				if not frame.has(cell):
 					continue
+				var material := frame.get_material(cell)
+				var material_key := _material_key(material)
+				if not material_filter.is_empty() and not _material_key_matches(material_key, material_filter):
+					continue
 				if full:
-					# The cap is reached only when one more occupied cell exists.
+					# The cap is reached only when one more matching cell exists.
 					truncated = true
 					next_cell = cell
 					done = true
 					break
-				var material := frame.get_material(cell)
 				var material_index := -1
-				if material_keys.has(material):
-					material_index = int(material_keys[material])
+				if material_keys.has(material_key):
+					material_index = int(material_keys[material_key])
 				else:
 					material_index = materials.size()
-					material_keys[material] = material_index
-					materials.append(_material_json(material))
+					material_keys[material_key] = material_index
+					var material_data := _material_json(material)
+					material_data["key"] = material_key
+					materials.append(material_data)
 				cells.append([x, y, z, material_index])
+				returned_min = Vector3i(mini(returned_min.x, x), mini(returned_min.y, y), mini(returned_min.z, z))
+				returned_max = Vector3i(maxi(returned_max.x, x), maxi(returned_max.y, y), maxi(returned_max.z, z))
 				if cells.size() >= limit:
 					full = true
 	var runs: Array = []
@@ -921,10 +1306,942 @@ func _get_cells(args: Dictionary) -> Dictionary:
 		"truncated": truncated,
 		"runs": runs,
 		"materials": materials,
+		"scanned_bounds": {"min": _json_cell(min_cell), "max": _json_cell(max_cell)},
+		"returned_bounds": null,
 	}
+	if not cells.is_empty():
+		data["returned_bounds"] = {"min": _json_cell(returned_min), "max": _json_cell(returned_max)}
 	if truncated:
 		data["next"] = _json_cell(next_cell)
+	if not material_filter.is_empty():
+		data["material"] = material_filter
 	return _tool_ok(data)
+
+
+func _inspect_document(args: Dictionary) -> Dictionary:
+	var document := State.document
+	if document == null:
+		return _tool_error("No document is open.")
+	var indices := _frame_indices_arg(args)
+	if indices.is_empty():
+		return _tool_error("The frame does not exist.")
+	var include_materials := _bool_arg(args, "materials", true)
+	var include_islands := _bool_arg(args, "islands", true)
+	var include_transitions := _bool_arg(args, "transitions", false)
+	var include_palette := _bool_arg(args, "palette", false)
+	var max_islands := clampi(_int_arg(args, "max_islands", 32), 1, MAX_INSPECT_ISLANDS)
+	var min_island_cells := maxi(1, _int_arg(args, "min_island_cells", 1))
+	var group := str(args.get("group", "material"))
+	if group != "material" and group != "frame":
+		return _tool_error("group must be material or frame.")
+	var scans := {}
+	var frames: Array = []
+	for index in indices:
+		var frame: VoxelFrame = State.get_voxel_frame(index)
+		if frame == null:
+			return _tool_error("The frame does not exist.")
+		var occupied := frame.count()
+		var frame_data := {
+			"index": index,
+			"delay_ms": frame.delay_ms,
+			"occupied": occupied,
+			"bounds": _cell_bounds_json(frame.get_bounds()),
+			"empty": occupied == 0,
+		}
+		if (include_materials or include_islands or include_transitions) and occupied > 0:
+			var scan := _scan_frame(frame)
+			scans[index] = scan
+			if scan.truncated:
+				frame_data["scan_truncated"] = true
+			if include_materials and not scan.truncated:
+				frame_data["materials"] = _materials_json(scan.materials)
+			if include_islands and not scan.truncated:
+				var region_result := _build_regions(scan.cells, group, min_island_cells, max_islands, "", scan.materials)
+				frame_data["islands"] = region_result.regions
+				frame_data["island_count"] = region_result.total
+				if region_result.truncated:
+					frame_data["islands_truncated"] = true
+				if region_result.small_count > 0:
+					frame_data["small_islands"] = region_result.small_count
+		frames.append(frame_data)
+	var transitions: Array = []
+	if include_transitions:
+		for transition_index in range(1, indices.size()):
+			transitions.append(_transition_json(indices[transition_index - 1], indices[transition_index], scans))
+	var document_data := {
+		"name": document.get_file_name(),
+		"frames": document.frames.size(),
+		"current_frame": State.current_frame,
+	}
+	if include_palette:
+		document_data["palette"] = _palette_json()
+	var data := {
+		"revision": _revision,
+		"document": document_data,
+		"frames": frames,
+		"tags": _tags_json(),
+	}
+	if include_transitions:
+		data["transitions"] = transitions
+	return _tool_ok(data)
+
+
+func _get_regions(args: Dictionary) -> Dictionary:
+	var frame_index := _int_arg(args, "frame", State.current_frame)
+	var frame: VoxelFrame = State.get_voxel_frame(frame_index)
+	if frame == null:
+		return _tool_error("The frame does not exist.")
+	var group := str(args.get("group", "material"))
+	if group != "material" and group != "frame":
+		return _tool_error("group must be material or frame.")
+	var max_regions := clampi(_int_arg(args, "max_regions", 32), 1, MAX_INSPECT_ISLANDS)
+	var min_cells := maxi(1, _int_arg(args, "min_cells", 1))
+	var material_filter := ""
+	var material_value: Variant = args.get("material", null)
+	if material_value != null:
+		var material_color: Variant = _parse_color(material_value)
+		if material_color == null:
+			return _tool_error("material must be a color, for example #ff0000.")
+		material_filter = _hex_color(material_color)
+	var scan := _scan_frame(frame)
+	if scan.truncated:
+		return _tool_error("The frame is too large to scan. Use a smaller frame or get_cells in boxes.")
+	var cells: Dictionary = scan.cells
+	var box_value: Variant = args.get("box", null)
+	if box_value != null:
+		var box: Variant = _parse_box(box_value)
+		if box == null:
+			return _tool_error("box must be [x0, y0, z0, x1, y1, z1] with min <= max.")
+		cells = _cells_in_box(cells, box[0], box[1])
+	var region_result := _build_regions(cells, group, min_cells, max_regions, material_filter, scan.materials)
+	var data := {
+		"revision": _revision,
+		"frame": frame_index,
+		"group": group,
+		"regions": region_result.regions,
+		"region_count": region_result.total,
+		"truncated": region_result.truncated,
+	}
+	if region_result.small_count > 0:
+		data["small_regions"] = region_result.small_count
+	if not material_filter.is_empty():
+		data["material"] = material_filter
+	return _tool_ok(data)
+
+
+func _get_slice(args: Dictionary) -> Dictionary:
+	var frame_index := _int_arg(args, "frame", State.current_frame)
+	var frame: VoxelFrame = State.get_voxel_frame(frame_index)
+	if frame == null:
+		return _tool_error("The frame does not exist.")
+	var axis := str(args.get("axis", "y"))
+	if not ["x", "y", "z"].has(axis):
+		return _tool_error("axis must be x, y, or z.")
+	var mode := str(args.get("mode", "materials"))
+	if not ["occupancy", "materials", "height", "depth"].has(mode):
+		return _tool_error("mode must be occupancy, materials, height, or depth.")
+	var bounds := _frame_cell_bounds(frame)
+	if bounds.is_empty():
+		return _tool_ok({"revision": _revision, "frame": frame_index, "axis": axis, "mode": mode, "empty": true, "slices": []})
+	var min_cell: Vector3i = bounds[0]
+	var max_cell: Vector3i = bounds[1]
+	var box_value: Variant = args.get("box", null)
+	if box_value != null:
+		var box: Variant = _parse_box(box_value)
+		if box == null:
+			return _tool_error("box must be [x0, y0, z0, x1, y1, z1] with min <= max.")
+		min_cell = box[0]
+		max_cell = box[1]
+	var scan := _scan_frame(frame)
+	if scan.truncated:
+		return _tool_error("The frame is too large to scan. Use a box or get_map.")
+	var cells: Dictionary = _cells_in_box(scan.cells, min_cell, max_cell)
+	if cells.is_empty():
+		return _tool_ok({"revision": _revision, "frame": frame_index, "axis": axis, "mode": mode, "empty": true, "slices": []})
+	var fixed_index := 1
+	var column_axis := 0
+	var row_axis := 2
+	match axis:
+		"x":
+			fixed_index = 0
+			column_axis = 2
+			row_axis = 1
+		"z":
+			fixed_index = 2
+			column_axis = 0
+			row_axis = 1
+	var col_start := min_cell[column_axis]
+	var col_end := max_cell[column_axis]
+	var row_start := min_cell[row_axis]
+	var row_end := max_cell[row_axis]
+	var fixed_start := min_cell[fixed_index]
+	var fixed_end := max_cell[fixed_index]
+	var width := col_end - col_start + 1
+	var height := row_end - row_start + 1
+	var max_size := clampi(_int_arg(args, "max_size", 64), 8, 256)
+	var scale_arg := _int_arg(args, "scale", 0)
+	var scale := scale_arg
+	if scale <= 0:
+		scale = maxi(1, ceili(float(maxi(width, height)) / float(max_size)))
+	scale = clampi(scale, 1, 16)
+	var grid_width := ceili(float(width) / float(scale))
+	var grid_height := ceili(float(height) / float(scale))
+	if grid_width * grid_height > 65536:
+		return _tool_error("The slice is too large. Use a box or a larger scale.")
+	var is_projection := mode == "height" or mode == "depth"
+	var layer_values: Array = []
+	if not is_projection:
+		var layers_value: Variant = args.get("layers", null)
+		if layers_value is Array:
+			var source: Array = layers_value
+			if source.is_empty() or source.size() > 32:
+				return _tool_error("layers must hold 1 to 32 layer indices.")
+			for value in source:
+				if not (value is int or value is float):
+					return _tool_error("layers must hold integers.")
+				layer_values.append(int(value))
+		else:
+			layer_values.append(fixed_start + (fixed_end - fixed_start) / 2)
+	var material_counts := {}
+	if mode == "materials":
+		for cell in cells:
+			if is_projection or layer_values.has(cell[fixed_index]):
+				var key: String = cells[cell]
+				material_counts[key] = int(material_counts.get(key, 0)) + 1
+	var material_list: Array = []
+	for key in material_counts:
+		material_list.append({"key": key, "cells": material_counts[key]})
+	material_list.sort_custom(_region_more_cells)
+	var char_by_key := {}
+	var legend: Array = []
+	for index in range(material_list.size()):
+		var entry: Dictionary = material_list[index]
+		var key: String = entry["key"]
+		var slice_char: String = SLICE_CHARS[index] if index < SLICE_CHARS.size() else "?"
+		char_by_key[key] = slice_char
+		var material_json: Variant = {}
+		var material_entry: Variant = scan.materials.get(key, null)
+		if material_entry is Dictionary:
+			material_json = material_entry.get("material", {})
+		legend.append({"char": slice_char, "material": material_json, "key": key})
+	var slices: Array = []
+	var values: Array = []
+	if is_projection:
+		var cell_values := {}
+		for cell in cells:
+			var key := Vector2i(
+				floori(float(cell[column_axis] - col_start) / float(scale)),
+				floori(float(cell[row_axis] - row_start) / float(scale))
+			)
+			if mode == "height":
+				if cell_values.has(key):
+					cell_values[key] = maxi(int(cell_values[key]), int(cell[fixed_index]))
+				else:
+					cell_values[key] = int(cell[fixed_index])
+			else:
+				cell_values[key] = int(cell_values.get(key, 0)) + 1
+		for gy in range(grid_height):
+			var row: Array = []
+			for gx in range(grid_width):
+				var key := Vector2i(gx, gy)
+				if mode == "height":
+					row.append(int(cell_values[key]) if cell_values.has(key) else -1)
+				else:
+					row.append(int(cell_values.get(key, 0)))
+			values.append(row)
+	else:
+		for layer in layer_values:
+			var lines: Array = []
+			for gy in range(grid_height):
+				var line := ""
+				for gx in range(grid_width):
+					var chosen := ""
+					if mode == "occupancy":
+						var found := false
+						for dy in range(scale):
+							for dx in range(scale):
+								var cell := _cell_with_axes(
+									fixed_index, layer,
+									column_axis, col_start + gx * scale + dx,
+									row_axis, row_start + gy * scale + dy
+								)
+								if cells.has(cell):
+									found = true
+									break
+							if found:
+								break
+						line += "#" if found else "."
+					else:
+						var block_materials := {}
+						for dy in range(scale):
+							for dx in range(scale):
+								var cell := _cell_with_axes(
+									fixed_index, layer,
+									column_axis, col_start + gx * scale + dx,
+									row_axis, row_start + gy * scale + dy
+								)
+								if cells.has(cell):
+									var key: String = cells[cell]
+									block_materials[key] = int(block_materials.get(key, 0)) + 1
+						var chosen_count := 0
+						for key in block_materials:
+							if int(block_materials[key]) > chosen_count:
+								chosen_count = int(block_materials[key])
+								chosen = key
+						line += "." if chosen.is_empty() else str(char_by_key.get(chosen, "?"))
+				lines.append(line)
+			var origin := _cell_with_axes(fixed_index, layer, column_axis, col_start, row_axis, row_start)
+			slices.append({"layer": layer, "origin": _json_cell(origin), "lines": lines})
+	var data := {
+		"revision": _revision,
+		"frame": frame_index,
+		"axis": axis,
+		"mode": mode,
+		"scale": scale,
+		"columns": _axis_name(column_axis),
+		"rows": _axis_name(row_axis),
+		"column_start": col_start,
+		"row_start": row_start,
+	}
+	if is_projection:
+		data["values"] = values
+		data["empty_value"] = -1 if mode == "height" else 0
+	else:
+		data["slices"] = slices
+	if mode == "materials":
+		data["legend"] = legend
+	return _tool_ok(data)
+
+
+func _get_map(args: Dictionary) -> Dictionary:
+	var frame_index := _int_arg(args, "frame", State.current_frame)
+	var frame: VoxelFrame = State.get_voxel_frame(frame_index)
+	if frame == null:
+		return _tool_error("The frame does not exist.")
+	var bounds := _frame_cell_bounds(frame)
+	if bounds.is_empty():
+		return _tool_ok({"revision": _revision, "frame": frame_index, "blocks": [], "empty": true})
+	var min_cell: Vector3i = bounds[0]
+	var max_cell: Vector3i = bounds[1]
+	var box_value: Variant = args.get("box", null)
+	if box_value != null:
+		var box: Variant = _parse_box(box_value)
+		if box == null:
+			return _tool_error("box must be [x0, y0, z0, x1, y1, z1] with min <= max.")
+		min_cell = box[0]
+		max_cell = box[1]
+	var cell_size := clampi(_int_arg(args, "cell_size", 16), 1, 128)
+	var max_blocks := clampi(_int_arg(args, "max_blocks", 512), 1, 4096)
+	var scan := _scan_frame(frame)
+	if scan.truncated:
+		return _chunk_map(frame, frame_index, min_cell, max_cell, max_blocks)
+	var cells := _cells_in_box(scan.cells, min_cell, max_cell)
+	var block_counts := {}
+	var block_materials := {}
+	for cell in cells:
+		var block := Vector3i(
+			floori(float(cell.x - min_cell.x) / float(cell_size)),
+			floori(float(cell.y - min_cell.y) / float(cell_size)),
+			floori(float(cell.z - min_cell.z) / float(cell_size))
+		)
+		block_counts[block] = int(block_counts.get(block, 0)) + 1
+		var counts: Dictionary
+		if block_materials.has(block):
+			counts = block_materials[block]
+		else:
+			counts = {}
+			block_materials[block] = counts
+		var key: String = cells[cell]
+		counts[key] = int(counts.get(key, 0)) + 1
+	var block_keys: Array = block_counts.keys()
+	block_keys.sort_custom(_cell_less)
+	var blocks: Array = []
+	for block in block_keys:
+		if blocks.size() >= max_blocks:
+			break
+		var counts: Dictionary = block_materials[block]
+		var best_key := ""
+		var best_count := -1
+		for key in counts:
+			if int(counts[key]) > best_count:
+				best_count = int(counts[key])
+				best_key = key
+		var material_json: Variant = {}
+		if scan.materials.has(best_key):
+			material_json = scan.materials[best_key].get("material", {})
+		blocks.append([block.x, block.y, block.z, block_counts[block], material_json])
+	var size := Vector3i(
+		ceili(float(max_cell.x - min_cell.x + 1) / float(cell_size)),
+		ceili(float(max_cell.y - min_cell.y + 1) / float(cell_size)),
+		ceili(float(max_cell.z - min_cell.z + 1) / float(cell_size))
+	)
+	return _tool_ok({
+		"revision": _revision,
+		"frame": frame_index,
+		"cell_size": cell_size,
+		"origin": _json_cell(min_cell),
+		"size": _json_cell(size),
+		"blocks": blocks,
+		"block_count": block_counts.size(),
+		"truncated": block_keys.size() > blocks.size(),
+		"occupied": cells.size(),
+	})
+
+
+func _chunk_map(frame: VoxelFrame, frame_index: int, min_cell: Vector3i, max_cell: Vector3i, max_blocks: int) -> Dictionary:
+	var block_counts := {}
+	for chunk_value in frame.chunks.values():
+		var chunk: VoxelFrame.Chunk = chunk_value
+		if chunk.occupied_count <= 0:
+			continue
+		var chunk_bounds := chunk.get_bounds()
+		if not chunk_bounds.has_volume():
+			continue
+		var chunk_min := Vector3i(
+			roundi(chunk_bounds.position.x + 0.5),
+			roundi(chunk_bounds.position.y + 0.5),
+			roundi(chunk_bounds.position.z + 0.5)
+		)
+		var chunk_max := Vector3i(
+			roundi(chunk_bounds.end.x - 0.5),
+			roundi(chunk_bounds.end.y - 0.5),
+			roundi(chunk_bounds.end.z - 0.5)
+		)
+		if chunk_max.x < min_cell.x or chunk_min.x > max_cell.x:
+			continue
+		if chunk_max.y < min_cell.y or chunk_min.y > max_cell.y:
+			continue
+		if chunk_max.z < min_cell.z or chunk_min.z > max_cell.z:
+			continue
+		var block := VoxelFrame.chunk_position(chunk.origin())
+		block_counts[block] = int(block_counts.get(block, 0)) + chunk.occupied_count
+	var block_keys: Array = block_counts.keys()
+	block_keys.sort_custom(_cell_less)
+	var blocks: Array = []
+	var occupied := 0
+	for count in block_counts.values():
+		occupied += int(count)
+	for block in block_keys:
+		if blocks.size() >= max_blocks:
+			break
+		blocks.append([block.x, block.y, block.z, block_counts[block], {}])
+	return _tool_ok({
+		"revision": _revision,
+		"frame": frame_index,
+		"cell_size": VoxelFrame.CHUNK_SIZE,
+		"origin": [0, 0, 0],
+		"chunk_aligned": true,
+		"blocks": blocks,
+		"block_count": block_counts.size(),
+		"truncated": block_keys.size() > blocks.size(),
+		"occupied": occupied,
+		"approximate": true,
+	})
+
+
+func _get_changes(args: Dictionary) -> Dictionary:
+	var since_value: Variant = args.get("since", null)
+	if not (since_value is int or since_value is float):
+		return _tool_error("since is required.")
+	var since := int(since_value)
+	var frame_index := _int_arg(args, "frame", State.current_frame)
+	if frame_index < 0 or frame_index >= State.document.frames.size():
+		return _tool_error("The frame does not exist.")
+	if since == _revision:
+		return _tool_ok({
+			"revision": _revision,
+			"frame": frame_index,
+			"full_refresh": false,
+			"cells": [],
+			"count": 0,
+			"chunk_origins": [],
+		})
+	if since < _journal_floor or since > _revision:
+		return _tool_ok({"revision": _revision, "frame": frame_index, "full_refresh": true})
+	var cells := {}
+	var chunks := {}
+	var other_frames := {}
+	for entry in _journal:
+		if int(entry.get("revision", 0)) <= since:
+			continue
+		var entry_frame := int(entry.get("frame", -1))
+		if entry_frame != frame_index:
+			other_frames[entry_frame] = true
+			continue
+		var entry_cells: Variant = entry.get("cells", null)
+		if entry_cells is Array:
+			for cell in entry_cells:
+				cells[cell] = true
+		var entry_chunks: Variant = entry.get("chunks", null)
+		if entry_chunks is Array:
+			for cell in entry_chunks:
+				chunks[cell] = true
+	var box_value: Variant = args.get("box", null)
+	if box_value != null:
+		var box: Variant = _parse_box(box_value)
+		if box == null:
+			return _tool_error("box must be [x0, y0, z0, x1, y1, z1] with min <= max.")
+		var filtered := {}
+		for cell in cells:
+			if _cell_in_box(cell, box[0], box[1]):
+				filtered[cell] = true
+		cells = filtered
+	var max_cells := clampi(_int_arg(args, "max_cells", 4096), 1, 65536)
+	var sorted := _sorted_cell_keys(cells)
+	var truncated := sorted.size() > max_cells
+	if truncated:
+		sorted.resize(max_cells)
+	var data := {
+		"revision": _revision,
+		"frame": frame_index,
+		"from": since,
+		"full_refresh": false,
+		"cells": _runs_from_sorted_cells(sorted),
+		"count": sorted.size(),
+		"truncated": truncated,
+		"chunk_origins": _json_cells(chunks.keys(), max_cells),
+		"bounds": _bounds_of_cell_array(sorted),
+	}
+	if not other_frames.is_empty():
+		data["other_frames"] = other_frames.keys()
+	return _tool_ok(data)
+
+
+func _changed_counts_since(since: int, frame_index: int) -> Dictionary:
+	var cells := {}
+	var chunks := {}
+	for entry in _journal:
+		if int(entry.get("revision", 0)) <= since:
+			continue
+		if int(entry.get("frame", -1)) != frame_index:
+			continue
+		var entry_cells: Variant = entry.get("cells", null)
+		if entry_cells is Array:
+			for cell in entry_cells:
+				cells[cell] = true
+		var entry_chunks: Variant = entry.get("chunks", null)
+		if entry_chunks is Array:
+			for cell in entry_chunks:
+				chunks[cell] = true
+	return {"cells": cells.size(), "chunks": chunks.size()}
+
+
+func _changed_bounds_since(since: int, frame_index: int) -> Variant:
+	var cells := {}
+	for entry in _journal:
+		if int(entry.get("revision", 0)) <= since:
+			continue
+		if int(entry.get("frame", -1)) != frame_index:
+			continue
+		var entry_cells: Variant = entry.get("cells", null)
+		if entry_cells is Array:
+			for cell in entry_cells:
+				cells[cell] = true
+		var entry_chunks: Variant = entry.get("chunks", null)
+		if entry_chunks is Array:
+			for cell in entry_chunks:
+				cells[cell] = true
+	return _bounds_of_dictionaries([cells])
+
+
+func _frame_cell_bounds(frame: VoxelFrame) -> Array:
+	if frame == null:
+		return []
+	var box := frame.get_bounds()
+	if not box.has_volume():
+		return []
+	var min_cell := Vector3i(
+		roundi(box.position.x + 0.5),
+		roundi(box.position.y + 0.5),
+		roundi(box.position.z + 0.5)
+	)
+	var max_cell := Vector3i(
+		roundi(box.end.x - 0.5),
+		roundi(box.end.y - 0.5),
+		roundi(box.end.z - 0.5)
+	)
+	return [min_cell, max_cell]
+
+
+func _frame_bounds_array(frame: VoxelFrame) -> Variant:
+	var bounds := _frame_cell_bounds(frame)
+	if bounds.is_empty():
+		return null
+	var min_cell: Vector3i = bounds[0]
+	var max_cell: Vector3i = bounds[1]
+	return [min_cell.x, min_cell.y, min_cell.z, max_cell.x, max_cell.y, max_cell.z]
+
+
+func _cell_bounds_json(box: AABB) -> Variant:
+	if not box.has_volume():
+		return null
+	var bounds := []
+	var edge := box.position + Vector3.ONE * 0.5
+	bounds.append(Vector3i(roundi(edge.x), roundi(edge.y), roundi(edge.z)))
+	edge = box.end - Vector3.ONE * 0.5
+	bounds.append(Vector3i(roundi(edge.x), roundi(edge.y), roundi(edge.z)))
+	return {"min": _json_cell(bounds[0]), "max": _json_cell(bounds[1])}
+
+
+func _cell_bounds_json_from_cells(min_cell: Vector3i, max_cell: Vector3i) -> Dictionary:
+	return {"min": _json_cell(min_cell), "max": _json_cell(max_cell)}
+
+
+func _cell_before_cursor(cell: Vector3i, cursor: Vector3i) -> bool:
+	if cell.z != cursor.z:
+		return cell.z < cursor.z
+	if cell.y != cursor.y:
+		return cell.y < cursor.y
+	return cell.x < cursor.x
+
+
+func _cell_in_box(cell: Vector3i, start: Vector3i, end: Vector3i) -> bool:
+	return (
+		cell.x >= start.x and cell.x <= end.x
+		and cell.y >= start.y and cell.y <= end.y
+		and cell.z >= start.z and cell.z <= end.z
+	)
+
+
+func _cells_in_box(cells: Dictionary, start: Vector3i, end: Vector3i) -> Dictionary:
+	var filtered := {}
+	for cell in cells:
+		if _cell_in_box(cell, start, end):
+			filtered[cell] = cells[cell]
+	return filtered
+
+
+func _cell_with_axes(fixed_axis: int, fixed_value: int, column_axis: int, column_value: int, row_axis: int, row_value: int) -> Vector3i:
+	var cell := Vector3i.ZERO
+	for axis in 3:
+		var value := 0
+		if axis == fixed_axis:
+			value = fixed_value
+		elif axis == column_axis:
+			value = column_value
+		else:
+			value = row_value
+		if axis == 0:
+			cell.x = value
+		elif axis == 1:
+			cell.y = value
+		else:
+			cell.z = value
+	return cell
+
+
+func _cell_less(a: Vector3i, b: Vector3i) -> bool:
+	if a.z != b.z:
+		return a.z < b.z
+	if a.y != b.y:
+		return a.y < b.y
+	return a.x < b.x
+
+
+func _region_more_cells(a: Dictionary, b: Dictionary) -> bool:
+	return int(a.get("cells", 0)) > int(b.get("cells", 0))
+
+
+func _sorted_cell_keys(cells: Dictionary) -> Array:
+	var keys: Array = cells.keys()
+	keys.sort_custom(_cell_less)
+	return keys
+
+
+func _runs_from_sorted_cells(cells: Array) -> Array:
+	var runs: Array = []
+	for cell in cells:
+		if not runs.is_empty():
+			var last: Array = runs[-1]
+			if last[1] + 1 == cell.x and last[2] == cell.y and last[3] == cell.z:
+				last[1] = cell.x
+				continue
+		runs.append([cell.x, cell.x, cell.y, cell.z])
+	return runs
+
+
+func _bounds_of_cell_array(cells: Array) -> Variant:
+	if cells.is_empty():
+		return null
+	var min_cell: Vector3i = cells[0]
+	var max_cell: Vector3i = cells[0]
+	for cell in cells:
+		min_cell = Vector3i(mini(min_cell.x, cell.x), mini(min_cell.y, cell.y), mini(min_cell.z, cell.z))
+		max_cell = Vector3i(maxi(max_cell.x, cell.x), maxi(max_cell.y, cell.y), maxi(max_cell.z, cell.z))
+	return _cell_bounds_json_from_cells(min_cell, max_cell)
+
+
+func _bounds_of_dictionaries(dictionaries: Array) -> Variant:
+	var min_cell := Vector3i.MAX
+	var max_cell := Vector3i.MIN
+	var found := false
+	for dictionary in dictionaries:
+		for cell in dictionary:
+			found = true
+			min_cell = Vector3i(mini(min_cell.x, cell.x), mini(min_cell.y, cell.y), mini(min_cell.z, cell.z))
+			max_cell = Vector3i(maxi(max_cell.x, cell.x), maxi(max_cell.y, cell.y), maxi(max_cell.z, cell.z))
+	if not found:
+		return null
+	return _cell_bounds_json_from_cells(min_cell, max_cell)
+
+
+func _json_cells(cells: Array, limit: int) -> Array:
+	var result := []
+	for index in range(mini(cells.size(), limit)):
+		result.append(_json_cell(cells[index]))
+	return result
+
+
+func _bool_arg(args: Dictionary, key: String, fallback: bool) -> bool:
+	var value: Variant = args.get(key, null)
+	if value is bool:
+		return value
+	return fallback
+
+
+func _frame_indices_arg(args: Dictionary) -> Array:
+	var document := State.document
+	if document == null:
+		return []
+	var frames_value: Variant = args.get("frames", null)
+	if frames_value is Array:
+		var source: Array = frames_value
+		if source.is_empty() or source.size() > 64:
+			return []
+		var indices: Array = []
+		for value in source:
+			if not (value is int or value is float):
+				return []
+			var index := int(value)
+			if index < 0 or index >= document.frames.size():
+				return []
+			indices.append(index)
+		return indices
+	var index := _int_arg(args, "frame", State.current_frame)
+	if index < 0 or index >= document.frames.size():
+		return []
+	return [index]
+
+
+func _tags_json() -> Array:
+	var tags: Array = []
+	for index in range(State.document.tags.size()):
+		var tag := State.document.tags[index]
+		tags.append({
+			"name": tag.name,
+			"from": tag.from,
+			"to": tag.to,
+			"mode": tag.loop_mode,
+			"mode_name": _tag_loop_name(tag.loop_mode),
+			"repeats": tag.repeats,
+		})
+	return tags
+
+
+func _palette_json() -> Array:
+	var entries: Array = []
+	for index in range(State.document.palette.size()):
+		entries.append({"index": index, "material": _material_json(State.document.palette[index])})
+	return entries
+
+
+func _material_key(material: PackedFloat32Array) -> String:
+	var emission := Color(
+		material[VoxelFrame.MATERIAL_EMISSION],
+		material[VoxelFrame.MATERIAL_EMISSION + 1],
+		material[VoxelFrame.MATERIAL_EMISSION + 2]
+	)
+	return "%s|%.3f|%.3f|%s" % [
+		_hex_color(VoxelFrame.material_color(material)),
+		material[VoxelFrame.MATERIAL_METALLIC],
+		material[VoxelFrame.MATERIAL_ROUGHNESS],
+		_hex_color(emission),
+	]
+
+
+func _material_key_matches(key: String, filter: String) -> bool:
+	return filter.is_empty() or key.begins_with(filter + "|")
+
+
+func _scan_frame(frame: VoxelFrame) -> Dictionary:
+	var result := {"cells": {}, "materials": {}, "truncated": false, "occupied": 0}
+	if frame == null:
+		return result
+	var total := frame.count()
+	result["occupied"] = total
+	if total > MAX_SCAN_CELLS:
+		result["truncated"] = true
+		return result
+	var cells: Dictionary = result["cells"]
+	var materials: Dictionary = result["materials"]
+	for chunk_value in frame.chunks.values():
+		var chunk: VoxelFrame.Chunk = chunk_value
+		var entries := {}
+		var material_count: int = chunk.materials.size() / VoxelFrame.MATERIAL_STRIDE
+		for id in range(1, material_count + 1):
+			var material: PackedFloat32Array = chunk.materials.slice((id - 1) * VoxelFrame.MATERIAL_STRIDE, id * VoxelFrame.MATERIAL_STRIDE)
+			var key := _material_key(material)
+			entries[id] = {"key": key, "json": _material_json(material)}
+		for cell in chunk.world_cells():
+			var id: int = chunk.material_id(cell)
+			var entry: Dictionary = entries.get(id, {})
+			if entry.is_empty():
+				continue
+			var key: String = entry["key"]
+			cells[cell] = key
+			var histogram: Dictionary
+			if materials.has(key):
+				histogram = materials[key]
+			else:
+				histogram = {"key": key, "material": entry["json"], "cells": 0, "min": cell, "max": cell}
+				materials[key] = histogram
+			histogram["cells"] = int(histogram["cells"]) + 1
+			var old_min: Vector3i = histogram["min"]
+			var old_max: Vector3i = histogram["max"]
+			histogram["min"] = Vector3i(mini(old_min.x, cell.x), mini(old_min.y, cell.y), mini(old_min.z, cell.z))
+			histogram["max"] = Vector3i(maxi(old_max.x, cell.x), maxi(old_max.y, cell.y), maxi(old_max.z, cell.z))
+	return result
+
+
+func _materials_json(materials: Dictionary) -> Array:
+	var list: Array = []
+	for histogram in materials.values():
+		list.append({
+			"material": histogram.get("material", {}),
+			"cells": histogram.get("cells", 0),
+			"bounds": _cell_bounds_json_from_cells(histogram.get("min", Vector3i.ZERO), histogram.get("max", Vector3i.ZERO)),
+			"key": histogram.get("key", ""),
+		})
+	list.sort_custom(_region_more_cells)
+	return list
+
+
+func _build_regions(cells: Dictionary, group: String, min_cells: int, max_regions: int, material_filter: String, material_table: Dictionary) -> Dictionary:
+	var visited := {}
+	var regions: Array = []
+	var total_found := 0
+	var small_count := 0
+	var small_cells := 0
+	for start_value in cells.keys():
+		var start: Vector3i = start_value
+		if visited.has(start):
+			continue
+		var start_key: String = cells[start]
+		if not _material_key_matches(start_key, material_filter):
+			continue
+		var stack: Array[Vector3i] = [start]
+		visited[start] = true
+		var count := 0
+		var min_cell: Vector3i = start
+		var max_cell: Vector3i = start
+		var sum := Vector3i.ZERO
+		var island_materials := {}
+		while not stack.is_empty():
+			var cell: Vector3i = stack.pop_back()
+			count += 1
+			sum += cell
+			min_cell = Vector3i(mini(min_cell.x, cell.x), mini(min_cell.y, cell.y), mini(min_cell.z, cell.z))
+			max_cell = Vector3i(maxi(max_cell.x, cell.x), maxi(max_cell.y, cell.y), maxi(max_cell.z, cell.z))
+			var key: String = cells[cell]
+			island_materials[key] = int(island_materials.get(key, 0)) + 1
+			for offset in REGION_NEIGHBORS:
+				var next: Vector3i = cell + offset
+				if visited.has(next) or not cells.has(next):
+					continue
+				if group == "material" and cells[next] != key:
+					continue
+				if not _material_key_matches(cells[next], material_filter):
+					continue
+				visited[next] = true
+				stack.append(next)
+		total_found += 1
+		if count < min_cells:
+			small_count += 1
+			small_cells += count
+			continue
+		regions.append({
+			"cells": count,
+			"min": min_cell,
+			"max": max_cell,
+			"sum": sum,
+			"materials": island_materials,
+		})
+	regions.sort_custom(_region_more_cells)
+	var truncated := regions.size() > max_regions
+	if truncated:
+		regions.resize(max_regions)
+	var output: Array = []
+	for index in range(regions.size()):
+		var region: Dictionary = regions[index]
+		var count := int(region["cells"])
+		var sum: Vector3i = region["sum"]
+		var center := Vector3i(floori(float(sum.x) / count), floori(float(sum.y) / count), floori(float(sum.z) / count))
+		var region_data := {
+			"id": index,
+			"cells": count,
+			"bounds": _cell_bounds_json_from_cells(region["min"], region["max"]),
+			"center": _json_cell(center),
+		}
+		var island_materials: Dictionary = region["materials"]
+		var material_list: Array = []
+		for key in island_materials:
+			var material_json: Variant = {}
+			if material_table.has(key):
+				material_json = material_table[key].get("material", {})
+			material_list.append({
+				"material": material_json,
+				"cells": island_materials[key],
+				"key": key,
+			})
+		material_list.sort_custom(_region_more_cells)
+		if group == "material":
+			if not material_list.is_empty():
+				region_data["material"] = material_list[0]["material"]
+				region_data["key"] = material_list[0]["key"]
+		else:
+			if not material_list.is_empty():
+				region_data["material"] = material_list[0]["material"]
+			if material_list.size() > 4:
+				material_list.resize(4)
+			region_data["materials"] = material_list
+		output.append(region_data)
+	return {
+		"regions": output,
+		"total": total_found,
+		"truncated": truncated,
+		"small_count": small_count,
+		"small_cells": small_cells,
+	}
+
+
+func _transition_json(from_index: int, to_index: int, scans: Dictionary) -> Dictionary:
+	var from_scan: Dictionary = scans.get(from_index, _scan_frame(State.get_voxel_frame(from_index)))
+	var to_scan: Dictionary = scans.get(to_index, _scan_frame(State.get_voxel_frame(to_index)))
+	if bool(from_scan.get("truncated", false)) or bool(to_scan.get("truncated", false)):
+		return {"from": from_index, "to": to_index, "truncated": true}
+	var from_cells: Dictionary = from_scan.get("cells", {})
+	var to_cells: Dictionary = to_scan.get("cells", {})
+	var added := {}
+	var removed := {}
+	var changed := {}
+	for cell in to_cells:
+		if not from_cells.has(cell):
+			added[cell] = true
+		elif from_cells[cell] != to_cells[cell]:
+			changed[cell] = true
+	for cell in from_cells:
+		if not to_cells.has(cell):
+			removed[cell] = true
+	return {
+		"from": from_index,
+		"to": to_index,
+		"added": added.size(),
+		"removed": removed.size(),
+		"changed": changed.size(),
+		"added_bounds": _bounds_of_dictionaries([added]),
+		"removed_bounds": _bounds_of_dictionaries([removed]),
+		"bounds": _bounds_of_dictionaries([added, removed, changed]),
+	}
 
 
 func _screenshot(args: Dictionary) -> Dictionary:
@@ -938,114 +2255,209 @@ func _screenshot(args: Dictionary) -> Dictionary:
 	var inline_value: Variant = args.get("inline", false)
 	if inline_value is bool:
 		inline = inline_value
-	var frame_index := State.current_frame
-	var frame_value: Variant = args.get("frame", null)
-	if frame_value is int or frame_value is float:
-		frame_index = int(frame_value)
-	var frame: VoxelFrame = State.get_voxel_frame(frame_index)
-	if frame == null:
-		return _tool_error("The frame does not exist.")
-	var bounds := frame.get_bounds()
+	var orthographic := true
+	var ortho_value: Variant = args.get("orthographic", true)
+	if ortho_value is bool:
+		orthographic = ortho_value
 	var focus_value: Variant = args.get("focus", null)
+	var focus_bounds: Variant = null
 	if focus_value != null:
 		var focus_box: Variant = _parse_box(focus_value)
 		if focus_box == null:
 			return _tool_error("focus must be [x0, y0, z0, x1, y1, z1] with min <= max.")
 		var focus_array: Array = focus_box
-		var start: Vector3i = focus_array[0]
-		var end: Vector3i = focus_array[1]
-		bounds = AABB(Vector3(start) - Vector3(0.5, 0.5, 0.5), Vector3(end - start + Vector3i.ONE))
+		var focus_start: Vector3i = focus_array[0]
+		var focus_end: Vector3i = focus_array[1]
+		focus_bounds = AABB(Vector3(focus_start) - Vector3(0.5, 0.5, 0.5), Vector3(focus_end - focus_start + Vector3i.ONE))
+	var views: Array = []
+	var views_value: Variant = args.get("views", null)
+	if views_value is Array:
+		var view_source: Array = views_value
+		if view_source.is_empty() or view_source.size() > 6:
+			return _tool_error("views must hold 1 to 6 view names.")
+		for value in view_source:
+			if not (value is String) or not _named_view(str(value)):
+				return _tool_error("views must name isometric, low, front, back, left, right, top, or bottom.")
+			views.append(str(value))
+	var frames: Array = []
+	var frames_value: Variant = args.get("frames", null)
+	if frames_value is Array:
+		var frame_source: Array = frames_value
+		if frame_source.is_empty() or frame_source.size() > 16:
+			return _tool_error("frames must hold 1 to 16 frame indices.")
+		for value in frame_source:
+			if not (value is int or value is float):
+				return _tool_error("frames must hold integers.")
+			var index := int(value)
+			if State.get_voxel_frame(index) == null:
+				return _tool_error("The frame does not exist.")
+			frames.append(index)
+	var frame_index := _int_arg(args, "frame", State.current_frame)
+	if State.get_voxel_frame(frame_index) == null:
+		return _tool_error("The frame does not exist.")
 	var view := "isometric"
 	var view_value: Variant = args.get("view", "isometric")
 	if view_value is String:
-		view = view_value
-	var orthographic := true
-	var ortho_value: Variant = args.get("orthographic", true)
-	if ortho_value is bool:
-		orthographic = ortho_value
+		view = str(view_value)
+	if not _named_view(view) and view != "current":
+		return _tool_error("view must name isometric, low, front, back, left, right, top, bottom, or current.")
+	if frames.is_empty():
+		frames = [frame_index]
+	if views.is_empty():
+		views = [view]
+	var is_contact := views.size() > 1
+	var is_storyboard := frames.size() > 1
+	if is_contact and is_storyboard:
+		return _tool_error("Use views or frames, not both.")
+	if (is_contact or is_storyboard) and (views.has("current") or view == "current"):
+		return _tool_error("The current view is not supported with views or frames.")
 	if view == "current" and focus_value != null:
 		return _tool_error("focus is not supported with the current view.")
+	var bounds := AABB()
+	if focus_bounds != null:
+		bounds = focus_bounds
+	elif is_storyboard:
+		for index in frames:
+			var frame: VoxelFrame = State.get_voxel_frame(index)
+			var box := frame.get_bounds()
+			if box.has_volume():
+				bounds = bounds.merge(box) if bounds.has_volume() else box
+	else:
+		bounds = State.get_voxel_frame(frames[0]).get_bounds()
+	if not bounds.has_volume():
+		return _tool_error("The selected frames are empty.")
+	var count := maxi(frames.size(), views.size())
+	var columns := _int_arg(args, "columns", 0)
+	if columns <= 0:
+		columns = ceili(sqrt(float(count)))
+	columns = clampi(columns, 1, 8)
+	var rows := ceili(float(count) / float(columns))
+	var gap := 4
+	var max_edge := 4096
+	var max_tile := maxi(64, (max_edge - (maxi(columns, rows) - 1) * gap) / maxi(columns, rows))
+	size = mini(size, max_tile)
+	var composite_width := columns * size + (columns - 1) * gap
+	var composite_height := rows * size + (rows - 1) * gap
+	var composite := Image.create(composite_width, composite_height, false, Image.FORMAT_RGBA8)
+	composite.fill(Color(0.118, 0.122, 0.133, 1.0))
 	var document := State.document
 	var viewport: SubViewport = SCREENSHOT_VIEWPORT.instantiate()
 	viewport.size = Vector2i(size, size)
 	VoxelImageRenderer.add_child(viewport)
 	var renderer: VoxelRenderer = viewport.get_node("%VoxelRenderer")
-	renderer.source_frame = frame.copy_frame()
 	var camera: Camera3D = viewport.get_node("Node3D/Camera3D")
 	var light: DirectionalLight3D = viewport.get_node("Node3D/Light")
-	if view == "current":
-		var main: Node = get_node_or_null("/root/Main")
-		var editor_viewport: Node = null
-		if main != null:
-			editor_viewport = main.get_node_or_null("%Viewport")
-		var editor_camera: Camera3D = null
-		if editor_viewport != null:
-			editor_camera = editor_viewport.get_node_or_null("%CameraRig") as Camera3D
-		if editor_camera == null:
-			viewport.free()
-			return _tool_error("The editor camera is not available.")
-		camera.transform = editor_camera.global_transform
-		camera.projection = editor_camera.projection
-		camera.fov = editor_camera.fov
-		camera.size = editor_camera.size
-		camera.near = editor_camera.near
-		camera.far = editor_camera.far
-	else:
-		var angles := Vector2(-45.0, 45.0)
-		match view:
-			"front":
-				angles = Vector2(0.0, 0.0)
-			"back":
-				angles = Vector2(180.0, 0.0)
-			"left":
-				angles = Vector2(90.0, 0.0)
-			"right":
-				angles = Vector2(-90.0, 0.0)
-			"top":
-				angles = Vector2(0.0, 89.9)
-			"bottom":
-				angles = Vector2(0.0, -89.9)
-			"isometric":
-				angles = Vector2(-45.0, 45.0)
-			"low":
-				angles = Vector2(-35.0, 18.0)
-		VoxelImageRenderer.frame_camera(camera, bounds, angles.x, angles.y, orthographic)
-	VoxelImageRenderer.apply_directional_shadow(light, camera)
 	camera.current = true
-	var deadline := Time.get_ticks_msec() + 10000
-	while not renderer.is_settled() and Time.get_ticks_msec() < deadline:
-		await get_tree().process_frame
-		if State.document != document:
-			viewport.free()
-			return _tool_error("The document changed before the screenshot finished.")
-	for draw in 2:
-		viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
-		await RenderingServer.frame_post_draw
-	var image := viewport.get_texture().get_image()
-	image.convert(Image.FORMAT_RGBA8)
-	var background := Image.create(size, size, false, Image.FORMAT_RGBA8)
-	background.fill(Color(0.118, 0.122, 0.133, 1.0))
-	background.blend_rect(image, Rect2i(Vector2i.ZERO, image.get_size()), Vector2i.ZERO)
+	var tile_index := 0
+	for row in range(rows):
+		for column in range(columns):
+			if tile_index >= count:
+				break
+			var tile_frame: int = int(frames[tile_index] if is_storyboard else frames[0])
+			var tile_view: String = str(views[tile_index] if is_contact else views[0])
+			var frame: VoxelFrame = State.get_voxel_frame(tile_frame)
+			if frame == null:
+				viewport.free()
+				return _tool_error("The frame does not exist.")
+			renderer.source_frame = frame.copy_frame()
+			if tile_view == "current":
+				if not _apply_editor_camera(camera):
+					viewport.free()
+					return _tool_error("The editor camera is not available.")
+			else:
+				var angles := _view_angles(tile_view)
+				VoxelImageRenderer.frame_camera(camera, bounds, angles.x, angles.y, orthographic)
+			VoxelImageRenderer.apply_directional_shadow(light, camera)
+			await get_tree().process_frame
+			var deadline := Time.get_ticks_msec() + 10000
+			while not renderer.is_settled() and Time.get_ticks_msec() < deadline:
+				await get_tree().process_frame
+				if State.document != document:
+					viewport.free()
+					return _tool_error("The document changed before the screenshot finished.")
+			for draw in 2:
+				viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
+				await RenderingServer.frame_post_draw
+			var image := viewport.get_texture().get_image()
+			image.convert(Image.FORMAT_RGBA8)
+			var target := Vector2i(column * (size + gap), row * (size + gap))
+			composite.blend_rect(image, Rect2i(Vector2i.ZERO, image.get_size()), target)
+			tile_index += 1
 	viewport.free()
 	var path := "user://mcp_screenshot.png"
-	var error := background.save_png(path)
+	var error := composite.save_png(path)
 	if error != OK:
 		return _tool_error("The screenshot could not be saved: " + error_string(error))
 	var info := {
 		"path": ProjectSettings.globalize_path(path),
-		"width": size,
-		"height": size,
-		"frame": frame_index,
+		"width": composite_width,
+		"height": composite_height,
+		"tile_size": size,
+		"columns": columns,
+		"rows": rows,
+		"revision": _revision,
+		"bounds": _cell_bounds_json(bounds),
 	}
+	if is_storyboard:
+		info["frames"] = frames
+		info["view"] = views[0]
+	elif is_contact:
+		info["views"] = views
+		info["frame"] = frames[0]
+	else:
+		info["frame"] = frames[0]
+		info["view"] = views[0]
 	if not inline:
 		return _tool_ok(info)
-	var png := background.save_png_to_buffer()
+	var png := composite.save_png_to_buffer()
 	return {
 		"content": [
 			{"type": "image", "data": Marshalls.raw_to_base64(png), "mimeType": "image/png"},
 			{"type": "text", "text": JSON.stringify(info)},
 		],
 	}
+
+
+func _named_view(view: String) -> bool:
+	return ["isometric", "low", "front", "back", "left", "right", "top", "bottom"].has(view)
+
+
+func _view_angles(view: String) -> Vector2:
+	match view:
+		"front":
+			return Vector2(0.0, 0.0)
+		"back":
+			return Vector2(180.0, 0.0)
+		"left":
+			return Vector2(90.0, 0.0)
+		"right":
+			return Vector2(-90.0, 0.0)
+		"top":
+			return Vector2(0.0, 89.9)
+		"bottom":
+			return Vector2(0.0, -89.9)
+		"low":
+			return Vector2(-35.0, 18.0)
+	return Vector2(-45.0, 45.0)
+
+
+func _apply_editor_camera(camera: Camera3D) -> bool:
+	var main: Node = get_tree().get_first_node_in_group("main")
+	var editor_viewport: Node = null
+	if main != null:
+		editor_viewport = main.get_node_or_null("%Viewport")
+	var editor_camera: Camera3D = null
+	if editor_viewport != null:
+		editor_camera = editor_viewport.get_node_or_null("%CameraRig") as Camera3D
+	if editor_camera == null:
+		return false
+	camera.transform = editor_camera.global_transform
+	camera.projection = editor_camera.projection
+	camera.fov = editor_camera.fov
+	camera.size = editor_camera.size
+	camera.near = editor_camera.near
+	camera.far = editor_camera.far
+	return true
 
 
 func _new_document() -> Dictionary:
@@ -1060,6 +2472,10 @@ func _new_document() -> Dictionary:
 func _save_document(args: Dictionary) -> Dictionary:
 	if State.active_edit() != null or State.edit_busy():
 		return _tool_error("The editor is busy with another edit. Retry.")
+	var copy := true
+	var copy_value: Variant = args.get("copy", true)
+	if copy_value is bool:
+		copy = copy_value
 	var path := _document_path(args.get("path", ""))
 	if path.is_empty():
 		return _tool_error("path is required.")
@@ -1087,8 +2503,14 @@ func _save_document(args: Dictionary) -> Dictionary:
 	var error := document.save_file(path, preview, encoded)
 	if error != OK:
 		return _tool_error("The document could not be saved: " + error_string(error))
-	State.record_saved(document, path)
-	return _tool_ok({"path": ProjectSettings.globalize_path(path)})
+	if not copy:
+		State.record_saved(document, path)
+	return _tool_ok({
+		"path": ProjectSettings.globalize_path(path),
+		"copy": copy,
+		"main_path": ProjectSettings.globalize_path(document.edit_save_path) if not document.edit_save_path.is_empty() else "",
+		"dirty": document.edit_dirty,
+	})
 
 
 func _open_document(args: Dictionary) -> Dictionary:
@@ -1422,6 +2844,7 @@ func _set_cursor(args: Dictionary) -> Dictionary:
 func _stroke(args: Dictionary) -> Dictionary:
 	if State.active_edit() != null or State.edit_busy():
 		return _tool_error("The editor is busy with another edit. Retry.")
+	var before_revision := _revision
 	var points_value: Variant = _parse_cells(args.get("points", null), 4096)
 	if not (points_value is Array):
 		return _tool_error("points must be an array of [x, y, z] cells.")
@@ -1447,12 +2870,24 @@ func _stroke(args: Dictionary) -> Dictionary:
 	var completed := await _wait_tool_idle(tool, 30000)
 	if not completed:
 		return _tool_error("The stroke did not complete within 30 seconds.")
-	return _tool_ok({"tool": tool_id, "points": points.size()})
+	for wait_frame in 2:
+		await get_tree().process_frame
+	var counts := _changed_counts_since(before_revision, State.current_frame)
+	return _tool_ok({
+		"tool": tool_id,
+		"points": points.size(),
+		"revision": _revision,
+		"occupied": State.get_current_voxel_frame().count() if State.get_current_voxel_frame() != null else 0,
+		"changed_cells": counts["cells"],
+		"changed_chunks": counts["chunks"],
+		"changed_bounds": _changed_bounds_since(before_revision, State.current_frame),
+	})
 
 
 func _fill(args: Dictionary) -> Dictionary:
 	if State.active_edit() != null or State.edit_busy():
 		return _tool_error("The editor is busy with another edit. Retry.")
+	var before_revision := _revision
 	var seed_value: Variant = _parse_cell(args.get("seed", null))
 	if seed_value == null:
 		return _tool_error("seed must be [x, y, z].")
@@ -1474,109 +2909,322 @@ func _fill(args: Dictionary) -> Dictionary:
 	var completed := await _wait_tool_idle(tool, 60000)
 	if not completed:
 		return _tool_error("The fill did not complete within 60 seconds.")
-	return _tool_ok({"seed": _json_cell(seed)})
+	for wait_frame in 2:
+		await get_tree().process_frame
+	var counts := _changed_counts_since(before_revision, State.current_frame)
+	return _tool_ok({
+		"seed": _json_cell(seed),
+		"revision": _revision,
+		"occupied": State.get_current_voxel_frame().count() if State.get_current_voxel_frame() != null else 0,
+		"changed_cells": counts["cells"],
+		"changed_chunks": counts["chunks"],
+		"changed_bounds": _changed_bounds_since(before_revision, State.current_frame),
+	})
 
 
 func _write_cells(args: Dictionary) -> Dictionary:
 	if State.active_edit() != null or State.edit_busy():
 		return _tool_error("The editor is busy with another edit. Retry.")
-	var cells_value: Variant = _parse_cells(args.get("cells", null), MAX_WRITE_CELLS)
-	if args.has("cells") and not (cells_value is Array):
-		return _tool_error("cells must be an array of [x, y, z] cells.")
-	var cells: Array = []
-	if cells_value is Array:
-		cells = cells_value
-	var boxes: Array = []
-	var boxes_value: Variant = args.get("boxes", null)
-	if boxes_value != null:
-		if not (boxes_value is Array):
-			return _tool_error("boxes must be an array of [x0, y0, z0, x1, y1, z1].")
-		var box_list: Array = boxes_value
-		for index in range(box_list.size()):
-			var box_value: Variant = _parse_box(box_list[index])
-			if box_value == null:
-				return _tool_error("boxes[%d] must be [x0, y0, z0, x1, y1, z1] with min <= max." % index)
-			boxes.append(box_value)
-	var runs: Array = []
-	var runs_value: Variant = args.get("runs", null)
-	if runs_value != null:
-		if not (runs_value is Array):
-			return _tool_error("runs must be an array of [x0, x1, y, z].")
-		var run_list: Array = runs_value
-		for index in range(run_list.size()):
-			var run_value: Variant = _parse_run(run_list[index])
-			if run_value == null:
-				return _tool_error("runs[%d] must be [x0, x1, y, z] with x0 <= x1." % index)
-			runs.append(run_value)
-	if cells.is_empty() and boxes.is_empty() and runs.is_empty():
-		return _tool_error("Provide cells, boxes, or runs.")
+	var materials: Array = []
+	var materials_value: Variant = args.get("materials", null)
+	if materials_value != null:
+		if not (materials_value is Array):
+			return _tool_error("materials must be an array of material objects.")
+		var entries: Array = materials_value
+		if entries.is_empty() or entries.size() > 256:
+			return _tool_error("materials must hold 1 to 256 entries.")
+		for index in range(entries.size()):
+			var entry: Variant = entries[index]
+			if not (entry is Dictionary):
+				return _tool_error("materials[%d] must be a material object." % index)
+			var material_value: Variant = _parse_material(entry)
+			if not (material_value is PackedFloat32Array):
+				return _tool_error("materials[%d] has invalid values." % index)
+			var material: PackedFloat32Array = material_value
+			if not VoxelDocument.valid_material(material):
+				return _tool_error("materials[%d] values must be between 0 and 1." % index)
+			materials.append(material)
 	var erase := false
 	var erase_value: Variant = args.get("erase", false)
 	if erase_value is bool:
 		erase = erase_value
-	var material := VoxelFrame.material(Color.TRANSPARENT) if erase else State.current_material
+	var current_material := VoxelFrame.material(Color.TRANSPARENT) if erase else State.current_material
 	var changes := {}
-	for value in cells:
-		var cell: Vector3i = value
-		changes[cell] = material
-	for value in boxes:
-		var box: Array = value
-		var start: Vector3i = box[0]
-		var end: Vector3i = box[1]
-		var extent := end - start + Vector3i.ONE
-		# Check each axis before the product, so a wide box cannot overflow the
-		# cell cap and enter the write loops.
-		if extent.x > MAX_WRITE_CELLS or extent.y > MAX_WRITE_CELLS or extent.z > MAX_WRITE_CELLS:
-			return _tool_error("The write exceeds %d cells." % MAX_WRITE_CELLS)
-		var volume := extent.x * extent.y * extent.z
-		if changes.size() + volume > MAX_WRITE_CELLS:
-			return _tool_error("The write exceeds %d cells." % MAX_WRITE_CELLS)
-		for x in range(start.x, end.x + 1):
-			for y in range(start.y, end.y + 1):
-				for z in range(start.z, end.z + 1):
-					changes[Vector3i(x, y, z)] = material
-	for value in runs:
-		var run: Array = value
-		var first: int = run[0]
-		var last: int = run[1]
-		var y: int = run[2]
-		var z: int = run[3]
-		var length := last - first + 1
-		if length > MAX_WRITE_CELLS:
-			return _tool_error("The write exceeds %d cells." % MAX_WRITE_CELLS)
-		if changes.size() + length > MAX_WRITE_CELLS:
-			return _tool_error("The write exceeds %d cells." % MAX_WRITE_CELLS)
-		for x in range(first, last + 1):
-			changes[Vector3i(x, y, z)] = material
-	var tx := State.begin_edit()
-	if tx == null:
-		return _tool_error("The editor is busy with another edit. Retry.")
-	var frame := State.get_current_voxel_frame()
-	if frame == null:
-		State.cancel_edit(tx)
-		return _tool_error("The document has no current frame.")
-	var job := WriteJob.new()
-	job.edit_context = tx.edit_context
-	job.edited_frame = VoxelFrame.job_frame(frame)
-	job.changes = changes
-	job.applied_uniform = material
-	if changes.size() <= 4096:
-		job.run()
-	else:
-		var operation := State.begin_operation("Writing cells", changes.size(), true, self, job.cancel)
-		await State.run_edit_job(job, operation, "MCP write")
-		State.finish_operation(operation)
-	if State.active_edit() != tx:
-		return _tool_error("The edit was cancelled or the document changed.")
-	frame.apply_published(job.changed_chunks, job.edited_frame)
-	State.document._bounds_dirty = true
-	if not job.changed_chunks.is_empty():
-		State.chunks_changed.emit(State.current_frame, job.changed_chunks)
-	State.finish_edit(tx, "Write Cells")
+	var cell_count := 0
+	var cells_value: Variant = args.get("cells", null)
+	if cells_value != null:
+		if not (cells_value is Array):
+			return _tool_error("cells must be an array of [x, y, z] or [x, y, z, material_index].")
+		var cell_list: Array = cells_value
+		if cell_list.is_empty() or cell_list.size() > MAX_WRITE_CELLS:
+			return _tool_error("cells must hold 1 to %d entries." % MAX_WRITE_CELLS)
+		for index in range(cell_list.size()):
+			var parsed: Variant = _parse_write_cell(cell_list[index])
+			if parsed == null:
+				return _tool_error("cells[%d] must be [x, y, z] or [x, y, z, material_index]." % index)
+			var shape: Array = parsed
+			var material: Variant = _write_material(shape[1], materials, current_material, erase)
+			if material == null:
+				return _tool_error("cells[%d] names a material index that does not exist." % index)
+			changes[shape[0]] = material
+			cell_count += 1
+			if cell_count > MAX_WRITE_CELLS:
+				return _tool_error("The write exceeds %d cells." % MAX_WRITE_CELLS)
+	var boxes_value: Variant = args.get("boxes", null)
+	if boxes_value != null:
+		if not (boxes_value is Array):
+			return _tool_error("boxes must be an array of [x0, y0, z0, x1, y1, z1] with an optional material index.")
+		var box_list: Array = boxes_value
+		if box_list.is_empty() or box_list.size() > 1024:
+			return _tool_error("boxes must hold 1 to 1024 entries.")
+		for index in range(box_list.size()):
+			var parsed: Variant = _parse_write_box(box_list[index])
+			if parsed == null:
+				return _tool_error("boxes[%d] must be [x0, y0, z0, x1, y1, z1] with min <= max and an optional material index." % index)
+			var shape: Array = parsed
+			var start: Vector3i = shape[0]
+			var end: Vector3i = shape[1]
+			var material: Variant = _write_material(shape[2], materials, current_material, erase)
+			if material == null:
+				return _tool_error("boxes[%d] names a material index that does not exist." % index)
+			var extent := end - start + Vector3i.ONE
+			# Check each axis before the product, so a wide box cannot overflow the
+			# cell cap and enter the write loops.
+			if extent.x > MAX_WRITE_CELLS or extent.y > MAX_WRITE_CELLS or extent.z > MAX_WRITE_CELLS:
+				return _tool_error("The write exceeds %d cells." % MAX_WRITE_CELLS)
+			var volume := extent.x * extent.y * extent.z
+			if cell_count + volume > MAX_WRITE_CELLS:
+				return _tool_error("The write exceeds %d cells." % MAX_WRITE_CELLS)
+			for x in range(start.x, end.x + 1):
+				for y in range(start.y, end.y + 1):
+					for z in range(start.z, end.z + 1):
+						changes[Vector3i(x, y, z)] = material
+			cell_count += volume
+	var runs_value: Variant = args.get("runs", null)
+	if runs_value != null:
+		if not (runs_value is Array):
+			return _tool_error("runs must be an array of [x0, x1, y, z] with an optional material index.")
+		var run_list: Array = runs_value
+		if run_list.is_empty() or run_list.size() > MAX_WRITE_CELLS:
+			return _tool_error("runs must hold 1 to %d entries." % MAX_WRITE_CELLS)
+		for index in range(run_list.size()):
+			var parsed: Variant = _parse_write_run(run_list[index])
+			if parsed == null:
+				return _tool_error("runs[%d] must be [x0, x1, y, z] with x0 <= x1 and an optional material index." % index)
+			var shape: Array = parsed
+			var first: int = shape[0]
+			var last: int = shape[1]
+			var y: int = shape[2]
+			var z: int = shape[3]
+			var material: Variant = _write_material(shape[4], materials, current_material, erase)
+			if material == null:
+				return _tool_error("runs[%d] names a material index that does not exist." % index)
+			var length := last - first + 1
+			if length > MAX_WRITE_CELLS:
+				return _tool_error("The write exceeds %d cells." % MAX_WRITE_CELLS)
+			if cell_count + length > MAX_WRITE_CELLS:
+				return _tool_error("The write exceeds %d cells." % MAX_WRITE_CELLS)
+			for x in range(first, last + 1):
+				changes[Vector3i(x, y, z)] = material
+			cell_count += length
+	if changes.is_empty():
+		return _tool_error("Provide cells, boxes, or runs.")
+	var frames := _write_frames(args)
+	if frames.is_empty():
+		return _tool_error("frames must hold 1 to 16 existing frame indices.")
+	var writes_other_frame := false
+	for frame_index in frames:
+		if int(frame_index) != State.current_frame:
+			writes_other_frame = true
+			break
+	if writes_other_frame and State.selection.count() > 0:
+		return _tool_error("Clear the selection before writing to other frames.")
+	if changes.size() * frames.size() > MAX_WRITE_TOTAL_CELLS:
+		return _tool_error("The write exceeds %d cells across frames." % MAX_WRITE_TOTAL_CELLS)
+	var uniform_material: Variant = null
+	var first_material := true
+	for material in changes.values():
+		if first_material:
+			uniform_material = material
+			first_material = false
+		elif material != uniform_material:
+			uniform_material = null
+			break
+	var label := "Write Cells"
+	var label_value: Variant = args.get("label", null)
+	if label_value is String and not String(label_value).strip_edges().is_empty():
+		label = String(label_value).strip_edges().left(80)
+	var document := State.document
+	var collected: Array = []
+	var frame_results: Array = []
+	var total_applied := 0
+	var total_chunks := 0
+	var total_bounds_min := Vector3i.MAX
+	var total_bounds_max := Vector3i.MIN
+	var has_bounds := false
+	for frame_index in frames:
+		if State.document != document:
+			State.cancel_changes(collected)
+			return _tool_error("The document changed before the write finished.")
+		var frame: VoxelFrame = State.get_voxel_frame(int(frame_index))
+		if frame == null:
+			State.cancel_changes(collected)
+			return _tool_error("The frame does not exist.")
+		var tx := State.begin_edit(int(frame_index))
+		if tx == null:
+			State.cancel_changes(collected)
+			return _tool_error("The editor is busy with another edit. Retry.")
+		var job := WriteJob.new()
+		job.edit_context = tx.edit_context
+		job.edited_frame = VoxelFrame.job_frame(frame)
+		job.changes = changes
+		job.applied_uniform = uniform_material
+		if changes.size() <= 4096:
+			job.run()
+		else:
+			var operation := State.begin_operation("Writing cells", changes.size(), true, self, job.cancel)
+			await State.run_edit_job(job, operation, "MCP write")
+			State.finish_operation(operation)
+		if State.active_edit() != tx:
+			State.cancel_changes(collected)
+			return _tool_error("The edit was cancelled or the document changed.")
+		if not job.checkpoint(0):
+			State.cancel_edit(tx)
+			State.cancel_changes(collected)
+			return _tool_error("The write was cancelled.")
+		frame.apply_published(job.changed_chunks, job.edited_frame)
+		State.document._bounds_dirty = true
+		if not job.changed_chunks.is_empty():
+			State.chunks_changed.emit(int(frame_index), job.changed_chunks)
+		_record_cells_change(int(frame_index), job.applied_cells.keys())
+		var change := State.finish_edit_collect(tx)
+		if change != null:
+			collected.append(change)
+		var applied_keys: Array = job.applied_cells.keys()
+		var bounds: Variant = _bounds_of_cell_array(applied_keys)
+		if bounds != null:
+			var bounds_data: Dictionary = bounds
+			var bounds_min: Array = bounds_data["min"]
+			var bounds_max: Array = bounds_data["max"]
+			var min_cell := Vector3i(int(bounds_min[0]), int(bounds_min[1]), int(bounds_min[2]))
+			var max_cell := Vector3i(int(bounds_max[0]), int(bounds_max[1]), int(bounds_max[2]))
+			total_bounds_min = Vector3i(mini(total_bounds_min.x, min_cell.x), mini(total_bounds_min.y, min_cell.y), mini(total_bounds_min.z, min_cell.z))
+			total_bounds_max = Vector3i(maxi(total_bounds_max.x, max_cell.x), maxi(total_bounds_max.y, max_cell.y), maxi(total_bounds_max.z, max_cell.z))
+			has_bounds = true
+		frame_results.append({
+			"frame": int(frame_index),
+			"applied": job.applied_cells.size(),
+			"chunks": job.changed_chunks.size(),
+			"occupied": frame.count(),
+			"changed_bounds": bounds,
+		})
+		total_applied += job.applied_cells.size()
+		total_chunks += job.changed_chunks.size()
+	State.commit_changes(collected, label)
+	var current_frame := State.get_current_voxel_frame()
 	return _tool_ok({
-		"applied": job.applied_cells.size(),
-		"chunks": job.changed_chunks.size(),
+		"applied": total_applied,
+		"chunks": total_chunks,
+		"frames": frame_results,
+		"action": label,
+		"revision": _revision,
+		"occupied": current_frame.count() if current_frame != null else 0,
+		"changed_bounds": _cell_bounds_json_from_cells(total_bounds_min, total_bounds_max) if has_bounds else null,
 	})
+
+
+func _parse_write_cell(value: Variant) -> Variant:
+	if not (value is Array):
+		return null
+	var components: Array = value
+	if components.size() < 3 or components.size() > 4:
+		return null
+	var cell_value: Variant = _parse_cell(components.slice(0, 3))
+	if cell_value == null:
+		return null
+	var material_index := -1
+	if components.size() == 4:
+		if not (components[3] is int or components[3] is float):
+			return null
+		material_index = int(components[3])
+		if material_index < -1:
+			return null
+	return [cell_value, material_index]
+
+
+func _parse_write_box(value: Variant) -> Variant:
+	if not (value is Array):
+		return null
+	var components: Array = value
+	if components.size() < 6 or components.size() > 7:
+		return null
+	var box_value: Variant = _parse_box(components.slice(0, 6))
+	if box_value == null:
+		return null
+	var box: Array = box_value
+	var material_index := -1
+	if components.size() == 7:
+		if not (components[6] is int or components[6] is float):
+			return null
+		material_index = int(components[6])
+		if material_index < -1:
+			return null
+	return [box[0], box[1], material_index]
+
+
+func _parse_write_run(value: Variant) -> Variant:
+	if not (value is Array):
+		return null
+	var components: Array = value
+	if components.size() < 4 or components.size() > 5:
+		return null
+	var run_value: Variant = _parse_run(components.slice(0, 4))
+	if run_value == null:
+		return null
+	var run: Array = run_value
+	var material_index := -1
+	if components.size() == 5:
+		if not (components[4] is int or components[4] is float):
+			return null
+		material_index = int(components[4])
+		if material_index < -1:
+			return null
+	return [run[0], run[1], run[2], run[3], material_index]
+
+
+func _write_material(index: int, materials: Array, current_material: PackedFloat32Array, erase: bool) -> Variant:
+	if erase:
+		return VoxelFrame.material(Color.TRANSPARENT)
+	if index < 0:
+		return current_material
+	if index >= materials.size():
+		return null
+	return materials[index]
+
+
+func _write_frames(args: Dictionary) -> Array:
+	var frames: Array = []
+	var frames_value: Variant = args.get("frames", null)
+	if frames_value == null:
+		frames.append(State.current_frame)
+		return frames
+	if not (frames_value is Array):
+		return []
+	var source: Array = frames_value
+	if source.is_empty() or source.size() > 16:
+		return []
+	var seen := {}
+	for value in source:
+		if not (value is int or value is float):
+			return []
+		var index := int(value)
+		if index < 0 or index >= State.document.frames.size():
+			return []
+		if seen.has(index):
+			continue
+		seen[index] = true
+		frames.append(index)
+	return frames
 
 
 func _sample(args: Dictionary) -> Dictionary:

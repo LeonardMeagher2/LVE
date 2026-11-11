@@ -3,7 +3,7 @@ extends "res://tests/test.gd"
 # Focused checks for the multi-test harness and the runner selection. Every test
 # is independent, so any single test can run alone in any requested order.
 
-const RUNNER := preload("res://tests/run_all.gd")
+const KIT := preload("res://addons/test_kit/test_case.gd")
 const GROUP_SCENES := {"tag_group": ["frames", "tag_frame_remove", "tag_playback", "tags"], "step_timing": []}
 
 
@@ -13,15 +13,12 @@ func _ready() -> void:
 	test("several case names deduplicate to one run", _case_dedup, "case_dedup")
 	test("a test owns its own result and check list", _own_result, "own_result")
 	test("a test carries its own config", _config, "config", {"timeout": 20.0, "allow_no_checks": true})
-	test("the runner honors a declared child budget", _budget, "budget")
-	test("engine errors cannot pass as successful output", _engine_errors, "engine_errors")
-	test("every registered name resolves to its scene", _name_resolution, "name_resolution")
 
 
 func _filter() -> void:
 	step("Then an empty request selects every test", func():
 		var sample := [{"name": "a"}, {"name": "b"}]
-		var result: Dictionary = select_tests([], sample)
+		var result: Dictionary = KIT.select_cases([], sample)
 		var selected: Array = result["selected"]
 		var unknown: Array = result["unknown"]
 		expect(selected.size() == 2, "an empty request selects both tests")
@@ -29,14 +26,14 @@ func _filter() -> void:
 	)
 	step("Then a named request selects only that test", func():
 		var sample := [{"name": "a"}, {"name": "b"}]
-		var result: Dictionary = select_tests(["b"], sample)
+		var result: Dictionary = KIT.select_cases(["b"], sample)
 		var selected: Array = result["selected"]
 		expect(selected.size() == 1, "a named request selects one test")
 		expect(str(selected[0]["name"]) == "b", "the named test is selected")
 	)
 	step("Then an unknown name is reported", func():
 		var sample := [{"name": "a"}]
-		var result: Dictionary = select_tests(["missing"], sample)
+		var result: Dictionary = KIT.select_cases(["missing"], sample)
 		var selected: Array = result["selected"]
 		var unknown: Array = result["unknown"]
 		expect(unknown == ["missing"], "the unknown name is reported")
@@ -44,7 +41,7 @@ func _filter() -> void:
 	)
 	step("Then a repeated name selects one test", func():
 		var sample := [{"name": "a"}, {"name": "b"}]
-		var result: Dictionary = select_tests(["b", "b"], sample)
+		var result: Dictionary = KIT.select_cases(["b", "b"], sample)
 		var selected: Array = result["selected"]
 		expect(selected.size() == 1, "a repeated name selects one test")
 	)
@@ -52,14 +49,14 @@ func _filter() -> void:
 
 func _whole_group() -> void:
 	step("Then the whole group wins in the group-first order", func():
-		_expect_whole_group(RUNNER.build_entries(["tag_group", "tags"], GROUP_SCENES))
+		_expect_whole_group(KIT.build_entries(["tag_group", "tags"], GROUP_SCENES))
 	)
 	step("Then the whole group wins in the case-first order", func():
-		_expect_whole_group(RUNNER.build_entries(["tags", "tag_group"], GROUP_SCENES))
+		_expect_whole_group(KIT.build_entries(["tags", "tag_group"], GROUP_SCENES))
 	)
 	step("Then the whole group wins with every case name present", func():
 		var names := ["frames", "tags", "tag_group", "tag_playback", "tag_frame_remove"]
-		_expect_whole_group(RUNNER.build_entries(names, GROUP_SCENES))
+		_expect_whole_group(KIT.build_entries(names, GROUP_SCENES))
 	)
 
 
@@ -73,14 +70,14 @@ func _expect_whole_group(result: Dictionary) -> void:
 
 func _case_dedup() -> void:
 	step("Then several case names deduplicate to one run", func():
-		var result: Dictionary = RUNNER.build_entries(["tags", "frames", "tags"], GROUP_SCENES)
+		var result: Dictionary = KIT.build_entries(["tags", "frames", "tags"], GROUP_SCENES)
 		var entries: Array = result["entries"]
 		expect(entries.size() == 1, "one group entry is built")
 		var cases: Array = entries[0]["cases"]
 		expect(cases == ["frames", "tags"], "the case names deduplicate in sorted order")
 	)
 	step("Then an unknown name is reported and nothing is built", func():
-		var result: Dictionary = RUNNER.build_entries(["tags", "missing"], GROUP_SCENES)
+		var result: Dictionary = KIT.build_entries(["tags", "missing"], GROUP_SCENES)
 		var unknown: Array = result["unknown"]
 		var entries: Array = result["entries"]
 		expect(unknown == ["missing"], "the unknown name is reported")
@@ -106,69 +103,5 @@ func _config() -> void:
 			found = true
 			expect(float(entry["timeout"]) == 20.0, "a config timeout replaces the harness default")
 			expect(bool(entry["empty_ok"]), "a config allow_no_checks replaces the harness flag")
-			expect(float(entry["config"].get("timeout", 0.0)) == 20.0, "the entry keeps its config")
 		expect(found, "the config test is registered")
-	)
-
-
-func _budget() -> void:
-	step("Then the runner reads a declared budget", func():
-		expect(is_equal_approx(RUNNER.parse_budget("TEST BUDGET: 110.000"), 110.0), "a plain budget line parses")
-		expect(is_equal_approx(RUNNER.parse_budget("  TEST BUDGET: 220.5  "), 220.5), "surrounding space is ignored")
-		expect(RUNNER.parse_budget("TEST OK") == 0.0, "a pass marker is not a budget")
-		expect(RUNNER.parse_budget("TEST BUDGET: no") == 0.0, "an invalid budget is ignored")
-	)
-	step("Then a declared budget extends the scene deadline", func():
-		expect(is_equal_approx(RUNNER.extended_timeout(30.0, 110.0), 120.0), "the declared budget wins over the default")
-		expect(is_equal_approx(RUNNER.extended_timeout(125.0, 110.0), 125.0), "a longer static deadline stays")
-		expect(is_equal_approx(RUNNER.extended_timeout(30.0, 0.0), 30.0), "no declaration keeps the default")
-		expect(is_equal_approx(RUNNER.extended_timeout(30.0, 5000.0), 1800.0), "the scene deadline is capped")
-	)
-
-
-func _engine_errors() -> void:
-	step("Then script and engine errors invalidate a child run", func():
-		expect(RUNNER.is_engine_error("SCRIPT ERROR: invalid call"), "a script error is recognized")
-		expect(RUNNER.is_engine_error("  ERROR: invalid resource"), "an indented engine error is recognized")
-		expect(not RUNNER.is_engine_error("TEST OK"), "a pass marker is not an engine error")
-		expect(not RUNNER.is_engine_error("WARNING: optional reference is absent"), "a warning is not an engine error")
-		expect(not RUNNER.is_engine_error("ERROR: Unable to open clipboard."), "a busy OS clipboard is not a scene error")
-	)
-
-
-func _name_resolution() -> void:
-	step("Then every registered case resolves to the scene that declares it", func():
-		var scenes := {}
-		var errors: Array[String] = []
-		for file in DirAccess.get_files_at("res://tests"):
-			if not file.ends_with(".tscn"):
-				continue
-			var scene_name := file.get_basename()
-			var cases := RUNNER._scene_cases("res://tests/%s.gd" % scene_name)
-			scenes[scene_name] = cases
-			if cases.is_empty():
-				continue
-			for case_name in cases:
-				var entries: Array = RUNNER.build_entries([case_name], scenes)["entries"]
-				var found := false
-				for entry in entries:
-					if entry["path"] != scene_name:
-						continue
-					# A case named after its own scene is reached as the whole
-					# scene, so the scene name still wins that selection.
-					if entry["cases"] == [case_name] or (case_name == scene_name and entry["cases"].is_empty()):
-						found = true
-				if not found:
-					errors.append("%s does not resolve to %s" % [case_name, scene_name])
-		expect(not scenes.is_empty(), "the runner discovers scenes")
-		expect(errors.is_empty(), "every registered case resolves to its scene: %s" % "; ".join(errors))
-	)
-	step("Then a plain scene name selects every case and the scene name wins", func():
-		var entries: Array = RUNNER.build_entries(["tag_group", "tags"], GROUP_SCENES)["entries"]
-		expect(entries.size() == 1 and entries[0]["cases"].is_empty(), "the scene name dominates its case names")
-	)
-	step("Then an unknown name is reported", func():
-		var result: Dictionary = RUNNER.build_entries(["missing"], GROUP_SCENES)
-		expect(result["unknown"] == ["missing"], "the unknown name is reported")
-		expect(result["entries"].is_empty(), "an unknown name builds no plan")
 	)

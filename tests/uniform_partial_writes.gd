@@ -50,10 +50,8 @@ func _ready() -> void:
 	test("a cancelled write job writes nothing", _cancel, "cancel")
 	test("a partial uniform write reserializes to the same frame", _reserialize, "reserialize")
 	# The two bench cases print timings only. They record no check on purpose.
-	allow_no_checks = true
-	test("partial uniform writes are timed against the generic path", _bench, "bench")
-	allow_no_checks = true
-	test("brush-like repaint sequences are timed for each source shape", _bench_shapes, "bench_shapes")
+	test("partial uniform writes are timed against the generic path", _bench, "bench", {"allow_no_checks": true})
+	test("brush-like repaint sequences are timed for each source shape", _bench_shapes, "bench_shapes", {"allow_no_checks": true})
 	test("the new shared row is isolated from a later single-cell write", _shared_row_later_edit, "shared_row_later_edit")
 	test("a mixed batch over the new shared row keeps each cell's material", _shared_row_mixed, "shared_row_mixed")
 	test("a compaction keeps the shared-row content and ids", _multi_id_compaction, "multi_id_compaction")

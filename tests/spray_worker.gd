@@ -48,7 +48,7 @@ func _ready() -> void:
 # Each check starts from a fresh document, the default symmetry, and the default
 # spray options. A previous check may have switched the active tool, so the spray
 # can is selected again.
-func _setup_test() -> void:
+func before_test() -> void:
 	State.stop()
 	State.document = VoxelDocument.new()
 	State.clear_selection()

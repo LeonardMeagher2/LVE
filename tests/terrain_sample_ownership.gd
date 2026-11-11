@@ -102,7 +102,7 @@ func _maximum_requested() -> bool:
 	return OS.get_cmdline_user_args().has(MAXIMUM_NAME)
 
 
-func _setup_test() -> void:
+func before_test() -> void:
 	State.stop()
 	State.document = VoxelDocument.new()
 	State.clear_selection()
@@ -133,7 +133,7 @@ func _setup_test() -> void:
 	await get_tree().process_frame
 
 
-func _cleanup_test() -> void:
+func after_test() -> void:
 	if _tool != null and _tool._edit != null:
 		_tool.finish_on_switch()
 		while _tool._edit != null:

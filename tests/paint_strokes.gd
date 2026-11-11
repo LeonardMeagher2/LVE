@@ -38,7 +38,7 @@ func _ready() -> void:
 # and the pixel-perfect option live in the shared settings resource, so they are
 # restored here. The brush color is restored to its startup value for the tests
 # that do not set one.
-func _setup_test() -> void:
+func before_test() -> void:
 	if not _defaults_ready:
 		_default_color = State.current_color
 		_default_mode = _brush_settings.mode

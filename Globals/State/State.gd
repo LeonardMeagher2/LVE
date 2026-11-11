@@ -17,6 +17,8 @@ signal document_deactivating()
 ## Emitted when cells in a frame change. [param frame] is the frame index.
 ## [param affected] lists the changed cells.
 signal cells_changed(frame: int, affected: Array[Vector3i])
+## Emitted when a document is saved to a path. The unsaved mark is already clear.
+signal document_saved(document: VoxelDocument)
 ## Emitted when chunks in a frame need a surface rebuild. [param frame] is the
 ## frame index. [param affected] lists one cell per changed chunk.
 signal chunks_changed(frame: int, affected: Array[Vector3i])
@@ -410,7 +412,22 @@ func _ready() -> void:
 	size_changed.connect(_mark_dirty)
 	model_settings_changed.connect(_mark_dirty)
 	palette_changed.connect(_mark_dirty)
-	
+
+
+## Removes every editor plugin. Main calls this when it leaves the tree, so a
+## freed Main cannot leave a plugin polling a freed control.
+func clear_plugins() -> void:
+	var root := get_node("/root")
+	for child in root.get_children():
+		if child is VoxelPlugin:
+			remove_plugin(child)
+
+
+## Rebuilds the editor plugins under the current main scene. Main calls this
+## when it becomes ready. A test scene calls it once per scene so the plugins
+## bind to that scene's Main node instead of a previous scene.
+func reset_plugins() -> void:
+	clear_plugins()
 	add_plugin(load("res://plugins/brush/BrushPlugin.gd").new())
 	add_plugin(load("res://plugins/Eyedropper/EyedropperPlugin.gd").new())
 	add_plugin(load("res://plugins/paint/PaintPlugin.gd").new())
@@ -478,6 +495,7 @@ func record_saved(document: VoxelDocument, path: String) -> void:
 	tabs_changed.emit()
 	if is_app_session():
 		remember_session()
+	document_saved.emit(document)
 
 
 ## Records an opened document path in its tab and the session.
@@ -837,17 +855,17 @@ func edit_busy(requester: Node = null) -> bool:
 	return false
 
 
-# Begin one owned edit on the current frame. The transaction captures the frame,
-# the selection, and the frozen edit context. Returns null when an edit is already
-# active or the current frame is missing, so a caller must check before it mutates
-# the model. The caller holds the returned handle for the whole edit.
-## Begins one owned edit on the current frame. Returns null while another edit
-## is active or the current frame is missing. The caller must check the result
-## before it mutates the model.
-func begin_edit() -> VoxelEditTransaction:
+# Begin one owned edit on the current frame or one named frame. The transaction
+# captures the frame, the selection, and the frozen edit context. Returns null
+# when an edit is already active or the frame is missing, so a caller must check
+# before it mutates the model. The caller holds the returned handle for the edit.
+## Begins one owned edit on the current frame, or on [param frame_index] when it
+## is not negative. Returns null while another edit is active or the frame is
+## missing. The caller must check the result before it mutates the model.
+func begin_edit(frame_index: int = -1) -> VoxelEditTransaction:
 	if _active_edit != null:
 		return null
-	var frame := get_current_voxel_frame()
+	var frame := get_current_voxel_frame() if frame_index < 0 else get_voxel_frame(frame_index)
 	if frame == null:
 		return null
 	_active_edit = VoxelEditTransaction.begin(document, frame, selection, _live_context())
@@ -880,6 +898,45 @@ func finish_edit(tx: VoxelEditTransaction, action: String = "Stroke") -> void:
 	undo_redo.add_undo_method(_restore_chunks.bind(change.frame, change.undo_chunks, change.undo_selection, change.undo_selection_masks))
 	undo_redo.add_do_method(_restore_chunks.bind(change.frame, change.redo_chunks, change.redo_selection, change.redo_selection_masks))
 	_commit_history(false)
+	edit_state_changed.emit()
+
+
+## Closes one owned edit and returns its change without a history action. The
+## caller commits one or more changes later with [method commit_changes]. Returns
+## null when the handle is stale or the edit changed nothing.
+func finish_edit_collect(tx: VoxelEditTransaction) -> VoxelEditTransaction.Change:
+	if tx == null or tx != _active_edit:
+		return null
+	_active_edit = null
+	var change := tx.finish()
+	edit_state_changed.emit()
+	return change
+
+
+## Records one history action from changes that the caller already applied.
+## The do methods run in change order and the undo methods run in reverse order,
+## so repeated edits to one frame restore the earliest snapshot last.
+func commit_changes(changes: Array, action: String = "Write Cells") -> void:
+	if changes.is_empty():
+		return
+	undo_redo.create_action(action)
+	for value in changes:
+		var change: VoxelEditTransaction.Change = value
+		undo_redo.add_do_method(_restore_chunks.bind(change.frame, change.redo_chunks, change.redo_selection, change.redo_selection_masks))
+	for index in range(changes.size() - 1, -1, -1):
+		var change: VoxelEditTransaction.Change = changes[index]
+		undo_redo.add_undo_method(_restore_chunks.bind(change.frame, change.undo_chunks, change.undo_selection, change.undo_selection_masks))
+	_commit_history(false)
+
+
+## Restores changes that the caller applied but did not commit. It records no
+## history action.
+func cancel_changes(changes: Array) -> void:
+	if changes.is_empty():
+		return
+	for index in range(changes.size() - 1, -1, -1):
+		var change: VoxelEditTransaction.Change = changes[index]
+		_restore_chunks(change.frame, change.undo_chunks, change.undo_selection, change.undo_selection_masks)
 	edit_state_changed.emit()
 
 

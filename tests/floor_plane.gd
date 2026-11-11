@@ -16,7 +16,7 @@ func _ready() -> void:
 	test("the document settings modal fits the size to all frames", _size_fit_run, "size_fit")
 
 
-func _setup_test() -> void:
+func before_test() -> void:
 	State.slice_enabled = false
 	State.floor_axis = Vector3.Axis.AXIS_Y
 	State.floor_index = 0

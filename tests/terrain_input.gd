@@ -26,7 +26,7 @@ func _ready() -> void:
 	test("the Terrain implementation has no random source", _no_random_source, "no_random_source")
 
 
-func _setup_test() -> void:
+func before_test() -> void:
 	State.stop()
 	State.document = VoxelDocument.new()
 	State.clear_selection()
@@ -55,7 +55,7 @@ func _setup_test() -> void:
 	_stepped = {}
 
 
-func _cleanup_test() -> void:
+func after_test() -> void:
 	if _tool != null and _tool._edit != null:
 		_tool.finish_on_switch()
 		await _wait_idle()

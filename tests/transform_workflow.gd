@@ -25,7 +25,7 @@ func _ready() -> void:
 
 # Each test starts from an empty frame, no selection, no history, the Move tool,
 # and a known camera and viewport. The hooks run under the per-test watchdog.
-func _setup_test() -> void:
+func before_test() -> void:
 	_capture_originals_once()
 	State.stop()
 	State.current_frame = 0
@@ -42,7 +42,7 @@ func _setup_test() -> void:
 
 # Finish any held press and pending transform, then restore the camera and
 # viewport. A later test must not inherit a mid-drag transform or a moved view.
-func _cleanup_test() -> void:
+func after_test() -> void:
 	await get_tree().process_frame
 	_release_held_press()
 	_stop_pending_transform()

@@ -25,7 +25,7 @@ func _ready() -> void:
 	test("removing a tag without an active tag changes nothing", _remove_tag_without_active, "remove_tag_without_active")
 
 
-func _setup_test() -> void:
+func before_test() -> void:
 	State.stop()
 	State.document = VoxelDocument.new()
 	State.undo_redo.clear_history()
@@ -39,7 +39,7 @@ func _setup_test() -> void:
 	await get_tree().process_frame
 
 
-func _cleanup_test() -> void:
+func after_test() -> void:
 	State.stop()
 	if _edit != null:
 		State.cancel_edit(_edit)

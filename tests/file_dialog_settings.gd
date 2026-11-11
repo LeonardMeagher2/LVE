@@ -15,7 +15,7 @@ func _ready() -> void:
 	test("the file dialog restores favorites and the last folder", _run, "dialog_settings")
 
 
-func _setup_test() -> void:
+func before_test() -> void:
 	FileDialog.set_favorite_list(PackedStringArray())
 	FileDialog.set_recent_list(PackedStringArray())
 	var directory := DirAccess.open("user://")
@@ -23,7 +23,7 @@ func _setup_test() -> void:
 		directory.remove(SETTINGS_PATH.get_file())
 
 
-func _cleanup_test() -> void:
+func after_test() -> void:
 	if is_instance_valid(menu):
 		menu.queue_free()
 		menu = null

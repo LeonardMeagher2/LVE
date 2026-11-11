@@ -48,7 +48,7 @@ func _ready() -> void:
 	test("the solid build reports its per-chunk mesher phases", _mesher_phases, "preview_mesher_phases")
 
 
-func _setup_test() -> void:
+func before_test() -> void:
 	State.stop()
 	State.document = VoxelDocument.new()
 	State.clear_selection()
@@ -56,7 +56,7 @@ func _setup_test() -> void:
 	_base += CHUNK
 
 
-func _cleanup_test() -> void:
+func after_test() -> void:
 	if preview != null and is_instance_valid(preview):
 		preview.free()
 		preview = null

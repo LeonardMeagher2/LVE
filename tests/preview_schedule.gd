@@ -67,7 +67,7 @@ func _ready() -> void:
 	test("a clear or a cancel drops the installed token", _token_clear, "preview_token_clear")
 
 
-func _setup_test() -> void:
+func before_test() -> void:
 	State.stop()
 	State.document = VoxelDocument.new()
 	State.clear_selection()
@@ -80,7 +80,7 @@ func _setup_test() -> void:
 	GatedJob.gate = Semaphore.new()
 
 
-func _cleanup_test() -> void:
+func after_test() -> void:
 	if preview != null and is_instance_valid(preview):
 		# Release any blocked worker before the detach joins it, so cleanup cannot
 		# deadlock on the test gate.

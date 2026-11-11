@@ -267,7 +267,7 @@ func _install_tool() -> void:
 	_tool.clear_shape_caches()
 
 
-func _cleanup_test() -> void:
+func after_test() -> void:
 	if is_instance_valid(_tool):
 		if _tool._edit != null:
 			_tool.finish_on_switch()

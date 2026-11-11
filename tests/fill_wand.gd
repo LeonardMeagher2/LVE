@@ -39,7 +39,7 @@ func _ready() -> void:
 # drives its own resource, so its button is restored. The viewport stretch
 # returns to its startup value, so a test that keeps the default size sees the
 # same size as a fresh process.
-func _setup_test() -> void:
+func before_test() -> void:
 	var fill_options: Node = plugin("PaintPlugin")._options
 	var connected := fill_options.get_node("Fill/Connected") as Button
 	if not _defaults_ready:

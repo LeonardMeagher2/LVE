@@ -23,7 +23,7 @@ func _ready() -> void:
 
 # Each test starts from a fresh document and the default symmetry. The fill
 # connected option lives in a shared resource, so it is restored here.
-func _setup_test() -> void:
+func before_test() -> void:
 	State.stop()
 	State.document = VoxelDocument.new()
 	State.symmetry_axes = 0

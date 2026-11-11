@@ -3,7 +3,7 @@
 /android/
 
 # Test failure artifacts
-/tests/**/artifacts/
+/.tests/
 
 # Export output
 /dist/

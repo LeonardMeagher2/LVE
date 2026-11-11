@@ -52,7 +52,7 @@ func _ready() -> void:
 	test("one edit scope limits the selection, the slice, and the writes", _scope_filter, "scope_filter")
 
 
-func _setup_test() -> void:
+func before_test() -> void:
 	if not _defaults_ready:
 		_default_color = State.current_color
 		_default_mode = _brush_settings.mode
@@ -82,7 +82,7 @@ func _setup_test() -> void:
 
 # Cancel only the handles this file created. The document reset above already
 # releases any transaction that a failed test left open.
-func _cleanup_test() -> void:
+func after_test() -> void:
 	if is_instance_valid(tool):
 		tool.free()
 		tool = null

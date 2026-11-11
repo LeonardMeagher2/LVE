@@ -1,6 +1,0 @@
-[gd_scene format=3]
-
-[ext_resource type="Script" path="res://tests/transform_rotate_smooth_alignment.gd" id="1"]
-
-[node name="TransformRotateSmoothAlignment" type="Node"]
-script = ExtResource("1")

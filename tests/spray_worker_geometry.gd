@@ -33,7 +33,7 @@ func _ready() -> void:
 	test("the sampler occupancy view matches the edit context expansion exactly", _worker_expand_view, "worker_expand")
 
 
-func _setup_test() -> void:
+func before_test() -> void:
 	State.stop()
 	State.document = VoxelDocument.new()
 	State.clear_selection()

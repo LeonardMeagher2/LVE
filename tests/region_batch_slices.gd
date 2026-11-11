@@ -90,7 +90,7 @@ func _ready() -> void:
 	test("the streamed fill and wand keep their exact results and one undo", _fill_and_wand_results_undo, "fill_and_wand_results_undo")
 
 
-func _setup_test() -> void:
+func before_test() -> void:
 	State.stop()
 	State.document = VoxelDocument.new()
 	State.symmetry_axes = 0
@@ -105,7 +105,7 @@ func _setup_test() -> void:
 
 
 # Leave no worker or open stroke behind, so a test can run alone or in any order.
-func _cleanup_test() -> void:
+func after_test() -> void:
 	if is_instance_valid(fill_tool):
 		fill_tool._interrupt_fill()
 	if is_instance_valid(wand_tool):

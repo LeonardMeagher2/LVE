@@ -162,7 +162,7 @@ func _enter_tree() -> void:
 
 func _exit_tree() -> void:
 	finish_on_switch()
-	if not _fill_running:
+	if not _fill_running and State.edit_context_changing.is_connected(_interrupt_fill):
 		State.edit_context_changing.disconnect(_interrupt_fill)
 
 

@@ -36,7 +36,7 @@ func _ready() -> void:
 	test("one dirty chunk installs a surface at least every fourth change", _cycle, "cycle")
 
 
-func _setup_test() -> void:
+func before_test() -> void:
 	State.stop()
 	State.document = VoxelDocument.new()
 	State.clear_selection()
@@ -46,7 +46,7 @@ func _setup_test() -> void:
 	renderer = viewport_scene().get_node("VoxelRenderer")
 
 
-func _cleanup_test() -> void:
+func after_test() -> void:
 	VoxelRenderer._surface_job_limit = 0
 	if is_instance_valid(renderer):
 		await _settle_within(renderer, 60)
