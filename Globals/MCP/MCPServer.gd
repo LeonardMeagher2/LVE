@@ -1603,7 +1603,7 @@ func _get_map(args: Dictionary) -> Dictionary:
 	var max_blocks := clampi(_int_arg(args, "max_blocks", 512), 1, 4096)
 	var scan := _scan_frame(frame)
 	if scan.truncated:
-		return _tool_error("The frame is too large to scan. Use a box or a larger cell_size with get_cells.")
+		return _chunk_map(frame, frame_index, min_cell, max_cell, max_blocks)
 	var cells := _cells_in_box(scan.cells, min_cell, max_cell)
 	var block_counts := {}
 	var block_materials := {}
@@ -1654,6 +1654,57 @@ func _get_map(args: Dictionary) -> Dictionary:
 		"block_count": block_counts.size(),
 		"truncated": block_keys.size() > blocks.size(),
 		"occupied": cells.size(),
+	})
+
+
+func _chunk_map(frame: VoxelFrame, frame_index: int, min_cell: Vector3i, max_cell: Vector3i, max_blocks: int) -> Dictionary:
+	var block_counts := {}
+	for chunk_value in frame.chunks.values():
+		var chunk: VoxelFrame.Chunk = chunk_value
+		if chunk.occupied_count <= 0:
+			continue
+		var chunk_bounds := chunk.get_bounds()
+		if not chunk_bounds.has_volume():
+			continue
+		var chunk_min := Vector3i(
+			roundi(chunk_bounds.position.x + 0.5),
+			roundi(chunk_bounds.position.y + 0.5),
+			roundi(chunk_bounds.position.z + 0.5)
+		)
+		var chunk_max := Vector3i(
+			roundi(chunk_bounds.end.x - 0.5),
+			roundi(chunk_bounds.end.y - 0.5),
+			roundi(chunk_bounds.end.z - 0.5)
+		)
+		if chunk_max.x < min_cell.x or chunk_min.x > max_cell.x:
+			continue
+		if chunk_max.y < min_cell.y or chunk_min.y > max_cell.y:
+			continue
+		if chunk_max.z < min_cell.z or chunk_min.z > max_cell.z:
+			continue
+		var block := VoxelFrame.chunk_position(chunk.origin())
+		block_counts[block] = int(block_counts.get(block, 0)) + chunk.occupied_count
+	var block_keys: Array = block_counts.keys()
+	block_keys.sort_custom(_cell_less)
+	var blocks: Array = []
+	var occupied := 0
+	for count in block_counts.values():
+		occupied += int(count)
+	for block in block_keys:
+		if blocks.size() >= max_blocks:
+			break
+		blocks.append([block.x, block.y, block.z, block_counts[block], {}])
+	return _tool_ok({
+		"revision": _revision,
+		"frame": frame_index,
+		"cell_size": VoxelFrame.CHUNK_SIZE,
+		"origin": [0, 0, 0],
+		"chunk_aligned": true,
+		"blocks": blocks,
+		"block_count": block_counts.size(),
+		"truncated": block_keys.size() > blocks.size(),
+		"occupied": occupied,
+		"approximate": true,
 	})
 
 

@@ -33,6 +33,7 @@ func _ready() -> void:
 	test("get_regions groups material and frame islands", _regions, "get_regions")
 	test("get_slice reads labeled planes", _slice, "get_slice")
 	test("get_map reads coarse blocks", _map, "get_map")
+	test("get_map falls back to chunk blocks", _chunk_map_fallback, "chunk_map")
 	test("get_changes returns the delta", _changes, "get_changes")
 	test("get_cells resumes with a cursor", _cursor, "cursor")
 
@@ -491,6 +492,35 @@ func _map() -> void:
 		if blocks.size() == 2:
 			expect(int(blocks[0][3]) == 2, "the first block holds two cells")
 			expect(int(blocks[1][3]) == 1, "the second block holds one cell")
+	)
+
+
+func _chunk_map_fallback() -> void:
+	step("Given two cells in different chunks", func():
+		var frame := State.get_current_voxel_frame()
+		frame.set_cell(Vector3i(0, 0, 0), VoxelFrame.material(Color.RED))
+		frame.set_cell(Vector3i(16, 0, 0), VoxelFrame.material(Color.RED))
+		State.document._bounds_dirty = true
+	)
+	var response: Variant = server.call("_chunk_map", State.get_current_voxel_frame(), 0, Vector3i(-1, -1, -1), Vector3i(20, 20, 20), 512)
+	step("Then the fallback lists chunk blocks", func():
+		expect(response is Dictionary, "the fallback returns a tool result")
+		if response is Dictionary:
+			var result: Dictionary = response
+			var content: Array = result.get("content", [])
+			var data: Variant = null
+			if not content.is_empty():
+				var entry: Dictionary = content[0]
+				data = JSON.parse_string(str(entry.get("text", "")))
+			expect(data is Dictionary, "the fallback returns JSON")
+			if data is Dictionary:
+				expect(bool(data.get("chunk_aligned", false)), "the map is chunk aligned")
+				expect(int(data.get("cell_size", 0)) == 16, "the chunk size is 16")
+				expect(int(data.get("block_count", 0)) == 2, "two chunks are listed")
+				var blocks: Array = data.get("blocks", [])
+				expect(blocks.size() == 2, "two blocks are returned")
+				if blocks.size() == 2:
+					expect(int(blocks[0][3]) == 1 and int(blocks[1][3]) == 1, "each chunk holds one cell")
 	)
 
 
