@@ -47,7 +47,7 @@ func _ready() -> void:
 
 
 # Resets the fixtures. Each test builds its own set in a step.
-func _setup_test() -> void:
+func before_test() -> void:
 	_occupied = {}
 	_cells = []
 	_result = {}

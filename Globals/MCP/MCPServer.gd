@@ -2442,7 +2442,7 @@ func _view_angles(view: String) -> Vector2:
 
 
 func _apply_editor_camera(camera: Camera3D) -> bool:
-	var main: Node = get_node_or_null("/root/Main")
+	var main: Node = get_tree().get_first_node_in_group("main")
 	var editor_viewport: Node = null
 	if main != null:
 		editor_viewport = main.get_node_or_null("%Viewport")

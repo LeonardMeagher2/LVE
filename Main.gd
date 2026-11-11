@@ -23,11 +23,11 @@ var interface_settings_path := UI_SETTINGS_PATH
 ## The MCP port. Tests set zero to take a free port.
 var mcp_port := MCP_PORT
 ## Tests turn this off, so a saved state cannot bind a port in the test process.
-var restore_saved_agent := true
+@export var restore_saved_agent := true
 ## Tests turn this off, so a quit signal cannot end the test process.
-var quit_on_confirmed := true
+@export var quit_on_confirmed := true
 ## Tests turn this off, so recovery files are not written in the test process.
-var autosave_enabled := true
+@export var autosave_enabled := true
 var _ui_scale := 0.0
 var _scale_check_elapsed := 0.0
 var _title_document: VoxelDocument
@@ -37,6 +37,7 @@ var autosave = null
 
 
 func _enter_tree() -> void:
+	add_to_group("main")
 	# The close request must wait for the save prompts. The SceneTree accepts a
 	# close request by default, so the dialog appears and the app still quits.
 	get_tree().auto_accept_quit = false
@@ -49,6 +50,7 @@ func _enter_tree() -> void:
 
 
 func _exit_tree() -> void:
+	remove_from_group("main")
 	State.document_changed.disconnect(_on_document_changed)
 	State.tabs_changed.disconnect(_update_window_title)
 	if _title_document:
@@ -109,6 +111,7 @@ func _ready() -> void:
 	if _has_user_arg("--mcp-bridge"):
 		_run_bridge()
 		return
+	State.reset_plugins()
 	# Godot coalesces pointer motion to one event per render frame by default. A
 	# long frame then turns a curved drag into a chord between two far samples,
 	# and every tool paints that chord. Take each event instead, so a stroke

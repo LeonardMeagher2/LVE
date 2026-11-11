@@ -50,7 +50,7 @@ func _ready() -> void:
 
 # Each case starts from a clean document. The cases share one process, so no
 # case may inherit another case's document, export settings, or signals.
-func _setup_test() -> void:
+func before_test() -> void:
 	State.stop()
 	State.document = VoxelDocument.new()
 	State.undo_redo.clear_history()
@@ -62,7 +62,7 @@ func _setup_test() -> void:
 	escaped_done = false
 
 
-func _cleanup_test() -> void:
+func after_test() -> void:
 	# A case that fails before its own disconnects must not leave a handler
 	# bound to the shared process frame or activity signal.
 	if get_tree().process_frame.is_connected(_capture_pose):

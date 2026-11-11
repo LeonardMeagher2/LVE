@@ -72,41 +72,44 @@ Run commands from the project root.
 Run one behavior test:
 
 ```text
-godot --path . res://tests/paint_strokes.tscn -- paint
+godot --path . res://tests/paint_strokes.test.tscn -- paint
 ```
 
 Run the full suite:
 
 ```text
-godot --headless --path . -s res://tests/run_all.gd
+godot --path . -s res://addons/test_kit/run.gd
 ```
 
 Run named scenes or legacy test names:
 
 ```text
-godot --headless --path . -s res://tests/run_all.gd -- paint line brush_modes
+godot --path . -s res://addons/test_kit/run.gd -- paint line brush_modes
 ```
 
-Reports are in `tests/artifacts/`. The runner exits non-zero on failure.
-The runner opens each child scene on screen 0. Tests in one group share a child process.
-Run a test scene with a window. The runner never passes `--headless` to a child, and the coordinator is the only headless process.
-A headless scene cannot draw, take a failure screenshot, or use the clipboard, focus, or popup paths.
+Reports are in `.tests/`. The runner exits non-zero on failure.
+The runner runs every scene in one process. It opens one window for the suite.
+A headless run cannot draw, take a failure screenshot, or use the clipboard, focus, or popup paths.
 A headless scene that records no check fails, so a skipped case never reports success.
 To select tests inside a scene, add their names after `--`. A scene name selects its entire group.
+The shared harness is in `addons/test_kit/`. The LVE fixture and helpers are in `tests/test.gd`.
+Test scenes are `*.test.tscn`. The runner finds them anywhere under `res://`.
+`Main` joins the `main` group. Plugins and the status bar find the current main scene there.
 
 ### Writing tests
 
-- Follow `tests/test.gd` and adjacent tests. Each test script needs a matching scene with that script on its root.
+- Follow `tests/test.gd` and adjacent tests. Each test scene is `*.test.tscn`. Its root script extends `tests/test.gd`.
 - Extend `"res://tests/test.gd"` by path. The tests folder is excluded from the global class cache.
+- Inherit `tests/test_base.tscn` when the test needs the LVE editor. Its `Main` child sets the three test properties before `Main._ready()`.
 - Register each behavior in `_ready()` with `test(description, callable, name)`. Use a unique name within the file.
 - Keep related tests in one file. Share fixtures and helpers without sharing execution state.
-- Override `_setup_test()` and `_cleanup_test()` to isolate each test. The harness awaits both hooks.
-- Keep each test selectable alone or in another order. The runner reads case names from the `test()` calls, so no alias table exists. Name each case after its old scene when a scene merges.
-- A case that records no check fails. Set `allow_no_checks` before `test()` or pass `config.allow_no_checks` only for a print-only probe.
+- Override `before_test()` and `after_test()` to isolate each test. The harness awaits both hooks.
+- `tests/test.gd` resets shared editor state before each case. A suite's `before_test()` runs after that reset.
+- Keep each test selectable alone or in another order. The runner reads case names from the root script, so no alias table exists. Name each case after its old scene when a scene merges.
+- A case that records no check fails. Pass `config.allow_no_checks` only for a print-only probe.
 - Pass `config` to `test()` for per-test settings. The keys are `timeout` and `allow_no_checks`.
 - Use `step("Given ...", func)`, `step("When ...", func)`, and `step("Then ...", func)` for setup, actions, and checks.
 - Use `expect(condition, message)` with an affirmative description of the required state.
 - Put waits in the test body, not step lambdas. Use member variables for state shared between steps.
-- The harness waits two frames before each test. Its per-test watchdog covers setup, the test body, and cleanup.
-- Set the per-test timeout with `config.timeout` or the `timeout` property. The default is 10 seconds.
-- The child prints the selected total as `TEST BUDGET: N`. The runner extends the scene deadline to that budget plus a margin. Do not add a scene timeout table.
+- The LVE adapter waits two frames before each test. Its per-test watchdog covers setup, the test body, and cleanup.
+- Set the per-test timeout with `config.timeout` or the `timeout` property. The default is 10 seconds. The deadman covers the whole selected run.

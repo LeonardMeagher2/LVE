@@ -484,7 +484,7 @@ The clean smoke command `godot --headless --path . res://tests/harness.tscn -- e
 The prior modular selection covered 65 distinct scenes.
 The first 7-batch run had 4 passes and 3 failures. All 3 failures were fixed without weakening a test.
 The initial passing scenes were `eyedropper_apply`, `region_batch_slices`, `line_lifecycle`, and `preview_schedule`.
-The rerun `godot --headless --path . -s res://tests/run_all.gd -- clipboard_lifecycle terrain_stroke_input` passed both scenes.
+The rerun `godot --path . -s res://addons/test_kit/run.gd -- clipboard_lifecycle terrain_stroke_input` passed both scenes.
 The remaining 59 scenes ran in `Temp/opencode/lve-modular-regressions.log`. The runner reported `TEST SUITE: OK` with 59 PASS and no errors.
 
 The test plan is `Temp/opencode/lve-modular-test-plan.txt`.
@@ -551,13 +551,13 @@ These are Flatten and Face terrain preview values. They are not old Build perfor
 
 Verification commands and outcomes:
 
-- `godot --headless --path . -s res://tests/run_all.gd` -> 124 PASS, 3 FAIL, 41 unrun. Log `Temp/opencode/lve-local-20261024-full-suite.log`.
+- `godot --path . -s res://addons/test_kit/run.gd` -> 124 PASS, 3 FAIL, 41 unrun. Log `Temp/opencode/lve-local-20261024-full-suite.log`.
 - Corrected 8-scene Terrain batch -> 8 PASS. Log `lve-local-20261024-sculpt-final2.log`.
 - Worker scene -> 1 PASS. Log `lve-local-20261024-whole-worker-scene.log`.
 - Completion batch -> 53 PASS. Log `lve-local-20261024-completion.log`.
 - `godot --path . --screen 1 res://tests/benchmarks/terrain_hover_scaling.tscn -- scaling density near_outside max_symmetry` -> `TEST OK`. Log `lve-local-20261024-grow-final-benchmark.log`.
 - `godot --headless --path . res://tests/benchmarks/spray_cost.tscn` -> `TEST OK`. Log `lve-local-20261024-spray-rendered2.log`.
-- Latest Build cursor 11-scene batch `godot --headless --path . -s res://tests/run_all.gd -- terrain_hover_local terrain_input terrain_cursor_preview terrain_normals terrain_prep_worker terrain_tools terrain_tools_smooth terrain_stroke_input terrain_preview_cache terrain_preview_async terrain_sample_ownership` -> `TEST SUITE: OK`, 0 errors.
+- Latest Build cursor 11-scene batch `godot --path . -s res://addons/test_kit/run.gd -- terrain_hover_local terrain_input terrain_cursor_preview terrain_normals terrain_prep_worker terrain_tools terrain_tools_smooth terrain_stroke_input terrain_preview_cache terrain_preview_async terrain_sample_ownership` -> `TEST SUITE: OK`, 0 errors.
 - Remaining 9 Terrain scenes passed in a separate runner batch with `TEST SUITE: OK` and 0 errors.
 - `godot --path . --screen 1 res://tests/benchmarks/terrain_preview_ab.tscn -- changed_r4 resize_r32` -> `TEST OK`. Log `Temp/opencode/lve-bench-terrain-ab.log`.
 - `godot --path . --screen 1 res://tests/benchmarks/terrain_preview.tscn -- ramp_r4` -> `TEST OK`. Log `Temp/opencode/lve-bench-terrain-base.log`.

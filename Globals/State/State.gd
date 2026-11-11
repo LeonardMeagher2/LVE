@@ -412,7 +412,22 @@ func _ready() -> void:
 	size_changed.connect(_mark_dirty)
 	model_settings_changed.connect(_mark_dirty)
 	palette_changed.connect(_mark_dirty)
-	
+
+
+## Removes every editor plugin. Main calls this when it leaves the tree, so a
+## freed Main cannot leave a plugin polling a freed control.
+func clear_plugins() -> void:
+	var root := get_node("/root")
+	for child in root.get_children():
+		if child is VoxelPlugin:
+			remove_plugin(child)
+
+
+## Rebuilds the editor plugins under the current main scene. Main calls this
+## when it becomes ready. A test scene calls it once per scene so the plugins
+## bind to that scene's Main node instead of a previous scene.
+func reset_plugins() -> void:
+	clear_plugins()
 	add_plugin(load("res://plugins/brush/BrushPlugin.gd").new())
 	add_plugin(load("res://plugins/Eyedropper/EyedropperPlugin.gd").new())
 	add_plugin(load("res://plugins/paint/PaintPlugin.gd").new())

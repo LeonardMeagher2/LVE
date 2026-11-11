@@ -576,7 +576,7 @@ func _refresh_export_status() -> void:
 
 
 func _set_status_context(provider: Callable) -> void:
-	var main := get_node_or_null("/root/Main")
+	var main := _main()
 	if main:
 		var status_bar: EditorStatusBar = main.get_node_or_null("%StatusBar")
 		if status_bar:

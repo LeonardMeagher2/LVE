@@ -37,7 +37,7 @@ func _ready() -> void:
 	test("a cancelled paste releases its placement operation", _paste_cancel, "paste_cancel_status")
 
 
-func _setup_test() -> void:
+func before_test() -> void:
 	clipboard = plugin("ClipboardPlugin")
 	clipboard.cancel_paste()
 	if clipboard._paste_tool.is_inside_tree():
@@ -54,7 +54,7 @@ func _setup_test() -> void:
 	_operation_id = 0
 
 
-func _cleanup_test() -> void:
+func after_test() -> void:
 	if DisplayServer.has_feature(DisplayServer.FEATURE_CLIPBOARD):
 		DisplayServer.clipboard_set(original_clipboard)
 

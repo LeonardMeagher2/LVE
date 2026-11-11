@@ -31,7 +31,7 @@ func _ready() -> void:
 	test("the widest even spot unions exactly at a negative center", _worker_exact_union, "worker_union")
 
 
-func _setup_test() -> void:
+func before_test() -> void:
 	State.stop()
 	State.document = VoxelDocument.new()
 	State.clear_selection()

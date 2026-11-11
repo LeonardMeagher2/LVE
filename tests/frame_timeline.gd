@@ -12,7 +12,7 @@ func _ready() -> void:
 
 
 # Each test starts from a fresh one-frame document.
-func _setup_test() -> void:
+func before_test() -> void:
 	State.stop()
 	State.document = VoxelDocument.new()
 	State.current_frame = 0

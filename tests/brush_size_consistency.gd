@@ -44,7 +44,7 @@ func _ready() -> void:
 
 # Each test owns its own settings. The live spray test restores the shared
 # settings, so a size check never depends on an earlier test.
-func _cleanup_test() -> void:
+func after_test() -> void:
 	if _spray_tool != null:
 		_spray_tool._paint_settings.spray_size = 9
 		_spray_tool = null

@@ -1,0 +1,7 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="PackedScene" path="res://tests/test_base.tscn" id="1"]
+[ext_resource type="Script" path="res://tests/planar_geometry.gd" id="2"]
+
+[node name="TestRoot" instance=ExtResource("1")]
+script = ExtResource("2")

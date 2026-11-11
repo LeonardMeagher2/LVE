@@ -16,7 +16,7 @@ func _ready() -> void:
 	test("discard removes a recovery copy", _discard, "autosave_discard")
 
 
-func _setup_test() -> void:
+func before_test() -> void:
 	State.stop()
 	State.tabs.clear()
 	var document := VoxelDocument.new()
@@ -32,7 +32,7 @@ func _setup_test() -> void:
 	_recovery_seen = []
 
 
-func _cleanup_test() -> void:
+func after_test() -> void:
 	if autosave != null:
 		autosave.queue_free()
 		autosave = null

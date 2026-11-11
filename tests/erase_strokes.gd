@@ -18,7 +18,7 @@ func _ready() -> void:
 
 
 # Each test starts from a fresh document. Every test selects the eraser itself.
-func _setup_test() -> void:
+func before_test() -> void:
 	State.stop()
 	State.document = VoxelDocument.new()
 

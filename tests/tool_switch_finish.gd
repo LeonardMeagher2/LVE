@@ -52,7 +52,7 @@ func _ready() -> void:
 	test("a pixel-perfect mode switch flushes the same queued centers", _brush_pixel_perfect_switch, "brush_pixel_perfect_switch")
 
 
-func _setup_test() -> void:
+func before_test() -> void:
 	if not _defaults_ready:
 		_default_mode = _brush_settings.mode
 		_defaults_ready = true

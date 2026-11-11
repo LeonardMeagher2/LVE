@@ -40,7 +40,7 @@ func _ready() -> void:
 	test("get_cells resumes with a cursor", _cursor, "cursor")
 
 
-func _setup_test() -> void:
+func before_test() -> void:
 	State.stop()
 	State.document = VoxelDocument.new()
 	State.undo_redo.clear_history()
@@ -58,7 +58,7 @@ func _setup_test() -> void:
 	expect(error == OK, "the MCP server starts on a free loopback port")
 
 
-func _cleanup_test() -> void:
+func after_test() -> void:
 	if peer != null:
 		peer.disconnect_from_host()
 		peer = null

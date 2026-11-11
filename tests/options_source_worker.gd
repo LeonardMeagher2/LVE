@@ -43,7 +43,7 @@ func _bars() -> Array:
 	]
 
 
-func _setup_test() -> void:
+func before_test() -> void:
 	State.stop()
 	State.current_frame = 0
 	State.active_tag = 0
@@ -57,7 +57,7 @@ func _setup_test() -> void:
 	await get_tree().process_frame
 
 
-func _cleanup_test() -> void:
+func after_test() -> void:
 	if is_instance_valid(options):
 		options.free()
 	options = null

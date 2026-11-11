@@ -78,7 +78,7 @@ func _publish_run() -> void:
 
 # Each case starts from a clean document, history, and playback state. The cases
 # shared one process, so no case may inherit another case's document or undo.
-func _setup_test() -> void:
+func before_test() -> void:
 	State.stop()
 	State.document = VoxelDocument.new()
 	State.undo_redo.clear_history()

@@ -50,7 +50,7 @@ func _ready() -> void:
 	_checker.latest_release.connect(show_latest)
 	_checker.start.call_deferred()
 	_mcp.pressed.connect(_on_mcp_pressed)
-	_main = get_node_or_null("/root/Main")
+	_main = get_tree().get_first_node_in_group("main")
 	if _main == null or not _main.has_signal("mcp_changed"):
 		_mcp.visible = false
 	else:
@@ -123,7 +123,9 @@ func show_latest(version: String, url: String, newer: bool) -> void:
 
 
 func _on_ui_scale_item_selected(index: int) -> void:
-	get_node("/root/Main").set_ui_scale(%UIScale.get_item_id(index) / 100.0)
+	var main := _main if is_instance_valid(_main) else get_tree().get_first_node_in_group("main")
+	if main != null:
+		main.set_ui_scale(%UIScale.get_item_id(index) / 100.0)
 
 
 ## Sets a context provider that returns the left and right status text. An

@@ -38,7 +38,7 @@ func _ready() -> void:
 # Each test starts from a fresh document, the default selection options, and the
 # default camera. The selection options and the camera view live outside the
 # document, so they are restored here.
-func _setup_test() -> void:
+func before_test() -> void:
 	if not _defaults_ready:
 		_default_mode = _selection_settings.mode
 		_default_empty = _selection_settings.include_empty

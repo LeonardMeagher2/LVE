@@ -181,7 +181,7 @@ A browser page can send a cross-origin POST to a loopback port. The server refus
 Run the MCP tests:
 
 ```text
-godot --headless --path . -s res://tests/run_all.gd -- mcp_server
+godot --path . -s res://addons/test_kit/run.gd -- mcp_server
 ```
 
 The server writes `user://mcp_server.log`. The bridge writes `user://mcp_bridge.log`.

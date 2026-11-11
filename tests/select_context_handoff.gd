@@ -26,7 +26,7 @@ func _ready() -> void:
 	test("Cut during a lasso drag releases the drag and cuts exactly once", _cut_during_lasso, "cut_during_lasso")
 
 
-func _setup_test() -> void:
+func before_test() -> void:
 	if not _defaults_ready:
 		_default_mode = _selection_settings.mode
 		_default_empty = _selection_settings.include_empty
@@ -48,7 +48,7 @@ func _setup_test() -> void:
 
 # Release only the tool's own drag handle. The document reset above already
 # releases any transaction a failed test left open.
-func _cleanup_test() -> void:
+func after_test() -> void:
 	var selection_plugin := plugin("SelectionPlugin")
 	if selection_plugin != null and is_instance_valid(selection_plugin._current_tool):
 		selection_plugin._current_tool.abort_stroke()

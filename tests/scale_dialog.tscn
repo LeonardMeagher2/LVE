@@ -1,6 +1,0 @@
-[gd_scene format=3]
-
-[ext_resource type="Script" path="res://tests/scale_dialog.gd" id="1_test"]
-
-[node name="ScaleDialog" type="Node"]
-script = ExtResource("1_test")

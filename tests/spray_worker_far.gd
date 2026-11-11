@@ -33,7 +33,7 @@ func _ready() -> void:
 	test("the dense footprint union is exact at every world coordinate", _worker_dense_far, "worker_far")
 
 
-func _setup_test() -> void:
+func before_test() -> void:
 	State.stop()
 	State.document = VoxelDocument.new()
 	State.clear_selection()

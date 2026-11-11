@@ -16,7 +16,7 @@ var _saved_document: VoxelDocument
 var _saved_selection := {}
 
 
-func _setup_test() -> void:
+func before_test() -> void:
 	# The undo case needs the global document and history. Back them up, so the
 	# cases stay independently selectable and the scene leaves State as it found
 	# it.
@@ -29,7 +29,7 @@ func _setup_test() -> void:
 	await get_tree().process_frame
 
 
-func _cleanup_test() -> void:
+func after_test() -> void:
 	State.stop()
 	State.undo_redo.clear_history()
 	State.selection.restore(_saved_selection)

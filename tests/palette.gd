@@ -26,7 +26,7 @@ func _ready() -> void:
 
 # Each case starts from a clean document and history. The cases share one
 # process, so no case may inherit another case's palette or undo stack.
-func _setup_test() -> void:
+func before_test() -> void:
 	State.stop()
 	State.document = VoxelDocument.new()
 	State.undo_redo.clear_history()

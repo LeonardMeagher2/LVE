@@ -24,7 +24,7 @@ func _ready() -> void:
 	test("the recovery prompt lists unsaved documents", _recovery_dialog, "recovery_dialog")
 
 
-func _setup_test() -> void:
+func before_test() -> void:
 	State.stop()
 	State.tabs.clear()
 	var document := VoxelDocument.new()
@@ -45,7 +45,7 @@ func _setup_test() -> void:
 			menu.call("_cancel_quit")
 
 
-func _cleanup_test() -> void:
+func after_test() -> void:
 	if is_instance_valid(tabs):
 		tabs.queue_free()
 		tabs = null

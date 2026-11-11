@@ -174,11 +174,13 @@ func _on_tool_toggled(on: bool) -> void:
 
 
 func _sync_options() -> void:
+	if not is_inside_tree():
+		return
 	var target: Control
 	var pressed_button := _button_group.get_pressed_button()
 	for plugin_name in ["BrushPlugin", "PaintPlugin", "SelectionPlugin", "TransformPlugin"]:
-		var plugin := get_node("/root/" + plugin_name)
-		if plugin._toolbar == pressed_button:
+		var plugin := get_tree().root.get_node_or_null(plugin_name)
+		if plugin != null and plugin._toolbar == pressed_button:
 			target = plugin._options
 			break
 	if target:
@@ -189,6 +191,8 @@ func _sync_options() -> void:
 
 
 func _sync_buttons() -> void:
+	if not is_inside_tree() or not is_instance_valid(_options):
+		return
 	var frame := State.get_current_voxel_frame()
 	var busy := State.edit_busy()
 	_options.get_node("Copy").disabled = busy or frame == null or frame.count() == 0
@@ -203,7 +207,7 @@ func _on_cells_changed(_frame: int, _affected: Array[Vector3i]) -> void:
 
 
 func _process(_delta: float) -> void:
-	if _options.is_inside_tree() and Time.get_ticks_msec() >= _clipboard_poll_ms:
+	if is_instance_valid(_options) and _options.is_inside_tree() and Time.get_ticks_msec() >= _clipboard_poll_ms:
 		_clipboard_poll_ms = Time.get_ticks_msec() + 500
 		_has_clipboard_voxels = _read_clipboard().begins_with(CLIPBOARD_PREFIX)
 		_sync_buttons()

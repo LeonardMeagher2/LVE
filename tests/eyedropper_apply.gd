@@ -34,7 +34,7 @@ func _ready() -> void:
 	test("a reentrant material callback keeps an unrelated writer notification", _reentrant_callback_keeps_writer, "reentrant_callback_keeps_writer")
 
 
-func _setup_test() -> void:
+func before_test() -> void:
 	State.stop()
 	State.document = VoxelDocument.new()
 	State.symmetry_axes = 0
@@ -47,7 +47,7 @@ func _setup_test() -> void:
 	State.chunks_changed.connect(_on_chunks_changed)
 
 
-func _cleanup_test() -> void:
+func after_test() -> void:
 	if State.cells_changed.is_connected(_on_cells_changed):
 		State.cells_changed.disconnect(_on_cells_changed)
 	if State.chunks_changed.is_connected(_on_chunks_changed):

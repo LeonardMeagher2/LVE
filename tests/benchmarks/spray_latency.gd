@@ -686,7 +686,7 @@ func _scene_export(node_path: String, property: String):
 	return value
 
 
-func _cleanup_test() -> void:
+func after_test() -> void:
 	_measuring = false
 	if is_instance_valid(_tool):
 		if _tool._edit != null:

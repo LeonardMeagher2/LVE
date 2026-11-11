@@ -25,7 +25,7 @@ func _ready() -> void:
 	test("a palette import completes after its operation is removed", _removed_operation, "worker_removed_operation")
 
 
-func _setup_test() -> void:
+func before_test() -> void:
 	import_done = false
 	import_error = OK
 	State.document = VoxelDocument.new()
@@ -37,7 +37,7 @@ func _setup_test() -> void:
 	await get_tree().process_frame
 
 
-func _cleanup_test() -> void:
+func after_test() -> void:
 	while State.get_activity() != null:
 		State.finish_operation(State.get_activity().id)
 	if not image_path.is_empty():

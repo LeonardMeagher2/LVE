@@ -60,7 +60,7 @@ func _ready() -> void:
 
 # Each test starts from a fresh document, the default symmetry, and the default
 # connected option, because those live in shared resources.
-func _setup_test() -> void:
+func before_test() -> void:
 	State.stop()
 	State.document = VoxelDocument.new()
 	State.symmetry_axes = 0
@@ -81,14 +81,21 @@ func _setup_test() -> void:
 # Leave no worker or open stroke behind, so a test can run alone or in any order.
 # A tool switch detaches a tool without destroying it, and its service loop is not
 # tied to the tree, so the cancel runs for every valid tool.
-func _cleanup_test() -> void:
+func after_test() -> void:
 	if is_instance_valid(fill_tool):
 		fill_tool._interrupt_fill()
 	if is_instance_valid(wand_tool):
 		wand_tool._cancel_selection()
 	State.clear_selection()
 	State.undo_redo.clear_history()
-	await _await_until(func(): return State.edit_busy())
+	await _await_until(func():
+		if State.edit_busy():
+			return true
+		if is_instance_valid(fill_tool):
+			return not fill_tool.is_settled() or not fill_tool._search_jobs.is_empty()
+		return false
+	)
+	await _await_until(func(): return is_instance_valid(wand_tool) and (not wand_tool._retired_jobs.is_empty() or wand_tool._reaping))
 	await get_tree().process_frame
 
 

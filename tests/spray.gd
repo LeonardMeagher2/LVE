@@ -85,7 +85,7 @@ func _ready() -> void:
 
 # Each test starts from a fresh document, the default symmetry, and the default
 # spray options.
-func _setup_test() -> void:
+func before_test() -> void:
 	State.stop()
 	State.document = VoxelDocument.new()
 	State.clear_selection()
