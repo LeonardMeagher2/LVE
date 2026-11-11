@@ -50,17 +50,24 @@ Other harnesses use the same URL:
 
 | Tool | Action |
 | --- | --- |
-| `get_state` | Read the compact document, tool, material, selection, symmetry, slice, busy, and undo state |
+| `get_state` | Read the compact document, tags, active tag, tool, material, selection, symmetry, slice, busy, and undo state |
 | `get_cells` | Read occupied cells in a box as x-runs |
 | `screenshot` | Save a PNG of one frame. Set `inline` true to return the image |
 | `new_document` | Open an empty document in a new tab |
 | `save_document` | Save the current document as `.lve` or `.lve.png` |
 | `open_document` | Open a saved `.lve` or `.lve.png` document in a new tab |
-| `add_frame` | Add an empty frame at the end |
+| `add_frame` | Add an empty frame at the end or at an index |
+| `remove_frame` | Remove one frame. The last frame stays |
+| `move_frame` | Move one frame to a new index |
 | `duplicate_frame` | Copy the current frame and insert it after |
 | `set_frame` | Make one frame current |
 | `set_frame_delay` | Set one frame duration in milliseconds |
-| `set_tag_loop` | Set the active tag loop mode and repeat count |
+| `add_tag` | Add a tag with a frame range, loop mode, and repeat count |
+| `remove_tag` | Remove one tag. The last tag stays |
+| `rename_tag` | Rename one tag |
+| `set_tag_range` | Set one tag's inclusive frame range |
+| `set_active_tag` | Select one tag or clear the selection |
+| `set_tag_loop` | Set one tag's loop mode and repeat count |
 | `set_playback` | Start or stop animation playback |
 | `set_tool` | Select brush, eraser, paint, or fill and set its options |
 | `set_material` | Set the current material, emission, or palette entry |
@@ -107,8 +114,12 @@ The server logs one line per tool call with its response bytes in `user://mcp_se
 - Use `duplicate_frame` to keep the static set pieces and change only the moving parts.
 - Erase the previous moving cells before you write the next frame.
 - Use `set_frame_delay` to time each frame.
+- Use `add_tag` to make one tag per action. The frame range is inclusive.
+- Use `set_tag_range`, `rename_tag`, and `remove_tag` to edit a tag.
 - Use `set_tag_loop` with `ping_pong` to reverse a growth sequence into a loop.
+- Use `set_active_tag` to select the tag that playback runs.
 - Use `set_playback` to start or stop the preview.
+- The new tag becomes active. The last tag and the last frame are kept.
 
 ## Limits
 

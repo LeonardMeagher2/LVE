@@ -22,6 +22,8 @@ func _ready() -> void:
 	test("documents save and open", _save_open, "save_open")
 	test("new_document opens a new tab", _new_tab, "new_document")
 	test("frames and tags can be driven", _frames, "frames")
+	test("frames can be inserted, moved, and removed", _edit_frames, "edit_frames")
+	test("tags can be added, renamed, ranged, looped, and removed", _edit_tags, "edit_tags")
 	test("a user edit makes an agent action busy", _busy, "busy")
 	test("the loopback transport answers MCP requests", _tcp, "tcp")
 	test("the HTTP transport answers a POST and opens an SSE stream", _http, "http")
@@ -327,7 +329,7 @@ func _budget() -> void:
 	var data := _result_data(response)
 	step("Then the state is compact", func():
 		expect(not _is_error(response), "get_state succeeds")
-		expect(text.length() < 500, "the state stays under 500 characters")
+		expect(text.length() < 800, "the state stays under 800 characters")
 		expect(not data.has("camera"), "the state omits the camera")
 		expect(not data.has("activity"), "the state omits the activity")
 		expect(data.has("document"), "the state carries the document")
@@ -447,6 +449,107 @@ func _frames() -> void:
 		expect(not _is_error(loop_response), "set_tag_loop succeeds")
 		var tag := State.get_tag(State.active_tag)
 		expect(tag.loop_mode == AnimationTag.LoopMode.PING_PONG, "the tag uses ping-pong")
+	)
+
+
+func _edit_frames() -> void:
+	var insert_response := await _call("add_frame", {"index": 0})
+	var insert_data := _result_data(insert_response)
+	step("When an empty frame is inserted at the start", func():
+		expect(not _is_error(insert_response), "add_frame accepts an index")
+		expect(int(insert_data.get("frames", 0)) == 2, "the document holds two frames")
+		expect(int(insert_data.get("frame", -1)) == 0, "the inserted frame is current")
+	)
+	var move_response := await _call("move_frame", {"from": 0, "to": 1})
+	var move_data := _result_data(move_response)
+	step("When the frame moves to the end", func():
+		expect(not _is_error(move_response), "move_frame succeeds")
+		expect(int(move_data.get("frame", -1)) == 1, "the moved frame is current")
+	)
+	var add_response := await _call("add_frame", {})
+	step("When another empty frame is added", func():
+		expect(not _is_error(add_response), "add_frame succeeds without an index")
+		expect(State.document.frames.size() == 3, "the document holds three frames")
+	)
+	var remove_response := await _call("remove_frame", {"frame": 1})
+	var remove_data := _result_data(remove_response)
+	step("When a middle frame is removed", func():
+		expect(not _is_error(remove_response), "remove_frame succeeds")
+		expect(int(remove_data.get("frames", 0)) == 2, "one frame is gone")
+	)
+	var last_remove := await _call("remove_frame", {"frame": 0})
+	step("When the second frame is removed", func():
+		expect(not _is_error(last_remove), "the second removal succeeds")
+		expect(State.document.frames.size() == 1, "one frame remains")
+	)
+	var refused := await _call("remove_frame", {"frame": 0})
+	step("Then the last frame cannot be removed", func():
+		expect(_is_error(refused), "remove_frame refuses the last frame")
+		expect(State.document.frames.size() == 1, "the document keeps one frame")
+	)
+
+
+func _edit_tags() -> void:
+	for index in range(2):
+		await _call("add_frame", {})
+	var add_response := await _call("add_tag", {"name": "Laugh", "from": 1, "to": 2, "mode": "ping_pong", "repeats": 0})
+	var add_data := _result_data(add_response)
+	step("When a two-frame tag is added", func():
+		expect(not _is_error(add_response), "add_tag succeeds")
+		expect(State.document.tags.size() == 2, "the document holds two tags")
+		expect(State.active_tag == 1, "the new tag is active")
+		expect(str(add_data.get("name", "")) == "Laugh", "the tag keeps its name")
+		expect(int(add_data.get("from", -1)) == 1 and int(add_data.get("to", -1)) == 2, "the tag keeps its range")
+		expect(State.get_tag(1).loop_mode == AnimationTag.LoopMode.PING_PONG, "the tag loops ping-pong")
+	)
+	var rename_response := await _call("rename_tag", {"tag": 1, "name": "Joy"})
+	step("When the tag is renamed", func():
+		expect(not _is_error(rename_response), "rename_tag succeeds")
+		expect(State.get_tag(1).name == "Joy", "the tag name changes")
+	)
+	var range_response := await _call("set_tag_range", {"tag": 1, "from": 0, "to": 2})
+	step("When the tag range is widened", func():
+		expect(not _is_error(range_response), "set_tag_range succeeds")
+		expect(State.get_tag(1).from == 0 and State.get_tag(1).to == 2, "the tag covers all frames")
+	)
+	var loop_response := await _call("set_tag_loop", {"tag": 1, "mode": "forward", "repeats": 2})
+	step("When the tag loop changes", func():
+		expect(not _is_error(loop_response), "set_tag_loop accepts a tag")
+		expect(State.get_tag(1).loop_mode == AnimationTag.LoopMode.FORWARD, "the tag loops forward")
+		expect(State.get_tag(1).repeats == 2, "the tag repeats twice")
+	)
+	var select_response := await _call("set_active_tag", {"tag": 0})
+	step("When the first tag is selected", func():
+		expect(not _is_error(select_response), "set_active_tag succeeds")
+		expect(State.active_tag == 0, "the first tag is active")
+	)
+	var state_response := await _call("get_state", {})
+	var state_data := _result_data(state_response)
+	var tags: Array = state_data.get("tags", [])
+	var names := []
+	for entry in tags:
+		if entry is Dictionary:
+			names.append(str(entry.get("name", "")))
+	step("Then the state lists both tags", func():
+		expect(int(state_data.get("active_tag", -1)) == 0, "the state names the active tag")
+		expect(names.has("Joy"), "the state lists the renamed tag")
+		expect(int(tags.size()) == 2, "the state lists two tags")
+	)
+	var clear_response := await _call("set_active_tag", {"tag": -1})
+	step("When the tag selection is cleared", func():
+		expect(not _is_error(clear_response), "set_active_tag accepts -1")
+		expect(State.active_tag == -1, "no tag is active")
+	)
+	await _call("set_active_tag", {"tag": 1})
+	var remove_response := await _call("remove_tag", {"tag": 1})
+	step("When the second tag is removed", func():
+		expect(not _is_error(remove_response), "remove_tag succeeds")
+		expect(State.document.tags.size() == 1, "one tag remains")
+	)
+	var refused := await _call("remove_tag", {"tag": 0})
+	step("Then the last tag cannot be removed", func():
+		expect(_is_error(refused), "remove_tag refuses the last tag")
+		expect(State.document.tags.size() == 1, "the document keeps one tag")
 	)
 
 

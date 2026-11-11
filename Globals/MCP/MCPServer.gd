@@ -97,8 +97,35 @@ const TOOLS := [
 	},
 	{
 		"name": "add_frame",
-		"description": "Add an empty frame after the last frame and make it current.",
-		"inputSchema": {"type": "object", "additionalProperties": false},
+		"description": "Add an empty frame. The default index is the last frame. The new frame becomes current.",
+		"inputSchema": {
+			"type": "object",
+			"properties": {"index": {"type": "integer", "minimum": 0}},
+			"additionalProperties": false,
+		},
+	},
+	{
+		"name": "remove_frame",
+		"description": "Remove one frame. The last remaining frame is kept. Tags shift to the remaining frames.",
+		"inputSchema": {
+			"type": "object",
+			"properties": {"frame": {"type": "integer", "minimum": 0}},
+			"required": ["frame"],
+			"additionalProperties": false,
+		},
+	},
+	{
+		"name": "move_frame",
+		"description": "Move one frame to a new index.",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"from": {"type": "integer", "minimum": 0},
+				"to": {"type": "integer", "minimum": 0},
+			},
+			"required": ["from", "to"],
+			"additionalProperties": false,
+		},
 	},
 	{
 		"name": "duplicate_frame",
@@ -130,14 +157,78 @@ const TOOLS := [
 	},
 	{
 		"name": "set_tag_loop",
-		"description": "Set the active tag loop mode and repeat count. Repeats 0 means continuous playback.",
+		"description": "Set one tag's loop mode and repeat count. Omit tag to use the active tag. Repeats 0 means continuous playback.",
 		"inputSchema": {
 			"type": "object",
 			"properties": {
+				"tag": {"type": "integer", "minimum": 0},
 				"mode": {"type": "string", "enum": ["forward", "reverse", "ping_pong", "ping_pong_reverse"]},
 				"repeats": {"type": "integer", "minimum": 0, "maximum": 1000},
 			},
 			"required": ["mode"],
+			"additionalProperties": false,
+		},
+	},
+	{
+		"name": "add_tag",
+		"description": "Add an animation tag with an inclusive frame range, loop mode, and repeat count. The new tag becomes active.",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"name": {"type": "string"},
+				"from": {"type": "integer", "minimum": 0},
+				"to": {"type": "integer", "minimum": 0},
+				"mode": {"type": "string", "enum": ["forward", "reverse", "ping_pong", "ping_pong_reverse"]},
+				"repeats": {"type": "integer", "minimum": 0, "maximum": 1000},
+			},
+			"required": ["name"],
+			"additionalProperties": false,
+		},
+	},
+	{
+		"name": "remove_tag",
+		"description": "Remove one tag. The last remaining tag is kept.",
+		"inputSchema": {
+			"type": "object",
+			"properties": {"tag": {"type": "integer", "minimum": 0}},
+			"required": ["tag"],
+			"additionalProperties": false,
+		},
+	},
+	{
+		"name": "rename_tag",
+		"description": "Rename one tag.",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"tag": {"type": "integer", "minimum": 0},
+				"name": {"type": "string"},
+			},
+			"required": ["tag", "name"],
+			"additionalProperties": false,
+		},
+	},
+	{
+		"name": "set_tag_range",
+		"description": "Set one tag's inclusive frame range. Omit tag to use the active tag.",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"tag": {"type": "integer", "minimum": 0},
+				"from": {"type": "integer", "minimum": 0},
+				"to": {"type": "integer", "minimum": 0},
+			},
+			"required": ["from", "to"],
+			"additionalProperties": false,
+		},
+	},
+	{
+		"name": "set_active_tag",
+		"description": "Select one tag by index. Set tag to -1 to clear the selection.",
+		"inputSchema": {
+			"type": "object",
+			"properties": {"tag": {"type": "integer", "minimum": -1}},
+			"required": ["tag"],
 			"additionalProperties": false,
 		},
 	},
@@ -632,7 +723,11 @@ func _call_tool(id: Variant, params: Dictionary) -> Dictionary:
 		"open_document":
 			return _result_response(id, _open_document(args))
 		"add_frame":
-			return _result_response(id, _add_frame())
+			return _result_response(id, _add_frame(args))
+		"remove_frame":
+			return _result_response(id, _remove_frame(args))
+		"move_frame":
+			return _result_response(id, _move_frame(args))
 		"duplicate_frame":
 			return _result_response(id, _duplicate_frame())
 		"set_frame":
@@ -641,6 +736,16 @@ func _call_tool(id: Variant, params: Dictionary) -> Dictionary:
 			return _result_response(id, _set_frame_delay(args))
 		"set_tag_loop":
 			return _result_response(id, _set_tag_loop(args))
+		"add_tag":
+			return _result_response(id, _add_tag(args))
+		"remove_tag":
+			return _result_response(id, _remove_tag(args))
+		"rename_tag":
+			return _result_response(id, _rename_tag(args))
+		"set_tag_range":
+			return _result_response(id, _set_tag_range(args))
+		"set_active_tag":
+			return _result_response(id, _set_active_tag(args))
 		"set_playback":
 			return _result_response(id, _set_playback(args))
 		"set_tool":
@@ -703,6 +808,17 @@ func _get_state() -> Dictionary:
 			"first": State.slice_first(),
 			"count": State.slice_count(),
 		}
+	var tags: Array = []
+	for index in range(document.tags.size()):
+		var tag := document.tags[index]
+		tags.append({
+			"name": tag.name,
+			"from": tag.from,
+			"to": tag.to,
+			"mode": tag.loop_mode,
+			"mode_name": _tag_loop_name(tag.loop_mode),
+			"repeats": tag.repeats,
+		})
 	return _tool_ok({
 		"document": {
 			"name": document.get_file_name(),
@@ -712,6 +828,8 @@ func _get_state() -> Dictionary:
 			"palette": document.palette.size(),
 			"bounds": _aabb_json(document.bounds()),
 		},
+		"tags": tags,
+		"active_tag": State.active_tag,
 		"active_tool": {"id": str(info.get("id", "")), "params": info.get("params", {})},
 		"material": _material_json(State.current_material),
 		"selection": State.selection.count(),
@@ -1004,9 +1122,36 @@ func _document_path(value: Variant) -> String:
 	return "user://" + path
 
 
-func _add_frame() -> Dictionary:
+func _add_frame(args: Dictionary) -> Dictionary:
+	var count := State.document.frames.size()
+	var index := _int_arg(args, "index", count)
+	if index < 0 or index > count:
+		return _tool_error("index must be between 0 and the frame count.")
 	State.add_frame()
+	if index < count:
+		State.move_frame(count, index)
 	return _tool_ok({"frame": State.current_frame, "frames": State.document.frames.size()})
+
+
+func _remove_frame(args: Dictionary) -> Dictionary:
+	var index := _int_arg(args, "frame", -1)
+	if index < 0 or index >= State.document.frames.size():
+		return _tool_error("The frame does not exist.")
+	if State.document.frames.size() <= 1:
+		return _tool_error("The document must keep one frame.")
+	State.current_frame = index
+	State.delete_frame()
+	return _tool_ok({"frame": State.current_frame, "frames": State.document.frames.size()})
+
+
+func _move_frame(args: Dictionary) -> Dictionary:
+	var from := _int_arg(args, "from", -1)
+	var to := _int_arg(args, "to", -1)
+	var count := State.document.frames.size()
+	if from < 0 or from >= count or to < 0 or to >= count:
+		return _tool_error("from and to must name existing frames.")
+	State.move_frame(from, to)
+	return _tool_ok({"frame": State.current_frame, "frames": count})
 
 
 func _duplicate_frame() -> Dictionary:
@@ -1034,30 +1179,135 @@ func _set_frame_delay(args: Dictionary) -> Dictionary:
 
 
 func _set_tag_loop(args: Dictionary) -> Dictionary:
-	var mode_value: Variant = args.get("mode", "forward")
-	var mode := AnimationTag.LoopMode.FORWARD
-	match str(mode_value):
-		"forward":
-			mode = AnimationTag.LoopMode.FORWARD
-		"reverse":
-			mode = AnimationTag.LoopMode.REVERSE
-		"ping_pong":
-			mode = AnimationTag.LoopMode.PING_PONG
-		"ping_pong_reverse":
-			mode = AnimationTag.LoopMode.PING_PONG_REVERSE
-		_:
-			return _tool_error("mode must be forward, reverse, ping_pong, or ping_pong_reverse.")
-	var index := State.active_tag
+	var mode := _tag_loop_mode(args.get("mode", "forward"))
+	if mode < 0:
+		return _tool_error("mode must be forward, reverse, ping_pong, or ping_pong_reverse.")
+	var index := _int_arg(args, "tag", State.active_tag)
 	if index < 0 and not State.document.tags.is_empty():
 		index = 0
-	if index < 0:
-		return _tool_error("The document has no tag.")
+	if index < 0 or index >= State.document.tags.size():
+		return _tool_error("The tag does not exist.")
 	State.set_tag_loop_mode(index, mode)
 	var repeats_value: Variant = args.get("repeats", null)
 	if repeats_value is int or repeats_value is float:
 		State.set_tag_repeats(index, clampi(int(repeats_value), 0, 1000))
+	return _tool_ok(_tag_json(index, State.get_tag(index)))
+
+
+func _add_tag(args: Dictionary) -> Dictionary:
+	var name_value: Variant = args.get("name", "")
+	if not (name_value is String):
+		return _tool_error("name must be a string.")
+	var tag_name: String = String(name_value).strip_edges()
+	if tag_name.is_empty():
+		return _tool_error("name is required.")
+	var last := State.document.frames.size() - 1
+	var from := _int_arg(args, "from", 0)
+	var to := _int_arg(args, "to", last)
+	if from < 0 or from > last or to < from or to > last:
+		return _tool_error("The tag range must be inside the frames and from must not exceed to.")
+	var mode := _tag_loop_mode(args.get("mode", "forward"))
+	if mode < 0:
+		return _tool_error("mode must be forward, reverse, ping_pong, or ping_pong_reverse.")
+	State.add_tag(tag_name, from, to)
+	var index := State.document.tags.size() - 1
+	if index < 0:
+		return _tool_error("The tag could not be added.")
+	State.set_tag_loop_mode(index, mode)
+	State.set_tag_repeats(index, clampi(_int_arg(args, "repeats", 0), 0, 1000))
+	return _tool_ok(_tag_json(index, State.get_tag(index)))
+
+
+func _remove_tag(args: Dictionary) -> Dictionary:
+	var index := _int_arg(args, "tag", -1)
+	if index < 0 or index >= State.document.tags.size():
+		return _tool_error("The tag does not exist.")
+	if State.document.tags.size() <= 1:
+		return _tool_error("The document must keep one tag.")
+	State.active_tag = index
+	State.remove_tag()
+	return _tool_ok({"tag": State.active_tag, "tags": State.document.tags.size()})
+
+
+func _rename_tag(args: Dictionary) -> Dictionary:
+	var index := _int_arg(args, "tag", -1)
+	if index < 0 or index >= State.document.tags.size():
+		return _tool_error("The tag does not exist.")
+	var name_value: Variant = args.get("name", "")
+	if not (name_value is String) or String(name_value).strip_edges().is_empty():
+		return _tool_error("name is required.")
+	State.set_tag_name(index, String(name_value).strip_edges())
+	return _tool_ok(_tag_json(index, State.get_tag(index)))
+
+
+func _set_tag_range(args: Dictionary) -> Dictionary:
+	var index := _int_arg(args, "tag", State.active_tag)
+	if index < 0 or index >= State.document.tags.size():
+		return _tool_error("The tag does not exist.")
+	var last := State.document.frames.size() - 1
+	var from := _int_arg(args, "from", -1)
+	var to := _int_arg(args, "to", -1)
+	if from < 0 or from > last or to < from or to > last:
+		return _tool_error("The tag range must be inside the frames and from must not exceed to.")
+	State.active_tag = index
+	State.set_tag_range(from, to)
+	return _tool_ok(_tag_json(index, State.get_tag(index)))
+
+
+func _set_active_tag(args: Dictionary) -> Dictionary:
+	var index := _int_arg(args, "tag", -1)
+	if index < -1 or index >= State.document.tags.size():
+		return _tool_error("The tag does not exist.")
+	State.active_tag = index
 	var tag := State.get_tag(index)
-	return _tool_ok({"tag": index, "mode": tag.loop_mode, "repeats": tag.repeats})
+	var data := {"tag": index, "tags": State.document.tags.size()}
+	if tag != null:
+		data["name"] = tag.name
+		data["from"] = tag.from
+		data["to"] = tag.to
+		data["mode"] = tag.loop_mode
+		data["repeats"] = tag.repeats
+	return _tool_ok(data)
+
+
+func _tag_loop_mode(value: Variant) -> int:
+	match str(value):
+		"forward":
+			return AnimationTag.LoopMode.FORWARD
+		"reverse":
+			return AnimationTag.LoopMode.REVERSE
+		"ping_pong":
+			return AnimationTag.LoopMode.PING_PONG
+		"ping_pong_reverse":
+			return AnimationTag.LoopMode.PING_PONG_REVERSE
+		_:
+			return -1
+
+
+func _tag_loop_name(mode: int) -> String:
+	match mode:
+		AnimationTag.LoopMode.REVERSE:
+			return "reverse"
+		AnimationTag.LoopMode.PING_PONG:
+			return "ping_pong"
+		AnimationTag.LoopMode.PING_PONG_REVERSE:
+			return "ping_pong_reverse"
+		_:
+			return "forward"
+
+
+func _tag_json(index: int, tag: AnimationTag) -> Dictionary:
+	if tag == null:
+		return {"tag": index}
+	return {
+		"tag": index,
+		"name": tag.name,
+		"from": tag.from,
+		"to": tag.to,
+		"mode": tag.loop_mode,
+		"mode_name": _tag_loop_name(tag.loop_mode),
+		"repeats": tag.repeats,
+	}
 
 
 func _set_playback(args: Dictionary) -> Dictionary:
