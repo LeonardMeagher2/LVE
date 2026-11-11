@@ -114,6 +114,15 @@ func _strip() -> void:
 	step("Then the state follows", func():
 		expect(State.active_tab == 1, "selecting a tab activates its document")
 	)
+	step("When a long document name is edited", func():
+		State.tabs[0].file_path = "user://a_very_long_document_name_for_the_tab_test.lve"
+		State.tabs[0].edit_dirty = true
+		State.tabs_changed.emit()
+	)
+	await get_tree().process_frame
+	step("Then the unsaved marker starts the title", func():
+		expect(tabs.get_tab_title(0).begins_with("* "), "the marker is not clipped")
+	)
 
 
 func _open() -> void:

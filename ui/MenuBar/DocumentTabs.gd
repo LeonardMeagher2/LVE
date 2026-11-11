@@ -38,7 +38,9 @@ func _sync() -> void:
 
 func _title(document: VoxelDocument) -> String:
 	var title := document.get_file_name()
-	return title + " *" if document.edit_dirty else title
+	# Keep the unsaved marker at the start. A long name is clipped from the end
+	# by the tab width, so a trailing marker would disappear.
+	return "* " + title if document.edit_dirty else title
 
 
 func _tooltip(document: VoxelDocument) -> String:
