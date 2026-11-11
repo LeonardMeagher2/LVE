@@ -48,7 +48,7 @@ Other harnesses use the same URL:
 | `get_cells` | Read occupied cells in a box as x-runs |
 | `screenshot` | Save a PNG of one frame. Set `inline` true to return the image |
 | `new_document` | Open an empty document in a new tab |
-| `save_document` | Save the current document under `user://` or a project path |
+| `save_document` | Save the current document as `.lve` or `.lve.png` |
 | `open_document` | Open a saved `.lve` or `.lve.png` document in a new tab |
 | `add_frame` | Add an empty frame at the end |
 | `duplicate_frame` | Copy the current frame and insert it after |
@@ -68,7 +68,7 @@ The tools use integer cell coordinates. Cell `c` covers `[c - 0.5, c + 0.5]`. Y 
 
 ## Compact forms
 
-`get_cells` returns x-runs. A run is `[x_first, x_last, y, z, material_index]`. The material index refers to the `materials` table. A truncated read returns `next`, the first cell not included.
+`get_cells` returns x-runs. A run is `[x_first, x_last, y, z, material_index]`. The material index refers to the `materials` table. The default cap is 512 cells. Set `max_cells` up to 4096. A truncated read returns `next`, the first occupied cell not included.
 
 `write_cells` accepts three cell forms:
 
@@ -82,9 +82,9 @@ Provide at least one form. All forms use the current material and make one undo 
 
 `set_material` accepts `color`, `emission`, `metallic`, and `roughness`. Emission gives the voxel a glow. A color change clears the glow unless you also pass `emission`. Set `emission` to `#000000` to clear it explicitly.
 
-`screenshot` saves `user://mcp_screenshot.png` and returns the path by default. Set `inline: true` to also return the image. The default size is 256. Use `focus` with an inclusive `[x0, y0, z0, x1, y1, z1]` box to frame a detail. The `low` view frames a floating scene from below.
+`screenshot` saves `user://mcp_screenshot.png` and returns the path by default. Set `inline: true` to also return the image. The default size is 256. Use `focus` with an inclusive `[x0, y0, z0, x1, y1, z1]` box to frame a detail. `focus` applies to the named views. The current view refuses it. The `low` view frames a floating scene from below.
 
-`save_document` writes a `.lve` or `.lve.png` file. `open_document` opens it in a new tab. Use a new path for each iteration so an earlier file stays intact.
+`save_document` writes a `.lve` file. A `.lve.png` path also stores a 256 by 256 preview, which needs a visible window. `open_document` opens both forms in a new tab. A successful save updates the tab save path, clears the unsaved mark, and updates the session. Use a new path for each iteration so an earlier file stays intact.
 
 The server logs one line per tool call with its response bytes in `user://mcp_server.log`.
 
@@ -124,6 +124,8 @@ opencode uses HTTP. Its local stdio process can echo the bridge input, so HTTP i
 ## Security
 
 The server binds to `127.0.0.1`. It has no authentication yet. Enable it only when an agent must use the editor. The agent can change the current document. Use undo or close the document without saving.
+
+A browser page can send a cross-origin POST to a loopback port. The server refuses a POST that carries an `Origin` header. It also requires `Content-Type: application/json`. A non-MCP client can still call the tools.
 
 ## Tests
 

@@ -95,11 +95,7 @@ func save_doc(path: String) -> Error:
 	if err != OK:
 		_show_file_error("Cannot save the document: %s" % error_string(err))
 		return err
-	current_save_path = path
-	document.file_path = path
-	document.edit_dirty = false
-	State.tabs_changed.emit()
-	_remember_session()
+	State.record_saved(document, path)
 	return OK
 
 
@@ -240,13 +236,12 @@ func open_document(path: String, saved: bool = true, replace: bool = false) -> b
 	var document := VoxelDocument.load_file(path)
 	if document == null:
 		return false
-	document.edit_save_path = path if saved else ""
 	if replace or _can_reuse_tab():
 		State.document = document
 	else:
 		State.open_tab(document)
 	if saved:
-		_remember_session()
+		State.record_opened(document, path)
 	return true
 
 

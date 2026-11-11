@@ -469,6 +469,24 @@ func open_tab(value: VoxelDocument) -> int:
 	return index
 
 
+## Records a saved document path in its tab and the session. It clears the
+## unsaved mark and refreshes the tab strip.
+func record_saved(document: VoxelDocument, path: String) -> void:
+	document.file_path = path
+	document.edit_save_path = path
+	document.edit_dirty = false
+	tabs_changed.emit()
+	if is_app_session():
+		remember_session()
+
+
+## Records an opened document path in its tab and the session.
+func record_opened(document: VoxelDocument, path: String) -> void:
+	document.edit_save_path = path
+	if is_app_session():
+		remember_session()
+
+
 ## Replaces every tab with [param documents] and activates [param index]. It
 ## restores a session in one step, without an empty startup tab.
 func set_tabs(documents: Array[VoxelDocument], index: int = 0) -> void:

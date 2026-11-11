@@ -30,13 +30,18 @@ const TOOLS := [
 	},
 	{
 		"name": "get_cells",
-		"description": "Read occupied cells in an inclusive box as x-runs. The cap is 512 cells.",
+		"description": "Read occupied cells in an inclusive box as x-runs. The default cap is 512 cells. Set max_cells up to 4096.",
 		"inputSchema": {
 			"type": "object",
 			"properties": {
 				"min": {"type": "array", "items": {"type": "integer"}, "minItems": 3, "maxItems": 3},
 				"max": {"type": "array", "items": {"type": "integer"}, "minItems": 3, "maxItems": 3},
-				"max_cells": {"type": "integer", "minimum": 1, "maximum": 4096},
+				"max_cells": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 4096,
+					"description": "Occupied-cell cap. Defaults to 512.",
+				},
 				"frame": {"type": "integer", "minimum": 0},
 			},
 			"required": ["min", "max"],
@@ -59,7 +64,7 @@ const TOOLS := [
 					"items": {"type": "integer"},
 					"minItems": 6,
 					"maxItems": 6,
-					"description": "Inclusive [x0, y0, z0, x1, y1, z1] to frame.",
+					"description": "Inclusive [x0, y0, z0, x1, y1, z1] to frame. Named views only.",
 				},
 			},
 			"additionalProperties": false,
@@ -72,17 +77,17 @@ const TOOLS := [
 	},
 	{
 		"name": "save_document",
-		"description": "Save the current document under user:// and return its absolute path.",
+		"description": "Save the current document as .lve or .lve.png and return its absolute path. A .lve.png file also stores a preview.",
 		"inputSchema": {
 			"type": "object",
-			"properties": {"path": {"type": "string", "description": "A file name or user:// path ending in .lve."}},
+			"properties": {"path": {"type": "string", "description": "A file name or user:// path ending in .lve or .lve.png."}},
 			"required": ["path"],
 			"additionalProperties": false,
 		},
 	},
 	{
 		"name": "open_document",
-		"description": "Open a saved .lve document in a new tab and make it current.",
+		"description": "Open a saved .lve or .lve.png document in a new tab and make it current.",
 		"inputSchema": {
 			"type": "object",
 			"properties": {"path": {"type": "string", "description": "A file name or user:// path."}},
@@ -346,7 +351,8 @@ func _process(_delta: float) -> void:
 				_send_sse_comment(state)
 				state.last_ping_ms = now
 			continue
-		_read_peer_bytes(state)
+		if not _read_peer_bytes(state):
+			continue
 		if _http_mode:
 			_drain_http(state)
 		else:
@@ -370,21 +376,26 @@ func _remove_peer(state: PeerState) -> void:
 		state.peer.disconnect_from_host()
 
 
-func _read_peer_bytes(state: PeerState) -> void:
+func _read_peer_bytes(state: PeerState) -> bool:
 	var available := state.peer.get_available_bytes()
 	if available <= 0:
-		return
+		return true
 	var result := state.peer.get_partial_data(available)
 	if result[0] != OK:
-		return
+		return true
 	var bytes: PackedByteArray = result[1]
 	state.buffer.append_array(bytes)
 	if state.buffer.size() > MAX_LINE_BYTES:
+		# Clear the request before the peer goes, so the same frame cannot
+		# dispatch the request that this limit just refused.
+		state.buffer.clear()
 		if _http_mode:
 			_send_http(state, 413, "Payload Too Large", "")
 		else:
 			_send_raw(state, _error_response(null, -32600, "Request is too large."))
 		_remove_peer(state)
+		return false
+	return true
 
 
 func _drain_http(state: PeerState) -> void:
@@ -411,6 +422,8 @@ func _drain_http(state: PeerState) -> void:
 	var method := request_line[0]
 	var path := request_line[1]
 	var content_length := 0
+	var origin := ""
+	var content_type := ""
 	for line_index in range(1, header_lines.size()):
 		var header := header_lines[line_index]
 		var separator := header.find(":")
@@ -420,16 +433,20 @@ func _drain_http(state: PeerState) -> void:
 		var value := header.substr(separator + 1).strip_edges()
 		if name == "content-length":
 			content_length = maxi(0, int(value))
+		elif name == "origin":
+			origin = value
+		elif name == "content-type":
+			content_type = value.to_lower()
 	var body_start := header_end + 4
 	if state.buffer.size() < body_start + content_length:
 		return
 	var body := state.buffer.slice(body_start, body_start + content_length).get_string_from_utf8()
 	state.buffer = state.buffer.slice(body_start + content_length)
 	state.busy = true
-	_handle_http(state, method, path, body)
+	_handle_http(state, method, path, body, origin, content_type)
 
 
-func _handle_http(state: PeerState, method: String, path: String, body: String) -> void:
+func _handle_http(state: PeerState, method: String, path: String, body: String, origin := "", content_type := "") -> void:
 	if path != "/mcp":
 		_send_http(state, 404, "Not Found", _error_response(null, -32601, "Unknown endpoint."))
 		state.busy = false
@@ -453,6 +470,17 @@ func _handle_http(state: PeerState, method: String, path: String, body: String) 
 			_send_http(state, 405, "Method Not Allowed", "")
 			state.busy = false
 			return
+	# A browser page can send a simple cross-origin POST without a preflight.
+	# Reject browser origins and require JSON, so a visited page cannot drive
+	# the editor tools.
+	if not origin.is_empty():
+		_send_http(state, 403, "Forbidden", _error_response(null, -32600, "Browser origins are not allowed."))
+		state.busy = false
+		return
+	if not content_type.begins_with("application/json"):
+		_send_http(state, 415, "Unsupported Media Type", _error_response(null, -32600, "Content-Type must be application/json."))
+		state.busy = false
+		return
 	var request_value: Variant = JSON.parse_string(body)
 	if not (request_value is Dictionary):
 		_send_http(state, 400, "Bad Request", _error_response(null, -32700, "Parse error."))
@@ -501,17 +529,23 @@ func _send_http(state: PeerState, status: int, reason: String, body: Variant) ->
 func _drain_lines(state: PeerState) -> void:
 	if state.busy:
 		return
-	var index := state.buffer.find(10)
-	if index < 0:
+	# Scan past empty lines in one pass. A recursive call per blank line could
+	# exhaust the stack, and slicing once per line copies the buffer each time.
+	var start := 0
+	while true:
+		var index := state.buffer.find(10, start)
+		if index < 0:
+			if start > 0:
+				state.buffer = state.buffer.slice(start)
+			return
+		var line := state.buffer.slice(start, index).get_string_from_utf8().strip_edges()
+		start = index + 1
+		if line.is_empty():
+			continue
+		state.buffer = state.buffer.slice(start)
+		state.busy = true
+		_handle_line(state, line)
 		return
-	var line_bytes := state.buffer.slice(0, index)
-	state.buffer = state.buffer.slice(index + 1)
-	var line := line_bytes.get_string_from_utf8().strip_edges()
-	if line.is_empty():
-		_drain_lines(state)
-		return
-	state.busy = true
-	_handle_line(state, line)
 
 
 func _handle_line(state: PeerState, line: String) -> void:
@@ -594,7 +628,7 @@ func _call_tool(id: Variant, params: Dictionary) -> Dictionary:
 		"new_document":
 			return _result_response(id, _new_document())
 		"save_document":
-			return _result_response(id, _save_document(args))
+			return _result_response(id, await _save_document(args))
 		"open_document":
 			return _result_response(id, _open_document(args))
 		"add_frame":
@@ -700,6 +734,8 @@ func _get_cells(args: Dictionary) -> Dictionary:
 	if min_cell.x > max_cell.x or min_cell.y > max_cell.y or min_cell.z > max_cell.z:
 		return _tool_error("min must not exceed max on any axis.")
 	var extent := max_cell - min_cell + Vector3i.ONE
+	if extent.x > MAX_BOX_CELLS or extent.y > MAX_BOX_CELLS or extent.z > MAX_BOX_CELLS:
+		return _tool_error("The box is too large. Scan at most %d cells." % MAX_BOX_CELLS)
 	var volume := extent.x * extent.y * extent.z
 	if volume > MAX_BOX_CELLS:
 		return _tool_error("The box is too large. Scan at most %d cells." % MAX_BOX_CELLS)
@@ -718,7 +754,9 @@ func _get_cells(args: Dictionary) -> Dictionary:
 	var materials: Array = []
 	var material_keys := {}
 	var truncated := false
+	var full := false
 	var done := false
+	var next_cell := Vector3i.ZERO
 	for z in range(min_cell.z, max_cell.z + 1):
 		if done:
 			break
@@ -729,6 +767,12 @@ func _get_cells(args: Dictionary) -> Dictionary:
 				var cell := Vector3i(x, y, z)
 				if not frame.has(cell):
 					continue
+				if full:
+					# The cap is reached only when one more occupied cell exists.
+					truncated = true
+					next_cell = cell
+					done = true
+					break
 				var material := frame.get_material(cell)
 				var material_index := -1
 				if material_keys.has(material):
@@ -739,9 +783,7 @@ func _get_cells(args: Dictionary) -> Dictionary:
 					materials.append(_material_json(material))
 				cells.append([x, y, z, material_index])
 				if cells.size() >= limit:
-					truncated = true
-					done = true
-					break
+					full = true
 	var runs: Array = []
 	for value in cells:
 		var cell: Array = value
@@ -762,17 +804,8 @@ func _get_cells(args: Dictionary) -> Dictionary:
 		"runs": runs,
 		"materials": materials,
 	}
-	if truncated and not cells.is_empty():
-		var last_cell: Array = cells[-1]
-		var next_cell := Vector3i(last_cell[0], last_cell[1], last_cell[2]) + Vector3i(1, 0, 0)
-		if next_cell.x > max_cell.x:
-			next_cell.x = min_cell.x
-			next_cell.y += 1
-			if next_cell.y > max_cell.y:
-				next_cell.y = min_cell.y
-				next_cell.z += 1
-		if next_cell.z <= max_cell.z:
-			data["next"] = _json_cell(next_cell)
+	if truncated:
+		data["next"] = _json_cell(next_cell)
 	return _tool_ok(data)
 
 
@@ -812,6 +845,8 @@ func _screenshot(args: Dictionary) -> Dictionary:
 	var ortho_value: Variant = args.get("orthographic", true)
 	if ortho_value is bool:
 		orthographic = ortho_value
+	if view == "current" and focus_value != null:
+		return _tool_error("focus is not supported with the current view.")
 	var document := State.document
 	var viewport: SubViewport = SCREENSHOT_VIEWPORT.instantiate()
 	viewport.size = Vector2i(size, size)
@@ -896,24 +931,51 @@ func _screenshot(args: Dictionary) -> Dictionary:
 
 
 func _new_document() -> Dictionary:
+	if State.active_edit() != null or State.edit_busy():
+		return _tool_error("The editor is busy with another edit. Retry.")
 	var index := State.open_tab(State.new_document())
+	if State.active_tab != index:
+		return _tool_error("The document opened but could not become current.")
 	return _tool_ok({"tab": index, "frames": 1})
 
 
 func _save_document(args: Dictionary) -> Dictionary:
+	if State.active_edit() != null or State.edit_busy():
+		return _tool_error("The editor is busy with another edit. Retry.")
 	var path := _document_path(args.get("path", ""))
 	if path.is_empty():
 		return _tool_error("path is required.")
-	if path.get_extension().to_lower() != "lve":
+	var extension := path.get_extension().to_lower()
+	if extension.is_empty():
 		path += ".lve"
-	var error := State.document.save_file(path)
+		extension = "lve"
+	elif extension != "lve" and extension != "png":
+		return _tool_error("path must end in .lve or .lve.png.")
+	var document := State.document
+	var encoded := document.encode_document()
+	if encoded.is_empty():
+		return _tool_error("The document exceeds the format limits or contains invalid data.")
+	var preview: Image = null
+	if extension == "png":
+		if DisplayServer.get_name() == "headless":
+			return _tool_error("The PNG preview needs a visible editor window.")
+		var operation := State.begin_operation("Rendering preview", -1, true, self)
+		preview = await VoxelImageRenderer.render_document_preview(document)
+		State.finish_operation(operation)
+		if State.document != document:
+			return _tool_error("The document changed before the save finished.")
+		if preview == null:
+			return _tool_error("The preview could not be rendered.")
+	var error := document.save_file(path, preview, encoded)
 	if error != OK:
 		return _tool_error("The document could not be saved: " + error_string(error))
-	State.document.file_path = path
+	State.record_saved(document, path)
 	return _tool_ok({"path": ProjectSettings.globalize_path(path)})
 
 
 func _open_document(args: Dictionary) -> Dictionary:
+	if State.active_edit() != null or State.edit_busy():
+		return _tool_error("The editor is busy with another edit. Retry.")
 	var path := _document_path(args.get("path", ""))
 	if path.is_empty():
 		return _tool_error("path is required.")
@@ -921,6 +983,9 @@ func _open_document(args: Dictionary) -> Dictionary:
 	if document == null:
 		return _tool_error("The document could not be opened.")
 	var index := State.open_tab(document)
+	if State.active_tab != index:
+		return _tool_error("The document opened but could not become current.")
+	State.record_opened(document, path)
 	return _tool_ok({
 		"tab": index,
 		"frames": document.frames.size(),
@@ -1077,6 +1142,8 @@ func _set_material(args: Dictionary) -> Dictionary:
 	if not (material_value is PackedFloat32Array):
 		return _tool_error("Provide a valid color, palette_index, metallic, or roughness.")
 	var material: PackedFloat32Array = material_value
+	if not VoxelDocument.valid_material(material):
+		return _tool_error("The material values must be between 0 and 1.")
 	State.set_material(material)
 	return _tool_ok({"material": _material_json(material)})
 
@@ -1206,7 +1273,12 @@ func _write_cells(args: Dictionary) -> Dictionary:
 		var box: Array = value
 		var start: Vector3i = box[0]
 		var end: Vector3i = box[1]
-		var volume := (end.x - start.x + 1) * (end.y - start.y + 1) * (end.z - start.z + 1)
+		var extent := end - start + Vector3i.ONE
+		# Check each axis before the product, so a wide box cannot overflow the
+		# cell cap and enter the write loops.
+		if extent.x > MAX_WRITE_CELLS or extent.y > MAX_WRITE_CELLS or extent.z > MAX_WRITE_CELLS:
+			return _tool_error("The write exceeds %d cells." % MAX_WRITE_CELLS)
+		var volume := extent.x * extent.y * extent.z
 		if changes.size() + volume > MAX_WRITE_CELLS:
 			return _tool_error("The write exceeds %d cells." % MAX_WRITE_CELLS)
 		for x in range(start.x, end.x + 1):
@@ -1219,7 +1291,10 @@ func _write_cells(args: Dictionary) -> Dictionary:
 		var last: int = run[1]
 		var y: int = run[2]
 		var z: int = run[3]
-		if changes.size() + last - first + 1 > MAX_WRITE_CELLS:
+		var length := last - first + 1
+		if length > MAX_WRITE_CELLS:
+			return _tool_error("The write exceeds %d cells." % MAX_WRITE_CELLS)
+		if changes.size() + length > MAX_WRITE_CELLS:
 			return _tool_error("The write exceeds %d cells." % MAX_WRITE_CELLS)
 		for x in range(first, last + 1):
 			changes[Vector3i(x, y, z)] = material
@@ -1449,11 +1524,22 @@ func _parse_cell(value: Variant) -> Variant:
 	for component in components:
 		if not (component is int or component is float):
 			return null
-	var cell := Vector3i(int(components[0]), int(components[1]), int(components[2]))
-	var limit := VoxelFrame.MAX_CHUNK_COORDINATE * VoxelFrame.CHUNK_SIZE
-	if absi(cell.x) > limit or absi(cell.y) > limit or absi(cell.z) > limit:
+	var x := int(components[0])
+	var y := int(components[1])
+	var z := int(components[2])
+	if not _cell_in_range(x, y, z):
 		return null
-	return cell
+	return Vector3i(x, y, z)
+
+
+## Returns [code]true[/code] when one cell coordinate is inside the storage limit.
+func _cell_in_range(x: int, y: int, z: int) -> bool:
+	var limit := VoxelFrame.MAX_CHUNK_COORDINATE * VoxelFrame.CHUNK_SIZE
+	return (
+		x >= -limit and x <= limit
+		and y >= -limit and y <= limit
+		and z >= -limit and z <= limit
+	)
 
 
 func _parse_cells(value: Variant, max_count: int) -> Variant:
@@ -1481,11 +1567,17 @@ func _parse_box(value: Variant) -> Variant:
 	for component in components:
 		if not (component is int or component is float):
 			return null
-	var start := Vector3i(int(components[0]), int(components[1]), int(components[2]))
-	var end := Vector3i(int(components[3]), int(components[4]), int(components[5]))
-	if start.x > end.x or start.y > end.y or start.z > end.z:
+	var sx := int(components[0])
+	var sy := int(components[1])
+	var sz := int(components[2])
+	var ex := int(components[3])
+	var ey := int(components[4])
+	var ez := int(components[5])
+	if sx > ex or sy > ey or sz > ez:
 		return null
-	return [start, end]
+	if not _cell_in_range(sx, sy, sz) or not _cell_in_range(ex, ey, ez):
+		return null
+	return [Vector3i(sx, sy, sz), Vector3i(ex, ey, ez)]
 
 
 func _parse_run(value: Variant) -> Variant:
@@ -1501,7 +1593,11 @@ func _parse_run(value: Variant) -> Variant:
 	var last := int(components[1])
 	if first > last:
 		return null
-	return [first, last, int(components[2]), int(components[3])]
+	var y := int(components[2])
+	var z := int(components[3])
+	if not _cell_in_range(first, y, z) or not _cell_in_range(last, y, z):
+		return null
+	return [first, last, y, z]
 
 
 func _axis_name(axis: int) -> String:

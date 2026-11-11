@@ -263,6 +263,18 @@ func _write() -> void:
 	step("Then an invalid box writes nothing", func():
 		expect(_is_error(invalid_response), "the invalid box reports an error")
 	)
+	var far_response := await _call("write_cells", {"boxes": [[1100000, 0, 0, 1100001, 0, 0]]})
+	step("Then a box outside the cell range is refused", func():
+		expect(_is_error(far_response), "the far box reports an error")
+	)
+	var wide_response := await _call("write_cells", {"boxes": [[0, 0, 0, 70000, 0, 0]]})
+	step("Then a box above the cell cap is refused", func():
+		expect(_is_error(wide_response), "the wide box reports an error")
+	)
+	var far_run := await _call("write_cells", {"runs": [[-7000000000000000000, 7000000000000000000, 0, 0]]})
+	step("Then a run outside the cell range is refused", func():
+		expect(_is_error(far_run), "the far run reports an error")
+	)
 
 
 func _read() -> void:
@@ -292,6 +304,20 @@ func _read() -> void:
 	step("Then a capped read returns the next cell", func():
 		expect(bool(truncated_data.get("truncated", false)), "the read is truncated")
 		expect(truncated_data.has("next"), "the read names the next cell")
+	)
+	var exact_response := await _call("get_cells", {"min": [-1, -1, -1], "max": [1, 1, 1], "max_cells": 27})
+	var exact_data := _result_data(exact_response)
+	step("Then an exact cap is not truncated", func():
+		expect(not bool(exact_data.get("truncated", true)), "the exact read is complete")
+		expect(not exact_data.has("next"), "the exact read has no next cell")
+	)
+	var short_response := await _call("get_cells", {"min": [-1, -1, -1], "max": [1, 1, 1], "max_cells": 26})
+	var short_data := _result_data(short_response)
+	step("Then a short cap names the first missing cell", func():
+		expect(bool(short_data.get("truncated", false)), "the short read is truncated")
+		var next: Array = short_data.get("next", [])
+		var is_last := next.size() == 3 and int(next[0]) == 1 and int(next[1]) == 1 and int(next[2]) == 1
+		expect(is_last, "the next cell is the last cell of the box")
 	)
 
 
@@ -331,29 +357,51 @@ func _emission() -> void:
 		var material: Dictionary = clear_data.get("material", {})
 		expect(not material.has("emission"), "the material has no emission")
 	)
+	var invalid_response := await _call("set_material", {"color": [2.0, 0.0, 0.0]})
+	step("Then an out-of-range material is refused", func():
+		expect(_is_error(invalid_response), "the invalid material reports an error")
+	)
 
 
 func _save_open() -> void:
 	var path := "user://mcp_save_test.lve"
+	var png_path := "user://mcp_save_test.lve.png"
 	step("Given a red cell and a save path", func():
 		var frame := State.get_current_voxel_frame()
 		frame.set_cell(Vector3i(1, 2, 3), VoxelFrame.material(Color.RED))
 		State.document._bounds_dirty = true
+		State.document.edit_dirty = true
 		DirAccess.remove_absolute(path)
+		DirAccess.remove_absolute(png_path)
 	)
 	var save_response := await _call("save_document", {"path": path})
 	var save_data := _result_data(save_response)
-	step("Then the document is written", func():
+	step("Then the document is written and the tab is marked saved", func():
 		expect(not _is_error(save_response), "save_document succeeds")
 		expect(FileAccess.file_exists(path), "the saved file exists")
 		expect(str(save_data.get("path", "")) != "", "the save reports a path")
+		expect(State.document.edit_save_path == path, "the save records the save path")
+		expect(State.document.file_path == path, "the document records the file path")
+		expect(not State.document.edit_dirty, "the save clears the unsaved mark")
 	)
 	var open_response := await _call("open_document", {"path": path})
 	step("Then the document opens in a new tab", func():
 		expect(not _is_error(open_response), "open_document succeeds")
 		expect(int(_result_data(open_response).get("frames", 0)) == 1, "the loaded document has one frame")
 		expect(State.get_current_voxel_frame().has(Vector3i(1, 2, 3)), "the loaded document keeps the cell")
+		expect(State.document.edit_save_path == path, "the open document records the save path")
 		DirAccess.remove_absolute(path)
+	)
+	var png_response := await _call("save_document", {"path": png_path})
+	step("Then a PNG document saves with a preview", func():
+		expect(not _is_error(png_response), "the PNG save succeeds")
+		expect(FileAccess.file_exists(png_path), "the PNG file exists")
+	)
+	var png_open := await _call("open_document", {"path": png_path})
+	step("Then the PNG document opens", func():
+		expect(not _is_error(png_open), "the PNG open succeeds")
+		expect(int(_result_data(png_open).get("frames", 0)) == 1, "the PNG document has one frame")
+		DirAccess.remove_absolute(png_path)
 	)
 
 
@@ -408,8 +456,23 @@ func _busy() -> void:
 		expect(edit != null, "the user edit is open")
 	)
 	var response := await _call("stroke", {"points": [[0, 0, 0]]})
-	step("Then the agent action is refused", func():
+	step("Then the agent stroke is refused", func():
 		expect(_is_error(response), "the agent stroke reports an error")
+	)
+	var new_response := await _call("new_document", {})
+	step("Then a new document is refused", func():
+		expect(_is_error(new_response), "new_document reports busy")
+	)
+	var open_response := await _call("open_document", {"path": "res://Flamingo.lve"})
+	step("Then opening a document is refused", func():
+		expect(_is_error(open_response), "open_document reports busy")
+	)
+	var save_response := await _call("save_document", {"path": "user://mcp_busy_save.lve"})
+	step("Then a save is refused", func():
+		expect(_is_error(save_response), "save_document reports busy")
+		expect(not FileAccess.file_exists("user://mcp_busy_save.lve"), "the busy save writes no file")
+	)
+	step("Then the user edit is cancelled", func():
 		State.cancel_edit(edit)
 	)
 
@@ -464,17 +527,14 @@ func _http() -> void:
 	expect(start_error == OK, "the HTTP server starts")
 	var port_value: Variant = server.call("local_port")
 	var port: int = int(port_value) if port_value is int else 0
-	var client := StreamPeerTCP.new()
-	var connect_error := client.connect_to_host("127.0.0.1", port)
-	expect(connect_error == OK, "the HTTP client connects")
-	await _wait_client(client)
 	var body := '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"1"}}}'
-	var request := "POST /mcp HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/json\r\nContent-Length: %d\r\nConnection: close\r\n\r\n%s" % [body.to_utf8_buffer().size(), body]
-	client.put_data(request.to_utf8_buffer())
-	var response := await _read_http(client)
+	var response := await _http_post(port, "Content-Type: application/json\r\n", body)
 	expect(response.begins_with("HTTP/1.1 200"), "the HTTP initialize returns 200")
 	expect(response.contains("\"name\":\"lve\""), "the HTTP body identifies the server")
-	client.disconnect_from_host()
+	var origin_response := await _http_post(port, "Origin: http://evil.example\r\nContent-Type: application/json\r\n", body)
+	expect(origin_response.begins_with("HTTP/1.1 403"), "a browser origin is refused")
+	var plain_response := await _http_post(port, "Content-Type: text/plain\r\n", body)
+	expect(plain_response.begins_with("HTTP/1.1 415"), "a non-JSON content type is refused")
 	var sse := StreamPeerTCP.new()
 	sse.connect_to_host("127.0.0.1", port)
 	await _wait_client(sse)
@@ -482,6 +542,18 @@ func _http() -> void:
 	var sse_response := await _read_http(sse, true)
 	expect(sse_response.contains("text/event-stream"), "the GET opens an SSE stream")
 	sse.disconnect_from_host()
+
+
+func _http_post(port: int, headers: String, body: String) -> String:
+	var client := StreamPeerTCP.new()
+	var connect_error := client.connect_to_host("127.0.0.1", port)
+	expect(connect_error == OK, "the HTTP client connects")
+	await _wait_client(client)
+	var request := "POST /mcp HTTP/1.1\r\nHost: 127.0.0.1\r\n%sContent-Length: %d\r\nConnection: close\r\n\r\n%s" % [headers, body.to_utf8_buffer().size(), body]
+	client.put_data(request.to_utf8_buffer())
+	var response := await _read_http(client)
+	client.disconnect_from_host()
+	return response
 
 
 func _screenshot() -> void:
@@ -513,6 +585,10 @@ func _screenshot() -> void:
 			expect(str(image_entry.get("type", "")) == "image", "the first entry is an image")
 			expect(str(image_entry.get("mimeType", "")) == "image/png", "the image is a PNG")
 			expect(not str(image_entry.get("data", "")).is_empty(), "the image has data")
+	)
+	var current_focus := await _call("screenshot", {"view": "current", "focus": [0, 0, 0, 0, 0, 0]})
+	step("Then focus with the current view is refused", func():
+		expect(_is_error(current_focus), "the current view rejects focus")
 	)
 
 
