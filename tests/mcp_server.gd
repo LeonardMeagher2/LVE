@@ -199,6 +199,7 @@ func _stroke() -> void:
 		pass
 	)
 	var response := await _call("stroke", {"points": [[0, 0, 0], [0, 0, 2]]})
+	var data := _result_data(response)
 	step("Then the cells are painted and one undo action is recorded", func():
 		expect(not _is_error(response), "stroke succeeds")
 		var frame := State.get_current_voxel_frame()
@@ -207,6 +208,9 @@ func _stroke() -> void:
 		expect(frame.has(Vector3i(0, 0, 2)), "the last center is painted")
 		expect(frame.get_color(Vector3i(0, 0, 1)).r == 1.0 and frame.get_color(Vector3i(0, 0, 1)).g == 0.0, "the cells use the current material")
 		expect(State.undo_redo.get_history_count() == 1, "the whole stroke is one history action")
+		expect(int(data.get("revision", -1)) >= 0, "the stroke reports a revision")
+		expect(int(data.get("changed_chunks", 0)) >= 1, "the stroke reports the changed chunks")
+		expect(data.get("changed_bounds") != null, "the stroke reports changed bounds")
 	)
 
 
@@ -222,6 +226,7 @@ func _fill() -> void:
 	)
 	await _call("set_tool", {"tool": "fill", "connected": true})
 	var response := await _call("fill", {"seed": [0, 0, 0]})
+	var data := _result_data(response)
 	step("Then the connected region uses the green material", func():
 		expect(not _is_error(response), "fill succeeds")
 		var frame := State.get_current_voxel_frame()
@@ -233,6 +238,9 @@ func _fill() -> void:
 					green += 1
 		expect(green == 9, "the nine connected cells are green")
 		expect(State.undo_redo.get_history_count() == 1, "the fill is one history action")
+		expect(int(data.get("revision", -1)) >= 0, "the fill reports a revision")
+		expect(int(data.get("changed_chunks", 0)) >= 1, "the fill reports the changed chunks")
+		expect(data.get("changed_bounds") != null, "the fill reports changed bounds")
 	)
 
 

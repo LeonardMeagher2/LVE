@@ -1725,8 +1725,9 @@ func _get_changes(args: Dictionary) -> Dictionary:
 	return _tool_ok(data)
 
 
-func _changed_count_since(since: int, frame_index: int) -> int:
+func _changed_counts_since(since: int, frame_index: int) -> Dictionary:
 	var cells := {}
+	var chunks := {}
 	for entry in _journal:
 		if int(entry.get("revision", 0)) <= since:
 			continue
@@ -1736,7 +1737,11 @@ func _changed_count_since(since: int, frame_index: int) -> int:
 		if entry_cells is Array:
 			for cell in entry_cells:
 				cells[cell] = true
-	return cells.size()
+		var entry_chunks: Variant = entry.get("chunks", null)
+		if entry_chunks is Array:
+			for cell in entry_chunks:
+				chunks[cell] = true
+	return {"cells": cells.size(), "chunks": chunks.size()}
 
 
 func _changed_bounds_since(since: int, frame_index: int) -> Variant:
@@ -1749,6 +1754,10 @@ func _changed_bounds_since(since: int, frame_index: int) -> Variant:
 		var entry_cells: Variant = entry.get("cells", null)
 		if entry_cells is Array:
 			for cell in entry_cells:
+				cells[cell] = true
+		var entry_chunks: Variant = entry.get("chunks", null)
+		if entry_chunks is Array:
+			for cell in entry_chunks:
 				cells[cell] = true
 	return _bounds_of_dictionaries([cells])
 
@@ -2769,13 +2778,16 @@ func _stroke(args: Dictionary) -> Dictionary:
 	var completed := await _wait_tool_idle(tool, 30000)
 	if not completed:
 		return _tool_error("The stroke did not complete within 30 seconds.")
-	await get_tree().process_frame
+	for wait_frame in 2:
+		await get_tree().process_frame
+	var counts := _changed_counts_since(before_revision, State.current_frame)
 	return _tool_ok({
 		"tool": tool_id,
 		"points": points.size(),
 		"revision": _revision,
 		"occupied": State.get_current_voxel_frame().count() if State.get_current_voxel_frame() != null else 0,
-		"changed": _changed_count_since(before_revision, State.current_frame),
+		"changed_cells": counts["cells"],
+		"changed_chunks": counts["chunks"],
 		"changed_bounds": _changed_bounds_since(before_revision, State.current_frame),
 	})
 
@@ -2805,12 +2817,15 @@ func _fill(args: Dictionary) -> Dictionary:
 	var completed := await _wait_tool_idle(tool, 60000)
 	if not completed:
 		return _tool_error("The fill did not complete within 60 seconds.")
-	await get_tree().process_frame
+	for wait_frame in 2:
+		await get_tree().process_frame
+	var counts := _changed_counts_since(before_revision, State.current_frame)
 	return _tool_ok({
 		"seed": _json_cell(seed),
 		"revision": _revision,
 		"occupied": State.get_current_voxel_frame().count() if State.get_current_voxel_frame() != null else 0,
-		"changed": _changed_count_since(before_revision, State.current_frame),
+		"changed_cells": counts["cells"],
+		"changed_chunks": counts["chunks"],
 		"changed_bounds": _changed_bounds_since(before_revision, State.current_frame),
 	})
 
