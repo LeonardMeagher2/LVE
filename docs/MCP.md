@@ -79,7 +79,7 @@ Other harnesses use the same URL:
 | `set_cursor` | Move the active tool cursor |
 | `stroke` | Draw a brush, paint, or eraser stroke through cell points |
 | `fill` | Fill a connected or matching region from a seed |
-| `write_cells` | Write or erase cells, boxes, or runs |
+| `write_cells` | Write or erase cells, boxes, or runs with optional per-cell materials and frames. One call is one undo action |
 | `sample` | Copy a cell material to the current material |
 
 The tools use integer cell coordinates. Cell `c` covers `[c - 0.5, c + 0.5]`. Y is up.
@@ -115,11 +115,11 @@ The material index is local to one response. The same material can have a differ
 
 `write_cells` accepts three cell forms:
 
-- `cells`: `[x, y, z]`
-- `boxes`: `[x0, y0, z0, x1, y1, z1]`, inclusive
-- `runs`: `[x0, x1, y, z]`, inclusive
+- `cells`: `[x, y, z]` or `[x, y, z, material_index]`
+- `boxes`: `[x0, y0, z0, x1, y1, z1]`, inclusive, or the same with a trailing `material_index`
+- `runs`: `[x0, x1, y, z]`, inclusive, or the same with a trailing `material_index`
 
-Provide at least one form. All forms use the current material and make one undo action.
+Provide at least one form. A shape without an index uses the current material. Set `materials` to a list of material objects and use the index in a shape. Set `frames` to write the same shapes to several frames. One call is one undo action, even across frames. `label` names the history action. The current frame stays the same.
 
 `get_state` returns a compact state. It omits the camera and other detail that editing does not need.
 

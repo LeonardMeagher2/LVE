@@ -21,6 +21,8 @@ const MAX_BOX_CELLS := 262144
 const MAX_GET_CELLS := 512
 ## The largest cell count that one write accepts.
 const MAX_WRITE_CELLS := 65536
+## The largest cell count that one multi-frame write accepts.
+const MAX_WRITE_TOTAL_CELLS := MAX_WRITE_CELLS * 4
 ## The largest frame cell count that the semantic read tools scan.
 const MAX_SCAN_CELLS := 262144
 ## The largest island count that one read lists.
@@ -483,31 +485,57 @@ const TOOLS := [
 	},
 	{
 		"name": "write_cells",
-		"description": "Write or erase cells with the current material. Provide cells, boxes, or runs. Each call is one undo action.",
+		"description": "Write or erase cells with per-cell materials and optional frames. Provide cells, boxes, or runs. Each call is one undo action, even across frames.",
 		"inputSchema": {
 			"type": "object",
 			"properties": {
 				"cells": {
 					"type": "array",
-					"items": {"type": "array", "items": {"type": "integer"}, "minItems": 3, "maxItems": 3},
+					"items": {"type": "array", "items": {"type": "integer"}, "minItems": 3, "maxItems": 4},
 					"minItems": 1,
 					"maxItems": 65536,
+					"description": "Inclusive [x, y, z] or [x, y, z, material_index].",
 				},
 				"boxes": {
 					"type": "array",
-					"items": {"type": "array", "items": {"type": "integer"}, "minItems": 6, "maxItems": 6},
+					"items": {"type": "array", "items": {"type": "integer"}, "minItems": 6, "maxItems": 7},
 					"minItems": 1,
 					"maxItems": 1024,
-					"description": "Inclusive [x0, y0, z0, x1, y1, z1].",
+					"description": "Inclusive [x0, y0, z0, x1, y1, z1] or [x0, y0, z0, x1, y1, z1, material_index].",
 				},
 				"runs": {
 					"type": "array",
-					"items": {"type": "array", "items": {"type": "integer"}, "minItems": 4, "maxItems": 4},
+					"items": {"type": "array", "items": {"type": "integer"}, "minItems": 4, "maxItems": 5},
 					"minItems": 1,
 					"maxItems": 65536,
-					"description": "Inclusive x span [x0, x1, y, z].",
+					"description": "Inclusive x span [x0, x1, y, z] or [x0, x1, y, z, material_index].",
+				},
+				"materials": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"properties": {
+							"color": {"type": "string", "description": "#rrggbb or #rrggbbaa"},
+							"emission": {"type": "string", "description": "#rrggbb or #rrggbbaa"},
+							"metallic": {"type": "number", "minimum": 0, "maximum": 1},
+							"roughness": {"type": "number", "minimum": 0, "maximum": 1},
+							"palette_index": {"type": "integer", "minimum": 0},
+						},
+						"additionalProperties": false,
+					},
+					"minItems": 1,
+					"maxItems": 256,
+					"description": "Material table for the shape material indices. A shape without an index uses the current material.",
+				},
+				"frames": {
+					"type": "array",
+					"items": {"type": "integer", "minimum": 0},
+					"minItems": 1,
+					"maxItems": 16,
+					"description": "Frame indices to write. Defaults to the current frame. One undo action covers every frame.",
 				},
 				"erase": {"type": "boolean"},
+				"label": {"type": "string", "description": "History action name. Defaults to Write Cells."},
 			},
 			"additionalProperties": false,
 		},
@@ -526,7 +554,7 @@ const TOOLS := [
 	},
 ]
 
-const INSTRUCTIONS := "LVE is a voxel editor. Cells are integers and Y is up. Read get_state for identity and revision. Call inspect_document for bounds, materials, islands, and frame transitions. Use get_slice or get_map for shape. Use screenshot views or frames for visual checks. Use get_cells for exact cells and pass next back as cursor with the same box. Each write is one undo action. Use get_changes since the last revision to verify the edit."
+const INSTRUCTIONS := "LVE is a voxel editor. Cells are integers and Y is up. Read get_state for identity and revision. Call inspect_document for bounds, materials, islands, and frame transitions. Use get_slice or get_map for shape. Use screenshot views or frames for visual checks. Use get_cells for exact cells and pass next back as cursor with the same box. write_cells accepts per-cell materials and frames. Each write_cells call is one undo action, even across frames. Use get_changes since the last revision to verify the edit."
 
 ## One accepted bridge or HTTP client.
 class PeerState extends RefCounted:
@@ -2884,107 +2912,306 @@ func _fill(args: Dictionary) -> Dictionary:
 func _write_cells(args: Dictionary) -> Dictionary:
 	if State.active_edit() != null or State.edit_busy():
 		return _tool_error("The editor is busy with another edit. Retry.")
-	var cells_value: Variant = _parse_cells(args.get("cells", null), MAX_WRITE_CELLS)
-	if args.has("cells") and not (cells_value is Array):
-		return _tool_error("cells must be an array of [x, y, z] cells.")
-	var cells: Array = []
-	if cells_value is Array:
-		cells = cells_value
-	var boxes: Array = []
-	var boxes_value: Variant = args.get("boxes", null)
-	if boxes_value != null:
-		if not (boxes_value is Array):
-			return _tool_error("boxes must be an array of [x0, y0, z0, x1, y1, z1].")
-		var box_list: Array = boxes_value
-		for index in range(box_list.size()):
-			var box_value: Variant = _parse_box(box_list[index])
-			if box_value == null:
-				return _tool_error("boxes[%d] must be [x0, y0, z0, x1, y1, z1] with min <= max." % index)
-			boxes.append(box_value)
-	var runs: Array = []
-	var runs_value: Variant = args.get("runs", null)
-	if runs_value != null:
-		if not (runs_value is Array):
-			return _tool_error("runs must be an array of [x0, x1, y, z].")
-		var run_list: Array = runs_value
-		for index in range(run_list.size()):
-			var run_value: Variant = _parse_run(run_list[index])
-			if run_value == null:
-				return _tool_error("runs[%d] must be [x0, x1, y, z] with x0 <= x1." % index)
-			runs.append(run_value)
-	if cells.is_empty() and boxes.is_empty() and runs.is_empty():
-		return _tool_error("Provide cells, boxes, or runs.")
+	var materials: Array = []
+	var materials_value: Variant = args.get("materials", null)
+	if materials_value != null:
+		if not (materials_value is Array):
+			return _tool_error("materials must be an array of material objects.")
+		var entries: Array = materials_value
+		if entries.is_empty() or entries.size() > 256:
+			return _tool_error("materials must hold 1 to 256 entries.")
+		for index in range(entries.size()):
+			var entry: Variant = entries[index]
+			if not (entry is Dictionary):
+				return _tool_error("materials[%d] must be a material object." % index)
+			var material_value: Variant = _parse_material(entry)
+			if not (material_value is PackedFloat32Array):
+				return _tool_error("materials[%d] has invalid values." % index)
+			var material: PackedFloat32Array = material_value
+			if not VoxelDocument.valid_material(material):
+				return _tool_error("materials[%d] values must be between 0 and 1." % index)
+			materials.append(material)
 	var erase := false
 	var erase_value: Variant = args.get("erase", false)
 	if erase_value is bool:
 		erase = erase_value
-	var material := VoxelFrame.material(Color.TRANSPARENT) if erase else State.current_material
+	var current_material := VoxelFrame.material(Color.TRANSPARENT) if erase else State.current_material
 	var changes := {}
-	for value in cells:
-		var cell: Vector3i = value
-		changes[cell] = material
-	for value in boxes:
-		var box: Array = value
-		var start: Vector3i = box[0]
-		var end: Vector3i = box[1]
-		var extent := end - start + Vector3i.ONE
-		# Check each axis before the product, so a wide box cannot overflow the
-		# cell cap and enter the write loops.
-		if extent.x > MAX_WRITE_CELLS or extent.y > MAX_WRITE_CELLS or extent.z > MAX_WRITE_CELLS:
-			return _tool_error("The write exceeds %d cells." % MAX_WRITE_CELLS)
-		var volume := extent.x * extent.y * extent.z
-		if changes.size() + volume > MAX_WRITE_CELLS:
-			return _tool_error("The write exceeds %d cells." % MAX_WRITE_CELLS)
-		for x in range(start.x, end.x + 1):
-			for y in range(start.y, end.y + 1):
-				for z in range(start.z, end.z + 1):
-					changes[Vector3i(x, y, z)] = material
-	for value in runs:
-		var run: Array = value
-		var first: int = run[0]
-		var last: int = run[1]
-		var y: int = run[2]
-		var z: int = run[3]
-		var length := last - first + 1
-		if length > MAX_WRITE_CELLS:
-			return _tool_error("The write exceeds %d cells." % MAX_WRITE_CELLS)
-		if changes.size() + length > MAX_WRITE_CELLS:
-			return _tool_error("The write exceeds %d cells." % MAX_WRITE_CELLS)
-		for x in range(first, last + 1):
-			changes[Vector3i(x, y, z)] = material
-	var tx := State.begin_edit()
-	if tx == null:
-		return _tool_error("The editor is busy with another edit. Retry.")
-	var frame := State.get_current_voxel_frame()
-	if frame == null:
-		State.cancel_edit(tx)
-		return _tool_error("The document has no current frame.")
-	var job := WriteJob.new()
-	job.edit_context = tx.edit_context
-	job.edited_frame = VoxelFrame.job_frame(frame)
-	job.changes = changes
-	job.applied_uniform = material
-	if changes.size() <= 4096:
-		job.run()
-	else:
-		var operation := State.begin_operation("Writing cells", changes.size(), true, self, job.cancel)
-		await State.run_edit_job(job, operation, "MCP write")
-		State.finish_operation(operation)
-	if State.active_edit() != tx:
-		return _tool_error("The edit was cancelled or the document changed.")
-	frame.apply_published(job.changed_chunks, job.edited_frame)
-	State.document._bounds_dirty = true
-	if not job.changed_chunks.is_empty():
-		State.chunks_changed.emit(State.current_frame, job.changed_chunks)
-	_record_cells_change(State.current_frame, job.applied_cells.keys())
-	State.finish_edit(tx, "Write Cells")
+	var cell_count := 0
+	var cells_value: Variant = args.get("cells", null)
+	if cells_value != null:
+		if not (cells_value is Array):
+			return _tool_error("cells must be an array of [x, y, z] or [x, y, z, material_index].")
+		var cell_list: Array = cells_value
+		if cell_list.is_empty() or cell_list.size() > MAX_WRITE_CELLS:
+			return _tool_error("cells must hold 1 to %d entries." % MAX_WRITE_CELLS)
+		for index in range(cell_list.size()):
+			var parsed: Variant = _parse_write_cell(cell_list[index])
+			if parsed == null:
+				return _tool_error("cells[%d] must be [x, y, z] or [x, y, z, material_index]." % index)
+			var shape: Array = parsed
+			var material: Variant = _write_material(shape[1], materials, current_material, erase)
+			if material == null:
+				return _tool_error("cells[%d] names a material index that does not exist." % index)
+			changes[shape[0]] = material
+			cell_count += 1
+			if cell_count > MAX_WRITE_CELLS:
+				return _tool_error("The write exceeds %d cells." % MAX_WRITE_CELLS)
+	var boxes_value: Variant = args.get("boxes", null)
+	if boxes_value != null:
+		if not (boxes_value is Array):
+			return _tool_error("boxes must be an array of [x0, y0, z0, x1, y1, z1] with an optional material index.")
+		var box_list: Array = boxes_value
+		if box_list.is_empty() or box_list.size() > 1024:
+			return _tool_error("boxes must hold 1 to 1024 entries.")
+		for index in range(box_list.size()):
+			var parsed: Variant = _parse_write_box(box_list[index])
+			if parsed == null:
+				return _tool_error("boxes[%d] must be [x0, y0, z0, x1, y1, z1] with min <= max and an optional material index." % index)
+			var shape: Array = parsed
+			var start: Vector3i = shape[0]
+			var end: Vector3i = shape[1]
+			var material: Variant = _write_material(shape[2], materials, current_material, erase)
+			if material == null:
+				return _tool_error("boxes[%d] names a material index that does not exist." % index)
+			var extent := end - start + Vector3i.ONE
+			# Check each axis before the product, so a wide box cannot overflow the
+			# cell cap and enter the write loops.
+			if extent.x > MAX_WRITE_CELLS or extent.y > MAX_WRITE_CELLS or extent.z > MAX_WRITE_CELLS:
+				return _tool_error("The write exceeds %d cells." % MAX_WRITE_CELLS)
+			var volume := extent.x * extent.y * extent.z
+			if cell_count + volume > MAX_WRITE_CELLS:
+				return _tool_error("The write exceeds %d cells." % MAX_WRITE_CELLS)
+			for x in range(start.x, end.x + 1):
+				for y in range(start.y, end.y + 1):
+					for z in range(start.z, end.z + 1):
+						changes[Vector3i(x, y, z)] = material
+			cell_count += volume
+	var runs_value: Variant = args.get("runs", null)
+	if runs_value != null:
+		if not (runs_value is Array):
+			return _tool_error("runs must be an array of [x0, x1, y, z] with an optional material index.")
+		var run_list: Array = runs_value
+		if run_list.is_empty() or run_list.size() > MAX_WRITE_CELLS:
+			return _tool_error("runs must hold 1 to %d entries." % MAX_WRITE_CELLS)
+		for index in range(run_list.size()):
+			var parsed: Variant = _parse_write_run(run_list[index])
+			if parsed == null:
+				return _tool_error("runs[%d] must be [x0, x1, y, z] with x0 <= x1 and an optional material index." % index)
+			var shape: Array = parsed
+			var first: int = shape[0]
+			var last: int = shape[1]
+			var y: int = shape[2]
+			var z: int = shape[3]
+			var material: Variant = _write_material(shape[4], materials, current_material, erase)
+			if material == null:
+				return _tool_error("runs[%d] names a material index that does not exist." % index)
+			var length := last - first + 1
+			if length > MAX_WRITE_CELLS:
+				return _tool_error("The write exceeds %d cells." % MAX_WRITE_CELLS)
+			if cell_count + length > MAX_WRITE_CELLS:
+				return _tool_error("The write exceeds %d cells." % MAX_WRITE_CELLS)
+			for x in range(first, last + 1):
+				changes[Vector3i(x, y, z)] = material
+			cell_count += length
+	if changes.is_empty():
+		return _tool_error("Provide cells, boxes, or runs.")
+	var frames := _write_frames(args)
+	if frames.is_empty():
+		return _tool_error("frames must hold 1 to 16 existing frame indices.")
+	var writes_other_frame := false
+	for frame_index in frames:
+		if int(frame_index) != State.current_frame:
+			writes_other_frame = true
+			break
+	if writes_other_frame and State.selection.count() > 0:
+		return _tool_error("Clear the selection before writing to other frames.")
+	if changes.size() * frames.size() > MAX_WRITE_TOTAL_CELLS:
+		return _tool_error("The write exceeds %d cells across frames." % MAX_WRITE_TOTAL_CELLS)
+	var uniform_material: Variant = null
+	var first_material := true
+	for material in changes.values():
+		if first_material:
+			uniform_material = material
+			first_material = false
+		elif material != uniform_material:
+			uniform_material = null
+			break
+	var label := "Write Cells"
+	var label_value: Variant = args.get("label", null)
+	if label_value is String and not String(label_value).strip_edges().is_empty():
+		label = String(label_value).strip_edges().left(80)
+	var document := State.document
+	var collected: Array = []
+	var frame_results: Array = []
+	var total_applied := 0
+	var total_chunks := 0
+	var total_bounds_min := Vector3i.MAX
+	var total_bounds_max := Vector3i.MIN
+	var has_bounds := false
+	for frame_index in frames:
+		if State.document != document:
+			State.cancel_changes(collected)
+			return _tool_error("The document changed before the write finished.")
+		var frame: VoxelFrame = State.get_voxel_frame(int(frame_index))
+		if frame == null:
+			State.cancel_changes(collected)
+			return _tool_error("The frame does not exist.")
+		var tx := State.begin_edit(int(frame_index))
+		if tx == null:
+			State.cancel_changes(collected)
+			return _tool_error("The editor is busy with another edit. Retry.")
+		var job := WriteJob.new()
+		job.edit_context = tx.edit_context
+		job.edited_frame = VoxelFrame.job_frame(frame)
+		job.changes = changes
+		job.applied_uniform = uniform_material
+		if changes.size() <= 4096:
+			job.run()
+		else:
+			var operation := State.begin_operation("Writing cells", changes.size(), true, self, job.cancel)
+			await State.run_edit_job(job, operation, "MCP write")
+			State.finish_operation(operation)
+		if State.active_edit() != tx:
+			State.cancel_changes(collected)
+			return _tool_error("The edit was cancelled or the document changed.")
+		if not job.checkpoint(0):
+			State.cancel_edit(tx)
+			State.cancel_changes(collected)
+			return _tool_error("The write was cancelled.")
+		frame.apply_published(job.changed_chunks, job.edited_frame)
+		State.document._bounds_dirty = true
+		if not job.changed_chunks.is_empty():
+			State.chunks_changed.emit(int(frame_index), job.changed_chunks)
+		_record_cells_change(int(frame_index), job.applied_cells.keys())
+		var change := State.finish_edit_collect(tx)
+		if change != null:
+			collected.append(change)
+		var applied_keys: Array = job.applied_cells.keys()
+		var bounds: Variant = _bounds_of_cell_array(applied_keys)
+		if bounds != null:
+			var bounds_data: Dictionary = bounds
+			var bounds_min: Array = bounds_data["min"]
+			var bounds_max: Array = bounds_data["max"]
+			var min_cell := Vector3i(int(bounds_min[0]), int(bounds_min[1]), int(bounds_min[2]))
+			var max_cell := Vector3i(int(bounds_max[0]), int(bounds_max[1]), int(bounds_max[2]))
+			total_bounds_min = Vector3i(mini(total_bounds_min.x, min_cell.x), mini(total_bounds_min.y, min_cell.y), mini(total_bounds_min.z, min_cell.z))
+			total_bounds_max = Vector3i(maxi(total_bounds_max.x, max_cell.x), maxi(total_bounds_max.y, max_cell.y), maxi(total_bounds_max.z, max_cell.z))
+			has_bounds = true
+		frame_results.append({
+			"frame": int(frame_index),
+			"applied": job.applied_cells.size(),
+			"chunks": job.changed_chunks.size(),
+			"occupied": frame.count(),
+			"changed_bounds": bounds,
+		})
+		total_applied += job.applied_cells.size()
+		total_chunks += job.changed_chunks.size()
+	State.commit_changes(collected, label)
+	var current_frame := State.get_current_voxel_frame()
 	return _tool_ok({
-		"applied": job.applied_cells.size(),
-		"chunks": job.changed_chunks.size(),
+		"applied": total_applied,
+		"chunks": total_chunks,
+		"frames": frame_results,
+		"action": label,
 		"revision": _revision,
-		"occupied": frame.count(),
-		"changed_bounds": _bounds_of_cell_array(job.applied_cells.keys()),
+		"occupied": current_frame.count() if current_frame != null else 0,
+		"changed_bounds": _cell_bounds_json_from_cells(total_bounds_min, total_bounds_max) if has_bounds else null,
 	})
+
+
+func _parse_write_cell(value: Variant) -> Variant:
+	if not (value is Array):
+		return null
+	var components: Array = value
+	if components.size() < 3 or components.size() > 4:
+		return null
+	var cell_value: Variant = _parse_cell(components.slice(0, 3))
+	if cell_value == null:
+		return null
+	var material_index := -1
+	if components.size() == 4:
+		if not (components[3] is int or components[3] is float):
+			return null
+		material_index = int(components[3])
+		if material_index < -1:
+			return null
+	return [cell_value, material_index]
+
+
+func _parse_write_box(value: Variant) -> Variant:
+	if not (value is Array):
+		return null
+	var components: Array = value
+	if components.size() < 6 or components.size() > 7:
+		return null
+	var box_value: Variant = _parse_box(components.slice(0, 6))
+	if box_value == null:
+		return null
+	var box: Array = box_value
+	var material_index := -1
+	if components.size() == 7:
+		if not (components[6] is int or components[6] is float):
+			return null
+		material_index = int(components[6])
+		if material_index < -1:
+			return null
+	return [box[0], box[1], material_index]
+
+
+func _parse_write_run(value: Variant) -> Variant:
+	if not (value is Array):
+		return null
+	var components: Array = value
+	if components.size() < 4 or components.size() > 5:
+		return null
+	var run_value: Variant = _parse_run(components.slice(0, 4))
+	if run_value == null:
+		return null
+	var run: Array = run_value
+	var material_index := -1
+	if components.size() == 5:
+		if not (components[4] is int or components[4] is float):
+			return null
+		material_index = int(components[4])
+		if material_index < -1:
+			return null
+	return [run[0], run[1], run[2], run[3], material_index]
+
+
+func _write_material(index: int, materials: Array, current_material: PackedFloat32Array, erase: bool) -> Variant:
+	if erase:
+		return VoxelFrame.material(Color.TRANSPARENT)
+	if index < 0:
+		return current_material
+	if index >= materials.size():
+		return null
+	return materials[index]
+
+
+func _write_frames(args: Dictionary) -> Array:
+	var frames: Array = []
+	var frames_value: Variant = args.get("frames", null)
+	if frames_value == null:
+		frames.append(State.current_frame)
+		return frames
+	if not (frames_value is Array):
+		return []
+	var source: Array = frames_value
+	if source.is_empty() or source.size() > 16:
+		return []
+	var seen := {}
+	for value in source:
+		if not (value is int or value is float):
+			return []
+		var index := int(value)
+		if index < 0 or index >= State.document.frames.size():
+			return []
+		if seen.has(index):
+			continue
+		seen[index] = true
+		frames.append(index)
+	return frames
 
 
 func _sample(args: Dictionary) -> Dictionary:

@@ -17,6 +17,8 @@ func _ready() -> void:
 	test("a driven brush stroke writes cells and one undo action", _stroke, "stroke")
 	test("a driven fill uses the current material", _fill, "fill")
 	test("write_cells writes boxes and runs", _write, "write_cells")
+	test("write_cells accepts per-cell materials", _write_materials, "write_materials")
+	test("write_cells writes several frames as one undo", _write_frames, "write_frames")
 	test("get_cells returns compact runs", _read, "get_cells")
 	test("materials can glow", _emission, "emission")
 	test("documents save and open", _save_open, "save_open")
@@ -291,6 +293,76 @@ func _write() -> void:
 	var far_run := await _call("write_cells", {"runs": [[-7000000000000000000, 7000000000000000000, 0, 0]]})
 	step("Then a run outside the cell range is refused", func():
 		expect(_is_error(far_run), "the far run reports an error")
+	)
+
+
+func _write_materials() -> void:
+	step("Given a black current material", func():
+		State.set_material(VoxelFrame.material(Color.BLACK))
+		State.undo_redo.clear_history()
+	)
+	var response := await _call("write_cells", {
+		"materials": [{"color": "#ff0000"}, {"color": "#0000ff"}],
+		"boxes": [[-1, 0, -1, 1, 0, 1, 0], [3, 0, -1, 5, 0, 1, 1]],
+		"label": "Two colors",
+	})
+	var data := _result_data(response)
+	step("Then each box uses its material in one action", func():
+		expect(not _is_error(response), "the material write succeeds")
+		var frame := State.get_current_voxel_frame()
+		var red := frame.get_color(Vector3i(0, 0, 0))
+		var blue := frame.get_color(Vector3i(4, 0, 0))
+		expect(red.r == 1.0 and red.g == 0.0 and red.b == 0.0, "the first box is red")
+		expect(blue.b == 1.0 and blue.r == 0.0 and blue.g == 0.0, "the second box is blue")
+		expect(State.current_material == VoxelFrame.material(Color.BLACK), "the current material is unchanged")
+		expect(State.undo_redo.get_history_count() == 1, "the write is one history action")
+		expect(State.undo_redo.get_action_name(State.undo_redo.get_current_action()) == "Two colors", "the action uses the label")
+		expect(int(data.get("applied", 0)) == 18, "the write reports 18 cells")
+	)
+	var invalid := await _call("write_cells", {"materials": [{"color": "#ff0000"}], "cells": [[0, 0, 0, 2]]})
+	step("Then an unknown material index is refused", func():
+		expect(_is_error(invalid), "the unknown index reports an error")
+	)
+	var missing := await _call("write_cells", {"cells": [[0, 0, 0, 0]]})
+	step("Then a material index without a table is refused", func():
+		expect(_is_error(missing), "the missing table reports an error")
+	)
+
+
+func _write_frames() -> void:
+	step("Given three empty frames", func():
+		State.add_frame()
+		State.add_frame()
+		State.current_frame = 0
+		State.undo_redo.clear_history()
+	)
+	var response := await _call("write_cells", {
+		"frames": [0, 1, 2],
+		"materials": [{"color": "#00ff00"}],
+		"boxes": [[0, 0, 0, 1, 0, 1, 0]],
+		"label": "Three frames",
+	})
+	var data := _result_data(response)
+	step("Then every frame holds the cells in one action", func():
+		expect(not _is_error(response), "the multi-frame write succeeds")
+		for index in 3:
+			var frame := State.get_voxel_frame(index)
+			expect(frame.has(Vector3i(0, 0, 0)) and frame.has(Vector3i(1, 0, 1)), "frame %d holds the cells" % index)
+			var color := frame.get_color(Vector3i(0, 0, 0))
+			expect(color.g == 1.0 and color.r == 0.0, "frame %d uses the green material" % index)
+		expect(State.current_frame == 0, "the current frame stays the same")
+		expect(State.undo_redo.get_history_count() == 1, "three frames are one history action")
+		expect(State.undo_redo.get_action_name(State.undo_redo.get_current_action()) == "Three frames", "the action uses the label")
+		expect(int(data.get("applied", 0)) == 12, "the write reports 12 cells across frames")
+		var frames: Array = data.get("frames", [])
+		expect(frames.size() == 3, "the response lists three frames")
+	)
+	step("When the action is undone", func():
+		State.undo()
+	)
+	step("Then every frame is empty", func():
+		for index in 3:
+			expect(State.get_voxel_frame(index).count() == 0, "frame %d is empty" % index)
 	)
 
 
