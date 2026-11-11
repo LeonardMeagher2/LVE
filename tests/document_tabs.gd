@@ -253,24 +253,38 @@ func _on_test_quit() -> void:
 func _recovery_dialog() -> void:
 	var menu := main.get_node("%MenuBar")
 	menu.recovery_accepted.connect(_on_test_recovery_accepted)
-	var entries := [{
-		"name": "first.lve",
-		"file": "user://first.lve",
-		"path": "user://first.lve",
-	}]
+	var entries := [
+		{"name": "first.lve", "file": "user://first.lve", "path": "user://first.lve"},
+		{"name": "second.lve", "file": "user://second.lve", "path": "user://second.lve"},
+	]
 	step("When recovery files are offered", func():
 		menu.show_recovery(entries)
 	)
-	step("Then the prompt lists them", func():
+	step("Then the prompt lists one checkbox per document", func():
 		var dialog: ConfirmationDialog = menu.get_node("%RecoveryDialog")
+		var options: VBoxContainer = menu.get_node("%RecoveryOptions")
 		expect(dialog.visible, "the recovery prompt opens")
-		expect(dialog.dialog_text.contains("first.lve"), "the prompt names the file")
+		expect(options.get_child_count() == 2, "the prompt has two checkboxes")
+		if options.get_child_count() == 2:
+			var first := options.get_child(0) as CheckBox
+			var second := options.get_child(1) as CheckBox
+			expect(first.button_pressed, "the first checkbox starts checked")
+			expect(second.button_pressed, "the second checkbox starts checked")
+			expect(first.text.contains("first.lve"), "the first checkbox names the file")
+			expect(second.text.contains("second.lve"), "the second checkbox names the file")
+	)
+	step("When the user clears the second document", func():
+		var options: VBoxContainer = menu.get_node("%RecoveryOptions")
+		var second := options.get_child(1) as CheckBox
+		second.button_pressed = false
 	)
 	step("When the user recovers", func():
 		menu.get_node("%RecoveryDialog").confirmed.emit()
 	)
-	step("Then the entries are accepted", func():
+	step("Then only the checked entry is accepted", func():
 		expect(_recovery_entries_seen.size() == 1, "the recovery signal carries one entry")
+		if _recovery_entries_seen.size() == 1:
+			expect(str(_recovery_entries_seen[0].get("name", "")) == "first.lve", "the checked entry is accepted")
 		expect(not menu.get_node("%RecoveryDialog").visible, "the prompt closes")
 	)
 

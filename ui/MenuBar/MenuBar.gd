@@ -42,6 +42,8 @@ var _quit_position := 0
 var _quit_after_save := false
 # The entries shown by the recovery prompt.
 var _recovery_entries: Array = []
+# One checkbox per recovery entry.
+var _recovery_checkboxes: Array[CheckBox] = []
 # The last folder that the file dialog used.
 var _last_dir := ""
 
@@ -62,7 +64,7 @@ func _ready() -> void:
 	%CloseTabDialog.confirmed.connect(_on_close_tab_save)
 	%CloseTabDialog.custom_action.connect(_on_close_tab_action)
 	%CloseTabDialog.canceled.connect(_on_close_tab_cancel)
-	%RecoveryDialog.add_button("Discard", true, "discard")
+	%RecoveryDialog.add_button("Discard all", true, "discard")
 	%RecoveryDialog.confirmed.connect(_on_recovery_confirmed)
 	%RecoveryDialog.custom_action.connect(_on_recovery_action)
 	%RecoveryDialog.canceled.connect(_on_recovery_canceled)
@@ -299,27 +301,43 @@ func _on_file_dialog_canceled() -> void:
 
 ## Shows the recovery prompt for the entries that the autosave manager found.
 func show_recovery(entries: Array) -> void:
-	if entries.is_empty():
-		return
-	_recovery_entries = entries.duplicate()
-	var lines := PackedStringArray()
+	_recovery_entries = []
 	for value in entries:
-		if not (value is Dictionary):
-			continue
-		var entry: Dictionary = value
+		if value is Dictionary:
+			_recovery_entries.append(value)
+	if _recovery_entries.is_empty():
+		return
+	_clear_recovery_options()
+	for entry in _recovery_entries:
 		var name := str(entry.get("name", ""))
 		if name.is_empty():
 			name = "Untitled"
-		lines.append(name)
-	%RecoveryDialog.dialog_text = "Recover these unsaved documents?\n\n" + "\n".join(lines)
+		var path := str(entry.get("path", ""))
+		var checkbox := CheckBox.new()
+		checkbox.text = name if not path.is_empty() else name + " (unsaved)"
+		checkbox.tooltip_text = path if not path.is_empty() else str(entry.get("file", ""))
+		checkbox.button_pressed = true
+		checkbox.clip_text = true
+		checkbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		checkbox.toggled.connect(_on_recovery_toggled)
+		%RecoveryOptions.add_child(checkbox)
+		_recovery_checkboxes.append(checkbox)
+	%RecoveryDialog.dialog_text = "Select the documents to recover."
+	_update_recovery_buttons()
 	%RecoveryDialog.popup_centered()
 
 
 func _on_recovery_confirmed() -> void:
+	var selected: Array = []
+	for index in range(_recovery_checkboxes.size()):
+		if _recovery_checkboxes[index].button_pressed:
+			selected.append(_recovery_entries[index])
+	if selected.is_empty():
+		return
 	%RecoveryDialog.hide()
-	var entries := _recovery_entries
 	_recovery_entries = []
-	recovery_accepted.emit(entries)
+	_clear_recovery_options()
+	recovery_accepted.emit(selected)
 
 
 func _on_recovery_action(action: StringName) -> void:
@@ -328,12 +346,38 @@ func _on_recovery_action(action: StringName) -> void:
 	%RecoveryDialog.hide()
 	var entries := _recovery_entries
 	_recovery_entries = []
+	_clear_recovery_options()
 	recovery_discarded.emit(entries)
 
 
 func _on_recovery_canceled() -> void:
 	%RecoveryDialog.hide()
 	_recovery_entries = []
+	_clear_recovery_options()
+
+
+func _on_recovery_toggled(_pressed: bool) -> void:
+	_update_recovery_buttons()
+
+
+func _update_recovery_buttons() -> void:
+	var any := false
+	for checkbox in _recovery_checkboxes:
+		if checkbox.button_pressed:
+			any = true
+			break
+	%RecoveryDialog.get_ok_button().disabled = not any
+
+
+func _clear_recovery_options() -> void:
+	for checkbox in _recovery_checkboxes:
+		if not is_instance_valid(checkbox):
+			continue
+		var parent := checkbox.get_parent()
+		if parent != null:
+			parent.remove_child(checkbox)
+		checkbox.queue_free()
+	_recovery_checkboxes.clear()
 
 
 # Restores the favorite folders and the last folder. The favorite list is

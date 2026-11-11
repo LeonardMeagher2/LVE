@@ -144,7 +144,24 @@ dialog_text = "Save the changes to this document?"
 unique_name_in_owner = true
 title = "Recover unsaved documents"
 ok_button_text = "Recover"
-dialog_text = "Recover these unsaved documents?"
+dialog_text = "Select the documents to recover."
+
+[node name="Margin" type="MarginContainer" parent="RecoveryDialog"]
+layout_mode = 2
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 8
+
+[node name="Scroll" type="ScrollContainer" parent="RecoveryDialog/Margin"]
+custom_minimum_size = Vector2(360, 120)
+layout_mode = 2
+horizontal_scroll_mode = 0
+
+[node name="RecoveryOptions" type="VBoxContainer" parent="RecoveryDialog/Margin/Scroll"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
 
 [connection signal="pressed" from="NewBtn" to="." method="_on_new_btn_pressed"]
 [connection signal="pressed" from="OpenBtn" to="." method="_on_open_btn_pressed"]
