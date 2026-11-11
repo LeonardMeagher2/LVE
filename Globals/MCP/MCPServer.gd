@@ -246,10 +246,13 @@ const TOOLS := [
 	},
 	{
 		"name": "save_document",
-		"description": "Save the current document as .lve or .lve.png and return its absolute path. A .lve.png file also stores a preview.",
+		"description": "Save the current document as .lve or .lve.png and return its absolute path. It writes a copy by default and leaves the main document path and unsaved mark unchanged. Set copy false to save the main document. A .lve.png file also stores a preview.",
 		"inputSchema": {
 			"type": "object",
-			"properties": {"path": {"type": "string", "description": "A file name or user:// path ending in .lve or .lve.png."}},
+			"properties": {
+				"path": {"type": "string", "description": "A file name or user:// path ending in .lve or .lve.png."},
+				"copy": {"type": "boolean", "description": "Write a copy and keep the main path and unsaved mark. Defaults to true."},
+			},
 			"required": ["path"],
 			"additionalProperties": false,
 		},
@@ -554,7 +557,7 @@ const TOOLS := [
 	},
 ]
 
-const INSTRUCTIONS := "LVE is a voxel editor. Cells are integers and Y is up. Read get_state for identity and revision. Call inspect_document for bounds, materials, islands, and frame transitions. Use get_slice or get_map for shape. Use screenshot views or frames for visual checks. Use get_cells for exact cells and pass next back as cursor with the same box. write_cells accepts per-cell materials and frames. Each write_cells call is one undo action, even across frames. Use get_changes since the last revision to verify the edit."
+const INSTRUCTIONS := "LVE is a voxel editor. Cells are integers and Y is up. Read get_state for identity and revision. Call inspect_document for bounds, materials, islands, and frame transitions. Use get_slice or get_map for shape. Use screenshot views or frames for visual checks. Use get_cells for exact cells and pass next back as cursor with the same box. write_cells accepts per-cell materials and frames. Each write_cells call is one undo action, even across frames. save_document writes a copy by default and keeps the unsaved mark. Set copy false to save the main document. Use get_changes since the last revision to verify the edit."
 
 ## One accepted bridge or HTTP client.
 class PeerState extends RefCounted:
@@ -2469,6 +2472,10 @@ func _new_document() -> Dictionary:
 func _save_document(args: Dictionary) -> Dictionary:
 	if State.active_edit() != null or State.edit_busy():
 		return _tool_error("The editor is busy with another edit. Retry.")
+	var copy := true
+	var copy_value: Variant = args.get("copy", true)
+	if copy_value is bool:
+		copy = copy_value
 	var path := _document_path(args.get("path", ""))
 	if path.is_empty():
 		return _tool_error("path is required.")
@@ -2496,8 +2503,14 @@ func _save_document(args: Dictionary) -> Dictionary:
 	var error := document.save_file(path, preview, encoded)
 	if error != OK:
 		return _tool_error("The document could not be saved: " + error_string(error))
-	State.record_saved(document, path)
-	return _tool_ok({"path": ProjectSettings.globalize_path(path)})
+	if not copy:
+		State.record_saved(document, path)
+	return _tool_ok({
+		"path": ProjectSettings.globalize_path(path),
+		"copy": copy,
+		"main_path": ProjectSettings.globalize_path(document.edit_save_path) if not document.edit_save_path.is_empty() else "",
+		"dirty": document.edit_dirty,
+	})
 
 
 func _open_document(args: Dictionary) -> Dictionary:

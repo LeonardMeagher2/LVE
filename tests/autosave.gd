@@ -68,6 +68,7 @@ func _save_delete() -> void:
 		expect(FileAccess.file_exists(recovery), "the recovery file exists next to the original")
 		var loaded := VoxelDocument.load_file(recovery)
 		expect(loaded != null and loaded.frames[0].has(Vector3i.ZERO), "the recovery file holds the cell")
+		expect(document.edit_dirty, "the autosave copy leaves the unsaved mark")
 		var entries: Array = autosave.recovery_entries()
 		expect(entries.size() == 1, "the manager tracks one copy")
 		if entries.size() == 1:

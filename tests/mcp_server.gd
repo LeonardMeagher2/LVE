@@ -725,7 +725,7 @@ func _save_open() -> void:
 		DirAccess.remove_absolute(path)
 		DirAccess.remove_absolute(png_path)
 	)
-	var save_response := await _call("save_document", {"path": path})
+	var save_response := await _call("save_document", {"path": path, "copy": false})
 	var save_data := _result_data(save_response)
 	step("Then the document is written and the tab is marked saved", func():
 		expect(not _is_error(save_response), "save_document succeeds")
@@ -734,6 +734,21 @@ func _save_open() -> void:
 		expect(State.document.edit_save_path == path, "the save records the save path")
 		expect(State.document.file_path == path, "the document records the file path")
 		expect(not State.document.edit_dirty, "the save clears the unsaved mark")
+	)
+	var copy_path := "user://mcp_copy_test.lve"
+	step("Given the saved document is edited again", func():
+		State.document.edit_dirty = true
+		DirAccess.remove_absolute(copy_path)
+	)
+	var copy_response := await _call("save_document", {"path": copy_path})
+	var copy_data := _result_data(copy_response)
+	step("Then a copy save keeps the main path and unsaved mark", func():
+		expect(not _is_error(copy_response), "the copy save succeeds")
+		expect(FileAccess.file_exists(copy_path), "the copy file exists")
+		expect(bool(copy_data.get("copy", false)), "the result reports a copy")
+		expect(State.document.edit_save_path == path, "the main save path is unchanged")
+		expect(State.document.edit_dirty, "the unsaved mark stays")
+		DirAccess.remove_absolute(copy_path)
 	)
 	var open_response := await _call("open_document", {"path": path})
 	step("Then the document opens in a new tab", func():

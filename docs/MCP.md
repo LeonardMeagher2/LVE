@@ -59,7 +59,7 @@ Other harnesses use the same URL:
 | `get_cells` | Read occupied cells in a box as x-runs. Omit min and max to use the frame bounds. Pass next back as cursor to continue |
 | `screenshot` | Save a PNG of one frame, a view contact sheet, or a frame storyboard. Set `inline` true to return the image |
 | `new_document` | Open an empty document in a new tab |
-| `save_document` | Save the current document as `.lve` or `.lve.png` |
+| `save_document` | Save a copy of the current document as `.lve` or `.lve.png`. Set `copy` false to save the main document |
 | `open_document` | Open a saved `.lve` or `.lve.png` document in a new tab |
 | `add_frame` | Add an empty frame at the end or at an index |
 | `remove_frame` | Remove one frame. The last frame stays |
@@ -129,7 +129,7 @@ Provide at least one form. A shape without an index uses the current material. S
 
 Set `views` to a list of named views to render a contact sheet. Set `frames` to a list of frame indices to render a storyboard. A storyboard uses the union bounds of the selected frames, so the content stays in place. `size` is the tile edge. The response reports `columns`, `rows`, `tile_size`, `bounds`, and the view or frame list.
 
-`save_document` writes a `.lve` file. A `.lve.png` path also stores a 256 by 256 preview, which needs a visible window. `open_document` opens both forms in a new tab. A successful save updates the tab save path, clears the unsaved mark, and updates the session. Use a new path for each iteration so an earlier file stays intact.
+`save_document` writes a `.lve` file. A `.lve.png` path also stores a 256 by 256 preview, which needs a visible window. It writes a copy by default and leaves the main document path and unsaved mark unchanged. Set `copy` false to save the main document, update the tab path, clear the unsaved mark, and update the session. Use a new path for each iteration so an earlier file stays intact. `open_document` opens both forms in a new tab.
 
 The server logs one line per tool call with its response bytes in `user://mcp_server.log`.
 

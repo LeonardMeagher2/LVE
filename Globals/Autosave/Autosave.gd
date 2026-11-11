@@ -145,20 +145,21 @@ func list_recovery() -> Array:
 	var known := {}
 	for entry in entries:
 		known[str(entry.get("file", ""))] = true
-	for path in State.last_tabs(State.SESSION_PATH):
-		var original := str(path)
-		if original.is_empty():
-			continue
-		var recovery := _recovery_path_for_path(original)
-		if recovery == original or not FileAccess.file_exists(recovery) or known.has(recovery):
-			continue
-		entries.append({
-			"file": recovery,
-			"path": original,
-			"name": original.get_file(),
-			"updated": 0,
-		})
-		known[recovery] = true
+	if State.is_app_session():
+		for path in State.last_tabs(State.SESSION_PATH):
+			var original := str(path)
+			if original.is_empty():
+				continue
+			var recovery := _recovery_path_for_path(original)
+			if recovery == original or not FileAccess.file_exists(recovery) or known.has(recovery):
+				continue
+			entries.append({
+				"file": recovery,
+				"path": original,
+				"name": original.get_file(),
+				"updated": 0,
+			})
+			known[recovery] = true
 	for entry in _scan_recovery_dir():
 		if not known.has(str(entry.get("file", ""))):
 			entries.append(entry)
