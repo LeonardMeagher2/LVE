@@ -446,6 +446,12 @@ func _finish_edit(job: BrushJob) -> void:
 		State.document._bounds_dirty = true
 		if not job.changed_chunks.is_empty():
 			State.chunks_changed.emit(State.current_frame, job.changed_chunks)
+		# Publish the exact cells too. A reader can then diff the stroke exactly,
+		# and the chunk list stays the coarse signal for redraw listeners.
+		var affected_cells: Array[Vector3i] = []
+		affected_cells.assign(job.applied_cells.keys())
+		if not affected_cells.is_empty():
+			State.cells_changed.emit(State.current_frame, affected_cells)
 	State.finish_operation(operation_id)
 	Profile.publish(profile_started_us)
 

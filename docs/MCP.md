@@ -46,6 +46,16 @@ Other harnesses use the same URL:
 - Cursor: put the URL in `.cursor/mcp.json`.
 - Codex: put the URL under `[mcp_servers.lve_local]` in `config.toml`.
 
+## Result shapes
+
+Each tool declares an `outputSchema` with a root object. A client that renders the schema shows the return type before the first call. A tool result carries the data twice. `structuredContent` holds the object. `content[0].text` holds the same object as JSON text, for clients that read text only.
+
+A legacy client rejects a tool list when one `outputSchema` is not a root object. Keep the root object when you add a tool.
+
+## Guide resource
+
+The server publishes one resource, `lve://guide`. It gives the edit rules and the returned keys of every tool. Read it with `resources/read`. The text lists the same keys as the output schemas, so the two cannot disagree.
+
 ## Tools
 
 | Tool | Action |
@@ -103,7 +113,7 @@ Use this order to build a mental model without reading many cells.
 
 A frame above the scan limit uses a chunk-aligned map. `cell_size` is 16, `chunk_aligned` is true, and `approximate` is true. The block coordinates are chunk coordinates. Block `0,0,0` starts at cell 0. Use this map to find a region, then call `get_cells` for exact cells.
 
-`get_changes` returns x-runs. `full_refresh` true means the change journal cannot describe the range. Call `inspect_document` and `get_cells` after a full refresh. `chunk_origins` lists one cell per changed chunk. A stroke or fill reports `changed_chunks`, not exact cells, because the tool publishes chunk ids. Read the cells in those chunks with `get_cells`.
+`get_changes` returns x-runs. `full_refresh` true means the change journal cannot describe the range. Call `inspect_document` and `get_cells` after a full refresh. `chunk_origins` lists the first cell of every changed chunk. A stroke reports its exact changed cells. A fill reports chunk origins, so read the cells of those chunks with `get_cells`.
 
 Every read returns a `revision`. Every write returns the new `revision` and its changed bounds. Pass the last revision to `get_changes`. An undo or redo asks for a full refresh because it has no cell list.
 
@@ -139,7 +149,7 @@ The server logs one line per tool call with its response bytes in `user://mcp_se
 - Each call is one undo action.
 - A user edit blocks an agent action. The tool returns a busy error.
 - The selection, slice, and document size limit every write.
-- `write_cells` and `fill` use the current material.
+- `write_cells` and `fill` use the current material. A shape without an index uses the current material, not `materials[0]`.
 
 ## Animate
 

@@ -38,6 +38,11 @@ func _ready() -> void:
 	test("get_map falls back to chunk blocks", _chunk_map_fallback, "chunk_map")
 	test("get_changes returns the delta", _changes, "get_changes")
 	test("get_cells resumes with a cursor", _cursor, "cursor")
+	test("every tool declares an object output schema", _schemas, "schemas")
+	test("a tool result carries structured content", _structured, "structured")
+	test("the guide resource names every tool", _guide, "guide")
+	test("a stroke reports the exact changed bounds", _stroke_bounds, "stroke_bounds")
+	test("inspect_document returns the palette", _palette, "palette")
 
 
 func before_test() -> void:
@@ -1149,3 +1154,101 @@ func _read_line() -> String:
 		peer.poll()
 		await get_tree().process_frame
 	return ""
+
+
+func _schemas() -> void:
+	var response: Variant = await server.call("_dispatch_request", {"id": 1, "method": "tools/list", "params": {}})
+	var tools: Array = []
+	if response is Dictionary:
+		var result: Dictionary = (response as Dictionary).get("result", {})
+		var list: Variant = result.get("tools", [])
+		if list is Array:
+			tools = list
+	step("Then every tool declares a root object output schema", func():
+		expect(tools.size() >= 31, "the server lists every tool")
+		var missing: PackedStringArray = []
+		for value in tools:
+			var tool: Dictionary = value
+			var name := str(tool.get("name", ""))
+			var schema_value: Variant = tool.get("outputSchema", null)
+			if not (schema_value is Dictionary):
+				missing.append(name)
+				continue
+			var schema: Dictionary = schema_value
+			expect(str(schema.get("type", "")) == "object", "%s returns an object" % name)
+		expect(missing.is_empty(), "every tool has an output schema. Missing: " + ", ".join(missing))
+	)
+
+
+func _structured() -> void:
+	var response := await _call("get_state", {})
+	var result_value: Variant = response.get("result", {})
+	var result: Dictionary = result_value if result_value is Dictionary else {}
+	step("Then the structured result mirrors the text result", func():
+		expect(result.has("structuredContent"), "the result carries structured content")
+		var structured: Variant = result.get("structuredContent", null)
+		expect(structured is Dictionary, "the structured content is an object")
+		expect(_result_text(response) == JSON.stringify(structured), "the structured content matches the text")
+	)
+
+
+func _guide() -> void:
+	var list_response: Variant = await server.call("_dispatch_request", {"id": 1, "method": "resources/list", "params": {}})
+	var read_response: Variant = await server.call("_dispatch_request", {"id": 2, "method": "resources/read", "params": {"uri": "lve://guide"}})
+	var tools_response: Variant = await server.call("_dispatch_request", {"id": 3, "method": "tools/list", "params": {}})
+	var guide := ""
+	if read_response is Dictionary:
+		var result: Dictionary = (read_response as Dictionary).get("result", {})
+		var contents: Array = result.get("contents", [])
+		if not contents.is_empty() and contents[0] is Dictionary:
+			guide = str((contents[0] as Dictionary).get("text", ""))
+	step("Then the guide is listed, readable, and names every tool", func():
+		expect(list_response is Dictionary, "resources/list answers")
+		if list_response is Dictionary:
+			var result: Dictionary = (list_response as Dictionary).get("result", {})
+			var resources: Array = result.get("resources", [])
+			expect(resources.size() == 1, "the server lists one resource")
+			if not resources.is_empty():
+				expect(str((resources[0] as Dictionary).get("uri", "")) == "lve://guide", "the resource is the guide")
+		expect(guide.begins_with("# LVE MCP guide"), "resources/read returns the guide")
+		if tools_response is Dictionary:
+			var result: Dictionary = (tools_response as Dictionary).get("result", {})
+			var tools: Array = result.get("tools", [])
+			for value in tools:
+				var tool: Dictionary = value
+				expect(guide.contains("### " + str(tool.get("name", ""))), "the guide describes %s" % str(tool.get("name", "")))
+	)
+
+
+func _stroke_bounds() -> void:
+	await _call("set_tool", {"tool": "brush", "diameter": 1, "shape": "cube", "pixel_perfect": false})
+	State.current_color = Color.RED
+	State.undo_redo.clear_history()
+	var response := await _call("stroke", {"points": [[33, 0, 0], [34, 0, 0]]})
+	var data := _result_data(response)
+	step("Then the bounds cover only the touched cells", func():
+		expect(not _is_error(response), "the stroke succeeds")
+		var bounds_value: Variant = data.get("changed_bounds", null)
+		expect(bounds_value is Dictionary, "the stroke reports bounds")
+		if bounds_value is Dictionary:
+			var bounds: Dictionary = bounds_value
+			var min_bound: Array = bounds.get("min", [])
+			var max_bound: Array = bounds.get("max", [])
+			var starts := min_bound.size() == 3 and int(min_bound[0]) == 33 and int(min_bound[1]) == 0 and int(min_bound[2]) == 0
+			var ends := max_bound.size() == 3 and int(max_bound[0]) == 34 and int(max_bound[1]) == 0 and int(max_bound[2]) == 0
+			expect(starts, "the bounds start at the first touched cell")
+			expect(ends, "the bounds end at the last touched cell")
+	)
+
+
+func _palette() -> void:
+	var response := await _call("inspect_document", {"palette": true})
+	var data := _result_data(response)
+	step("Then the palette is inside the document summary", func():
+		expect(not _is_error(response), "inspect_document succeeds")
+		var document: Dictionary = data.get("document", {})
+		expect(document.has("palette"), "the document summary carries the palette")
+		var palette: Array = document.get("palette", [])
+		for value in palette:
+			expect((value as Dictionary).has("material"), "a palette entry carries a material")
+	)

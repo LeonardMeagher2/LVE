@@ -74,7 +74,7 @@ const TOOLS := [
 					"enum": ["material", "frame"],
 					"description": "Island grouping. material connects same-material cells. frame connects any occupied cells. Defaults to material.",
 				},
-				"palette": {"type": "boolean", "description": "Include the document palette. Defaults to false."},
+				"palette": {"type": "boolean", "description": "Include the document palette at document.palette. Defaults to false."},
 			},
 			"additionalProperties": false,
 		},
@@ -177,7 +177,7 @@ const TOOLS := [
 	},
 	{
 		"name": "get_cells",
-		"description": "Read occupied cells in an inclusive box as x-runs. Omit min and max to read the frame bounds. When truncated, pass next back as cursor with the same box to continue.",
+		"description": "Read occupied cells in an inclusive box as x-runs of [x0, x1, y, z, material_index]. The material_index points into the returned materials list and is numbered per page, so read it back. Omit min and max to read the frame bounds. When truncated, pass next back as cursor with the same box to continue.",
 		"inputSchema": {
 			"type": "object",
 			"properties": {
@@ -204,7 +204,7 @@ const TOOLS := [
 	},
 	{
 		"name": "screenshot",
-		"description": "Save a PNG of one frame, a multi-view contact sheet, or a frame storyboard. Set inline true to also return the image.",
+		"description": "Save a PNG to user://mcp_screenshot.png every call and overwrite it. Render one frame, a multi-view contact sheet, or a frame storyboard. Pass focus to frame a detail, or a far cell shrinks the model. Set inline true to also return the image.",
 		"inputSchema": {
 			"type": "object",
 			"properties": {
@@ -259,7 +259,7 @@ const TOOLS := [
 	},
 	{
 		"name": "open_document",
-		"description": "Open a saved .lve or .lve.png document in a new tab and make it current.",
+		"description": "Open a saved .lve or .lve.png document in a new tab and make it current. The current document stays open.",
 		"inputSchema": {
 			"type": "object",
 			"properties": {"path": {"type": "string", "description": "A file name or user:// path."}},
@@ -382,7 +382,7 @@ const TOOLS := [
 	},
 	{
 		"name": "set_tag_range",
-		"description": "Set one tag's inclusive frame range. Omit tag to use the active tag.",
+		"description": "Set one tag's inclusive frame range. The range must be inside the frames, or the call fails. Omit tag to use the active tag.",
 		"inputSchema": {
 			"type": "object",
 			"properties": {
@@ -528,7 +528,7 @@ const TOOLS := [
 					},
 					"minItems": 1,
 					"maxItems": 256,
-					"description": "Material table for the shape material indices. A shape without an index uses the current material.",
+					"description": "Material table for the shape material indices. A shape without an index uses the current material, not materials[0].",
 				},
 				"frames": {
 					"type": "array",
@@ -557,7 +557,465 @@ const TOOLS := [
 	},
 ]
 
-const INSTRUCTIONS := "LVE is a voxel editor. Cells are integers and Y is up. Read get_state for identity and revision. Call inspect_document for bounds, materials, islands, and frame transitions. Use get_slice or get_map for shape. Use screenshot views or frames for visual checks. Use get_cells for exact cells and pass next back as cursor with the same box. write_cells accepts per-cell materials and frames. Each write_cells call is one undo action, even across frames. save_document writes a copy by default and keeps the unsaved mark. Set copy false to save the main document. Use get_changes since the last revision to verify the edit."
+## The shared response schema parts. A legacy revision requires a root object,
+## so every output schema below is an object with properties.
+const SCHEMA_CELL := {"type": "array", "items": {"type": "integer"}, "minItems": 3, "maxItems": 3}
+const SCHEMA_BOUNDS := {
+	"type": ["object", "null"],
+	"properties": {"min": SCHEMA_CELL, "max": SCHEMA_CELL},
+}
+const SCHEMA_MATERIAL := {
+	"type": "object",
+	"properties": {
+		"color": {"type": "string"},
+		"metallic": {"type": "number"},
+		"roughness": {"type": "number"},
+		"emission": {"type": "string"},
+	},
+}
+const SCHEMA_TAG := {
+	"type": "object",
+	"properties": {
+		"tag": {"type": "integer"},
+		"name": {"type": "string"},
+		"from": {"type": "integer"},
+		"to": {"type": "integer"},
+		"mode": {"type": "integer"},
+		"mode_name": {"type": "string"},
+		"repeats": {"type": "integer"},
+	},
+}
+const SCHEMA_RUNS := {"type": "array", "items": {"type": "array", "items": {"type": "integer"}}}
+const SCHEMA_REGION := {
+	"type": "object",
+	"properties": {
+		"id": {"type": "integer"},
+		"cells": {"type": "integer"},
+		"bounds": SCHEMA_BOUNDS,
+		"center": SCHEMA_CELL,
+		"material": SCHEMA_MATERIAL,
+		"key": {"type": "string"},
+		"materials": {
+			"type": "array",
+			"items": {
+				"type": "object",
+				"properties": {
+					"material": SCHEMA_MATERIAL,
+					"cells": {"type": "integer"},
+					"key": {"type": "string"},
+				},
+			},
+		},
+	},
+}
+const SCHEMA_FRAME_RESULT := {
+	"type": "object",
+	"properties": {
+		"frame": {"type": "integer"},
+		"applied": {"type": "integer"},
+		"chunks": {"type": "integer"},
+		"occupied": {"type": "integer"},
+		"changed_bounds": SCHEMA_BOUNDS,
+	},
+}
+
+## The output schema of each tool, keyed by tool name. Clients show this as the
+## return type, so an agent sees the shape before the first call. The guide
+## resource lists the same keys.
+const OUTPUT_SCHEMAS := {
+	"get_state": {
+		"type": "object",
+		"properties": {
+			"revision": {"type": "integer"},
+			"document": {
+				"type": "object",
+				"properties": {
+					"name": {"type": "string"},
+					"frames": {"type": "integer"},
+					"frame": {"type": "integer"},
+					"delay_ms": {"type": "integer"},
+					"palette": {"type": "integer", "description": "The palette entry count."},
+					"bounds": {
+						"type": "object",
+						"properties": {
+							"position": {"type": "array", "items": {"type": "number"}},
+							"size": {"type": "array", "items": {"type": "number"}},
+						},
+					},
+					"frame_bounds": {"type": ["array", "null"], "items": {"type": "integer"}},
+				},
+			},
+			"tags": {"type": "array", "items": SCHEMA_TAG},
+			"active_tag": {"type": "integer"},
+			"active_tool": {
+				"type": "object",
+				"properties": {"id": {"type": "string"}, "params": {"type": "object"}},
+			},
+			"material": SCHEMA_MATERIAL,
+			"selection": {"type": "integer"},
+			"symmetry": {"type": "integer"},
+			"slice": {"type": ["object", "boolean"]},
+			"busy": {"type": "boolean"},
+			"undo": {
+				"type": "object",
+				"properties": {"undo": {"type": "boolean"}, "redo": {"type": "boolean"}},
+			},
+		},
+	},
+	"inspect_document": {
+		"type": "object",
+		"properties": {
+			"revision": {"type": "integer"},
+			"document": {
+				"type": "object",
+				"properties": {
+					"name": {"type": "string"},
+					"frames": {"type": "integer"},
+					"current_frame": {"type": "integer"},
+					"palette": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {"index": {"type": "integer"}, "material": SCHEMA_MATERIAL},
+						},
+					},
+				},
+			},
+			"frames": {
+				"type": "array",
+				"items": {
+					"type": "object",
+					"properties": {
+						"index": {"type": "integer"},
+						"delay_ms": {"type": "integer"},
+						"occupied": {"type": "integer"},
+						"bounds": SCHEMA_BOUNDS,
+						"empty": {"type": "boolean"},
+						"materials": {
+							"type": "array",
+							"items": {
+								"type": "object",
+								"properties": {
+									"material": SCHEMA_MATERIAL,
+									"cells": {"type": "integer"},
+									"bounds": SCHEMA_BOUNDS,
+									"key": {"type": "string"},
+								},
+							},
+						},
+						"islands": {"type": "array", "items": SCHEMA_REGION},
+						"island_count": {"type": "integer"},
+						"islands_truncated": {"type": "boolean"},
+						"small_islands": {"type": "integer"},
+						"scan_truncated": {"type": "boolean"},
+					},
+				},
+			},
+			"tags": {"type": "array", "items": SCHEMA_TAG},
+			"transitions": {
+				"type": "array",
+				"items": {
+					"type": "object",
+					"properties": {
+						"from": {"type": "integer"},
+						"to": {"type": "integer"},
+						"added": {"type": "integer"},
+						"removed": {"type": "integer"},
+						"changed": {"type": "integer"},
+						"added_bounds": SCHEMA_BOUNDS,
+						"removed_bounds": SCHEMA_BOUNDS,
+						"bounds": SCHEMA_BOUNDS,
+						"truncated": {"type": "boolean"},
+					},
+				},
+			},
+		},
+	},
+	"get_regions": {
+		"type": "object",
+		"properties": {
+			"revision": {"type": "integer"},
+			"frame": {"type": "integer"},
+			"group": {"type": "string"},
+			"regions": {"type": "array", "items": SCHEMA_REGION},
+			"region_count": {"type": "integer"},
+			"truncated": {"type": "boolean"},
+			"small_regions": {"type": "integer"},
+			"material": {"type": "string"},
+		},
+	},
+	"get_slice": {
+		"type": "object",
+		"properties": {
+			"revision": {"type": "integer"},
+			"frame": {"type": "integer"},
+			"axis": {"type": "string"},
+			"mode": {"type": "string"},
+			"scale": {"type": "integer"},
+			"columns": {"type": "string"},
+			"rows": {"type": "string"},
+			"column_start": {"type": "integer"},
+			"row_start": {"type": "integer"},
+			"empty": {"type": "boolean"},
+			"slices": {
+				"type": "array",
+				"items": {
+					"type": "object",
+					"properties": {
+						"layer": {"type": "integer"},
+						"origin": SCHEMA_CELL,
+						"lines": {"type": "array", "items": {"type": "string"}},
+					},
+				},
+			},
+			"values": {"type": "array", "items": {"type": "array", "items": {"type": "integer"}}},
+			"empty_value": {"type": "integer"},
+			"legend": {
+				"type": "array",
+				"items": {
+					"type": "object",
+					"properties": {
+						"char": {"type": "string"},
+						"material": SCHEMA_MATERIAL,
+						"key": {"type": "string"},
+					},
+				},
+			},
+		},
+	},
+	"get_map": {
+		"type": "object",
+		"properties": {
+			"revision": {"type": "integer"},
+			"frame": {"type": "integer"},
+			"cell_size": {"type": "integer"},
+			"origin": SCHEMA_CELL,
+			"size": SCHEMA_CELL,
+			"blocks": {"type": "array", "items": {}},
+			"block_count": {"type": "integer"},
+			"truncated": {"type": "boolean"},
+			"occupied": {"type": "integer"},
+			"chunk_aligned": {"type": "boolean"},
+			"approximate": {"type": "boolean"},
+			"empty": {"type": "boolean"},
+		},
+	},
+	"get_changes": {
+		"type": "object",
+		"properties": {
+			"revision": {"type": "integer"},
+			"frame": {"type": "integer"},
+			"from": {"type": "integer"},
+			"full_refresh": {"type": "boolean"},
+			"cells": SCHEMA_RUNS,
+			"count": {"type": "integer"},
+			"truncated": {"type": "boolean"},
+			"chunk_origins": {"type": "array", "items": SCHEMA_CELL},
+			"bounds": SCHEMA_BOUNDS,
+			"other_frames": {"type": "array", "items": {"type": "integer"}},
+		},
+	},
+	"get_cells": {
+		"type": "object",
+		"properties": {
+			"frame": {"type": "integer"},
+			"count": {"type": "integer"},
+			"truncated": {"type": "boolean"},
+			"runs": SCHEMA_RUNS,
+			"materials": {
+				"type": "array",
+				"items": {
+					"type": "object",
+					"properties": {
+						"color": {"type": "string"},
+						"metallic": {"type": "number"},
+						"roughness": {"type": "number"},
+						"emission": {"type": "string"},
+						"key": {"type": "string"},
+					},
+				},
+			},
+			"scanned_bounds": SCHEMA_BOUNDS,
+			"returned_bounds": SCHEMA_BOUNDS,
+			"next": SCHEMA_CELL,
+			"material": {"type": "string"},
+		},
+	},
+	"screenshot": {
+		"type": "object",
+		"properties": {
+			"path": {"type": "string"},
+			"width": {"type": "integer"},
+			"height": {"type": "integer"},
+			"tile_size": {"type": "integer"},
+			"columns": {"type": "integer"},
+			"rows": {"type": "integer"},
+			"revision": {"type": "integer"},
+			"bounds": SCHEMA_BOUNDS,
+			"frame": {"type": "integer"},
+			"frames": {"type": "array", "items": {"type": "integer"}},
+			"view": {"type": "string"},
+			"views": {"type": "array", "items": {"type": "string"}},
+		},
+	},
+	"new_document": {
+		"type": "object",
+		"properties": {"tab": {"type": "integer"}, "frames": {"type": "integer"}},
+	},
+	"save_document": {
+		"type": "object",
+		"properties": {
+			"path": {"type": "string"},
+			"copy": {"type": "boolean"},
+			"main_path": {"type": "string"},
+			"dirty": {"type": "boolean"},
+		},
+	},
+	"open_document": {
+		"type": "object",
+		"properties": {
+			"tab": {"type": "integer"},
+			"frames": {"type": "integer"},
+			"path": {"type": "string"},
+		},
+	},
+	"add_frame": {
+		"type": "object",
+		"properties": {"frame": {"type": "integer"}, "frames": {"type": "integer"}},
+	},
+	"remove_frame": {
+		"type": "object",
+		"properties": {"frame": {"type": "integer"}, "frames": {"type": "integer"}},
+	},
+	"move_frame": {
+		"type": "object",
+		"properties": {"frame": {"type": "integer"}, "frames": {"type": "integer"}},
+	},
+	"duplicate_frame": {
+		"type": "object",
+		"properties": {"frame": {"type": "integer"}, "frames": {"type": "integer"}},
+	},
+	"set_frame": {
+		"type": "object",
+		"properties": {"frame": {"type": "integer"}, "delay_ms": {"type": "integer"}},
+	},
+	"set_frame_delay": {
+		"type": "object",
+		"properties": {"frame": {"type": "integer"}, "delay_ms": {"type": "integer"}},
+	},
+	"set_tag_loop": SCHEMA_TAG,
+	"add_tag": SCHEMA_TAG,
+	"rename_tag": SCHEMA_TAG,
+	"set_tag_range": SCHEMA_TAG,
+	"remove_tag": {
+		"type": "object",
+		"properties": {"tag": {"type": "integer"}, "tags": {"type": "integer"}},
+	},
+	"set_active_tag": {
+		"type": "object",
+		"properties": {
+			"tag": {"type": "integer"},
+			"tags": {"type": "integer"},
+			"name": {"type": "string"},
+			"from": {"type": "integer"},
+			"to": {"type": "integer"},
+			"mode": {"type": "integer"},
+			"repeats": {"type": "integer"},
+		},
+	},
+	"set_playback": {
+		"type": "object",
+		"properties": {"playing": {"type": "boolean"}, "frame": {"type": "integer"}},
+	},
+	"set_tool": {
+		"type": "object",
+		"properties": {"tool": {"type": "string"}, "params": {"type": "object"}},
+	},
+	"set_material": {
+		"type": "object",
+		"properties": {"material": SCHEMA_MATERIAL},
+	},
+	"set_cursor": {
+		"type": "object",
+		"properties": {"cell": SCHEMA_CELL, "hidden": {"type": "boolean"}},
+	},
+	"stroke": {
+		"type": "object",
+		"properties": {
+			"tool": {"type": "string"},
+			"points": {"type": "integer"},
+			"revision": {"type": "integer"},
+			"occupied": {"type": "integer"},
+			"changed_cells": {"type": "integer"},
+			"changed_chunks": {"type": "integer"},
+			"changed_bounds": SCHEMA_BOUNDS,
+		},
+	},
+	"fill": {
+		"type": "object",
+		"properties": {
+			"seed": SCHEMA_CELL,
+			"revision": {"type": "integer"},
+			"occupied": {"type": "integer"},
+			"changed_cells": {"type": "integer"},
+			"changed_chunks": {"type": "integer"},
+			"changed_bounds": SCHEMA_BOUNDS,
+		},
+	},
+	"write_cells": {
+		"type": "object",
+		"properties": {
+			"applied": {"type": "integer"},
+			"chunks": {"type": "integer"},
+			"frames": {"type": "array", "items": SCHEMA_FRAME_RESULT},
+			"action": {"type": "string"},
+			"revision": {"type": "integer"},
+			"occupied": {"type": "integer"},
+			"changed_bounds": SCHEMA_BOUNDS,
+		},
+	},
+	"sample": {
+		"type": "object",
+		"properties": {"material": SCHEMA_MATERIAL},
+	},
+}
+
+## The guide resource. It gives the rules and the return shape of every tool
+## without a skill install or a repository checkout.
+const GUIDE_URI := "lve://guide"
+const GUIDE_BODY := """# LVE MCP guide
+
+LVE is a voxel editor that runs as its own app. You edit the document the user
+has open, not a file copy. A read or a write lands in their real session.
+
+## Rules
+
+- Cells are integer points. Y is up. Negative coordinates are normal.
+- Boxes are inclusive: [x0, y0, z0, x1, y1, z1].
+- Read get_state first. It gives the document, revision, material, tool, and undo state.
+- Call inspect_document for bounds, materials, islands, and frame transitions.
+- Call get_slice or get_map to see shape. Use screenshot for a picture.
+- Runs in get_cells are [x0, x1, y, z, material_index].
+- The material_index points into the materials array of that page. It is not the index you wrote.
+- Pass next back as cursor with the same min and max to continue a read.
+- A write_cells shape without a material index uses the current material, not materials[0].
+- Each call is one undo action, even across frames.
+- Verify a write with get_changes since the revision you just received.
+- stroke reports the bounds of the changed cells. A fill reports the chunk-aligned box.
+- screenshot always writes user://mcp_screenshot.png. Pass focus to frame a detail.
+- save_document writes a copy by default. Pass copy false to save the main document.
+- new_document and open_document add a tab. The current document stays open.
+- Frame and tag indices shift after add, move, or remove. Re-read them.
+- set_tag_range fails when the range is outside the frames.
+- inspect_document with palette true puts the palette at document.palette.
+
+## Return shapes
+
+Every tool declares an outputSchema. A client that renders it shows the return
+type before the first call. The keys of each result are listed below.
+"""
+
+const INSTRUCTIONS := "LVE is a voxel editor. Cells are integers and Y is up. Boxes are inclusive. Read get_state for the document, material, and revision. Read the lve://guide resource once for the rules and the return shape of every tool. inspect_document gives bounds, materials, islands, and transitions. get_slice or get_map shows shape. get_cells returns runs [x0, x1, y, z, material_index]. Pass next back as cursor with the same box. write_cells uses the current material when a shape has no index. Each call is one undo action. save_document writes a copy unless copy is false. Verify with get_changes since the last revision."
 
 ## One accepted bridge or HTTP client.
 class PeerState extends RefCounted:
@@ -674,7 +1132,12 @@ func _on_chunks_changed(frame: int, affected: Array[Vector3i]) -> void:
 	_revision += 1
 	_last_content_revision = _revision
 	_content_since_history = true
-	_journal.append({"revision": _revision, "frame": frame, "chunks": affected.duplicate()})
+	# A tool reports chunk locations, not cell coordinates. Store origins, so
+	# every journal field uses cell units.
+	var origins: Array[Vector3i] = []
+	for location in affected:
+		origins.append(location * VoxelFrame.CHUNK_SIZE)
+	_journal.append({"revision": _revision, "frame": frame, "chunks": origins})
 	_prune_journal()
 
 
@@ -995,13 +1458,17 @@ func _dispatch_request(request: Dictionary) -> Variant:
 		"initialize":
 			return _result_response(id, _initialize(params))
 		"tools/list":
-			var tool_list := _result_response(id, {"tools": TOOLS})
+			var tool_list := _result_response(id, {"tools": _tools_json()})
 			_log("tools/list %d bytes" % JSON.stringify(tool_list).length())
 			return tool_list
 		"tools/call":
 			var response: Variant = await _call_tool(id, params)
 			_log("tool %s %d bytes" % [str(params.get("name", "")), JSON.stringify(response).length()])
 			return response
+		"resources/list":
+			return _result_response(id, {"resources": _resources_json()})
+		"resources/read":
+			return _read_resource(id, params)
 		"ping":
 			return _result_response(id, {})
 		_:
@@ -1018,10 +1485,93 @@ func _initialize(params: Dictionary) -> Dictionary:
 		version_string += ".0"
 	return {
 		"protocolVersion": version,
-		"capabilities": {"tools": {"listChanged": false}},
+		"capabilities": {
+			"tools": {"listChanged": false},
+			"resources": {"subscribe": false, "listChanged": false},
+		},
 		"serverInfo": {"name": "lve", "title": "Leonard's Voxel Editor", "version": version_string},
 		"instructions": INSTRUCTIONS,
 	}
+
+
+## Returns the tool list with the output schema of each tool. The schemas are
+## kept in a separate table, so a tool entry stays readable.
+func _tools_json() -> Array:
+	var tools: Array = []
+	for value in TOOLS:
+		var tool: Dictionary = value
+		var entry: Dictionary = tool.duplicate()
+		var schema: Variant = OUTPUT_SCHEMAS.get(str(entry.get("name", "")), null)
+		if schema is Dictionary:
+			entry["outputSchema"] = schema
+		tools.append(entry)
+	return tools
+
+
+## Returns the resources the client can read. The guide is the only one.
+func _resources_json() -> Array:
+	var text := _guide_text()
+	return [{
+		"uri": GUIDE_URI,
+		"name": "guide",
+		"title": "LVE MCP guide",
+		"description": "The rules and the return shape of every tool. Read it before the first edit.",
+		"mimeType": "text/markdown",
+		"size": text.to_utf8_buffer().size(),
+	}]
+
+
+## Answers one resources/read request.
+func _read_resource(id: Variant, params: Dictionary) -> Dictionary:
+	var uri_value: Variant = params.get("uri", "")
+	if not (uri_value is String):
+		return _error_response(id, -32602, "uri must be a string.")
+	var uri: String = uri_value
+	if uri != GUIDE_URI:
+		return _error_response(id, -32002, "Resource not found: " + uri)
+	return _result_response(id, {
+		"contents": [{
+			"uri": GUIDE_URI,
+			"mimeType": "text/markdown",
+			"text": _guide_text(),
+		}],
+	})
+
+
+## Returns the guide text: the fixed rules, then the result keys of each tool.
+## The keys come from the output schemas, so the guide cannot drift from them.
+func _guide_text() -> String:
+	var lines: PackedStringArray = [GUIDE_BODY]
+	for value in TOOLS:
+		var tool: Dictionary = value
+		var name := str(tool.get("name", ""))
+		lines.append("\n### %s\n" % name)
+		lines.append(str(tool.get("description", "")) + "\n")
+		var schema_value: Variant = OUTPUT_SCHEMAS.get(name, null)
+		if not (schema_value is Dictionary):
+			continue
+		var schema: Dictionary = schema_value
+		var properties_value: Variant = schema.get("properties", {})
+		if not (properties_value is Dictionary):
+			continue
+		var properties: Dictionary = properties_value
+		var keys: PackedStringArray = []
+		for key in properties:
+			var field_value: Variant = properties[key]
+			var kind := "value"
+			if field_value is Dictionary:
+				var field: Dictionary = field_value
+				var type_value: Variant = field.get("type", "value")
+				if type_value is String:
+					kind = type_value
+				elif type_value is Array:
+					var names: PackedStringArray = []
+					for entry in type_value:
+						names.append(str(entry))
+					kind = " or ".join(names)
+			keys.append("%s: %s" % [key, kind])
+		lines.append("Returns: " + ", ".join(keys) + "\n")
+	return "".join(lines)
 
 
 func _call_tool(id: Variant, params: Dictionary) -> Dictionary:
@@ -1124,7 +1674,12 @@ func _response_id(id: Variant) -> Variant:
 
 
 func _tool_ok(data: Variant) -> Dictionary:
-	return {"content": [{"type": "text", "text": JSON.stringify(data)}]}
+	var result := {"content": [{"type": "text", "text": JSON.stringify(data)}]}
+	if data is Dictionary:
+		# The structured half lets a client use the result as data and check it
+		# against the declared output schema. The text half keeps older clients.
+		result["structuredContent"] = data
+	return result
 
 
 func _tool_error(message: String) -> Dictionary:
@@ -1828,6 +2383,7 @@ func _changed_counts_since(since: int, frame_index: int) -> Dictionary:
 
 func _changed_bounds_since(since: int, frame_index: int) -> Variant:
 	var cells := {}
+	var chunks := {}
 	for entry in _journal:
 		if int(entry.get("revision", 0)) <= since:
 			continue
@@ -1840,8 +2396,21 @@ func _changed_bounds_since(since: int, frame_index: int) -> Variant:
 		var entry_chunks: Variant = entry.get("chunks", null)
 		if entry_chunks is Array:
 			for cell in entry_chunks:
-				cells[cell] = true
-	return _bounds_of_dictionaries([cells])
+				chunks[cell] = true
+	# A cell list is exact. A tool that reports only chunks has no cell list, so
+	# its bounds cover the whole changed chunks and stay coarse.
+	if not cells.is_empty():
+		return _bounds_of_dictionaries([cells])
+	if chunks.is_empty():
+		return null
+	var min_cell := Vector3i.MAX
+	var max_cell := Vector3i.MIN
+	for origin in chunks:
+		var start: Vector3i = origin
+		var stop: Vector3i = origin + Vector3i.ONE * (VoxelFrame.CHUNK_SIZE - 1)
+		min_cell = Vector3i(mini(min_cell.x, start.x), mini(min_cell.y, start.y), mini(min_cell.z, start.z))
+		max_cell = Vector3i(maxi(max_cell.x, stop.x), maxi(max_cell.y, stop.y), maxi(max_cell.z, stop.z))
+	return _cell_bounds_json_from_cells(min_cell, max_cell)
 
 
 func _frame_cell_bounds(frame: VoxelFrame) -> Array:
@@ -2415,6 +2984,7 @@ func _screenshot(args: Dictionary) -> Dictionary:
 			{"type": "image", "data": Marshalls.raw_to_base64(png), "mimeType": "image/png"},
 			{"type": "text", "text": JSON.stringify(info)},
 		],
+		"structuredContent": info,
 	}
 
 
