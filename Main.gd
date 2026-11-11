@@ -9,9 +9,15 @@ extends Control
 const UI_SETTINGS_PATH := "user://interface.cfg"
 ## The document that opens when no last document exists.
 const STARTUP_DOCUMENT := "res://Flamingo.lve"
+## The MCP server and bridge scripts.
+const MCP_SERVER_SCRIPT := preload("res://Globals/MCP/MCPServer.gd")
+const MCP_BRIDGE_SCRIPT := preload("res://Globals/MCP/MCPBridge.gd")
+## The default loopback MCP port.
+const MCP_PORT := 17373
 var _ui_scale := 0.0
 var _scale_check_elapsed := 0.0
 var _title_document: VoxelDocument
+var _mcp: Node = null
 
 
 func _enter_tree() -> void:
@@ -44,6 +50,9 @@ func _update_window_title() -> void:
 
 
 func _ready() -> void:
+	if _has_user_arg("--mcp-bridge"):
+		_run_bridge()
+		return
 	# Godot coalesces pointer motion to one event per render frame by default. A
 	# long frame then turns a curved drag into a chord between two far samples,
 	# and every tool paints that chord. Take each event instead, so a stroke
@@ -62,6 +71,8 @@ func _ready() -> void:
 		window.move_to_center()
 	%TabContainer.tab_changed.connect(_on_tab_changed)
 	_on_tab_changed(%TabContainer.current_tab)
+	if _has_user_arg("--mcp"):
+		_start_mcp()
 	_restore_startup_document.call_deferred()
 
 
@@ -144,3 +155,41 @@ func _on_tab_changed(_index: int) -> void:
 	viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS if current == %Editor else SubViewport.UPDATE_DISABLED
 	if current != %Editor:
 		State.stop()
+
+
+## Returns [code]true[/code] when the user passed [param argument] after `--`.
+func _has_user_arg(argument: String) -> bool:
+	return OS.get_cmdline_user_args().has(argument)
+
+
+## Returns the MCP port from `--mcp-port=N`, or the default port.
+func _mcp_port() -> int:
+	for argument in OS.get_cmdline_user_args():
+		if argument.begins_with("--mcp-port="):
+			var value := argument.substr("--mcp-port=".length())
+			if value.is_valid_int():
+				return clampi(value.to_int(), 1, 65535)
+	return MCP_PORT
+
+
+## Starts the in-app MCP server.
+func _start_mcp() -> void:
+	if _mcp != null:
+		return
+	var server: Node = MCP_SERVER_SCRIPT.new()
+	add_child(server)
+	var http_mode := not _has_user_arg("--mcp-line")
+	var error_value: Variant = server.call("start", _mcp_port(), http_mode)
+	var error: Error = error_value if error_value is int else ERR_UNAVAILABLE
+	if error != OK:
+		server.queue_free()
+		return
+	_mcp = server
+
+
+## Runs the stdio bridge until stdin closes, then quits.
+func _run_bridge() -> void:
+	var bridge: RefCounted = MCP_BRIDGE_SCRIPT.new()
+	var code_value: Variant = bridge.call("run", _mcp_port())
+	var code: int = int(code_value) if code_value is int else 1
+	get_tree().quit(code)

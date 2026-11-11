@@ -491,3 +491,24 @@ func _interrupt_fill() -> void:
 ## Returns [code]true[/code] when no fill runs.
 func is_settled() -> bool:
 	return not _fill_running
+
+
+# --- External driver --------------------------------------------------------
+
+## Fills from one seed with the current material. The fill ends like a pointer
+## release, so the whole region is one history action.
+func driver_fill(seed_cell: Vector3i) -> Error:
+	if driver_is_busy():
+		return ERR_BUSY
+	if not State.has_cell(seed_cell):
+		return ERR_INVALID_DATA
+	_release_pending = true
+	_queue_seed(seed_cell)
+	if _edit == null and not _fill_running:
+		_release_pending = false
+	return OK
+
+
+## Returns [code]true[/code] while the fill streams or holds its edit.
+func driver_is_busy() -> bool:
+	return _fill_running or _edit != null
