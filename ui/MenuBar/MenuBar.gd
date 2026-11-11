@@ -322,7 +322,6 @@ func show_recovery(entries: Array) -> void:
 		checkbox.toggled.connect(_on_recovery_toggled)
 		%RecoveryOptions.add_child(checkbox)
 		_recovery_checkboxes.append(checkbox)
-	%RecoveryDialog.dialog_text = "Select the documents to recover."
 	_update_recovery_buttons()
 	%RecoveryDialog.popup_centered()
 
