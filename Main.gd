@@ -33,6 +33,9 @@ var _mcp_http_mode := true
 
 
 func _enter_tree() -> void:
+	# The close request must wait for the save prompts. The SceneTree accepts a
+	# close request by default, so the dialog appears and the app still quits.
+	get_tree().auto_accept_quit = false
 	# Seed the port before the status bar reads it in its own _ready.
 	mcp_port = _mcp_port_setting()
 	_mcp_http_mode = not _has_user_arg("--mcp-line")

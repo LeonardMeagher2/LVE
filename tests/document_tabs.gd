@@ -169,6 +169,9 @@ func _serialize() -> void:
 func _quit() -> void:
 	var menu := main.get_node("%MenuBar")
 	menu.quit_confirmed.connect(_on_test_quit)
+	step("Then the tree waits for the quit flow", func():
+		expect(not get_tree().auto_accept_quit, "the tree does not accept the close request")
+	)
 	step("Given two edited documents", func():
 		_first = State.tabs[0]
 		_first.file_path = "user://first.lve"
