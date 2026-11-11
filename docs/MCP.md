@@ -50,9 +50,14 @@ Other harnesses use the same URL:
 
 | Tool | Action |
 | --- | --- |
-| `get_state` | Read the compact document, tags, active tag, tool, material, selection, symmetry, slice, busy, and undo state |
-| `get_cells` | Read occupied cells in a box as x-runs |
-| `screenshot` | Save a PNG of one frame. Set `inline` true to return the image |
+| `get_state` | Read the compact document, tags, active tag, tool, material, selection, symmetry, slice, busy, and undo state. It also returns the content revision and the current frame cell bounds |
+| `inspect_document` | Read a semantic summary of one or more frames: integer bounds, occupied count, materials, connected islands, tags, and transitions |
+| `get_regions` | List connected regions by material or by frame. Use it to target a part |
+| `get_slice` | Read labeled 2D slices or projections as text. Use it for exact shape and material layout |
+| `get_map` | Read a coarse occupancy grid. Use it to locate content in a large frame |
+| `get_changes` | Read cells changed since a revision. Use the revision from a read or a write |
+| `get_cells` | Read occupied cells in a box as x-runs. Omit min and max to use the frame bounds. Pass next back as cursor to continue |
+| `screenshot` | Save a PNG of one frame, a view contact sheet, or a frame storyboard. Set `inline` true to return the image |
 | `new_document` | Open an empty document in a new tab |
 | `save_document` | Save the current document as `.lve` or `.lve.png` |
 | `open_document` | Open a saved `.lve` or `.lve.png` document in a new tab |
@@ -79,9 +84,32 @@ Other harnesses use the same URL:
 
 The tools use integer cell coordinates. Cell `c` covers `[c - 0.5, c + 0.5]`. Y is up.
 
+## Read a document
+
+Use this order to build a mental model without reading many cells.
+
+1. Call `get_state` for the document name, revision, and current frame bounds.
+2. Call `inspect_document` for bounds, materials, islands, and tags. Set `transitions` true to compare frames.
+3. Call `get_slice` for exact shape. Call `get_map` to find content in a large frame.
+4. Call `screenshot` with `views` for form and with `frames` for animation.
+5. Call `get_cells` for exact cells. Omit `min` and `max` to read the frame bounds.
+6. Call `get_changes` with the last revision to verify an edit.
+
+`inspect_document` groups islands by material by default. Set `group` to `frame` to merge touching cells of different materials. It limits the island list to `max_islands`. It reports `island_count` and `islands_truncated` when the list is short.
+
+`get_slice` uses `axis` x, y, or z. The `layers` list selects layers on that axis. The `materials` mode returns one character per material and a legend. The `height` and `depth` modes return a projection as `values`. `scale` sets the cells per character. The response states the column axis, the row axis, and the start cells.
+
+`get_map` divides the frame into blocks of `cell_size` cells. A block entry is `[bx, by, bz, occupied, material]`. Block `0,0,0` starts at `origin`. The `material` is the most common material in the block.
+
+`get_changes` returns x-runs. `full_refresh` true means the change journal cannot describe the range. Call `inspect_document` and `get_cells` after a full refresh. `chunk_origins` lists one cell per changed chunk.
+
+Every read returns a `revision`. Every write returns the new `revision` and its changed bounds. Pass the last revision to `get_changes`. An undo or redo asks for a full refresh because it has no cell list.
+
 ## Compact forms
 
-`get_cells` returns x-runs. A run is `[x_first, x_last, y, z, material_index]`. The material index refers to the `materials` table. The default cap is 512 cells. Set `max_cells` up to 4096. A truncated read returns `next`, the first occupied cell not included.
+`get_cells` returns x-runs. A run is `[x_first, x_last, y, z, material_index]`. The material index refers to the `materials` table. The default cap is 512 cells. Set `max_cells` up to 4096. A truncated read returns `next`, the first occupied cell not included. Pass `next` back as `cursor` with the same `min` and `max` to continue. Do not use `next` as a new `min`. The scan order is z, then y, then x. Omit `min` and `max` to read the frame bounds. `scanned_bounds` names the box. `returned_bounds` names the cells in the result.
+
+The material index is local to one response. The same material can have a different index on another page. Compare the `key` field of the `materials` entries across pages. Set `material` to a color to read only that material.
 
 `write_cells` accepts three cell forms:
 
@@ -96,6 +124,8 @@ Provide at least one form. All forms use the current material and make one undo 
 `set_material` accepts `color`, `emission`, `metallic`, and `roughness`. Emission gives the voxel a glow. A color change clears the glow unless you also pass `emission`. Set `emission` to `#000000` to clear it explicitly.
 
 `screenshot` saves `user://mcp_screenshot.png` and returns the path by default. Set `inline: true` to also return the image. The default size is 256. Use `focus` with an inclusive `[x0, y0, z0, x1, y1, z1]` box to frame a detail. `focus` applies to the named views. The current view refuses it. The `low` view frames a floating scene from below.
+
+Set `views` to a list of named views to render a contact sheet. Set `frames` to a list of frame indices to render a storyboard. A storyboard uses the union bounds of the selected frames, so the content stays in place. `size` is the tile edge. The response reports `columns`, `rows`, `tile_size`, `bounds`, and the view or frame list.
 
 `save_document` writes a `.lve` file. A `.lve.png` path also stores a 256 by 256 preview, which needs a visible window. `open_document` opens both forms in a new tab. A successful save updates the tab save path, clears the unsaved mark, and updates the session. Use a new path for each iteration so an earlier file stays intact.
 
