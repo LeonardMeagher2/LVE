@@ -190,16 +190,18 @@ func cancel() -> void:
 
 ## Exports the document as a GLB file and returns the error code.
 ## [param center_origin] centers the model on the origin. [param tag_index]
-## limits the export to one tag, or -1 for every tag.
-func export_gltf(path: String, center_origin := true, tag_index := -1) -> Error:
+## limits the export to one tag, or -1 for every tag. [param overrides] can set
+## [code]smooth_normals[/code], [code]ao[/code], and [code]unlit[/code] for this
+## call only. An absent key keeps the document value.
+func export_gltf(path: String, center_origin := true, tag_index := -1, overrides := {}) -> Error:
 	if State.edit_busy() or _export_job:
 		return ERR_BUSY
 	State.stop()
 	var job := ExportJob.new()
 	job.center_origin = center_origin
-	job.smooth_normals = State.document.smooth_normals
-	job.ao_strength = State.document.ao_strength
-	job.unlit = bool(State.document.export_settings.get("unlit", false))
+	job.smooth_normals = bool(overrides.get("smooth_normals", State.document.smooth_normals))
+	job.ao_strength = clampf(float(overrides.get("ao", State.document.ao_strength)), 0.0, 1.0)
+	job.unlit = bool(overrides.get("unlit", State.document.export_settings.get("unlit", false)))
 	var selected_tag := State.document.get_tag(tag_index)
 	var first := selected_tag.from if selected_tag else 0
 	var last := selected_tag.to if selected_tag else State.get_frame_count() - 1

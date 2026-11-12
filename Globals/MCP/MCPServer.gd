@@ -11,6 +11,8 @@ extends Node
 const DEFAULT_PORT := 17373
 ## The off-screen viewport used for screenshots.
 const SCREENSHOT_VIEWPORT := preload("res://Globals/VoxelImageRenderer/RendererViewport.tscn")
+## The export plugin script. Its sprite sheet layout is static.
+const EXPORT_PLUGIN_SCRIPT := preload("res://plugins/Export/ExportPlugin.gd")
 ## The server log in the shared user directory.
 const LOG_PATH := "user://mcp_server.log"
 ## The largest request line the server accepts.
@@ -268,32 +270,87 @@ const TOOLS := [
 		},
 	},
 	{
-		"name": "add_frame",
-		"description": "Add an empty frame. The default index is the last frame. The new frame becomes current.",
+		"name": "get_export_settings",
+		"description": "Read the export settings the editor uses now. Use it to start from the current view, tile size, tag, and model options.",
+		"inputSchema": {"type": "object", "additionalProperties": false},
+	},
+	{
+		"name": "export_model",
+		"description": "Export the document as a .glb or .gltf file. Set the model options for this call. The call does not change the document or the export tab settings.",
 		"inputSchema": {
 			"type": "object",
-			"properties": {"index": {"type": "integer", "minimum": 0}},
+			"properties": {
+				"path": {"type": "string", "description": "A file name or user:// path ending in .glb or .gltf."},
+				"center": {"type": "boolean", "description": "Center the model on the origin. Defaults to true."},
+				"tag": {"type": "integer", "minimum": -1, "description": "Export only this tag. -1 exports every tag. Defaults to -1."},
+				"smooth_normals": {"type": "boolean", "description": "Use smooth normals. Defaults to the document setting."},
+				"ao": {"type": "number", "minimum": 0, "maximum": 1, "description": "Ambient occlusion strength. Defaults to the document setting."},
+				"unlit": {"type": "boolean", "description": "Export an unlit material. Defaults to the saved export setting."},
+			},
+			"required": ["path"],
+			"additionalProperties": false,
+		},
+	},
+	{
+		"name": "export_sprite_sheet",
+		"description": "Export a PNG sprite sheet and the Aseprite JSON sidecar. Set the view, tile size, turntable, and frame range for this call. The call does not change the export tab settings.",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"path": {"type": "string", "description": "A file name or user:// path ending in .png."},
+				"first_frame": {"type": "integer", "minimum": 0, "description": "First frame. Defaults to 0."},
+				"last_frame": {"type": "integer", "minimum": 0, "description": "Last frame, inclusive. Defaults to the last frame."},
+				"tag": {"type": "integer", "minimum": -1, "description": "Use this tag's frame range. -1 uses first_frame and last_frame."},
+				"tile_size": {"type": "integer", "minimum": 1, "maximum": 1024, "description": "Tile edge in pixels. Defaults to the export tab value."},
+				"view": {"type": "string", "enum": ["current", "isometric", "front", "back", "left", "right", "top", "bottom"], "description": "Camera view. Defaults to the export tab value."},
+				"views": {"type": "integer", "minimum": 1, "maximum": 16, "description": "Turntable view count. Defaults to the export tab value."},
+				"orthographic": {"type": "boolean", "description": "Use an orthographic camera. Defaults to the export tab value."},
+				"center": {"type": "boolean", "description": "Center the model in each tile. Defaults to the export tab value."},
+				"metadata": {"type": "boolean", "description": "Write the JSON sidecar. Defaults to the export tab value."},
+			},
+			"required": ["path"],
+			"additionalProperties": false,
+		},
+	},
+	{
+		"name": "add_frame",
+		"description": "Add empty frames as one undo action. The default index is the last frame. The new frames become current.",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"index": {"type": "integer", "minimum": 0},
+				"count": {"type": "integer", "minimum": 1, "maximum": 256, "description": "Frames to add. Defaults to 1."},
+			},
 			"additionalProperties": false,
 		},
 	},
 	{
 		"name": "remove_frame",
-		"description": "Remove one frame. The last remaining frame is kept. Tags shift to the remaining frames.",
+		"description": "Remove one or more frames as one undo action. The last remaining frame is kept. Tags shift to the remaining frames.",
 		"inputSchema": {
 			"type": "object",
-			"properties": {"frame": {"type": "integer", "minimum": 0}},
-			"required": ["frame"],
+			"properties": {
+				"frame": {"type": "integer", "minimum": 0},
+				"frames": {
+					"type": "array",
+					"items": {"type": "integer", "minimum": 0},
+					"minItems": 1,
+					"maxItems": 256,
+					"description": "Frame indices to remove. Overrides frame.",
+				},
+			},
 			"additionalProperties": false,
 		},
 	},
 	{
 		"name": "move_frame",
-		"description": "Move one frame to a new index.",
+		"description": "Move one frame or a contiguous block of frames to a new index as one undo action. Tag ranges stay at their indices.",
 		"inputSchema": {
 			"type": "object",
 			"properties": {
 				"from": {"type": "integer", "minimum": 0},
 				"to": {"type": "integer", "minimum": 0},
+				"count": {"type": "integer", "minimum": 1, "maximum": 256, "description": "Frames to move as a block. Defaults to 1. to is the final index of the first moved frame."},
 			},
 			"required": ["from", "to"],
 			"additionalProperties": false,
@@ -316,11 +373,18 @@ const TOOLS := [
 	},
 	{
 		"name": "set_frame_delay",
-		"description": "Set one frame duration in milliseconds.",
+		"description": "Set the duration of one or more frames as one undo action.",
 		"inputSchema": {
 			"type": "object",
 			"properties": {
 				"frame": {"type": "integer", "minimum": 0},
+				"frames": {
+					"type": "array",
+					"items": {"type": "integer", "minimum": 0},
+					"minItems": 1,
+					"maxItems": 256,
+					"description": "Frame indices to set. Overrides frame.",
+				},
 				"ms": {"type": "integer", "minimum": 1, "maximum": 10000},
 			},
 			"required": ["ms"],
@@ -818,6 +882,7 @@ const OUTPUT_SCHEMAS := {
 	"get_cells": {
 		"type": "object",
 		"properties": {
+			"revision": {"type": "integer"},
 			"frame": {"type": "integer"},
 			"count": {"type": "integer"},
 			"truncated": {"type": "boolean"},
@@ -879,6 +944,63 @@ const OUTPUT_SCHEMAS := {
 			"path": {"type": "string"},
 		},
 	},
+	"get_export_settings": {
+		"type": "object",
+		"properties": {
+			"revision": {"type": "integer"},
+			"sprite": {
+				"type": "object",
+				"properties": {
+					"view": {"type": "string"},
+					"orthographic": {"type": "boolean"},
+					"center": {"type": "boolean"},
+					"tile_size": {"type": "integer"},
+					"views": {"type": "integer"},
+					"metadata": {"type": "boolean"},
+					"tag": {"type": "integer"},
+					"tag_name": {"type": "string"},
+					"first_frame": {"type": "integer"},
+					"last_frame": {"type": "integer"},
+				},
+			},
+			"model": {
+				"type": "object",
+				"properties": {
+					"center": {"type": "boolean"},
+					"tag": {"type": "integer"},
+					"smooth_normals": {"type": "boolean"},
+					"ao": {"type": "number"},
+					"unlit": {"type": "boolean"},
+					"first_frame": {"type": "integer"},
+					"last_frame": {"type": "integer"},
+				},
+			},
+		},
+	},
+	"export_model": {
+		"type": "object",
+		"properties": {
+			"path": {"type": "string"},
+			"format": {"type": "string"},
+			"frames": {"type": "integer"},
+			"tags": {"type": "array", "items": {"type": "string"}},
+			"revision": {"type": "integer"},
+		},
+	},
+	"export_sprite_sheet": {
+		"type": "object",
+		"properties": {
+			"path": {"type": "string"},
+			"metadata_path": {"type": "string"},
+			"width": {"type": "integer"},
+			"height": {"type": "integer"},
+			"tile_size": {"type": "integer"},
+			"frames": {"type": "integer"},
+			"views": {"type": "integer"},
+			"view": {"type": "string"},
+			"revision": {"type": "integer"},
+		},
+	},
 	"add_frame": {
 		"type": "object",
 		"properties": {"frame": {"type": "integer"}, "frames": {"type": "integer"}},
@@ -901,7 +1023,11 @@ const OUTPUT_SCHEMAS := {
 	},
 	"set_frame_delay": {
 		"type": "object",
-		"properties": {"frame": {"type": "integer"}, "delay_ms": {"type": "integer"}},
+		"properties": {
+			"frame": {"type": "integer"},
+			"frames": {"type": "array", "items": {"type": "integer"}},
+			"delay_ms": {"type": "integer"},
+		},
 	},
 	"set_tag_loop": SCHEMA_TAG,
 	"add_tag": SCHEMA_TAG,
@@ -1006,8 +1132,11 @@ has open, not a file copy. A read or a write lands in their real session.
 - save_document writes a copy by default. Pass copy false to save the main document.
 - new_document and open_document add a tab. The current document stays open.
 - Frame and tag indices shift after add, move, or remove. Re-read them.
+- add_frame, remove_frame, move_frame, and set_frame_delay accept several frames in one call. One call is one undo action.
 - set_tag_range fails when the range is outside the frames.
 - inspect_document with palette true puts the palette at document.palette.
+- Call get_export_settings to read the view, tile size, tag, and model options of the export tab.
+- export_model and export_sprite_sheet take their own settings for one call. They do not change the export tab.
 
 ## Return shapes
 
@@ -1015,7 +1144,7 @@ Every tool declares an outputSchema. A client that renders it shows the return
 type before the first call. The keys of each result are listed below.
 """
 
-const INSTRUCTIONS := "LVE is a voxel editor. Cells are integers and Y is up. Boxes are inclusive. Read get_state for the document, material, and revision. Read the lve://guide resource once for the rules and the return shape of every tool. inspect_document gives bounds, materials, islands, and transitions. get_slice or get_map shows shape. get_cells returns runs [x0, x1, y, z, material_index]. Pass next back as cursor with the same box. write_cells uses the current material when a shape has no index. Each call is one undo action. save_document writes a copy unless copy is false. Verify with get_changes since the last revision."
+const INSTRUCTIONS := "LVE is a voxel editor. Cells are integers and Y is up. Boxes are inclusive. Read get_state for the document, material, and revision. Read the lve://guide resource once for the rules and the return shape of every tool. inspect_document gives bounds, materials, islands, and transitions. get_slice or get_map shows shape. get_cells returns runs [x0, x1, y, z, material_index]. Pass next back as cursor with the same box. write_cells uses the current material when a shape has no index. Each call is one undo action. save_document writes a copy unless copy is false. Export with export_model or export_sprite_sheet, and set their options per call. Verify with get_changes since the last revision."
 
 ## One accepted bridge or HTTP client.
 class PeerState extends RefCounted:
@@ -1113,8 +1242,9 @@ func _on_cells_changed(frame: int, affected: Array[Vector3i]) -> void:
 
 
 func _record_cells_change(frame: int, affected: Array) -> void:
+	# A write that the scope filtered to nothing changes no cell, so it must keep
+	# the journal instead of forcing a full refresh.
 	if affected.is_empty():
-		_reset_journal()
 		return
 	_revision += 1
 	_last_content_revision = _revision
@@ -1606,6 +1736,12 @@ func _call_tool(id: Variant, params: Dictionary) -> Dictionary:
 			return _result_response(id, await _save_document(args))
 		"open_document":
 			return _result_response(id, _open_document(args))
+		"get_export_settings":
+			return _result_response(id, _get_export_settings())
+		"export_model":
+			return _result_response(id, await _export_model(args))
+		"export_sprite_sheet":
+			return _result_response(id, await _export_sprite_sheet(args))
 		"add_frame":
 			return _result_response(id, _add_frame(args))
 		"remove_frame":
@@ -1697,17 +1833,6 @@ func _get_state() -> Dictionary:
 			"first": State.slice_first(),
 			"count": State.slice_count(),
 		}
-	var tags: Array = []
-	for index in range(document.tags.size()):
-		var tag := document.tags[index]
-		tags.append({
-			"name": tag.name,
-			"from": tag.from,
-			"to": tag.to,
-			"mode": tag.loop_mode,
-			"mode_name": _tag_loop_name(tag.loop_mode),
-			"repeats": tag.repeats,
-		})
 	return _tool_ok({
 		"revision": _revision,
 		"document": {
@@ -1719,7 +1844,7 @@ func _get_state() -> Dictionary:
 			"bounds": _aabb_json(document.bounds()),
 			"frame_bounds": _frame_bounds_array(frame),
 		},
-		"tags": tags,
+		"tags": _tags_json(),
 		"active_tag": State.active_tag,
 		"active_tool": {"id": str(info.get("id", "")), "params": info.get("params", {})},
 		"material": _material_json(State.current_material),
@@ -1751,12 +1876,14 @@ func _get_cells(args: Dictionary) -> Dictionary:
 	if min_value == null and max_value == null:
 		if frame_bounds.is_empty():
 			return _tool_ok({
+				"revision": _revision,
 				"frame": frame_index,
 				"count": 0,
 				"truncated": false,
 				"runs": [],
 				"materials": [],
-				"bounds": null,
+				"scanned_bounds": null,
+				"returned_bounds": null,
 			})
 		min_cell = frame_bounds[0]
 		max_cell = frame_bounds[1]
@@ -1856,6 +1983,7 @@ func _get_cells(args: Dictionary) -> Dictionary:
 				continue
 		runs.append([x, x, y, z, material_index])
 	var data := {
+		"revision": _revision,
 		"frame": frame_index,
 		"count": cells.size(),
 		"truncated": truncated,
@@ -2095,55 +2223,42 @@ func _get_slice(args: Dictionary) -> Dictionary:
 					cell_values[key] = int(cell[fixed_index])
 			else:
 				cell_values[key] = int(cell_values.get(key, 0)) + 1
+		# A height is a real coordinate, so the empty marker must sit outside the
+		# box. A fixed -1 would hide a cell at layer -1.
+		var empty_height := fixed_start - 1
 		for gy in range(grid_height):
 			var row: Array = []
 			for gx in range(grid_width):
 				var key := Vector2i(gx, gy)
 				if mode == "height":
-					row.append(int(cell_values[key]) if cell_values.has(key) else -1)
+					row.append(int(cell_values[key]) if cell_values.has(key) else empty_height)
 				else:
 					row.append(int(cell_values.get(key, 0)))
 			values.append(row)
 	else:
+		# One pass over the cells fills every scaled block, so a large scale costs
+		# one write per cell, not one lookup per cell of every block.
+		var layer_blocks := _slice_blocks(cells, layer_values, fixed_index, column_axis, row_axis, col_start, row_start, scale, mode)
 		for layer in layer_values:
+			var blocks: Dictionary = layer_blocks.get(layer, {})
 			var lines: Array = []
 			for gy in range(grid_height):
 				var line := ""
 				for gx in range(grid_width):
 					var chosen := ""
+					var block: Variant = blocks.get(Vector2i(gx, gy), null)
 					if mode == "occupancy":
-						var found := false
-						for dy in range(scale):
-							for dx in range(scale):
-								var cell := _cell_with_axes(
-									fixed_index, layer,
-									column_axis, col_start + gx * scale + dx,
-									row_axis, row_start + gy * scale + dy
-								)
-								if cells.has(cell):
-									found = true
-									break
-							if found:
-								break
-						line += "#" if found else "."
-					else:
-						var block_materials := {}
-						for dy in range(scale):
-							for dx in range(scale):
-								var cell := _cell_with_axes(
-									fixed_index, layer,
-									column_axis, col_start + gx * scale + dx,
-									row_axis, row_start + gy * scale + dy
-								)
-								if cells.has(cell):
-									var key: String = cells[cell]
-									block_materials[key] = int(block_materials.get(key, 0)) + 1
+						line += "." if block == null else "#"
+					elif block != null:
+						var block_materials: Dictionary = block
 						var chosen_count := 0
 						for key in block_materials:
 							if int(block_materials[key]) > chosen_count:
 								chosen_count = int(block_materials[key])
 								chosen = key
 						line += "." if chosen.is_empty() else str(char_by_key.get(chosen, "?"))
+					else:
+						line += "."
 				lines.append(line)
 			var origin := _cell_with_axes(fixed_index, layer, column_axis, col_start, row_axis, row_start)
 			slices.append({"layer": layer, "origin": _json_cell(origin), "lines": lines})
@@ -2160,7 +2275,7 @@ func _get_slice(args: Dictionary) -> Dictionary:
 	}
 	if is_projection:
 		data["values"] = values
-		data["empty_value"] = -1 if mode == "height" else 0
+		data["empty_value"] = fixed_start - 1 if mode == "height" else 0
 	else:
 		data["slices"] = slices
 	if mode == "materials":
@@ -2499,6 +2614,28 @@ func _cell_with_axes(fixed_axis: int, fixed_value: int, column_axis: int, column
 	return cell
 
 
+## Groups the cells of one slice into scaled blocks. The result maps a layer to
+## a block grid, keyed by (column block, row block). An occupancy block holds
+## [code]true[/code]. A materials block holds a map of material key to count.
+func _slice_blocks(cells: Dictionary, layer_values: Array, fixed_index: int, column_axis: int, row_axis: int, col_start: int, row_start: int, scale: int, mode: String) -> Dictionary:
+	var blocks := {}
+	for cell in cells:
+		var layer: int = cell[fixed_index]
+		if not layer_values.has(layer):
+			continue
+		var block_key := Vector2i((cell[column_axis] - col_start) / scale, (cell[row_axis] - row_start) / scale)
+		var layer_map: Dictionary = blocks.get(layer, {})
+		if mode == "occupancy":
+			layer_map[block_key] = true
+		else:
+			var block_materials: Dictionary = layer_map.get(block_key, {})
+			var material_key: String = cells[cell]
+			block_materials[material_key] = int(block_materials.get(material_key, 0)) + 1
+			layer_map[block_key] = block_materials
+		blocks[layer] = layer_map
+	return blocks
+
+
 func _cell_less(a: Vector3i, b: Vector3i) -> bool:
 	if a.z != b.z:
 		return a.z < b.z
@@ -2568,14 +2705,23 @@ func _bool_arg(args: Dictionary, key: String, fallback: bool) -> bool:
 	return fallback
 
 
-func _frame_indices_arg(args: Dictionary) -> Array:
+## Returns the frame indices of the [code]frames[/code] list, or of the
+## [code]frame[/code] argument, or the current frame. An invalid list or index
+## returns an empty array. [param limit] is the longest accepted list.
+func _frame_indices_arg(args: Dictionary, limit := 64) -> Array:
 	var document := State.document
 	if document == null:
 		return []
 	var frames_value: Variant = args.get("frames", null)
+	# A key that is present with the wrong type is an error, not a request for the
+	# current frame. A silent fallback would edit or remove another frame.
+	if frames_value != null and not frames_value is Array:
+		return []
+	if args.has("frame") and not (args["frame"] is int or args["frame"] is float):
+		return []
 	if frames_value is Array:
 		var source: Array = frames_value
-		if source.is_empty() or source.size() > 64:
+		if source.is_empty() or source.size() > limit:
 			return []
 		var indices: Array = []
 		for value in source:
@@ -2597,6 +2743,7 @@ func _tags_json() -> Array:
 	for index in range(State.document.tags.size()):
 		var tag := State.document.tags[index]
 		tags.append({
+			"tag": index,
 			"name": tag.name,
 			"from": tag.from,
 			"to": tag.to,
@@ -2703,12 +2850,19 @@ func _build_regions(cells: Dictionary, group: String, min_cells: int, max_region
 		var count := 0
 		var min_cell: Vector3i = start
 		var max_cell: Vector3i = start
+		# A region far from the origin can hold a sum above the 32-bit range of a
+		# Vector3i component, so the totals use plain integers.
 		var sum := Vector3i.ZERO
+		var sum_x := 0
+		var sum_y := 0
+		var sum_z := 0
 		var island_materials := {}
 		while not stack.is_empty():
 			var cell: Vector3i = stack.pop_back()
 			count += 1
-			sum += cell
+			sum_x += cell.x
+			sum_y += cell.y
+			sum_z += cell.z
 			min_cell = Vector3i(mini(min_cell.x, cell.x), mini(min_cell.y, cell.y), mini(min_cell.z, cell.z))
 			max_cell = Vector3i(maxi(max_cell.x, cell.x), maxi(max_cell.y, cell.y), maxi(max_cell.z, cell.z))
 			var key: String = cells[cell]
@@ -2732,7 +2886,7 @@ func _build_regions(cells: Dictionary, group: String, min_cells: int, max_region
 			"cells": count,
 			"min": min_cell,
 			"max": max_cell,
-			"sum": sum,
+			"sum": Vector3(sum_x, sum_y, sum_z),
 			"materials": island_materials,
 		})
 	regions.sort_custom(_region_more_cells)
@@ -2743,8 +2897,8 @@ func _build_regions(cells: Dictionary, group: String, min_cells: int, max_region
 	for index in range(regions.size()):
 		var region: Dictionary = regions[index]
 		var count := int(region["cells"])
-		var sum: Vector3i = region["sum"]
-		var center := Vector3i(floori(float(sum.x) / count), floori(float(sum.y) / count), floori(float(sum.z) / count))
+		var sum: Vector3 = region["sum"]
+		var center := Vector3i(floori(sum.x / count), floori(sum.y / count), floori(sum.z / count))
 		var region_data := {
 			"id": index,
 			"cells": count,
@@ -2784,8 +2938,10 @@ func _build_regions(cells: Dictionary, group: String, min_cells: int, max_region
 
 
 func _transition_json(from_index: int, to_index: int, scans: Dictionary) -> Dictionary:
-	var from_scan: Dictionary = scans.get(from_index, _scan_frame(State.get_voxel_frame(from_index)))
-	var to_scan: Dictionary = scans.get(to_index, _scan_frame(State.get_voxel_frame(to_index)))
+	# `Dictionary.get` evaluates its default at once, so a scan is only built on a
+	# miss. A cached scan must never be rescanned.
+	var from_scan: Dictionary = scans[from_index] if scans.has(from_index) else _scan_frame(State.get_voxel_frame(from_index))
+	var to_scan: Dictionary = scans[to_index] if scans.has(to_index) else _scan_frame(State.get_voxel_frame(to_index))
 	if bool(from_scan.get("truncated", false)) or bool(to_scan.get("truncated", false)):
 		return {"from": from_index, "to": to_index, "truncated": true}
 	var from_cells: Dictionary = from_scan.get("cells", {})
@@ -3114,36 +3270,197 @@ func _document_path(value: Variant) -> String:
 	return "user://" + path
 
 
+## Returns the export path for one output file, or an empty string when the
+## path is invalid. A path without an extension gets the first extension. A path
+## with an extension outside [param extensions] is invalid. A bare name lands in
+## the user directory.
+func _export_path(value: Variant, extensions: Array) -> String:
+	var path := _document_path(value)
+	if path.is_empty():
+		return ""
+	var extension := path.get_extension().to_lower()
+	if extension.is_empty():
+		return path + "." + str(extensions[0])
+	return path if extensions.has(extension) else ""
+
+
+## Returns a readable message for an export error code.
+func _export_error(error: Error) -> String:
+	match error:
+		ERR_BUSY:
+			return "The editor is busy with another export or edit. Retry."
+		ERR_UNAVAILABLE:
+			return "The export needs a visible editor window."
+		ERR_INVALID_PARAMETER:
+			return "The export settings are invalid."
+	return "The export failed: " + error_string(error)
+
+
+func _get_export_settings() -> Dictionary:
+	var plugin := _plugin("ExportPlugin")
+	if plugin == null:
+		return _tool_error("The export plugin is not available.")
+	var settings_value: Variant = plugin.call("current_export_settings")
+	if not (settings_value is Dictionary):
+		return _tool_error("The export settings are not available.")
+	var settings: Dictionary = settings_value
+	return _tool_ok({
+		"revision": _revision,
+		"sprite": settings.get("sprite", {}),
+		"model": settings.get("model", {}),
+	})
+
+
+func _export_model(args: Dictionary) -> Dictionary:
+	if State.active_edit() != null or State.edit_busy():
+		return _tool_error("The editor is busy with another edit. Retry.")
+	var plugin := _plugin("ExportPlugin")
+	if plugin == null:
+		return _tool_error("The export plugin is not available.")
+	var path := _export_path(args.get("path", ""), ["glb", "gltf"])
+	if path.is_empty():
+		return _tool_error("path must be a file name or user:// path ending in .glb or .gltf.")
+	var tag := _int_arg(args, "tag", -1)
+	if tag < -1 or tag >= State.document.tags.size():
+		return _tool_error("The tag does not exist.")
+	var frames := State.get_frame_count()
+	var names: Array = []
+	if tag >= 0:
+		var tag_data := State.document.tags[tag]
+		frames = tag_data.to - tag_data.from + 1
+		names.append(tag_data.name)
+	else:
+		for tag_data in State.document.tags:
+			names.append(tag_data.name)
+	var settings := {"tag": tag}
+	for key in ["center", "smooth_normals", "unlit"]:
+		if args.has(key):
+			settings[key] = _bool_arg(args, key, false)
+	if args.has("ao"):
+		var ao_value: Variant = args["ao"]
+		if not (ao_value is int or ao_value is float):
+			return _tool_error("ao must be a number from 0 to 1.")
+		settings["ao"] = clampf(float(ao_value), 0.0, 1.0)
+	var error_value: Variant = await plugin.call("export_gltf_settings", path, settings)
+	var error: Error = error_value if error_value is int else ERR_UNAVAILABLE
+	if error != OK:
+		return _tool_error(_export_error(error))
+	return _tool_ok({
+		"path": ProjectSettings.globalize_path(path),
+		"format": path.get_extension().to_lower(),
+		"frames": frames,
+		"tags": names,
+		"revision": _revision,
+	})
+
+
+func _export_sprite_sheet(args: Dictionary) -> Dictionary:
+	if State.active_edit() != null or State.edit_busy():
+		return _tool_error("The editor is busy with another edit. Retry.")
+	var plugin := _plugin("ExportPlugin")
+	if plugin == null:
+		return _tool_error("The export plugin is not available.")
+	var path := _export_path(args.get("path", ""), ["png"])
+	if path.is_empty():
+		return _tool_error("path must be a file name or user:// path ending in .png.")
+	var tag := _int_arg(args, "tag", -1)
+	if tag < -1 or tag >= State.document.tags.size():
+		return _tool_error("The tag does not exist.")
+	var first := _int_arg(args, "first_frame", 0)
+	var last := _int_arg(args, "last_frame", State.get_frame_count() - 1)
+	# Start from the export tab values, so the result reports what the call used.
+	var current_value: Variant = plugin.call("current_export_settings")
+	var settings: Dictionary = current_value.get("sprite", {}).duplicate() if current_value is Dictionary else {}
+	# The tab tag does not apply. The call names its own tag or frame range.
+	settings["tag_name"] = ""
+	if tag >= 0:
+		var tag_data := State.document.tags[tag]
+		first = tag_data.from
+		last = tag_data.to
+		settings["tag_name"] = tag_data.name
+	if first < 0 or last < first or last >= State.get_frame_count():
+		return _tool_error("first_frame and last_frame must name frames in order.")
+	settings["first_frame"] = first
+	settings["last_frame"] = last
+	for key in ["orthographic", "center", "metadata"]:
+		if args.has(key):
+			settings[key] = _bool_arg(args, key, false)
+	if args.has("tile_size"):
+		var tile_arg := _int_arg(args, "tile_size", 0)
+		if tile_arg < 1 or tile_arg > 1024:
+			return _tool_error("tile_size must be a whole number between 1 and 1024.")
+		settings["tile_size"] = tile_arg
+	if args.has("view"):
+		var view_arg := str(args["view"])
+		if not EXPORT_PLUGIN_SCRIPT.VIEW_KEYS.has(view_arg):
+			return _tool_error("view must be current, isometric, front, back, left, right, top, or bottom.")
+		settings["view"] = view_arg
+	if args.has("views"):
+		var views_arg: Variant = args["views"]
+		if not (views_arg is int or views_arg is float):
+			return _tool_error("views must be a whole number.")
+		settings["views"] = clampi(int(views_arg), 1, 16)
+	var tile_size := int(settings.get("tile_size", 64))
+	var views := int(settings.get("views", 1))
+	var view := str(settings.get("view", "isometric"))
+	var metadata := bool(settings.get("metadata", true))
+	var error_value: Variant = await plugin.call("export_sprite_sheet_settings", path, settings)
+	var error: Error = error_value if error_value is int else ERR_UNAVAILABLE
+	if error != OK:
+		return _tool_error(_export_error(error))
+	var frames := last - first + 1
+	var layout: Dictionary = EXPORT_PLUGIN_SCRIPT.sheet_layout(frames * views, tile_size)
+	var size: Vector2i = layout.get("size", Vector2i.ZERO)
+	return _tool_ok({
+		"path": ProjectSettings.globalize_path(path),
+		"metadata_path": ProjectSettings.globalize_path(path.get_basename() + ".json") if metadata else "",
+		"width": size.x,
+		"height": size.y,
+		"tile_size": tile_size,
+		"frames": frames,
+		"views": views,
+		"view": view,
+		"revision": _revision,
+	})
+
+
 func _add_frame(args: Dictionary) -> Dictionary:
 	var count := State.document.frames.size()
 	var index := _int_arg(args, "index", count)
 	if index < 0 or index > count:
 		return _tool_error("index must be between 0 and the frame count.")
-	State.add_frame()
-	if index < count:
-		State.move_frame(count, index)
+	var amount := clampi(_int_arg(args, "count", 1), 1, 256)
+	State.add_frames(amount, index)
 	return _tool_ok({"frame": State.current_frame, "frames": State.document.frames.size()})
 
 
 func _remove_frame(args: Dictionary) -> Dictionary:
-	var index := _int_arg(args, "frame", -1)
-	if index < 0 or index >= State.document.frames.size():
-		return _tool_error("The frame does not exist.")
-	if State.document.frames.size() <= 1:
+	# A removal must name its frames. It does not default to the current frame.
+	if not args.has("frame") and not args.has("frames"):
+		return _tool_error("frame or frames is required.")
+	var indices := _frame_indices_arg(args, 256)
+	if indices.is_empty():
+		return _tool_error("frame or frames must name 1 to 256 existing frames.")
+	var unique := {}
+	for index in indices:
+		unique[index] = true
+	if unique.size() >= State.document.frames.size():
 		return _tool_error("The document must keep one frame.")
-	State.current_frame = index
-	State.delete_frame()
+	State.remove_frames(unique.keys())
 	return _tool_ok({"frame": State.current_frame, "frames": State.document.frames.size()})
 
 
 func _move_frame(args: Dictionary) -> Dictionary:
+	var size := State.document.frames.size()
 	var from := _int_arg(args, "from", -1)
 	var to := _int_arg(args, "to", -1)
-	var count := State.document.frames.size()
-	if from < 0 or from >= count or to < 0 or to >= count:
-		return _tool_error("from and to must name existing frames.")
-	State.move_frame(from, to)
-	return _tool_ok({"frame": State.current_frame, "frames": count})
+	var count := clampi(_int_arg(args, "count", 1), 1, 256)
+	if from < 0 or from >= size or count > size - from:
+		return _tool_error("from and count must name frames in the document.")
+	if to < 0 or to > size - count:
+		return _tool_error("to must leave room for the moved block.")
+	State.move_frames(from, count, to)
+	return _tool_ok({"frame": State.current_frame, "frames": size})
 
 
 func _duplicate_frame() -> Dictionary:
@@ -3160,14 +3477,14 @@ func _set_frame(args: Dictionary) -> Dictionary:
 
 
 func _set_frame_delay(args: Dictionary) -> Dictionary:
-	var index := _int_arg(args, "frame", State.current_frame)
-	if index < 0 or index >= State.document.frames.size():
-		return _tool_error("The frame does not exist.")
-	var ms := _int_arg(args, "ms", State.document.frames[index].delay_ms)
+	var ms := _int_arg(args, "ms", -1)
 	if ms < 1 or ms > 10000:
 		return _tool_error("ms must be between 1 and 10000.")
-	State.set_frame_delay(index, ms)
-	return _tool_ok({"frame": index, "delay_ms": ms})
+	var indices := _frame_indices_arg(args, 256)
+	if indices.is_empty():
+		return _tool_error("frame or frames must name 1 to 256 existing frames.")
+	State.set_frame_delays(indices, ms)
+	return _tool_ok({"frame": int(indices[0]), "frames": indices, "delay_ms": ms})
 
 
 func _set_tag_loop(args: Dictionary) -> Dictionary:
@@ -3179,10 +3496,9 @@ func _set_tag_loop(args: Dictionary) -> Dictionary:
 		index = 0
 	if index < 0 or index >= State.document.tags.size():
 		return _tool_error("The tag does not exist.")
-	State.set_tag_loop_mode(index, mode)
 	var repeats_value: Variant = args.get("repeats", null)
-	if repeats_value is int or repeats_value is float:
-		State.set_tag_repeats(index, clampi(int(repeats_value), 0, 1000))
+	var set_repeats := repeats_value is int or repeats_value is float
+	State.set_tag_loop(index, mode, clampi(int(repeats_value), 0, 1000) if set_repeats else 0, set_repeats)
 	return _tool_ok(_tag_json(index, State.get_tag(index)))
 
 
@@ -3201,12 +3517,10 @@ func _add_tag(args: Dictionary) -> Dictionary:
 	var mode := _tag_loop_mode(args.get("mode", "forward"))
 	if mode < 0:
 		return _tool_error("mode must be forward, reverse, ping_pong, or ping_pong_reverse.")
-	State.add_tag(tag_name, from, to)
+	State.add_tag(tag_name, from, to, mode, clampi(_int_arg(args, "repeats", 0), 0, 1000))
 	var index := State.document.tags.size() - 1
 	if index < 0:
 		return _tool_error("The tag could not be added.")
-	State.set_tag_loop_mode(index, mode)
-	State.set_tag_repeats(index, clampi(_int_arg(args, "repeats", 0), 0, 1000))
 	return _tool_ok(_tag_json(index, State.get_tag(index)))
 
 
@@ -3666,11 +3980,11 @@ func _write_cells(args: Dictionary) -> Dictionary:
 		State.document._bounds_dirty = true
 		if not job.changed_chunks.is_empty():
 			State.chunks_changed.emit(int(frame_index), job.changed_chunks)
-		_record_cells_change(int(frame_index), job.applied_cells.keys())
+		var applied_keys: Array = job.applied_cells.keys()
+		_record_cells_change(int(frame_index), applied_keys)
 		var change := State.finish_edit_collect(tx)
 		if change != null:
 			collected.append(change)
-		var applied_keys: Array = job.applied_cells.keys()
 		var bounds: Variant = _bounds_of_cell_array(applied_keys)
 		if bounds != null:
 			var bounds_data: Dictionary = bounds

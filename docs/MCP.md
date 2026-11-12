@@ -71,12 +71,15 @@ The server publishes one resource, `lve://guide`. It gives the edit rules and th
 | `new_document` | Open an empty document in a new tab |
 | `save_document` | Save a copy of the current document as `.lve` or `.lve.png`. Set `copy` false to save the main document |
 | `open_document` | Open a saved `.lve` or `.lve.png` document in a new tab |
-| `add_frame` | Add an empty frame at the end or at an index |
-| `remove_frame` | Remove one frame. The last frame stays |
-| `move_frame` | Move one frame to a new index |
+| `get_export_settings` | Read the export settings the editor uses now |
+| `export_model` | Export a `.glb` or `.gltf` file with per-call model settings |
+| `export_sprite_sheet` | Export a PNG sprite sheet and the Aseprite JSON sidecar with per-call settings |
+| `add_frame` | Add empty frames at the end or at an index, in one undo action |
+| `remove_frame` | Remove one frame, or a list in one undo action. The last frame stays |
+| `move_frame` | Move one frame or a block to a new index, in one undo action |
 | `duplicate_frame` | Copy the current frame and insert it after |
 | `set_frame` | Make one frame current |
-| `set_frame_delay` | Set one frame duration in milliseconds |
+| `set_frame_delay` | Set one frame duration, or a list, in milliseconds |
 | `add_tag` | Add a tag with a frame range, loop mode, and repeat count |
 | `remove_tag` | Remove one tag. The last tag stays |
 | `rename_tag` | Rename one tag |
@@ -143,6 +146,16 @@ Set `views` to a list of named views to render a contact sheet. Set `frames` to 
 
 The server logs one line per tool call with its response bytes in `user://mcp_server.log`.
 
+## Export
+
+`get_export_settings` reads the values the export tab uses now: the sheet view, the tile size, the tag, and the model options.
+
+`export_model` writes a `.glb` or `.gltf` file. It accepts `center`, `tag`, `smooth_normals`, `ao`, and `unlit`. `export_sprite_sheet` writes a PNG and the Aseprite JSON sidecar. It accepts `first_frame`, `last_frame`, `tag`, `tile_size`, `view`, `views`, `orthographic`, `center`, and `metadata`.
+
+Pass a key only when the call needs a value that differs from the export tab. The call does not change the document or the saved export settings. Both tools return the resolved path and the resolved values.
+
+The sprite sheet needs a visible editor window. A headless run returns an unavailable error.
+
 ## Editing rules
 
 - Call `set_tool` before `stroke` or `fill`.
@@ -155,7 +168,9 @@ The server logs one line per tool call with its response bytes in `user://mcp_se
 
 - Use `duplicate_frame` to keep the static set pieces and change only the moving parts.
 - Erase the previous moving cells before you write the next frame.
-- Use `set_frame_delay` to time each frame.
+- Use `set_frame_delay` to time each frame. A `frames` list sets several delays in one action.
+- Use `add_frame`, `remove_frame`, and `move_frame` with batches. `move_frame` takes `count` for a block. `remove_frame` takes `frames`. One call is one undo action.
+- After `remove_frame`, the current frame stays current. If it was removed, the next remaining frame is current.
 - Use `add_tag` to make one tag per action. The frame range is inclusive.
 - Use `set_tag_range`, `rename_tag`, and `remove_tag` to edit a tag.
 - Use `set_tag_loop` with `ping_pong` to reverse a growth sequence into a loop.
@@ -165,7 +180,7 @@ The server logs one line per tool call with its response bytes in `user://mcp_se
 
 ## Limits
 
-The first version supports brush, paint, eraser, fill, exact writes, material sample, screenshots, documents, frames, tags, and playback. Terrain, selection, transform, and clipboard are not exposed yet.
+The first version supports brush, paint, eraser, fill, exact writes, material sample, screenshots, documents, frames, tags, playback, and export. Terrain, selection, transform, and clipboard are not exposed yet.
 
 ## Bridge mode
 
