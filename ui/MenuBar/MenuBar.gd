@@ -220,7 +220,9 @@ func _save_quit_document() -> void:
 	var document := State.document
 	if document.edit_save_path.is_empty():
 		_quit_after_save = true
-		_on_save_as_btn_pressed()
+		# A dialog that cannot open leaves the quit flow waiting forever.
+		if not _on_save_as_btn_pressed():
+			_cancel_quit()
 		return
 	var error := await save_doc(document.edit_save_path)
 	if error != OK:
@@ -256,7 +258,10 @@ func _on_close_tab_save() -> void:
 	var document := State.document
 	if document.edit_save_path.is_empty():
 		_close_after_save = index
-		_on_save_as_btn_pressed()
+		# A dialog that cannot open would leave the flag set, and the next Save As
+		# would then close this tab.
+		if not _on_save_as_btn_pressed():
+			_close_after_save = -1
 		return
 	var error := await save_doc(document.edit_save_path)
 	if error == OK:
@@ -471,11 +476,22 @@ func _on_file_opened(path: String) -> void:
 			_show_file_error("Cannot open the document. The file is invalid or its version is unsupported.")
 			return
 	if path.get_extension().to_lower() in State.IMAGE_EXTENSIONS:
+		# The import replaces the active document. Open a fresh tab first, so an
+		# unsaved edit in the current tab survives.
+		var placeholder: VoxelDocument = null
+		if not _can_reuse_tab():
+			placeholder = State.new_document()
+			State.open_tab(placeholder)
 		var error: Error = await get_node("/root/ImageImportPlugin").import_image(path)
 		if error == OK:
 			current_save_path = ""
-		if error != OK and error != ERR_BUSY:
-			_show_file_error("Cannot import the image: %s" % error_string(error))
+		else:
+			if placeholder != null:
+				var index := State.tabs.find(placeholder)
+				if index >= 0:
+					State.close_tab(index)
+			if error != ERR_BUSY:
+				_show_file_error("Cannot import the image: %s" % error_string(error))
 		return
 	_show_file_error("The file type is unsupported.")
 
@@ -486,9 +502,11 @@ func _on_save_btn_pressed() -> void:
 		return
 	await save_doc(current_save_path)
 
-func _on_save_as_btn_pressed() -> void:
+## Opens the Save As dialog. Returns [code]false[/code] when the editor is busy
+## and no dialog opens.
+func _on_save_as_btn_pressed() -> bool:
 	if State.edit_busy():
-		return
+		return false
 	%FileDialog.file_mode = FileDialog.FILE_MODE_SAVE_FILE
 	_save_format.show()
 	var format_index := 1 if current_save_path.get_extension().to_lower() == "png" else 0
@@ -496,6 +514,7 @@ func _on_save_as_btn_pressed() -> void:
 	%FileDialog.current_file = State.document.get_file_name()
 	_on_save_format_selected(format_index)
 	_show_file_dialog()
+	return true
 
 
 func _on_save_format_selected(index: int) -> void:
