@@ -25,6 +25,7 @@ func _ready() -> void:
 	test("new_document opens a new tab", _new_tab, "new_document")
 	test("frames and tags can be driven", _frames, "frames")
 	test("frames can be inserted, moved, and removed", _edit_frames, "edit_frames")
+	test("frame blocks add, move, and remove in one action", _batch_frames, "batch_frames")
 	test("tags can be added, renamed, ranged, looped, and removed", _edit_tags, "edit_tags")
 	test("a user edit makes an agent action busy", _busy, "busy")
 	test("the loopback transport answers MCP requests", _tcp, "tcp")
@@ -43,6 +44,9 @@ func _ready() -> void:
 	test("the guide resource names every tool", _guide, "guide")
 	test("a stroke reports the exact changed bounds", _stroke_bounds, "stroke_bounds")
 	test("inspect_document returns the palette", _palette, "palette")
+	test("the export settings are readable", _export_settings, "export_settings")
+	test("a sprite sheet uses the requested settings", _export_sheet, "export_sheet", {"timeout": 30.0})
+	test("a model export uses the requested settings", _export_model, "export_model", {"timeout": 30.0})
 
 
 func before_test() -> void:
@@ -858,6 +862,55 @@ func _edit_frames() -> void:
 	)
 
 
+func _batch_frames() -> void:
+	var add_response := await _call("add_frame", {"count": 5})
+	step("Then one call adds five frames", func():
+		expect(not _is_error(add_response), "add_frame accepts count")
+		expect(State.document.frames.size() == 6, "six frames exist")
+		expect(State.undo_redo.get_history_count() == 1, "the block add is one undo action")
+	)
+	var delay_response := await _call("set_frame_delay", {"frames": [0, 1, 2, 3, 4, 5], "ms": 150})
+	step("Then one call sets every delay", func():
+		expect(not _is_error(delay_response), "set_frame_delay accepts frames")
+		for index in 6:
+			expect(State.document.frames[index].delay_ms == 150, "frame %d has 150 ms" % index)
+		expect(State.undo_redo.get_history_count() == 2, "the delay batch is one undo action")
+	)
+	step("Given distinct delays", func():
+		for index in 6:
+			State.set_frame_delays([index], 100 + index)
+		State.undo_redo.clear_history()
+	)
+	var move_response := await _call("move_frame", {"from": 0, "to": 4, "count": 2})
+	var move_data := _result_data(move_response)
+	step("Then the block moves as one action", func():
+		expect(not _is_error(move_response), "move_frame accepts count")
+		var delays := []
+		for frame in State.document.frames:
+			delays.append(frame.delay_ms)
+		expect(delays == [102, 103, 104, 105, 100, 101], "the block lands at the end")
+		expect(int(move_data.get("frames", 0)) == 6, "the frame count stays")
+		expect(State.undo_redo.get_history_count() == 1, "the block move is one undo action")
+	)
+	var remove_response := await _call("remove_frame", {"frames": [0, 2]})
+	step("Then several frames are removed as one action", func():
+		expect(not _is_error(remove_response), "remove_frame accepts frames")
+		expect(State.document.frames.size() == 4, "two frames are gone")
+		var delays := []
+		for frame in State.document.frames:
+			delays.append(frame.delay_ms)
+		expect(delays == [103, 105, 100, 101], "the remaining order is stable")
+		expect(State.document.frames[State.current_frame].delay_ms == 105, "the current frame stays current after the removal")
+		expect(State.undo_redo.get_history_count() == 2, "the removal batch is one undo action")
+	)
+	var insert_response := await _call("add_frame", {"count": 2, "index": 1})
+	step("Then an inserted block becomes current", func():
+		expect(not _is_error(insert_response), "add_frame inserts a block")
+		expect(State.document.frames.size() == 6, "two frames are added")
+		expect(State.current_frame == 2, "the last inserted frame is current")
+	)
+
+
 func _edit_tags() -> void:
 	for index in range(2):
 		await _call("add_frame", {})
@@ -1251,4 +1304,71 @@ func _palette() -> void:
 		var palette: Array = document.get("palette", [])
 		for value in palette:
 			expect((value as Dictionary).has("material"), "a palette entry carries a material")
+	)
+
+
+func _export_settings() -> void:
+	var response := await _call("get_export_settings", {})
+	var data := _result_data(response)
+	step("Then the settings name the sprite and model sections", func():
+		expect(not _is_error(response), "get_export_settings succeeds")
+		var sprite: Dictionary = data.get("sprite", {})
+		var model: Dictionary = data.get("model", {})
+		expect(sprite.has("view") and sprite.has("tile_size") and sprite.has("views"), "the sprite section carries the sheet settings")
+		expect(model.has("center") and model.has("smooth_normals") and model.has("unlit"), "the model section carries the model settings")
+	)
+
+
+func _export_sheet() -> void:
+	var path := "user://mcp_export_sheet.png"
+	var json_path := "user://mcp_export_sheet.json"
+	step("Given two frames and a clean output", func():
+		var frame := State.get_current_voxel_frame()
+		frame.set_cell(Vector3i(0, 0, 0), VoxelFrame.material(Color.RED))
+		frame.set_cell(Vector3i(1, 0, 0), VoxelFrame.material(Color.RED))
+		State.add_frame()
+		State.get_current_voxel_frame().set_cell(Vector3i(0, 1, 0), VoxelFrame.material(Color.BLUE))
+		State.document._bounds_dirty = true
+		DirAccess.remove_absolute(path)
+		DirAccess.remove_absolute(json_path)
+	)
+	var response := await _call("export_sprite_sheet", {"path": path, "first_frame": 0, "last_frame": 1, "tile_size": 32, "view": "front", "views": 2, "orthographic": true, "center": true, "metadata": true})
+	var data := _result_data(response)
+	step("Then the sheet uses the requested settings", func():
+		expect(not _is_error(response), "export_sprite_sheet succeeds: %s" % _result_text(response))
+		expect(FileAccess.file_exists(path), "the sheet exists")
+		expect(FileAccess.file_exists(json_path), "the sidecar exists")
+		expect(int(data.get("tile_size", 0)) == 32, "the sheet uses the requested tile size")
+		expect(int(data.get("views", 0)) == 2, "the sheet uses the requested turntable")
+		expect(str(data.get("view", "")) == "front", "the sheet uses the requested view")
+		expect(int(data.get("frames", 0)) == 2, "the sheet uses the requested frames")
+		var image := Image.load_from_file(path)
+		expect(image != null, "the sheet is a readable PNG")
+		if image != null:
+			expect(image.get_width() == int(data.get("width", -1)), "the image width matches the response")
+			expect(image.get_height() == int(data.get("height", -1)), "the image height matches the response")
+	)
+
+
+func _export_model() -> void:
+	var path := "user://mcp_export_model.glb"
+	step("Given one red cell and a clean output", func():
+		State.get_current_voxel_frame().set_cell(Vector3i(0, 0, 0), VoxelFrame.material(Color.RED))
+		State.document._bounds_dirty = true
+		State.document.smooth_normals = false
+		DirAccess.remove_absolute(path)
+	)
+	var response := await _call("export_model", {"path": path, "center": false, "smooth_normals": true, "ao": 0.5, "unlit": true})
+	var data := _result_data(response)
+	step("Then the model uses the requested settings", func():
+		expect(not _is_error(response), "export_model succeeds: %s" % _result_text(response))
+		expect(FileAccess.file_exists(path), "the model exists")
+		var file := FileAccess.open(path, FileAccess.READ)
+		expect(file != null, "the model is readable")
+		if file != null:
+			var magic := file.get_buffer(4).get_string_from_ascii()
+			expect(magic == "glTF", "the file is a binary glTF")
+		expect(not State.document.smooth_normals, "the export keeps the document smooth normals")
+		expect(int(data.get("frames", 0)) == 1, "the export names one frame")
+		expect(str(data.get("format", "")) == "glb", "the export names the format")
 	)

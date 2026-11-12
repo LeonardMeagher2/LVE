@@ -325,6 +325,12 @@ func _preview_behavior() -> void:
 		expect(error == OK and image.get_data() == exporter._preview_image.get_data(), "preview and export contain the same PNG pixels")
 		expect(not FileAccess.file_exists(SHEET_PATH.get_basename() + ".json"), "PNG-only export creates no JSON sidecar")
 	)
+	var default_range_error: Error = await exporter.export_sprite_sheet(SHEET_PATH, 0, -1, 32, 2, false)
+	var bad_view_error: Error = await exporter.export_sprite_sheet(SHEET_PATH, 0, 1, 32, 99, false)
+	step("Then the export arguments keep their defaults and limits", func():
+		expect(default_range_error == OK, "a negative last frame exports to the last frame")
+		expect(bad_view_error == ERR_INVALID_PARAMETER, "an unknown view index is refused")
+	)
 	step("When the user selects the 3D preview view and moves its camera", func():
 		var yaw: float = exporter._model_camera._yaw
 		var motion := InputEventMouseMotion.new()
