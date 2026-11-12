@@ -188,6 +188,9 @@ var _sample_operation_id := 0
 # The accepted stroke brush cells, in order. Each record captures its own inputs.
 var _pending_intents: Array[Intent] = []
 var _intent_running := false
+# The accepted cell that the runner samples now. It is not in the queue, so the
+# duplicate check must test it too.
+var _running_intent: Intent = null
 # Whether the current input event is the press that opens the stroke. The press
 # samples its own captured batch and never waits for a hover result.
 var _press_pending := false
@@ -646,7 +649,10 @@ func _accept_intent(center: Vector3i, frame: VoxelFrame, context: VoxelFrame.Edi
 	intent.spot_size = _paint_settings.spot_diameter
 	intent.search_size = _paint_settings.spray_size
 	intent.speed = _paint_settings.speed
-	if not _pending_intents.is_empty() and _pending_intents[_pending_intents.size() - 1].matches(intent):
+	# A repeat of the newest accepted sample compacts away. The newest sample is
+	# the running one while the queue is empty.
+	var newest: Intent = _pending_intents.back() if not _pending_intents.is_empty() else _running_intent
+	if newest != null and newest.matches(intent):
 		return
 	_pending_intents.append(intent)
 	_run_intents()
@@ -668,6 +674,7 @@ func _run_intents() -> void:
 		var intent: Intent = _pending_intents.pop_front()
 		if intent.frame == null or intent.context == null:
 			continue
+		_running_intent = intent
 		var job := _build_sample_job(intent.frame, intent.center, intent.context, intent.material, intent.estimate, intent.spot_size, intent.search_size, intent.speed)
 		# The accepted cell captured its own sizes, so a settings change while a
 		# sample waits never alters the batch or the captured ROI.
@@ -703,6 +710,7 @@ func _run_intents() -> void:
 		if not job.cells.is_empty():
 			_adopt_batch(intent.frame, intent.center, intent.context, intent.material, job.cells, witness, job.preview_payload)
 			_queue_centers(job.cells)
+		_running_intent = null
 	_intent_running = false
 	_close_if_idle()
 	_release_context_subscriptions()
@@ -711,6 +719,7 @@ func _run_intents() -> void:
 # Cancels every pending stroke sample and drops the queued brush cells.
 func _cancel_samples() -> void:
 	_pending_intents.clear()
+	_running_intent = null
 	if _sample_job:
 		_sample_job.cancel()
 
@@ -800,7 +809,10 @@ func _install_hover(job: SpraySamplingJob) -> void:
 	if frame == null or frame != job.source_frame:
 		return
 	var context := State.drawing_context()
-	if context.axes != job.axes or context.origin_twice != job.origin_twice or not _same_selection(context.selection, job.selection):
+	# A moved slice or floor would label the sampled cells with a scope that no
+	# longer matches them, so the sample is stale.
+	if context.axes != job.axes or context.origin_twice != job.origin_twice or not _same_selection(context.selection, job.selection) \
+			or context.slice_axis != job.slice_axis or context.slice_index != job.slice_index or context.slice_count != job.slice_count:
 		return
 	if not _witness_holds(job.witness, frame) and not _cells_hold(frame, job.cells):
 		_invalidate_batch()
@@ -1124,6 +1136,9 @@ func _sample(center: Vector3i, frame: VoxelFrame, context: VoxelFrame.EditContex
 	var report := {}
 	var selection_index := _cached_selection_index(context.selection)
 	var cells := SpraySampler.sample(center, frame, context, use_spot, use_search, use_speed, use_rng, use_material, _shape_cache, null, report, selection_index)
+	# The worker path applies the same slice rule, so the cursor shows the exact
+	# cells a press writes.
+	cells = SpraySampler.in_slice(cells, context.slice_axis, context.slice_index, context.slice_count)
 	last_index_builds = report.get("index_builds", 0)
 	last_index_grid_reads = report.get("index_grid_reads", 0)
 	last_index_build_slots = report.get("index_build_slots", 0)

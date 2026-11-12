@@ -132,7 +132,7 @@ func _on_scale_z_changed(value: float) -> void:
 	if _settings.uniform:
 		_updating = true
 		%ScaleX.set_value_no_signal(value)
-		%ScaleZ.set_value_no_signal(value)
+		%ScaleY.set_value_no_signal(value)
 		_updating = false
 		_emit_state(Vector3(value, value, value), -1)
 	else:

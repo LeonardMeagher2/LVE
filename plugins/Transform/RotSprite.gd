@@ -8,11 +8,6 @@ extends RefCounted
 ## An angle that is an exact multiple of 90 degrees uses an exact integer
 ## rotation instead.
 
-# RotSprite (Xenowhirl): upscale with a Scale2x-style pass, then rotate and downscale together by
-# nearest-neighbor sampling at the finer resolution. Reduces the jagged, gap-prone look of rotating
-# a small pixel/voxel grid directly. Angles that are an exact multiple of 90 degrees never use this;
-# they use an exact integer rotation instead (see RotateTool._compute_new_dest_exact).
-
 ## The empty cell color.
 const EMPTY := Color.TRANSPARENT
 ## The number of 2x upscale passes.
@@ -58,9 +53,6 @@ func _init(cells: Dictionary) -> void:
 		_scale *= 2
 
 
-# Rotates the layer by `angle` radians around `pivot` (both in the same 1x local coordinate
-# space the constructor's cells used). Returns a cell -> color dictionary; empty cells are
-# omitted.
 ## Rotates the layer by [param angle] radians around [param pivot]. Both use the
 ## same local coordinate space as the constructor cells. Returns a cell-to-color
 ## dictionary. Empty cells are omitted.

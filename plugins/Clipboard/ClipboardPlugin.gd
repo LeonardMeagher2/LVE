@@ -361,6 +361,10 @@ func _on_paste_finished() -> void:
 
 
 func _remove_paste_preview() -> void:
+	# The deferred call can run after the plugin left the tree on shutdown. The
+	# predelete notification frees the tool in that case.
+	if _shutting_down or not is_inside_tree():
+		return
 	if not _paste_tool._active:
 		remove_editor_node(_paste_tool)
 

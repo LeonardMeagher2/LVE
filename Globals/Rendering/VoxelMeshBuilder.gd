@@ -101,7 +101,9 @@ func run() -> void:
 		_finish_enclosed(frame)
 		return
 	var snapshot_started_us := Time.get_ticks_usec() if profile else 0
-	var snapshot := _snapshot(source_frame, chunk_location, smooth_normals, profile, slice_axis, slice_index, slice_count)
+	# The AO reads the diagonal corner cells, so those chunks must be in the
+	# snapshot even without smooth normals.
+	var snapshot := _snapshot(source_frame, chunk_location, smooth_normals or ao_strength > 0.0, profile, slice_axis, slice_index, slice_count)
 	var padded_cell_colors: PackedColorArray = snapshot[0]
 	var padded_cell_materials: PackedInt32Array = snapshot[1]
 	var materials: PackedFloat32Array = snapshot[2]
@@ -387,10 +389,13 @@ static func _sparse_layers(chunk: VoxelFrame.Chunk) -> Array:
 	return layers
 
 
+# Returns true when one chunk-local cell is inside the slice. The slice holds
+# world layers, so the test adds the chunk's world base. A chunk outside the
+# slice contributes no cell.
 func _cell_in_slice(cell: Vector3i) -> bool:
 	if slice_axis < 0:
 		return true
-	var layer := cell[slice_axis]
+	var layer := cell[slice_axis] + chunk_location[slice_axis] * CHUNK_SIZE
 	return layer >= slice_index and layer < slice_index + slice_count
 
 
@@ -641,8 +646,9 @@ static func _corner_normal(corner: Vector3i, padded_cell_colors: PackedColorArra
 # stats]. The last entry holds [chunks read, grid slots examined, cells decoded],
 # and it is zeroed unless [param count_reads] is on. A nonzero padded material id
 # marks an occupied cell for the whole padded volume, including the border. The
-# smooth corner normals read occupancy from that map, so they match
-# `VoxelFrame.has` for every stored voxel.
+# smooth corner normals and the AO read occupancy from that map, so they match
+# `VoxelFrame.has` for every stored voxel. [param use_smooth_normals] also
+# selects whether the diagonal neighbor chunks are read.
 static func _snapshot(frame: VoxelFrame, location: Vector3i, use_smooth_normals: bool, count_reads := false, slice_axis := -1, slice_index := 0, slice_count := 1) -> Array:
 	var padded_cell_colors := PackedColorArray()
 	padded_cell_colors.resize(PADDED_CHUNK_SIZE * PADDED_CHUNK_SIZE * PADDED_CHUNK_SIZE)

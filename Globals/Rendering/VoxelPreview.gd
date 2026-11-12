@@ -564,6 +564,10 @@ func _request(cells: Dictionary, style: PreviewStyle, use_voxel_colors: bool = f
 	_requested_cache_key = cache_key
 	var cached: Dictionary = _mesh_cache.get(cache_key, {})
 	if not cached.is_empty() and cached.color_key == color_key and (outline or _same_cells(cached.cells, cells, colored)):
+		# A dedupe compares the next request with `_requested_cells`, so a cache
+		# hit must record the cells it installed. Otherwise a request that
+		# alternates between two sets skips the second set after a hit.
+		_requested_cells = cached.cells
 		_install_cached(cache_key, cached)
 		return
 	# The request schedules a job. An outline shares the selection dictionary and

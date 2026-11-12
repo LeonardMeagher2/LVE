@@ -1,7 +1,7 @@
 class_name TerrainPreview
 extends RefCounted
 
-## The minimum depth of the footprint for tall terrain.
+## The maximum depth of the footprint for tall terrain.
 const FOOTPRINT_DEPTH_LIMIT := 64
 
 ## Owns the idle hover preview of the terrain tool.
@@ -800,7 +800,7 @@ func _launch(inputs: Dictionary, live: VoxelFrame, hit: Vector3i, half: int) -> 
 	request.epoch = _epoch
 	# The job reads the surface disc around the hit, then the map disc under the
 	# pointer. The pointer stays within the brush radius of the hit, so one box
-	# covers both reads. A floor hover keeps the full frame.
+	# covers both reads. A hover with no cell copies the full frame.
 	var center := hit
 	if center == VoxelPicking.NONE:
 		center = inputs.get("target", VoxelPicking.NONE)

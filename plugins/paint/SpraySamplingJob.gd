@@ -107,12 +107,7 @@ func run() -> void:
 	cells = SpraySampler.sample(center, frame, context, spot_size, search_size, speed, rng, material, shape_cache, self, report, selection_index)
 	# The slice limits the sampled cells, so the cursor shows exactly the cells a
 	# press writes. The write gate repeats the test, so a later scope cannot pass.
-	if slice_axis >= 0:
-		var kept: Array[Vector3i] = []
-		for cell in cells:
-			if cell[slice_axis] >= slice_index and cell[slice_axis] < slice_index + slice_count:
-				kept.append(cell)
-		cells = kept
+	cells = SpraySampler.in_slice(cells, slice_axis, slice_index, slice_count)
 	local_count = report.get("local", 0)
 	candidate_count = report.get("candidates", 0)
 	built_selection_index = report.get("selection_index")

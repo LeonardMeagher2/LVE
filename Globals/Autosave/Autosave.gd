@@ -101,7 +101,9 @@ func _on_tabs_changed() -> void:
 
 
 func _mark_dirty() -> void:
-	if not enabled:
+	# Playback steps the frame every tick and emits `frame_changed`. No content
+	# changed, so the copy must not be rewritten for each step.
+	if not enabled or State.is_playing:
 		return
 	_dirty = true
 	if _timer != null and _timer.is_stopped():

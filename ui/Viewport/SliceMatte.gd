@@ -246,7 +246,24 @@ func _ready() -> void:
 	State.document_changed.connect(_on_model_changed)
 	State.frame_changed.connect(_on_model_changed)
 	State.cells_changed.connect(_on_cells_changed)
+	# A tool that writes whole chunks reports no cell list, so any chunk write
+	# can change the matte.
+	State.chunks_changed.connect(_on_chunks_changed)
 	_on_slice_state_changed()
+
+
+func _exit_tree() -> void:
+	# The node cannot await, so it joins its own worker before it leaves.
+	if _job == null:
+		return
+	_job.cancel()
+	_job.wait_for_worker()
+	_job = null
+
+
+func _on_chunks_changed(frame_index: int, _affected: Array[Vector3i]) -> void:
+	if State.slice_enabled and frame_index == State.current_frame:
+		_invalidate()
 
 
 func _process(_delta: float) -> void:

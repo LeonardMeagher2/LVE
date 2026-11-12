@@ -20,7 +20,9 @@ func _safe_remove(parent:Node, child:Node) -> void:
 ## Returns the current main scene. A test scene puts Main below its test root,
 ## so the plugins find it through the group instead of a fixed tree path.
 func _main() -> Node:
-	return get_tree().get_first_node_in_group("main")
+	# A deferred call can run after the plugin left the tree. `get_tree` is null
+	# then, so every caller must handle a missing Main.
+	return get_tree().get_first_node_in_group("main") if is_inside_tree() else null
 
 ## Adds a control to the menu bar before its separator.
 func add_menu_bar_item(control:Control) -> void:

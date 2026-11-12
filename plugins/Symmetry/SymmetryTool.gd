@@ -46,6 +46,10 @@ func _on_cells_changed(_frame: int, _cells: Array[Vector3i]) -> void:
 
 func _rebuild() -> void:
 	visible = active or State.symmetry_axes != 0
+	# A hidden tool draws nothing, so it must not rebuild its three meshes on
+	# every cell change.
+	if not visible:
+		return
 	position = State.symmetry_origin
 	$Origin.visible = active
 	var bounds := State.document.bounds()
