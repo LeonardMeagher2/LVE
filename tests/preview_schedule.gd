@@ -64,6 +64,7 @@ func _ready() -> void:
 	test("an identical settings or document change keeps the running worker", _settings_change_keeps, "preview_settings_keeps")
 	test("a changed shading cancels the running worker and queues a new snapshot", _settings_change_replaces, "preview_settings_replaces")
 	test("a cache hit reports the token of the request that asked for it", _cache_hit_token, "preview_cache_token")
+	test("a cache hit keeps the next request in step", _cache_hit_dedupe, "preview_cache_dedupe")
 	test("a clear or a cancel drops the installed token", _token_clear, "preview_token_clear")
 
 
@@ -355,8 +356,30 @@ func _cache_hit_token() -> void:
 	step("Then the cached surface reports the second request token", func():
 		expect(preview.mesh == cached_mesh, "the surface comes from the cache")
 		expect(preview.installed_token() == second, "the cache hit reports the request that asked for it")
-		expect(not is_same(preview.installed_cells(), preview._requested_cells), "the cached cells are the cached object, not the new request")
+		expect(is_same(preview.installed_cells(), preview._requested_cells), "the requested cells are the installed cells")
 		expect(_same_keys(preview.installed_cells(), cells), "the cached cells hold the requested cells")
+	)
+
+
+# A cache hit must record the cells it installed, or the next request for the
+# other set compares against the wrong set and leaves the old surface visible.
+func _cache_hit_dedupe() -> void:
+	var first := _variant(0)
+	var second := _variant(1)
+	step("Given two cached surfaces", func():
+		preview = PREVIEW.new()
+		add_child(preview)
+		preview.show_voxels(first, Color.RED, false, 0, false)
+	)
+	await _await_settled(preview)
+	step("When the second surface installs and the first one repeats", func():
+		preview.show_voxels(second, Color.RED, false, 0, false)
+	)
+	await _await_settled(preview)
+	step("Then a repeat of the second surface installs it again", func():
+		preview.show_voxels(first, Color.RED, false, 0, false)
+		preview.show_voxels(second, Color.RED, false, 0, false)
+		expect(_same_keys(preview.installed_cells(), second), "the installed surface follows the newest request")
 	)
 
 
