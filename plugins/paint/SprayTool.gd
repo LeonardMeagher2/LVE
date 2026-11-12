@@ -43,9 +43,6 @@ extends "res://plugins/brush/StrokeTool.gd"
 ## The whole spray is one history action. Escape and a context change roll it
 ## back.
 
-## The pure size helpers. They own the sphere mask and the reach of the search
-## size and the spot diameter.
-const VoxelBrushSize := preload("res://Globals/State/Tools/VoxelBrushSize.gd")
 ## The pure sampler kernel. It reads no Node, no State, and no settings.
 const SpraySampler := preload("./SpraySampler.gd")
 ## The cancellable worker job of one spray sample.
@@ -200,6 +197,9 @@ var _reroll_pending := false
 
 # The in-flight hover sample and the newest request behind it.
 var _hover_sample_job: SpraySamplingJob = null
+# Cancelled hover samples that still run on the pool. Every task must be waited,
+# so the pump reaps them and the teardown joins the rest.
+var _retired_hover_jobs: Array[SpraySamplingJob] = []
 var _hover_sample_operation_id := 0
 var _hover_request := {}
 # The request epoch. It moves on every hover request, so a result can be matched
@@ -786,6 +786,7 @@ func _start_hover_sample() -> void:
 
 # Installs a completed hover sample and starts the newest request behind it.
 func _pump_hover_sample() -> void:
+	_reap_hover_jobs()
 	var job: SpraySamplingJob = _hover_sample_job
 	if job != null and WorkerThreadPool.is_task_completed(job.worker_task_id):
 		WorkerThreadPool.wait_for_task_completion(job.worker_task_id)
@@ -899,23 +900,35 @@ func _witness_holds(witness: Dictionary, frame: VoxelFrame) -> bool:
 
 
 # Cancels the running hover sample and drops the queued request. The result is
-# optional work, so the caller never waits for it.
+# optional work, so the caller never waits for it. The job moves to the retired
+# list, because every pool task must be waited.
 func _cancel_hover_sample() -> void:
 	_hover_request = {}
 	if _hover_sample_job:
 		_hover_sample_job.cancel()
+		_retired_hover_jobs.append(_hover_sample_job)
 		_hover_sample_job = null
 	State.finish_operation(_hover_sample_operation_id)
 	_hover_sample_operation_id = 0
 
 
-# Cancels, joins, and drops the hover sample. Only the node teardown joins it,
+# Cancels, joins, and drops every hover sample. Only the node teardown waits,
 # because an optional sample must never block a tool switch.
 func _teardown_hover_sample() -> void:
-	var job: SpraySamplingJob = _hover_sample_job
 	_cancel_hover_sample()
-	if job:
+	for job in _retired_hover_jobs:
 		job.wait_for_worker()
+	_retired_hover_jobs.clear()
+
+
+# Joins the retired hover samples that finished. The pool keeps a task until it
+# is waited, so each cancelled sample is reaped here.
+func _reap_hover_jobs() -> void:
+	for job in _retired_hover_jobs.duplicate():
+		if not WorkerThreadPool.is_task_completed(job.worker_task_id):
+			continue
+		job.wait_for_worker()
+		_retired_hover_jobs.erase(job)
 
 
 # Returns true when the frozen context matches the one that the current batch
@@ -1175,24 +1188,6 @@ func _footprints(spots: Array[Vector3i], local: Array[Vector3i], spot_size := -1
 # matches the brush sphere of the same diameter.
 func _spot_offsets(diameter: int) -> Array[Vector3i]:
 	return SpraySampler.offsets(_shape_cache, diameter)
-
-
-# The scanline rows of one spot sphere, cached by diameter in the shared cache.
-func _spot_rows(diameter: int) -> Array:
-	return SpraySampler.rows(_shape_cache, diameter)
-
-
-# The spot sphere as a read-only lookup set, cached by diameter in the shared
-# cache. The sparse footprint path reads it, so the widest spot never rebuilds
-# its 137376 keys.
-func _spot_pattern(diameter: int) -> Dictionary:
-	return SpraySampler.pattern(_shape_cache, diameter)
-
-
-# The largest distance from a spot center to one of its sphere cells. The shared
-# helper computes it without building the whole offset set.
-func _spot_radius(diameter: int) -> int:
-	return VoxelBrushSize.reach(diameter)
 
 
 # Shows exactly these cells with the full material. An empty list hides the

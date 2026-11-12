@@ -261,8 +261,9 @@ static func sample(center: Vector3i, frame: VoxelFrame, context: VoxelFrame.Edit
 	var surface := SprayIndex.SurfaceIndex.new()
 	surface.frame = frame
 	var candidates := SprayIndex.build_candidates(center, frame, search_size, context.selection, job, selection_index, search_spans, surface)
+	# The indexed sampler never gathers the legacy local array. The key stays so
+	# a caller can tell that the empty value is deliberate, not missing.
 	report["local"] = 0
-	report["legacy_local"] = 0
 	report["candidates"] = candidates.total
 	report["chunks"] = candidates.chunks_scanned
 	report["rows"] = candidates.rows_scanned
@@ -398,46 +399,6 @@ static func _reflect(cell: Vector3i, mask: int, origin_twice: Vector3i) -> Vecto
 		if mask & (1 << axis):
 			destination[axis] = origin_twice[axis] - cell[axis]
 	return destination
-
-
-## Samples the write set from an already gathered local set. The spot sphere is
-## the shared brush sphere of the spot diameter, and the search size is the
-## shared brush sphere of that width, so an even size keeps the brush alignment.
-## The sample keeps only exposed voxels, like [method sample].
-static func sample_local(center: Vector3i, frame: VoxelFrame, context: VoxelFrame.EditContext, local: Array[Vector3i], spot_size: int, search_size: int, speed: int, rng: RandomNumberGenerator, material: PackedFloat32Array, cache: ShapeCache, job: VoxelFrame.EditJob = null, report: Dictionary = {}) -> Array[Vector3i]:
-	var surface := SprayIndex.SurfaceIndex.new()
-	surface.frame = frame
-	var candidates: Array[Vector3i] = []
-	for cell in candidate_cells(center, local, search_size):
-		if surface.exposed(cell):
-			candidates.append(cell)
-	report["candidates"] = candidates.size()
-	var count := mini(speed, candidates.size())
-	if count <= 0:
-		return []
-	# A partial shuffle picks distinct centers without replacement. The candidate
-	# array is fresh, so the shuffle runs in place and needs no index array.
-	var spots: Array[Vector3i] = []
-	for i in count:
-		var pick := rng.randi_range(i, candidates.size() - 1)
-		var swap := candidates[i]
-		candidates[i] = candidates[pick]
-		candidates[pick] = swap
-		spots.append(candidates[i])
-	var changes := footprints(spots, local, spot_size, material, cache, job, surface)
-	# Every change is already occupied, exposed, and selection-filtered, so an
-	# identity context needs no expansion. A symmetry or selection context still
-	# expands, because its mirrored destinations must exist and be exposed too.
-	# The expansion reads the frozen frame through a raw occupancy view, so a
-	# mirrored destination outside the gathered region is exact and costs one
-	# array read.
-	var cells: Array[Vector3i] = []
-	if context.axes == 0 and context.selection.is_empty():
-		if job and not job.checkpoint(0):
-			return []
-		cells.assign(changes.keys())
-		return cells
-	return _expanded_cells(changes, frame, context, job, true)
 
 
 ## Returns the voxels that the selected spot centers paint, read directly from
