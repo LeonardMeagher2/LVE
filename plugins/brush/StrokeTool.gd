@@ -348,6 +348,10 @@ func _apply_pick(target: Vector3i, hit: Vector3i) -> void:
 	var center := hit if _paints_existing() else target
 	if center == VoxelPicking.NONE:
 		return
+	# The press stamps its cell, so the filter must treat that cell as drawn. The
+	# first drag cell then continues the path instead of starting a new one.
+	if _settings.pixel_perfect and target != VoxelPicking.NONE:
+		_filter.feed(target)
 	_queue_centers([center])
 
 

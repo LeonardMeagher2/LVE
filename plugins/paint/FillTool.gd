@@ -179,6 +179,11 @@ func _notification(what: int) -> void:
 		# A freed tool cannot finish its own edit, so release it here. Otherwise the
 		# active edit outlives the tool and blocks every later edit.
 		abort_stroke()
+		# The coroutine that would finish the operation dies with the node, so the
+		# foreground operation must be released here.
+		var operation_id := _operation_id
+		_operation_id = 0
+		State.finish_operation(operation_id)
 		for search_job in _search_jobs:
 			search_job.cancel()
 			if search_job.batch_queue != null:
