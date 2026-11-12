@@ -159,7 +159,7 @@ func _on_document_changed() -> void:
 	_editing_drag = false
 	_control_edit_revision += 1
 	_on_material_changed()
-	_rebuild_swatches()
+	# The palette signal of the new document rebuilds the swatches.
 
 
 func _rebuild_swatches() -> void:

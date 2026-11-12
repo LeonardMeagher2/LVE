@@ -13,7 +13,6 @@ signal edit_started()
 ## Emitted when an edit gesture finishes. [param cancelled] reports a rollback.
 signal edit_finished(cancelled: bool)
 
-# Pixels of accumulated horizontal movement that cross the whole value range.
 ## The drag distance in pixels that crosses the whole value range.
 const DRAG_RANGE_PIXELS := 200.0
 
@@ -77,6 +76,7 @@ func set_value_no_signal(next: float) -> void:
 	text = _format(value)
 	var fill := get_node_or_null("Fill") as ProgressBar
 	if fill:
+		fill.min_value = minf(min_value, upper)
 		fill.max_value = upper
 		fill.value = value
 

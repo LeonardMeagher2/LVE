@@ -9,6 +9,7 @@ func _ready() -> void:
 	test("can set a frame delay on the timeline", _frame_delay, "frame_delay")
 	test("frame buttons follow the current frame", _frame_selection, "frame_selection")
 	test("can drag frames to reorder them", _frame_reorder, "frame_reorder")
+	test("the timeline scroll follows the focused frame", _follow_focus, "follow_focus")
 
 
 # Each test starts from a fresh one-frame document.
@@ -41,6 +42,18 @@ func _frame_buttons() -> Array:
 	for cell in _frame_cells():
 		out.append(cell.get_node("%Button"))
 	return out
+
+
+func _follow_focus() -> void:
+	step("Then the timeline scroll container follows focus", func():
+		var grid := main.find_child("FrameGrid", true, false)
+		expect(grid != null, "the frame grid exists")
+		if grid != null:
+			var scroll := grid.get_parent() as ScrollContainer
+			expect(scroll != null, "the grid sits in a scroll container")
+			if scroll != null:
+				expect(scroll.follow_focus, "the scroll container follows focus")
+	)
 
 
 func _frame_delay() -> void:

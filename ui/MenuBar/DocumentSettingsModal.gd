@@ -69,8 +69,7 @@ func _apply_preview() -> void:
 
 
 func _on_confirmed() -> void:
-	State.commit_document_properties(_before_smooth, _before_size)
-	State.commit_ao_strength(_before_ao)
+	State.commit_document_settings(_before_smooth, _before_size, _before_ao)
 
 
 func _on_canceled() -> void:
