@@ -40,10 +40,12 @@ func _sync() -> void:
 	var has_tag := State.get_active_tag() != null
 	%TagActions.visible = has_tag
 	%LoopMenu.visible = has_tag
+	# A rename can name any tag, so every item text follows the document.
+	for index in State.document.tags.size():
+		%TagDropdown.set_item_text(index, State.document.tags[index].name)
 	var repeats_on := false
 	if has_tag:
 		var tag := State.get_active_tag()
-		%TagDropdown.set_item_text(State.active_tag, tag.name)
 		%LoopMenu.icon = _loop_icon(tag.loop_mode)
 		%LoopMenu.tooltip_text = _loop_tooltip(tag.loop_mode)
 		repeats_on = tag.repeats > 0
