@@ -91,8 +91,13 @@ class ImportJob extends VoxelFrame.EditJob:
 		if descriptor.get("rotated", false):
 			error = ERR_UNAVAILABLE
 			return false
-		var source_size: Dictionary = descriptor.get("sourceSize", {"w": rect.size.x, "h": rect.size.y})
-		var source_rect: Dictionary = descriptor.get("spriteSourceSize", {"x": 0, "y": 0})
+		var source_size: Variant = descriptor.get("sourceSize", {})
+		var source_rect: Variant = descriptor.get("spriteSourceSize", {})
+		if not source_size is Dictionary or not source_rect is Dictionary:
+			error = ERR_INVALID_DATA
+			return false
+		source_size = {"w": rect.size.x, "h": rect.size.y} if source_size.is_empty() else source_size
+		source_rect = {"x": 0, "y": 0} if source_rect.is_empty() else source_rect
 		var horizontal := Vector3i.BACK if plane_axis == Vector3.Axis.AXIS_X else Vector3i.RIGHT
 		var vertical := Vector3i.FORWARD if plane_axis == Vector3.Axis.AXIS_Y else Vector3i.UP
 		var first_x := int(source_rect.get("x", 0)) - floori(int(source_size.w) * 0.5)

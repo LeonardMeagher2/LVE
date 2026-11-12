@@ -232,7 +232,7 @@ func _update_params(origin: Vector3, dir: Vector3) -> bool:
 		sq = v.y / _ref_q
 	# The camera ray round-trip and the reference-vector normalization both lose a little
 	# precision, on the order of 1e-6. A factor the user drags to "exactly" 2x can land at
-	# 1.9999993 instead, which tips a boundary cell to the wrong side in _compute_new_dest.
+	# 1.9999993 instead, which tips a boundary cell to the wrong side in `ScaleJob._samples`.
 	# Snapping erases that noise without meaningfully rounding an intentionally fractional drag.
 	sp = snapped(sp, 0.0001)
 	sq = snapped(sq, 0.0001)

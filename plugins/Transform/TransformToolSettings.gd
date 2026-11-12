@@ -40,7 +40,8 @@ enum Tools {
 		tool_changed.emit(tool)
 		emit_changed()
 
-## Whether a rotate drag snaps to the nearest 90 degrees near a cardinal angle.
+## Whether a rotate drag snaps every angle to a 90 degree step. When it is off,
+## the drag snaps to one degree and pulls to a nearby cardinal angle.
 @export var snap: bool = true :
 	set(value):
 		if value == snap:
