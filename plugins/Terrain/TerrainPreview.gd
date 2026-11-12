@@ -1,8 +1,7 @@
 class_name TerrainPreview
 extends RefCounted
 
-## The maximum depth of the footprint for tall terrain.
-const FOOTPRINT_DEPTH_LIMIT := 64
+
 
 ## Owns the idle hover preview of the terrain tool.
 ##
@@ -35,9 +34,6 @@ const FOOTPRINT_DEPTH_LIMIT := 64
 
 const CANCEL_CHECKPOINT := 16
 ## The disc offsets between two worker cancel checks of one surface read. One offset is one
-## bounded surface walk.
-const READ_CANCEL_CHECKPOINT := 32
-
 
 ## Returns the bounded surface search depth of one radius.
 ##
@@ -51,11 +47,10 @@ static func depth_for(radius: int) -> int:
 ## Returns the bounded surface search depth of one footprint column.
 ##
 ## The depth scales with the brush size, but keeps a minimum depth for tall
-## terrain. Users think in terms of brush size, so the size is the input.
+## terrain. The geometry read uses the same bound, so the preview and the edit
+## resolve the same surface.
 static func footprint_depth(size: int) -> int:
-	# Scale with the size but ensure at least 16 cells for tall terrain support.
-	# This matches the brush plugin's footprint scaling behavior.
-	return mini(FOOTPRINT_DEPTH_LIMIT, maxi(16, size))
+	return TerrainGeometry.read_depth(size)
 
 
 ## Returns the active symmetry masks of one context. A null context is one mask.
@@ -233,7 +228,7 @@ static func compute_hover_frame(frame: VoxelFrame, hit: Vector3i, entry: Vector3
 ## depth + 1 further outward, so a read cell is at most 2 * depth + 2 cells away.
 ## The disc adds the brush radius and one cell covers the half cell seed step.
 static func watch_half(radius: int) -> int:
-	return radius + 2 * depth_for(radius) + 3
+	return radius + 2 * TerrainGeometry.read_depth(radius) + 3
 
 
 ## Returns the exact identity and revision of every occupied chunk inside the

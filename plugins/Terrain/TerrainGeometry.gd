@@ -27,6 +27,14 @@ static func axis_of(step: Vector3i) -> int:
 	return -1
 
 
+## Returns the depth of one surface read from a footprint column. The depth
+## follows the brush size, with a minimum of 16 cells for tall support and a
+## maximum of 64. The hover watch box uses the same value, so a cached hover
+## covers every cell the read can touch.
+static func read_depth(radius: int) -> int:
+	return mini(64, maxi(16, maxi(radius, 1)))
+
+
 ## Returns the one axis of an exactly cardinal direction, or -1 when the direction
 ## has zero or two non-zero components. An exact cardinal direction is the only
 ## one whose walk stays inside a single column.
@@ -541,7 +549,7 @@ static func surface_points(frame: VoxelFrame, hit: Vector3i, entry: Vector3i, ra
 		var point := Vector3(hit)
 		point[u_axis] += float(offset["u"])
 		point[v_axis] += float(offset["v"])
-		var surface := surface_along(frame, point, entry_normal, maxi(8, use_radius * 2), {}, context)
+		var surface := surface_along(frame, point, entry_normal, read_depth(use_radius), {}, context)
 		completed += 1
 		if job != null and completed % READ_CANCEL_CHECKPOINT == 0 and not job.checkpoint(completed):
 			return []

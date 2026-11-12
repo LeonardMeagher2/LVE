@@ -176,7 +176,6 @@ var _drag_ray_moved := true
 # hit on the accepted frame at dab time. No hit position is resolved at input
 # time, so a queued dab never depends on when a worker published.
 var _stroke_forward := Vector3.ZERO
-var _press_entry := Vector3i.ZERO
 # The Smooth placement camera family, captured at the press. The projection mode
 # picks the family: a perspective or frustum camera shares one focus, an
 # orthographic camera keeps one direction and translates the origin. A live
@@ -468,7 +467,6 @@ class TerrainTickJob extends VoxelFrame.EditJob:
 
 	func _build_step(sample: Dictionary, surface: Vector3i, changes: Dictionary) -> Variant:
 		var normal: Vector3 = sample["normal"]
-		var point: Vector3 = sample["point"]
 		var add := build_mode == TerrainSettings.BuildMode.ADD
 		var action := TerrainGeometry.build_layer_cells(edited_frame, changes, surface, normal, sample.get("seed", sample["anchor"]), add, selection)
 		var cells: Array = action["cells"]
@@ -490,7 +488,6 @@ class TerrainTickJob extends VoxelFrame.EditJob:
 
 	func _flatten_step(sample: Dictionary, surface: Vector3i, changes: Dictionary) -> Variant:
 		var normal: Vector3 = sample["normal"]
-		var point: Vector3 = sample["point"]
 		var action := TerrainGeometry.flatten_action(edited_frame, changes, surface, normal, sample["anchor"], sample["plane_origin"], threshold, selection)
 		var cell: Vector3i = action["cell"]
 		if cell == VoxelPicking.NONE:
@@ -657,9 +654,6 @@ class SmoothJob extends VoxelFrame.EditJob:
 	var prep_selection := {}
 	## The entered face of the dab and the normal source of the stroke.
 	var prep_entry := Vector3i.ZERO
-	## The fields of the previous dab. The job reads the list and never changes
-	## it.
-	var prep_fields: Array = []
 	## The operation plane after the surface read, or null.
 	var prepared_frame: TerrainFrame
 	## The rounding fields the preparation built, or null when the job did not
@@ -954,8 +948,6 @@ func _ready() -> void:
 	_preview.pauser = _preview_paused
 	_preview.view_provider = _live_view
 	_preview.hider = _hide_preview_visible
-	State.color_changed.connect(_on_color_changed)
-	_on_color_changed(State.current_color)
 	_setup_footprint()
 	visible = false
 
@@ -1027,13 +1019,6 @@ func _disconnect_preview_signals() -> void:
 		State.document_changed.disconnect(_on_document_changed)
 	if State.frame_changed.is_connected(_mark_preview_dirty):
 		State.frame_changed.disconnect(_mark_preview_dirty)
-
-
-func _on_color_changed(_color: Color) -> void:
-	# The ring is fixed white, so the working color never changes it and never
-	# marks geometry dirty. A color change never re-reads and never rescans the
-	# surface.
-	pass
 
 
 func _mark_preview_dirty() -> void:
@@ -1133,7 +1118,6 @@ func open_stroke() -> VoxelEditTransaction:
 	_drag_ray_dir = Vector3.INF
 	_drag_ray_moved = true
 	_stroke_forward = Vector3.ZERO
-	_press_entry = Vector3i.ZERO
 	_camera_perspective = false
 	_camera_focus = Vector3.ZERO
 	_stroke_ray_dir = Vector3.ZERO
@@ -1738,7 +1722,6 @@ func _start_prep_smooth() -> void:
 	job.prep_context = _context()
 	job.prep_selection = _stroke_selection
 	job.prep_entry = _smooth_entry
-	job.prep_fields = _smooth_fields
 	_smooth_job = job
 	_operation_id = State.begin_operation("Smoothing voxels", _dab_candidates(), true, self, _cancel_edit)
 	job.operation_id = _operation_id
@@ -1830,27 +1813,10 @@ func _prune_state() -> void:
 	# re-reads, and the tall depth still resolves the column.
 	if _stroke_columns.size() > STATE_LIMIT:
 		_stroke_columns = {}
-	if _samples.size() <= STATE_LIMIT:
-		return
-	var kept_samples := {}
-	for anchor in _samples:
-		kept_samples[anchor] = _samples[anchor]
-	_samples = kept_samples
-	var kept_base := {}
-	for anchor in kept_samples:
-		var key := TerrainGeometry.column_key(anchor, kept_samples[anchor]["normal"])
-		if _base_surfaces.has(key):
-			kept_base[key] = _base_surfaces[key]
-	_base_surfaces = kept_base
 
 
 func _collect_steps() -> Array:
 	return Prep.collect_steps(_samples, _stroke_tool, _stroke_strength)
-
-
-func _depth(radius: int, tool: int = 0) -> int:
-	# All tools use the same depth formula for consistency.
-	return TerrainPreview.depth_for(radius)
 
 
 ## Returns the footprint depth of the active tool for the given radius.
@@ -2410,28 +2376,6 @@ func _on_document_changed() -> void:
 	_preview.invalidate()
 
 
-## Returns the eligible Grab source cells around a center. A source is occupied
-## and inside the selection. A zero falloff weight cannot move, so it is
-## excluded. The set includes every active symmetry mask.
-func _grab_sources_for(center: Vector3i) -> Dictionary:
-	var cells := {}
-	var active := _active_frame()
-	var context := _context()
-	var selection: Dictionary = context.selection if context != null else {}
-	var radius := _settings.radius
-	for mask in _masks_for(context):
-		var mirrored := context.reflect(center, mask) if context != null else center
-		for offset in _ball_offsets(radius):
-			var cell := mirrored + offset
-			if cells.has(cell) or not active.has(cell) or not TerrainGeometry.allows(selection, cell):
-				continue
-			var weight := TerrainGeometry.weight_at(Vector3(offset).length(), float(radius), _settings.falloff)
-			if weight <= 0.0:
-				continue
-			cells[cell] = true
-	return cells
-
-
 ## Poses the one white footprint ring after a published hover result.
 ##
 ## The ring is the whole cursor. It lies in the operation plane of the picked
@@ -2599,7 +2543,6 @@ func _pick_start(origin: Vector3, dir: Vector3) -> PickResult:
 		# Smooth uses the ray for its operation plane too.
 		_capture_press_camera(origin, dir)
 		_stroke_forward = _forward()
-		_press_entry = pick.entry
 	_pending_frame = _frame_for_pick(pick, origin)
 	pick.plane = _plane_for(_pending_frame.origin, _pending_frame.normal)
 	_press_point = _plane_hit(_pending_frame, origin, dir)
@@ -2646,7 +2589,6 @@ func _raw_frame_for_pick(pick: PickResult, origin: Vector3) -> TerrainFrame:
 				return reused
 		var entry := pick.entry
 		if entry == Vector3i.ZERO:
-			entry = Vector3i.ZERO
 			entry[VoxelPicking.view_axis(_forward())] = 1
 		var fallback := TerrainFrame.from_face(pick.hit, entry)
 		return TerrainFrame.from_surface(State.get_current_voxel_frame(), pick.hit, entry, _settings.radius, fallback)
@@ -2696,9 +2638,22 @@ func _frame_drag(request: PickRequest) -> PickResult:
 	var intersection = _cursor_frame.to_plane().intersects_ray(request.origin, request.dir)
 	if intersection == null:
 		return result
-	result.target = TerrainGeometry.cell_at(intersection)
+	result.target = _cursor_cell(intersection)
 	result.hit = result.target if request.frame != null and request.frame.has(result.target) else VoxelPicking.NONE
 	return result
+
+
+# Rounds a point on the cursor plane to a cell. A cardinal plane fixes one
+# coordinate at a half step, so the exact frame origin selects that cell. A
+# plain round would flip between two cells when float noise moves the point.
+func _cursor_cell(point: Vector3) -> Vector3i:
+	var cell := TerrainGeometry.cell_at(point)
+	if _cursor_frame == null:
+		return cell
+	var axis := TerrainGeometry.cardinal_axis(_cursor_frame.normal)
+	if axis >= 0:
+		cell[axis] = floori(_cursor_frame.origin[axis] + 0.5)
+	return cell
 
 
 # Returns true when the live camera no longer matches the captured press camera.
@@ -2722,6 +2677,8 @@ func _view_drag(request: PickRequest) -> PickResult:
 	if t <= 0.0:
 		return result
 	var point: Vector3 = request.origin + request.dir * t
+	# A view-aligned plane can be oblique, so the drag keeps all three rounded
+	# components. Only a cardinal cursor plane fixes one component.
 	result.target = TerrainGeometry.cell_at(point)
 	result.hit = result.target if request.frame != null and request.frame.has(result.target) else VoxelPicking.NONE
 	return result

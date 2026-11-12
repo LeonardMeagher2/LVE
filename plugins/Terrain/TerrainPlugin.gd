@@ -20,7 +20,6 @@ func _ready() -> void:
 	name = "TerrainPlugin"
 	_tool = _terrain_tool
 	_toolbar.toggled.connect(_on_toolbar_toggled)
-	_settings.tool_changed.connect(_on_tool_changed)
 	_options.bind(_settings)
 	add_tool_bar_item(_toolbar)
 
@@ -58,8 +57,4 @@ func _on_toolbar_toggled(on: bool) -> void:
 		deactivate_tool()
 
 
-func _on_tool_changed(_tool_id: int) -> void:
-	# The single tool instance keeps the stroke settings it captured. A tool
-	# change still ends the stroke like a release.
-	if _tool:
-		_tool.finish_on_switch()
+
