@@ -351,10 +351,14 @@ func _input(event: InputEvent) -> void:
 			MOUSE_BUTTON_MIDDLE:
 				get_viewport().set_input_as_handled()
 			MOUSE_BUTTON_WHEEL_UP:
-				%ZoomSlider.value *= 1.0 / 0.85
+				# An X11 wheel can arrive as a press and a release, so only the
+				# press zooms. Both events are consumed.
+				if mb.pressed:
+					%ZoomSlider.value *= 1.0 / 0.85
 				get_viewport().set_input_as_handled()
 			MOUSE_BUTTON_WHEEL_DOWN:
-				%ZoomSlider.value *= 0.85
+				if mb.pressed:
+					%ZoomSlider.value *= 0.85
 				get_viewport().set_input_as_handled()
 	elif event is InputEventMouseMotion:
 		var mm := event as InputEventMouseMotion

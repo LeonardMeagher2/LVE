@@ -3,6 +3,7 @@ extends "res://tests/test.gd"
 var rig: EditorCameraRig
 var viewport: SubViewport
 var _measured: Array = []
+var _wheel_slider: Range
 
 const VIEW_KEYS := [
 	[KEY_1, "top", 0.0, 89.0],
@@ -17,6 +18,7 @@ const VIEW_KEYS := [
 
 func _ready() -> void:
 	test("can snap the camera to every axis view and switch projection", _run)
+	test("the mouse wheel zooms once per notch", _wheel, "wheel_zoom")
 
 
 func _angles_match(yaw_deg: float, pitch_deg: float) -> bool:
@@ -30,6 +32,39 @@ func _key(code: Key) -> void:
 	ev.physical_keycode = code
 	ev.pressed = true
 	viewport.push_input(ev)
+
+
+# A wheel can arrive as a press and a release on some platforms. Only the press
+# may change the zoom, or one notch zooms twice.
+func _wheel() -> void:
+	step("Given the editor viewport at one hundred percent", func():
+		viewport = editor_viewport()
+		viewport.get_parent().stretch = false
+		viewport.size = Vector2i(800, 500)
+		_wheel_slider = main.find_child("ZoomSlider", true, false)
+		expect(_wheel_slider != null, "the zoom slider exists")
+		_wheel_slider.value = 100.0
+	)
+	var released := InputEventMouseButton.new()
+	released.button_index = MOUSE_BUTTON_WHEEL_UP
+	released.pressed = false
+	released.position = Vector2(400.0, 250.0)
+	step("When a wheel release event arrives", func():
+		viewport.push_input(released)
+	)
+	step("Then the zoom does not change", func():
+		expect(is_equal_approx(_wheel_slider.value, 100.0), "a release event does not zoom")
+	)
+	var pressed := InputEventMouseButton.new()
+	pressed.button_index = MOUSE_BUTTON_WHEEL_UP
+	pressed.pressed = true
+	pressed.position = Vector2(400.0, 250.0)
+	step("When a wheel press event arrives", func():
+		viewport.push_input(pressed)
+	)
+	step("Then the zoom changes once", func():
+		expect(_wheel_slider.value > 100.0, "a press event zooms in")
+	)
 
 
 func _run() -> void:
