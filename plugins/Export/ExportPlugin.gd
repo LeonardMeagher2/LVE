@@ -9,6 +9,8 @@ extends VoxelPlugin
 const GLTF_EXPORT := preload("./GLTFExport.gd")
 ## The camera view names of the sprite sheet.
 const VIEWS := ["3D preview", "Isometric", "Front", "Back", "Left", "Right", "Top", "Bottom"]
+## The stable API names of the sprite sheet views. They match the screenshot tool.
+const VIEW_KEYS := ["current", "isometric", "front", "back", "left", "right", "top", "bottom"]
 ## The yaw and pitch of each sprite sheet view.
 const ANGLES := [Vector2.ZERO, Vector2(-45, 45), Vector2.ZERO, Vector2(180, 0), Vector2(90, 0), Vector2(-90, 0), Vector2(0, 90), Vector2(0, -90)]
 ## The debounce delay of the sheet preview in milliseconds.
@@ -215,6 +217,39 @@ func _restore_export_settings() -> void:
 	_model_camera.fov = _pending_export_camera.get("fov", _default_camera.fov)
 	_model_camera.is_orthogonal = _pending_export_camera.get("orthographic", _default_camera.orthographic)
 	_restoring_export_settings = false
+
+
+## Returns the settings the export tab uses now. An agent can start from these
+## values and override what it needs.
+func current_export_settings() -> Dictionary:
+	var view_index: int = _sheet_settings.get_node("ViewRow/View").selected
+	var sheet_range := _selected_frames()
+	var model_range := _model_range()
+	var sheet_tag_index := State.document.tags.find(_sheet_tag) if _sheet_tag else -1
+	var model_tag_index := State.document.tags.find(_selected_tag) if _selected_tag else -1
+	return {
+		"sprite": {
+			"view": VIEW_KEYS[clampi(view_index, 0, VIEW_KEYS.size() - 1)],
+			"orthographic": not _sheet_settings.get_node("ViewRow/Perspective").button_pressed,
+			"center": _sheet_settings.get_node("ViewRow/Center").button_pressed,
+			"tile_size": int(_sheet_settings.get_node("SizeRow/Size").value),
+			"views": _view_count(),
+			"metadata": _sheet_settings.get_node("TurntableRow/Metadata").button_pressed,
+			"tag": sheet_tag_index,
+			"tag_name": _sheet_tag.name if _sheet_tag else "",
+			"first_frame": sheet_range.x,
+			"last_frame": sheet_range.y,
+		},
+		"model": {
+			"center": _model.get_node("AnimationRow/Center").button_pressed,
+			"tag": model_tag_index,
+			"smooth_normals": State.document.smooth_normals,
+			"ao": State.document.ao_strength,
+			"unlit": bool(State.document.export_settings.get("unlit", false)),
+			"first_frame": model_range.x,
+			"last_frame": model_range.y,
+		},
+	}
 
 
 func _enter_tree() -> void:
@@ -615,7 +650,29 @@ func _on_gltf_file_selected(path: String) -> void:
 ## Exports the model as a GLB file and returns the error code. It uses the
 ## current center option and the selected tag.
 func export_gltf(path: String) -> Error:
-	var error: Error = await _gltf.export_gltf(path, _model.get_node("AnimationRow/Center").button_pressed, State.document.tags.find(_selected_tag) if _selected_tag else -1)
+	return await export_gltf_settings(path, {
+		"center": _model.get_node("AnimationRow/Center").button_pressed,
+		"tag": State.document.tags.find(_selected_tag) if _selected_tag else -1,
+	})
+
+
+## Exports the model as a GLB file with explicit settings. Keys: [code]center[/code],
+## [code]tag[/code] (-1 for every tag), [code]smooth_normals[/code], [code]ao[/code],
+## and [code]unlit[/code]. An absent [code]center[/code] is true and an absent
+## [code]tag[/code] is -1. Each other absent key keeps the document value. The
+## call does not change the document.
+func export_gltf_settings(path: String, settings: Dictionary) -> Error:
+	if _exporting or State.edit_busy():
+		return ERR_BUSY
+	var tag_value: Variant = settings.get("tag", -1)
+	var tag_index := int(tag_value) if tag_value is int or tag_value is float else -1
+	if tag_index < -1 or tag_index >= State.document.tags.size():
+		return ERR_INVALID_PARAMETER
+	var overrides := {}
+	for key in ["smooth_normals", "ao", "unlit"]:
+		if settings.has(key):
+			overrides[key] = settings[key]
+	var error: Error = await _gltf.export_gltf(path, bool(settings.get("center", true)), tag_index, overrides)
 	_sync()
 	_preview_due_ms = Time.get_ticks_msec() + PREVIEW_DELAY_MS
 	return error
@@ -648,8 +705,8 @@ static func sheet_layout(frame_count: int, tile_size: int) -> Dictionary:
 	return {"size": size, "tile_size": dimensions, "rects": rects}
 
 
-func _sheet_camera(view: int, views := 1) -> Dictionary:
-	var orthographic: bool = not _sheet_settings.get_node("ViewRow/Perspective").button_pressed
+func _sheet_camera(view: int, views := 1, orthographic_value: Variant = null) -> Dictionary:
+	var orthographic: bool = bool(orthographic_value) if orthographic_value is bool else not _sheet_settings.get_node("ViewRow/Perspective").button_pressed
 	var bounds := State.document.bounds()
 	var transform: Transform3D
 	var size: float = _model_camera.size
@@ -682,14 +739,14 @@ func _sheet_camera(view: int, views := 1) -> Dictionary:
 	return {"transforms": transforms, "projection": Camera3D.PROJECTION_ORTHOGONAL if orthographic else Camera3D.PROJECTION_PERSPECTIVE, "size": size, "fov": _model_camera.fov, "near": near_plane}
 
 
-func _sheet_render_settings(view: int, views: int) -> Dictionary:
-	var settings := _sheet_camera(view, views)
+func _sheet_render_settings(view: int, views: int, orthographic: bool, center: bool, lighting: Dictionary) -> Dictionary:
+	var settings := _sheet_camera(view, views, orthographic)
 	var bounds := State.document.bounds()
-	var model_transform := Transform3D(Basis.IDENTITY, -bounds.get_center() if _sheet_settings.get_node("ViewRow/Center").button_pressed else Vector3.ZERO)
+	var model_transform := Transform3D(Basis.IDENTITY, -bounds.get_center() if center else Vector3.ZERO)
 	for index in settings.transforms.size():
 		settings.transforms[index] = model_transform * settings.transforms[index]
 	settings.model_transform = model_transform
-	settings.lighting = _sheet_lighting()
+	settings.lighting = lighting
 	var render_bounds := model_transform * bounds
 	var near_depth := INF
 	var far_depth := -INF
@@ -789,7 +846,13 @@ func _update_sheet_preview() -> void:
 	for index in range(frame_range.x, frame_range.y + 1):
 		frames.append(State.get_voxel_frame(index).copy_frame())
 	var resolution := int(_sheet_settings.get_node("SizeRow/Size").value)
-	var settings := _sheet_render_settings(_sheet_settings.get_node("ViewRow/View").selected, _view_count())
+	var settings := _sheet_render_settings(
+		_sheet_settings.get_node("ViewRow/View").selected,
+		_view_count(),
+		not _sheet_settings.get_node("ViewRow/Perspective").button_pressed,
+		_sheet_settings.get_node("ViewRow/Center").button_pressed,
+		_sheet_lighting()
+	)
 	settings.layout = sheet_layout(frames.size() * settings.transforms.size(), resolution)
 	_preview_operation_id = State.begin_operation("Rendering preview", frames.size() * settings.transforms.size(), false, self)
 	var image := await _render_sheet(frames, settings, State.document, revision)
@@ -807,25 +870,60 @@ func _update_sheet_preview() -> void:
 ## pixels. [param view] selects the camera view. [param include_json] also
 ## writes the Aseprite JSON sidecar. [param views] adds turntable views.
 func export_sprite_sheet(path: String, first_frame := 0, last_frame := -1, tile_size := -1, view := 1, include_json := true, views := 1, tag_name := "") -> Error:
+	if view < 0 or view >= VIEW_KEYS.size():
+		return ERR_INVALID_PARAMETER
+	return await export_sprite_sheet_settings(path, {
+		"first_frame": first_frame,
+		"last_frame": last_frame,
+		"tile_size": tile_size,
+		"view": VIEW_KEYS[view],
+		"metadata": include_json,
+		"views": views,
+		"tag_name": tag_name,
+	})
+
+
+## Exports a PNG sprite sheet with explicit settings. Keys: [code]first_frame[/code],
+## [code]last_frame[/code], [code]tile_size[/code], [code]view[/code] (an API
+## name from [constant VIEW_KEYS]), [code]views[/code], [code]orthographic[/code],
+## [code]center[/code], [code]metadata[/code], [code]tag_name[/code], and
+## [code]lighting[/code]. An absent view, camera, size, or metadata key keeps the
+## value of the export tab. The frame range defaults to every frame, and a
+## negative [code]last_frame[/code] or [code]tile_size[/code] also selects the
+## default. The call does not change the document or the saved export settings.
+func export_sprite_sheet_settings(path: String, settings: Dictionary) -> Error:
 	if _exporting or State.edit_busy():
 		return ERR_BUSY
 	if DisplayServer.get_name() == "headless":
 		return ERR_UNAVAILABLE
-	last_frame = State.get_frame_count() - 1 if last_frame < 0 else last_frame
-	if first_frame < 0 or last_frame < first_frame or last_frame >= State.get_frame_count() or view < 0 or view >= VIEWS.size() or views < 1:
-		return ERR_INVALID_PARAMETER
-	var settings := _sheet_render_settings(view, views)
+	var tab: Dictionary = current_export_settings().sprite
+	var frame_count := State.get_frame_count()
+	var first_frame := int(settings.get("first_frame", 0))
+	var last_frame := int(settings.get("last_frame", -1))
+	if last_frame < 0:
+		last_frame = frame_count - 1
+	var tile_size := int(settings.get("tile_size", -1))
 	if tile_size < 0:
-		tile_size = int(_sheet_settings.get_node("SizeRow/Size").value)
-	if tile_size < 1:
+		tile_size = tab.tile_size
+	var view := VIEW_KEYS.find(str(settings.get("view", tab.view)))
+	var views := int(settings.get("views", tab.views))
+	var orthographic := bool(settings.get("orthographic", tab.orthographic))
+	var center := bool(settings.get("center", tab.center))
+	var include_json := bool(settings.get("metadata", tab.metadata))
+	var tag_name := str(settings.get("tag_name", ""))
+	var lighting: Dictionary = settings.get("lighting", {})
+	if lighting.is_empty():
+		lighting = _sheet_lighting()
+	if first_frame < 0 or last_frame < first_frame or last_frame >= frame_count or view < 0 or views < 1 or tile_size < 1:
 		return ERR_INVALID_PARAMETER
+	var render_settings := _sheet_render_settings(view, views, orthographic, center, lighting)
 	var frames: Array[VoxelFrame] = []
 	for index in range(first_frame, last_frame + 1):
 		frames.append(State.get_voxel_frame(index).copy_frame())
 	var layout := sheet_layout(frames.size() * views, tile_size)
 	if layout.size.x > Image.MAX_WIDTH or layout.size.y > Image.MAX_HEIGHT:
 		return ERR_INVALID_PARAMETER
-	settings.layout = layout
+	render_settings.layout = layout
 	if path.get_extension().to_lower() != "png":
 		path += ".png"
 	var metadata := sheet_metadata(path, first_frame, last_frame, layout, views, tag_name)
@@ -835,7 +933,7 @@ func export_sprite_sheet(path: String, first_frame := 0, last_frame := -1, tile_
 	_cancel_requested = false
 	_preview_revision += 1
 	_operation_id = State.begin_operation("Exporting", frames.size() * views, true, self, _cancel_export)
-	var image := await _render_sheet(frames, settings, source_document)
+	var image := await _render_sheet(frames, render_settings, source_document)
 	if image == null:
 		_finish_export()
 		return ERR_BUSY

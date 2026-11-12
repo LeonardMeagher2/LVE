@@ -526,8 +526,8 @@ static func _valid_camera(data: Variant) -> bool:
 func add_frame(from_frame: int = -1) -> VoxelFrame:
 	var f := VoxelFrame.new()
 	if from_frame >= 0 and from_frame < frames.size():
+		# `copy_frame` already carries the delay.
 		f = frames[from_frame].copy_frame()
-		f.delay_ms = frames[from_frame].delay_ms
 	elif not frames.is_empty():
 		f.delay_ms = frames.back().delay_ms
 	var old_last := frames.size() - 1
@@ -540,9 +540,7 @@ func add_frame(from_frame: int = -1) -> VoxelFrame:
 func duplicate_frame(i: int) -> void:
 	if i < 0 or i >= frames.size():
 		return
-	var f := VoxelFrame.new()
-	f = frames[i].copy_frame()
-	f.delay_ms = frames[i].delay_ms
+	var f := frames[i].copy_frame()
 	frames.insert(i + 1, f)
 	_extend_end_tags(frames.size() - 2)
 
@@ -580,18 +578,6 @@ func _shift_tags_after_remove(i: int) -> void:
 		tag.to = clampi(tag.to, 0, last)
 		if tag.from > tag.to:
 			tag.to = tag.from
-
-
-## Moves one frame to a new index.
-func move_frame(from: int, to: int) -> void:
-	if from < 0 or from >= frames.size() or to < 0 or to >= frames.size():
-		return
-	if from == to:
-		return
-	var frame := frames[from]
-	frames.remove_at(from)
-	frames.insert(to, frame)
-	_bounds_dirty = true
 
 
 ## Adds a tag and returns its index. The frame range is inclusive. A repeat

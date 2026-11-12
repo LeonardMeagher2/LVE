@@ -210,15 +210,6 @@ class BatchCursor extends RefCounted:
 		return true
 
 
-## Searches [param frame] and fills [param result] with every match. A
-## [param connected] search floods the six face neighbors from [param seed_cell].
-## A disconnected search scans every occupied cell. A non-empty
-## [param selection_mask] blocks traversal and matching. Returns [code]false[/code]
-## when [param job] cancels, and the caller must discard [param result].
-## [param stream] receives the found cells in batches while the search runs.
-## [param slice_axis] and [param slice_index] bound the search to one layer when
-## the axis is not -1. A flood must not cross a layer, or a fill would paint
-## disconnected patches of the slice.
 ## Returns [code]true[/code] when [param cell] is inside the slice range. A slice
 ## axis below zero means every layer is inside.
 static func _in_slice(cell: Vector3i, slice_axis: int, slice_index: int, slice_count: int) -> bool:
@@ -228,6 +219,15 @@ static func _in_slice(cell: Vector3i, slice_axis: int, slice_index: int, slice_c
 	return layer >= slice_index and layer < slice_index + slice_count
 
 
+## Searches [param frame] and fills [param result] with every match. A
+## [param connected] search floods the six face neighbors from [param seed_cell].
+## A disconnected search scans every occupied cell. A non-empty
+## [param selection_mask] blocks traversal and matching. Returns [code]false[/code]
+## when [param job] cancels, and the caller must discard [param result].
+## [param stream] receives the found cells in batches while the search runs.
+## [param slice_axis] and [param slice_index] bound the search to one layer when
+## the axis is not -1. A flood must not cross a layer, or a fill would paint
+## disconnected patches of the slice.
 static func find(result: Dictionary, frame: VoxelFrame, seed_cell: Vector3i, target_material: PackedFloat32Array, connected: bool, value: Variant = true, selection_mask: Dictionary = {}, job: VoxelFrame.EditJob = null, stream: Callable = Callable(), slice_axis := -1, slice_index := 0, slice_count := 1) -> bool:
 	if frame == null:
 		return true

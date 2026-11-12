@@ -50,7 +50,9 @@ func run(port: int) -> int:
 			# server's own output back to stdin. A response has no method, so it
 			# is not a request for the editor.
 			continue
-		var expects_response := (request as Dictionary).has("id")
+		# The server answers a request without a response for a null id, so the
+		# bridge must not wait for one.
+		var expects_response: Variant = (request as Dictionary).get("id", null) != null
 		var send_error := _peer.put_data((line + "\n").to_utf8_buffer())
 		if send_error != OK:
 			printerr("LVE MCP bridge: the editor connection closed.")
