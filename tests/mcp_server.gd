@@ -24,6 +24,7 @@ func _ready() -> void:
 	test("documents save and open", _save_open, "save_open")
 	test("new_document opens a new tab", _new_tab, "new_document")
 	test("frames and tags can be driven", _frames, "frames")
+	test("document settings set normals, AO, and size in one undo", _document_settings, "document_settings")
 	test("frames can be inserted, moved, and removed", _edit_frames, "edit_frames")
 	test("frame blocks add, move, and remove in one action", _batch_frames, "batch_frames")
 	test("tags can be added, renamed, ranged, looped, and removed", _edit_tags, "edit_tags")
@@ -822,6 +823,40 @@ func _frames() -> void:
 		expect(not _is_error(loop_response), "set_tag_loop succeeds")
 		var tag := State.get_tag(State.active_tag)
 		expect(tag.loop_mode == AnimationTag.LoopMode.PING_PONG, "the tag uses ping-pong")
+	)
+
+
+func _document_settings() -> void:
+	step("Given a document with flat normals and full ambient occlusion", func():
+		State.document.smooth_normals = false
+		State.document.ao_strength = 1.0
+		State.document.size = Vector3i.ZERO
+		State.undo_redo.clear_history()
+	)
+	var response: Dictionary = await _call("set_document_settings", {"smooth_normals": true, "ao": 0.3, "size": [8, 6, 4]})
+	step("Then one call sets every document setting", func():
+		expect(not _is_error(response), "set_document_settings succeeds")
+		expect(State.document.smooth_normals, "smooth normals are on")
+		expect(is_equal_approx(State.document.ao_strength, 0.3), "ambient occlusion is 0.3")
+		expect(State.document.size == Vector3i(8, 6, 4), "the document size is 8 by 6 by 4")
+		expect(State.undo_redo.get_history_count() == 1, "the settings are one undo action")
+	)
+	step("When the settings are undone", func():
+		State.undo_redo.undo()
+	)
+	step("Then the previous settings return", func():
+		expect(not State.document.smooth_normals, "flat normals return")
+		expect(is_equal_approx(State.document.ao_strength, 1.0), "ambient occlusion returns")
+		expect(State.document.size == Vector3i.ZERO, "the infinite size returns")
+	)
+	var clamped: Dictionary = await _call("set_document_settings", {"ao": 2.0})
+	step("Then an out-of-range AO is clamped", func():
+		expect(not _is_error(clamped), "an AO above one is accepted")
+		expect(is_equal_approx(State.document.ao_strength, 1.0), "AO clamps to one")
+	)
+	var empty: Dictionary = await _call("set_document_settings", {})
+	step("Then an empty request is refused", func():
+		expect(_is_error(empty), "set_document_settings requires one field")
 	)
 
 

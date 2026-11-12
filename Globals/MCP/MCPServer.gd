@@ -270,6 +270,25 @@ const TOOLS := [
 		},
 	},
 	{
+		"name": "set_document_settings",
+		"description": "Set the document render settings: smooth normals, ambient occlusion strength, and the centered size. Omit a field to keep it. One undo action.",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"smooth_normals": {"type": "boolean", "description": "Use smooth normals."},
+				"ao": {"type": "number", "minimum": 0, "maximum": 1, "description": "Ambient occlusion strength. Zero disables it."},
+				"size": {
+					"type": "array",
+					"items": {"type": "integer", "minimum": 0, "maximum": 4096},
+					"minItems": 3,
+					"maxItems": 3,
+					"description": "Centered document size as [x, y, z]. Zero on an axis means infinite.",
+				},
+			},
+			"additionalProperties": false,
+		},
+	},
+	{
 		"name": "get_export_settings",
 		"description": "Read the export settings the editor uses now. Use it to start from the current view, tile size, tag, and model options.",
 		"inputSchema": {"type": "object", "additionalProperties": false},
@@ -1053,6 +1072,15 @@ const OUTPUT_SCHEMAS := {
 		"type": "object",
 		"properties": {"playing": {"type": "boolean"}, "frame": {"type": "integer"}},
 	},
+	"set_document_settings": {
+		"type": "object",
+		"properties": {
+			"size": {"type": "array", "items": {"type": "integer"}},
+			"smooth_normals": {"type": "boolean"},
+			"ao": {"type": "number"},
+			"revision": {"type": "integer"},
+		},
+	},
 	"set_tool": {
 		"type": "object",
 		"properties": {"tool": {"type": "string"}, "params": {"type": "object"}},
@@ -1133,6 +1161,7 @@ has open, not a file copy. A read or a write lands in their real session.
 - new_document and open_document add a tab. The current document stays open.
 - Frame and tag indices shift after add, move, or remove. Re-read them.
 - add_frame, remove_frame, move_frame, and set_frame_delay accept several frames in one call. One call is one undo action.
+- set_document_settings sets smooth normals, AO strength, and the centered size. One call is one undo action.
 - set_tag_range fails when the range is outside the frames.
 - inspect_document with palette true puts the palette at document.palette.
 - Call get_export_settings to read the view, tile size, tag, and model options of the export tab.
@@ -1766,6 +1795,8 @@ func _call_tool(id: Variant, params: Dictionary) -> Dictionary:
 			return _result_response(id, _set_active_tag(args))
 		"set_playback":
 			return _result_response(id, _set_playback(args))
+		"set_document_settings":
+			return _result_response(id, _set_document_settings(args))
 		"set_tool":
 			return _result_response(id, _set_tool(args))
 		"set_material":
@@ -3616,6 +3647,59 @@ func _set_playback(args: Dictionary) -> Dictionary:
 	var playing: bool = playing_value if playing_value is bool else false
 	State.is_playing = playing
 	return _tool_ok({"playing": State.is_playing, "frame": State.current_frame})
+
+
+## Sets document-level render settings. Every supplied field is applied as one
+## history action, like the document settings modal.
+func _set_document_settings(args: Dictionary) -> Dictionary:
+	if not (args.has("smooth_normals") or args.has("ao") or args.has("size")):
+		return _tool_error("Pass smooth_normals, ao, or size.")
+	if State.edit_busy():
+		return _tool_error("The editor is busy.")
+	var before_smooth := State.document.smooth_normals
+	var before_size := State.document.size
+	var before_ao := State.document.ao_strength
+	var smooth := before_smooth
+	var size := before_size
+	var ao := before_ao
+	if args.has("smooth_normals"):
+		var smooth_value: Variant = args["smooth_normals"]
+		if not (smooth_value is bool):
+			return _tool_error("smooth_normals must be a boolean.")
+		smooth = smooth_value
+	if args.has("size"):
+		var size_value: Variant = args["size"]
+		if not (size_value is Array) or size_value.size() != 3:
+			return _tool_error("size must hold three integers.")
+		var values: Array = size_value
+		var parsed := Vector3i.ZERO
+		for axis in 3:
+			var value: Variant = values[axis]
+			if not (value is int or value is float):
+				return _tool_error("size must hold three integers.")
+			var number := int(value)
+			if number < 0 or number > VoxelDocument.MAX_DOCUMENT_SIZE:
+				return _tool_error("size values must be from 0 to %d." % VoxelDocument.MAX_DOCUMENT_SIZE)
+			parsed[axis] = number
+		size = parsed
+	if args.has("ao"):
+		var ao_value: Variant = args["ao"]
+		if not (ao_value is int or ao_value is float):
+			return _tool_error("ao must be a number from 0 to 1.")
+		ao = clampf(float(ao_value), 0.0, 1.0)
+	if smooth == before_smooth and size == before_size and is_equal_approx(ao, before_ao):
+		return _tool_ok({"size": [size.x, size.y, size.z], "smooth_normals": smooth, "ao": ao, "revision": _revision})
+	# The preview path writes without history, then one commit records the whole
+	# change. This matches the document settings modal.
+	State.set_document_properties(smooth, size, false)
+	State.set_ao_strength(ao, false)
+	State.commit_document_settings(before_smooth, before_size, before_ao)
+	return _tool_ok({
+		"size": [State.document.size.x, State.document.size.y, State.document.size.z],
+		"smooth_normals": State.document.smooth_normals,
+		"ao": State.document.ao_strength,
+		"revision": _revision,
+	})
 
 
 func _int_arg(args: Dictionary, key: String, fallback: int) -> int:

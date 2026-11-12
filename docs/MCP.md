@@ -28,7 +28,7 @@ Add this entry to `opencode.json`:
 {
   "mcp": {
     "servers": {
-      "lve_local": {
+      "lve": {
         "type": "remote",
         "url": "http://127.0.0.1:17373/mcp",
         "oauth": false
@@ -42,9 +42,9 @@ The `oauth` field must be `false`. The server uses no OAuth.
 
 Other harnesses use the same URL:
 
-- Claude Code: `claude mcp add --transport http lve_local http://127.0.0.1:17373/mcp`
+- Claude Code: `claude mcp add --transport http lve http://127.0.0.1:17373/mcp`
 - Cursor: put the URL in `.cursor/mcp.json`.
-- Codex: put the URL under `[mcp_servers.lve_local]` in `config.toml`.
+- Codex: put the URL under `[mcp_servers.lve]` in `config.toml`.
 
 ## Result shapes
 
@@ -71,6 +71,7 @@ The server publishes one resource, `lve://guide`. It gives the edit rules and th
 | `new_document` | Open an empty document in a new tab |
 | `save_document` | Save a copy of the current document as `.lve` or `.lve.png`. Set `copy` false to save the main document |
 | `open_document` | Open a saved `.lve` or `.lve.png` document in a new tab |
+| `set_document_settings` | Set smooth normals, ambient occlusion strength, and the centered document size. One undo action |
 | `get_export_settings` | Read the export settings the editor uses now |
 | `export_model` | Export a `.glb` or `.gltf` file with per-call model settings |
 | `export_sprite_sheet` | Export a PNG sprite sheet and the Aseprite JSON sidecar with per-call settings |
