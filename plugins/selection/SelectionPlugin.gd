@@ -17,6 +17,9 @@ var _settings := preload("./settings.tres")
 @onready var _lasso := preload("./tools/LassoSelectTool.tscn").instantiate()
 
 var _current_tool:Node = null
+## Whether the selection plugin owns the pointer. A tool change while another
+## plugin is active must not add a second tool node to the viewport.
+var _active := false
 
 func _ready() -> void:
 	name = "SelectionPlugin"
@@ -46,6 +49,7 @@ func _on_selection_changed() -> void:
 
 ## Activates the current selection tool and shows the option bar.
 func activate_tool() -> void:
+	_active = true
 	_toolbar.set_pressed_no_signal(true)
 	add_option_bar_item(_options)
 	_on_tool_changed(_settings.tool)
@@ -54,6 +58,7 @@ func activate_tool() -> void:
 ## Deactivates the current selection tool and hides the option bar. A held Box
 ## or Lasso drag applies its outline before the detach.
 func deactivate_tool() -> void:
+	_active = false
 	remove_option_bar_item(_options)
 	if _current_tool:
 		# A held Box or Lasso drag applies its current outline as a release would
@@ -69,6 +74,8 @@ func _on_toolbar_toggled(on: bool) -> void:
 		deactivate_tool()
 
 func _on_tool_changed(tool: int):
+	if not _active:
+		return
 	if _current_tool:
 		_current_tool.finish_on_switch()
 		remove_editor_node(_current_tool)

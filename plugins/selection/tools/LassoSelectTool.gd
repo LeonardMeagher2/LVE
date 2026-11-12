@@ -39,8 +39,13 @@ func _reset_shape() -> void:
 
 
 func _append_point(pos: Vector2) -> void:
+	# At the limit, halve the path instead of dropping the rest. A dropped tail
+	# would close the outline short of the pointer.
 	if _points.size() >= SCREEN_POINT_LIMIT:
-		return
+		var thinned := PackedVector2Array()
+		for index in range(0, _points.size(), 2):
+			thinned.append(_points[index])
+		_points = thinned
 	if not _points.is_empty() and _points[_points.size() - 1].distance_to(pos) < SCREEN_STEP:
 		return
 	_points.append(pos)

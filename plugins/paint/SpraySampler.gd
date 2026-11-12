@@ -231,6 +231,20 @@ static func work_estimate(frame: VoxelFrame, center: Vector3i, search_size: int,
 	return SprayIndex.work_estimate(frame, center, search_size, spot_size, selection, speed, selection_index)
 
 
+## Returns the cells inside the slice range. A slice axis below zero keeps every
+## cell. The write gate repeats the test, so a later scope cannot pass. The
+## cursor and the write use this one rule, so a preview shows the exact cells a
+## press writes.
+static func in_slice(cells: Array[Vector3i], axis: int, index: int, count: int) -> Array[Vector3i]:
+	if axis < 0:
+		return cells
+	var kept: Array[Vector3i] = []
+	for cell in cells:
+		if cell[axis] >= index and cell[axis] < index + count:
+			kept.append(cell)
+	return kept
+
+
 ## Samples the write set of one spray batch.
 ##
 ## The candidate set is the occupied cells of the search sphere. A cell counts
