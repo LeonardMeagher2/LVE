@@ -1625,6 +1625,10 @@ func restore_storage(serialized_frame: Array) -> void:
 		var octree_nodes: PackedInt32Array = serialized_chunk[serialized_chunk.size() - 1]
 		if version == STORAGE_VERSION:
 			var material_table: PackedFloat32Array = serialized_chunk[1]
+			# A cell that points at an empty entry reads as occupied and as empty.
+			# The writer never stores one, so skip this chunk and keep the rest.
+			if _has_empty_stored_entry(material_table):
+				continue
 			# The stored table already holds one entry per distinct material. Install
 			# it directly instead of expanding one entry per cell, so a solid or a
 			# checkerboard chunk keeps a small table.
@@ -1647,6 +1651,9 @@ func restore_storage(serialized_frame: Array) -> void:
 			# the sparse check so the legacy path also keeps a small table.
 			chunk._compact()
 		chunk.compress_if_sparse()
+		# An empty chunk and a missing chunk have the same content, so skip it.
+		if chunk.occupied_count == 0:
+			continue
 		chunk.bounds_dirty = true
 		if version == STORAGE_VERSION:
 			chunk.serialized_record = serialized_chunk
@@ -1745,6 +1752,14 @@ static func _valid_material_values(material_table: PackedFloat32Array) -> bool:
 		if not is_finite(value) or value < 0.0 or value > 1.0:
 			return false
 	return true
+
+
+# Returns true when a stored material table holds an empty entry after entry 0.
+static func _has_empty_stored_entry(material_table: PackedFloat32Array) -> bool:
+	for entry in range(1, material_table.size() / MATERIAL_STRIDE):
+		if is_empty(material_table.slice(entry * MATERIAL_STRIDE, (entry + 1) * MATERIAL_STRIDE)):
+			return true
+	return false
 
 
 # Emission stores the glow color. Finish stores metallic and roughness. Alpha is unused.

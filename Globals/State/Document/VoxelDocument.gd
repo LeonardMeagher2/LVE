@@ -598,13 +598,6 @@ func get_tag(i:int) -> AnimationTag:
 		return tags[i]
 	return null
 
-## Removes one tag by index.
-func remove_tag(i: int) -> void:
-	if i >= 0 and i < tags.size():
-		tags.remove_at(i)
-		edit_tag = clampi(edit_tag, -1, tags.size() - 1)
-
-
 ## Returns [code]true[/code] when at least one axis has a finite document size.
 func has_size() -> bool:
 	return size.x > 0 or size.y > 0 or size.z > 0

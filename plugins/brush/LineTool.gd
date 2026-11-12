@@ -27,6 +27,12 @@ func _enter_tree() -> void:
 		State.selection_changed.connect(_cancel_edit)
 	if not State.floor_plane_changed.is_connected(_cancel_edit):
 		State.floor_plane_changed.connect(_cancel_edit)
+	# The anchor froze its symmetry and slice at the press, so a change must
+	# discard the line instead of committing it with the old scope.
+	if not State.symmetry_changed.is_connected(_cancel_edit):
+		State.symmetry_changed.connect(_cancel_edit)
+	if not State.slice_changed.is_connected(_cancel_edit):
+		State.slice_changed.connect(_cancel_edit)
 
 
 func _exit_tree() -> void:
@@ -48,6 +54,10 @@ func _exit_tree() -> void:
 		State.selection_changed.disconnect(_cancel_edit)
 	if State.floor_plane_changed.is_connected(_cancel_edit):
 		State.floor_plane_changed.disconnect(_cancel_edit)
+	if State.symmetry_changed.is_connected(_cancel_edit):
+		State.symmetry_changed.disconnect(_cancel_edit)
+	if State.slice_changed.is_connected(_cancel_edit):
+		State.slice_changed.disconnect(_cancel_edit)
 	# `tree_exited` releases the context subscriptions after this exit.
 
 
