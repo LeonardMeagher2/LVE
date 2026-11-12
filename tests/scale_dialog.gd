@@ -118,7 +118,7 @@ func _run() -> void:
 
 	step("Then the 3x scale replaces the 2x preview instead of compounding", func():
 		expect(_frame().count() == 48, "the adjusted block holds 48 voxels (has %d)" % _frame().count())
-		_expect_bounds(Vector3i(-3, 0, 0), Vector3i(8, 3, 0))
+		_expect_bounds(Vector3i(-4, 0, 0), Vector3i(7, 3, 0))
 	)
 	State.undo_redo.clear_history()
 	_paint_block(4)

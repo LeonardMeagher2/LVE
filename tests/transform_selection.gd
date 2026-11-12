@@ -79,17 +79,19 @@ func _run() -> void:
 	)
 	step("Then the full selection expands with its empty cells", func():
 		var expected := VoxelSelection.new()
-		expected.from_box(Vector3i(-1, -1, 0), Vector3i(4, 4, 0))
+		expected.from_box(Vector3i(-2, -2, 0), Vector3i(3, 3, 0))
 		expect(State.selection.capture() == expected.capture(), "the scaled selection contains the full six-by-six square")
 		expect(frame.count() == 4, "only the source voxel expands into four voxels")
 	)
 	step("When the user doubles the selection again", func():
-		_drag(Vector3(5.5, 5.5, 0), Vector3(9.5, 9.5, 0))
+		# The scaled selection is centred on 0.5, so the second drag doubles the
+		# distance from that centre.
+		_drag(Vector3(5.5, 5.5, 0), Vector3(10.5, 10.5, 0))
 		_press_option("Commit")
 	)
 	step("Then repeated scaling uses the full selection bounds", func():
-		expect(State.selection.count() == 144, "the repeated scale contains twelve-by-twelve selected cells")
-		expect(frame.count() == 16, "the repeated scale contains sixteen occupied voxels")
+		expect(State.selection.count() == 144, "the repeated scale contains twelve-by-twelve selected cells (has %d)" % State.selection.count())
+		expect(frame.count() == 16, "the repeated scale contains sixteen occupied voxels (has %d)" % frame.count())
 		State.undo_redo.undo()
 		expect(State.selection.capture() == source_selection, "undo restores the full source square")
 	)

@@ -275,7 +275,10 @@ func _make_job() -> TransformJob:
 	job.axis = _axis
 	job.p = _p
 	job.q = _q
-	job.pivot = _pivot
+	# The job treats a cell as [c, c + 1), so its pivot sits half a cell above
+	# the cell-centred bounds centre. Without the shift a mirror lands one cell
+	# off and an odd factor grows away from the selection.
+	job.pivot = _pivot + Vector3.ONE * 0.5
 	job.scale_p = _safe_scale(_scale_p)
 	job.scale_q = _safe_scale(_scale_q)
 	job.uniform = _settings.uniform
