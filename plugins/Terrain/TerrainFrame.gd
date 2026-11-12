@@ -10,9 +10,6 @@ extends RefCounted
 ## The tool samples the surface along the frame normal, so a surface frame makes
 ## the footprint follow a slope instead of a cube face.
 
-## The radius in cells of the local surface sample around a hit.
-const SAMPLE_RADIUS := 3
-
 ## A point on the surface.
 var origin := Vector3.ZERO
 ## The outward unit normal.

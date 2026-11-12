@@ -1158,7 +1158,6 @@ class PeerState extends RefCounted:
 var _server := TCPServer.new()
 var _peers: Array[PeerState] = []
 var _http_mode := false
-var _port := DEFAULT_PORT
 ## The document content revision. The read tools report it.
 var _revision := 0
 ## The bounded journal of cell and chunk changes since a revision.
@@ -1317,7 +1316,6 @@ func _entry_cell_count(entry: Dictionary) -> int:
 ## newline-delimited JSON-RPC for the stdio bridge.
 func start(port: int = DEFAULT_PORT, http_mode := false) -> Error:
 	stop()
-	_port = port
 	_http_mode = http_mode
 	var error := _server.listen(port, "127.0.0.1")
 	if error != OK:
@@ -2188,7 +2186,7 @@ func _get_slice(args: Dictionary) -> Dictionary:
 	var material_counts := {}
 	if mode == "materials":
 		for cell in cells:
-			if is_projection or layer_values.has(cell[fixed_index]):
+			if layer_values.has(cell[fixed_index]):
 				var key: String = cells[cell]
 				material_counts[key] = int(material_counts.get(key, 0)) + 1
 	var material_list: Array = []
@@ -2837,7 +2835,6 @@ func _build_regions(cells: Dictionary, group: String, min_cells: int, max_region
 	var regions: Array = []
 	var total_found := 0
 	var small_count := 0
-	var small_cells := 0
 	for start_value in cells.keys():
 		var start: Vector3i = start_value
 		if visited.has(start):
@@ -2880,7 +2877,6 @@ func _build_regions(cells: Dictionary, group: String, min_cells: int, max_region
 		total_found += 1
 		if count < min_cells:
 			small_count += 1
-			small_cells += count
 			continue
 		regions.append({
 			"cells": count,
@@ -2933,7 +2929,6 @@ func _build_regions(cells: Dictionary, group: String, min_cells: int, max_region
 		"total": total_found,
 		"truncated": truncated,
 		"small_count": small_count,
-		"small_cells": small_cells,
 	}
 
 
@@ -3852,8 +3847,6 @@ func _write_cells(args: Dictionary) -> Dictionary:
 				return _tool_error("cells[%d] names a material index that does not exist." % index)
 			changes[shape[0]] = material
 			cell_count += 1
-			if cell_count > MAX_WRITE_CELLS:
-				return _tool_error("The write exceeds %d cells." % MAX_WRITE_CELLS)
 	var boxes_value: Variant = args.get("boxes", null)
 	if boxes_value != null:
 		if not (boxes_value is Array):

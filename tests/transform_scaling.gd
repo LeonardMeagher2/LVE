@@ -62,7 +62,7 @@ func _transform_scale() -> void:
 		# Uniform scale is a true 3D scale, so the depth axis (invisible from the front view)
 		# doubles from 1 layer to 2 right along with the two visible axes: 8 * 8 * 2 = 128.
 		expect(_frame().count() == 128, "the scaled block holds exactly 128 voxels (has %d)" % _frame().count())
-		_expect_bounds(Vector3i(-2, -2, 0), Vector3i(5, 5, 1))
+		_expect_bounds(Vector3i(-2, -2, -1), Vector3i(5, 5, 0))
 	)
 
 	step("Given the same solid 4x4 block again with uniform off", func():
@@ -95,10 +95,11 @@ func _transform_scale() -> void:
 
 	step("Then the shape mirrors through the pivot, keeping its size and voxel count", func():
 		expect(_frame().count() == 16, "the mirrored block still holds 16 voxels (has %d)" % _frame().count())
-		# A -1 factor is still uniform (all 3 axes flip through the pivot), so the depth axis
-		# mirrors from z=0 to z=-1 instead of staying put.
-		_expect_bounds(Vector3i(-1, -1, -1), Vector3i(2, 2, -1))
-		expect(_color_at(Vector3i(-1, -1, -1)).is_equal_approx(Color.from_rgba8(40, 120, 40)), "the marker moved to the mirrored corner")
+		# A -1 factor is still uniform (all 3 axes flip through the pivot), so the
+		# four-cell block swaps in place on both in-plane axes. The single depth
+		# layer also stays on its own layer.
+		_expect_bounds(Vector3i(0, 0, 0), Vector3i(3, 3, 0))
+		expect(_color_at(Vector3i(0, 0, 0)).is_equal_approx(Color.from_rgba8(40, 120, 40)), "the marker moved to the mirrored corner")
 	)
 
 	step("Given a solid 2x2 block selected with the scale tool active", func():
@@ -115,7 +116,7 @@ func _transform_scale() -> void:
 	step("Then the two 2x steps compound into a single 4x scale, centered where it started", func():
 		# The depth axis compounds too: 1 layer -> 4 layers, same as the two visible axes' 2x2.
 		expect(_frame().count() == 256, "compounding two 2x scales holds exactly 256 voxels (has %d)" % _frame().count())
-		_expect_bounds(Vector3i(-3, -3, -1), Vector3i(4, 4, 2))
+		_expect_bounds(Vector3i(-3, -3, -2), Vector3i(4, 4, 1))
 		expect(State.undo_redo.has_undo(), "the compounded scale is still a single undo step")
 	)
 

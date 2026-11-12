@@ -87,9 +87,6 @@ var witness := {}
 var preview_payload: VoxelPreview.SolidPayload
 ## The indexed row work estimate of the sample. It sizes the progress total.
 var local_estimate := 0
-## The legacy gathered cell count. The indexed sampler reports zero, because it
-## never gathers the reach range.
-var local_count := 0
 ## The candidate cell count inside the search sphere, or zero before the worker
 ## runs.
 var candidate_count := 0
@@ -108,7 +105,6 @@ func run() -> void:
 	# The slice limits the sampled cells, so the cursor shows exactly the cells a
 	# press writes. The write gate repeats the test, so a later scope cannot pass.
 	cells = SpraySampler.in_slice(cells, slice_axis, slice_index, slice_count)
-	local_count = report.get("local", 0)
 	candidate_count = report.get("candidates", 0)
 	built_selection_index = report.get("selection_index")
 	index_builds = report.get("index_builds", 0)

@@ -139,20 +139,7 @@ class ExportJob extends VoxelFrame.EditJob:
 				return []
 			var position := source_positions[vertex_index]
 			var bucket := Vector3i((position / WELD_EPSILON).floor())
-			var match_index := -1
-			for x in range(-1, 2):
-				for y in range(-1, 2):
-					for z in range(-1, 2):
-						for candidate: int in buckets.get(bucket + Vector3i(x, y, z), []):
-							if normals[candidate] == source_normals[vertex_index] and colors[candidate] == source_colors[vertex_index] and positions[candidate].distance_squared_to(position) <= WELD_EPSILON * WELD_EPSILON:
-								match_index = candidate
-								break
-						if match_index != -1:
-							break
-					if match_index != -1:
-						break
-				if match_index != -1:
-					break
+			var match_index := _weld_match(positions, normals, colors, buckets, bucket, position, source_normals[vertex_index], source_colors[vertex_index])
 			if match_index == -1:
 				match_index = positions.size()
 				positions.append(position)
@@ -172,6 +159,35 @@ class ExportJob extends VoxelFrame.EditJob:
 		welded[Mesh.ARRAY_COLOR] = colors
 		welded[Mesh.ARRAY_INDEX] = indices
 		return welded
+
+
+	# Returns the index of an already welded vertex that matches, or -1. The own
+	# bucket is tested first, because an exact duplicate is the common case. The
+	# neighbor set is unchanged, so the same candidates can match.
+	func _weld_match(positions: PackedVector3Array, normals: PackedVector3Array, colors: PackedColorArray, buckets: Dictionary, bucket: Vector3i, position: Vector3, normal: Vector3, color: Color) -> int:
+		var match_index := _bucket_match(positions, normals, colors, buckets, bucket, position, normal, color)
+		if match_index != -1:
+			return match_index
+		for x in range(-1, 2):
+			for y in range(-1, 2):
+				for z in range(-1, 2):
+					if x == 0 and y == 0 and z == 0:
+						continue
+					match_index = _bucket_match(positions, normals, colors, buckets, bucket + Vector3i(x, y, z), position, normal, color)
+					if match_index != -1:
+						return match_index
+		return -1
+
+
+	# Returns one matching vertex of one bucket, or -1. A missing bucket costs no
+	# temporary array.
+	func _bucket_match(positions: PackedVector3Array, normals: PackedVector3Array, colors: PackedColorArray, buckets: Dictionary, key: Vector3i, position: Vector3, normal: Vector3, color: Color) -> int:
+		if not buckets.has(key):
+			return -1
+		for candidate: int in buckets[key]:
+			if normals[candidate] == normal and colors[candidate] == color and positions[candidate].distance_squared_to(position) <= WELD_EPSILON * WELD_EPSILON:
+				return candidate
+		return -1
 
 
 	func _simplify_frame(arrays: Array, frame_index: int) -> Array:

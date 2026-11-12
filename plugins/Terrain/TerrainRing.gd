@@ -112,7 +112,7 @@ static func surface_ring_data(frame: VoxelFrame, surface_frame: TerrainFrame, ce
 	var breaks := 0
 	var completed := 0
 	var cancelled := false
-	var masks := _masks_for(context)
+	var masks := TerrainPreview.masks_for(context)
 	var no_changes := {}
 	for mask: int in masks:
 		var axis_frame := surface_frame
@@ -178,7 +178,7 @@ static func plane_ring(surface_frame: TerrainFrame, center_point: Vector3, size:
 	var radius := BrushSize.radius(use_size)
 	var offset := BrushSize.center_offset(use_size)
 	var sample_count := segments_for(use_size)
-	for mask: int in _masks_for(context):
+	for mask: int in TerrainPreview.masks_for(context):
 		var axis_frame := surface_frame
 		var center := center_point
 		if context != null and mask != 0:
@@ -449,13 +449,4 @@ static func _rim_point(center: Vector3, radius: float, angle: float, first: Vect
 	return center + radius * (cos(angle) * first + sin(angle) * second)
 
 
-# Returns the active symmetry masks of one context. A null context is one mask.
-static func _masks_for(context: VoxelFrame.EditContext) -> Array:
-	var masks := []
-	if context == null:
-		masks.append(0)
-		return masks
-	for mask in 8:
-		if (mask & ~context.axes) == 0:
-			masks.append(mask)
-	return masks
+

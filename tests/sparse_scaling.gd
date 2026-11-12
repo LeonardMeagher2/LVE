@@ -49,8 +49,8 @@ func _run() -> void:
 	step("Then the distant voxels keep their exact mirrored positions", func():
 		var frame := State.get_current_voxel_frame()
 		expect(frame.count() == 2, "mirroring preserves both distant voxels")
-		expect(frame.get_color(Vector3i.ONE * 254) == Color.RED, "the first voxel reaches its mirrored position")
-		expect(frame.get_color(Vector3i.ONE * -1) == Color.GREEN, "the second voxel reaches its mirrored position")
+		expect(frame.get_color(Vector3i.ONE * 255) == Color.RED, "the first voxel reaches its mirrored position")
+		expect(frame.get_color(Vector3i.ZERO) == Color.GREEN, "the second voxel reaches its mirrored position")
 		State.undo_redo.undo()
 	)
 	step("When the user doubles only the visible axes", func():

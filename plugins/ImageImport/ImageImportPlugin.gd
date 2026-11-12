@@ -56,7 +56,8 @@ class ImportJob extends VoxelFrame.EditJob:
 			else:
 				error = ERR_INVALID_DATA
 				return
-			metadata = data.get("meta", {})
+			var meta_value: Variant = data.get("meta", {})
+			metadata = meta_value if meta_value is Dictionary else {}
 			if descriptors.is_empty():
 				error = ERR_INVALID_DATA
 				return

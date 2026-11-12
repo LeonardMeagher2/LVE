@@ -24,7 +24,6 @@ var _center := Vector3i.ZERO
 var _clipboard_text := ""
 var _copy_job: ClipboardCopyJob
 var _import_job: ClipboardImportJob
-var _clipboard_poll_ms := 0
 var _has_clipboard_voxels := false
 var _shutting_down := false
 
@@ -161,6 +160,11 @@ func _ready() -> void:
 
 
 func _notification(what: int) -> void:
+	# Another window can copy while this one is inactive, so a focus event is the
+	# point where the Paste state can change.
+	if what == NOTIFICATION_APPLICATION_FOCUS_IN or what == NOTIFICATION_WM_WINDOW_FOCUS_IN:
+		_refresh_clipboard()
+		return
 	if what == NOTIFICATION_PREDELETE:
 		for node in [_options, _paste_tool]:
 			if is_instance_valid(node):
@@ -187,6 +191,8 @@ func _sync_options() -> void:
 		_safe_add(target, _options)
 	elif _options.get_parent():
 		_options.get_parent().remove_child(_options)
+	# The option bar is visible now, so its first Paste state is current.
+	_refresh_clipboard()
 	_sync_buttons()
 
 
@@ -206,11 +212,15 @@ func _on_cells_changed(_frame: int, _affected: Array[Vector3i]) -> void:
 	_sync_buttons()
 
 
-func _process(_delta: float) -> void:
-	if is_instance_valid(_options) and _options.is_inside_tree() and Time.get_ticks_msec() >= _clipboard_poll_ms:
-		_clipboard_poll_ms = Time.get_ticks_msec() + 500
-		_has_clipboard_voxels = _read_clipboard().begins_with(CLIPBOARD_PREFIX)
-		_sync_buttons()
+# Refreshes the Paste state from the system clipboard. The clipboard can change
+# only in another window, so a focus event covers it. A large voxel record costs
+# one full read here, not one read every half second.
+func _refresh_clipboard() -> void:
+	var has_voxels := _read_clipboard().begins_with(CLIPBOARD_PREFIX)
+	if has_voxels == _has_clipboard_voxels:
+		return
+	_has_clipboard_voxels = has_voxels
+	_sync_buttons()
 
 
 func _read_clipboard() -> String:
