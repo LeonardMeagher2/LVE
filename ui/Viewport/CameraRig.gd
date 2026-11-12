@@ -29,10 +29,6 @@ signal view_changed
 			_update()
 ## The active view mode.
 @export var view_mode:ViewMode = ViewMode.NONE
-## The minimum zoom percent.
-@export var min_zoom:float = 1.0
-## The maximum zoom percent.
-@export var max_zoom:float = 400
 
 ## The box that the camera frames. When it is not valid, the camera uses the
 ## document bounds.
@@ -107,14 +103,6 @@ func center_active() -> void:
 		bounds = State.document.bounds()
 	center_on(bounds)
 
-func _frame_distance(d: VoxelDocument) -> float:
-	return max(d.bounds().size.length(), 16.0) * 1.25
-
-
-func _frame_target(d: VoxelDocument) -> Vector3:
-	return d.bounds().get_center()
-
-
 ## Sets one named view. A known name is [code]default[/code], [code]top[/code],
 ## [code]bottom[/code], [code]front[/code], [code]back[/code], [code]left[/code],
 ## [code]right[/code], or [code]isometric[/code].
@@ -179,19 +167,25 @@ func pan(rel: Vector2) -> void:
 
 
 func _update() -> void:
-	var off := Vector3(
+	var direction := Vector3(
 		sin(_yaw) * cos(_pitch), sin(_pitch), cos(_yaw) * cos(_pitch)
-	) * _dist
-	position = _target + off
-	look_at(_target, Vector3.UP)
+	)
 	var bounds: AABB = bounds_provider.call() if bounds_provider.is_valid() else State.document.bounds()
 	var max_radius := maxf(bounds.size.length() * 0.5, 1.0)
 	if is_orthogonal:
 		projection = Camera3D.PROJECTION_ORTHOGONAL
 		size = 2.0 * _dist * tan(deg_to_rad(fov) / 2.0)
+		# The projection scale follows the zoom, but the camera must stay outside
+		# the model. A close zoom would otherwise put the model behind the near
+		# plane, and orthographic clipping would cut it.
+		var camera_distance := maxf(_dist, max_radius + 1.0)
+		position = _target + direction * camera_distance
 		# Godot derives the directional shadow depth range from the camera far plane in orthographic projection.
-		far = maxf(2.0, _dist + max_radius)
+		far = maxf(2.0, camera_distance + max_radius)
 	else:
 		projection = Camera3D.PROJECTION_PERSPECTIVE
-		far = 4000.0
+		position = _target + direction * _dist
+		# The lowest zoom step is farther than a fixed far plane would keep.
+		far = maxf(4000.0, _dist + max_radius * 2.0)
+	look_at(_target, Vector3.UP)
 	view_changed.emit()
