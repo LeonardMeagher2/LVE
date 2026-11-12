@@ -304,6 +304,26 @@ func commit_document_properties(before_smooth: bool, before_size: Vector3i) -> v
 	_commit_history(false)
 
 
+## Records one history action for the normals mode, the size, and the AO
+## strength. Use it when one dialog edits both settings.
+func commit_document_settings(before_smooth: bool, before_size: Vector3i, before_ao: float) -> void:
+	var after_smooth := document.smooth_normals
+	var after_size := document.size
+	var after_ao := document.ao_strength
+	var properties_changed := before_smooth != after_smooth or before_size != after_size
+	var ao_changed := not is_equal_approx(before_ao, after_ao)
+	if not properties_changed and not ao_changed:
+		return
+	undo_redo.create_action("Set Document Settings")
+	if properties_changed:
+		undo_redo.add_undo_method(_apply_document_properties.bind(before_smooth, before_size))
+		undo_redo.add_do_method(_apply_document_properties.bind(after_smooth, after_size))
+	if ao_changed:
+		undo_redo.add_undo_method(_apply_ao_strength.bind(before_ao))
+		undo_redo.add_do_method(_apply_ao_strength.bind(after_ao))
+	_commit_history(false)
+
+
 func _apply_document_properties(smooth_normals: bool, size: Vector3i) -> void:
 	var smooth_changed := document.smooth_normals != smooth_normals
 	var size_was_changed := document.size != size
@@ -414,8 +434,8 @@ func _ready() -> void:
 	palette_changed.connect(_mark_dirty)
 
 
-## Removes every editor plugin. Main calls this when it leaves the tree, so a
-## freed Main cannot leave a plugin polling a freed control.
+## Removes every editor plugin. A test scene calls this before it replaces the
+## editor, so a plugin cannot outlive the controls it reads.
 func clear_plugins() -> void:
 	var root := get_node("/root")
 	for child in root.get_children():
@@ -1331,7 +1351,9 @@ func remember_session(config_path: String = SESSION_PATH) -> void:
 	var active := 0
 	for index in tabs.size():
 		var document := tabs[index]
-		var path := document.edit_save_path if not document.edit_save_path.is_empty() else document.file_path
+		# Only a written path is a save path. A bundled sample has a file path
+		# but must not be saved over, so the next launch opens it again.
+		var path := document.edit_save_path
 		if path.is_empty():
 			continue
 		if index == active_tab:
@@ -1412,6 +1434,9 @@ func erase_selection() -> void:
 	# a selected voxel outside the size can still be deleted.
 	job.edit_context = _erase_edit.edit_context.duplicate()
 	job.edit_context.bounded_axes = 0
+	# The job writes exactly the selected cells, so filtering them again by the
+	# same selection would copy the whole dictionary for no change.
+	job.edit_context.selection = {}
 	_erase_job = job
 	var operation_id := begin_operation("Erasing selection", selection.count(), true, self, _interrupt_erase)
 	_erase_operation_id = operation_id
@@ -1487,8 +1512,9 @@ func next_frame() -> void:
 
 ## Moves to the previous frame, wrapping at the start.
 func prev_frame() -> void:
-	var n := document.frames.size()
-	current_frame = (current_frame - 1) % n
+	# GDScript `%` keeps the sign of the dividend, so a plain modulo would stay
+	# at frame zero instead of wrapping to the last frame.
+	current_frame = posmod(current_frame - 1, document.frames.size())
 
 ## Returns the frame count.
 func get_frame_count() -> int:
@@ -1555,14 +1581,27 @@ func get_current_voxel_frame() -> VoxelFrame:
 	return document.frames[current_frame]
 
 
-## Adds an empty frame after the current frame and records a history action.
-func add_frame() -> void:
+## Adds empty frames and records one history action. [param index] inserts the
+## first frame at that index, or appends when negative. The last added frame
+## becomes current.
+func add_frames(count: int, index := -1) -> void:
+	var size := document.frames.size()
+	var amount := clampi(count, 1, 256)
+	var target := size if index < 0 else clampi(index, 0, size)
 	edit_context_changing.emit()
 	is_playing = false
 	var before := _frame_snapshot()
-	document.add_frame()
-	current_frame = document.frames.size() - 1
-	_record_frame_action("Add Frame", before, _frame_snapshot())
+	for added in amount:
+		document.add_frame()
+	if target < size:
+		_move_block(size, amount, target)
+	current_frame = clampi(target + amount - 1, 0, document.frames.size() - 1)
+	_record_frame_action("Add Frame" if amount == 1 else "Add Frames", before, _frame_snapshot())
+
+
+## Adds one empty frame at the end and records a history action.
+func add_frame() -> void:
+	add_frames(1)
 
 
 ## Duplicates the current frame and records a history action.
@@ -1577,33 +1616,82 @@ func duplicate_frame() -> void:
 
 ## Deletes the current frame. The last remaining frame is kept.
 func delete_frame() -> void:
-	if document.frames.size() <= 1:
+	remove_frames([current_frame])
+
+
+## Removes frames and records one history action. The last remaining frame is
+## kept, so a list that would remove every frame removes nothing. The current
+## frame stays current. When it is removed, the next remaining frame is current.
+func remove_frames(indices: Array) -> void:
+	var size := document.frames.size()
+	var unique := {}
+	for value in indices:
+		if value is int or value is float:
+			var index := int(value)
+			if index >= 0 and index < size:
+				unique[index] = true
+	var descending: Array = unique.keys()
+	if descending.is_empty() or descending.size() >= size:
 		return
+	# Remove from the end, so the lower indices stay valid.
+	descending.sort()
+	descending.reverse()
 	edit_context_changing.emit()
 	is_playing = false
 	var before := _frame_snapshot()
-	document.remove_frame(current_frame)
-	if current_frame >= document.frames.size():
-		current_frame = document.frames.size() - 1
-	_record_frame_action("Delete Frame", before, _frame_snapshot())
+	var current := current_frame
+	var removed_before_current := 0
+	for index in descending:
+		document.remove_frame(index)
+		if index < current:
+			removed_before_current += 1
+	current_frame = clampi(current - removed_before_current, 0, document.frames.size() - 1)
+	_record_frame_action("Delete Frame" if descending.size() == 1 else "Delete Frames", before, _frame_snapshot())
+
+
+## Moves a block of frames and records one history action. [param from] is the
+## first frame, [param count] is the block size, and [param to] is the index the
+## first frame lands on. Tag ranges stay at their indices.
+func move_frames(from: int, count: int, to: int) -> void:
+	var size := document.frames.size()
+	if count < 1 or from < 0 or from + count > size:
+		return
+	var target := clampi(to, 0, size - count)
+	if target == from:
+		return
+	edit_context_changing.emit()
+	var before := _frame_snapshot()
+	_move_block(from, count, target)
+	# The current frame follows its frame object to the new index.
+	var current := current_frame
+	if current >= from and current < from + count:
+		current += target - from
+	else:
+		if current > from:
+			current -= count
+		if current >= target:
+			current += count
+	current_frame = clampi(current, 0, size - 1)
+	_record_frame_action("Move Frame" if count == 1 else "Move Frames", before, _frame_snapshot())
 
 
 ## Moves one frame to a new index and records a history action.
 func move_frame(from: int, to: int) -> void:
-	var f := clampi(from, 0, document.frames.size() - 1)
-	var t := clampi(to, 0, document.frames.size() - 1)
-	if f == t:
-		return
-	edit_context_changing.emit()
-	var before := _frame_snapshot()
-	document.move_frame(f, t)
-	if current_frame == f:
-		current_frame = t
-	elif f < current_frame and current_frame <= t:
-		current_frame -= 1
-	elif t <= current_frame and current_frame < f:
-		current_frame += 1
-	_record_frame_action("Move Frame", before, _frame_snapshot())
+	move_frames(from, 1, to)
+
+
+## Reorders the frame array. [param to] uses the list without the block.
+func _move_block(from: int, count: int, to: int) -> void:
+	var frames := document.frames
+	var block := frames.slice(from, from + count)
+	var rest := frames.slice(0, from)
+	rest.append_array(frames.slice(from + count))
+	var reordered: Array[VoxelFrame] = []
+	reordered.append_array(rest.slice(0, to))
+	reordered.append_array(block)
+	reordered.append_array(rest.slice(to))
+	document.frames = reordered
+	document._bounds_dirty = true
 
 
 func _frame_snapshot() -> Dictionary:
@@ -1624,7 +1712,9 @@ func _record_frame_action(action_name: String, before: Dictionary, after: Dictio
 
 func _restore_frame_layout(frames: Array[VoxelFrame], ranges: Array[Vector2i], current: int) -> void:
 	edit_context_changing.emit()
-	document.frames = frames
+	# UndoRedo binds this array, and Godot arrays pass by reference. The document
+	# mutates its frame list in place, so it must not hold the recorded state.
+	document.frames = frames.duplicate()
 	_set_tag_ranges(ranges)
 	document._bounds_dirty = true
 	current_frame = clampi(current, 0, frames.size() - 1)
@@ -1647,28 +1737,48 @@ func _set_tag_ranges(ranges: Array[Vector2i]) -> void:
 
 ## Sets a frame duration in milliseconds and records a history action.
 func set_frame_delay(index: int, ms: int) -> void:
-	if index < 0 or index >= document.frames.size():
+	set_frame_delays([index], ms)
+
+
+## Sets the delay of several frames and records one history action. An absent or
+## unchanged value records nothing.
+func set_frame_delays(indices: Array, ms: int) -> void:
+	var size := document.frames.size()
+	# Maps each changed frame index to its previous delay.
+	var previous := {}
+	for value in indices:
+		if not (value is int or value is float):
+			continue
+		var index := int(value)
+		if index < 0 or index >= size:
+			continue
+		if document.frames[index].delay_ms != ms:
+			previous[index] = document.frames[index].delay_ms
+	if previous.is_empty():
 		return
-	var frame := document.frames[index]
-	if frame.delay_ms == ms:
-		return
+	var next := {}
+	for index in previous:
+		next[index] = ms
 	undo_redo.create_action("Set Frame Delay")
-	undo_redo.add_undo_method(_apply_frame_delay.bind(index, frame.delay_ms))
-	undo_redo.add_do_method(_apply_frame_delay.bind(index, ms))
+	undo_redo.add_undo_method(_apply_frame_delays.bind(previous))
+	undo_redo.add_do_method(_apply_frame_delays.bind(next))
 	_commit_history(false)
-	_apply_frame_delay(index, ms)
+	_apply_frame_delays(next)
 
 
-func _apply_frame_delay(index: int, ms: int) -> void:
-	if index < 0 or index >= document.frames.size():
-		return
-	document.frames[index].delay_ms = ms
+## Applies a map of frame index to delay and notifies once.
+func _apply_frame_delays(delays: Dictionary) -> void:
+	for index in delays:
+		if index >= 0 and index < document.frames.size():
+			document.frames[index].delay_ms = delays[index]
+	_mark_dirty()
 	frame_changed.emit()
 
 
 ## Adds an animation tag and records a history action. A negative [param to]
-## means the last frame. The frame range is inclusive.
-func add_tag(tag_name: String, from: int = 0, to: int = -1) -> void:
+## means the last frame. The frame range is inclusive. [param mode] and
+## [param repeats] set the loop in the same action.
+func add_tag(tag_name: String, from: int = 0, to: int = -1, mode := AnimationTag.LoopMode.FORWARD, repeats := 0) -> void:
 	var end := to
 	if to < 0:
 		end = document.frames.size() - 1
@@ -1677,6 +1787,8 @@ func add_tag(tag_name: String, from: int = 0, to: int = -1) -> void:
 	tag.name = tag_name
 	tag.from = clampi(from, 0, document.frames.size() - 1)
 	tag.to = clampi(end, tag.from, document.frames.size() - 1)
+	tag.loop_mode = mode
+	tag.repeats = repeats
 	var prev_active := active_tag
 	undo_redo.create_action("Add Tag")
 	undo_redo.add_undo_method(_apply_tag_removed.bind(index, prev_active))
@@ -1756,7 +1868,32 @@ func _apply_tag_range(index: int, from: int, to: int) -> void:
 	tag.to = to
 	if is_playing:
 		current_frame = clampi(current_frame, playback.first_frame(), playback.last_frame())
+	_mark_dirty()
 	tag_changed.emit()
+
+
+## Sets the loop mode and, when [param set_repeats] is true, the repeat count of
+## one tag. Both changes form one history action.
+func set_tag_loop(index: int, mode: int, repeats: int, set_repeats: bool) -> void:
+	var tag := document.get_tag(index)
+	if tag == null:
+		return
+	var mode_changed := tag.loop_mode != mode
+	var repeats_changed := set_repeats and tag.repeats != repeats
+	if not mode_changed and not repeats_changed:
+		return
+	undo_redo.create_action("Set Tag Loop")
+	if mode_changed:
+		undo_redo.add_undo_method(_apply_tag_loop_mode.bind(index, tag.loop_mode))
+		undo_redo.add_do_method(_apply_tag_loop_mode.bind(index, mode))
+	if repeats_changed:
+		undo_redo.add_undo_method(_apply_tag_repeats.bind(index, tag.repeats))
+		undo_redo.add_do_method(_apply_tag_repeats.bind(index, repeats))
+	_commit_history(false)
+	if mode_changed:
+		_apply_tag_loop_mode(index, mode)
+	if repeats_changed:
+		_apply_tag_repeats(index, repeats)
 
 
 ## Sets a tag loop mode and records a history action. See
@@ -1777,6 +1914,7 @@ func _apply_tag_loop_mode(index: int, mode: int) -> void:
 	if tag == null:
 		return
 	tag.loop_mode = mode as AnimationTag.LoopMode
+	_mark_dirty()
 	tag_changed.emit()
 
 
@@ -1798,6 +1936,7 @@ func _apply_tag_repeats(index: int, value: int) -> void:
 	if tag == null:
 		return
 	tag.repeats = value
+	_mark_dirty()
 	tag_changed.emit()
 
 
@@ -1818,6 +1957,7 @@ func _apply_tag_name(index: int, tag_name: String) -> void:
 	if tag == null:
 		return
 	tag.name = tag_name
+	_mark_dirty()
 	tag_changed.emit()
 
 

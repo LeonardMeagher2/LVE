@@ -57,6 +57,8 @@ func clear() -> void:
 
 ## Adds one cell to the selection.
 func add(cell_position: Vector3i) -> void:
+	if _selected_cells.has(cell_position):
+		return
 	_make_writable()
 	_selected_cells[cell_position] = true
 	_set_mask(cell_position, true)
@@ -86,8 +88,12 @@ func add_range(keys: Array, start: int, end: int) -> void:
 	var buckets := {}
 	for index in range(start, end):
 		var cell_position: Vector3i = keys[index]
+		# A repeated add must not raise the chunk count, or an erase leaves a
+		# mask with a count above zero.
+		if _selected_cells.has(cell_position):
+			continue
 		_selected_cells[cell_position] = true
-		var base := Vector3i(cell_position.x >> 4, cell_position.y >> 4, cell_position.z >> 4)
+		var base := chunk_base(cell_position)
 		var bucket = buckets.get(base)
 		if bucket == null:
 			bucket = []
@@ -173,6 +179,8 @@ func from_box(first_corner: Vector3i, second_corner: Vector3i) -> void:
 func union(other_selection: VoxelSelection) -> void:
 	_make_writable()
 	for cell_position in other_selection._selected_cells:
+		if _selected_cells.has(cell_position):
+			continue
 		_selected_cells[cell_position] = true
 		_set_mask(cell_position, true)
 		_bump_chunk(chunk_base(cell_position), 1)
