@@ -1234,7 +1234,9 @@ func _floor_grid_frame(frame: TerrainFrame) -> TerrainFrame:
 	grid.follows_surface = frame.follows_surface
 	grid.on_floor = true
 	grid.origin = frame.origin
-	grid.origin[State.floor_axis] = float(State.floor_index) - 0.5
+	# The stroke captured its floor cell at the press. A floor change mid-stroke
+	# must not move the remaining dab centres.
+	grid.origin[_stroke_floor_axis] = float(_stroke_floor_cell) - 0.5
 	return grid
 
 
@@ -1432,11 +1434,12 @@ func _process(_delta: float) -> void:
 	_preview.process()
 
 
-## Applies extra deterministic influence at the current brush center.
+## Applies one dab at the current brush center.
 ##
-## The hook is a kernel probe for tests and benchmarks. One unit applies
-## [member TerrainToolSettings.strength] voxel steps at full weight, so a split of
-## the influence gives the same result as one call. The runtime never calls it.
+## The hook is a kernel probe for tests and benchmarks. The dab applies the
+## strength at full weight, and the solo Smooth pass count is one, so
+## [param influence] is not read. Two calls apply two dabs. The runtime never
+## calls it.
 func advance_stroke(influence: float) -> void:
 	if _edit == null or _stroke_tool == TerrainSettings.Tools.GRAB:
 		return
@@ -1651,7 +1654,10 @@ func _start_prep_batch(cells: Array) -> void:
 	job.prep_terrain_frame = _stroke_frame
 	job.prep_ray_origin = _ray_origin
 	job.prep_ray_dir = _ray_dir
-	job.prep_forward = _stroke_forward if _stroke_forward != Vector3.ZERO else _forward()
+	# Only Build reads the prep forward, and it reads it on the worker. A tool
+	# without a captured forward must not ask the live camera here: the tool may
+	# already be outside the tree while its accepted dabs drain.
+	job.prep_forward = _stroke_forward if _stroke_forward != Vector3.ZERO else Vector3.BACK
 	if not cells.is_empty() and typeof(cells[0]) == TYPE_VECTOR3I:
 		job.prep_cells = cells
 		job.prep_center = _plane_point(cells[cells.size() - 1])
@@ -1693,7 +1699,10 @@ func _run_smooth_dab() -> void:
 		return
 	if origin == Vector3.INF:
 		origin = _press_ray_origin
-	var actual := VoxelPicking.start_pick(origin, dir, _source_frame, _stroke_forward if _stroke_forward != Vector3.ZERO else _forward())
+	# The dab uses the slice of the captured stroke context, exactly like the
+	# press, so a column outside the slab cannot move the Smooth centre.
+	var use_slice := _stroke_context != null and _stroke_context.slice_axis >= 0
+	var actual := VoxelPicking.start_pick(origin, dir, _source_frame, _stroke_forward if _stroke_forward != Vector3.ZERO else _forward(), use_slice)
 	_smooth_hit = actual.hit
 	_smooth_entry = actual.entry
 	if actual.hit == VoxelPicking.NONE:
@@ -1874,9 +1883,6 @@ func _run_tick() -> void:
 		return
 	var job := TerrainTickJob.new()
 	job.stroke_id = _stroke_id
-	# An inline dab edits the stroke frame in place. A copy per crossed cell is
-	# the cost that blocks the frame and starves pointer input on a large model.
-	job.edited_frame = _source_frame
 	job.samples = columns
 	job.tool = _stroke_tool
 	job.build_mode = _stroke_build_mode
@@ -1889,6 +1895,11 @@ func _run_tick() -> void:
 	var work := 0
 	for column in columns:
 		work += int(column["steps"])
+	# An inline dab edits the stroke frame in place. A copy per crossed cell is
+	# the cost that blocks the frame and starves pointer input on a large model.
+	# A worker dab must not write the frame that the renderer and the hover read,
+	# so only that path takes a job copy.
+	job.edited_frame = _source_frame if work <= INLINE_EDIT_LIMIT else VoxelFrame.job_frame(_source_frame)
 	_tick_job = job
 	if work <= INLINE_EDIT_LIMIT:
 		job.run()
@@ -2548,21 +2559,26 @@ func _pick_start(origin: Vector3, dir: Vector3) -> PickResult:
 	_drag_ray_moved = origin != _drag_ray_origin or dir != _drag_ray_dir
 	_drag_ray_origin = origin
 	_drag_ray_dir = dir
-	_press_ray_origin = origin
-	_press_ray_dir = dir
-	_ray_origin = origin
-	_ray_dir = dir
-	# The first buildable cell is on the side of the floor plane that the pointer
-	# is on, so a stroke from below seeds below the plane.
-	var floor_level := float(State.floor_index) - 0.5
-	_stroke_floor_cell = State.floor_index if origin[State.floor_axis] >= floor_level else State.floor_index - 1
+	# A stroke that already released only drains its accepted dabs. Its captures
+	# belong to the press, so a hover must not overwrite the rays, the camera,
+	# or the floor cell that the queued dabs read.
+	var press := _edit != null and not _end_requested
+	if press:
+		_press_ray_origin = origin
+		_press_ray_dir = dir
+		_ray_origin = origin
+		_ray_dir = dir
+		# The first buildable cell is on the side of the floor plane that the
+		# pointer is on, so a stroke from below seeds below the plane.
+		var floor_level := float(State.floor_index) - 0.5
+		_stroke_floor_cell = State.floor_index if origin[State.floor_axis] >= floor_level else State.floor_index - 1
 	if _settings.tool == TerrainSettings.Tools.GRAB:
 		if pick.hit != VoxelPicking.NONE:
 			pick.target = pick.hit
 			pick.plane = _plane_for(Vector3(pick.hit), _forward().normalized())
 			# Grab keeps the exact picked face, so a press stores the cheap face
 			# frame and runs no surface read.
-			if _edit != null:
+			if press:
 				_pending_frame = TerrainFrame.from_face(pick.hit, pick.entry)
 		else:
 			pick.plane = null
@@ -2573,7 +2589,7 @@ func _pick_start(origin: Vector3, dir: Vector3) -> PickResult:
 	# baseline is unchanged. A press reads the surface here, because `open_stroke` runs before
 	# this call and `_apply_pick` reads `_pending_frame` and `_press_point` at
 	# once.
-	if _edit == null:
+	if not press:
 		return pick
 	if _settings.tool == TerrainSettings.Tools.SMOOTH or _settings.tool == TerrainSettings.Tools.BUILD:
 		# Capture the camera family of the press. A perspective or frustum camera
@@ -2754,8 +2770,6 @@ func _context() -> VoxelFrame.EditContext:
 	return _stroke_context if _edit != null else State.drawing_context()
 
 
-# Returns the normal source of the open stroke, or the live setting when no
-# stroke is open. The stroke keeps the source it captured at the press, so queued
-# dabs and a running job never read a later option change.
+# Returns the symmetry masks of one edit context. A null context is one mask.
 func _masks_for(context: VoxelFrame.EditContext) -> Array:
 	return TerrainPreview.masks_for(context)

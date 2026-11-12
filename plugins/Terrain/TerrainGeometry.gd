@@ -157,8 +157,7 @@ static func cell_at(point: Vector3) -> Vector3i:
 
 ## Resolves a footprint candidate list into the exact sample map.
 ##
-## Every candidate holds an "anchor" cell, an "influence" weight, and a "claim"
-## cell. The result keeps one row per accepted anchor, keyed by that anchor. An
+## Every candidate holds an "anchor" cell, a "weight", and a "claim" cell. The result keeps one row per accepted anchor, keyed by that anchor. An
 ## anchor and a claim are each unique, so no two rows write the same cell and no
 ## row is left without its own key.
 ##
