@@ -51,18 +51,35 @@ func _sync_range_row() -> void:
 
 func _on_prev_pressed() -> void:
 	State.prev_frame()
+	_focus_current_frame()
 
 
 func _on_next_pressed() -> void:
 	State.next_frame()
+	_focus_current_frame()
 
 
 func _on_to_start_pressed() -> void:
 	State.to_start()
+	_focus_current_frame()
 
 
 func _on_to_end_pressed() -> void:
 	State.to_end()
+	_focus_current_frame()
+
+
+# Moves the keyboard focus to the current frame cell. The scroll container
+# follows the focus, so a step shortcut keeps the selected frame visible.
+func _focus_current_frame() -> void:
+	# A tag row puts one range cell before every frame cell.
+	var offset := State.document.frames.size() if _has_tag_row else 0
+	var index := offset + State.current_frame
+	if index < 0 or index >= %FrameGrid.get_child_count():
+		return
+	var cell := %FrameGrid.get_child(index) as AnimationFrame
+	if cell:
+		cell.get_node("%Button").grab_focus()
 
 
 func _on_frame_add() -> void:

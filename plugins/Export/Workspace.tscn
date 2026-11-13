@@ -9,7 +9,6 @@
 [ext_resource type="Texture2D" uid="uid://dif3h4ri2n0me" path="res://icons/camera.svg" id="7_view"]
 [ext_resource type="Texture2D" uid="uid://bshoasjpvru2h" path="res://icons/play.svg" id="12_play"]
 [ext_resource type="Texture2D" uid="uid://denrh23gr1h18" path="res://icons/light.svg" id="13_kuqai"]
-[ext_resource type="Texture2D" uid="uid://do3ouxrp3uwfa" path="res://icons/uniform.svg" id="14_lock"]
 [ext_resource type="Texture2D" uid="uid://denrh23gr1h30" path="res://icons/ortho.svg" id="21_ortho"]
 [ext_resource type="Texture2D" uid="uid://denrh23gr1h2a" path="res://icons/size.svg" id="22_size"]
 [ext_resource type="Texture2D" uid="uid://denrh23gr1h20" path="res://icons/turntable.svg" id="23_turntable"]
@@ -259,56 +258,6 @@ tooltip_text = "Include Aseprite-style frame rectangles, delays, and tags."
 toggle_mode = true
 button_pressed = true
 icon = ExtResource("24_json")
-icon_alignment = 1
-
-[node name="LightingOptions" type="HBoxContainer" parent="Panels/SheetPanel/Margin/Sheet" unique_id=1922603328]
-layout_mode = 2
-
-[node name="Enabled" type="Button" parent="Panels/SheetPanel/Margin/Sheet/LightingOptions" unique_id=187343127]
-layout_mode = 2
-tooltip_text = "Enable lighting. Disable this to export without shading."
-toggle_mode = true
-button_pressed = true
-icon = ExtResource("13_kuqai")
-icon_alignment = 1
-
-[node name="LightColor" type="ColorPickerButton" parent="Panels/SheetPanel/Margin/Sheet/LightingOptions" unique_id=2092835933]
-custom_minimum_size = Vector2(32, 24)
-layout_mode = 2
-size_flags_horizontal = 3
-tooltip_text = "Light color. Alpha controls the strength."
-color = Color(1, 1, 1, 1)
-edit_alpha = false
-edit_intensity = false
-
-[node name="AmbientColor" type="ColorPickerButton" parent="Panels/SheetPanel/Margin/Sheet/LightingOptions" unique_id=1875228551]
-custom_minimum_size = Vector2(32, 24)
-layout_mode = 2
-size_flags_horizontal = 3
-tooltip_text = "Ambient color. Alpha controls the strength."
-color = Color(0.54901963, 0.5686275, 0.61960787, 1)
-edit_alpha = false
-edit_intensity = false
-
-[node name="Shadows" type="Button" parent="Panels/SheetPanel/Margin/Sheet/LightingOptions" unique_id=1365619243]
-layout_mode = 2
-tooltip_text = "Render cast shadows for the sprites. Disable this to export without shadows."
-toggle_mode = true
-button_pressed = true
-icon = ExtResource("25_shadow")
-icon_alignment = 1
-
-[node name="LockView" type="Button" parent="Panels/SheetPanel/Margin/Sheet/LightingOptions" unique_id=1167671887]
-layout_mode = 2
-tooltip_text = "Keep the light direction fixed relative to the view during rotation and turntable rendering."
-toggle_mode = true
-icon = ExtResource("14_lock")
-icon_alignment = 1
-
-[node name="Reset" type="Button" parent="Panels/SheetPanel/Margin/Sheet/LightingOptions" unique_id=1052354764]
-layout_mode = 2
-tooltip_text = "Restore the default lighting"
-icon = ExtResource("6_reset")
 icon_alignment = 1
 
 [node name="Export" type="Button" parent="Panels/SheetPanel/Margin/Sheet" unique_id=1792495167]

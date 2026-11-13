@@ -51,9 +51,6 @@ var _default_camera := {}
 var _settings_document: VoxelDocument
 var _restoring_export_settings := false
 var _pending_export_camera := {}
-var _syncing_lighting := false
-var _view_light_basis := Basis.IDENTITY
-var _updating_view_light := false
 var _selected_tag: AnimationTag
 var _sheet_tag: AnimationTag
 var _model_frames: Array[VoxelFrame] = []
@@ -83,8 +80,9 @@ func _ready() -> void:
 	_model_camera.stores_document_pose = false
 	_model_camera.bounds_provider = _model_bounds
 	var view_group: ButtonGroup = _model.get_node("Viewport/ControlBar/PanToggle").button_group.duplicate()
-	for button in ["PanToggle", "RotateToggle", "LightToggle"]:
+	for button in ["PanToggle", "RotateToggle"]:
 		_model.get_node("Viewport/ControlBar/" + button).button_group = view_group
+	_model.get_node("Viewport/EnvironmentLayer/EnvironmentBar/Margin/Bar/LightToggle").button_group = view_group
 	for view in VIEWS:
 		_sheet_settings.get_node("ViewRow/View").add_item(view)
 	_sheet_settings.get_node("ViewRow/View").select(1)
@@ -94,13 +92,6 @@ func _ready() -> void:
 	_default_lighting = _model_scene.get_lighting_settings()
 	_default_camera = _capture_export_camera()
 	_model_scene.lighting_changed.connect(_on_model_lighting_changed)
-	var lighting: HBoxContainer = _controls.get_node("LightingOptions")
-	for path in ["LightColor", "AmbientColor"]:
-		lighting.get_node(path).color_changed.connect(_on_sheet_lighting_changed.unbind(1))
-	for path in ["Enabled", "Shadows"]:
-		lighting.get_node(path).toggled.connect(_on_sheet_lighting_changed.unbind(1))
-	lighting.get_node("LockView").toggled.connect(_on_light_view_lock_toggled)
-	lighting.get_node("Reset").pressed.connect(_reset_lighting)
 	_menu_item.get_node("ExportBtn").toggled.connect(_on_export_toggled)
 	_workspace.visibility_changed.connect(_on_workspace_visibility_changed)
 	_model.get_node("Export").pressed.connect(_choose_gltf_file)
@@ -145,10 +136,9 @@ func _ready() -> void:
 	_sync()
 
 
-func _on_model_lit_toggled(pressed: bool) -> void:
-	# The model preview shows the material the GLB will use. The sprite sheet keeps
-	# its own lighting controls.
-	_model_viewport.debug_draw = Viewport.DEBUG_DRAW_DISABLED if pressed else Viewport.DEBUG_DRAW_UNSHADED
+func _on_model_lit_toggled(_pressed: bool) -> void:
+	# The viewport shading comes from the Environment row. This option chooses
+	# the material for the exported GLB.
 	_save_export_settings()
 
 
@@ -202,14 +192,8 @@ func _restore_export_settings() -> void:
 	_model.get_node("AnimationRow/Center").set_pressed_no_signal(saved.get("center", true))
 	var lit: bool = not saved.get("unlit", false)
 	_model.get_node("ModelOptions/Lit").set_pressed_no_signal(lit)
-	_model_viewport.debug_draw = Viewport.DEBUG_DRAW_DISABLED if lit else Viewport.DEBUG_DRAW_UNSHADED
 	_model.get_node("ModelOptions/AO").set_value_no_signal(State.document.ao_strength)
 	var lighting: Dictionary = saved.get("lighting", _default_lighting)
-	var controls: HBoxContainer = _controls.get_node("LightingOptions")
-	controls.get_node("Shadows").set_pressed_no_signal(lighting.shadows)
-	controls.get_node("Enabled").set_pressed_no_signal(lighting.shaded)
-	controls.get_node("LockView").set_pressed_no_signal(lighting.get("view_locked", false))
-	_view_light_basis = lighting.get("view_basis", _model_camera.basis.inverse() * lighting.basis)
 	_model_scene.set_lighting_settings(lighting)
 	_pending_export_camera = saved.get("camera", {}).duplicate()
 	_model_camera._yaw = _pending_export_camera.get("yaw", _default_camera.yaw)
@@ -398,76 +382,16 @@ func _sheet_settings_changed() -> void:
 
 
 func _sheet_lighting() -> Dictionary:
-	var settings: Dictionary = _model_scene.get_lighting_settings()
-	var controls: HBoxContainer = _controls.get_node("LightingOptions")
-	var light_color: Color = controls.get_node("LightColor").color
-	var ambient_color: Color = controls.get_node("AmbientColor").color
-	settings.energy = light_color.a
-	settings.ambient_energy = ambient_color.a
-	light_color.a = 1.0
-	ambient_color.a = 1.0
-	settings.color = light_color
-	settings.ambient_color = ambient_color
-	settings.shadows = controls.get_node("Shadows").button_pressed
-	settings.shaded = controls.get_node("Enabled").button_pressed
-	settings.view_locked = controls.get_node("LockView").button_pressed
-	settings.view_basis = _view_light_basis
-	return settings
-
-
-func _on_light_view_lock_toggled(locked: bool) -> void:
-	if locked:
-		var settings: Dictionary = _model_scene.get_lighting_settings()
-		_view_light_basis = _model_camera.basis.inverse() * settings.basis
-	_sheet_settings_changed()
-
-
-func _on_sheet_lighting_changed() -> void:
-	if _syncing_lighting:
-		return
-	_model_scene.set_lighting_settings(_sheet_lighting())
+	return _model_scene.get_lighting_settings()
 
 
 func _on_model_lighting_changed() -> void:
-	if _updating_view_light:
-		return
-	var settings: Dictionary = _model_scene.get_lighting_settings()
-	var controls: HBoxContainer = _controls.get_node("LightingOptions")
-	if controls.get_node("LockView").button_pressed and not _restoring_export_settings:
-		_view_light_basis = _model_camera.basis.inverse() * settings.basis
-	_syncing_lighting = true
-	var light_color: Color = settings.color
-	var ambient_color: Color = settings.ambient_color
-	light_color.a = clampf(settings.energy, 0.0, 1.0)
-	ambient_color.a = clampf(settings.ambient_energy, 0.0, 1.0)
-	controls.get_node("LightColor").color = light_color
-	controls.get_node("AmbientColor").color = ambient_color
-	_syncing_lighting = false
 	_sheet_settings_changed()
-
-
-func _reset_lighting() -> void:
-	var controls: HBoxContainer = _controls.get_node("LightingOptions")
-	controls.get_node("Shadows").set_pressed_no_signal(_default_lighting.shadows)
-	controls.get_node("Enabled").set_pressed_no_signal(_default_lighting.shaded)
-	controls.get_node("LockView").set_pressed_no_signal(false)
-	_model_scene.set_lighting_settings(_default_lighting)
-
-
-func _update_view_locked_light() -> void:
-	if _controls.get_node("LightingOptions/LockView").button_pressed:
-		var settings: Dictionary = _model_scene.get_lighting_settings()
-		settings.basis = _model_camera.basis * _view_light_basis
-		settings.debug_draw = _model_viewport.debug_draw
-		_updating_view_light = true
-		_model_scene.set_lighting_settings(settings)
-		_updating_view_light = false
 
 
 func _on_preview_camera_changed() -> void:
 	if _restoring_export_settings or State.document != _settings_document:
 		return
-	_update_view_locked_light()
 	_save_export_settings()
 	_refresh_export_status()
 	if _sheet_settings.get_node("ViewRow/View").selected == 0:
@@ -581,11 +505,6 @@ func _sync() -> void:
 	_model.get_node("AnimationRow/Center").disabled = busy
 	_model.get_node("AnimationRow/Tags").disabled = busy
 	_model.get_node("AnimationRow/Play").disabled = busy or _model_range().x == _model_range().y
-	var lighting: HBoxContainer = _controls.get_node("LightingOptions")
-	var lit: bool = lighting.get_node("Enabled").button_pressed
-	for path in ["LightColor", "AmbientColor", "Shadows", "LockView", "Reset"]:
-		lighting.get_node(path).disabled = busy or not lit
-	lighting.get_node("Enabled").disabled = busy
 	_refresh_export_status()
 
 
@@ -783,8 +702,8 @@ func _render_sheet(frames: Array[VoxelFrame], settings: Dictionary, document: Vo
 	environment_node.environment = environment_node.environment.duplicate()
 	var light: DirectionalLight3D = viewport.get_node("Node3D/Light")
 	VoxelImageRenderer.apply_lighting(light, environment_node.environment, lighting_settings)
-	viewport.debug_draw = Viewport.DEBUG_DRAW_DISABLED if lighting_settings.shaded else Viewport.DEBUG_DRAW_UNSHADED
 	var renderer: VoxelRenderer = viewport.get_node("%VoxelRenderer")
+	renderer.unshaded = not lighting_settings.shaded
 	renderer.transform = settings.model_transform
 	var camera: Camera3D = viewport.get_node("Node3D/Camera3D")
 	camera.transform = transforms[0]
