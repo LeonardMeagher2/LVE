@@ -30,6 +30,7 @@ var view_mode:ViewMode = ViewMode.NONE
 var _drag_mode:ViewMode = ViewMode.NONE
 var _light_dragging := false
 var _light_start_basis := Basis.IDENTITY
+var _light_start_view_basis := Basis.IDENTITY
 var _light_center := Vector3.ZERO
 var _light_orbit_radius := 4.0
 var _light_trackball_center := Vector2.ZERO
@@ -39,13 +40,15 @@ var _light_trackball_start := Vector3.BACK
 var _light_trackball_rotation := Quaternion.IDENTITY
 var _default_lighting := {}
 var _loading_document_lighting := false
+var _view_light_basis := Basis.IDENTITY
+var _lighting_document: VoxelDocument
 var _camera_shadow_projection := Camera3D.PROJECTION_PERSPECTIVE
 const LIGHT_HANDLE_RADIUS := 12.0
 
 func _ready() -> void:
 	%CameraMenu.get_popup().index_pressed.connect(_on_camera_index_pressed)
 	%CameraRig.zoom_changed.connect(%ZoomSlider.set_value_no_signal)
-	%CameraRig.view_changed.connect(_on_camera_projection_changed)
+	%CameraRig.view_changed.connect(_on_camera_view_changed)
 	$WorldEnvironment.environment = $WorldEnvironment.environment.duplicate()
 	var material: StandardMaterial3D = %LightHandle.material_override.duplicate()
 	material.albedo_color = $Light.light_color
@@ -55,6 +58,9 @@ func _ready() -> void:
 	%LightDirection.get_node("Tip").material_override = material
 	set_process(false)
 	_default_lighting = get_lighting_settings()
+	_sync_lighting_controls(_default_lighting)
+	_sync_shading_controls()
+	_lighting_document = State.document
 	if document_lighting:
 		lighting_changed.connect(_save_document_lighting)
 		State.document_changed.connect(_restore_document_lighting)
@@ -80,7 +86,7 @@ func _on_slice_changed() -> void:
 
 
 func _save_document_lighting() -> void:
-	if _loading_document_lighting:
+	if not document_lighting or _loading_document_lighting or State.document != _lighting_document:
 		return
 	var settings := get_lighting_settings()
 	var light_color: Color = settings.color
@@ -95,7 +101,6 @@ func _restore_document_lighting() -> void:
 	var saved := State.document.lighting_settings
 	var settings := get_lighting_settings()
 	settings.basis = saved.get("basis", _default_lighting.basis)
-	settings.debug_draw = %Viewport.debug_draw
 	var light_color: Color = saved.get("color", _default_lighting.color)
 	var ambient_color: Color = saved.get("ambient_color", _default_lighting.ambient_color)
 	settings.energy = light_color.a
@@ -104,11 +109,19 @@ func _restore_document_lighting() -> void:
 	ambient_color.a = 1.0
 	settings.color = light_color
 	settings.ambient_color = ambient_color
+	# The editor light lock is a session option.
+	settings.view_locked = false
+	settings.view_basis = Basis.IDENTITY
 	_loading_document_lighting = true
 	set_lighting_settings(settings)
 	_loading_document_lighting = false
+	_lighting_document = State.document
 
-func _on_camera_projection_changed() -> void:
+func _on_camera_view_changed() -> void:
+	if %LockView.button_pressed:
+		$Light.basis = %CameraRig.basis * _view_light_basis
+		_update_light_handle()
+		_save_document_lighting()
 	if %CameraRig.projection == _camera_shadow_projection:
 		return
 	_camera_shadow_projection = %CameraRig.projection
@@ -125,21 +138,14 @@ func _on_camera_index_pressed(index:int) -> void:
 			while adjacent_index >= 0 and adjacent_index < popup.item_count and popup.is_item_radio_checkable(adjacent_index):
 				popup.set_item_checked(adjacent_index, false)
 				adjacent_index += direction
+	elif popup.is_item_checkable(index):
+		popup.set_item_checked(index, not popup.is_item_checked(index))
 	
 	match text:
 		"orthographic":
-			var is_orthogonal = not popup.is_item_checked(index)
-			%CameraRig.is_orthogonal = is_orthogonal
-			popup.set_item_checked(index, is_orthogonal)
-		"unshaded":
-			var is_unshaded = popup.is_item_checked(index)
-			%Viewport.debug_draw = Viewport.DEBUG_DRAW_UNSHADED if is_unshaded else Viewport.DEBUG_DRAW_DISABLED
+			%CameraRig.is_orthogonal = popup.is_item_checked(index)
 		"wireframe":
-			var is_wireframe = popup.is_item_checked(index)
-			%Viewport.debug_draw = Viewport.DEBUG_DRAW_WIREFRAME if is_wireframe else Viewport.DEBUG_DRAW_DISABLED
-		"shadows":
-			$Light.shadow_enabled = not popup.is_item_checked(index)
-			popup.set_item_checked(index, $Light.shadow_enabled)
+			%Viewport.debug_draw = Viewport.DEBUG_DRAW_WIREFRAME if popup.is_item_checked(index) else Viewport.DEBUG_DRAW_DISABLED
 		_:
 			%CameraRig.set_view(text)
 
@@ -148,27 +154,92 @@ func _on_camera_index_pressed(index:int) -> void:
 ## lighting dictionary in `docs/DOCUMENT_FORMAT.md`.
 func get_lighting_settings() -> Dictionary:
 	var environment: Environment = $WorldEnvironment.environment
-	return {"basis": $Light.basis, "color": $Light.light_color, "energy": $Light.light_energy, "ambient_color": environment.ambient_light_color, "ambient_energy": environment.ambient_light_energy, "shadows": $Light.shadow_enabled, "shaded": %Viewport.debug_draw != Viewport.DEBUG_DRAW_UNSHADED}
+	return {"basis": $Light.basis, "color": $Light.light_color, "energy": $Light.light_energy, "ambient_color": environment.ambient_light_color, "ambient_energy": environment.ambient_light_energy, "shadows": $Light.shadow_enabled, "shaded": not $VoxelRenderer.unshaded, "view_locked": %LockView.button_pressed, "view_basis": _view_light_basis}
 
 
 ## Applies one lighting settings dictionary and emits [signal lighting_changed].
 func set_lighting_settings(settings: Dictionary) -> void:
 	VoxelImageRenderer.apply_lighting($Light, $WorldEnvironment.environment, settings)
-	%Viewport.debug_draw = settings.get("debug_draw", Viewport.DEBUG_DRAW_DISABLED if settings.shaded else Viewport.DEBUG_DRAW_UNSHADED)
+	$VoxelRenderer.unshaded = not settings.get("shaded", true)
+	%Viewport.debug_draw = settings.get("debug_draw", %Viewport.debug_draw)
 	var popup: PopupMenu = %CameraMenu.get_popup()
 	for index in popup.item_count:
-		var text := popup.get_item_text(index).to_lower()
-		if text == "unshaded":
-			popup.set_item_checked(index, %Viewport.debug_draw == Viewport.DEBUG_DRAW_UNSHADED)
-		elif text == "wireframe":
+		if popup.get_item_text(index).to_lower() == "wireframe":
 			popup.set_item_checked(index, %Viewport.debug_draw == Viewport.DEBUG_DRAW_WIREFRAME)
-		elif text == "shadows":
-			popup.set_item_checked(index, settings.shadows)
+	_sync_lighting_controls(settings)
+	_sync_shading_controls()
 	_update_light_handle()
 	lighting_changed.emit()
 
 
-func _on_light_toggle_toggled(pressed: bool) -> void:
+func _sync_lighting_controls(settings: Dictionary) -> void:
+	var light_color: Color = settings.color
+	var ambient_color: Color = settings.ambient_color
+	light_color.a = 1.0
+	ambient_color.a = 1.0
+	%LightColor.color = light_color
+	%AmbientColor.color = ambient_color
+	var locked: bool = settings.get("view_locked", false)
+	%LockView.set_pressed_no_signal(locked)
+	_view_light_basis = settings.get("view_basis", Basis.IDENTITY)
+	if locked and not settings.has("view_basis"):
+		_view_light_basis = %CameraRig.basis.inverse() * settings.basis
+
+
+func _sync_shading_controls() -> void:
+	%Shadows.set_pressed_no_signal($Light.shadow_enabled)
+	var shaded: bool = not $VoxelRenderer.unshaded
+	%Shaded.set_pressed_no_signal(shaded)
+	if not shaded and %LightToggle.button_pressed:
+		%LightToggle.set_pressed_no_signal(false)
+		_set_light_widget(false)
+	var controls: Array[BaseButton] = [%LightToggle, %LockView, %LightColor, %AmbientColor, %Shadows, %Reset]
+	for control in controls:
+		control.disabled = not shaded
+
+
+func _on_environment_toggled(pressed: bool) -> void:
+	%EnvironmentBar.visible = pressed
+	if not pressed:
+		%LightToggle.set_pressed_no_signal(false)
+		_set_light_widget(false)
+
+
+func _on_light_color_changed(color: Color) -> void:
+	var settings := get_lighting_settings()
+	settings.color = Color(color.r, color.g, color.b, 1.0)
+	set_lighting_settings(settings)
+
+
+func _on_ambient_color_changed(color: Color) -> void:
+	var settings := get_lighting_settings()
+	settings.ambient_color = Color(color.r, color.g, color.b, 1.0)
+	set_lighting_settings(settings)
+
+
+func _on_lock_view_toggled(pressed: bool) -> void:
+	if pressed:
+		_view_light_basis = %CameraRig.basis.inverse() * $Light.basis
+	lighting_changed.emit()
+
+
+func _on_shadows_toggled(pressed: bool) -> void:
+	$Light.shadow_enabled = pressed
+	_sync_shading_controls()
+	lighting_changed.emit()
+
+
+func _on_shaded_toggled(pressed: bool) -> void:
+	$VoxelRenderer.unshaded = not pressed
+	_sync_shading_controls()
+	lighting_changed.emit()
+
+
+func _on_reset_lighting_pressed() -> void:
+	set_lighting_settings(_default_lighting)
+
+
+func _set_light_widget(pressed: bool) -> void:
 	%LightHandle.visible = pressed
 	%LightDirection.visible = pressed
 	_light_dragging = false
@@ -178,6 +249,10 @@ func _on_light_toggle_toggled(pressed: bool) -> void:
 		_update_light_handle()
 	elif view_mode == ViewMode.LIGHT:
 		view_mode = ViewMode.NONE
+
+
+func _on_light_toggle_toggled(pressed: bool) -> void:
+	_set_light_widget(pressed)
 
 
 func _process(_delta: float) -> void:
@@ -209,6 +284,7 @@ func _update_light_handle() -> void:
 func _begin_light_drag(screen_position: Vector2, camera: Camera3D) -> void:
 	_light_dragging = true
 	_light_start_basis = $Light.basis
+	_light_start_view_basis = _view_light_basis
 	_light_trackball_basis = camera.basis.orthonormalized()
 	_light_trackball_center = camera.unproject_position(to_global(_light_center))
 	var edge := camera.unproject_position(to_global(_light_center + _light_trackball_basis.x * _light_orbit_radius))
@@ -229,6 +305,7 @@ func _light_trackball_vector(screen_position: Vector2) -> Vector3:
 func _handle_light_input(event: InputEvent) -> bool:
 	if _light_dragging and event.is_action_pressed("ui_cancel"):
 		$Light.basis = _light_start_basis
+		_view_light_basis = _light_start_view_basis
 		_light_dragging = false
 		_update_light_handle()
 		lighting_changed.emit()
@@ -251,6 +328,8 @@ func _handle_light_input(event: InputEvent) -> bool:
 		var current := _light_trackball_vector(event.position)
 		var drag_rotation := Quaternion(_light_trackball_start, current).normalized()
 		$Light.quaternion = (drag_rotation * _light_trackball_rotation).normalized()
+		if %LockView.button_pressed:
+			_view_light_basis = %CameraRig.basis.inverse() * $Light.basis
 		_update_light_handle()
 		lighting_changed.emit()
 		return true

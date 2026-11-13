@@ -182,7 +182,7 @@ func _projection_run() -> void:
 		State.document.set_cell(2, Vector3i(8, 8, 8), VoxelFrame.material(Color.BLUE))
 		State.frames_changed.emit()
 		exporter._refresh_model()
-		exporter._controls.get_node("LightingOptions/Enabled").button_pressed = false
+		exporter._model_scene.get_node("%Shaded").button_pressed = false
 		exporter._sheet_settings.get_node("TurntableRow/Turntable").button_pressed = false
 		exporter._model_camera.set_view("front")
 		exporter._model_camera.is_orthogonal = true
@@ -234,7 +234,7 @@ func _sampling_run() -> void:
 		State.document.add_frame()
 		State.frames_changed.emit()
 		exporter._refresh_model()
-		exporter._controls.get_node("LightingOptions/Enabled").button_pressed = false
+		exporter._model_scene.get_node("%Shaded").button_pressed = false
 		sampling_path = "user://sprite_sampling_%s.png" % Time.get_ticks_usec()
 	)
 	for orthographic in [true, false]:
@@ -536,7 +536,7 @@ func _sheet_run() -> void:
 
 func _shadows_run() -> void:
 	step("Given a column and a floor in two animation frames", func():
-		shadow_lighting = exporter._controls.get_node("LightingOptions")
+		shadow_lighting = exporter._model_scene
 		for x in range(-3, 4):
 			for z in range(-3, 4):
 				State.document.set_cell(0, Vector3i(x, 0, z), VoxelFrame.material(Color.from_rgba8(120, 120, 120)))
@@ -547,8 +547,8 @@ func _shadows_run() -> void:
 		State.frames_changed.emit()
 		exporter._model_camera.center_active()
 		exporter._model_camera.set_view("isometric")
-		shadow_lighting.get_node("Enabled").button_pressed = true
-		shadow_lighting.get_node("LockView").button_pressed = false
+		shadow_lighting.get_node("%Shaded").button_pressed = true
+		shadow_lighting.get_node("%LockView").button_pressed = false
 		shadow_prefix = "user://voxel_shadow_%s" % Time.get_ticks_usec()
 	)
 	for camera_case in [{"view": 1, "ortho": true}, {"view": 1, "ortho": false}, {"view": 0, "ortho": true}, {"view": 0, "ortho": false}]:
@@ -556,7 +556,7 @@ func _shadows_run() -> void:
 		var view: int = camera_case.view
 		step("When the user exports with shadows disabled", func():
 			settings.get_node("ViewRow/Perspective").button_pressed = not orthographic
-			shadow_lighting.get_node("Shadows").button_pressed = false
+			shadow_lighting.get_node("%Shadows").button_pressed = false
 		)
 		var error: Error = await exporter.export_sprite_sheet(shadow_prefix + "_off.png", 0, 1, 128, view, false, 2)
 		expect(error == OK, "the export without shadows completes")
@@ -567,7 +567,7 @@ func _shadows_run() -> void:
 		else:
 			expect(baseline.get_data() != orthographic_image.get_data(), "the projection toggle changes the rendered projection")
 		step("When the user exports with shadows enabled", func():
-			shadow_lighting.get_node("Shadows").button_pressed = true
+			shadow_lighting.get_node("%Shadows").button_pressed = true
 		)
 		error = await exporter.export_sprite_sheet(shadow_prefix + "_on.png", 0, 1, 128, view, false, 2)
 		expect(error == OK, "the export with shadows completes")

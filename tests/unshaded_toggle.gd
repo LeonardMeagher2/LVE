@@ -4,11 +4,29 @@ var camera_menu_btn: MenuButton
 
 
 func _ready() -> void:
-	test("adjacent camera-menu radio items share one rendering mode", _run)
+	test("shading and wireframe are independent view options", _run)
+
+
+func after_test() -> void:
+	if camera_menu_btn == null:
+		camera_menu_btn = camera_menu()
+	if _checked("wireframe"):
+		_pick("wireframe")
+	if _checked("orthographic"):
+		_pick("orthographic")
+	_shaded().button_pressed = true
+
+
+func _renderer() -> VoxelRenderer:
+	return viewport_scene().get_node("VoxelRenderer")
 
 
 func _debug_draw() -> int:
 	return (editor_viewport() as SubViewport).debug_draw
+
+
+func _shaded() -> Button:
+	return viewport_scene().get_node("%Shaded")
 
 
 func _pick(text: String) -> void:
@@ -27,50 +45,87 @@ func _checked(text: String) -> bool:
 	return false
 
 
+func _settle() -> void:
+	var renderer := _renderer()
+	while not renderer.is_settled():
+		await get_tree().process_frame
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+
+# Returns true when every displayed chunk material uses the expected shading.
+func _all_materials(expected: int) -> bool:
+	var modes: Array[int] = []
+	for instance: MeshInstance3D in _renderer()._chunk_instances.values():
+		var material := instance.material_override as BaseMaterial3D
+		if material:
+			modes.append(material.shading_mode)
+	if modes.is_empty():
+		return false
+	for mode in modes:
+		if mode != expected:
+			return false
+	return true
+
+
 func _run() -> void:
+	State.document.set_cell(0, Vector3i.ZERO, VoxelFrame.material(Color.RED))
+	State.frames_changed.emit()
+	await _settle()
+
 	step("Given an editor viewport with shaded voxels", func():
 		camera_menu_btn = camera_menu()
-		expect(_debug_draw() == Viewport.DEBUG_DRAW_DISABLED, "the viewport starts shaded")
+		expect(not _renderer().unshaded, "the renderer is not unshaded")
+		expect(_all_materials(BaseMaterial3D.SHADING_MODE_PER_PIXEL), "the chunk materials shade with the light")
+		expect(_shaded().button_pressed, "the Shaded button starts pressed")
+		expect(_debug_draw() == Viewport.DEBUG_DRAW_DISABLED, "the viewport starts without a debug mode")
 	)
 
-	step("When the user enables the unshaded mode", func():
-		_pick("unshaded")
+	step("When the user disables shading", func():
+		_shaded().button_pressed = false
 	)
-	step("Then the viewport renders without shading", func():
-		expect(_debug_draw() == Viewport.DEBUG_DRAW_UNSHADED, "the viewport renders unshaded")
+	step("Then the chunk materials draw unshaded and the viewport debug mode stays off", func():
+		expect(_all_materials(BaseMaterial3D.SHADING_MODE_UNSHADED), "the chunk materials ignore the light")
+		expect(not _shaded().button_pressed, "the Shaded button shows unpressed")
+		expect(_debug_draw() == Viewport.DEBUG_DRAW_DISABLED, "the viewport keeps its debug mode off")
+		expect(viewport_scene().get_node("%Shadows").disabled, "the other lighting controls disable")
 	)
 
-	step("When the user disables the unshaded mode", func():
-		_pick("unshaded")
-	)
-	step("Then the viewport shades again", func():
-		expect(_debug_draw() == Viewport.DEBUG_DRAW_DISABLED, "the viewport renders shaded")
-	)
-	step("When the user enables orthographic projection and switches from unshaded to wireframe", func():
-		_pick("orthographic")
-		_pick("unshaded")
+	step("When the user enables the wireframe checkbox while unshaded", func():
 		_pick("wireframe")
 	)
-	step("Then wireframe owns the rendering mode and projection stays independent", func():
-		expect(_debug_draw() == Viewport.DEBUG_DRAW_WIREFRAME, "the viewport renders wireframe")
-		expect(_checked("wireframe"), "the wireframe radio item is checked")
-		expect(not _checked("unshaded"), "the unshaded radio item is cleared")
-		expect(_checked("orthographic"), "the orthographic checkbox stays checked")
+	step("Then wireframe and unshaded apply together", func():
+		expect(_debug_draw() == Viewport.DEBUG_DRAW_WIREFRAME, "the viewport draws wireframe")
+		expect(_checked("wireframe"), "the wireframe item shows checked")
+		expect(_all_materials(BaseMaterial3D.SHADING_MODE_UNSHADED), "the chunk materials stay unshaded")
+		expect(not _shaded().button_pressed, "the Shaded button stays unpressed")
+	)
+
+	step("When the user enables shading while wireframe is on", func():
+		_shaded().button_pressed = true
+	)
+	step("Then the materials shade and wireframe stays checked", func():
+		expect(_all_materials(BaseMaterial3D.SHADING_MODE_PER_PIXEL), "the chunk materials shade again")
+		expect(_debug_draw() == Viewport.DEBUG_DRAW_WIREFRAME, "the viewport still draws wireframe")
+		expect(_checked("wireframe"), "the wireframe item stays checked")
+		expect(not viewport_scene().get_node("%Shadows").disabled, "the other lighting controls enable")
+	)
+
+	step("When the user unchecks wireframe", func():
+		_pick("wireframe")
+	)
+	step("Then the viewport returns to the shaded solid view", func():
+		expect(_debug_draw() == Viewport.DEBUG_DRAW_DISABLED, "the viewport leaves wireframe")
+		expect(not _checked("wireframe"), "the wireframe item shows unchecked")
+		expect(_all_materials(BaseMaterial3D.SHADING_MODE_PER_PIXEL), "the chunk materials stay shaded")
+	)
+
+	step("When the user enables orthographic projection and disables shading", func():
+		_pick("orthographic")
+		_shaded().button_pressed = false
+	)
+	step("Then the projection stays independent", func():
 		expect(camera_rig().is_orthogonal, "the camera stays orthographic")
-	)
-	step("When the user switches back to unshaded", func():
-		_pick("unshaded")
-	)
-	step("Then unshaded owns the rendering mode", func():
-		expect(_debug_draw() == Viewport.DEBUG_DRAW_UNSHADED, "the viewport renders unshaded again")
-		expect(_checked("unshaded"), "the unshaded radio item is checked")
-		expect(not _checked("wireframe"), "the wireframe radio item is cleared")
-	)
-	step("When the user disables the selected rendering mode", func():
-		_pick("unshaded")
-	)
-	step("Then normal shading returns with the rendering group cleared", func():
-		expect(_debug_draw() == Viewport.DEBUG_DRAW_DISABLED, "the viewport returns to normal shading")
-		expect(not _checked("unshaded") and not _checked("wireframe"), "both rendering radio items are cleared")
-		expect(_checked("orthographic"), "the separate projection checkbox stays checked")
+		expect(_checked("orthographic"), "the orthographic item stays checked")
+		expect(_all_materials(BaseMaterial3D.SHADING_MODE_UNSHADED), "the chunk materials draw unshaded")
 	)

@@ -85,6 +85,14 @@ var slice_count := 1:
 		slice_count = value
 		if is_inside_tree() and not _slice_setting:
 			_rebuild()
+## Whether the chunk meshes draw without lighting. The renderer copies the
+## cached materials, so two viewports can shade one shared surface differently.
+var unshaded := false:
+	set(value):
+		if value == unshaded:
+			return
+		unshaded = value
+		_apply_materials()
 # Whether one slice request is assigning its three values. A batch request
 # rebuilds once, so a layer-count drag pays one rebuild per step.
 var _slice_setting := false
@@ -106,6 +114,10 @@ func set_slice(axis: int, index: int, count: int) -> void:
 
 var _chunk_instances: Dictionary = {}
 var _displayed_surface_keys: Dictionary = {}
+# The source material of each displayed chunk instance, and the unshaded copy
+# of each source. The copies share the source textures.
+var _chunk_materials: Dictionary = {}
+var _unshaded_materials: Dictionary = {}
 var _pending_surface_keys: Dictionary = {}
 # The one surface key this renderer may install from a completed build for each
 # chunk. A chunk holds at most one in-flight key, so the installs of one chunk
@@ -195,9 +207,9 @@ func _rebuild() -> void:
 			chunk_instance.visible = false
 		_displayed_frame = active_frame
 	_pending_surface_keys.clear()
-	# A rebuild follows a context change: a document, a frame, a shading mode, a
-	# history restore, or a refresh. Every result built before it belongs to the
-	# previous context, so it leaves the install set.
+	# A rebuild follows a context change: a document, a frame, a history restore,
+	# or a refresh. Every result built before it belongs to the previous context,
+	# so it leaves the install set.
 	_inflight_surface_keys.clear()
 	for chunk_location in _displayed_surface_keys.keys():
 		if active_frame == null or not active_frame.chunks.has(chunk_location):
@@ -593,11 +605,45 @@ func _install(chunk_location: Vector3i, surface_key: PackedInt64Array, entry: Di
 		add_child(chunk_instance)
 		_chunk_instances[chunk_location] = chunk_instance
 	chunk_instance.mesh = chunk_surface
-	chunk_instance.material_override = entry.material if entry.material else (mesh.surface_get_material(0) if mesh and mesh.get_surface_count() > 0 else null)
+	var source_material: Material = entry.material if entry.material else (mesh.surface_get_material(0) if mesh and mesh.get_surface_count() > 0 else null)
+	chunk_instance.material_override = _instance_material(chunk_location, source_material)
 	chunk_instance.visible = true
 	_displayed_surface_keys[chunk_location] = surface_key
 	if profile_surfaces:
 		_profile.install_us += Time.get_ticks_usec() - install_started_us
+
+
+# Returns the material this renderer gives one chunk. A shaded view uses the
+# shared cached material. An unshaded view uses a per-renderer copy, because a
+# shading mode on the shared material would change every other viewport.
+func _instance_material(chunk_location: Vector3i, source: Material) -> Material:
+	if source == null:
+		_chunk_materials.erase(chunk_location)
+		_unshaded_materials.erase(chunk_location)
+		return null
+	if _chunk_materials.get(chunk_location) != source:
+		# The chunk holds a new surface, so a copy of the old material is stale.
+		_chunk_materials[chunk_location] = source
+		_unshaded_materials.erase(chunk_location)
+	if not unshaded:
+		_unshaded_materials.erase(chunk_location)
+		return source
+	var copy: Material = _unshaded_materials.get(chunk_location)
+	if copy == null:
+		copy = source.duplicate()
+		var base := copy as BaseMaterial3D
+		if base:
+			base.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_unshaded_materials[chunk_location] = copy
+	return copy
+
+
+func _apply_materials() -> void:
+	if not unshaded:
+		_unshaded_materials.clear()
+	for chunk_location in _chunk_instances:
+		var chunk_instance: MeshInstance3D = _chunk_instances[chunk_location]
+		chunk_instance.material_override = _instance_material(chunk_location, _chunk_materials.get(chunk_location))
 
 
 func _retire(chunk_location: Vector3i) -> void:
@@ -606,6 +652,8 @@ func _retire(chunk_location: Vector3i) -> void:
 		chunk_instance.visible = false
 		_retired_chunk_instances.append(chunk_instance)
 		_chunk_instances.erase(chunk_location)
+	_chunk_materials.erase(chunk_location)
+	_unshaded_materials.erase(chunk_location)
 	_displayed_surface_keys.erase(chunk_location)
 	# A retired chunk owns no surface, so a result still building for it must not
 	# appear later.

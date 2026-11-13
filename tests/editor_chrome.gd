@@ -31,7 +31,7 @@ func _ready() -> void:
 	test("the tool menu button selects on the first click and opens its menu on the second", _tool_select_run, "tool_select")
 	test("the editor reopens the last document or the Flamingo sample", _startup_run, "startup_document")
 	test("the menu bar undo and redo buttons follow the edit history", _history_run, "history")
-	test("the camera menu drives views, projection, and shading", _camera_menu_run, "control_bar_views")
+	test("the camera menu drives views and projection, and the environment row drives shading", _camera_menu_run, "control_bar_views")
 	test("the status bar toggles the MCP server and saves the state", _mcp_toggle_run, "mcp_toggle")
 	test("a busy MCP port keeps the server off", _mcp_bind_failure_run, "mcp_bind_failure")
 
@@ -76,10 +76,12 @@ func after_test() -> void:
 		brush_button.get_popup().hide()
 	if is_instance_valid(camera_menu_btn) and camera_menu_btn.get_popup().visible:
 		camera_menu_btn.get_popup().hide()
-	# The camera menu case leaves the viewport unshaded and orthographic.
+	# The environment row case leaves the viewport unshaded and orthographic.
 	var scene := viewport_scene()
 	if scene != null:
+		scene.get_node("%Shaded").button_pressed = true
 		editor_viewport().debug_draw = Viewport.DEBUG_DRAW_DISABLED
+		scene._sync_shading_controls()
 	await get_tree().process_frame
 
 
@@ -475,11 +477,10 @@ func _camera_menu_run() -> void:
 		expect(light.directional_shadow_mode == DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS, "the light uses split shadow mapping")
 	)
 
-	step("When the user picks Unshaded in the camera menu", func():
-		_pick_view("unshaded")
+	step("When the user disables shading in the environment row", func():
+		viewport_scene().get_node("%Shaded").button_pressed = false
 	)
-	step("Then the viewport renders unshaded and the item shows checked", func():
-		var svp := editor_viewport() as SubViewport
-		expect(svp.debug_draw == Viewport.DEBUG_DRAW_UNSHADED, "the viewport renders unshaded")
-		expect(_camera_popup().is_item_checked(_camera_index("unshaded")), "the Unshaded item shows checked")
+	step("Then the viewport renders unshaded and the row button shows unpressed", func():
+		expect(viewport_scene().get_node("VoxelRenderer").unshaded, "the voxel meshes draw unshaded")
+		expect(not viewport_scene().get_node("%Shaded").button_pressed, "the Shaded button shows unpressed")
 	)

@@ -28,21 +28,18 @@ func _run() -> void:
 		lighting.basis = light_basis
 		lighting.color = Color.RED
 		scene.set_lighting_settings(lighting)
-		var popup := camera_menu().get_popup()
-		for index in popup.item_count:
-			if popup.get_item_text(index) == "Shadows":
-				scene._on_camera_index_pressed(index)
+		scene.get_node("%Shadows").button_pressed = false
 		exporter._sheet_settings.get_node("SizeRow/Size").value = 24
 		exporter._sheet_settings.get_node("ViewRow/View").select(2)
 		exporter._sheet_settings.get_node("ViewRow/View").item_selected.emit(2)
 		exporter._sheet_settings.get_node("TurntableRow/Turntable").button_pressed = false
 		exporter._sheet_settings.get_node("TurntableRow/Metadata").button_pressed = false
-		exporter._controls.get_node("LightingOptions/LightColor").color = Color(0, 0, 1, 0.5)
-		exporter._on_sheet_lighting_changed()
+		exporter._model_scene.get_node("%LightColor").color_changed.emit(Color(0, 0, 1))
 		var export_lighting: Dictionary = exporter._model_scene.get_lighting_settings()
 		export_lighting.basis = export_light_basis
 		exporter._model_scene.set_lighting_settings(export_lighting)
-		exporter._controls.get_node("LightingOptions/Shadows").button_pressed = false
+		exporter._model_scene.get_node("%Shadows").button_pressed = false
+		exporter._model_scene.get_node("%LockView").button_pressed = true
 		expect(menu.save_doc(first_path) == OK, "the document saves with the current settings")
 	)
 	step("Then the saved document uses its filename", func():
@@ -55,6 +52,8 @@ func _run() -> void:
 		expect(State.document.lighting_settings.color == Color.RED, "export color changes preserve the editor light color")
 		expect(State.document.lighting_settings.basis.is_equal_approx(light_basis), "the document stores the editor light direction")
 		expect(State.document.export_settings.lighting.basis.is_equal_approx(export_light_basis), "the document stores the independent export light direction")
+		expect(State.document.export_settings.lighting.view_locked, "the document stores the export view lock")
+		expect(not State.document.lighting_settings.has("view_locked"), "the editor lock stays a session option")
 	)
 	step("When the user saves under another file name", func():
 		menu.save_doc(renamed_path)
@@ -76,7 +75,8 @@ func _run() -> void:
 		expect(exporter._sheet_settings.get_node("ViewRow/View").selected == 2, "the selected sprite view is restored")
 		expect(not exporter._sheet_settings.get_node("TurntableRow/Turntable").button_pressed, "the saved turntable choice is restored")
 		expect(not exporter._sheet_settings.get_node("TurntableRow/Metadata").button_pressed, "the saved metadata choice is restored")
-		expect(exporter._controls.get_node("LightingOptions/LightColor").color == Color(0, 0, 1, 0.5), "the export color and alpha strength are restored")
+		expect(exporter._sheet_lighting().color == Color(0, 0, 1), "the export color is restored")
+		expect(exporter._model_scene.get_lighting_settings().view_locked, "the export view lock is restored")
 	)
 	step("When the user edits the document and opens the same file again", func():
 		State.paint(Vector3i(100, 100, 100), VoxelFrame.material(Color.RED))
