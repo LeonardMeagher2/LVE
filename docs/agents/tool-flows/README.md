@@ -27,7 +27,8 @@ Use a Markdown viewer with Mermaid support to display the graphs.
 | [Composition guide](composition.md) | Current A to H mechanisms, signatures, ownership, and reuse limits |
 | [Shared paths and utilities](shared-and-utilities.md) | Input routing, edit jobs, previews, model rendering, Plane, Symmetry, Eyedropper |
 | [Drawing](drawing.md) | Brush, Eraser, Line, Paint Brush, Fill, Spray |
-| [Terrain](terrain.md) | Build, Flatten, Smooth, Grab |
+| [Terrain](terrain.md) | Build, Flatten, Smooth |
+| [Deform](deform.md) | Grab, Pose |
 | [Transform, clipboard, and selection](transform-selection.md) | Move, Rotate, Scale, Paste, Copy, Cut, Box, Lasso, Wand |
 
 ## Diagram scope

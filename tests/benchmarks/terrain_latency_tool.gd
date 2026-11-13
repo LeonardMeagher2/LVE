@@ -8,13 +8,13 @@ const Rounding := preload("res://plugins/Terrain/SmoothOperation.gd")
 var use_reference := false
 
 
-func _run_smooth(fields: Array, seconds: float) -> void:
+func _run_smooth(fields: Array) -> void:
 	if not use_reference:
-		super._run_smooth(fields, seconds)
+		super._run_smooth(fields)
 		return
 	var job := ReferenceJobs.new_job()
 	job.stroke_id = _stroke_id
-	job.edited_frame = _source_frame.copy_frame()
+	job.edited_frame = VoxelFrame.job_frame(_source_frame)
 	job.fields = []
 	var work := 0
 	for field in fields:
@@ -23,11 +23,8 @@ func _run_smooth(fields: Array, seconds: float) -> void:
 		job.fields.append({
 			"cells": cells,
 			"weights": (field["weights"] as Dictionary).duplicate(),
-			"credits": (field["credits"] as Dictionary).duplicate(),
-			"carry": float(field["carry"]),
 		})
-	job.seconds = seconds
-	job.rate = _stroke.strength
+	job.passes = _stroke_strength
 	job.radius = Rounding.KERNEL_RADIUS
 	job.remove_threshold = Rounding.REMOVE_THRESHOLD
 	job.add_threshold = Rounding.ADD_THRESHOLD

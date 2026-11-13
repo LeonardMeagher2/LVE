@@ -54,7 +54,7 @@ const TOOLS := [
 	},
 	{
 		"name": "inspect_document",
-		"description": "Read a semantic summary of one or more frames: integer cell bounds, occupied count, materials, connected islands, tags, and transitions between consecutive listed frames. Use this before get_cells.",
+		"description": "Read a semantic summary of one or more frames: integer cell bounds, occupied count, materials, connected islands, tags, and transitions between consecutive listed frames. A single frame also puts its fields at the root, so materials sits beside frames. Use this before get_cells.",
 		"inputSchema": {
 			"type": "object",
 			"properties": {
@@ -192,7 +192,7 @@ const TOOLS := [
 	},
 	{
 		"name": "screenshot",
-		"description": "Save a PNG to user://mcp_screenshot.png every call and overwrite it. Render one frame, a multi-view contact sheet, or a frame storyboard. Pass focus to frame a detail, or a far cell shrinks the model. Set orthographic, environment, shadows, shaded, or wireframe to change the view. Set inline true to also return the image.",
+		"description": "Save a PNG in the user directory every call, overwrite it, and return its absolute path. Render one frame, a multi-view contact sheet, or a frame storyboard. Pass focus to frame a detail, or a far cell shrinks the model. Set orthographic, environment, shadows, shaded, or wireframe to change the view. Set inline true to also return the image.",
 		"inputSchema": {
 			"type": "object",
 			"properties": {
@@ -238,23 +238,22 @@ const TOOLS := [
 	},
 	{
 		"name": "save_document",
-		"description": "Save the current document as .lve or .lve.png and return its absolute path. It writes a copy by default and leaves the main document path and unsaved mark unchanged. Set copy false to save the main document. A .lve.png file also stores a preview.",
+		"description": "Save the current document as .lve or .lve.png at an absolute path. Omit path to save the open document to its own path. A path writes a copy unless copy is false. The server creates a missing folder. A .lve.png file also stores a preview.",
 		"inputSchema": {
 			"type": "object",
 			"properties": {
-				"path": {"type": "string", "description": "A file name or user:// path ending in .lve or .lve.png."},
-				"copy": {"type": "boolean", "description": "Write a copy and keep the main path and unsaved mark. Defaults to true."},
+				"path": {"type": "string", "description": "An absolute path ending in .lve or .lve.png. Omit it to save the open document."},
+				"copy": {"type": "boolean", "description": "With a path, write a copy and keep the main path and unsaved mark. Defaults to true. Ignored without a path."},
 			},
-			"required": ["path"],
 			"additionalProperties": false,
 		},
 	},
 	{
 		"name": "open_document",
-		"description": "Open a saved .lve or .lve.png document in a new tab and make it current. The current document stays open.",
+		"description": "Open a saved .lve or .lve.png document at an absolute path in a new tab and make it current. The current document stays open.",
 		"inputSchema": {
 			"type": "object",
-			"properties": {"path": {"type": "string", "description": "A file name or user:// path."}},
+			"properties": {"path": {"type": "string", "description": "An absolute path to a .lve or .lve.png file."}},
 			"required": ["path"],
 			"additionalProperties": false,
 		},
@@ -280,33 +279,32 @@ const TOOLS := [
 	},
 	{
 		"name": "get_export_settings",
-		"description": "Read the export settings the editor uses now. Use it to start from the current view, tile size, tag, and model options.",
+		"description": "Read the export settings the editor uses now. Use it to start from the current view, tile size, tag, and model options. It also returns the open document path and the default model and sprite paths.",
 		"inputSchema": {"type": "object", "additionalProperties": false},
 	},
 	{
 		"name": "export_model",
-		"description": "Export the document as a .glb or .gltf file. Set the model options for this call. The call does not change the document or the export tab settings.",
+		"description": "Export the document as a .glb or .gltf file at an absolute path. Omit path to export beside the document. Set the model options for this call. The call does not change the document or the export tab settings.",
 		"inputSchema": {
 			"type": "object",
 			"properties": {
-				"path": {"type": "string", "description": "A file name or user:// path ending in .glb or .gltf."},
+				"path": {"type": "string", "description": "An absolute path ending in .glb or .gltf. Omit it to export beside the document."},
 				"center": {"type": "boolean", "description": "Center the model on the origin. Defaults to true."},
 				"tag": {"type": "integer", "minimum": -1, "description": "Export only this tag. -1 exports every tag. Defaults to -1."},
 				"smooth_normals": {"type": "boolean", "description": "Use smooth normals. Defaults to the document setting."},
 				"ao": {"type": "number", "minimum": 0, "maximum": 1, "description": "Ambient occlusion strength. Defaults to the document setting."},
 				"unlit": {"type": "boolean", "description": "Export an unlit material. Defaults to the saved export setting."},
 			},
-			"required": ["path"],
 			"additionalProperties": false,
 		},
 	},
 	{
 		"name": "export_sprite_sheet",
-		"description": "Export a PNG sprite sheet and the Aseprite JSON sidecar. Set the view, tile size, turntable, and frame range for this call. The call does not change the export tab settings.",
+		"description": "Export a PNG sprite sheet and the Aseprite JSON sidecar at an absolute path. Omit path to export beside the document. Set the view, tile size, turntable, and frame range for this call. The call does not change the export tab settings.",
 		"inputSchema": {
 			"type": "object",
 			"properties": {
-				"path": {"type": "string", "description": "A file name or user:// path ending in .png."},
+				"path": {"type": "string", "description": "An absolute path ending in .png. Omit it to export beside the document."},
 				"first_frame": {"type": "integer", "minimum": 0, "description": "First frame. Defaults to 0."},
 				"last_frame": {"type": "integer", "minimum": 0, "description": "Last frame, inclusive. Defaults to the last frame."},
 				"tag": {"type": "integer", "minimum": -1, "description": "Use this tag's frame range. -1 uses first_frame and last_frame."},
@@ -317,7 +315,6 @@ const TOOLS := [
 				"center": {"type": "boolean", "description": "Center the model in each tile. Defaults to the export tab value."},
 				"metadata": {"type": "boolean", "description": "Write the JSON sidecar. Defaults to the export tab value."},
 			},
-			"required": ["path"],
 			"additionalProperties": false,
 		},
 	},
@@ -353,15 +350,15 @@ const TOOLS := [
 	},
 	{
 		"name": "move_frame",
-		"description": "Move one frame or a contiguous block of frames to a new index as one undo action. Tag ranges stay at their indices.",
+		"description": "Move one frame or a contiguous block of frames to a new index as one undo action. Omit from to move the current frame. Tag ranges stay at their indices.",
 		"inputSchema": {
 			"type": "object",
 			"properties": {
-				"from": {"type": "integer", "minimum": 0},
+				"from": {"type": "integer", "minimum": 0, "description": "First frame to move. Defaults to the current frame."},
 				"to": {"type": "integer", "minimum": 0},
 				"count": {"type": "integer", "minimum": 1, "maximum": 256, "description": "Frames to move as a block. Defaults to 1. to is the final index of the first moved frame."},
 			},
-			"required": ["from", "to"],
+			"required": ["to"],
 			"additionalProperties": false,
 		},
 	},
@@ -432,24 +429,23 @@ const TOOLS := [
 	},
 	{
 		"name": "remove_tag",
-		"description": "Remove one tag. The last remaining tag is kept.",
+		"description": "Remove one tag. Omit tag to use the active tag. The last remaining tag is kept.",
 		"inputSchema": {
 			"type": "object",
-			"properties": {"tag": {"type": "integer", "minimum": 0}},
-			"required": ["tag"],
+			"properties": {"tag": {"type": "integer", "minimum": 0, "description": "Defaults to the active tag."}},
 			"additionalProperties": false,
 		},
 	},
 	{
 		"name": "rename_tag",
-		"description": "Rename one tag.",
+		"description": "Rename one tag. Omit tag to use the active tag.",
 		"inputSchema": {
 			"type": "object",
 			"properties": {
-				"tag": {"type": "integer", "minimum": 0},
+				"tag": {"type": "integer", "minimum": 0, "description": "Defaults to the active tag."},
 				"name": {"type": "string"},
 			},
-			"required": ["tag", "name"],
+			"required": ["name"],
 			"additionalProperties": false,
 		},
 	},
@@ -662,14 +658,12 @@ const SCHEMA_REGION := {
 		"cells": {"type": "integer"},
 		"bounds": SCHEMA_BOUNDS,
 		"center": SCHEMA_CELL,
-		"material": SCHEMA_MATERIAL,
 		"key": {"type": "string"},
 		"materials": {
 			"type": "array",
 			"items": {
 				"type": "object",
 				"properties": {
-					"material": SCHEMA_MATERIAL,
 					"cells": {"type": "integer"},
 					"key": {"type": "string"},
 				},
@@ -689,8 +683,7 @@ const SCHEMA_FRAME_RESULT := {
 }
 
 ## The output schema of each tool, keyed by tool name. Clients show this as the
-## return type, so an agent sees the shape before the first call. The guide
-## resource lists the same keys.
+## return type, so an agent sees the shape before the first call.
 const OUTPUT_SCHEMAS := {
 	"get_state": {
 		"type": "object",
@@ -766,7 +759,6 @@ const OUTPUT_SCHEMAS := {
 							"items": {
 								"type": "object",
 								"properties": {
-									"material": SCHEMA_MATERIAL,
 									"cells": {"type": "integer"},
 									"bounds": SCHEMA_BOUNDS,
 									"key": {"type": "string"},
@@ -833,7 +825,6 @@ const OUTPUT_SCHEMAS := {
 					"type": "object",
 					"properties": {
 						"char": {"type": "string"},
-						"material": SCHEMA_MATERIAL,
 						"key": {"type": "string"},
 					},
 				},
@@ -946,6 +937,9 @@ const OUTPUT_SCHEMAS := {
 		"type": "object",
 		"properties": {
 			"revision": {"type": "integer"},
+			"document_path": {"type": "string"},
+			"model_path": {"type": "string"},
+			"sprite_path": {"type": "string"},
 			"sprite": {
 				"type": "object",
 				"properties": {
@@ -1110,49 +1104,7 @@ const OUTPUT_SCHEMAS := {
 	},
 }
 
-## The guide resource. It gives the rules and the return shape of every tool
-## without a skill install or a repository checkout.
-const GUIDE_URI := "lve://guide"
-const GUIDE_BODY := """# LVE MCP guide
-
-LVE is a voxel editor that runs as its own app. You edit the document the user
-has open, not a file copy. A read or a write lands in their real session.
-
-## Rules
-
-- Cells are integer points. Y is up. Negative coordinates are normal.
-- Boxes are inclusive: [x0, y0, z0, x1, y1, z1].
-- Read get_state first. It gives the document, revision, material, tool, and undo state.
-- Call inspect_document for bounds, materials, islands, and frame transitions.
-- Call get_slice or get_map to see shape. Use screenshot for a picture.
-- Runs in get_cells are [x0, x1, y, z, material_index].
-- The material_index points into the materials array of that page. It is not the index you wrote.
-- Pass next back as cursor with the same min and max to continue a read.
-- A write_cells shape without a material index uses the current material, not materials[0].
-- Set the shared selection with set_selection. Use replace, add, subtract, or clear.
-- get_state gives the selection count and bounds. A selection outside the current frame is allowed.
-- Each call is one undo action, even across frames.
-- Verify a write with get_changes since the revision you just received.
-- stroke reports the bounds of the changed cells. A fill reports the chunk-aligned box.
-- screenshot always writes user://mcp_screenshot.png. Pass focus to frame a detail.
-- screenshot takes orthographic, environment, shadows, shaded, and wireframe. It reports the resolved options.
-- save_document writes a copy by default. Pass copy false to save the main document.
-- new_document and open_document add a tab. The current document stays open.
-- Frame and tag indices shift after add, move, or remove. Re-read them.
-- add_frame, remove_frame, move_frame, and set_frame_delay accept several frames in one call. One call is one undo action.
-- set_document_settings sets smooth normals, AO strength, and the centered size. One call is one undo action.
-- set_tag_range fails when the range is outside the frames.
-- inspect_document with palette true puts the palette at document.palette.
-- Call get_export_settings to read the view, tile size, tag, and model options of the export tab.
-- export_model and export_sprite_sheet take their own settings for one call. They do not change the export tab.
-
-## Return shapes
-
-Every tool declares an outputSchema. A client that renders it shows the return
-type before the first call. The keys of each result are listed below.
-"""
-
-const INSTRUCTIONS := "LVE is a voxel editor. Cells are integers and Y is up. Boxes are inclusive. Read get_state for the document, material, and revision. Read the lve://guide resource once for the rules and the return shape of every tool. inspect_document gives bounds, materials, islands, and transitions. get_slice or get_map shows shape. get_cells returns runs [x0, x1, y, z, material_index]. Pass next back as cursor with the same box. write_cells uses the current material when a shape has no index. Each call is one undo action. save_document writes a copy unless copy is false. Export with export_model or export_sprite_sheet, and set their options per call. Verify with get_changes since the last revision."
+const INSTRUCTIONS_BODY := "LVE is a voxel editor. Cells are integers and Y is up. Boxes are inclusive. Read get_state for the document, material, revision, and selection. inspect_document gives bounds, materials, islands, and transitions. get_slice or get_map shows shape. get_cells returns runs [x0, x1, y, z, material_index] for the materials of that page. Pass next back as cursor with the same box. A material key is color|metallic|roughness|emission. write_cells uses the current material when a shape has no index. Omit frame or tag to use the current frame or the active tag. Frame and tag indices shift after add, move, or remove, so re-read them. Each call is one undo action. save_document without a path saves the open document. Paths are absolute. A relative, user://, or res:// path is refused. Export with export_model or export_sprite_sheet, and set their options per call. Verify with get_changes since the last revision.\n\nTool index. A question mark marks an optional argument. Call these names directly. Do not search for them.\n"
 
 ## One accepted bridge or HTTP client.
 class PeerState extends RefCounted:
@@ -1605,21 +1557,16 @@ func _dispatch_request(request: Dictionary) -> Variant:
 			var response: Variant = await _call_tool(id, params)
 			_log("tool %s %d bytes" % [str(params.get("name", "")), JSON.stringify(response).length()])
 			return response
-		"resources/list":
-			return _result_response(id, {"resources": _resources_json()})
-		"resources/read":
-			return _read_resource(id, params)
 		"ping":
 			return _result_response(id, {})
 		_:
 			return _error_response(id, -32601, "Unknown method: " + method)
 
 
-func _initialize(params: Dictionary) -> Dictionary:
-	var requested_value: Variant = params.get("protocolVersion", "2025-11-25")
-	var requested: String = requested_value if requested_value is String else "2025-11-25"
-	var supported := ["2025-06-18", "2025-03-26"]
-	var version := requested if supported.has(requested) else "2025-06-18"
+func _initialize(_params: Dictionary) -> Dictionary:
+	# outputSchema is part of 2025-06-18. An older revision cannot show a tool's
+	# return type, so this server answers 2025-06-18 to every request.
+	var version := "2025-06-18"
 	var version_string := str(ProjectSettings.get_setting("application/config/version", "0"))
 	if version_string.count(".") < 2:
 		version_string += ".0"
@@ -1627,11 +1574,67 @@ func _initialize(params: Dictionary) -> Dictionary:
 		"protocolVersion": version,
 		"capabilities": {
 			"tools": {"listChanged": false},
-			"resources": {"subscribe": false, "listChanged": false},
 		},
 		"serverInfo": {"name": "lve", "title": "Leonard's Voxel Editor", "version": version_string},
-		"instructions": INSTRUCTIONS,
+		"instructions": _instructions_text(),
 	}
+
+
+## Returns the initialize instructions: the fixed rules and the tool index.
+func _instructions_text() -> String:
+	return INSTRUCTIONS_BODY + _tool_index()
+
+
+## Returns one line per tool with its argument names. The index comes from the
+## input schemas, so it cannot drift from the tools. A client that hides most
+## tools can read the whole list here, without a search call.
+func _tool_index() -> String:
+	var lines: PackedStringArray = []
+	for value in TOOLS:
+		var tool: Dictionary = value
+		var properties: Dictionary = {}
+		var required: Array = []
+		var schema_value: Variant = tool.get("inputSchema", null)
+		if schema_value is Dictionary:
+			var schema: Dictionary = schema_value
+			var properties_value: Variant = schema.get("properties", {})
+			if properties_value is Dictionary:
+				properties = properties_value
+			var required_value: Variant = schema.get("required", [])
+			if required_value is Array:
+				required = required_value
+		var names: PackedStringArray = []
+		for key in properties:
+			names.append(str(key) + ("" if required.has(key) else "?"))
+		lines.append("- %s(%s)" % [str(tool.get("name", "")), ", ".join(names)])
+	return "\n".join(lines)
+
+
+## Returns the declared output schema of one tool. The inspect_document schema
+## gains the single-frame keys at the root, so it matches both result shapes
+## without listing the same keys twice.
+func _output_schema(name: String) -> Variant:
+	var schema_value: Variant = OUTPUT_SCHEMAS.get(name, null)
+	if not (schema_value is Dictionary):
+		return null
+	var schema: Dictionary = schema_value.duplicate(true)
+	if name != "inspect_document":
+		return schema
+	var properties_value: Variant = schema.get("properties", {})
+	if not (properties_value is Dictionary):
+		return schema
+	var properties: Dictionary = properties_value
+	var frames_value: Variant = properties.get("frames", {})
+	if not (frames_value is Dictionary):
+		return schema
+	var items_value: Variant = frames_value.get("items", {})
+	if not (items_value is Dictionary):
+		return schema
+	var item_properties: Variant = items_value.get("properties", {})
+	if item_properties is Dictionary:
+		for key in item_properties:
+			properties[key] = item_properties[key]
+	return schema
 
 
 ## Returns the tool list with the output schema of each tool. The schemas are
@@ -1641,77 +1644,11 @@ func _tools_json() -> Array:
 	for value in TOOLS:
 		var tool: Dictionary = value
 		var entry: Dictionary = tool.duplicate()
-		var schema: Variant = OUTPUT_SCHEMAS.get(str(entry.get("name", "")), null)
+		var schema: Variant = _output_schema(str(entry.get("name", "")))
 		if schema is Dictionary:
 			entry["outputSchema"] = schema
 		tools.append(entry)
 	return tools
-
-
-## Returns the resources the client can read. The guide is the only one.
-func _resources_json() -> Array:
-	var text := _guide_text()
-	return [{
-		"uri": GUIDE_URI,
-		"name": "guide",
-		"title": "LVE MCP guide",
-		"description": "The rules and the return shape of every tool. Read it before the first edit.",
-		"mimeType": "text/markdown",
-		"size": text.to_utf8_buffer().size(),
-	}]
-
-
-## Answers one resources/read request.
-func _read_resource(id: Variant, params: Dictionary) -> Dictionary:
-	var uri_value: Variant = params.get("uri", "")
-	if not (uri_value is String):
-		return _error_response(id, -32602, "uri must be a string.")
-	var uri: String = uri_value
-	if uri != GUIDE_URI:
-		return _error_response(id, -32002, "Resource not found: " + uri)
-	return _result_response(id, {
-		"contents": [{
-			"uri": GUIDE_URI,
-			"mimeType": "text/markdown",
-			"text": _guide_text(),
-		}],
-	})
-
-
-## Returns the guide text: the fixed rules, then the result keys of each tool.
-## The keys come from the output schemas, so the guide cannot drift from them.
-func _guide_text() -> String:
-	var lines: PackedStringArray = [GUIDE_BODY]
-	for value in TOOLS:
-		var tool: Dictionary = value
-		var name := str(tool.get("name", ""))
-		lines.append("\n### %s\n" % name)
-		lines.append(str(tool.get("description", "")) + "\n")
-		var schema_value: Variant = OUTPUT_SCHEMAS.get(name, null)
-		if not (schema_value is Dictionary):
-			continue
-		var schema: Dictionary = schema_value
-		var properties_value: Variant = schema.get("properties", {})
-		if not (properties_value is Dictionary):
-			continue
-		var properties: Dictionary = properties_value
-		var keys: PackedStringArray = []
-		for key in properties:
-			var field_value: Variant = properties[key]
-			var kind := "value"
-			if field_value is Dictionary:
-				var field: Dictionary = field_value
-				var type_value: Variant = field.get("type", "value")
-				if type_value is String:
-					kind = type_value
-				elif type_value is Array:
-					var names: PackedStringArray = []
-					for entry in type_value:
-						names.append(str(entry))
-					kind = " or ".join(names)
-			keys.append("%s: %s" % [key, kind])
-		lines.append("Returns: " + ", ".join(keys) + "\n")
-	return "".join(lines)
 
 
 func _call_tool(id: Variant, params: Dictionary) -> Dictionary:
@@ -1870,7 +1807,7 @@ func _get_cells(args: Dictionary) -> Dictionary:
 		frame_index = int(frame_value)
 	var frame: VoxelFrame = State.get_voxel_frame(frame_index)
 	if frame == null:
-		return _tool_error("The frame does not exist.")
+		return _tool_error(_frame_error(frame_index))
 	var frame_bounds := _frame_cell_bounds(frame)
 	var min_value: Variant = _parse_cell(args.get("min", null))
 	var max_value: Variant = _parse_cell(args.get("max", null))
@@ -2014,7 +1951,7 @@ func _inspect_document(args: Dictionary) -> Dictionary:
 		return _tool_error("No document is open.")
 	var indices := _frame_indices_arg(args)
 	if indices.is_empty():
-		return _tool_error("The frame does not exist.")
+		return _tool_error(_frame_error())
 	var include_materials := _bool_arg(args, "materials", true)
 	var include_islands := _bool_arg(args, "islands", true)
 	var include_transitions := _bool_arg(args, "transitions", false)
@@ -2042,7 +1979,7 @@ func _inspect_document(args: Dictionary) -> Dictionary:
 	for index in indices:
 		var frame: VoxelFrame = State.get_voxel_frame(index)
 		if frame == null:
-			return _tool_error("The frame does not exist.")
+			return _tool_error(_frame_error(index))
 		var occupied := frame.count()
 		var frame_data := {
 			"index": index,
@@ -2062,7 +1999,7 @@ func _inspect_document(args: Dictionary) -> Dictionary:
 				var island_cells: Dictionary = scan.cells
 				if box != null:
 					island_cells = _cells_in_box(scan.cells, box[0], box[1])
-				var region_result := _build_regions(island_cells, group, min_island_cells, max_islands, material_filter, scan.materials)
+				var region_result := _build_regions(island_cells, group, min_island_cells, max_islands, material_filter)
 				frame_data["islands"] = region_result.regions
 				frame_data["island_count"] = region_result.total
 				if region_result.truncated:
@@ -2087,6 +2024,12 @@ func _inspect_document(args: Dictionary) -> Dictionary:
 		"frames": frames,
 		"tags": _tags_json(),
 	}
+	# One frame is the common read. Its fields sit at the root, so a caller does
+	# not need frames[0]. A multi-frame read keeps them in the list only.
+	if frames.size() == 1:
+		var only: Dictionary = frames[0]
+		for key in only:
+			data[key] = only[key]
 	if include_transitions:
 		data["transitions"] = transitions
 	return _tool_ok(data)
@@ -2096,7 +2039,7 @@ func _get_slice(args: Dictionary) -> Dictionary:
 	var frame_index := _int_arg(args, "frame", State.current_frame)
 	var frame: VoxelFrame = State.get_voxel_frame(frame_index)
 	if frame == null:
-		return _tool_error("The frame does not exist.")
+		return _tool_error(_frame_error(frame_index))
 	var axis := str(args.get("axis", "y"))
 	if not ["x", "y", "z"].has(axis):
 		return _tool_error("axis must be x, y, or z.")
@@ -2182,11 +2125,8 @@ func _get_slice(args: Dictionary) -> Dictionary:
 		var key: String = entry["key"]
 		var slice_char: String = SLICE_CHARS[index] if index < SLICE_CHARS.size() else "?"
 		char_by_key[key] = slice_char
-		var material_json: Variant = {}
-		var material_entry: Variant = scan.materials.get(key, null)
-		if material_entry is Dictionary:
-			material_json = material_entry.get("material", {})
-		legend.append({"char": slice_char, "material": material_json, "key": key})
+		# The key holds the color, metallic, roughness, and emission.
+		legend.append({"char": slice_char, "key": key})
 	var slices: Array = []
 	var values: Array = []
 	if is_projection:
@@ -2267,7 +2207,7 @@ func _get_map(args: Dictionary) -> Dictionary:
 	var frame_index := _int_arg(args, "frame", State.current_frame)
 	var frame: VoxelFrame = State.get_voxel_frame(frame_index)
 	if frame == null:
-		return _tool_error("The frame does not exist.")
+		return _tool_error(_frame_error(frame_index))
 	var bounds := _frame_cell_bounds(frame)
 	if bounds.is_empty():
 		return _tool_ok({"revision": _revision, "frame": frame_index, "blocks": [], "empty": true})
@@ -2396,7 +2336,7 @@ func _get_changes(args: Dictionary) -> Dictionary:
 	var since := int(since_value)
 	var frame_index := _int_arg(args, "frame", State.current_frame)
 	if frame_index < 0 or frame_index >= State.document.frames.size():
-		return _tool_error("The frame does not exist.")
+		return _tool_error(_frame_error(frame_index))
 	if since == _revision:
 		return _tool_ok({
 			"revision": _revision,
@@ -2737,6 +2677,24 @@ func _frame_indices_arg(args: Dictionary, limit := 64) -> Array:
 	return [index]
 
 
+## Returns the error for a frame outside the open document. The message names
+## the document and its frame count, so a caller does not need a second read to
+## learn why the frame is missing. A negative index means the call named no
+## valid frame at all.
+func _frame_error(index := -1) -> String:
+	var document := State.document
+	if document == null:
+		return "No document is open."
+	var count := document.frames.size()
+	if index < 0 or count == 0:
+		return "The open document is %s with %d frames. Pass frame indices from 0 to %d." % [
+			document.get_file_name(), count, count - 1,
+		]
+	return "The open document is %s with %d frames. Frame %d does not exist." % [
+		document.get_file_name(), count, index,
+	]
+
+
 func _tags_json() -> Array:
 	var tags: Array = []
 	for index in range(State.document.tags.size()):
@@ -2820,9 +2778,10 @@ func _scan_frame(frame: VoxelFrame) -> Dictionary:
 
 func _materials_json(materials: Dictionary) -> Array:
 	var list: Array = []
+	# The key holds the color, metallic, roughness, and emission, so the entry
+	# does not repeat them as an object.
 	for histogram in materials.values():
 		list.append({
-			"material": histogram.get("material", {}),
 			"cells": histogram.get("cells", 0),
 			"bounds": _cell_bounds_json_from_cells(histogram.get("min", Vector3i.ZERO), histogram.get("max", Vector3i.ZERO)),
 			"key": histogram.get("key", ""),
@@ -2831,7 +2790,7 @@ func _materials_json(materials: Dictionary) -> Array:
 	return list
 
 
-func _build_regions(cells: Dictionary, group: String, min_cells: int, max_regions: int, material_filter: String, material_table: Dictionary) -> Dictionary:
+func _build_regions(cells: Dictionary, group: String, min_cells: int, max_regions: int, material_filter: String) -> Dictionary:
 	var visited := {}
 	var regions: Array = []
 	var total_found := 0
@@ -2905,22 +2864,15 @@ func _build_regions(cells: Dictionary, group: String, min_cells: int, max_region
 		var island_materials: Dictionary = region["materials"]
 		var material_list: Array = []
 		for key in island_materials:
-			var material_json: Variant = {}
-			if material_table.has(key):
-				material_json = material_table[key].get("material", {})
 			material_list.append({
-				"material": material_json,
 				"cells": island_materials[key],
 				"key": key,
 			})
 		material_list.sort_custom(_region_more_cells)
 		if group == "material":
 			if not material_list.is_empty():
-				region_data["material"] = material_list[0]["material"]
 				region_data["key"] = material_list[0]["key"]
 		else:
-			if not material_list.is_empty():
-				region_data["material"] = material_list[0]["material"]
 			if material_list.size() > 4:
 				material_list.resize(4)
 			region_data["materials"] = material_list
@@ -3027,11 +2979,11 @@ func _screenshot(args: Dictionary) -> Dictionary:
 				return _tool_error("frames must hold integers.")
 			var index := int(value)
 			if State.get_voxel_frame(index) == null:
-				return _tool_error("The frame does not exist.")
+				return _tool_error(_frame_error(index))
 			frames.append(index)
 	var frame_index := _int_arg(args, "frame", State.current_frame)
 	if State.get_voxel_frame(frame_index) == null:
-		return _tool_error("The frame does not exist.")
+		return _tool_error(_frame_error(frame_index))
 	var view := "isometric"
 	var view_value: Variant = args.get("view", "isometric")
 	if view_value is String:
@@ -3102,7 +3054,7 @@ func _screenshot(args: Dictionary) -> Dictionary:
 			var frame: VoxelFrame = State.get_voxel_frame(tile_frame)
 			if frame == null:
 				viewport.free()
-				return _tool_error("The frame does not exist.")
+				return _tool_error(_frame_error(tile_frame))
 			renderer.source_frame = frame.copy_frame()
 			if tile_view == "current":
 				if not _apply_editor_camera(camera):
@@ -3222,19 +3174,17 @@ func _new_document() -> Dictionary:
 func _save_document(args: Dictionary) -> Dictionary:
 	if State.active_edit() != null or State.edit_busy():
 		return _tool_error("The editor is busy with another edit. Retry.")
-	var copy := true
-	var copy_value: Variant = args.get("copy", true)
-	if copy_value is bool:
-		copy = copy_value
-	var path := _document_path(args.get("path", ""))
+	var path := _save_path(args)
 	if path.is_empty():
-		return _tool_error("path is required.")
+		return _tool_error("path must be an absolute path ending in .lve or .lve.png.")
+	# A call without a path saves the open document. A call with a path writes a
+	# copy unless it asks for a main save.
+	var copy := false
+	if args.has("path"):
+		var copy_value: Variant = args.get("copy", true)
+		if copy_value is bool:
+			copy = copy_value
 	var extension := path.get_extension().to_lower()
-	if extension.is_empty():
-		path += ".lve"
-		extension = "lve"
-	elif extension != "lve" and extension != "png":
-		return _tool_error("path must end in .lve or .lve.png.")
 	var document := State.document
 	var encoded := document.encode_document()
 	if encoded.is_empty():
@@ -3250,9 +3200,16 @@ func _save_document(args: Dictionary) -> Dictionary:
 			return _tool_error("The document changed before the save finished.")
 		if preview == null:
 			return _tool_error("The preview could not be rendered.")
+	# A save must not fail because the folder is missing. res:// can be read only
+	# in an exported build, so the save error still reports that case.
+	var folder := path.get_base_dir()
+	if not folder.is_empty():
+		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(folder))
 	var error := document.save_file(path, preview, encoded)
 	if error != OK:
-		return _tool_error("The document could not be saved: " + error_string(error))
+		return _tool_error("The document could not be saved to %s: %s" % [
+			ProjectSettings.globalize_path(path), error_string(error),
+		])
 	if not copy:
 		State.record_saved(document, path)
 	return _tool_ok({
@@ -3268,7 +3225,7 @@ func _open_document(args: Dictionary) -> Dictionary:
 		return _tool_error("The editor is busy with another edit. Retry.")
 	var path := _document_path(args.get("path", ""))
 	if path.is_empty():
-		return _tool_error("path is required.")
+		return _tool_error("path must be an absolute path to a .lve or .lve.png file.")
 	var document := VoxelDocument.load_file(path)
 	if document == null:
 		return _tool_error("The document could not be opened.")
@@ -3289,15 +3246,43 @@ func _document_path(value: Variant) -> String:
 	var path: String = String(value).strip_edges()
 	if path.is_empty():
 		return ""
-	if path.begins_with("user://") or path.begins_with("res://") or path.is_absolute_path():
-		return path
-	return "user://" + path
+	# An agent knows the file system, not the engine. Only an absolute path is
+	# allowed. A relative path or an engine path is refused, because the client
+	# named a location the server cannot resolve on its own. is_absolute_path()
+	# accepts an engine path, so the schemes are refused first.
+	if path.begins_with("user://") or path.begins_with("res://"):
+		return ""
+	return path if path.is_absolute_path() else ""
+
+
+## Returns the path a save writes, or an empty string when the path is invalid.
+## A call without a path saves the open document to its own path.
+func _save_path(args: Dictionary) -> String:
+	var value: Variant = args.get("path", null)
+	if value is String and not String(value).strip_edges().is_empty():
+		var path := _document_path(value)
+		if path.is_empty():
+			return ""
+		var extension := path.get_extension().to_lower()
+		if extension.is_empty():
+			return path + ".lve"
+		return path if extension == "lve" or extension == "png" else ""
+	var document := State.document
+	if document == null:
+		return ""
+	if not document.edit_save_path.is_empty():
+		return document.edit_save_path
+	var name := document.get_file_name()
+	if name.is_empty():
+		name = "Untitled"
+	if name.get_extension().is_empty():
+		name += ".lve"
+	return ProjectSettings.globalize_path("user://" + name)
 
 
 ## Returns the export path for one output file, or an empty string when the
 ## path is invalid. A path without an extension gets the first extension. A path
-## with an extension outside [param extensions] is invalid. A bare name lands in
-## the user directory.
+## with an extension outside [param extensions] is invalid.
 func _export_path(value: Variant, extensions: Array) -> String:
 	var path := _document_path(value)
 	if path.is_empty():
@@ -3306,6 +3291,26 @@ func _export_path(value: Variant, extensions: Array) -> String:
 	if extension.is_empty():
 		return path + "." + str(extensions[0])
 	return path if extensions.has(extension) else ""
+
+
+## Returns the output path of an export. A call without a path exports beside
+## the document. An unsaved document exports in the user directory.
+func _export_output_path(args: Dictionary, extensions: Array) -> String:
+	var value: Variant = args.get("path", null)
+	if value is String and not String(value).strip_edges().is_empty():
+		return _export_path(value, extensions)
+	var document := State.document
+	var name := document.get_file_name() if document != null else ""
+	if name.is_empty():
+		name = "Untitled"
+	var base := name.get_basename()
+	if document != null and not document.edit_save_path.is_empty():
+		# The stored path can be an engine path, because the user can open a
+		# document from res://. Globalize it instead of parsing it as input.
+		var folder := ProjectSettings.globalize_path(document.edit_save_path).get_base_dir()
+		if not folder.is_empty():
+			return _export_path(folder.path_join(base), extensions)
+	return _export_path(ProjectSettings.globalize_path("user://" + base), extensions)
 
 
 ## Returns a readable message for an export error code.
@@ -3328,8 +3333,15 @@ func _get_export_settings() -> Dictionary:
 	if not (settings_value is Dictionary):
 		return _tool_error("The export settings are not available.")
 	var settings: Dictionary = settings_value
+	var document := State.document
+	var document_path := ""
+	if document != null and not document.edit_save_path.is_empty():
+		document_path = ProjectSettings.globalize_path(document.edit_save_path)
 	return _tool_ok({
 		"revision": _revision,
+		"document_path": document_path,
+		"model_path": ProjectSettings.globalize_path(_export_output_path({}, ["glb", "gltf"])),
+		"sprite_path": ProjectSettings.globalize_path(_export_output_path({}, ["png"])),
 		"sprite": settings.get("sprite", {}),
 		"model": settings.get("model", {}),
 	})
@@ -3341,9 +3353,9 @@ func _export_model(args: Dictionary) -> Dictionary:
 	var plugin := _plugin("ExportPlugin")
 	if plugin == null:
 		return _tool_error("The export plugin is not available.")
-	var path := _export_path(args.get("path", ""), ["glb", "gltf"])
+	var path := _export_output_path(args, ["glb", "gltf"])
 	if path.is_empty():
-		return _tool_error("path must be a file name or user:// path ending in .glb or .gltf.")
+		return _tool_error("path must be an absolute path ending in .glb or .gltf.")
 	var tag := _int_arg(args, "tag", -1)
 	if tag < -1 or tag >= State.document.tags.size():
 		return _tool_error("The tag does not exist.")
@@ -3384,9 +3396,9 @@ func _export_sprite_sheet(args: Dictionary) -> Dictionary:
 	var plugin := _plugin("ExportPlugin")
 	if plugin == null:
 		return _tool_error("The export plugin is not available.")
-	var path := _export_path(args.get("path", ""), ["png"])
+	var path := _export_output_path(args, ["png"])
 	if path.is_empty():
-		return _tool_error("path must be a file name or user:// path ending in .png.")
+		return _tool_error("path must be an absolute path ending in .png.")
 	var tag := _int_arg(args, "tag", -1)
 	if tag < -1 or tag >= State.document.tags.size():
 		return _tool_error("The tag does not exist.")
@@ -3476,7 +3488,7 @@ func _remove_frame(args: Dictionary) -> Dictionary:
 
 func _move_frame(args: Dictionary) -> Dictionary:
 	var size := State.document.frames.size()
-	var from := _int_arg(args, "from", -1)
+	var from := _int_arg(args, "from", State.current_frame)
 	var to := _int_arg(args, "to", -1)
 	var count := clampi(_int_arg(args, "count", 1), 1, 256)
 	if from < 0 or from >= size or count > size - from:
@@ -3495,7 +3507,7 @@ func _duplicate_frame() -> Dictionary:
 func _set_frame(args: Dictionary) -> Dictionary:
 	var index := _int_arg(args, "frame", State.current_frame)
 	if index < 0 or index >= State.document.frames.size():
-		return _tool_error("The frame does not exist.")
+		return _tool_error(_frame_error(index))
 	State.current_frame = index
 	return _tool_ok({"frame": index, "delay_ms": State.document.frames[index].delay_ms})
 
@@ -3549,7 +3561,7 @@ func _add_tag(args: Dictionary) -> Dictionary:
 
 
 func _remove_tag(args: Dictionary) -> Dictionary:
-	var index := _int_arg(args, "tag", -1)
+	var index := _int_arg(args, "tag", State.active_tag)
 	if index < 0 or index >= State.document.tags.size():
 		return _tool_error("The tag does not exist.")
 	if State.document.tags.size() <= 1:
@@ -3560,7 +3572,7 @@ func _remove_tag(args: Dictionary) -> Dictionary:
 
 
 func _rename_tag(args: Dictionary) -> Dictionary:
-	var index := _int_arg(args, "tag", -1)
+	var index := _int_arg(args, "tag", State.active_tag)
 	if index < 0 or index >= State.document.tags.size():
 		return _tool_error("The tag does not exist.")
 	var name_value: Variant = args.get("name", "")
@@ -4000,7 +4012,7 @@ func _write_cells(args: Dictionary) -> Dictionary:
 		var frame: VoxelFrame = State.get_voxel_frame(int(frame_index))
 		if frame == null:
 			State.cancel_changes(collected)
-			return _tool_error("The frame does not exist.")
+			return _tool_error(_frame_error(int(frame_index)))
 		var tx := State.begin_edit(int(frame_index))
 		if tx == null:
 			State.cancel_changes(collected)
@@ -4294,6 +4306,9 @@ func _active_tool_info() -> Dictionary:
 	var terrain: Node = _plugin("TerrainPlugin")
 	if terrain != null and _toolbar_pressed(terrain):
 		return {"id": "terrain", "node": terrain.get("_tool"), "params": {}}
+	var deform: Node = _plugin("DeformPlugin")
+	if deform != null and _toolbar_pressed(deform):
+		return {"id": "deform", "node": deform.get("_current_tool"), "params": {}}
 	var selection: Node = _plugin("SelectionPlugin")
 	if selection != null and _toolbar_pressed(selection):
 		return {"id": "select", "node": selection.get("_current_tool"), "params": {}}
@@ -4307,7 +4322,7 @@ func _active_tool_info() -> Dictionary:
 
 
 func _activate_plugin(name: String) -> void:
-	for other in ["BrushPlugin", "PaintPlugin", "TerrainPlugin", "SelectionPlugin", "TransformPlugin", "EyedropperPlugin"]:
+	for other in ["BrushPlugin", "PaintPlugin", "TerrainPlugin", "DeformPlugin", "SelectionPlugin", "TransformPlugin", "EyedropperPlugin"]:
 		if other == name:
 			continue
 		var plugin: Node = _plugin(other)

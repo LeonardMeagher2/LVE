@@ -31,7 +31,7 @@ Read the family maps for each tool's complete flow.
 - `Chunk.occupancy_rows` provides shared immutable row masks and counts per occupancy revision.
 - `SprayOccupancyIndex` counts and ranks occupied rows. It has no candidate array and no full reach gather.
 - `TerrainTool` uses a separate active Build footprint leaf. It does not predict the next voxels.
-- `TerrainPreview` uses two local hover stages for Flatten and Smooth. Build uses a cheap face or floor ring. Grab keeps its source preview.
+- `TerrainPreview` uses two local hover stages for Flatten and Smooth. Build uses a cheap face or floor ring. Grab keeps its source preview and adds no surface read.
 - Verification is partial. These are current code mechanisms, not latest guarantees.
 - No performance gain or maximum-size Spray claim is made.
 
@@ -67,7 +67,8 @@ This graph describes a review process, not the current runtime.
 Evidence:
 
 - [Terrain queue and modes](terrain.md#common-hover-press-and-stroke-queue)
-- [Grab displacement](terrain.md#grab)
+- [Grab displacement](deform.md#grab)
+- [Pose bend](deform.md#pose)
 - [Transform lifecycle](transform-selection.md#transform-move-rotate-and-scale)
 - [Paste placement](transform-selection.md#paste-placement)
 - [Selection modes](transform-selection.md#selection-combine-modes)

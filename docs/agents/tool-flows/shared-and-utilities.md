@@ -44,7 +44,8 @@ The source is [`State.gd:252`](../../../Globals/State/State.gd#L252).
 | `BrushPlugin` | `plugins/brush/Toolbar.tscn`, a `MenuButton` with Pencil, Line, and Eraser | `plugins/brush/Options.tscn` | `BrushTool.tscn` and `LineTool.tscn` | Active at startup |
 | `EyedropperPlugin` | `plugins/Eyedropper/Toolbar.tscn`, a `Button` | None | `EyedropperTool.tscn` | Inactive |
 | `PaintPlugin` | `plugins/paint/Toolbar.tscn`, a `MenuButton` with Paintbrush, Bucket Fill, and Spray Can | `plugins/paint/Options.tscn` | `PaintBrushTool.tscn`, `FillTool.tscn`, and `SprayTool.tscn` | Inactive |
-| `TerrainPlugin` | `plugins/Terrain/Toolbar.tscn`, a `MenuButton` with Build, Flatten, Smooth, and Grab | `plugins/Terrain/Options.tscn` | `TerrainTool.tscn` | Inactive |
+| `TerrainPlugin` | `plugins/Terrain/Toolbar.tscn`, a `MenuButton` with Build, Flatten, and Smooth | `plugins/Terrain/Options.tscn` | `TerrainTool.tscn` | Inactive |
+| `DeformPlugin` | `plugins/Deform/Toolbar.tscn`, a `MenuButton` with Grab and Pose | `plugins/Deform/Options.tscn` | `GrabTool.tscn` or `PoseTool.tscn` | Inactive |
 | `SelectionPlugin` | `plugins/selection/Toolbar.tscn`, a `MenuButton` with Box, Wand, and Lasso | `plugins/selection/Options.tscn` | `BoxSelectTool.tscn`, `WandSelectTool.tscn`, and `LassoSelectTool.tscn` | Inactive |
 | `TransformPlugin` | `plugins/Transform/Toolbar.tscn`, a `MenuButton` with Move, Rotate, and Scale | `plugins/Transform/Options.tscn` | `MoveTool.tscn`, `RotateTool.tscn`, and `ScaleTool.tscn` | Inactive |
 | `SymmetryPlugin` | `plugins/Symmetry/Toolbar.tscn`, a `Button` | `plugins/Symmetry/Options.tscn` | `SymmetryTool.tscn` | Tool mounted, `active` false |
@@ -707,11 +708,11 @@ The verification history is in the composition guide.
 ### F. Publish by chunk location
 
 - Current signature: `VoxelFrame.apply_published(locations: Array[Vector3i], published: VoxelFrame) -> void`
-- Callers: Terrain (tick, Smooth, Grab), `StrokeTool` for Brush, Paint Brush, and Spray, `LineTool`, `PasteTool`, the Transform preview, the small Fill path, `EraseJob`, and a clipboard cut.
+- Callers: Terrain (tick and Smooth), the deform tools, `StrokeTool` for Brush, Paint Brush, and Spray, `LineTool`, `PasteTool`, the Transform preview, the small Fill path, `EraseJob`, and a clipboard cut.
 - Current mechanism: The method replaces only the listed chunks. It copies no chunk.
 - Marker rule: In a job frame, a shared marker means the job did not write that chunk. A neighbor or a reverted baseline chunk keeps its marker, so the undo snapshot stays frozen.
 - Job frame: `VoxelFrame.job_frame(source)` shares the chunk objects without a whole-frame copy. Use it only when the source is not written while the job runs.
-- Baseline previews: Grab publishes the union of the current and previous locations, because it recomputes from one baseline.
+- Baseline previews: Grab and Pose publish the union of the current and previous locations, because they recompute from one baseline.
 - Preserved contract: The bounds flag, the changed chunk list, and the notification order stay the same.
 - Evidence: `chunk_materials.chunk_publish`, `terrain_prep_worker.batch_parity`, and the affected tool suites.
 See the [composition guide](composition.md) for signatures, ownership, and reuse limits.

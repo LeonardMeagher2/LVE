@@ -65,21 +65,11 @@ func _ready() -> void:
 	test("flatten on a slope cuts toward the surface plane", _flatten_slope, "flatten_slope")
 	test("flatten settles to one slope and does not oscillate", _flatten_converges, "flatten_converges")
 	test("a surface plane mirrors through a symmetry plane", _surface_symmetry, "surface_symmetry")
-	test("grab drags on the true camera-facing plane", _grab_oblique, "grab_oblique")
-	test("grab stretches voxels, keeps materials, and preserves unrelated geometry", _grab_stretch, "grab_stretch")
-	test("grab keeps a source whose destination leaves the selection", _grab_selection_destination, "grab_selection_destination")
-	test("grab ignores sources and destinations outside the document size", _grab_stops_at_document_edge, "grab_stops_at_document_edge")
 	test("smooth fields stay inside the document size", _smooth_stops_at_document_edge, "smooth_stops_at_document_edge")
-	test("grab without a source changes nothing", _grab_empty, "grab_empty")
-	test("a large grab runs on the worker pool and publishes once", _grab_worker, "grab_worker")
-	test("a grab honors the shared radius bound past the old cap", _grab_shared_radius, "grab_shared_radius")
-	test("a queued return to the origin closes the edit", _grab_pending_return, "grab_pending_return")
-	test("a cancelled worker cannot touch a replacement stroke", _cancel_repress, "cancel_repress")
 	test("a grow stroke supports undo, redo, Escape, a switch, and a context change", _stroke_history, "stroke_history")
 	test("a lost left release finishes the stroke", _lost_release, "lost_release")
 	test("frame-spaced motion interpolates without amplifying time", _motion_interpolation, "motion_interpolation")
 	test("selection and symmetry limit and mirror a grow stroke", _selection_symmetry, "selection_symmetry")
-	test("the Grab options keep the shared radius and hide strength", _grab_controls, "grab_controls")
 
 
 func before_test() -> void:
@@ -238,7 +228,7 @@ func _run_job(source: VoxelFrame, samples: Array) -> Array:
 
 func _await_tool_idle() -> void:
 	for _frame in 600:
-		if tool._tick_job == null and tool._grab_job == null and not State.edit_busy():
+		if tool._tick_job == null and not State.edit_busy():
 			await get_tree().process_frame
 			return
 		await get_tree().process_frame
@@ -246,7 +236,7 @@ func _await_tool_idle() -> void:
 
 func _await_edit_closed() -> void:
 	for _frame in 600:
-		if tool._edit == null and tool._grab_job == null and not State.edit_busy():
+		if tool._edit == null and not State.edit_busy():
 			await get_tree().process_frame
 			return
 		await get_tree().process_frame
@@ -1343,132 +1333,6 @@ func _surface_symmetry() -> void:
 	)
 
 
-# --- Grab -------------------------------------------------------------------
-
-func _grab_oblique() -> void:
-	step("Given a voxel seen from an isometric view", func():
-		_settings.tool = _settings.Tools.GRAB
-		_settings.radius = 5
-		_settings.falloff = 0.5
-		_view("isometric")
-		press = _pos(Vector3.ZERO)
-		anchor = aim(press).target
-		for x in range(-1, 2):
-			for z in range(-1, 2):
-				frame.set_cell(anchor + Vector3i(x, 0, z), VoxelFrame.material(Color.WHITE))
-		sync_viewport()
-		press = _pos(Vector3(anchor))
-	)
-	step("When the user presses and drags", func():
-		_press(press)
-		expect(tool._plane != null, "the grab press locks a plane")
-		var forward := -camera_rig().basis.z
-		expect(tool._plane.normal.is_equal_approx(forward.normalized()), "the plane normal is the true camera forward")
-		var drag_pos := _pos(Vector3(anchor + Vector3i(3, 2, 1)))
-		_motion(drag_pos, drag_pos - press)
-		var delta: Vector3i = tool._grab_drag - anchor
-		expect(delta.x != 0 and delta.y != 0 and delta.z != 0, "the drag keeps all three world-axis components")
-		_release(drag_pos)
-	)
-	step("Then the drag lands on the camera-facing plane", func():
-		expect(State.edit_busy() == false, "the release ends the drag")
-	)
-
-
-func _grab_stretch() -> void:
-	step("Given a line of voxels with two colors", func():
-		_settings.tool = _settings.Tools.GRAB
-		_settings.radius = 9
-		_settings.falloff = 0.5
-		_view("top")
-		press = _pos(Vector3.ZERO)
-		anchor = aim(press).target
-		for x in range(0, 5):
-			var color := Color.RED if x == 0 else Color.BLUE
-			frame.set_cell(anchor + Vector3i(x, 0, 0), VoxelFrame.material(color))
-		frame.set_cell(anchor + Vector3i(10, 0, 0), VoxelFrame.material(Color.GREEN))
-		sync_viewport()
-		press = _pos(Vector3(anchor))
-	)
-	step("When the user presses and drags three cells", func():
-		_press(press)
-		expect(not tool._grab_empty, "the press captures the source voxels")
-		expect(tool._grab_sources.size() == 5, "the source region holds the five voxels")
-		var drag_pos := _pos(Vector3(anchor + Vector3i(3, 0, 0)))
-		_motion(drag_pos, drag_pos - press)
-		_release(drag_pos)
-	)
-	step("Then the center stretches full and the edge moves less", func():
-		expect(frame.get_color(anchor + Vector3i(3, 0, 0)) == Color.RED, "the center moves full and keeps its material")
-		expect(not frame.has(anchor), "the center leaves its old cell")
-		expect(frame.has(anchor + Vector3i(6, 0, 0)), "the far source moves a shorter distance")
-		expect(not frame.has(anchor + Vector3i(7, 0, 0)), "the far source does not move the full distance")
-	)
-	step("Then the unrelated geometry stays", func():
-		expect(frame.get_color(anchor + Vector3i(10, 0, 0)) == Color.GREEN, "the distant voxel keeps its material")
-	)
-
-
-func _grab_selection_destination() -> void:
-	step("Given a line of voxels with a selection over the first two", func():
-		_settings.tool = _settings.Tools.GRAB
-		_settings.radius = 9
-		_settings.falloff = 0.0
-		_view("top")
-		press = _pos(Vector3.ZERO)
-		anchor = aim(press).target
-		for x in range(0, 5):
-			frame.set_cell(anchor + Vector3i(x, 0, 0), VoxelFrame.material(Color.WHITE))
-		sync_viewport()
-		State.selection.clear()
-		State.selection.add(anchor)
-		State.selection.add(anchor + Vector3i(1, 0, 0))
-		State.selection_changed.emit()
-		press = _pos(Vector3(anchor))
-	)
-	step("When the user drags the selected voxels outside the selection", func():
-		_press(press)
-		var drag_pos := _pos(Vector3(anchor + Vector3i(3, 0, 0)))
-		_motion(drag_pos, drag_pos - press)
-		_release(drag_pos)
-	)
-	step("Then the sources stay and no unselected voxel is written", func():
-		expect(frame.has(anchor), "the blocked source stays in place")
-		expect(frame.has(anchor + Vector3i(1, 0, 0)), "the second source stays in place")
-		expect(frame.count() == 5, "no destination leaves the selection")
-	)
-
-
-func _grab_stops_at_document_edge() -> void:
-	step("Given a line of voxels with a four-cell X size", func():
-		_settings.tool = _settings.Tools.GRAB
-		_settings.radius = 9
-		_settings.falloff = 0.0
-		_view("top")
-		press = _pos(Vector3.ZERO)
-		anchor = aim(press).target
-		for x in range(0, 5):
-			frame.set_cell(anchor + Vector3i(x, 0, 0), VoxelFrame.material(Color.WHITE))
-		sync_viewport()
-		State.set_size(Vector3i(4, 0, 0))
-		press = _pos(Vector3(anchor))
-		expect(State.document.axis_cell_range(0) == Vector2i(-2, 2), "the X size covers cells minus two through one")
-	)
-	step("When the user presses and drags outside the size", func():
-		_press(press)
-		expect(not tool._grab_empty, "the press captures the inside source voxels")
-		expect(tool._grab_sources.size() == 2, "only the two inside voxels join the drag")
-		var drag_pos := _pos(Vector3(anchor + Vector3i(3, 0, 0)))
-		_motion(drag_pos, drag_pos - press)
-		_release(drag_pos)
-	)
-	step("Then no voxel moves outside the size", func():
-		expect(frame.count() == 5, "the outside destinations are refused")
-		expect(frame.has(anchor), "the first source stays in place")
-		expect(frame.has(anchor + Vector3i(1, 0, 0)), "the second source stays in place")
-	)
-
-
 func _smooth_stops_at_document_edge() -> void:
 	step("Given a smooth field with a four-cell X size", func():
 		State.set_size(Vector3i(4, 0, 0))
@@ -1484,172 +1348,6 @@ func _smooth_stops_at_document_edge() -> void:
 					outside += 1
 		expect(inside > 0, "the smooth field keeps the inside cells")
 		expect(outside == 0, "the smooth field drops every outside cell")
-	)
-
-
-func _grab_empty() -> void:
-	step("Given the Grab tool on an empty floor", func():
-		_settings.tool = _settings.Tools.GRAB
-		_view("top")
-		press = _pos(Vector3.ZERO)
-	)
-	step("When the user presses and drags", func():
-		_press(press)
-		expect(tool._grab_empty, "the grab finds no source voxel")
-		_motion(press + Vector2(20.0, 0.0), Vector2(20.0, 0.0))
-		_release(press)
-	)
-	step("Then nothing changes and no history is recorded", func():
-		expect(frame.count() == 0, "the empty grab changes nothing")
-		expect(not State.undo_redo.has_undo(), "the empty grab adds no history")
-	)
-
-
-func _grab_worker() -> void:
-	step("Given a wide plate with the Grab tool", func():
-		_settings.tool = _settings.Tools.GRAB
-		_settings.radius = 25
-		_settings.falloff = 0.5
-		_view("top")
-		press = _pos(Vector3.ZERO)
-		anchor = aim(press).target
-		for x in range(-12, 13):
-			for z in range(-12, 13):
-				var color := Color.RED if (x == 0 and z == 0) else Color.BLUE
-				frame.set_cell(anchor + Vector3i(x, 0, z), VoxelFrame.material(color))
-		sync_viewport()
-		press = _pos(Vector3(anchor))
-	)
-	step("When the user drags far", func():
-		_press(press)
-		expect(not tool._grab_empty, "the press captures the wide source region")
-		var drag_pos := _pos(Vector3(anchor + Vector3i(30, 0, 0)))
-		_motion(drag_pos, drag_pos - press)
-		expect(tool._grab_job != null, "the large drag runs on the worker pool")
-		expect(State.edit_busy(), "the worker drag owns a foreground operation")
-	)
-	await _await_tool_idle()
-	step("Then the worker publishes the drag once", func():
-		expect(frame.get_color(anchor + Vector3i(30, 0, 0)) == Color.RED, "the worker moves the center and keeps its material")
-		expect(not State.edit_busy(), "the worker releases its operation")
-		_release(press)
-	)
-	step("Then the whole drag is one history action", func():
-		expect(State.undo_redo.has_undo(), "the worker drag records one action")
-		State.undo_redo.undo()
-		expect(not frame.has(anchor + Vector3i(30, 0, 0)), "one undo clears the worker drag")
-	)
-
-
-func _grab_shared_radius() -> void:
-	step("Given a wide plate with the Grab tool and a large shared radius", func():
-		_settings.tool = _settings.Tools.GRAB
-		_settings.radius = 50
-		_settings.falloff = 0.5
-		_view("top")
-		press = _pos(Vector3.ZERO)
-		anchor = aim(press).target
-		for x in range(-20, 21):
-			for z in range(-20, 21):
-				var color := Color.RED if (x == 0 and z == 0) else Color.BLUE
-				frame.set_cell(anchor + Vector3i(x, 0, z), VoxelFrame.material(color))
-		sync_viewport()
-		press = _pos(Vector3(anchor))
-	)
-	step("When the user presses, the capture uses the shared radius", func():
-		_press(press)
-		expect(not tool._grab_empty, "the press captures the wide source region")
-		expect(tool._grab_sources.size() > 785, "the capture uses the shared radius, not the old small cap")
-	)
-	step("When the user drags far", func():
-		var drag_pos := _pos(Vector3(anchor + Vector3i(10, 0, 0)))
-		_motion(drag_pos, drag_pos - press)
-		expect(tool._grab_job != null, "the large drag runs on the worker pool")
-	)
-	await _await_tool_idle()
-	step("Then the center moves by the full delta", func():
-		expect(frame.get_color(anchor + Vector3i(10, 0, 0)) == Color.RED, "the center moves the full drag and keeps its material")
-	)
-	step("Then a weighted source reaches its partial destination", func():
-		expect(frame.get_color(anchor + Vector3i(21, 0, 0)) == Color.BLUE, "the weighted source reaches its partial destination and keeps its material")
-	)
-	step("Then the user releases", func():
-		_release(press)
-	)
-	step("Then the whole drag is one history action", func():
-		expect(State.undo_redo.has_undo(), "the shared-radius drag records one action")
-		State.undo_redo.undo()
-		expect(frame.get_color(anchor) == Color.RED, "one undo restores the center to its origin")
-		expect(frame.get_color(anchor + Vector3i(10, 0, 0)) == Color.BLUE, "one undo restores the moved position to the plate")
-	)
-
-
-func _grab_pending_return() -> void:
-	step("Given a wide plate and a far worker drag", func():
-		_settings.tool = _settings.Tools.GRAB
-		_settings.radius = 25
-		_settings.falloff = 0.5
-		_view("top")
-		press = _pos(Vector3.ZERO)
-		anchor = aim(press).target
-		for x in range(-12, 13):
-			for z in range(-12, 13):
-				frame.set_cell(anchor + Vector3i(x, 0, z), VoxelFrame.material(Color.WHITE))
-		sync_viewport()
-		press = _pos(Vector3(anchor))
-		_press(press)
-		var drag_pos := _pos(Vector3(anchor + Vector3i(30, 0, 0)))
-		_motion(drag_pos, drag_pos - press)
-		expect(tool._grab_job != null, "the large drag runs on the worker pool")
-	)
-	step("When the user returns to the origin and releases", func():
-		var origin_pos := _pos(Vector3(anchor))
-		_motion(origin_pos, origin_pos - press)
-		_release(origin_pos)
-		expect(tool._grab_pending_delta != null, "the return is queued while the worker runs")
-	)
-	await _await_edit_closed()
-	step("Then the model returns to the baseline and the edit closes", func():
-		expect(tool._edit == null, "the queued return closes the edit")
-		expect(not State.edit_busy(), "no operation remains")
-		expect(frame.count() == 625, "the plate is back to its original cell count")
-		expect(not State.undo_redo.has_undo(), "the net-zero drag adds no history")
-	)
-
-
-func _cancel_repress() -> void:
-	step("Given a wide plate and a worker grab", func():
-		_settings.tool = _settings.Tools.GRAB
-		_settings.radius = 25
-		_settings.falloff = 0.5
-		_view("top")
-		press = _pos(Vector3.ZERO)
-		anchor = aim(press).target
-		for x in range(-12, 13):
-			for z in range(-12, 13):
-				var color := Color.RED if (x == 0 and z == 0) else Color.BLUE
-				frame.set_cell(anchor + Vector3i(x, 0, z), VoxelFrame.material(color))
-		sync_viewport()
-		press = _pos(Vector3(anchor))
-		_press(press)
-		var drag_pos := _pos(Vector3(anchor + Vector3i(30, 0, 0)))
-		_motion(drag_pos, drag_pos - press)
-		expect(tool._grab_job != null, "the large drag runs on the worker pool")
-	)
-	step("When the user cancels and presses again", func():
-		_key(KEY_ESCAPE)
-		expect(tool._edit == null, "Escape cancels the stroke")
-		_press(press)
-		expect(tool._edit != null, "the new press opens a new edit")
-		var small := _pos(Vector3(anchor + Vector3i(2, 0, 0)))
-		_motion(small, small - press)
-		_release(small)
-	)
-	await _await_edit_closed()
-	step("Then the cancelled job cannot touch the new stroke", func():
-		expect(tool._edit == null, "the new stroke closes after its release")
-		expect(not State.edit_busy(), "no operation remains")
-		expect(frame.get_color(anchor + Vector3i(2, 0, 0)) == Color.RED, "the new drag applied")
 	)
 
 
@@ -1932,21 +1630,18 @@ func _smooth_controls() -> void:
 		expect(options.get_node("Strength").visible, "the strength control is visible for Smooth")
 		expect(not options.get_node("Build").visible, "Smooth has no build direction")
 		var popup := toolbar.get_popup()
-		expect(popup.item_count == 4, "the terrain menu holds four tools")
+		expect(popup.item_count == 3, "the terrain menu holds three tools")
 		expect(
 			popup.get_item_text(0) == "Build" and popup.get_item_text(1) == "Flatten"
-			and popup.get_item_text(2) == "Smooth" and popup.get_item_text(3) == "Grab",
-			"the menu order is Build, Flatten, Smooth, Grab"
+			and popup.get_item_text(2) == "Smooth",
+			"the menu order is Build, Flatten, Smooth"
 		)
-		expect(popup.get_item_id(2) == 3, "the Smooth item keeps its append-only id")
-		expect(popup.get_item_id(3) == 2, "the Grab item keeps its append-only id")
+		expect(popup.get_item_id(2) == 2, "the Smooth item keeps its append-only id")
 	)
 	step("When the user selects the menu entries by index", func():
 		var toolbar: MenuButton = plugin("TerrainPlugin")._toolbar
 		toolbar.get_popup().index_pressed.emit(2)
 		expect(_settings.tool == _settings.Tools.SMOOTH, "the third entry selects Smooth")
-		toolbar.get_popup().index_pressed.emit(3)
-		expect(_settings.tool == _settings.Tools.GRAB, "the fourth entry selects Grab")
 		toolbar.get_popup().index_pressed.emit(0)
 		expect(_settings.tool == _settings.Tools.BUILD, "the first entry selects Build")
 	)
@@ -2808,23 +2503,6 @@ func _flatten_material_signed() -> void:
 
 
 # --- Preview and controls ---------------------------------------------------
-
-func _grab_controls() -> void:
-	step("Given the Grab tool with a wide radius", func():
-		var options: Control = plugin("TerrainPlugin")._options
-		_settings.tool = _settings.Tools.GRAB
-		_settings.radius = 72
-		expect(_settings.radius == 32, "the Grab keeps the shared radius")
-		expect(options.get_node("Radius").max_value == 32.0, "the radius control keeps the shared bound")
-		expect(not options.get_node("Strength").visible, "the strength control is hidden for Grab")
-	)
-	step("When the user switches back to Build", func():
-		var options: Control = plugin("TerrainPlugin")._options
-		_settings.tool = _settings.Tools.BUILD
-		expect(_settings.radius == 32, "the radius survives the tool switch")
-		expect(options.get_node("Radius").max_value == 32.0, "the radius control keeps the shared bound")
-		expect(options.get_node("Strength").visible, "the strength control returns for Build")
-	)
 
 
 # --- Movement applications --------------------------------------------------

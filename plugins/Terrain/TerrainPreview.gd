@@ -520,7 +520,7 @@ func mark_intent() -> void:
 
 
 ## Retires every running and finished request and hides the visible preview. It
-## never waits for the worker. A stroke, a Grab drag, a clear, and a context
+## never waits for the worker. A stroke, a tool switch, a clear, and a context
 ## change call it, so an older hover result can never reach the cursor.
 func invalidate() -> void:
 	_stash_from_cache()
@@ -562,8 +562,8 @@ func clear_all() -> void:
 
 
 ## Publishes the current hover state on the main thread and retires every hover
-## request. The stroke and the Grab preview use it, so a finished hover job can
-## never overwrite the stroke ring.
+## request. The stroke uses it, so a finished hover job can never overwrite the
+## stroke ring.
 func publish_now() -> void:
 	_epoch += 1
 	_cache_valid = false

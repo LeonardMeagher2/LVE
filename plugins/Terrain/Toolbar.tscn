@@ -3,7 +3,6 @@
 [ext_resource type="ButtonGroup" uid="uid://tm4elm05vye0" path="res://plugins/ToolBarButtonGroup.tres" id="1_bg"]
 [ext_resource type="Texture2D" path="res://icons/build.svg" id="2_build"]
 [ext_resource type="Texture2D" path="res://icons/flatten.svg" id="3_flatten"]
-[ext_resource type="Texture2D" path="res://icons/hand.svg" id="4_grab"]
 [ext_resource type="Texture2D" path="res://icons/smooth.svg" id="6_smooth"]
 [ext_resource type="Script" path="res://plugins/Terrain/Toolbar.gd" id="5_script"]
 
@@ -13,7 +12,7 @@ button_group = ExtResource("1_bg")
 icon = ExtResource("2_build")
 flat = false
 icon_alignment = 1
-item_count = 4
+item_count = 3
 popup/item_0/text = "Build"
 popup/item_0/icon = ExtResource("2_build")
 popup/item_0/id = 0
@@ -22,8 +21,5 @@ popup/item_1/icon = ExtResource("3_flatten")
 popup/item_1/id = 1
 popup/item_2/text = "Smooth"
 popup/item_2/icon = ExtResource("6_smooth")
-popup/item_2/id = 3
-popup/item_3/text = "Grab"
-popup/item_3/icon = ExtResource("4_grab")
-popup/item_3/id = 2
+popup/item_2/id = 2
 script = ExtResource("5_script")

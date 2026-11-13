@@ -12,7 +12,7 @@ const DRAG_STEPS := 12
 # wait needs more than the shared 120 s deadline. Only it gets this one.
 const HEAVY_TIMEOUT := 900.0
 const ProbeScript := preload("./terrain_latency_tool.gd")
-const TOOLS := ["Build", "Flatten", "Grab", "Smooth"]
+const TOOLS := ["Build", "Flatten", "Smooth"]
 const RADII := [2, 4, 16, 32]
 const MODES := ["tap", "drag"]
 const FIXTURES := ["small", "large"]
@@ -110,7 +110,7 @@ func after_test() -> void:
 			_tool.finish_on_switch()
 		while _tool._smooth_job != null:
 			await get_tree().process_frame
-		while _tool._tick_job != null or _tool._grab_job != null:
+		while _tool._tick_job != null:
 			await get_tree().process_frame
 		_tool.free()
 	_fixture = null
@@ -305,8 +305,6 @@ func _reset_counters() -> void:
 	VoxelEditTransaction._profile_chunks_equal_us = 0
 	VoxelDocument._profile_rescan_calls = 0
 	VoxelDocument._profile_rescan_us = 0
-	TerrainPreview._profile_sample_candidates = 0
-	TerrainPreview._profile_smooth_candidates = 0
 	_renderer.profile_surfaces = true
 	_renderer.reset_profile()
 
@@ -330,8 +328,6 @@ func _read_counters() -> Dictionary:
 		"chunks_equal_us": VoxelEditTransaction._profile_chunks_equal_us,
 		"doc_rescan_calls": VoxelDocument._profile_rescan_calls,
 		"doc_rescan_us": VoxelDocument._profile_rescan_us,
-		"sample_candidates": TerrainPreview._profile_sample_candidates,
-		"smooth_candidates": TerrainPreview._profile_smooth_candidates,
 	}
 
 
@@ -361,8 +357,6 @@ func _tool_id(name: String) -> int:
 			return _settings.Tools.BUILD
 		"Flatten":
 			return _settings.Tools.FLATTEN
-		"Grab":
-			return _settings.Tools.GRAB
 		"Smooth":
 			return _settings.Tools.SMOOTH
 	return _settings.Tools.BUILD

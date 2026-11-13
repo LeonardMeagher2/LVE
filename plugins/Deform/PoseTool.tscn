@@ -1,0 +1,12 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://plugins/Deform/PoseTool.gd" id="1_tool"]
+
+[node name="PoseTool" type="Node3D"]
+script = ExtResource("1_tool")
+
+[node name="Footprint" type="MeshInstance3D" parent="."]
+cast_shadow = 0
+
+[node name="Bone" type="MeshInstance3D" parent="."]
+cast_shadow = 0

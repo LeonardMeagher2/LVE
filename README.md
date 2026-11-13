@@ -14,7 +14,8 @@ Export a low-poly glTF mesh or a sprite sheet.
 ## Features
 
 - Paint, erase, fill, spray, and pick colors.
-- Build, dig, flatten, smooth, and grab terrain.
+- Build, dig, flatten, and smooth terrain.
+- Grab and pose connected limbs.
 - Select, move, rotate, and scale voxels.
 - Mirror and slice the model while you work.
 - Animate frames with tags, loops, and playback.

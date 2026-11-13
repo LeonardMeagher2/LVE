@@ -147,11 +147,11 @@ Smooth-tool spacing remains a separate policy question.
 
 | Behavior | External evidence | LVE current | Consequence |
 | --- | --- | --- | --- |
-| The source set is fixed at the press. | Blender Grab moves only the vertices under the brush at the stroke start. [P6c] Nomad Grab selects at the start and keeps that selection. [P11a] | `_capture_grab` collects ball sources at the press. [L7] | LVE matches the fixed-source family. |
+| The source set is fixed at the press. | Blender Grab moves only the vertices under the brush at the stroke start. [P6c] Nomad Grab selects at the start and keeps that selection. [P11a] | `GrabTool._capture_gesture` collects ball sources at the press. [L7] | LVE matches the fixed-source family. |
 | Drag can keep adding sources. | Nomad Drag keeps updating what is inside the radius during the stroke. [P11a] | LVE uses the captured sources only. | Do not switch to Drag behavior without a measured need. |
 | Pressure can be unsupported. | Blender Grab does not support size or strength pressure. Its Normal Radius is visual only. [P6c] | LVE Grab uses no strength and hides the strength option. [L7] | No pressure support is consistent with Blender Grab. |
 | The latest target wins. | Blender Grab follows the cursor. | LVE queues the latest absolute delta while a job runs. [L7] | This is an absolute target, not an accumulated path. Keep it. |
-| The drag is bounded. | The cited Grab pages state no cell limit. | LVE clamps the source radius to 12 and the drag to 48 cells. [L7] | The limit is a project rule. State it in the UI help. |
+| The drag is bounded. | The cited Grab pages state no cell limit. | LVE clamps the brush radius to 32 cells and the drag to 48 cells. [L7] | The limit is a project rule. State it in the UI help. |
 
 Inference: LVE Grab is a proportional stretch on a view-facing plane.
 It is not a soft brush and not an incremental snake.
@@ -403,7 +403,7 @@ Total: 17 entries, 25 URLs.
 - [L4] `plugins/Terrain/TerrainPrep.gd`, `progress_key`, `accumulated`, `collect_steps`.
 - [L5] `plugins/Terrain/TerrainGeometry.gd`, `flatten_action`.
 - [L6] `plugins/Terrain/TerrainPreview.gd`, `compute_smooth_fields`, `plugins/Terrain/TerrainPrep.gd`, `smooth_surface_frame`.
-- [L7] `plugins/Terrain/TerrainTool.gd`, `_capture_grab`, `_update_grab`, `_run_grab`, `GRAB_MAX_RADIUS`, `GRAB_MAX_DISTANCE`.
+- [L7] `plugins/Deform/GrabTool.gd`, `_capture_gesture`, `_make_job`, `GrabJob`, `GRAB_MAX_DISTANCE`.
 - [L8] `plugins/Terrain/TerrainTool.gd`, `FOOTPRINT_COLOR`, `_setup_build_footprint`, `_build_build_footprint_mesh`, `_pose_build_footprint`, `_pose_build_idle`, `_pose_build_visual`, `_pose_build_footprint_from_pointer`, `handle_input`.
 - [L9] `ui/Viewport/Viewport.gd`, `_view_drag_mode`, `_input`.
 - [L10] `plugins/Terrain/TerrainGeometry.gd`, `resolve_samples`, `plugins/Terrain/TerrainPreview.gd`, `compute_sample_map`.

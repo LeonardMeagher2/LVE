@@ -3,7 +3,7 @@ extends VoxelTool
 
 ## The terrain tool.
 ##
-## The tool grows, flattens, smooths, or grabs voxels on a surface plane.
+## The tool grows, flattens, or smooths voxels on a surface plane.
 ## A press reads the local voxel surface, so a slope follows the
 ## surface instead of a cube face. A read that is too sparse or too ambiguous
 ## falls back to the clicked face. A press that misses the model uses the floor
@@ -22,9 +22,8 @@ extends VoxelTool
 ## accepted press or motion anchor is the cell of the frozen cursor plane, so a
 ## later surface read never moves it. Each Build and Flatten column keeps its own support
 ## lookup on that fixed plane. The lookup reaches 64 cells, beyond the old
-## per-radius bound. It does not provide unrestricted height. Grab is a
-## proportional stretch drag on the true camera-facing plane. A large dab or drag
-## runs on the worker pool: the
+## per-radius bound. It does not provide unrestricted height. A large dab runs on
+## the worker pool: the
 ## footprint map of a Build or Flatten dab, the rounding fields of a Smooth dab,
 ## and every write. A small dab stays inline, so a press with a small brush
 ## edits in its input event. A burst of input drains after the release and
@@ -62,8 +61,6 @@ const PREP_BATCH_TARGET_US := 50000
 ## limit. The operation plane never moves, so the kernel coverage and the profile
 ## inside the old bound are unchanged.
 const HEIGHT_LOOKUP_LIMIT := 64
-## The largest Grab drag distance in voxels.
-const GRAB_MAX_DISTANCE := 48.0
 ## The most dabs one drain applies. A longer accepted path continues on the next
 ## deferred drain, so a giant jump never blocks one frame and no accepted cell is
 ## dropped.
@@ -193,19 +190,6 @@ var _smooth_hit := VoxelPicking.NONE
 var _smooth_entry := Vector3i.ZERO
 
 
-# The Grab state.
-var _grab_sources: Array = []
-var _grab_source_cells := {}
-var _grab_baseline: VoxelFrame
-var _grab_anchor := VoxelPicking.NONE
-var _grab_drag := VoxelPicking.NONE
-var _grab_pending_delta = null
-var _grab_empty := false
-# The chunk locations the drag has published. A drag recomputes from the
-# baseline, so the next publish restores the earlier locations too.
-var _grab_published := {}
-
-
 # The Smooth state. One rounding field per active symmetry mask. A field holds
 # the writable candidate cells and its fractional pass carry. The rounding reads
 # the frozen occupancy of the candidates, so a mask that shares a cell with
@@ -217,7 +201,6 @@ var _tick_job: TerrainTickJob
 # How many crossed centers one prep job takes. The worker time of the last
 # batch sets it, so a broad brush stays at one and a narrow one takes several.
 var _prep_batch := 1
-var _grab_job: GrabJob
 var _smooth_job: SmoothJob
 var _operation_id := 0
 var _last_pick: PickResult
@@ -231,7 +214,6 @@ var _settings_tool := 0
 var _settings_build_mode := 0
 var _settings_radius := 4
 var _settings_falloff := 0.5
-var _ball_cache := {}
 
 
 # The hover preview controller. It owns the hover frame, the cached cells, and
@@ -260,8 +242,8 @@ var _stroke_frame_index := -1
 
 
 ## Whether the visible preview may not match the current inputs. The hover
-## controller owns the flag. The stroke and the Grab paths clear it when they
-## publish, and the frame loop reads it.
+## controller owns the flag. The stroke paths clear it when they publish, and
+## the frame loop reads it.
 var _preview_dirty: bool:
 	get:
 		return _preview.is_dirty() if _preview != null else false
@@ -519,86 +501,6 @@ class TerrainTickJob extends VoxelFrame.EditJob:
 			if edited_frame.has(surface):
 				return edited_frame.get_material(surface)
 		return material
-
-
-## One cancellable Grab drag.
-##
-## The job starts from the baseline frame snapshot and moves every captured
-## source by its own scaled offset. It keeps the unrelated geometry and the
-## full materials. It writes a move only when the destination stays inside the
-## selection. [method VoxelFrame.EditJob.run] is the worker body.
-class GrabJob extends VoxelFrame.EditJob:
-	## The stroke id that the job belongs to.
-	var stroke_id := 0
-	## The operation id that the job belongs to.
-	var operation_id := 0
-	## The frame snapshot to read and write. It starts as the baseline copy.
-	var edited_frame: VoxelFrame
-	## The planned moves. Each entry holds the source cell, the full material,
-	## the scaled cell offset, and the weight.
-	var moves: Array = []
-	## The captured source cells, keyed by cell position.
-	var sources := {}
-	## The selected cells. An empty dictionary allows every cell.
-	var selection := {}
-	## The frozen edit context that limits the slice and the document size.
-	var context: VoxelFrame.EditContext
-	## The chunk locations that the drag changed.
-	var changed_chunks: Array[Vector3i] = []
-
-	## Computes and applies the drag. This is the worker body.
-	func run() -> void:
-		stage("Grabbing voxels", moves.size())
-		var planned := []
-		for move in moves:
-			var source: Vector3i = move["source"]
-			var destination: Vector3i = source + move["delta"]
-			if destination == source or not _allows(destination) or _blocked(destination):
-				continue
-			planned.append(move)
-		# A higher weight moves first. A tie breaks by the canonical world cell,
-		# so two equal weights never depend on the sort order. The first writer of
-		# an overlapping destination then wins the same way on every run.
-		planned.sort_custom(func(a, b):
-			var weight_a := float(a["weight"])
-			var weight_b := float(b["weight"])
-			if weight_a != weight_b:
-				return weight_a > weight_b
-			var source_a: Vector3i = a["source"]
-			var source_b: Vector3i = b["source"]
-			if source_a.y != source_b.y:
-				return source_a.y < source_b.y
-			if source_a.z != source_b.z:
-				return source_a.z < source_b.z
-			return source_a.x < source_b.x
-		)
-		var changes := {}
-		for move in planned:
-			changes[move["source"]] = VoxelFrame.material(Color.TRANSPARENT)
-		var writes := {}
-		var completed := 0
-		for move in planned:
-			var source: Vector3i = move["source"]
-			var material: PackedFloat32Array = move["material"]
-			var destination: Vector3i = source + move["delta"]
-			for cell in StrokeLine.cells(source, destination):
-				if cell == source or _blocked(cell) or not _allows(cell) or writes.has(cell):
-					continue
-				writes[cell] = material
-			completed += 1
-			if completed % 512 == 0 and not checkpoint(completed):
-				return
-		for cell in writes:
-			changes[cell] = writes[cell]
-		changed_chunks = apply_cells(edited_frame, changes)
-
-	func _blocked(cell: Vector3i) -> bool:
-		return edited_frame.has(cell) and not sources.has(cell)
-
-	func _allows(cell: Vector3i) -> bool:
-		if context != null:
-			return context.allows(cell)
-		return selection.is_empty() or selection.has(cell)
 
 
 ## One cancellable Smooth rounding tick.
@@ -959,10 +861,6 @@ func _notification(what: int) -> void:
 		_tick_job.cancel()
 		_tick_job.wait_for_worker()
 		_tick_job = null
-	if _grab_job:
-		_grab_job.cancel()
-		_grab_job.wait_for_worker()
-		_grab_job = null
 	if _smooth_job:
 		_smooth_job.cancel()
 		_smooth_job.wait_for_worker()
@@ -991,7 +889,7 @@ func _exit_tree() -> void:
 
 
 func _release_context_subscriptions() -> void:
-	if is_inside_tree() or _edit != null or _tick_job != null or _grab_job != null or _smooth_job != null:
+	if is_inside_tree() or _edit != null or _tick_job != null or _smooth_job != null:
 		return
 	if State.edit_context_changing.is_connected(_cancel_edit):
 		State.edit_context_changing.disconnect(_cancel_edit)
@@ -1130,14 +1028,6 @@ func open_stroke() -> VoxelEditTransaction:
 	_ray_dir = Vector3.INF
 	_smooth_hit = VoxelPicking.NONE
 	_smooth_entry = Vector3i.ZERO
-	_grab_sources = []
-	_grab_source_cells = {}
-	_grab_baseline = null
-	_grab_anchor = VoxelPicking.NONE
-	_grab_drag = VoxelPicking.NONE
-	_grab_pending_delta = null
-	_grab_empty = false
-	_grab_published.clear()
 	_prep_batch = 1
 	_clear_smooth()
 	# A press retires the hover at once: the running job is cancelled without a
@@ -1150,13 +1040,6 @@ func open_stroke() -> VoxelEditTransaction:
 
 
 func _apply_pick(target: Vector3i, hit: Vector3i) -> void:
-	if _stroke_tool == TerrainSettings.Tools.GRAB:
-		_stroke_center_point = Vector3(target)
-		# Grab records the cheap face frame of the picked voxel, so a reader of
-		# the stroke frame always has one.
-		_stroke_frame = _pending_frame
-		_capture_grab(target)
-		return
 	_stroke_frame = _pending_frame
 	if _stroke_frame == null:
 		_stroke_frame = TerrainFrame.from_face(target, Vector3i(0, 1, 0))
@@ -1255,9 +1138,6 @@ func _dab_moved_enough(from_cell: Vector3i, to_cell: Vector3i) -> bool:
 
 
 func _apply_stroke_to(to: Vector3i) -> void:
-	if _stroke_tool == TerrainSettings.Tools.GRAB:
-		_update_grab(to)
-		return
 	if _path_anchor == VoxelPicking.NONE or to == VoxelPicking.NONE:
 		return
 	# A surface read of the Smooth plane can change the pick cell without pointer
@@ -1317,13 +1197,6 @@ func _finish_stroke() -> void:
 	_base_surfaces = {}
 	_stroke_columns = {}
 	_clear_smooth()
-	_grab_sources = []
-	_grab_source_cells = {}
-	_grab_baseline = null
-	_grab_anchor = VoxelPicking.NONE
-	_grab_drag = VoxelPicking.NONE
-	_grab_pending_delta = null
-	_grab_published.clear()
 	_stroke_tx = null
 	_source_document = null
 	_source_frame = null
@@ -1339,8 +1212,6 @@ func _action_name() -> String:
 	match _stroke_tool:
 		TerrainSettings.Tools.FLATTEN:
 			return "Flatten"
-		TerrainSettings.Tools.GRAB:
-			return "Grab"
 		TerrainSettings.Tools.SMOOTH:
 			return "Smooth"
 	return "Build"
@@ -1349,8 +1220,6 @@ func _action_name() -> String:
 func _cancel_edit() -> void:
 	if _tick_job:
 		_tick_job.cancel()
-	if _grab_job:
-		_grab_job.cancel()
 	if _smooth_job:
 		_smooth_job.cancel()
 	# Drop the accepted path, so a stale completion cannot apply a cancelled dab.
@@ -1363,13 +1232,6 @@ func _cancel_edit() -> void:
 	_stroke_frame = null
 	_cursor_frame = null
 	_clear_smooth()
-	_grab_sources = []
-	_grab_source_cells = {}
-	_grab_baseline = null
-	_grab_pending_delta = null
-	_grab_anchor = VoxelPicking.NONE
-	_grab_drag = VoxelPicking.NONE
-	_grab_published.clear()
 	_stroke_active = false
 	_plane = null
 	_last_target = VoxelPicking.NONE
@@ -1399,8 +1261,7 @@ func _on_history_changed() -> void:
 # The tool edits on input, not on elapsed time. The frame loop only rebuilds a
 # dirty hover preview, so a held pointer never adds a dab on its own.
 #
-# The hover surface read and the footprint map run on a worker. A stroke or a Grab hover
-# publishes on the main thread, because those are cheap and must not wait.
+# The hover surface read and the footprint map run on a worker.
 func _process(_delta: float) -> void:
 	if _preview == null:
 		return
@@ -1408,10 +1269,6 @@ func _process(_delta: float) -> void:
 	# is never awaited here.
 	_preview.poll()
 	if _edit != null or _busy():
-		if _preview_dirty:
-			_rebuild_preview()
-		return
-	if _settings.tool == TerrainSettings.Tools.GRAB:
 		if _preview_dirty:
 			_rebuild_preview()
 		return
@@ -1425,7 +1282,7 @@ func _process(_delta: float) -> void:
 ## [param influence] is not read. Two calls apply two dabs. The runtime never
 ## calls it.
 func advance_stroke(influence: float) -> void:
-	if _edit == null or _stroke_tool == TerrainSettings.Tools.GRAB:
+	if _edit == null:
 		return
 	if _busy():
 		return
@@ -1448,7 +1305,7 @@ func _apply_influence(applications: float) -> void:
 # reaches the segment, so the queue holds one entry per real motion and no
 # accepted cell is ever dropped.
 func _enqueue_segment(from: Vector3i, to: Vector3i) -> void:
-	if _edit == null or _stroke_tool == TerrainSettings.Tools.GRAB:
+	if _edit == null:
 		return
 	if from == VoxelPicking.NONE or to == VoxelPicking.NONE or from == to:
 		return
@@ -1739,11 +1596,11 @@ func _plane_point(cell: Vector3i) -> Vector3:
 
 # Returns true while a dab or a drag runs on the worker pool.
 func _busy() -> bool:
-	return _tick_job != null or _grab_job != null or _smooth_job != null
+	return _tick_job != null or _smooth_job != null
 
 
 # Returns true when a finished worker job still belongs to the current stroke and
-# may publish its result. Every dab job (tick, grab, smooth) shares this check: a
+# may publish its result. Every dab job (tick and smooth) shares this check: a
 # newer stroke, an expired cancel request, a closed handle, or a swapped document
 # or frame rejects the result.
 func _job_is_current(job: Variant) -> bool:
@@ -1941,188 +1798,6 @@ func _flush_stroke_chunks() -> void:
 	State.chunks_changed.emit(State.current_frame, chunks)
 
 
-# --- Grab -------------------------------------------------------------------
-
-
-func _capture_grab(anchor: Vector3i) -> void:
-	_grab_anchor = anchor
-	_grab_drag = anchor
-	_grab_baseline = _source_frame.copy_frame()
-	_grab_sources = []
-	_grab_source_cells = {}
-	var radius := _stroke_radius
-	for mask in _masks_for(_stroke_context):
-		var center := _stroke_context.reflect(anchor, mask)
-		for offset in _ball_offsets(radius):
-			var cell := center + offset
-			if _grab_source_cells.has(cell):
-				continue
-			if not _source_frame.has(cell):
-				continue
-			if not _allows_selection(cell):
-				continue
-			var distance := Vector3(offset).length()
-			var weight := TerrainGeometry.weight_at(distance, float(radius), _stroke_falloff)
-			# A zero weight cannot move, so the source never joins the drag.
-			if weight <= 0.0:
-				continue
-			_grab_source_cells[cell] = true
-			_grab_sources.append({
-				"cell": cell,
-				"material": _source_frame.get_material(cell),
-				"mask": mask,
-				"weight": weight,
-			})
-	_grab_empty = _grab_sources.is_empty()
-	_mark_hover_dirty()
-
-
-func _allows_selection(cell: Vector3i) -> bool:
-	if _stroke_context != null:
-		return _stroke_context.allows(cell)
-	return _stroke_selection.is_empty() or _stroke_selection.has(cell)
-
-
-func _ball_offsets(size: int) -> Array[Vector3i]:
-	if _ball_cache.has(size):
-		return _ball_cache[size]
-	var offsets: Array[Vector3i] = []
-	var radius := float(size) * 0.5
-	var radius_squared := radius * radius
-	var reach := ceili(radius)
-	for x in range(-reach, reach + 1):
-		for y in range(-reach, reach + 1):
-			for z in range(-reach, reach + 1):
-				if x * x + y * y + z * z <= radius_squared:
-					offsets.append(Vector3i(x, y, z))
-	_ball_cache[size] = offsets
-	return offsets
-
-
-func _update_grab(to: Vector3i) -> void:
-	if _grab_empty or _grab_baseline == null or to == VoxelPicking.NONE:
-		return
-	var delta := Vector3(to - _grab_anchor)
-	if delta.length() > GRAB_MAX_DISTANCE:
-		delta = delta.normalized() * GRAB_MAX_DISTANCE
-		to = _grab_anchor + Vector3i(delta.round())
-	if to == _grab_drag:
-		return
-	_grab_drag = to
-	if _grab_job != null:
-		_grab_pending_delta = to - _grab_anchor
-		return
-	_run_grab(to - _grab_anchor)
-
-
-func _run_grab(delta: Vector3i) -> void:
-	if _grab_baseline == null:
-		return
-	var moves := []
-	for source in _grab_sources:
-		var mask: int = source["mask"]
-		var anchor_mirror := _stroke_context.reflect(_grab_anchor, mask)
-		var moved_mirror := _stroke_context.reflect(_grab_anchor + delta, mask)
-		var mirrored: Vector3i = moved_mirror - anchor_mirror
-		var weight: float = source["weight"]
-		var scaled := Vector3i(
-			roundi(float(mirrored.x) * weight),
-			roundi(float(mirrored.y) * weight),
-			roundi(float(mirrored.z) * weight)
-		)
-		if scaled == Vector3i.ZERO:
-			continue
-		moves.append({"source": source["cell"], "material": source["material"], "delta": scaled, "weight": weight})
-	if moves.is_empty():
-		_publish_grab_baseline()
-		_after_grab()
-		return
-	var job := GrabJob.new()
-	job.stroke_id = _stroke_id
-	job.edited_frame = VoxelFrame.job_frame(_grab_baseline)
-	job.moves = moves
-	job.sources = _grab_source_cells
-	job.selection = _stroke_selection
-	job.context = _stroke_context
-	var work := 0
-	for move in moves:
-		var offset: Vector3i = move["delta"]
-		work += absi(offset.x) + absi(offset.y) + absi(offset.z) + 1
-	_grab_job = job
-	if work <= INLINE_EDIT_LIMIT:
-		job.run()
-		_finish_grab(job)
-	else:
-		_operation_id = State.begin_operation("Grabbing voxels", work, true, self, _cancel_edit)
-		job.operation_id = _operation_id
-		_run_grab_worker(job)
-
-
-func _run_grab_worker(job: GrabJob) -> void:
-	await State.run_edit_job(job, job.operation_id, "Terrain grab")
-	if _grab_job != job:
-		return
-	_finish_grab(job)
-
-
-func _finish_grab(job: GrabJob) -> void:
-	if _grab_job == job:
-		_grab_job = null
-	if _operation_id == job.operation_id:
-		_operation_id = 0
-	State.finish_operation(job.operation_id)
-	if job.stroke_id != _stroke_id:
-		# A newer stroke owns the tool. Run its queued drag when one waits.
-		if _grab_pending_delta != null and _edit == _stroke_tx:
-			var queued: Vector3i = _grab_pending_delta
-			_grab_pending_delta = null
-			_run_grab(queued)
-		return
-	if not _job_is_current(job):
-		return
-	# The drag recomputes from the baseline, so a chunk that moved in an earlier
-	# update and not in this one must revert. Publish the union of both updates.
-	var locations: Array[Vector3i] = []
-	for location in _grab_published:
-		locations.append(location)
-	for location in job.changed_chunks:
-		if not _grab_published.has(location):
-			_grab_published[location] = true
-			locations.append(location)
-	_source_frame.apply_published(locations, job.edited_frame)
-	State.document._bounds_dirty = true
-	if not locations.is_empty():
-		State.chunks_changed.emit(State.current_frame, locations)
-	if job.stroke_id != _stroke_id:
-		return
-	if _grab_pending_delta != null:
-		var pending: Vector3i = _grab_pending_delta
-		_grab_pending_delta = null
-		_run_grab(pending)
-	else:
-		_after_grab()
-
-
-func _after_grab() -> void:
-	_settle_dabs()
-
-
-func _publish_grab_baseline() -> void:
-	if _grab_baseline == null or _edit == null or _edit != _stroke_tx:
-		return
-	if State.document != _source_document or State.get_current_voxel_frame() != _source_frame:
-		return
-	var locations: Array[Vector3i] = []
-	for location in _grab_published:
-		locations.append(location)
-	_grab_published.clear()
-	_source_frame.apply_published(locations, _grab_baseline)
-	State.document._bounds_dirty = true
-	if not locations.is_empty():
-		State.chunks_changed.emit(State.current_frame, locations)
-	_mark_hover_dirty()
-
-
 # --- Smooth -----------------------------------------------------------------
 #
 # Smooth rounds the local surface in three dimensions. It keeps one rounding
@@ -2268,16 +1943,9 @@ func _finish_smooth(job: SmoothJob) -> void:
 
 
 ## Pumps the preview for one frame. The runtime calls it from [method _process].
-## A test calls it to force one request outside the frame loop. A stroke and a
-## Grab hover publish the pose on the main thread, because both are cheap.
+## A test calls it to force one request outside the frame loop.
 func _rebuild_preview() -> void:
 	if _edit != null:
-		_preview.publish_now()
-		return
-	if _settings.tool == TerrainSettings.Tools.GRAB:
-		if _last_pick == null or _last_pick.target == VoxelPicking.NONE:
-			_preview.publish_now()
-			return
 		_preview.publish_now()
 		return
 	# The hover request runs on the worker. A test or a benchmark calls it to
@@ -2457,11 +2125,9 @@ func _pose_footprint(pick: PickResult) -> void:
 	_footprint.visible = true
 
 
-## Returns the plane the ring shows. Grab and the Face source keep the exact
-## picked face, and every other state uses the surface hover frame.
+## Returns the plane the ring shows. The surface hover frame or a captured stroke
+## plane supplies it, and a missing read falls back to the picked face.
 func _footprint_frame(pick: PickResult) -> TerrainFrame:
-	if _settings.tool == _settings.Tools.GRAB:
-		return TerrainFrame.from_face(pick.hit, pick.entry)
 	# A Smooth stroke poses the ring on the re-read operation plane, so the ring
 	# rotates with the normal the dab is using.
 	if _edit != null and _stroke_frame != null and _stroke_tool == TerrainSettings.Tools.SMOOTH:
@@ -2516,17 +2182,6 @@ func _pick_start(origin: Vector3, dir: Vector3) -> PickResult:
 		# pointer is on, so a stroke from below seeds below the plane.
 		var floor_level := float(State.floor_index) - 0.5
 		_stroke_floor_cell = State.floor_index if origin[State.floor_axis] >= floor_level else State.floor_index - 1
-	if _settings.tool == TerrainSettings.Tools.GRAB:
-		if pick.hit != VoxelPicking.NONE:
-			pick.target = pick.hit
-			pick.plane = _plane_for(Vector3(pick.hit), _forward().normalized())
-			# Grab keeps the exact picked face, so a press stores the cheap face
-			# frame and runs no surface read.
-			if press:
-				_pending_frame = TerrainFrame.from_face(pick.hit, pick.entry)
-		else:
-			pick.plane = null
-		return pick
 	# An idle hover runs its surface read and its footprint map on the preview
 	# worker, so a still pointer pays nothing and a new cell pays one bounded
 	# request. The pointer ray above is already recorded, so the stroke spacing
@@ -2615,8 +2270,6 @@ func pick_drag(request: PickRequest) -> PickResult:
 		# ray. The write still uses the cursor plane and the sample map.
 		_ray_origin = request.origin
 		_ray_dir = request.dir
-	if _stroke_active and _stroke_tool == TerrainSettings.Tools.GRAB:
-		return _view_drag(request)
 	if _stroke_active and _cursor_frame != null:
 		return _frame_drag(request)
 	return VoxelPicking.drag_pick(request.origin, request.dir, request.frame, request.plane)
@@ -2666,30 +2319,11 @@ func _camera_changed() -> bool:
 	return not camera.global_transform.is_equal_approx(_press_camera_transform)
 
 
-# Intersects the true camera-facing plane and rounds the point to a cell.
-func _view_drag(request: PickRequest) -> PickResult:
-	var plane := request.plane
-	var result := PickResult.new()
-	var denom := request.dir.dot(plane.normal)
-	if absf(denom) < 1e-8:
-		return result
-	var t: float = (plane.point - request.origin).dot(plane.normal) / denom
-	if t <= 0.0:
-		return result
-	var point: Vector3 = request.origin + request.dir * t
-	# A view-aligned plane can be oblique, so the drag keeps all three rounded
-	# components. Only a cardinal cursor plane fixes one component.
-	result.target = TerrainGeometry.cell_at(point)
-	result.hit = result.target if request.frame != null and request.frame.has(result.target) else VoxelPicking.NONE
-	return result
-
-
 ## Updates the tool cursor and the preview for one pick.
 ##
 ## The builder records the pick and marks the hover dirty. The controller reads
 ## the frame and builds the footprint on a worker, so a pointer event never runs
-## a surface read or a scan on the main thread. Grab draws the occupied sources of
-## the view plane, so it needs no surface frame.
+## a surface read or a scan on the main thread.
 func update_visual(pick: PickResult) -> void:
 	if pick.plane == null:
 		pick.plane = _plane

@@ -4,8 +4,7 @@ extends HBoxContainer
 ##
 ## It shows the options of the active terrain tool. The Build section selects the
 ## add or the remove direction. Every tool shares the radius, the falloff, and
-## the radius bound of the shared settings. The strength control is hidden for
-## Grab, because Grab does not use it.
+## the radius bound of the shared settings.
 
 var _settings: TerrainToolSettings = preload("./settings.tres")
 
@@ -25,7 +24,6 @@ func _sync() -> void:
 	$Build.visible = tool == _settings.Tools.BUILD
 	$Build/Add.set_pressed_no_signal(_settings.build_mode == _settings.BuildMode.ADD)
 	$Build/Remove.set_pressed_no_signal(_settings.build_mode == _settings.BuildMode.REMOVE)
-	$Strength.visible = tool != _settings.Tools.GRAB
 	$Radius.set_value_no_signal(_settings.radius)
 	$Strength.set_value_no_signal(_settings.strength)
 	$Falloff.set_value_no_signal(_settings.falloff)
