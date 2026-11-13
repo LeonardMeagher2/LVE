@@ -9,6 +9,7 @@ var _unlocked := Basis.IDENTITY
 
 func _ready() -> void:
 	test("the viewport light and ambient controls update the scene and the document", _color_run)
+	test("the saved document lighting applies to a light and environment", _saved_lighting, "saved_lighting")
 	test("the light lock follows the camera and resets with the document", _lock_run)
 	test("the environment row owns the light widget and shading controls", _environment_run)
 
@@ -170,3 +171,24 @@ func _environment_run() -> void:
 		expect(not scene.get_node("%LockView").button_pressed, "the lock turns off")
 		expect(scene.get_node("%Shaded").button_pressed, "shading turns on")
 	)
+
+
+func _saved_lighting() -> void:
+	var test_light := DirectionalLight3D.new()
+	var test_environment := Environment.new()
+	add_child(test_light)
+	step("Given saved light and ambient energies", func():
+		VoxelImageRenderer.apply_saved_lighting(test_light, test_environment, {
+			"basis": Basis(Vector3.UP, 0.5),
+			"color": Color(1.0, 0.5, 0.25, 0.75),
+			"ambient_color": Color(0.2, 0.3, 0.4, 0.5),
+		})
+	)
+	step("Then the saved values apply", func():
+		expect(test_light.basis.is_equal_approx(Basis(Vector3.UP, 0.5)), "the light direction is applied")
+		expect(test_light.light_color.is_equal_approx(Color(1.0, 0.5, 0.25)), "the light color is opaque")
+		expect(is_equal_approx(test_light.light_energy, 0.75), "the color alpha sets the light energy")
+		expect(test_environment.ambient_light_color.is_equal_approx(Color(0.2, 0.3, 0.4)), "the ambient color is opaque")
+		expect(is_equal_approx(test_environment.ambient_light_energy, 0.5), "the ambient alpha sets the ambient energy")
+	)
+	test_light.free()

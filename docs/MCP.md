@@ -60,14 +60,13 @@ The server publishes one resource, `lve://guide`. It gives the edit rules and th
 
 | Tool | Action |
 | --- | --- |
-| `get_state` | Read the compact document, tags, active tag, tool, material, selection, symmetry, slice, busy, and undo state. It also returns the content revision and the current frame cell bounds |
-| `inspect_document` | Read a semantic summary of one or more frames: integer bounds, occupied count, materials, connected islands, tags, and transitions |
-| `get_regions` | List connected regions by material or by frame. Use it to target a part |
+| `get_state` | Read the compact document, tags, active tag, tool, material, selection count and bounds, symmetry, slice, busy, and undo state. It also returns the content revision and the current frame cell bounds |
+| `inspect_document` | Read a semantic summary of one or more frames: integer bounds, occupied count, materials, connected islands, tags, and transitions. Limit islands to a box or one material |
 | `get_slice` | Read labeled 2D slices or projections as text. Use it for exact shape and material layout |
 | `get_map` | Read a coarse occupancy grid. Use it to locate content in a large frame |
 | `get_changes` | Read cells changed since a revision. Use the revision from a read or a write |
 | `get_cells` | Read occupied cells in a box as x-runs. Omit min and max to use the frame bounds. Pass next back as cursor to continue |
-| `screenshot` | Save a PNG of one frame, a view contact sheet, or a frame storyboard. Set `inline` true to return the image |
+| `screenshot` | Save a PNG of one frame, a view contact sheet, or a frame storyboard. Set the view, lighting, shading, wireframe, and `inline` options |
 | `new_document` | Open an empty document in a new tab |
 | `save_document` | Save a copy of the current document as `.lve` or `.lve.png`. Set `copy` false to save the main document |
 | `open_document` | Open a saved `.lve` or `.lve.png` document in a new tab |
@@ -87,14 +86,12 @@ The server publishes one resource, `lve://guide`. It gives the edit rules and th
 | `set_tag_range` | Set one tag's inclusive frame range |
 | `set_active_tag` | Select one tag or clear the selection |
 | `set_tag_loop` | Set one tag's loop mode and repeat count |
-| `set_playback` | Start or stop animation playback |
 | `set_tool` | Select brush, eraser, paint, or fill and set its options |
 | `set_material` | Set the current material, emission, or palette entry |
-| `set_cursor` | Move the active tool cursor |
 | `stroke` | Draw a brush, paint, or eraser stroke through cell points |
 | `fill` | Fill a connected or matching region from a seed |
 | `write_cells` | Write or erase cells, boxes, or runs with optional per-cell materials and frames. One call is one undo action |
-| `sample` | Copy a cell material to the current material |
+| `set_selection` | Set, add, subtract, or clear the shared selection from cells or boxes. One call is one undo action |
 
 The tools use integer cell coordinates. Cell `c` covers `[c - 0.5, c + 0.5]`. Y is up.
 
@@ -109,7 +106,7 @@ Use this order to build a mental model without reading many cells.
 5. Call `get_cells` for exact cells. Omit `min` and `max` to read the frame bounds.
 6. Call `get_changes` with the last revision to verify an edit.
 
-`inspect_document` groups islands by material by default. Set `group` to `frame` to merge touching cells of different materials. It limits the island list to `max_islands`. It reports `island_count` and `islands_truncated` when the list is short.
+`inspect_document` groups islands by material by default. Set `group` to `frame` to merge touching cells of different materials. Set `box` to limit island connectivity to an inclusive box, and `material` to list only one color. It limits the island list to `max_islands`. It reports `island_count` and `islands_truncated` when the list is short.
 
 `get_slice` uses `axis` x, y, or z. The `layers` list selects layers on that axis. The `materials` mode returns one character per material and a legend. The `height` and `depth` modes return a projection as `values`. `scale` sets the cells per character. The response states the column axis, the row axis, and the start cells.
 
@@ -135,11 +132,15 @@ The material index is local to one response. The same material can have a differ
 
 Provide at least one form. A shape without an index uses the current material. Set `materials` to a list of material objects and use the index in a shape. Set `frames` to write the same shapes to several frames. One call is one undo action, even across frames. `label` names the history action. The current frame stays the same.
 
-`get_state` returns a compact state. It omits the camera and other detail that editing does not need.
+`get_state` returns a compact state. It omits the camera and other detail that editing does not need. `selection` is the selected cell count. `selection_bounds` is the inclusive box around the selected cells, or null when the selection is empty.
+
+`set_selection` sets the shared selection that the user sees. It accepts the same `cells` and `boxes` forms as `write_cells`. Set `mode` to `replace`, `add`, or `subtract`. Set `mode` to `clear` to empty the selection. A selection can hold cells outside the current frame. One call is one undo action, and undo and redo restore the earlier selection.
 
 `set_material` accepts `color`, `emission`, `metallic`, and `roughness`. Emission gives the voxel a glow. A color change clears the glow unless you also pass `emission`. Set `emission` to `#000000` to clear it explicitly.
 
 `screenshot` saves `user://mcp_screenshot.png` and returns the path by default. Set `inline: true` to also return the image. The default size is 256. Use `focus` with an inclusive `[x0, y0, z0, x1, y1, z1]` box to frame a detail. `focus` applies to the named views. The current view refuses it. The `low` view frames a floating scene from below.
+
+Set `orthographic: false` for a perspective view. `environment` defaults to true and applies the document light direction, light color, and ambient color. `shadows` and `shaded` default to true. `wireframe` defaults to false. The response reports every resolved option.
 
 Set `views` to a list of named views to render a contact sheet. Set `frames` to a list of frame indices to render a storyboard. A storyboard uses the union bounds of the selected frames, so the content stays in place. `size` is the tile edge. The response reports `columns`, `rows`, `tile_size`, `bounds`, and the view or frame list.
 
@@ -176,12 +177,11 @@ The sprite sheet needs a visible editor window. A headless run returns an unavai
 - Use `set_tag_range`, `rename_tag`, and `remove_tag` to edit a tag.
 - Use `set_tag_loop` with `ping_pong` to reverse a growth sequence into a loop.
 - Use `set_active_tag` to select the tag that playback runs.
-- Use `set_playback` to start or stop the preview.
 - The new tag becomes active. The last tag and the last frame are kept.
 
 ## Limits
 
-The first version supports brush, paint, eraser, fill, exact writes, material sample, screenshots, documents, frames, tags, playback, and export. Terrain, selection, transform, and clipboard are not exposed yet.
+The first version supports brush, paint, eraser, fill, exact writes, selection, screenshots, documents, frames, tags, and export. Terrain, transform, playback, and clipboard are not exposed yet.
 
 ## Bridge mode
 
