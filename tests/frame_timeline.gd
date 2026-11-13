@@ -4,12 +4,15 @@ extends "res://tests/test.gd"
 # of its original scene. The user arguments after `--` name the tests to run, so
 # an old scene name still selects its own test.
 
+var step_timeline: Node
+
 
 func _ready() -> void:
 	test("can set a frame delay on the timeline", _frame_delay, "frame_delay")
 	test("frame buttons follow the current frame", _frame_selection, "frame_selection")
 	test("can drag frames to reorder them", _frame_reorder, "frame_reorder")
 	test("the timeline scroll follows the focused frame", _follow_focus, "follow_focus")
+	test("stepping frames moves focus to the selected frame", _step_focus, "step_focus")
 
 
 # Each test starts from a fresh one-frame document.
@@ -53,6 +56,31 @@ func _follow_focus() -> void:
 			expect(scroll != null, "the grid sits in a scroll container")
 			if scroll != null:
 				expect(scroll.follow_focus, "the scroll container follows focus")
+	)
+
+
+func _step_focus() -> void:
+	step("Given a timeline with forty frames at the first frame", func():
+		_add_frames(39)
+		State.current_frame = 0
+		step_timeline = main.find_child("BottomDock", true, false)
+		expect(step_timeline != null, "the timeline exists")
+	)
+	await get_tree().process_frame
+
+	step("When the user steps to the end with the frame shortcut", func():
+		step_timeline._on_to_end_pressed()
+	)
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+	step("Then the last frame cell holds the focus and the timeline scrolls to it", func():
+		var buttons := _frame_buttons()
+		expect(buttons.size() == 40, "the timeline holds forty frames")
+		expect(State.current_frame == 39, "the editor shows the last frame")
+		expect(buttons[39].has_focus(), "the last frame cell holds the focus")
+		var scroll := main.find_child("FrameGrid", true, false).get_parent() as ScrollContainer
+		expect(scroll.scroll_horizontal > 0, "the timeline scrolls to the selected frame")
 	)
 
 
