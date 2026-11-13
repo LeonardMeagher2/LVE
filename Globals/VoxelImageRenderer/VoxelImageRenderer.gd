@@ -160,6 +160,22 @@ func apply_lighting(light: DirectionalLight3D, environment: Environment, setting
 	environment.ambient_light_energy = settings.ambient_energy
 
 
+## Applies the saved document lighting to a light and an environment. The saved
+## light color alpha is the light energy, and the ambient color alpha is the
+## ambient energy. The saved settings do not include shadows or the unshaded
+## state.
+func apply_saved_lighting(light: DirectionalLight3D, environment: Environment, settings: Dictionary) -> void:
+	light.basis = settings.get("basis", light.basis)
+	var color: Color = settings.get("color", light.light_color)
+	light.light_energy = color.a
+	color.a = 1.0
+	light.light_color = color
+	var ambient: Color = settings.get("ambient_color", environment.ambient_light_color)
+	environment.ambient_light_energy = ambient.a
+	ambient.a = 1.0
+	environment.ambient_light_color = ambient
+
+
 ## Renders a 256 by 256 preview of the first frame. It uses the saved editor
 ## lighting. Returns null in a headless run or when the document is replaced.
 func render_document_preview(document: VoxelDocument) -> Image:
@@ -175,15 +191,7 @@ func render_document_preview(document: VoxelDocument) -> Image:
 	var environment_node: WorldEnvironment = viewport.get_node("Node3D/WorldEnvironment")
 	environment_node.environment = environment_node.environment.duplicate()
 	var environment := environment_node.environment
-	light.basis = document.lighting_settings.get("basis", light.basis)
-	var color: Color = document.lighting_settings.get("color", light.light_color)
-	light.light_energy = color.a
-	color.a = 1.0
-	light.light_color = color
-	color = document.lighting_settings.get("ambient_color", environment.ambient_light_color)
-	environment.ambient_light_energy = color.a
-	color.a = 1.0
-	environment.ambient_light_color = color
+	apply_saved_lighting(light, environment, document.lighting_settings)
 	frame_camera(camera, renderer.source_frame.get_bounds(), yaw_degrees, pitch_degrees, true)
 	apply_directional_shadow(light, camera)
 	while not renderer.is_settled():

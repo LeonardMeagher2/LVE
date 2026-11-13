@@ -19,6 +19,7 @@ func _ready() -> void:
 	test("write_cells writes boxes and runs", _write, "write_cells")
 	test("write_cells accepts per-cell materials", _write_materials, "write_materials")
 	test("write_cells writes several frames as one undo", _write_frames, "write_frames")
+	test("the shared selection can be read and set", _selection, "selection")
 	test("get_cells returns compact runs", _read, "get_cells")
 	test("materials can glow", _emission, "emission")
 	test("documents save and open", _save_open, "save_open")
@@ -34,7 +35,7 @@ func _ready() -> void:
 	test("a screenshot saves a file and returns an image on request", _screenshot, "screenshot")
 	test("the compact state stays small", _budget, "budget")
 	test("inspect_document summarizes frames and islands", _inspect, "inspect_document")
-	test("get_regions groups material and frame islands", _regions, "get_regions")
+	test("inspect_document groups islands with box and material filters", _islands, "island_filters")
 	test("get_slice reads labeled planes", _slice, "get_slice")
 	test("get_map reads coarse blocks", _map, "get_map")
 	test("get_map falls back to chunk blocks", _chunk_map_fallback, "chunk_map")
@@ -111,6 +112,21 @@ func _result_data(response: Dictionary) -> Dictionary:
 	if data is Dictionary:
 		return data
 	return {}
+
+
+func _island_count(data: Dictionary) -> int:
+	var frames: Array = data.get("frames", [])
+	if frames.is_empty() or not (frames[0] is Dictionary):
+		return -1
+	return int((frames[0] as Dictionary).get("island_count", -1))
+
+
+func _islands_of(data: Dictionary) -> Array:
+	var frames: Array = data.get("frames", [])
+	if frames.is_empty() or not (frames[0] is Dictionary):
+		return []
+	var islands_value: Variant = (frames[0] as Dictionary).get("islands", [])
+	return islands_value if islands_value is Array else []
 
 
 func _is_error(response: Dictionary) -> bool:
@@ -376,6 +392,91 @@ func _write_frames() -> void:
 	)
 
 
+func _selection() -> void:
+	step("Given an empty document with no selection", func():
+		State.clear_selection()
+		State.undo_redo.clear_history()
+	)
+	var empty_response := await _call("get_state", {})
+	var empty_data := _result_data(empty_response)
+	step("Then the state reports no selection", func():
+		expect(not _is_error(empty_response), "get_state succeeds")
+		expect(int(empty_data.get("selection", -1)) == 0, "the state reports no selected cells")
+		expect(empty_data.get("selection_bounds", "missing") == null, "the selection bounds are null")
+	)
+	var box_response := await _call("set_selection", {"boxes": [[0, 0, 0, 2, 2, 2]]})
+	var box_data := _result_data(box_response)
+	step("When the agent selects a box", func():
+		expect(not _is_error(box_response), "set_selection succeeds")
+		expect(int(box_data.get("count", 0)) == 27, "the box selects twenty-seven cells")
+		expect(State.selection.count() == 27, "the shared selection holds the box")
+		var bounds: Dictionary = box_data.get("bounds", {})
+		var min_cell: Array = bounds.get("min", [])
+		var max_cell: Array = bounds.get("max", [])
+		expect(min_cell.size() == 3 and int(min_cell[0]) == 0 and int(min_cell[1]) == 0 and int(min_cell[2]) == 0, "the bounds start at the first corner")
+		expect(max_cell.size() == 3 and int(max_cell[0]) == 2 and int(max_cell[1]) == 2 and int(max_cell[2]) == 2, "the bounds end at the second corner")
+		expect(State.undo_redo.get_history_count() == 1, "the selection is one history action")
+	)
+	var state_response := await _call("get_state", {})
+	var state_data := _result_data(state_response)
+	step("Then the state reports the same selection", func():
+		expect(int(state_data.get("selection", 0)) == 27, "the state reports twenty-seven cells")
+		var bounds: Dictionary = state_data.get("selection_bounds", {})
+		var min_cell: Array = bounds.get("min", [])
+		var max_cell: Array = bounds.get("max", [])
+		expect(min_cell.size() == 3 and int(min_cell[0]) == 0 and int(min_cell[1]) == 0 and int(min_cell[2]) == 0, "the state reports the selection start")
+		expect(max_cell.size() == 3 and int(max_cell[0]) == 2 and int(max_cell[1]) == 2 and int(max_cell[2]) == 2, "the state reports the selection end")
+	)
+	var add_response := await _call("set_selection", {"cells": [[5, 5, 5]], "mode": "add"})
+	var add_data := _result_data(add_response)
+	step("When the agent adds one cell", func():
+		expect(not _is_error(add_response), "the add succeeds")
+		expect(int(add_data.get("count", 0)) == 28, "the selection holds twenty-eight cells")
+		expect(State.selection.contains(Vector3i(5, 5, 5)), "the added cell is selected")
+	)
+	var subtract_response := await _call("set_selection", {"boxes": [[0, 0, 0, 0, 0, 0]], "mode": "subtract"})
+	var subtract_data := _result_data(subtract_response)
+	step("When the agent subtracts the first corner", func():
+		expect(not _is_error(subtract_response), "the subtract succeeds")
+		expect(int(subtract_data.get("count", 0)) == 27, "one cell leaves the selection")
+		expect(not State.selection.contains(Vector3i(0, 0, 0)), "the subtracted cell is gone")
+	)
+	step("When the user undoes the subtract", func():
+		State.undo()
+	)
+	step("Then the cell returns", func():
+		expect(State.selection.count() == 28, "undo restores twenty-eight cells")
+		expect(State.selection.contains(Vector3i(0, 0, 0)), "undo restores the subtracted cell")
+	)
+	step("When the user redoes the subtract", func():
+		State.redo()
+	)
+	step("Then the cell leaves again", func():
+		expect(State.selection.count() == 27, "redo removes the cell again")
+	)
+	var clear_response := await _call("set_selection", {"mode": "clear"})
+	var clear_data := _result_data(clear_response)
+	step("When the agent clears the selection", func():
+		expect(not _is_error(clear_response), "the clear succeeds")
+		expect(int(clear_data.get("count", -1)) == 0, "the selection is empty")
+		expect(clear_data.get("bounds", "missing") == null, "the empty selection has no bounds")
+		expect(State.selection.is_empty(), "the shared selection is empty")
+	)
+	step("When the user undoes the clear", func():
+		State.undo()
+	)
+	step("Then the selection returns", func():
+		expect(State.selection.count() == 27, "undo restores twenty-seven cells")
+	)
+	var invalid_response := await _call("set_selection", {"mode": "intersect", "cells": [[0, 0, 0]]})
+	var missing_response := await _call("set_selection", {})
+	step("Then an unknown mode and an empty shape are refused", func():
+		expect(_is_error(invalid_response), "the unknown mode reports an error")
+		expect(_is_error(missing_response), "the missing shape reports an error")
+		expect(State.selection.count() == 27, "a refused call leaves the selection unchanged")
+	)
+
+
 func _read() -> void:
 	step("Given a solid three-cell box", func():
 		State.current_color = Color.BLUE
@@ -493,7 +594,7 @@ func _inspect() -> void:
 	)
 
 
-func _regions() -> void:
+func _islands() -> void:
 	step("Given adjacent red and blue cells and a far red cell", func():
 		var frame := State.get_current_voxel_frame()
 		frame.set_cell(Vector3i(0, 0, 0), VoxelFrame.material(Color.RED))
@@ -501,19 +602,32 @@ func _regions() -> void:
 		frame.set_cell(Vector3i(5, 0, 0), VoxelFrame.material(Color.RED))
 		State.document._bounds_dirty = true
 	)
-	var material_response := await _call("get_regions", {"group": "material"})
-	var frame_response := await _call("get_regions", {"group": "frame"})
+	var material_response := await _call("inspect_document", {"group": "material"})
+	var frame_response := await _call("inspect_document", {"group": "frame"})
 	step("Then material grouping separates the colors and frame grouping merges them", func():
 		var material_data := _result_data(material_response)
 		var frame_data := _result_data(frame_response)
-		expect(not _is_error(material_response), "material regions succeed")
-		expect(not _is_error(frame_response), "frame regions succeed")
-		expect(int(material_data.get("region_count", 0)) == 3, "material grouping keeps three regions")
-		expect(int(frame_data.get("region_count", 0)) == 2, "frame grouping merges the touching cells")
-		var regions: Array = frame_data.get("regions", [])
-		expect(regions.size() == 2, "frame grouping lists two regions")
-		if not regions.is_empty():
-			expect(int(regions[0].get("cells", 0)) == 2, "the merged region has two cells")
+		expect(not _is_error(material_response), "material islands succeed")
+		expect(not _is_error(frame_response), "frame islands succeed")
+		expect(_island_count(material_data) == 3, "material grouping keeps three islands")
+		expect(_island_count(frame_data) == 2, "frame grouping merges the touching cells")
+		var islands: Array = _islands_of(frame_data)
+		expect(islands.size() == 2, "frame grouping lists two islands")
+		if not islands.is_empty():
+			expect(int(islands[0].get("cells", 0)) == 2, "the merged island has two cells")
+	)
+	var box_response := await _call("inspect_document", {"group": "frame", "box": [0, 0, 0, 1, 0, 0]})
+	var color_response := await _call("inspect_document", {"material": "#ff0000"})
+	step("Then a box and a color filter each limit the island list", func():
+		var box_data := _result_data(box_response)
+		var color_data := _result_data(color_response)
+		expect(not _is_error(box_response), "the box filter succeeds")
+		expect(not _is_error(color_response), "the color filter succeeds")
+		expect(_island_count(box_data) == 1, "the box drops the far island")
+		var islands: Array = _islands_of(box_data)
+		if not islands.is_empty():
+			expect(int(islands[0].get("cells", 0)) == 2, "the box keeps the touching pair")
+		expect(_island_count(color_data) == 2, "the color filter keeps the red islands")
 	)
 
 
@@ -1133,6 +1247,28 @@ func _screenshot() -> void:
 			var entry: Dictionary = content[0]
 			expect(str(entry.get("type", "")) == "text", "the entry is text")
 		expect(FileAccess.file_exists(str(data.get("path", ""))), "the screenshot file exists")
+		expect(bool(data.get("orthographic", false)), "the default view is orthographic")
+		expect(bool(data.get("environment", false)), "the default view uses the document environment")
+		expect(bool(data.get("shadows", false)), "the default view casts shadows")
+		expect(bool(data.get("shaded", false)), "the default view is shaded")
+		expect(not bool(data.get("wireframe", true)), "the default view is not wireframe")
+	)
+	var options_response := await _call("screenshot", {
+		"size": 64,
+		"orthographic": false,
+		"environment": false,
+		"shadows": false,
+		"shaded": false,
+		"wireframe": true,
+	})
+	var options_data := _result_data(options_response)
+	step("Then every view option applies and is reported", func():
+		expect(not _is_error(options_response), "the view option screenshot succeeds")
+		expect(not bool(options_data.get("orthographic", true)), "perspective is reported")
+		expect(not bool(options_data.get("environment", true)), "the fixed environment is reported")
+		expect(not bool(options_data.get("shadows", true)), "shadows off is reported")
+		expect(not bool(options_data.get("shaded", true)), "unshaded is reported")
+		expect(bool(options_data.get("wireframe", false)), "wireframe is reported")
 	)
 	var inline_response := await _call("screenshot", {"size": 64, "inline": true})
 	step("Then inline true returns the image", func():

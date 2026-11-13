@@ -49,7 +49,7 @@ const SLICE_CHARS := [
 const TOOLS := [
 	{
 		"name": "get_state",
-		"description": "Return the document, revision, current frame bounds, active tool, material, selection, symmetry, slice, busy, and undo state.",
+		"description": "Return the document, revision, current frame bounds, active tool, material, selection count and bounds, symmetry, slice, busy, and undo state.",
 		"inputSchema": {"type": "object", "additionalProperties": false},
 	},
 	{
@@ -76,29 +76,15 @@ const TOOLS := [
 					"enum": ["material", "frame"],
 					"description": "Island grouping. material connects same-material cells. frame connects any occupied cells. Defaults to material.",
 				},
-				"palette": {"type": "boolean", "description": "Include the document palette at document.palette. Defaults to false."},
-			},
-			"additionalProperties": false,
-		},
-	},
-	{
-		"name": "get_regions",
-		"description": "List connected regions of one frame. Use it to target a part without reading cells.",
-		"inputSchema": {
-			"type": "object",
-			"properties": {
-				"frame": {"type": "integer", "minimum": 0},
 				"box": {
 					"type": "array",
 					"items": {"type": "integer"},
 					"minItems": 6,
 					"maxItems": 6,
-					"description": "Inclusive [x0, y0, z0, x1, y1, z1]. Connectivity is limited to the box.",
+					"description": "Include [x0, y0, z0, x1, y1, z1]. Island connectivity is limited to the box.",
 				},
-				"group": {"type": "string", "enum": ["material", "frame"], "description": "Defaults to material."},
-				"material": {"type": "string", "description": "Only this color, for example #ff0000."},
-				"min_cells": {"type": "integer", "minimum": 1, "description": "Skip smaller regions. Defaults to 1."},
-				"max_regions": {"type": "integer", "minimum": 1, "maximum": 256, "description": "Defaults to 32."},
+				"material": {"type": "string", "description": "Only group islands of this color, for example #ff0000."},
+				"palette": {"type": "boolean", "description": "Include the document palette at document.palette. Defaults to false."},
 			},
 			"additionalProperties": false,
 		},
@@ -206,7 +192,7 @@ const TOOLS := [
 	},
 	{
 		"name": "screenshot",
-		"description": "Save a PNG to user://mcp_screenshot.png every call and overwrite it. Render one frame, a multi-view contact sheet, or a frame storyboard. Pass focus to frame a detail, or a far cell shrinks the model. Set inline true to also return the image.",
+		"description": "Save a PNG to user://mcp_screenshot.png every call and overwrite it. Render one frame, a multi-view contact sheet, or a frame storyboard. Pass focus to frame a detail, or a far cell shrinks the model. Set orthographic, environment, shadows, shaded, or wireframe to change the view. Set inline true to also return the image.",
 		"inputSchema": {
 			"type": "object",
 			"properties": {
@@ -228,7 +214,11 @@ const TOOLS := [
 				"columns": {"type": "integer", "minimum": 1, "maximum": 8, "description": "Contact sheet columns. Defaults to a square grid."},
 				"size": {"type": "integer", "minimum": 64, "maximum": 1024, "description": "Tile edge in pixels. Defaults to 256."},
 				"view": {"type": "string", "enum": ["isometric", "low", "front", "back", "left", "right", "top", "bottom", "current"]},
-				"orthographic": {"type": "boolean"},
+				"orthographic": {"type": "boolean", "description": "Use an orthographic camera. Defaults to true."},
+				"environment": {"type": "boolean", "description": "Use the document light direction, light color, and ambient color. Defaults to true."},
+				"shadows": {"type": "boolean", "description": "Cast shadows. Defaults to true."},
+				"shaded": {"type": "boolean", "description": "Draw the voxels with lighting. Set false for flat unshaded colors. Defaults to true."},
+				"wireframe": {"type": "boolean", "description": "Draw the voxel edges as wireframe. Defaults to false."},
 				"inline": {"type": "boolean"},
 				"focus": {
 					"type": "array",
@@ -488,16 +478,6 @@ const TOOLS := [
 		},
 	},
 	{
-		"name": "set_playback",
-		"description": "Start or stop animation playback.",
-		"inputSchema": {
-			"type": "object",
-			"properties": {"playing": {"type": "boolean"}},
-			"required": ["playing"],
-			"additionalProperties": false,
-		},
-	},
-	{
 		"name": "set_tool",
 		"description": "Select the real editor tool and set its options. This changes the user's toolbar and option bar. Use brush, eraser, paint, or fill.",
 		"inputSchema": {
@@ -525,18 +505,6 @@ const TOOLS := [
 				"metallic": {"type": "number", "minimum": 0, "maximum": 1},
 				"roughness": {"type": "number", "minimum": 0, "maximum": 1},
 			},
-			"additionalProperties": false,
-		},
-	},
-	{
-		"name": "set_cursor",
-		"description": "Move the active tool cursor to a cell. Pass null to hide it. This moves the user's cursor.",
-		"inputSchema": {
-			"type": "object",
-			"properties": {
-				"cell": {"type": ["array", "null"], "items": {"type": "integer"}, "minItems": 3, "maxItems": 3},
-			},
-			"required": ["cell"],
 			"additionalProperties": false,
 		},
 	},
@@ -627,14 +595,32 @@ const TOOLS := [
 		},
 	},
 	{
-		"name": "sample",
-		"description": "Copy the full material of one occupied cell to the current material, like the eyedropper.",
+		"name": "set_selection",
+		"description": "Set the shared selection from world boxes or cells. mode replace swaps the set, add and subtract combine with it, and clear empties it. This changes the selection the user sees. One call is one undo action.",
 		"inputSchema": {
 			"type": "object",
 			"properties": {
-				"cell": {"type": "array", "items": {"type": "integer"}, "minItems": 3, "maxItems": 3},
+				"mode": {
+					"type": "string",
+					"enum": ["replace", "add", "subtract", "clear"],
+					"description": "How the shape combines with the current selection. Defaults to replace.",
+				},
+				"cells": {
+					"type": "array",
+					"items": {"type": "array", "items": {"type": "integer"}, "minItems": 3, "maxItems": 3},
+					"minItems": 1,
+					"maxItems": 65536,
+					"description": "Inclusive [x, y, z] cells.",
+				},
+				"boxes": {
+					"type": "array",
+					"items": {"type": "array", "items": {"type": "integer"}, "minItems": 6, "maxItems": 6},
+					"minItems": 1,
+					"maxItems": 1024,
+					"description": "Inclusive [x0, y0, z0, x1, y1, z1] boxes.",
+				},
+				"label": {"type": "string", "description": "History action name. Defaults to Selection."},
 			},
-			"required": ["cell"],
 			"additionalProperties": false,
 		},
 	},
@@ -736,6 +722,7 @@ const OUTPUT_SCHEMAS := {
 			},
 			"material": SCHEMA_MATERIAL,
 			"selection": {"type": "integer"},
+			"selection_bounds": SCHEMA_BOUNDS,
 			"symmetry": {"type": "integer"},
 			"slice": {"type": ["object", "boolean"]},
 			"busy": {"type": "boolean"},
@@ -812,19 +799,6 @@ const OUTPUT_SCHEMAS := {
 					},
 				},
 			},
-		},
-	},
-	"get_regions": {
-		"type": "object",
-		"properties": {
-			"revision": {"type": "integer"},
-			"frame": {"type": "integer"},
-			"group": {"type": "string"},
-			"regions": {"type": "array", "items": SCHEMA_REGION},
-			"region_count": {"type": "integer"},
-			"truncated": {"type": "boolean"},
-			"small_regions": {"type": "integer"},
-			"material": {"type": "string"},
 		},
 	},
 	"get_slice": {
@@ -940,6 +914,11 @@ const OUTPUT_SCHEMAS := {
 			"frames": {"type": "array", "items": {"type": "integer"}},
 			"view": {"type": "string"},
 			"views": {"type": "array", "items": {"type": "string"}},
+			"orthographic": {"type": "boolean"},
+			"environment": {"type": "boolean"},
+			"shadows": {"type": "boolean"},
+			"shaded": {"type": "boolean"},
+			"wireframe": {"type": "boolean"},
 		},
 	},
 	"new_document": {
@@ -1068,10 +1047,6 @@ const OUTPUT_SCHEMAS := {
 			"repeats": {"type": "integer"},
 		},
 	},
-	"set_playback": {
-		"type": "object",
-		"properties": {"playing": {"type": "boolean"}, "frame": {"type": "integer"}},
-	},
 	"set_document_settings": {
 		"type": "object",
 		"properties": {
@@ -1088,10 +1063,6 @@ const OUTPUT_SCHEMAS := {
 	"set_material": {
 		"type": "object",
 		"properties": {"material": SCHEMA_MATERIAL},
-	},
-	"set_cursor": {
-		"type": "object",
-		"properties": {"cell": SCHEMA_CELL, "hidden": {"type": "boolean"}},
 	},
 	"stroke": {
 		"type": "object",
@@ -1128,9 +1099,14 @@ const OUTPUT_SCHEMAS := {
 			"changed_bounds": SCHEMA_BOUNDS,
 		},
 	},
-	"sample": {
+	"set_selection": {
 		"type": "object",
-		"properties": {"material": SCHEMA_MATERIAL},
+		"properties": {
+			"revision": {"type": "integer"},
+			"count": {"type": "integer"},
+			"bounds": SCHEMA_BOUNDS,
+			"action": {"type": "string"},
+		},
 	},
 }
 
@@ -1153,10 +1129,13 @@ has open, not a file copy. A read or a write lands in their real session.
 - The material_index points into the materials array of that page. It is not the index you wrote.
 - Pass next back as cursor with the same min and max to continue a read.
 - A write_cells shape without a material index uses the current material, not materials[0].
+- Set the shared selection with set_selection. Use replace, add, subtract, or clear.
+- get_state gives the selection count and bounds. A selection outside the current frame is allowed.
 - Each call is one undo action, even across frames.
 - Verify a write with get_changes since the revision you just received.
 - stroke reports the bounds of the changed cells. A fill reports the chunk-aligned box.
 - screenshot always writes user://mcp_screenshot.png. Pass focus to frame a detail.
+- screenshot takes orthographic, environment, shadows, shaded, and wireframe. It reports the resolved options.
 - save_document writes a copy by default. Pass copy false to save the main document.
 - new_document and open_document add a tab. The current document stays open.
 - Frame and tag indices shift after add, move, or remove. Re-read them.
@@ -1200,6 +1179,10 @@ var _journal_floor := 0
 var _last_content_revision := 0
 ## Whether a cell or chunk signal arrived since the last history change.
 var _content_since_history := false
+## The selection revision that the cached bounds follow.
+var _cached_selection_bounds_revision := -1
+## The cached selection bounds. A selection read does not rescan the cells.
+var _cached_selection_bounds: Variant = null
 
 
 ## One direct cell write job. It writes a batch through the edit context.
@@ -1745,8 +1728,6 @@ func _call_tool(id: Variant, params: Dictionary) -> Dictionary:
 			return _result_response(id, _get_state())
 		"inspect_document":
 			return _result_response(id, _inspect_document(args))
-		"get_regions":
-			return _result_response(id, _get_regions(args))
 		"get_slice":
 			return _result_response(id, _get_slice(args))
 		"get_map":
@@ -1793,24 +1774,20 @@ func _call_tool(id: Variant, params: Dictionary) -> Dictionary:
 			return _result_response(id, _set_tag_range(args))
 		"set_active_tag":
 			return _result_response(id, _set_active_tag(args))
-		"set_playback":
-			return _result_response(id, _set_playback(args))
 		"set_document_settings":
 			return _result_response(id, _set_document_settings(args))
 		"set_tool":
 			return _result_response(id, _set_tool(args))
 		"set_material":
 			return _result_response(id, _set_material(args))
-		"set_cursor":
-			return _result_response(id, _set_cursor(args))
 		"stroke":
 			return _result_response(id, await _stroke(args))
 		"fill":
 			return _result_response(id, await _fill(args))
 		"write_cells":
 			return _result_response(id, await _write_cells(args))
-		"sample":
-			return _result_response(id, _sample(args))
+		"set_selection":
+			return _result_response(id, _set_selection(args))
 		_:
 			return _error_response(id, -32602, "Unknown tool: " + tool_name)
 
@@ -1878,6 +1855,7 @@ func _get_state() -> Dictionary:
 		"active_tool": {"id": str(info.get("id", "")), "params": info.get("params", {})},
 		"material": _material_json(State.current_material),
 		"selection": State.selection.count(),
+		"selection_bounds": _selection_bounds(),
 		"symmetry": State.symmetry_axes,
 		"slice": slice,
 		"busy": State.edit_busy() or State.active_edit() != null,
@@ -2046,6 +2024,19 @@ func _inspect_document(args: Dictionary) -> Dictionary:
 	var group := str(args.get("group", "material"))
 	if group != "material" and group != "frame":
 		return _tool_error("group must be material or frame.")
+	var box: Variant = null
+	var box_value: Variant = args.get("box", null)
+	if box_value != null:
+		box = _parse_box(box_value)
+		if box == null:
+			return _tool_error("box must be [x0, y0, z0, x1, y1, z1] with min <= max.")
+	var material_filter := ""
+	var material_value: Variant = args.get("material", null)
+	if material_value != null:
+		var material_color: Variant = _parse_color(material_value)
+		if material_color == null:
+			return _tool_error("material must be a color, for example #ff0000.")
+		material_filter = _hex_color(material_color)
 	var scans := {}
 	var frames: Array = []
 	for index in indices:
@@ -2068,7 +2059,10 @@ func _inspect_document(args: Dictionary) -> Dictionary:
 			if include_materials and not scan.truncated:
 				frame_data["materials"] = _materials_json(scan.materials)
 			if include_islands and not scan.truncated:
-				var region_result := _build_regions(scan.cells, group, min_island_cells, max_islands, "", scan.materials)
+				var island_cells: Dictionary = scan.cells
+				if box != null:
+					island_cells = _cells_in_box(scan.cells, box[0], box[1])
+				var region_result := _build_regions(island_cells, group, min_island_cells, max_islands, material_filter, scan.materials)
 				frame_data["islands"] = region_result.regions
 				frame_data["island_count"] = region_result.total
 				if region_result.truncated:
@@ -2095,49 +2089,6 @@ func _inspect_document(args: Dictionary) -> Dictionary:
 	}
 	if include_transitions:
 		data["transitions"] = transitions
-	return _tool_ok(data)
-
-
-func _get_regions(args: Dictionary) -> Dictionary:
-	var frame_index := _int_arg(args, "frame", State.current_frame)
-	var frame: VoxelFrame = State.get_voxel_frame(frame_index)
-	if frame == null:
-		return _tool_error("The frame does not exist.")
-	var group := str(args.get("group", "material"))
-	if group != "material" and group != "frame":
-		return _tool_error("group must be material or frame.")
-	var max_regions := clampi(_int_arg(args, "max_regions", 32), 1, MAX_INSPECT_ISLANDS)
-	var min_cells := maxi(1, _int_arg(args, "min_cells", 1))
-	var material_filter := ""
-	var material_value: Variant = args.get("material", null)
-	if material_value != null:
-		var material_color: Variant = _parse_color(material_value)
-		if material_color == null:
-			return _tool_error("material must be a color, for example #ff0000.")
-		material_filter = _hex_color(material_color)
-	var scan := _scan_frame(frame)
-	if scan.truncated:
-		return _tool_error("The frame is too large to scan. Use a smaller frame or get_cells in boxes.")
-	var cells: Dictionary = scan.cells
-	var box_value: Variant = args.get("box", null)
-	if box_value != null:
-		var box: Variant = _parse_box(box_value)
-		if box == null:
-			return _tool_error("box must be [x0, y0, z0, x1, y1, z1] with min <= max.")
-		cells = _cells_in_box(cells, box[0], box[1])
-	var region_result := _build_regions(cells, group, min_cells, max_regions, material_filter, scan.materials)
-	var data := {
-		"revision": _revision,
-		"frame": frame_index,
-		"group": group,
-		"regions": region_result.regions,
-		"region_count": region_result.total,
-		"truncated": region_result.truncated,
-	}
-	if region_result.small_count > 0:
-		data["small_regions"] = region_result.small_count
-	if not material_filter.is_empty():
-		data["material"] = material_filter
 	return _tool_ok(data)
 
 
@@ -2600,6 +2551,25 @@ func _cell_bounds_json_from_cells(min_cell: Vector3i, max_cell: Vector3i) -> Dic
 	return {"min": _json_cell(min_cell), "max": _json_cell(max_cell)}
 
 
+## Returns the bounds of the shared selection, or null when it is empty. The
+## bounds follow the selection revision, so a read does not rescan the cells.
+func _selection_bounds() -> Variant:
+	var selection := State.selection
+	if selection.revision == _cached_selection_bounds_revision:
+		return _cached_selection_bounds
+	_cached_selection_bounds_revision = selection.revision
+	var min_cell := Vector3i.MAX
+	var max_cell := Vector3i.MIN
+	for cell_position: Vector3i in selection.all_cells():
+		min_cell = Vector3i(mini(min_cell.x, cell_position.x), mini(min_cell.y, cell_position.y), mini(min_cell.z, cell_position.z))
+		max_cell = Vector3i(maxi(max_cell.x, cell_position.x), maxi(max_cell.y, cell_position.y), maxi(max_cell.z, cell_position.z))
+	if min_cell == Vector3i.MAX:
+		_cached_selection_bounds = null
+	else:
+		_cached_selection_bounds = _cell_bounds_json_from_cells(min_cell, max_cell)
+	return _cached_selection_bounds
+
+
 func _cell_before_cursor(cell: Vector3i, cursor: Vector3i) -> bool:
 	if cell.z != cursor.z:
 		return cell.z < cursor.z
@@ -3010,6 +2980,22 @@ func _screenshot(args: Dictionary) -> Dictionary:
 	var ortho_value: Variant = args.get("orthographic", true)
 	if ortho_value is bool:
 		orthographic = ortho_value
+	var environment := true
+	var environment_value: Variant = args.get("environment", true)
+	if environment_value is bool:
+		environment = environment_value
+	var shadows := true
+	var shadows_value: Variant = args.get("shadows", true)
+	if shadows_value is bool:
+		shadows = shadows_value
+	var shaded := true
+	var shaded_value: Variant = args.get("shaded", true)
+	if shaded_value is bool:
+		shaded = shaded_value
+	var wireframe := false
+	var wireframe_value: Variant = args.get("wireframe", false)
+	if wireframe_value is bool:
+		wireframe = wireframe_value
 	var focus_value: Variant = args.get("focus", null)
 	var focus_bounds: Variant = null
 	if focus_value != null:
@@ -3099,6 +3085,13 @@ func _screenshot(args: Dictionary) -> Dictionary:
 	var camera: Camera3D = viewport.get_node("Node3D/Camera3D")
 	var light: DirectionalLight3D = viewport.get_node("Node3D/Light")
 	camera.current = true
+	renderer.unshaded = not shaded
+	viewport.debug_draw = Viewport.DEBUG_DRAW_WIREFRAME if wireframe else Viewport.DEBUG_DRAW_DISABLED
+	if environment:
+		var environment_node: WorldEnvironment = viewport.get_node("Node3D/WorldEnvironment")
+		environment_node.environment = environment_node.environment.duplicate()
+		VoxelImageRenderer.apply_saved_lighting(light, environment_node.environment, document.lighting_settings)
+	light.shadow_enabled = shadows
 	var tile_index := 0
 	for row in range(rows):
 		for column in range(columns):
@@ -3148,6 +3141,11 @@ func _screenshot(args: Dictionary) -> Dictionary:
 		"rows": rows,
 		"revision": _revision,
 		"bounds": _cell_bounds_json(bounds),
+		"orthographic": orthographic,
+		"environment": environment,
+		"shadows": shadows,
+		"shaded": shaded,
+		"wireframe": wireframe,
 	}
 	if is_storyboard:
 		info["frames"] = frames
@@ -3642,13 +3640,6 @@ func _tag_json(index: int, tag: AnimationTag) -> Dictionary:
 	}
 
 
-func _set_playback(args: Dictionary) -> Dictionary:
-	var playing_value: Variant = args.get("playing", false)
-	var playing: bool = playing_value if playing_value is bool else false
-	State.is_playing = playing
-	return _tool_ok({"playing": State.is_playing, "frame": State.current_frame})
-
-
 ## Sets document-level render settings. Every supplied field is applied as one
 ## history action, like the document settings modal.
 func _set_document_settings(args: Dictionary) -> Dictionary:
@@ -3781,27 +3772,6 @@ func _set_material(args: Dictionary) -> Dictionary:
 		return _tool_error("The material values must be between 0 and 1.")
 	State.set_material(material)
 	return _tool_ok({"material": _material_json(material)})
-
-
-func _set_cursor(args: Dictionary) -> Dictionary:
-	if State.active_edit() != null:
-		return _tool_error("The editor has an open edit. Finish it before moving the cursor.")
-	var info := _active_tool_info()
-	var node_value: Variant = info.get("node")
-	if not (node_value is VoxelTool):
-		return _tool_error("Select a tool first.")
-	var tool: VoxelTool = node_value
-	var cell_value: Variant = args.get("cell", null)
-	if cell_value == null:
-		tool.visible = false
-		return _tool_ok({"hidden": true})
-	var cell: Variant = _parse_cell(cell_value)
-	if cell == null:
-		return _tool_error("cell must be [x, y, z] or null.")
-	var cell_position: Vector3i = cell
-	var tool_id := str(info.get("id", ""))
-	tool.driver_show_cursor(cell_position, cell_position if tool_id == "paint" else VoxelPicking.NONE)
-	return _tool_ok({"cell": _json_cell(cell_position)})
 
 
 func _stroke(args: Dictionary) -> Dictionary:
@@ -4094,6 +4064,87 @@ func _write_cells(args: Dictionary) -> Dictionary:
 	})
 
 
+func _set_selection(args: Dictionary) -> Dictionary:
+	if State.document == null:
+		return _tool_error("There is no open document.")
+	if State.active_edit() != null or State.edit_busy():
+		return _tool_error("The editor is busy with another edit. Retry.")
+	var mode := "replace"
+	var mode_value: Variant = args.get("mode", null)
+	if mode_value is String:
+		mode = mode_value
+	if not ["replace", "add", "subtract", "clear"].has(mode):
+		return _tool_error("mode must be replace, add, subtract, or clear.")
+	var shape_cells := {}
+	if mode != "clear":
+		var boxes_value: Variant = args.get("boxes", null)
+		if boxes_value != null:
+			if not (boxes_value is Array):
+				return _tool_error("boxes must be an array of [x0, y0, z0, x1, y1, z1] boxes.")
+			var boxes: Array = boxes_value
+			if boxes.is_empty() or boxes.size() > 1024:
+				return _tool_error("boxes must hold 1 to 1024 entries.")
+			var volume_total := 0
+			for index in range(boxes.size()):
+				var box_value: Variant = _parse_box(boxes[index])
+				if box_value == null:
+					return _tool_error("boxes[%d] must be [x0, y0, z0, x1, y1, z1]." % index)
+				var corners: Array = box_value
+				var first: Vector3i = corners[0]
+				var last: Vector3i = corners[1]
+				var extent := last - first + Vector3i.ONE
+				var volume := extent.x * extent.y * extent.z
+				volume_total += volume
+				if volume_total > MAX_BOX_CELLS:
+					return _tool_error("The shape covers more than %d cells. Use smaller boxes." % MAX_BOX_CELLS)
+				for x in range(first.x, last.x + 1):
+					for y in range(first.y, last.y + 1):
+						for z in range(first.z, last.z + 1):
+							shape_cells[Vector3i(x, y, z)] = true
+		var cells_value: Variant = args.get("cells", null)
+		if cells_value != null:
+			if not (cells_value is Array):
+				return _tool_error("cells must be an array of [x, y, z] cells.")
+			var cells: Array = cells_value
+			if cells.is_empty() or cells.size() > 65536:
+				return _tool_error("cells must hold 1 to 65536 entries.")
+			for index in range(cells.size()):
+				var cell_value: Variant = _parse_cell(cells[index])
+				if cell_value == null:
+					return _tool_error("cells[%d] must be [x, y, z]." % index)
+				shape_cells[cell_value] = true
+				if shape_cells.size() > MAX_BOX_CELLS:
+					return _tool_error("The shape covers more than %d cells. Use smaller boxes." % MAX_BOX_CELLS)
+		if shape_cells.is_empty():
+			return _tool_error("Provide cells or boxes, or use mode clear.")
+	var label := "Selection"
+	var label_value: Variant = args.get("label", null)
+	if label_value is String and not String(label_value).strip_edges().is_empty():
+		label = String(label_value).strip_edges().left(80)
+	var tx := State.begin_edit()
+	if tx == null:
+		return _tool_error("The editor is busy with another edit. Retry.")
+	if mode == "clear":
+		State.selection.clear()
+	elif mode == "replace":
+		State.selection.cells = shape_cells
+	else:
+		var shape := VoxelSelection.new()
+		shape.cells = shape_cells
+		if mode == "add":
+			State.selection.union(shape)
+		else:
+			State.selection.subtract(shape)
+	State.finish_edit(tx, label)
+	State.selection_changed.emit()
+	return _tool_ok({
+		"revision": _revision,
+		"count": State.selection.count(),
+		"bounds": _selection_bounds(),
+		"action": label,
+	})
+
+
 func _parse_write_cell(value: Variant) -> Variant:
 	if not (value is Array):
 		return null
@@ -4186,23 +4237,6 @@ func _write_frames(args: Dictionary) -> Array:
 		seen[index] = true
 		frames.append(index)
 	return frames
-
-
-func _sample(args: Dictionary) -> Dictionary:
-	if State.active_edit() != null:
-		return _tool_error("The editor has an open edit. Finish it before sampling a material.")
-	var cell_value: Variant = _parse_cell(args.get("cell", null))
-	if cell_value == null:
-		return _tool_error("cell must be [x, y, z].")
-	var cell: Vector3i = cell_value
-	if not State.has_cell(cell):
-		return _tool_error("The cell is empty.")
-	var frame := State.get_current_voxel_frame()
-	if frame == null:
-		return _tool_error("The document has no current frame.")
-	var material := frame.get_material(cell)
-	State.set_material(material)
-	return _tool_ok({"material": _material_json(material)})
 
 
 func _wait_tool_idle(tool: VoxelTool, timeout_ms: int) -> bool:
