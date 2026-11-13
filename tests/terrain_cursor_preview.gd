@@ -154,7 +154,7 @@ func _ring_per_tool() -> void:
 	step("Given a plate and each terrain tool in turn", func() -> void:
 		_plate()
 	)
-	for tool_index in [_settings.Tools.BUILD, _settings.Tools.FLATTEN, _settings.Tools.SMOOTH, _settings.Tools.GRAB]:
+	for tool_index in [_settings.Tools.BUILD, _settings.Tools.FLATTEN, _settings.Tools.SMOOTH]:
 		var label := str(tool_index)
 		step("When the pointer hovers the plate with tool %s" % label, func() -> void:
 			_settings.tool = tool_index
@@ -410,15 +410,6 @@ func _hover_orientation() -> void:
 	step("When the user releases the stroke", func() -> void:
 		_button(false, _screen(hover))
 		await _wait_idle()
-	)
-	step("When the pointer hovers the same point with the Grab tool", func() -> void:
-		_settings.tool = _settings.Tools.GRAB
-		_motion(_screen(hover))
-		await get_tree().process_frame
-	)
-	step("Then the ring keeps the exact picked face", func() -> void:
-		expect(footprint.is_visible_in_tree(), "the Grab ring is visible")
-		expect(footprint.global_transform.basis.z == Vector3.UP, "the Grab ring keeps the picked face normal")
 	)
 	step("When the pointer hovers the same point with the Face source", func() -> void:
 		_settings.tool = _settings.Tools.BUILD

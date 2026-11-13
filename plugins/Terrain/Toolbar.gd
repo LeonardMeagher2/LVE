@@ -8,8 +8,7 @@ extends ToolMenuButton
 # its icon select the same tool even when the enum changes.
 const BUILD_ID := 0
 const FLATTEN_ID := 1
-const GRAB_ID := 2
-const SMOOTH_ID := 3
+const SMOOTH_ID := 2
 
 var _settings := preload("./settings.tres")
 
@@ -37,8 +36,6 @@ func _tool_for_id(id: int) -> int:
 	match id:
 		FLATTEN_ID:
 			return _settings.Tools.FLATTEN
-		GRAB_ID:
-			return _settings.Tools.GRAB
 		SMOOTH_ID:
 			return _settings.Tools.SMOOTH
 	return _settings.Tools.BUILD

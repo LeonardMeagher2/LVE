@@ -68,7 +68,8 @@ Do not treat a source number from another engine as an LVE speed claim.
 | Move, Rotate, Scale | Live preview. Release leaves the transform pending. One action. | Pending release is a project choice. Undo labels are generic today. | [Editing](editing-ux.md) |
 | Copy, Cut, Paste | Copy has no model write. Cut has one action. Paste previews, then commits one action. | Paste is a placement mode with explicit commit and cancel. | [Editing](editing-ux.md) |
 | Eyedropper, Plane, Symmetry | Eyedropper picks the full material. Plane and Symmetry change state only. | Full material pick is the default. Color-only pick is a product decision. | [Editing](editing-ux.md) |
-| Build, Flatten, Smooth, Grab | Build uses a fixed stroke plane. A press applies one dab. Accepted crossings stay deterministic. Grab keeps an absolute target. | No stationary Terrain. No pressure or anchored stroke. The single white all-state Build ring is implemented. All 20 affected Terrain scenes passed. | [Terrain](terrain-ux.md) |
+| Build, Flatten, Smooth | Build uses a fixed stroke plane. A press applies one dab. Accepted crossings stay deterministic. | No stationary Terrain. No pressure or anchored stroke. The single white all-state Build ring is implemented. All 20 affected Terrain scenes passed. | [Terrain](terrain-ux.md) |
+| Grab, Pose | Grab keeps an absolute target on one baseline. Pose bends the connected limb around a joint on one baseline. | Pose has no twist and no joint chain. Both commit one action on release. | [Terrain](terrain-ux.md) |
 
 ## Ranked experiments
 

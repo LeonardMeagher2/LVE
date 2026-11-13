@@ -452,6 +452,7 @@ func reset_plugins() -> void:
 	add_plugin(load("res://plugins/Eyedropper/EyedropperPlugin.gd").new())
 	add_plugin(load("res://plugins/paint/PaintPlugin.gd").new())
 	add_plugin(load("res://plugins/Terrain/TerrainPlugin.gd").new())
+	add_plugin(load("res://plugins/Deform/DeformPlugin.gd").new())
 	add_plugin(load("res://plugins/selection/SelectionPlugin.gd").new())
 	add_plugin(load("res://plugins/Transform/TransformPlugin.gd").new())
 	add_plugin(load("res://plugins/Symmetry/SymmetryPlugin.gd").new())

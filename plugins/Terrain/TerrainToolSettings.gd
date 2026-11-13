@@ -17,8 +17,6 @@ enum Tools {
 	BUILD,
 	## Fill and cut columns to one flat surface.
 	FLATTEN,
-	## Stretch the voxels under the pointer.
-	GRAB,
 	## Relax the surface toward the average of its neighbors.
 	SMOOTH
 }

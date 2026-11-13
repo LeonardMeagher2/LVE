@@ -101,7 +101,7 @@ func _on_mcp_pressed() -> void:
 	var result: Variant = _main.call("set_mcp_enabled", not bool(_main.call("is_mcp_enabled")), true)
 	var error: Error = result if result is int else ERR_UNAVAILABLE
 	_sync_mcp()
-	if error == OK or DisplayServer.get_name() == "headless":
+	if error == OK:
 		return
 	%MCPError.dialog_text = "Cannot start the MCP server on 127.0.0.1:%d. Another program may use this port." % int(_main.get("mcp_port"))
 	%MCPError.popup_centered()

@@ -1,0 +1,21 @@
+[gd_scene format=3]
+
+[ext_resource type="ButtonGroup" uid="uid://tm4elm05vye0" path="res://plugins/ToolBarButtonGroup.tres" id="1_bg"]
+[ext_resource type="Texture2D" uid="uid://cubut3i22m2q4" path="res://icons/hand.svg" id="2_grab"]
+[ext_resource type="Texture2D" path="res://icons/pose.svg" id="3_pose"]
+[ext_resource type="Script" path="res://plugins/Deform/Toolbar.gd" id="4_script"]
+
+[node name="deform" type="MenuButton"]
+tooltip_text = "Deform tools"
+button_group = ExtResource("1_bg")
+icon = ExtResource("2_grab")
+flat = false
+icon_alignment = 1
+item_count = 2
+popup/item_0/text = "Grab"
+popup/item_0/icon = ExtResource("2_grab")
+popup/item_0/id = 0
+popup/item_1/text = "Pose"
+popup/item_1/icon = ExtResource("3_pose")
+popup/item_1/id = 1
+script = ExtResource("4_script")

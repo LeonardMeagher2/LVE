@@ -1,6 +1,7 @@
 # Terrain tool flows
 
-This page shows the current high-level flows of Terrain Build, Flatten, Smooth, and Grab.
+This page shows the current high-level flows of Terrain Build, Flatten, and Smooth.
+Grab and Pose are deform tools. See [deform.md](deform.md).
 It covers the cursor ring, press, stroke queue, visible surface updates, commit, and cancel.
 It cites the current source only.
 It does not describe a target design.
@@ -11,7 +12,7 @@ Read each graph from top to bottom.
 
 ## Terms
 
-- **Footprint ring**: the one white leaf ring named `Footprint`. All four tools pose it. It does not predict the next voxels.
+- **Footprint ring**: the one white leaf ring named `Footprint`. All three tools pose it. It does not predict the next voxels.
 - **Idle pose**: the ring pose while no stroke is open. It uses live inputs.
 - **Idle surface read**: the surface read of a hover on a model. It runs on the worker pool at the full size.
 - **Stroke pose**: the ring pose of an open stroke. It uses the captured frame, size, and context.
@@ -116,7 +117,6 @@ It is one leaf mesh. No cell map and no preview mesh exist.
 `update_visual` stores the pick and poses the ring on every pointer motion.
 An idle pick keeps the frame that `TerrainPreview` publishes.
 The idle read runs the local surface read at the active size, on the worker pool.
-Grab uses the exact entered face.
 A floor miss uses the floor plane.
 The idle read matches the press read, so the ring shows the orientation the stroke will apply.
 The ring keeps its fallback pose while the read runs, so a move stays cheap.
@@ -142,8 +142,7 @@ Model picking still runs and can have a ray-distance cost.
 A press is different.
 `open_stroke` captures the stroke state and begins the edit.
 `_pick_start` computes the press frame on the main thread at the full size.
-For Grab, the press uses the exact entered face and runs no surface read.
-For Build, Flatten, and Smooth, `_apply_pick` starts the press dab at once.
+`_apply_pick` starts the press dab at once.
 
 Build, Flatten, and Smooth queue motion segments.
 Each accepted motion with the left button becomes one segment.
@@ -189,10 +188,6 @@ The Build ground may move the operation plane.
 `TerrainTool._stroke_cursor_frame` keeps the cursor plane on the grid when it does.
 Without that rule the seed lands in front of the clicked cell, and a one-pixel
 move adds cells that the user did not ask for.
-
-Grab never runs `_frame_for_pick`.
-`_pick_start` captures the exact entered face for the press.
-It runs no surface read and no scan.
 
 The press read always runs on the main thread at the full size.
 The idle read uses the same size, so the ring shows the orientation the press will use.
@@ -265,7 +260,7 @@ Dig clears the surface and continues inward while the next cell is occupied.
 A gentle plane grows upward. A steep plane grows sideways.
 Both use the dominant axis, so they feel the same.
 
-All four terrain tools share the one footprint ring.
+All three terrain tools share the one footprint ring.
 The ring is one separate white leaf mesh named `Footprint`.
 The color is set once on the cloned material. Paint color and stroke material never tint it.
 The ring is identical in idle, press, pending job, held, drain, and release.
@@ -276,7 +271,6 @@ The ring skips the depth test, so it stays readable inside geometry.
 It then draws through a hill in front of it. A depth-tested ring hides in the
 voxels around the cursor, which is worse.
 An idle Build pick reads the local surface at the active size, on the worker pool.
-Grab uses the entered face.
 An idle floor miss puts the ring on the floor grid plane.
 The floor frame plane is the outer face of the first buildable layer, one cell
 above that grid, so the ring would float without that rule.
@@ -296,7 +290,6 @@ The per-column support lookup uses `TerrainPreview.footprint_depth`.
 The Build sample map reads within the cylinder half-height, `max(1, ceil(size * 0.25))`.
 Flatten keeps the 64-cell support bound.
 Smooth returns `depth_for(radius)`.
-Grab returns the same value from the helper, but its source capture uses ball offsets.
 The lookup is bounded, not unbounded.
 
 The falloff weight comes from `TerrainGeometry.weight_at`.
@@ -358,7 +351,6 @@ Each center reads the frame and the surface that the previous center left.
 The batch size follows the worker time of the last job and targets `PREP_BATCH_TARGET_US`.
 The job takes a shared `job_frame`, so it copies no chunk until it writes one.
 The result publishes only `job.changed_chunks` with `VoxelFrame.apply_published`.
-A Grab drag publishes the union of the current and previous updates, because it recomputes from one baseline.
 The tick owns the Build step rules.
 Add and Dig call `TerrainGeometry.build_layer_cells` for the layer cells.
 No preview calls these rules.
@@ -518,77 +510,6 @@ Source:
 - [`TerrainGeometry.sphere_offsets`](../../../plugins/Terrain/TerrainGeometry.gd)
 - [`TerrainTool._frame_drag`](../../../plugins/Terrain/TerrainTool.gd)
 
-## Grab
-
-```mermaid
-flowchart TD
-  subgraph Main["Main"]
-    B1["Press on a voxel"]
-    B2["View-facing plane through the hit"]
-    B3["Capture ball sources per mask"]
-    B4["Filter by selection and falloff weight"]
-    B5["Copy the baseline frame"]
-    B6["Drag: view-plane pick"]
-    B7["Clamp drag to 48 cells"]
-    B8["Scale each source by weight and mirror"]
-    B9["Queue the latest delta while a job runs"]
-    B10["Finish job: restore result"]
-    B11["Release: _end drains and waits"]
-    B12["Settle, finish, and commit"]
-  end
-  subgraph Worker["Worker"]
-    W1["GrabJob: move sources from baseline"]
-  end
-  B1 --> B2 --> B3 --> B4 --> B5
-  B6 --> B7 --> B8
-  B5 --> B8
-  B8 -->|small drag inline| B10
-  B8 -.->|large drag| W1
-  W1 -.->|changed chunks| B10
-  B9 --> B10
-  B10 -->|pointer still down| B6
-  B10 -->|release pending| B12
-  W1 -.->|release pending| B12
-  B11 --> B12
-```
-
-Grab uses its own flow.
-It does not use the surface frame or the stroke queue.
-Its ring is the shared footprint ring on the picked face.
-No surface read runs for Grab.
-`_pick_start` sets the target to the hit and builds a view-facing plane through that cell.
-`_capture_grab` collects the occupied source cells in a ball around the anchor.
-It collects the sources for every active symmetry mask.
-A source must pass the frozen selection.
-A zero falloff weight cannot move, so it is excluded.
-The capture also copies the baseline frame.
-
-A drag intersects the true camera-facing plane.
-The delta clamps to `GRAB_MAX_DISTANCE`.
-Each source moves by its mirrored delta scaled by its weight.
-`GrabJob` starts from the baseline snapshot.
-It clears the source cells.
-It writes each source material along the line to its destination.
-It keeps unrelated geometry.
-It writes a destination only when the selection allows it.
-
-A job keeps only the latest pending delta.
-When the job finishes, the tool restores the result and runs that delta.
-A return to the origin republishes the baseline.
-Grab strength is not used, so the option bar hides it.
-
-Source:
-
-- [`TerrainTool._pick_start`](../../../plugins/Terrain/TerrainTool.gd)
-- [`TerrainTool._pose_footprint`](../../../plugins/Terrain/TerrainTool.gd)
-- [`TerrainTool._capture_grab`](../../../plugins/Terrain/TerrainTool.gd)
-- [`TerrainTool._update_grab`](../../../plugins/Terrain/TerrainTool.gd)
-- [`TerrainTool._run_grab`](../../../plugins/Terrain/TerrainTool.gd)
-- [`TerrainTool._finish_grab`](../../../plugins/Terrain/TerrainTool.gd)
-- [`TerrainTool._view_drag`](../../../plugins/Terrain/TerrainTool.gd)
-- [`TerrainTool.GrabJob`](../../../plugins/Terrain/TerrainTool.gd)
-- [`Options._sync`](../../../plugins/Terrain/Options.gd#L38-L52)
-
 ## Release, drain, commit, and visible surfaces
 
 ```mermaid
@@ -628,7 +549,7 @@ The stroke finishes only when the queue is empty and no job runs.
 `State.finish_edit` records one undo action for the whole stroke.
 
 The visible model surface changes earlier.
-Each tick, Smooth, or Grab job restores its edited snapshot into the source frame.
+Each tick or Smooth job restores its edited snapshot into the source frame.
 The tool marks the document bounds dirty.
 It emits `chunks_changed`.
 `VoxelRenderer` updates the affected chunks.
@@ -655,7 +576,7 @@ flowchart TD
     C3["History change"]
     C4["Status cancel of a tracked worker operation"]
     C5["_cancel_edit"]
-    C6["Cancel tick, grab, and smooth jobs"]
+    C6["Cancel tick and smooth jobs"]
     C7["Clear queue and stroke state"]
     C8["abort_stroke: rollback"]
     C9["Drain token check"]
@@ -708,7 +629,6 @@ Source:
 - [`State.cancel_operation`](../../../Globals/State/State.gd#L419-L433)
 - [`TerrainTool._run_tick`](../../../plugins/Terrain/TerrainTool.gd)
 - [`TerrainTool._start_prep_dab`](../../../plugins/Terrain/TerrainTool.gd)
-- [`TerrainTool._run_grab`](../../../plugins/Terrain/TerrainTool.gd)
 - [`TerrainTool._run_smooth`](../../../plugins/Terrain/TerrainTool.gd)
 - [`State.cancel_edit`](../../../Globals/State/State.gd#L581-L590)
 - [`VoxelTool.abort_stroke`](../../../Globals/State/Tools/VoxelTool.gd)
@@ -720,23 +640,21 @@ Source:
 | Build | Cylinder brush. The plane keeps the press normal and moves its origin to the center base. Anchor projects to the plane. | Sample map inside the cylinder half-height. The first sample of a column records the base. One step list per logical column. | Add writes one dominant-axis cell. Dig clears the surface and continues inward. | The cell must be empty or occupied and allowed. | Sample map mirrors every active mask. | One action at stroke close, if cells changed. | Escape, context, or history cancel rolls back. Status cancel applies to a tracked worker operation. |
 | Flatten | Fixed operation and cursor plane. Anchor projects to the plane. | Sample map with `footprint_depth` 64. One step list per anchor. | Fill copies local support. Cut writes transparent. | Cut surface and fill destination must pass. | Sample map mirrors every active mask. | One action at stroke close, if cells changed. | Same as Build. |
 | Smooth | Cursor plane faces the view. Operation plane re-reads. | Each dab resolves its own captured ray. Fields follow the surface. Footprint depth uses `depth_for(radius)`. | Fill copies the nearest local support. Remove writes transparent. | Field cells are filtered at build time. | One field per mask, with its own falloff weights. | One action at stroke close, if cells changed. | Same as Build. A camera change ends the gesture. |
-| Grab | View-facing plane through the hit. | Ball sources captured at press. Baseline copy. No sample-map footprint depth. The helper returns `depth_for(radius)`. | Sources keep their full material. | Source and destination must pass. | Sources mirror for every active mask. | One action at stroke close, if cells changed. | Same as Build. A pending delta is dropped. |
 
-All four modes pose the shared footprint ring.
+All three modes pose the shared footprint ring.
 The ring shows the footprint, not the edit.
 
 ## Current limits and non-claims
 
 - The size setting clamps to 1 through 32. Every sculpt tool shares this bound.
-- Grab uses a drag limit of 48.
-- Build and Flatten use `TerrainPreview.footprint_depth` 64. Smooth uses `depth_for(radius)`. Grab returns it from the helper but uses no sample map.
+- Build and Flatten use `TerrainPreview.footprint_depth` 64. Smooth uses `depth_for(radius)`.
 - The stroke drain applies at most 32 dabs in one pass. A longer path yields one frame and continues.
 - A small inline stroke has no tracked operation id. A large worker dab or drag starts one.
-- All four tools pose the shared footprint ring. It is built from `TerrainRing.legacy_plane_ring`.
-- The idle ring reads the local surface at the active size, on the worker pool. Grab uses the entered face. A floor miss uses the floor plane.
+- All three tools pose the shared footprint ring. It is built from `TerrainRing.legacy_plane_ring`.
+- The idle ring reads the local surface at the active size, on the worker pool. A floor miss uses the floor plane.
 - The ring keeps its fallback pose while an idle read runs, so a full-size hover keeps the main thread free.
 - The ring is the whole cursor. It has no idle map and no terrain prediction.
-- All press reads run on the main thread at the full size. The Grab press uses the exact face and runs no surface read.
+- All press reads run on the main thread at the full size.
 - The press read costs about 55 milliseconds at size 32. That press read cost is an open task in `../../../TASKS.md`.
 - The `TerrainPreview` helpers accept a `TerrainQueryContext`. The tool never constructs one.
 - The column walk at maximum size on sparse models remains a pending measurement.
@@ -747,7 +665,6 @@ The ring shows the footprint, not the edit.
 Source:
 
 - [`TerrainToolSettings.radius`](../../../plugins/Terrain/TerrainToolSettings.gd#L51-L58)
-- [`TerrainTool.GRAB_MAX_DISTANCE`](../../../plugins/Terrain/TerrainTool.gd)
 - [`TerrainTool.DABS_PER_DRAIN`](../../../plugins/Terrain/TerrainTool.gd)
 - [`TerrainQueryContext`](../../../plugins/Terrain/TerrainQueryContext.gd)
 
@@ -766,7 +683,7 @@ A later settings or selection change cannot alter an accepted dab.
 
 ### Shared footprint ring
 
-All four tools pose one white leaf ring named `Footprint`. See [Build](#grow).
+All three tools pose one white leaf ring named `Footprint`. See [Build](#grow).
 It uses `TerrainRing.legacy_plane_ring`. It does not predict the next voxels.
 The mesh is cached per size. The mirrors are symmetry copies.
 A pose sets transforms only, so a pointer move stays bounded by the mask count.
@@ -786,7 +703,7 @@ There is no new `CursorJob` or controller hierarchy.
 ### Footprint depth
 
 `TerrainPreview.footprint_depth(tool, radius)` returns 64 for Build and Flatten.
-It returns `depth_for(radius)` for Smooth. Grab returns the same value from the helper, but its source capture uses ball offsets.
+It returns `depth_for(radius)` for Smooth.
 `TerrainTool._footprint_depth(radius)` reads the active tool.
 
 ### Shared job wiring
@@ -809,8 +726,8 @@ Each candidate states facts and a hypothesis.
 
 ### 1. Use one job runner for inline and worker paths
 
-- **Existing mechanism**: repeated `work <= INLINE_EDIT_LIMIT` branches in `_run_tick`, `_run_grab`, and `_run_smooth`.
-- **Consumers**: Build, Flatten, Smooth, and Grab.
+- **Existing mechanism**: repeated `work <= INLINE_EDIT_LIMIT` branches in `_run_tick` and `_run_smooth`.
+- **Consumers**: Build, Flatten, and Smooth.
 - **Contract**: a small press dab must finish in its input event. A large job must use the worker pool.
 - **Tradeoff**: a helper can hide the synchronous inline order that the press needs.
 - **Facts**: the three paths repeat the same operation setup and finish sequence. `_make_tick_job` and `_make_smooth_job` now share the job wiring, but the inline and worker branches remain.

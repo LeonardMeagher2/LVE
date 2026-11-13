@@ -18,7 +18,6 @@ var _press := Vector2.ZERO
 
 func _ready() -> void:
 	test("Surface reads a non-cardinal normal and locks it for the stroke", _surface_gradient, "surface_gradient")
-	test("Grab keeps the view plane drag", _grab_hidden, "grab_hidden")
 
 
 func before_test() -> void:
@@ -91,28 +90,6 @@ func _surface_gradient() -> void:
 		expect(_tool._stroke_frame.follows_surface, "the Surface source reads the local surface")
 		expect(_tool.surface_frames >= 1, "the press returned a surface frame")
 		expect(absf(_tool._stroke_frame.normal.y) < 0.995, "the surface normal is not the flat face normal")
-		_button(false, _press)
-	)
-	await _wait_idle()
-
-
-func _grab_hidden() -> void:
-	step("Given the Grab tool", func():
-		_view("top")
-		_solid_block()
-		_settings.tool = _settings.Tools.GRAB
-		_settings.radius = 5
-		_press = _pos(Vector3(0, 3, 0))
-	)
-	step("When the user hovers and presses with Grab", func():
-		_hover(_press)
-		_button(true, _press)
-	)
-	step("Then Grab captures its drag sources on the view plane", func():
-		expect(_tool._edit != null, "the Grab press opens the edit")
-		expect(_tool._stroke_frame != null and not _tool._stroke_frame.follows_surface, "the Grab press stores the cheap face frame")
-		expect(_tool._plane != null and _tool._plane.normal.is_equal_approx(_tool._forward().normalized()), "the drag plane is the view plane")
-		expect(_tool._grab_anchor != VoxelPicking.NONE and not _tool._grab_sources.is_empty(), "the Grab tool captures its drag sources")
 		_button(false, _press)
 	)
 	await _wait_idle()

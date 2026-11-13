@@ -52,37 +52,39 @@ Each tool declares an `outputSchema` with a root object. A client that renders t
 
 A legacy client rejects a tool list when one `outputSchema` is not a root object. Keep the root object when you add a tool.
 
-## Guide resource
+## Protocol
 
-The server publishes one resource, `lve://guide`. It gives the edit rules and the returned keys of every tool. Read it with `resources/read`. The text lists the same keys as the output schemas, so the two cannot disagree.
+The server answers protocol revision `2025-06-18` only. An older revision has no `outputSchema`, so the client could not show a return type.
+
+The server publishes no resources. The initialize `instructions` field carries the edit rules and a one-line index of every tool, generated from the input schemas.
 
 ## Tools
 
 | Tool | Action |
 | --- | --- |
 | `get_state` | Read the compact document, tags, active tag, tool, material, selection count and bounds, symmetry, slice, busy, and undo state. It also returns the content revision and the current frame cell bounds |
-| `inspect_document` | Read a semantic summary of one or more frames: integer bounds, occupied count, materials, connected islands, tags, and transitions. Limit islands to a box or one material |
+| `inspect_document` | Read a semantic summary of one or more frames: integer bounds, occupied count, materials, connected islands, tags, and transitions. Limit islands to a box or one material. One frame also puts its fields at the root |
 | `get_slice` | Read labeled 2D slices or projections as text. Use it for exact shape and material layout |
 | `get_map` | Read a coarse occupancy grid. Use it to locate content in a large frame |
 | `get_changes` | Read cells changed since a revision. Use the revision from a read or a write |
 | `get_cells` | Read occupied cells in a box as x-runs. Omit min and max to use the frame bounds. Pass next back as cursor to continue |
-| `screenshot` | Save a PNG of one frame, a view contact sheet, or a frame storyboard. Set the view, lighting, shading, wireframe, and `inline` options |
+| `screenshot` | Save a PNG of one frame, a view contact sheet, or a frame storyboard and return its absolute path. Set the view, lighting, shading, wireframe, and `inline` options |
 | `new_document` | Open an empty document in a new tab |
-| `save_document` | Save a copy of the current document as `.lve` or `.lve.png`. Set `copy` false to save the main document |
-| `open_document` | Open a saved `.lve` or `.lve.png` document in a new tab |
+| `save_document` | Save the current document as `.lve` or `.lve.png` at an absolute path. Omit `path` to save the open document. A path writes a copy unless `copy` is false. A missing folder is created |
+| `open_document` | Open a saved `.lve` or `.lve.png` document at an absolute path in a new tab |
 | `set_document_settings` | Set smooth normals, ambient occlusion strength, and the centered document size. One undo action |
-| `get_export_settings` | Read the export settings the editor uses now |
-| `export_model` | Export a `.glb` or `.gltf` file with per-call model settings |
-| `export_sprite_sheet` | Export a PNG sprite sheet and the Aseprite JSON sidecar with per-call settings |
+| `get_export_settings` | Read the export settings the editor uses now. It also returns the document path and the default model and sprite paths |
+| `export_model` | Export a `.glb` or `.gltf` file with per-call model settings. Omit `path` to export beside the document |
+| `export_sprite_sheet` | Export a PNG sprite sheet and the Aseprite JSON sidecar with per-call settings. Omit `path` to export beside the document |
 | `add_frame` | Add empty frames at the end or at an index, in one undo action |
 | `remove_frame` | Remove one frame, or a list in one undo action. The last frame stays |
-| `move_frame` | Move one frame or a block to a new index, in one undo action |
+| `move_frame` | Move one frame or a block to a new index, in one undo action. Omit `from` to move the current frame |
 | `duplicate_frame` | Copy the current frame and insert it after |
 | `set_frame` | Make one frame current |
 | `set_frame_delay` | Set one frame duration, or a list, in milliseconds |
 | `add_tag` | Add a tag with a frame range, loop mode, and repeat count |
-| `remove_tag` | Remove one tag. The last tag stays |
-| `rename_tag` | Rename one tag |
+| `remove_tag` | Remove one tag. Omit `tag` to remove the active tag. The last tag stays |
+| `rename_tag` | Rename one tag. Omit `tag` to rename the active tag |
 | `set_tag_range` | Set one tag's inclusive frame range |
 | `set_active_tag` | Select one tag or clear the selection |
 | `set_tag_loop` | Set one tag's loop mode and repeat count |
@@ -95,6 +97,8 @@ The server publishes one resource, `lve://guide`. It gives the edit rules and th
 
 The tools use integer cell coordinates. Cell `c` covers `[c - 0.5, c + 0.5]`. Y is up.
 
+An omitted `frame` means the current frame. An omitted `tag` means the active tag. Every path is an absolute file system path. The server refuses a relative path and a Godot `user://` or `res://` path, because the client names a location the server cannot resolve on its own. The server creates a missing folder before a save.
+
 ## Read a document
 
 Use this order to build a mental model without reading many cells.
@@ -106,9 +110,13 @@ Use this order to build a mental model without reading many cells.
 5. Call `get_cells` for exact cells. Omit `min` and `max` to read the frame bounds.
 6. Call `get_changes` with the last revision to verify an edit.
 
+One frame is the common read. Then `index`, `occupied`, `bounds`, `materials`, and `islands` also sit at the root of the result. `frames` holds the same object, so an earlier client still works.
+
+A material or island entry names its material by `key`. The key is `color|metallic|roughness|emission`, so the entry does not repeat the same values as an object.
+
 `inspect_document` groups islands by material by default. Set `group` to `frame` to merge touching cells of different materials. Set `box` to limit island connectivity to an inclusive box, and `material` to list only one color. It limits the island list to `max_islands`. It reports `island_count` and `islands_truncated` when the list is short.
 
-`get_slice` uses `axis` x, y, or z. The `layers` list selects layers on that axis. The `materials` mode returns one character per material and a legend. The `height` and `depth` modes return a projection as `values`. `scale` sets the cells per character. The response states the column axis, the row axis, and the start cells.
+`get_slice` uses `axis` x, y, or z. The `layers` list selects layers on that axis. The `materials` mode returns one character per material and a legend. A legend entry is `char` and `key`. The `height` and `depth` modes return a projection as `values`. `scale` sets the cells per character. The response states the column axis, the row axis, and the start cells.
 
 `get_map` divides the frame into blocks of `cell_size` cells. A block entry is `[bx, by, bz, occupied, material]`. Block `0,0,0` starts at `origin`. The `material` is the most common material in the block.
 
@@ -138,13 +146,13 @@ Provide at least one form. A shape without an index uses the current material. S
 
 `set_material` accepts `color`, `emission`, `metallic`, and `roughness`. Emission gives the voxel a glow. A color change clears the glow unless you also pass `emission`. Set `emission` to `#000000` to clear it explicitly.
 
-`screenshot` saves `user://mcp_screenshot.png` and returns the path by default. Set `inline: true` to also return the image. The default size is 256. Use `focus` with an inclusive `[x0, y0, z0, x1, y1, z1]` box to frame a detail. `focus` applies to the named views. The current view refuses it. The `low` view frames a floating scene from below.
+`screenshot` saves `mcp_screenshot.png` in the user directory and returns its absolute path by default. Set `inline: true` to also return the image. The default size is 256. Use `focus` with an inclusive `[x0, y0, z0, x1, y1, z1]` box to frame a detail. `focus` applies to the named views. The current view refuses it. The `low` view frames a floating scene from below.
 
 Set `orthographic: false` for a perspective view. `environment` defaults to true and applies the document light direction, light color, and ambient color. `shadows` and `shaded` default to true. `wireframe` defaults to false. The response reports every resolved option.
 
 Set `views` to a list of named views to render a contact sheet. Set `frames` to a list of frame indices to render a storyboard. A storyboard uses the union bounds of the selected frames, so the content stays in place. `size` is the tile edge. The response reports `columns`, `rows`, `tile_size`, `bounds`, and the view or frame list.
 
-`save_document` writes a `.lve` file. A `.lve.png` path also stores a 256 by 256 preview, which needs a visible window. It writes a copy by default and leaves the main document path and unsaved mark unchanged. Set `copy` false to save the main document, update the tab path, clear the unsaved mark, and update the session. Use a new path for each iteration so an earlier file stays intact. `open_document` opens both forms in a new tab.
+`save_document` writes a `.lve` file. A `.lve.png` path also stores a 256 by 256 preview, which needs a visible window. Omit `path` to save the open document to its own path, update the tab path, and clear the unsaved mark. A path writes a copy by default: it leaves the main document path and unsaved mark unchanged. Set `copy` false to save the main document at that path. Use a new path for each iteration so an earlier file stays intact. `open_document` opens both forms in a new tab.
 
 The server logs one line per tool call with its response bytes in `user://mcp_server.log`.
 
@@ -152,7 +160,7 @@ The server logs one line per tool call with its response bytes in `user://mcp_se
 
 `get_export_settings` reads the values the export tab uses now: the sheet view, the tile size, the tag, and the model options.
 
-`export_model` writes a `.glb` or `.gltf` file. It accepts `center`, `tag`, `smooth_normals`, `ao`, and `unlit`. `export_sprite_sheet` writes a PNG and the Aseprite JSON sidecar. It accepts `first_frame`, `last_frame`, `tag`, `tile_size`, `view`, `views`, `orthographic`, `center`, and `metadata`.
+`export_model` writes a `.glb` or `.gltf` file. It accepts `center`, `tag`, `smooth_normals`, `ao`, and `unlit`. `export_sprite_sheet` writes a PNG and the Aseprite JSON sidecar. It accepts `first_frame`, `last_frame`, `tag`, `tile_size`, `view`, `views`, `orthographic`, `center`, and `metadata`. Omit `path` on either tool to write beside the document. An unsaved document exports to the user directory. `get_export_settings` returns both default paths.
 
 Pass a key only when the call needs a value that differs from the export tab. The call does not change the document or the saved export settings. Both tools return the resolved path and the resolved values.
 
@@ -174,7 +182,7 @@ The sprite sheet needs a visible editor window. A headless run returns an unavai
 - Use `add_frame`, `remove_frame`, and `move_frame` with batches. `move_frame` takes `count` for a block. `remove_frame` takes `frames`. One call is one undo action.
 - After `remove_frame`, the current frame stays current. If it was removed, the next remaining frame is current.
 - Use `add_tag` to make one tag per action. The frame range is inclusive.
-- Use `set_tag_range`, `rename_tag`, and `remove_tag` to edit a tag.
+- Use `set_tag_range`, `rename_tag`, and `remove_tag` to edit a tag. Omit `tag` to use the active tag.
 - Use `set_tag_loop` with `ping_pong` to reverse a growth sequence into a loop.
 - Use `set_active_tag` to select the tag that playback runs.
 - The new tag becomes active. The last tag and the last frame are kept.

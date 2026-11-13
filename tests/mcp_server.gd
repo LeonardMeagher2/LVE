@@ -43,12 +43,18 @@ func _ready() -> void:
 	test("get_cells resumes with a cursor", _cursor, "cursor")
 	test("every tool declares an object output schema", _schemas, "schemas")
 	test("a tool result carries structured content", _structured, "structured")
-	test("the guide resource names every tool", _guide, "guide")
 	test("a stroke reports the exact changed bounds", _stroke_bounds, "stroke_bounds")
 	test("inspect_document returns the palette", _palette, "palette")
 	test("the export settings are readable", _export_settings, "export_settings")
 	test("a sprite sheet uses the requested settings", _export_sheet, "export_sheet", {"timeout": 30.0})
 	test("a model export uses the requested settings", _export_model, "export_model", {"timeout": 30.0})
+	test("a save without a path saves the open document", _save_main, "save_main")
+	test("a save creates a missing folder", _save_folder, "save_folder")
+	test("an export without a path uses the document name", _export_default_path, "export_default")
+	test("move_frame without from moves the current frame", _move_current, "move_current")
+	test("the tag tools default to the active tag", _tag_defaults, "tag_defaults")
+	test("inspect_document puts one frame at the root", _inspect_root, "inspect_root")
+	test("the instructions carry a tool index", _tool_index, "tool_index")
 
 
 func before_test() -> void:
@@ -562,6 +568,9 @@ func _inspect() -> void:
 			expect(max_bound.size() == 3 and int(max_bound[0]) == 4 and int(max_bound[1]) == 1 and int(max_bound[2]) == 0, "the bounds cover the far cell")
 			var materials: Array = frame.get("materials", [])
 			expect(materials.size() == 2, "the summary lists two materials")
+			if not materials.is_empty():
+				expect(materials[0].has("key"), "a material entry carries the key")
+				expect(not materials[0].has("material"), "a material entry omits the duplicated material object")
 			var islands: Array = frame.get("islands", [])
 			expect(int(frame.get("island_count", 0)) == 3, "the material scan finds three islands")
 			expect(islands.size() == 3, "the island list holds three entries")
@@ -655,6 +664,9 @@ func _slice() -> void:
 				expect(str(lines[1]) == "+..", "the second row starts with the blue cell")
 		var legend: Array = data.get("legend", [])
 		expect(legend.size() == 2, "the legend lists two materials")
+		if not legend.is_empty():
+			expect(legend[0].has("key"), "a legend entry carries the key")
+			expect(not legend[0].has("material"), "a legend entry omits the duplicated material object")
 	)
 	var height_response := await _call("get_slice", {"axis": "y", "mode": "height", "scale": 1})
 	var height_data := _result_data(height_response)
@@ -839,8 +851,8 @@ func _emission() -> void:
 
 
 func _save_open() -> void:
-	var path := "user://mcp_save_test.lve"
-	var png_path := "user://mcp_save_test.lve.png"
+	var path := ProjectSettings.globalize_path("user://mcp_save_test.lve")
+	var png_path := ProjectSettings.globalize_path("user://mcp_save_test.lve.png")
 	step("Given a red cell and a save path", func():
 		var frame := State.get_current_voxel_frame()
 		frame.set_cell(Vector3i(1, 2, 3), VoxelFrame.material(Color.RED))
@@ -859,7 +871,7 @@ func _save_open() -> void:
 		expect(State.document.file_path == path, "the document records the file path")
 		expect(not State.document.edit_dirty, "the save clears the unsaved mark")
 	)
-	var copy_path := "user://mcp_copy_test.lve"
+	var copy_path := ProjectSettings.globalize_path("user://mcp_copy_test.lve")
 	step("Given the saved document is edited again", func():
 		State.document.edit_dirty = true
 		DirAccess.remove_absolute(copy_path)
@@ -1137,14 +1149,14 @@ func _busy() -> void:
 	step("Then a new document is refused", func():
 		expect(_is_error(new_response), "new_document reports busy")
 	)
-	var open_response := await _call("open_document", {"path": "res://Flamingo.lve"})
+	var open_response := await _call("open_document", {"path": ProjectSettings.globalize_path("res://Flamingo.lve")})
 	step("Then opening a document is refused", func():
 		expect(_is_error(open_response), "open_document reports busy")
 	)
-	var save_response := await _call("save_document", {"path": "user://mcp_busy_save.lve"})
+	var save_response := await _call("save_document", {"path": ProjectSettings.globalize_path("user://mcp_busy_save.lve")})
 	step("Then a save is refused", func():
 		expect(_is_error(save_response), "save_document reports busy")
-		expect(not FileAccess.file_exists("user://mcp_busy_save.lve"), "the busy save writes no file")
+		expect(not FileAccess.file_exists(ProjectSettings.globalize_path("user://mcp_busy_save.lve")), "the busy save writes no file")
 	)
 	step("Then the user edit is cancelled", func():
 		State.cancel_edit(edit)
@@ -1416,34 +1428,6 @@ func _structured() -> void:
 	)
 
 
-func _guide() -> void:
-	var list_response: Variant = await server.call("_dispatch_request", {"id": 1, "method": "resources/list", "params": {}})
-	var read_response: Variant = await server.call("_dispatch_request", {"id": 2, "method": "resources/read", "params": {"uri": "lve://guide"}})
-	var tools_response: Variant = await server.call("_dispatch_request", {"id": 3, "method": "tools/list", "params": {}})
-	var guide := ""
-	if read_response is Dictionary:
-		var result: Dictionary = (read_response as Dictionary).get("result", {})
-		var contents: Array = result.get("contents", [])
-		if not contents.is_empty() and contents[0] is Dictionary:
-			guide = str((contents[0] as Dictionary).get("text", ""))
-	step("Then the guide is listed, readable, and names every tool", func():
-		expect(list_response is Dictionary, "resources/list answers")
-		if list_response is Dictionary:
-			var result: Dictionary = (list_response as Dictionary).get("result", {})
-			var resources: Array = result.get("resources", [])
-			expect(resources.size() == 1, "the server lists one resource")
-			if not resources.is_empty():
-				expect(str((resources[0] as Dictionary).get("uri", "")) == "lve://guide", "the resource is the guide")
-		expect(guide.begins_with("# LVE MCP guide"), "resources/read returns the guide")
-		if tools_response is Dictionary:
-			var result: Dictionary = (tools_response as Dictionary).get("result", {})
-			var tools: Array = result.get("tools", [])
-			for value in tools:
-				var tool: Dictionary = value
-				expect(guide.contains("### " + str(tool.get("name", ""))), "the guide describes %s" % str(tool.get("name", "")))
-	)
-
-
 func _stroke_bounds() -> void:
 	await _call("set_tool", {"tool": "brush", "diameter": 1, "shape": "cube", "pixel_perfect": false})
 	State.current_color = Color.RED
@@ -1491,8 +1475,8 @@ func _export_settings() -> void:
 
 
 func _export_sheet() -> void:
-	var path := "user://mcp_export_sheet.png"
-	var json_path := "user://mcp_export_sheet.json"
+	var path := ProjectSettings.globalize_path("user://mcp_export_sheet.png")
+	var json_path := ProjectSettings.globalize_path("user://mcp_export_sheet.json")
 	step("Given two frames and a clean output", func():
 		var frame := State.get_current_voxel_frame()
 		frame.set_cell(Vector3i(0, 0, 0), VoxelFrame.material(Color.RED))
@@ -1522,7 +1506,7 @@ func _export_sheet() -> void:
 
 
 func _export_model() -> void:
-	var path := "user://mcp_export_model.glb"
+	var path := ProjectSettings.globalize_path("user://mcp_export_model.glb")
 	step("Given one red cell and a clean output", func():
 		State.get_current_voxel_frame().set_cell(Vector3i(0, 0, 0), VoxelFrame.material(Color.RED))
 		State.document._bounds_dirty = true
@@ -1543,3 +1527,166 @@ func _export_model() -> void:
 		expect(int(data.get("frames", 0)) == 1, "the export names one frame")
 		expect(str(data.get("format", "")) == "glb", "the export names the format")
 	)
+
+
+func _save_main() -> void:
+	var path := ProjectSettings.globalize_path("user://mcp_main_test.lve")
+	step("Given a document with a save path and an unsaved cell", func():
+		State.get_current_voxel_frame().set_cell(Vector3i(1, 2, 3), VoxelFrame.material(Color.RED))
+		State.document._bounds_dirty = true
+		State.document.edit_save_path = path
+		State.document.edit_dirty = true
+		DirAccess.remove_absolute(path)
+	)
+	var response := await _call("save_document", {})
+	var data := _result_data(response)
+	step("Then a save without a path writes the open document", func():
+		expect(not _is_error(response), "save_document succeeds without a path: %s" % _result_text(response))
+		expect(FileAccess.file_exists(path), "the main file exists")
+		expect(not bool(data.get("copy", true)), "the save is not a copy")
+		expect(not State.document.edit_dirty, "the save clears the unsaved mark")
+		DirAccess.remove_absolute(path)
+	)
+
+
+func _save_folder() -> void:
+	var folder := "user://mcp_folder_test/nested"
+	var path := folder + "/tiles.lve"
+	var absolute := ProjectSettings.globalize_path(path)
+	step("Given a save path in a missing folder", func():
+		DirAccess.remove_absolute(path)
+		expect(not DirAccess.dir_exists_absolute(folder), "the folder is missing")
+	)
+	var relative_response := await _call("save_document", {"path": "mcp_folder_test/nested/tiles.lve"})
+	var engine_response := await _call("save_document", {"path": "user://mcp_folder_test/nested/tiles.lve"})
+	step("Then a relative path and an engine path are refused", func():
+		expect(_is_error(relative_response), "save_document refuses a relative path")
+		expect(_is_error(engine_response), "save_document refuses a user:// path")
+		expect(not FileAccess.file_exists(path), "the refused save writes no file")
+	)
+	var response := await _call("save_document", {"path": absolute})
+	step("Then the save creates the folder and writes the file", func():
+		expect(not _is_error(response), "save_document succeeds: %s" % _result_text(response))
+		expect(DirAccess.dir_exists_absolute(folder), "the folder exists")
+		expect(FileAccess.file_exists(path), "the file exists")
+		DirAccess.remove_absolute(path)
+		DirAccess.remove_absolute(folder)
+		DirAccess.remove_absolute(folder.get_base_dir())
+	)
+
+
+func _export_default_path() -> void:
+	var path := "user://Untitled.glb"
+	step("Given one red cell and no export path", func():
+		State.get_current_voxel_frame().set_cell(Vector3i(0, 0, 0), VoxelFrame.material(Color.RED))
+		State.document._bounds_dirty = true
+		DirAccess.remove_absolute(path)
+	)
+	var settings_response := await _call("get_export_settings", {})
+	var settings := _result_data(settings_response)
+	var response := await _call("export_model", {})
+	var data := _result_data(response)
+	step("Then the export uses the document name", func():
+		expect(not _is_error(settings_response), "get_export_settings succeeds")
+		expect(str(settings.get("model_path", "")).ends_with("Untitled.glb"), "the settings name the default model path")
+		expect(not _is_error(response), "export_model succeeds without a path: %s" % _result_text(response))
+		expect(str(data.get("path", "")).ends_with("Untitled.glb"), "the export reports the document name")
+		expect(FileAccess.file_exists(path), "the model exists")
+		DirAccess.remove_absolute(path)
+	)
+	step("Given a document that was saved", func():
+		State.document.file_path = ProjectSettings.globalize_path("user://mcp_beside/props.lve")
+		State.document.edit_save_path = State.document.file_path
+		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("user://mcp_beside"))
+	)
+	var beside_response := await _call("export_model", {})
+	var beside_data := _result_data(beside_response)
+	step("Then a default export lands beside the document", func():
+		expect(not _is_error(beside_response), "the export beside the document succeeds: %s" % _result_text(beside_response))
+		var beside_path := str(beside_data.get("path", ""))
+		expect(beside_path.ends_with("mcp_beside/props.glb") or beside_path.ends_with("mcp_beside\\props.glb"), "the export uses the document folder")
+		DirAccess.remove_absolute(beside_path)
+		DirAccess.remove_absolute(ProjectSettings.globalize_path("user://mcp_beside"))
+	)
+
+
+func _move_current() -> void:
+	step("Given three frames", func():
+		State.add_frame()
+		State.add_frame()
+		expect(State.document.frames.size() == 3, "the document holds three frames")
+	)
+	State.current_frame = 0
+	var response := await _call("move_frame", {"to": 2})
+	var data := _result_data(response)
+	step("Then move_frame without from moves the current frame", func():
+		expect(not _is_error(response), "move_frame succeeds without from: %s" % _result_text(response))
+		expect(int(data.get("frame", -1)) == 2, "the moved frame is current")
+		expect(State.current_frame == 2, "the editor shows the moved frame")
+	)
+
+
+func _tag_defaults() -> void:
+	await _call("add_frame", {})
+	await _call("add_tag", {"name": "Second", "from": 0, "to": 1})
+	step("Given two tags", func():
+		State.active_tag = 0
+		expect(State.document.tags.size() == 2, "the document holds two tags")
+	)
+	var rename_response := await _call("rename_tag", {"name": "First"})
+	step("Then rename_tag without a tag renames the active tag", func():
+		expect(not _is_error(rename_response), "rename_tag succeeds without a tag: %s" % _result_text(rename_response))
+		expect(State.get_tag(0).name == "First", "the active tag is renamed")
+		expect(State.get_tag(1).name == "Second", "the other tag keeps its name")
+	)
+	var remove_response := await _call("remove_tag", {})
+	step("Then remove_tag without a tag removes the active tag", func():
+		expect(not _is_error(remove_response), "remove_tag succeeds without a tag: %s" % _result_text(remove_response))
+		expect(State.document.tags.size() == 1, "one tag remains")
+		expect(State.get_tag(0).name == "Second", "the other tag stays")
+	)
+
+
+func _inspect_root() -> void:
+	step("Given one red cell", func():
+		State.get_current_voxel_frame().set_cell(Vector3i(0, 0, 0), VoxelFrame.material(Color.RED))
+		State.document._bounds_dirty = true
+	)
+	var response := await _call("inspect_document", {})
+	var data := _result_data(response)
+	step("Then a single frame is summarized at the root", func():
+		expect(not _is_error(response), "inspect_document succeeds: %s" % _result_text(response))
+		expect(int(data.get("index", -1)) == 0, "the root names the frame")
+		expect(int(data.get("occupied", 0)) == 1, "the root counts the cells")
+		var materials: Array = data.get("materials", [])
+		expect(materials.size() == 1, "the root lists the materials")
+		var frames: Array = data.get("frames", [])
+		expect(frames.size() == 1, "the frame list stays")
+	)
+
+
+func _tool_index() -> void:
+	var text := str(server.call("_instructions_text"))
+	var init_response: Variant = await server.call("_dispatch_request", {"id": 1, "method": "initialize", "params": {"protocolVersion": "2025-11-25"}})
+	var init_result: Dictionary = {}
+	if init_response is Dictionary:
+		var result_value: Variant = (init_response as Dictionary).get("result", {})
+		if result_value is Dictionary:
+			init_result = result_value
+	step("Then the instructions name every tool with its arguments", func():
+		for value in MCPServerScript.TOOLS:
+			var tool: Dictionary = value
+			var name := str(tool.get("name", ""))
+			expect(text.contains("- %s(" % name), "the index names %s" % name)
+		expect(text.contains("save_document(path?"), "an optional argument carries a question mark")
+		expect(text.contains("get_changes(since,"), "a required argument carries no mark")
+	)
+	step("Then initialize carries the instructions and no resources", func():
+		expect(str(init_result.get("protocolVersion", "")) == "2025-06-18", "the server answers 2025-06-18")
+		var capabilities: Dictionary = init_result.get("capabilities", {})
+		expect(capabilities.has("tools"), "the server declares tools")
+		expect(not capabilities.has("resources"), "the server declares no resources")
+		expect(str(init_result.get("instructions", "")).contains("get_state("), "initialize carries the tool index")
+	)
+
+

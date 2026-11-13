@@ -4,7 +4,7 @@ extends "res://tests/terrain_tools.gd"
 #
 # The script extends the root case file, so every fixture, helper, and setup hook
 # is shared and no case changes. The split keeps each scene inside its own
-# deadline: the root runs the Build, Flatten, surface, gradient, Grab, and preview
+# deadline: the root runs the Build, Flatten, surface, gradient, and preview
 # cases, and this scene runs the Smooth and drain cases. A case name still
 # selects its own case, because the runner reads the registered names from the
 # script.
