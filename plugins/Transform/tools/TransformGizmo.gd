@@ -22,23 +22,25 @@ enum Kind {
 ## The handle radius in screen pixels.
 const RADIUS_PX := 64.0
 ## The Move arrow reach as a fraction of the handle radius.
-const MOVE_REACH := 0.55
+const MOVE_REACH := 0.35
 ## The Move arrow shaft start as a fraction of the handle radius.
-const MOVE_INNER := 0.12
+const MOVE_INNER := 0.08
 ## The Move arrowhead length as a fraction of the handle radius.
-const MOVE_HEAD := 0.16
+const MOVE_HEAD := 0.12
 ## The Move arrowhead half width as a fraction of the handle radius.
-const MOVE_SIDE := 0.09
+const MOVE_SIDE := 0.07
+## The Move center square half size as a fraction of the handle radius.
+const MOVE_CENTER := 0.05
 ## The Scale square reach as a fraction of the handle radius.
-const SCALE_REACH := 0.55
+const SCALE_REACH := 0.35
 ## The Scale arrow shaft start as a fraction of the handle radius.
-const SCALE_INNER := 0.15
+const SCALE_INNER := 0.10
 ## The Scale arrowhead length as a fraction of the handle radius.
-const SCALE_HEAD := 0.14
+const SCALE_HEAD := 0.10
 ## The Scale arrowhead half width as a fraction of the handle radius.
-const SCALE_SIDE := 0.09
+const SCALE_SIDE := 0.07
 ## The Scale center square half size as a fraction of the handle radius.
-const SCALE_CENTER := 0.06
+const SCALE_CENTER := 0.05
 ## The half size of the Rotate joint square in screen pixels.
 const JOINT_HALF_PX := 7.0
 ## The Rotate mark arc radius in screen pixels.
@@ -225,7 +227,7 @@ func _append_move(vertices: PackedVector3Array) -> void:
 		var side := Vector3(-direction.y * MOVE_SIDE, direction.x * MOVE_SIDE, 0.0)
 		_append_line(vertices, end, back + side)
 		_append_line(vertices, end, back - side)
-	_append_square(vertices, Vector3.ZERO, 0.07)
+	_append_square(vertices, Vector3.ZERO, MOVE_CENTER)
 
 
 func _append_scale(vertices: PackedVector3Array) -> void:
