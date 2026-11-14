@@ -18,6 +18,7 @@ var _default_tool := 0
 var _default_snap := true
 var _default_uniform := true
 var _gizmo_radius := 0.0
+var _scale_line_target := Vector3.ZERO
 
 
 func _ready() -> void:
@@ -213,6 +214,34 @@ func _transform_gizmo() -> void:
 		for vertex in vertices:
 			reach = maxf(reach, Vector2(vertex.x, vertex.y).length())
 		expect(reach <= TransformGizmoScript.ARROW_REACH + 0.001, "the scale arrows share the move reach")
+		var edge := TransformGizmoScript.CENTER_HALF + 0.001
+		var spare := 0
+		for vertex in vertices:
+			if absf(vertex.x) > edge and absf(vertex.y) > edge and vertex.x * vertex.y > 0.0:
+				spare += 1
+		expect(spare == 0, "the scale gizmo draws two corner arrows")
+	)
+
+	step("When the user drags the scale gizmo", func():
+		var gizmo = plugin("TransformPlugin")._scale.get_node("Gizmo")
+		_scale_line_target = gizmo.global_position + Vector3(2, -2, 0)
+		var from := camera_rig().unproject_position(gizmo.global_position)
+		var to := camera_rig().unproject_position(_scale_line_target)
+		_mouse_button(from, true)
+		_mouse_motion(to)
+	)
+
+	step("Then the scale gizmo draws a line to the pointer", func():
+		var gizmo = plugin("TransformPlugin")._scale.get_node("Gizmo")
+		expect(gizmo._dragging, "the scale drag shows a pointer line")
+		expect(gizmo._has_tip, "the scale line has a tip at the pointer")
+		var pointer := camera_rig().unproject_position(_scale_line_target)
+		expect(camera_rig().unproject_position(gizmo._last_tip).distance_to(pointer) <= 1.0, "the scale line tip follows the drag")
+		_release_at(_last_mouse_pos)
+		expect(not gizmo._dragging, "the scale line hides after the release")
+		expect(not gizmo._has_tip, "the released gizmo holds no line")
+		expect(gizmo.mesh == gizmo._static_mesh, "the released gizmo drops the scale line")
+		_press_option("Cancel")
 	)
 
 	step("When the selection moves to one cell", func():

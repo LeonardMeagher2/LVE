@@ -257,7 +257,8 @@ It is a grab target, not an axis constraint.
 Move draws four view-plane arrows.
 Rotate draws a joint square with two quarter-turn arrows.
 A bone from the pivot to the pointer appears during a drag.
-Scale draws four diagonal arrows at the square corners.
+Scale draws two diagonal arrows on opposite corners.
+A line from the pivot to the pointer appears during a drag.
 There is no duplicate mode.
 There is no destination mask.
 

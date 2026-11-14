@@ -132,10 +132,10 @@ The gizmo draws over geometry.
 | --- | --- |
 | Move | Four view-plane arrows. |
 | Rotate | A joint square with two quarter-turn arrows. The bone to the pointer appears during a drag. |
-| Scale | Four diagonal arrows at the square corners, matching Move rotated 45 degrees. |
+| Scale | Two diagonal arrows on opposite corners, matching Move rotated 45 degrees. The line to the pointer appears during a drag. |
 
-The Rotate bone uses the pointer ray and a plane through the pivot.
-It is visible only during a drag.
+The Rotate bone and the Scale line use the pointer ray and a plane through the pivot.
+Both are visible only during a drag.
 A drag passes the captured plane normal, so a camera move does not change the bone plane.
 A press on the gizmo starts the same free gesture as a press elsewhere in the viewport.
 The gizmo adds no axis constraint.

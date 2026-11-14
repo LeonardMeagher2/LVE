@@ -2,10 +2,11 @@ extends MeshInstance3D
 
 ## The camera-facing transform pivot gizmo.
 ##
-## Move draws four axis arrows. Scale draws the same arrows on the diagonals.
-## Rotate draws a joint square with two bent arrows at the pivot. A bone to the
-## pointer appears during a drag. The fixed handles keep a constant screen size.
-## The gizmo draws over geometry.
+## Move draws four axis arrows. Scale draws the same arrows on two opposite
+## diagonals and a line to the pointer during a drag. Rotate draws a joint square
+## with two quarter-turn arrows at the pivot and a bone to the pointer during a
+## drag. The fixed handles keep a constant screen size. The gizmo draws over
+## geometry.
 
 const VoxelLineMesh := preload("res://Globals/Rendering/VoxelLineMesh.gd")
 
@@ -15,7 +16,7 @@ enum Kind {
 	MOVE,
 	## A bone from the pivot to the pointer.
 	ROTATE,
-	## A view-plane square with corner arrows.
+	## Two diagonal arrows on opposite corners.
 	SCALE,
 }
 
@@ -54,6 +55,7 @@ var _plane_normal := Vector3.ZERO
 var _last_tip := Vector3.ZERO
 var _has_tip := false
 var _dragging := false
+var _static_mesh: ArrayMesh
 var _size_viewport: Viewport
 
 
@@ -68,7 +70,8 @@ func _ready() -> void:
 	material.render_priority = 1
 	material_override = material
 	if kind != Kind.ROTATE:
-		mesh = _build_static_mesh(kind)
+		_static_mesh = _build_static_mesh(kind)
+		mesh = _static_mesh
 	visible = false
 
 
@@ -100,23 +103,23 @@ func hide_gizmo() -> void:
 	visible = false
 
 
-## Sets the pointer that the Rotate bone points at. A nonzero plane normal uses
-## the plane that the drag captured.
+## Sets the pointer that the Rotate bone and the Scale line follow. A nonzero
+## plane normal uses the plane that the drag captured.
 func set_pointer(screen_pos: Vector2, plane_normal := Vector3.ZERO) -> void:
 	if screen_pos == _pointer and plane_normal == _plane_normal:
 		return
 	_pointer = screen_pos
 	_plane_normal = plane_normal
-	if _has_pivot and kind == Kind.ROTATE:
+	if _has_pivot and kind != Kind.MOVE:
 		_pose()
 
 
-## Shows or hides the Rotate bone. The joint marks stay visible.
+## Shows or hides the line to the pointer. The fixed marks stay visible.
 func set_dragging(dragging: bool) -> void:
 	if dragging == _dragging:
 		return
 	_dragging = dragging
-	if _has_pivot and kind == Kind.ROTATE:
+	if _has_pivot and kind != Kind.MOVE:
 		_pose()
 
 
@@ -149,8 +152,41 @@ func _pose_fixed(camera: Camera3D) -> void:
 	if world_px <= 0.0:
 		visible = false
 		return
-	global_transform = Transform3D(camera.global_transform.basis.scaled(Vector3.ONE * world_px * RADIUS_PX), _pivot)
+	var size := world_px * RADIUS_PX
+	var basis := camera.global_transform.basis
+	if _dragging and kind == Kind.SCALE:
+		var vertices := PackedVector3Array()
+		_append_scale(vertices)
+		var tip := _pointer_tip(camera)
+		if tip != Vector3.INF:
+			_last_tip = tip
+			_has_tip = true
+		if _has_tip:
+			_append_line(vertices, Vector3.ZERO, basis.inverse() * (_last_tip - _pivot) / size)
+		mesh = VoxelLineMesh.build(vertices)
+	else:
+		mesh = _static_mesh
+		_has_tip = false
+	global_transform = Transform3D(basis.scaled(Vector3.ONE * size), _pivot)
 	visible = true
+
+
+# Returns the pointer point on the drag plane. Returns Vector3.INF when the
+# pointer ray misses the plane.
+func _pointer_tip(camera: Camera3D) -> Vector3:
+	var pointer := _pointer
+	if pointer == Vector2.INF:
+		pointer = get_viewport().get_mouse_position()
+	var normal := _plane_normal if not _plane_normal.is_zero_approx() else -camera.global_transform.basis.z
+	var origin := camera.project_ray_origin(pointer)
+	var direction := camera.project_ray_normal(pointer)
+	var denom := direction.dot(normal)
+	if absf(denom) <= 0.000001:
+		return Vector3.INF
+	var t: float = (_pivot - origin).dot(normal) / denom
+	if t <= 0.0:
+		return Vector3.INF
+	return origin + direction * t
 
 
 func _pose_rotate(camera: Camera3D) -> void:
@@ -161,20 +197,14 @@ func _pose_rotate(camera: Camera3D) -> void:
 	var basis := camera.global_transform.basis
 	var vertices := PackedVector3Array()
 	if _dragging:
-		var pointer := _pointer
-		if pointer == Vector2.INF:
-			pointer = get_viewport().get_mouse_position()
-		var normal := _plane_normal if not _plane_normal.is_zero_approx() else -basis.z
-		var tip := _pivot + basis.x * (world_px * RADIUS_PX) if not _has_tip else _last_tip
-		var origin := camera.project_ray_origin(pointer)
-		var direction := camera.project_ray_normal(pointer)
-		var denom := direction.dot(normal)
-		if absf(denom) > 0.000001:
-			var t: float = (_pivot - origin).dot(normal) / denom
-			if t > 0.0:
-				tip = origin + direction * t
-				_last_tip = tip
-				_has_tip = true
+		var tip := _pointer_tip(camera)
+		if tip != Vector3.INF:
+			_last_tip = tip
+			_has_tip = true
+		elif _has_tip:
+			tip = _last_tip
+		else:
+			tip = _pivot + basis.x * (world_px * RADIUS_PX)
 		_append_line(vertices, Vector3.ZERO, basis.inverse() * (tip - _pivot))
 	else:
 		_has_tip = false
@@ -217,9 +247,7 @@ func _append_move(vertices: PackedVector3Array) -> void:
 
 func _append_scale(vertices: PackedVector3Array) -> void:
 	var directions: Array[Vector2] = [
-		Vector2(1, 1).normalized(),
 		Vector2(-1, 1).normalized(),
-		Vector2(-1, -1).normalized(),
 		Vector2(1, -1).normalized(),
 	]
 	_append_arrows(vertices, directions)
