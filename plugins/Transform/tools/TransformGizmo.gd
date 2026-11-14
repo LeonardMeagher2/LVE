@@ -26,7 +26,7 @@ const JOINT_HALF_PX := 7.0
 ## The local half size of a center square that matches the joint square.
 const CENTER_HALF := JOINT_HALF_PX / RADIUS_PX
 ## The arrow reach as a fraction of the handle radius.
-const ARROW_REACH := 0.25
+const ARROW_REACH := 0.325
 ## The arrow shaft start as a fraction of the handle radius.
 const ARROW_INNER := 0.06
 ## The arrowhead length as a fraction of the handle radius.
