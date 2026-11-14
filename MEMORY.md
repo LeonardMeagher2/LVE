@@ -76,6 +76,7 @@
 - 2026-10-17T00:00Z [imp:5] [notes/ui-and-input] A Control below a Node3D draws over its viewport's 3D content. A CanvasLayer at -1 draws behind it.
 - 2026-10-19T00:00Z [imp:5] [notes/ui-and-input] `State.update_operation` takes a diagnostic phase, not a label. The `Operation.label` from `begin_operation` stays the artist action. The job widget shows that label, a measured percentage, or `CancellingΓÇª`. It shows no worker stage or count.
 - 2026-10-19T00:00Z [imp:5] [notes/ui-and-input] `Input.use_accumulated_input` defaults to true in this build. A real device therefore sends at most one motion per render frame.
+- 2026-11-14T00:00Z [imp:5] [notes/ui-and-input] Connect `Window.files_dropped` on the main window to accept operating system file drops. The signal supplies a `PackedStringArray` of file paths. It works only with native windows.
 - 2026-10-17T00:00Z [imp:5] [notes/assets-and-files] Before importing SVG icons, set `importer="svg"` and `type="DPITexture"` in their `.import` files. Otherwise, imports use plain textures. The `dest_files` hash is the MD5 of the `res://` source path.
 - 2026-10-06T00:00Z [imp:5] [notes/assets-and-files] DPITexture keeps SVG dimensions and renders icons at the viewport scale.
 - 2026-10-06T00:00Z [imp:5] [notes/assets-and-files] On this Windows display, Godot 4.7.2 reports scale 1.0 and DPI 192 at 200% scaling.

@@ -52,7 +52,7 @@ The source is [`State.gd:252`](../../../Globals/State/State.gd#L252).
 | `PlanePlugin` | `plugins/Plane/Toolbar.tscn`, a `Button` | `plugins/Plane/Options.tscn` | `PlaneTool.tscn` | Tool mounted only while active |
 | `ExportPlugin` | `plugins/Export/MenuBarItem.tscn`, a menu bar item | Export workspace controls | Own `VoxelRenderer` nodes | Workspace tab added |
 | `ClipboardPlugin` | No own toolbar button | `plugins/Clipboard/Options.tscn` | `PasteTool.tscn` on demand | Inactive |
-| `ImageImportPlugin` | No toolbar and no menu item | None | None | Called from the file open path |
+| `ImageImportPlugin` | No toolbar and no menu item | None | None | Called from the Open dialog and file drops |
 
 The plugin base class supplies the registration helpers.
 The helpers are `add_tool_bar_item`, `add_option_bar_item`, `add_editor_node`, `add_menu_bar_item`, and `add_tab`.
@@ -88,7 +88,7 @@ The source is [`ToolMenuButton.gd:21`](../../../plugins/ToolMenuButton.gd#L21).
 These gaps are visible in the current registrations.
 
 - `TerrainPlugin` has no `tool_terrain` action. The sculpt menu has no keyboard shortcut.
-- `ImageImportPlugin` has no direct toolbar or menu item. `MenuBar.open_document` calls `import_image` for image extensions.
+- `ImageImportPlugin` has no direct toolbar or menu item. `MenuBar._on_file_opened` calls `import_image` for image extensions. The Open dialog and a file drop both use this path.
 - `ClipboardPlugin._sync_options` attaches its controls only to Brush, Paint, Selection, and Transform option bars. The controls are absent while Terrain, Plane, Symmetry, or Eyedropper is active.
 - `EyedropperPlugin` has no option bar.
 - `PlanePlugin` mounts its tool only while active. `SymmetryPlugin` mounts its tool at startup and toggles `active`.
@@ -794,7 +794,7 @@ Some have no production caller.
 | `VoxelRenderer.reset_profile` and `profile_snapshot` | Tests call them. `profile_surfaces` is off by default |
 | `State.cancel_activity` | `State._input` calls it on Escape |
 | `StrokeTool.finish_on_switch` | `BrushPlugin` and `PaintPlugin` call the stroke tool method. `LineTool` and `FillTool` override it. `TerrainTool` has its own policy |
-| `ImageImportPlugin.import_image` | `MenuBar.open_document` calls it for image files |
+| `ImageImportPlugin.import_image` | `MenuBar._on_file_opened` calls it for image files from the Open dialog or a file drop |
 | `ClipboardPlugin` paste tool | `paste_voxels` mounts it on demand |
 
 ## Ambiguities
@@ -806,7 +806,7 @@ The selected modular tests cover these facts. The final verification is in the c
 
 1. `State.floor_axis`, `State.floor_index`, `State.symmetry_axes`, and `State.symmetry_origin` are not document fields. They survive a document change in one session. They do not survive a restart. Confirm that this behavior is intended.
 2. `ClipboardPlugin._sync_options` attaches the shared controls only to Brush, Paint, Selection, and Transform. The controls are absent for Terrain, Plane, Symmetry, and Eyedropper. Confirm that this behavior is intended.
-3. `ImageImportPlugin` has no direct command. A user must open an image through the file open path. Confirm that a direct import command is not required.
+3. `ImageImportPlugin` has no direct command. A user opens an image through the Open dialog or a file drop. Confirm that a direct import command is not required.
 4. `TerrainPlugin` has no keyboard action. The sculpt menu is the only entry point. Confirm that a shortcut is not required.
 5. `PlanePlugin` mounts its tool only while active. `SymmetryPlugin` mounts its tool at startup. The different lifetimes change when `_enter_tree` and `_exit_tree` run. Confirm that the difference is intended.
 6. `VoxelTool._unhandled_input` blocks Plane and Symmetry input while a foreground operation runs. The tools are state-only, so the block can be surprising. Confirm that this behavior is intended.
