@@ -43,20 +43,22 @@ static func masks_for(context: VoxelFrame.EditContext) -> Array:
 ## [code]reach[/code] as the distance from the anchor to the pivot, and
 ## [code]found[/code] as whether the limb extends past the picked cell.
 ##
-## The joint is the farthest cell of the limb within one brush size. The
-## search walks the connected cells from the picked cell and stops at that bound,
-## so the joint stays on the limb and the picked face has no effect.
+## The joint is the farthest cell of the limb within the brush radius. The search
+## walks the connected cells from the picked cell one brush size out, then walks
+## back to the brush radius, so the joint stays on the limb and the picked face
+## has no effect.
 ##
-## The bound is the search bound, not the brush reach: it must see past the
-## near end of the limb, or a press near a tip keeps the joint on the tip side.
-## The walk also
-## stops at [constant JOINT_CELL_LIMIT] cells.
+## The search looks one brush radius past the joint bound. Without that lookahead
+## both ends of a limb tie, and a press near a tip keeps the joint on the tip
+## side. The walk also stops at [constant JOINT_CELL_LIMIT] cells.
 static func joint_pivot(frame: VoxelFrame, anchor: Vector3i, size: int, context: VoxelFrame.EditContext) -> Dictionary:
 	var result := {"found": false, "pivot": Vector3(anchor), "bone_dir": Vector3.ZERO, "reach": 0.0}
 	if frame == null or anchor == VoxelPicking.NONE or not frame.has(anchor):
 		return result
 	var origin := Vector3(anchor)
-	var limit := float(clampi(size, 1, 32))
+	var brush_reach := float(clampi(size, 1, 32)) * 0.5
+	var search := brush_reach * 2.0
+	var parent := {}
 	var steps := {anchor: 0}
 	var queue: Array[Vector3i] = [anchor]
 	var head := 0
@@ -73,15 +75,21 @@ static func joint_pivot(frame: VoxelFrame, anchor: Vector3i, size: int, context:
 			var next := cell + offset
 			if steps.has(next) or not frame.has(next):
 				continue
-			if Vector3(next).distance_to(origin) > limit:
+			if Vector3(next).distance_to(origin) > search:
 				continue
 			if context != null and not context.allows(next):
 				continue
 			steps[next] = depth + 1
+			parent[next] = cell
 			queue.append(next)
 	if far_steps < 1:
 		return result
-	var bone := origin - Vector3(far)
+	# Walk back from the far end of the limb. The first cell inside the brush is
+	# the base, so the joint sits where the limb enters the brush.
+	var base := far
+	while parent.has(base) and Vector3(base).distance_to(origin) > brush_reach:
+		base = parent[base]
+	var bone := origin - Vector3(base)
 	var reach := bone.length()
 	if reach < 0.5:
 		return result

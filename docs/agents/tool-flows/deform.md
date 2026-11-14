@@ -140,7 +140,7 @@ Source:
 flowchart TD
   subgraph Main["Main"]
     P1["Press on a voxel"]
-    P2["Find the farthest limb cell within one brush size"]
+    P2["Find where the limb enters the brush"]
     P3["Capture the limb at the joint band"]
     P4["Build one pose entry per symmetry mask"]
     P5["Drag: view-plane cell"]
@@ -161,7 +161,7 @@ view bends in the view plane.
 `DeformLimb.joint_pivot` reads no cell axis and no face normal.
 The entered face has no effect on the bend.
 
-The joint is the farthest cell of the limb within one brush size. The bound is the search bound, not the brush reach, so it sees past the near end of the limb.
+The joint is the cell where the limb enters the brush. The search looks one brush size out, then walks back to the brush radius.
 The brush walks the connected cells from the picked cell and stops at that bound.
 It does not walk back, so the base is the limb root and not a cell under the
 pointer.
@@ -260,8 +260,8 @@ Source:
 - Pose turns around the view normal only. It cannot turn out of the view plane.
 - A limb walk stops at 8192 cells, so a bend stays inside the brush bound. A
   hover reads one cell of the limb.
-- The joint search reads at most 2048 cells and stops at the brush
-  radius. It has no walk back.
+- The joint search reads at most 2048 cells. It looks one brush size out and
+  walks back to the brush radius.
 - A bend lowers its angle until every moved cell fits. It never splits a
   symmetric pair.
 - The joint share comes from the joint neck. It is not a

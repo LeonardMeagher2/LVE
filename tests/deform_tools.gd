@@ -604,7 +604,7 @@ func _pose_limb() -> void:
 		expect(tool._edit != null, "the pose press opens an edit")
 		expect(tool._joint_found, "the pose finds the joint")
 		expect(tool._bone_dir.is_equal_approx(Vector3.RIGHT), "the bone runs from the joint to the picked cell")
-		expect(tool._pivot.distance_to(Vector3(6, 0, 0)) <= 4.5, "the joint sits within one brush diameter")
+		expect(tool._pivot.distance_to(Vector3(6, 0, 0)) <= 4.5, "the joint sits within the brush radius")
 		expect(tool._pivot.distance_to(Vector3(6, 0, 0)) >= 1.0, "the joint keeps a lever")
 		expect(not tool._limb.is_empty(), "the pose captures the limb")
 	)
@@ -652,7 +652,7 @@ func _pose_hover_pivot() -> void:
 		expect(vertices[1].is_equal_approx(Vector3(6, 0, 0)), "the bone ends at the picked cell")
 		expect(origin.is_equal_approx(Vector3.ZERO), "the bone vertices are in world space")
 		var joint: Vector3 = tool._hover_joint["pivot"]
-		expect(Vector3(joint).distance_to(Vector3(6, 0, 0)) <= 4.5, "the joint sits within one brush diameter")
+		expect(Vector3(joint).distance_to(Vector3(6, 0, 0)) <= 4.5, "the joint sits within the brush radius")
 		expect(frame.has(Vector3i(joint)), "the joint is an occupied cell")
 		expect(vertices[0].is_equal_approx(Vector3(joint)), "the bone starts at the joint")
 		pose_before = {"x": Vector3(joint).x}
@@ -666,7 +666,7 @@ func _pose_hover_pivot() -> void:
 		var vertices: PackedVector3Array = (bone.mesh as ArrayMesh).surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
 		var joint: Vector3 = tool._hover_joint["pivot"]
 		expect(vertices[1].is_equal_approx(Vector3(1, 0, 0)), "the bone ends at the new cell")
-		expect(Vector3(joint).distance_to(Vector3(1, 0, 0)) <= 4.5, "the joint stays within one brush diameter")
+		expect(Vector3(joint).distance_to(Vector3(1, 0, 0)) <= 4.5, "the joint stays within the brush radius")
 		expect(frame.has(Vector3i(joint)), "the joint is an occupied cell")
 		expect(not is_equal_approx(float(pose_before["x"]), Vector3(joint).x), "the joint moves with the picked cell")
 	)
@@ -1046,7 +1046,7 @@ func _pose_search_bound() -> void:
 	step("When the user presses two cells from the tip", func():
 		_press(press)
 		expect(tool._joint_found, "the pose finds the joint")
-		expect(tool._pivot.distance_to(Vector3(2, 0, 0)) <= 4.5, "the joint stays within one brush diameter")
+		expect(tool._pivot.distance_to(Vector3(2, 0, 0)) <= 4.5, "the joint stays within the brush radius")
 		var drag_pos := press + Vector2(0.0, -300.0)
 		_motion(drag_pos, drag_pos - press)
 		_release(drag_pos)
