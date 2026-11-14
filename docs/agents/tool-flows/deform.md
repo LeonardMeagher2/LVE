@@ -158,8 +158,9 @@ The behaviour follows the [Pose brush spec](../research/tools/pose-brush-spec.md
 
 The bone runs from the joint to the pointer, so a limb that lies across the
 view bends in the view plane.
-`DeformLimb.joint_pivot` reads no cell axis and no face normal.
-The entered face has no effect on the bend.
+`DeformLimb.joint_pivot` reads no cell axis.
+The pointer point on the entered face only scores the joint, so the face picks
+between candidates. It never turns the limb.
 
 The joint is the occupied cell inside the brush with the best score. The score weighs the brush edge, the view plane of the press, and the half of the entered face that the pointer touches. The view plane outranks the edge, so a farther cell off the plane loses to a nearer cell on it. The walk visits empty cells too, so a gap does not hide a cell.
 The connected option limits the walk to occupied cells. A press-centred face gives no direction, so the walk order decides that tie.
@@ -184,9 +185,17 @@ plane.
 The arm runs from the joint to the pointer, and the angle is the screen angle
 from the bone to that arm.
 The tip therefore lands under the pointer, and no other rule can move it there.
-The only limit is the fit, so no angle option caps the stroke.
+The Snap option rounds the requested angle to a quarter turn before the fit, so
+a blocked snap falls back to the largest angle that fits.
+Apart from the snap, the fit is the only limit.
 A bone that points at the viewer has no screen direction, so the bend becomes a
-twist by the pointer travel. A mirrored mask turns the other way.
+twist by the pointer travel.
+
+A mirrored mask turns the mirror of the primary turn, about the mirror of the
+primary axis.
+A screen angle about the view axis is not a mirror when the view is oblique.
+The axis mirror keeps the two sides exact mirrors from any view, so the far limb
+does not turn about the near view axis.
 
 The cell selection limits the limb search and the captured cells, like the
 transform tools: an empty selection allows every cell.
@@ -242,7 +251,10 @@ Source:
 `DeformPlugin` owns the two tools, one `MenuButton`, and one option bar.
 `State.reset_plugins` adds it after the terrain plugin.
 The toolbar holds Grab and Pose with fixed ids.
-The option bar shows the shared size and falloff, and the pose Connected option.
+The option bar shows the shared size and falloff, and the pose Connected and Snap
+options.
+The Pose Snap option starts off, and the Pose Connected option starts on.
+The rotate tool snap also starts off, so a plain drag is free.
 Neither tool shows a strength control, because neither uses one.
 
 Source:

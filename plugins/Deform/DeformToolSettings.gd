@@ -38,6 +38,16 @@ enum Tools {
 		size = value
 		emit_changed()
 
+## Whether the pose angle snaps to a 90 degree step. The fit can still lower it,
+## so a blocked snap falls back to the largest angle that fits. It starts off, so
+## a drag is free.
+@export var snap := false:
+	set(value):
+		if value == snap:
+			return
+		snap = value
+		emit_changed()
+
 ## The edge softness. Zero is a hard edge and one is a smooth edge. Grab scales
 ## the drag of each source by it. Pose sets the width of the joint neck by it.
 @export var falloff := 0.5:
@@ -48,10 +58,11 @@ enum Tools {
 		falloff = value
 		emit_changed()
 
-## Whether the pose joint walk follows the connected limb only. Off searches
-## every cell inside the brush, so a gap does not hide an occupied cell. On walks
-## occupied cells only, so the joint stays on the connected limb.
-@export var connected := false:
+## Whether the pose joint walk follows the connected limb only. On walks
+## occupied cells only, so the joint stays on the connected limb. Off searches
+## every cell inside the brush, so a gap does not hide an occupied cell. It
+## starts on, so a gap does not move the base by surprise.
+@export var connected := true:
 	set(value):
 		if value == connected:
 			return

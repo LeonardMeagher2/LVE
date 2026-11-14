@@ -187,6 +187,8 @@ var _poses: Array = []
 var _bone: MeshInstance3D
 # Whether the open stroke walks only the connected limb.
 var _stroke_connected := false
+# Whether the open stroke snaps its angle to a quarter turn.
+var _stroke_snap := false
 
 
 # The hover joint and whether the press can capture a cell, keyed by the inputs
@@ -239,6 +241,8 @@ func _clear_state() -> void:
 
 func _capture_gesture(pick: PickResult) -> bool:
 	_stroke_connected = _settings.connected
+	# Snap the pose angle to a quarter turn. It starts off, so a drag is free.
+	_stroke_snap = _settings.snap
 	var joint := DeformLimb.joint_pivot(_source_frame, _anchor, _stroke_size, _stroke_context, _stroke_connected, _view_forward, _stroke_face, _stroke_touch)
 	_joint_found = bool(joint["found"])
 	if not _joint_found:
@@ -312,6 +316,7 @@ func _make_job(_target: Vector3i) -> DeformJob:
 	var entries := []
 	var work := 0
 	var magnitude := 0.0
+	var primary := NAN
 	for pose in _poses:
 		var mask: int = pose["mask"]
 		var cells: Dictionary = pose["cells"]
@@ -326,15 +331,22 @@ func _make_job(_target: Vector3i) -> DeformJob:
 		var angle := 0.0
 		if screen_bone.length() < DEGENERATE_SCREEN or screen_arm.length() < DEGENERATE_SCREEN:
 			# A bone that points at the viewer has no screen direction, so the bend
-			# becomes a twist by the pointer travel. A mirrored mask turns the other
-			# way. The lever has a floor, so a short bone cannot turn small pointer
-			# motion into a large angle.
+			# becomes a twist by the pointer travel. The lever has a floor, so a
+			# short bone cannot turn small pointer motion into a large angle.
 			var lever := maxf(DeformLimb.screen_length(bone, _view_right, _view_up), maxf(float(_stroke_size) * 0.5, 0.5))
-			angle = DeformLimb.screen_vector(travel, _view_right, _view_up).length() / lever * DeformLimb.mask_handedness(mask)
+			angle = DeformLimb.screen_vector(travel, _view_right, _view_up).length() / lever
 		else:
 			# The angle is the screen angle from the bone to the joint-to-pointer
 			# arm, so the tip lands under the pointer.
 			angle = screen_bone.angle_to(screen_arm)
+		if is_nan(primary):
+			primary = angle
+		else:
+			# A mirrored mask must turn the mirror of the primary turn about the
+			# mirror of the primary axis. A screen angle about the view axis is not
+			# a mirror when the view is oblique, so it breaks the symmetry between
+			# the two sides.
+			angle = primary * DeformLimb.mask_handedness(mask)
 		work += cells.size()
 		entries.append({
 			"mask": mask,
@@ -342,9 +354,11 @@ func _make_job(_target: Vector3i) -> DeformJob:
 			"bone": bone.normalized(),
 			"cells": cells,
 			"angle": angle,
-			"axis": axis,
+			"axis": DeformLimb.mirror_direction(axis, mask),
 		})
 		magnitude = maxf(magnitude, absf(float(entries[entries.size() - 1]["angle"])))
+	if _stroke_snap:
+		magnitude = snappedf(magnitude, PI * 0.5)
 	if magnitude < ANGLE_EPSILON:
 		return null
 	# One magnitude serves every mask, so an obstacle on one side limits both sides.

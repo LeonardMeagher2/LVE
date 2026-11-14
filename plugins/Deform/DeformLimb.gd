@@ -246,6 +246,16 @@ static func mask_handedness(mask: int) -> float:
 	return -1.0 if odd == 1 else 1.0
 
 
+## Returns the mirror of one world direction through a symmetry mask. A direction
+## has no position, so only the mirrored components flip.
+static func mirror_direction(direction: Vector3, mask: int) -> Vector3:
+	var mirrored := direction
+	for axis in 3:
+		if mask & (1 << axis):
+			mirrored[axis] = -mirrored[axis]
+	return mirrored
+
+
 ## Returns the mirror of one world point through a symmetry mask. The origin is
 ## the corner between eight cells, so a point mirrors around a half-cell line.
 static func mirror_point(point: Vector3, context: VoxelFrame.EditContext, mask: int) -> Vector3:

@@ -39,6 +39,7 @@ Tradeoff: a limb keeps the silhouette smooth. It moves every connected cell, so 
 ## 5. The rotation
 
 - The axis is the view direction through the joint. The bend therefore lies in the screen plane.
+- A mirrored copy turns about the mirror of that axis, by the mirror of the angle. The bend of a copy can therefore leave the screen plane, so the two sides stay exact mirrors from any view.
 - The axis passes through the joint and does not move during the stroke.
 - The arm runs from the joint to the pointer. The angle is the screen angle from the bone to that arm, so the tip lands under the pointer.
 - Radial pointer motion, toward or away from the joint, changes no angle.
@@ -71,6 +72,8 @@ Tradeoff: a limb keeps the silhouette smooth. It moves every connected cell, so 
 | --- | --- | --- | --- |
 | Brush size | 1 to 32 cells, as a diameter | 4 | Sets the ring and the captured set. Blender states that only Size and Auto-Masking change this brush [R1]. |
 | Edge falloff | 0 to 1 | 0.5 | Sets the width of the joint neck (section 6) [R3]. |
+| Connected | on or off | on | Limits the joint walk to connected occupied cells. Off searches the whole brush ball, so a gap does not hide a cell. |
+| Snap | on or off | off | Rounds the requested angle to a quarter turn before the fit (section 5). |
 | Mirror planes | X, Y, Z | as set | Repeats the bend through each active plane [R4]. |
 
 The brush size and the edge falloff are the shared inputs of the tool set.
@@ -83,7 +86,7 @@ The cell selection is not an option. It always limits the brush, like the transf
 - **Bend that leaves the writable slice or the document limit.** The brush lowers the angle until every moved cell fits. If no angle fits, the brush shows a blocked state and the stroke does nothing.
 - **Bend that leaves the selection.** Only selected cells move. An unselected occupied cell blocks the bend. The brush lowers the angle until no moved cell lands on one.
 - **No selected cell in the picked set.** The brush shows a blocked state and starts no stroke.
-- **Symmetry.** The brush repeats the bend on each mirrored copy. Each active X, Y, and Z plane gives one copy [R4]. It lowers one angle for all copies, so the result stays symmetric. An obstacle on one side limits both sides.
+- **Symmetry.** The brush repeats the bend on each mirrored copy. Each active X, Y, and Z plane gives one copy [R4]. Each copy turns the mirror of the primary turn about the mirror of the primary axis, so the result stays an exact mirror from any view. It lowers one angle for all copies. An obstacle on one side limits both sides.
 - **Cell on a mirror plane.** A cell that maps to itself counts once.
 - **Escape during a drag.** The preview clears at once. The cells return to their first position.
 

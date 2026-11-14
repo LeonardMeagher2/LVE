@@ -30,6 +30,7 @@ var anchor := Vector3i.ZERO
 var pose_before := {}
 var pose_bent := {}
 var pose_count := 0
+var pose_base := Vector3i.ZERO
 
 
 func _ready() -> void:
@@ -54,6 +55,7 @@ func _ready() -> void:
 	test("pose keeps the bent limb solid", _pose_solid, "pose_solid")
 	test("a limb that runs into the screen bases near the press", _pose_end_on, "pose_end_on")
 	test("pose mirrors its bend through the symmetry", _pose_symmetry, "pose_symmetry")
+	test("pose mirrors a block through the symmetry from an oblique view", _pose_symmetry_isometric, "pose_symmetry_isometric")
 	test("pose keeps the bend inside the document size", _pose_document_edge, "pose_document_edge")
 	test("a pose stroke supports undo and Escape", _pose_history, "pose_history")
 	test("a selection limits a pose and follows the moved cells", _pose_selection, "pose_selection")
@@ -63,6 +65,7 @@ func _ready() -> void:
 	test("the joint search stays near the press on a long limb", _pose_search_bound, "pose_search_bound")
 	test("the base prefers a cell on the view plane of the pressed cell", _pose_depth_bias, "pose_depth_bias")
 	test("the base leans to the half of the face under the pointer", _pose_face_bias, "pose_face_bias")
+	test("the pose snap turns the limb in a quarter turn", _pose_snap, "pose_snap")
 	test("pose on a large blob bends a bounded set and keeps it solid", _pose_large_blob, "pose_large_blob")
 
 
@@ -78,6 +81,8 @@ func before_test() -> void:
 	State.slice_layers = 0
 	_use(_settings.Tools.GRAB)
 	_settings.size = 5
+	_settings.connected = true
+	_settings.snap = false
 	_settings.falloff = 0.5
 	viewport = editor_viewport()
 	viewport.get_parent().stretch = false
@@ -556,6 +561,11 @@ func _deform_controls() -> void:
 		expect(options.get_node("Size").max_value == 32.0, "the size control keeps the shared bound")
 		expect(options.get_node_or_null("Strength") == null, "neither deform tool shows a strength control")
 		expect(options.get_node_or_null("UseSelection") == null, "the pose row holds no selection control")
+		expect(options.get_node_or_null("Connected") != null, "the pose row holds a connected control")
+		expect(options.get_node_or_null("Snap") != null, "the pose row holds a snap control")
+		expect(_settings.connected, "the pose connected option is on by default")
+		expect(not _settings.snap, "the pose snap is off by default")
+		expect(not bool(load("res://plugins/Transform/settings.tres").snap), "the rotate tool snap is off by default")
 		var popup := toolbar.get_popup()
 		expect(popup.item_count == 2, "the deform menu holds two tools")
 		expect(
@@ -739,6 +749,40 @@ func _pose_end_on() -> void:
 	)
 
 
+func _pose_symmetry_isometric() -> void:
+	# The same block from an isometric view checks that the mirrored mask stays a
+	# true mirror when the view is not axis aligned.
+	step("Given a symmetric block, the X symmetry plane, and an oblique view", func():
+		_use(_settings.Tools.POSE)
+		_settings.size = 4
+		_settings.falloff = 0.5
+		for x in range(-6, 6):
+			for y in range(0, 3):
+				for z in range(0, 2):
+					frame.set_cell(Vector3i(x, y, z), VoxelFrame.material(Color.WHITE))
+		sync_viewport()
+		_view("isometric")
+		State.symmetry_axes = 1
+		State.symmetry_origin = Vector3(-0.5, -0.5, -0.5)
+		press = _pos(Vector3(3.0, 2.0, 1.0))
+		anchor = aim(press).target
+	)
+	step("When the user drags up", func():
+		_press(press)
+		var drag_pos := press + Vector2(-60.0, -180.0)
+		_motion(drag_pos, drag_pos - press)
+		_release(drag_pos)
+	)
+	await _await_edit_closed()
+	step("Then every cell has a mirrored cell", func():
+		var missing := []
+		for cell in frame.positions():
+			if not frame.has(Vector3i(-1 - cell.x, cell.y, cell.z)):
+				missing.append(cell)
+		expect(missing.is_empty(), "every posed cell has its mirrored cell: %s" % [missing])
+	)
+
+
 func _pose_symmetry() -> void:
 	step("Given a symmetric bar and the X symmetry plane", func():
 		_use(_settings.Tools.POSE)
@@ -760,15 +804,15 @@ func _pose_symmetry() -> void:
 	)
 	await _await_edit_closed()
 	step("Then the other end mirrors the bend", func():
-		var mirrored := true
+		var missing := []
 		var moved := 0
 		for cell in frame.positions():
-			if cell.y == 0:
-				continue
-			moved += 1
-			mirrored = mirrored and frame.has(Vector3i(-1 - cell.x, cell.y, cell.z))
+			if not frame.has(Vector3i(-1 - cell.x, cell.y, cell.z)):
+				missing.append(cell)
+			if cell.y != 0:
+				moved += 1
 		expect(moved > 0, "the bend leaves the original row")
-		expect(mirrored, "every bent cell has its reflected counterpart")
+		expect(missing.is_empty(), "every bent cell has its reflected counterpart: %s" % [missing])
 	)
 
 
@@ -853,6 +897,9 @@ func _pose_depth_bias() -> void:
 		_use(_settings.Tools.POSE)
 		_settings.size = 4
 		_settings.falloff = 0.0
+		# The two candidates are not connected, so the walk must search the whole
+		# brush ball.
+		_settings.connected = false
 		_view("right")
 		frame.set_cell(Vector3i(0, 0, 0), VoxelFrame.material(Color.WHITE))
 		frame.set_cell(Vector3i(-2, 0, 0), VoxelFrame.material(Color.WHITE))
@@ -895,6 +942,42 @@ func _pose_face_bias() -> void:
 	await get_tree().process_frame
 	step("Then the base leans to the left half", func():
 		expect(Vector3i(tool._hover_joint["pivot"]) == Vector3i(-2, 0, 0), "the left half picks the left cell")
+	)
+
+
+func _pose_snap() -> void:
+	# The snap rounds the requested angle to a quarter turn before the fit, so the
+	# whole limb lands on one line.
+	step("Given a bar and the pose snap on", func():
+		_use(_settings.Tools.POSE)
+		_settings.size = 4
+		_settings.falloff = 0.0
+		_settings.snap = true
+		_view("front")
+		_bar(-8, 8)
+		press = _pos(Vector3(0.0, 0.0, 0.0))
+	)
+	step("When the user drags past 45 degrees", func():
+		_press(press)
+		expect(tool._joint_found, "the pose finds the joint")
+		pose_base = Vector3i(tool._pivot)
+		var drag_pos := press + Vector2(0.0, -300.0)
+		_motion(drag_pos, drag_pos - press)
+		_release(drag_pos)
+	)
+	await _await_edit_closed()
+	step("Then every moved cell lies on the quarter-turn line", func():
+		var moved := 0
+		var off_axis := []
+		for cell in frame.positions():
+			if cell.y == 0:
+				continue
+			moved += 1
+			if cell.x != pose_base.x:
+				off_axis.append(cell)
+		expect(moved > 0, "the snapped turn moves the limb")
+		expect(off_axis.is_empty(), "the snapped turn puts every moved cell on the base column: base %s off %s" % [pose_base, off_axis])
+		expect(frame.count() == 17, "the snapped turn keeps the cell count")
 	)
 
 

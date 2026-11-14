@@ -2,7 +2,7 @@ extends HBoxContainer
 
 ## The deform option bar.
 ##
-## It shows the shared size and falloff, and the pose connected option.
+## It shows the shared size and falloff, and the pose connected and snap options.
 
 var _settings: DeformToolSettings = preload("./settings.tres")
 
@@ -22,6 +22,8 @@ func _sync() -> void:
 	$Falloff.set_value_no_signal(_settings.falloff)
 	$Connected.visible = _settings.tool == _settings.Tools.POSE
 	$Connected.set_pressed_no_signal(_settings.connected)
+	$Snap.visible = _settings.tool == _settings.Tools.POSE
+	$Snap.set_pressed_no_signal(_settings.snap)
 
 
 func _on_size_changed(value: float) -> void:
@@ -34,3 +36,7 @@ func _on_falloff_changed(value: float) -> void:
 
 func _on_connected_toggled(on: bool) -> void:
 	_settings.connected = on
+
+
+func _on_snap_toggled(on: bool) -> void:
+	_settings.snap = on
