@@ -59,6 +59,11 @@ var _symmetry_origin_twice := Vector3i.ZERO
 # selection, because a transform moves cells to destinations outside the source
 # selection.
 var _symmetry_scope: VoxelFrame.EditContext
+var _gizmo = null
+var _gizmo_camera: Camera3D
+var _gizmo_grab_ready := false
+var _gizmo_selection_revision := -1
+var _gizmo_selection_bounds := AABB()
 
 ## One cancellable job that reads the transform source.
 ##
@@ -275,6 +280,8 @@ class TransformJob extends VoxelFrame.EditJob:
 ## Handles one input event. A press grabs the source. A drag previews. A release
 ## leaves the transform pending. Enter commits and Escape cancels.
 func handle_input(event: InputEvent, pos: Vector2) -> bool:
+	if event is InputEventMouse:
+		_set_gizmo_pointer(pos)
 	if event is InputEventMouseButton:
 		return _on_mouse_button(event, pos)
 	if event is InputEventMouseMotion:
@@ -284,18 +291,45 @@ func handle_input(event: InputEvent, pos: Vector2) -> bool:
 	return false
 
 
+func _ready() -> void:
+	_gizmo = get_node_or_null("Gizmo")
+	if _gizmo != null and is_inside_tree():
+		var viewport := get_viewport()
+		if viewport != null:
+			_gizmo.set_pointer(viewport.get_mouse_position())
+	_refresh_gizmo()
+
+
 func _enter_tree() -> void:
 	_settings.commit_requested.connect(_commit)
 	_settings.cancel_requested.connect(_cancel)
 	if not State.edit_context_changing.is_connected(_finish_context_edit):
 		State.edit_context_changing.connect(_finish_context_edit)
+	_connect_gizmo_signals()
+	if _gizmo != null:
+		var viewport := get_viewport()
+		if viewport != null:
+			_gizmo.set_pointer(viewport.get_mouse_position())
+		_refresh_gizmo()
 
 
 func _exit_tree() -> void:
 	_settings.commit_requested.disconnect(_commit)
 	_settings.cancel_requested.disconnect(_cancel)
+	_disconnect_gizmo_signals()
 	_commit()
+	if _gizmo != null:
+		_gizmo.hide_gizmo()
 	_disconnect_context_if_idle()
+
+
+func _set_gizmo_pointer(pos: Vector2) -> void:
+	if _gizmo == null:
+		return
+	var normal := Vector3.ZERO
+	if _dragging and _plane != null:
+		normal = _plane.normal
+	_gizmo.set_pointer(pos, normal)
 
 
 func _notification(what: int) -> void:
@@ -420,6 +454,8 @@ func _press(origin: Vector3, dir: Vector3) -> void:
 		_stash_grab_baseline()
 	_grab_waiting = false
 	_begin_grab(origin, dir)
+	_gizmo_grab_ready = true
+	_refresh_gizmo()
 	_dragging = true
 	_dragged = false
 	_resume_queued_drag()
@@ -480,12 +516,15 @@ func _release() -> void:
 	_dragging = false
 	if _dragged:
 		_pending = true
+		_refresh_gizmo()
 	elif _on_click_without_drag():
+		_refresh_gizmo()
 		return
 	elif not _pending:
 		_clear_grab()
 		_settings.transforming = false
 		_end()
+		_refresh_gizmo()
 
 
 func _on_click_without_drag() -> bool:
@@ -541,6 +580,7 @@ func _apply_preview() -> void:
 		_dest_colors = job.destination_colors
 		_dest_materials = job.destination_materials
 		_destination_bounds = job.destination_bounds
+		_refresh_gizmo()
 		if not job.changed_chunks.is_empty():
 			_source_document._bounds_dirty = true
 			State.chunks_changed.emit(_source_document.frames.find(_source_frame), job.changed_chunks)
@@ -598,6 +638,7 @@ func _commit_now() -> void:
 	_clear_grab()
 	_settings.transforming = false
 	_end()
+	_refresh_gizmo()
 
 
 func _cancel() -> void:
@@ -626,6 +667,7 @@ func _cancel() -> void:
 	_operation_id = 0
 	abort_stroke()
 	State.finish_operation(operation_id)
+	_refresh_gizmo()
 
 
 func _clear_grab() -> void:
@@ -636,6 +678,9 @@ func _clear_grab() -> void:
 	_dest_cells = []
 	_dest_colors = {}
 	_dest_materials = {}
+	_source_bounds = AABB()
+	_destination_bounds = AABB()
+	_gizmo_grab_ready = false
 	_covered = {}
 	_covered_materials = {}
 	_source_document = null
@@ -648,6 +693,7 @@ func _clear_grab() -> void:
 	_dialog_open_values = {}
 	_dialog_open_had_pending = false
 	_dialog_dirty = false
+	_refresh_gizmo()
 
 
 func _stash_grab_baseline() -> void:
@@ -671,6 +717,7 @@ func _restore_grab_baseline() -> void:
 	_dest_colors = pending_dest_colors
 	_dest_materials = pending_dest_materials
 	_did_restore_baseline()
+	_refresh_gizmo()
 
 
 func _did_restore_baseline() -> void:
@@ -727,6 +774,124 @@ func _view_plane_through(point: Vector3) -> StrokePlane:
 
 func _source_bbox() -> AABB:
 	return _source_bounds
+
+
+func _connect_gizmo_signals() -> void:
+	if not State.selection_changed.is_connected(_on_gizmo_changed):
+		State.selection_changed.connect(_on_gizmo_changed)
+	if not State.frame_changed.is_connected(_on_gizmo_changed):
+		State.frame_changed.connect(_on_gizmo_changed)
+	if not State.frames_changed.is_connected(_on_gizmo_changed):
+		State.frames_changed.connect(_on_gizmo_changed)
+	if not State.history_changed.is_connected(_on_gizmo_changed):
+		State.history_changed.connect(_on_gizmo_changed)
+	if not State.document_changed.is_connected(_on_gizmo_document_changed):
+		State.document_changed.connect(_on_gizmo_document_changed)
+	if not State.cells_changed.is_connected(_on_gizmo_cells_changed):
+		State.cells_changed.connect(_on_gizmo_cells_changed)
+	if not State.chunks_changed.is_connected(_on_gizmo_cells_changed):
+		State.chunks_changed.connect(_on_gizmo_cells_changed)
+	_connect_gizmo_camera()
+
+
+func _disconnect_gizmo_signals() -> void:
+	if State.selection_changed.is_connected(_on_gizmo_changed):
+		State.selection_changed.disconnect(_on_gizmo_changed)
+	if State.frame_changed.is_connected(_on_gizmo_changed):
+		State.frame_changed.disconnect(_on_gizmo_changed)
+	if State.frames_changed.is_connected(_on_gizmo_changed):
+		State.frames_changed.disconnect(_on_gizmo_changed)
+	if State.history_changed.is_connected(_on_gizmo_changed):
+		State.history_changed.disconnect(_on_gizmo_changed)
+	if State.document_changed.is_connected(_on_gizmo_document_changed):
+		State.document_changed.disconnect(_on_gizmo_document_changed)
+	if State.cells_changed.is_connected(_on_gizmo_cells_changed):
+		State.cells_changed.disconnect(_on_gizmo_cells_changed)
+	if State.chunks_changed.is_connected(_on_gizmo_cells_changed):
+		State.chunks_changed.disconnect(_on_gizmo_cells_changed)
+	_disconnect_gizmo_camera()
+
+
+func _connect_gizmo_camera() -> void:
+	var camera := get_viewport().get_camera_3d() if is_inside_tree() else null
+	if camera == _gizmo_camera:
+		return
+	_disconnect_gizmo_camera()
+	_gizmo_camera = camera
+	if _gizmo_camera != null and not _gizmo_camera.view_changed.is_connected(_on_gizmo_camera_changed):
+		_gizmo_camera.view_changed.connect(_on_gizmo_camera_changed)
+
+
+func _disconnect_gizmo_camera() -> void:
+	if is_instance_valid(_gizmo_camera) and _gizmo_camera.view_changed.is_connected(_on_gizmo_camera_changed):
+		_gizmo_camera.view_changed.disconnect(_on_gizmo_camera_changed)
+	_gizmo_camera = null
+
+
+func _on_gizmo_changed() -> void:
+	_refresh_gizmo()
+
+
+func _on_gizmo_document_changed() -> void:
+	_gizmo_selection_revision = -1
+	_gizmo_selection_bounds = AABB()
+	_refresh_gizmo()
+
+
+func _on_gizmo_cells_changed(_frame: int, _affected: Array[Vector3i]) -> void:
+	_refresh_gizmo()
+
+
+func _on_gizmo_camera_changed() -> void:
+	if _gizmo != null:
+		_gizmo.refresh_pose()
+
+
+func _refresh_gizmo() -> void:
+	if _gizmo == null or not is_inside_tree():
+		return
+	if not _gizmo_has_source():
+		_gizmo.hide_gizmo()
+		return
+	_gizmo.show_at(_gizmo_pivot())
+
+
+func _gizmo_has_source() -> bool:
+	if _dragging or _pending:
+		return _source_bounds.has_volume() or _destination_bounds.has_volume()
+	return _idle_bounds().has_volume()
+
+
+func _gizmo_pivot() -> Vector3:
+	if _dragging or _pending:
+		if _destination_bounds.has_volume():
+			return _destination_bounds.get_center()
+		if _source_bounds.has_volume():
+			return _source_bounds.get_center()
+	return _idle_bounds().get_center()
+
+
+func _idle_bounds() -> AABB:
+	if not State.selection.is_empty():
+		return _selection_bounds()
+	var frame := State.get_current_voxel_frame()
+	return frame.get_bounds() if frame != null else AABB()
+
+
+func _selection_bounds() -> AABB:
+	if State.selection.revision == _gizmo_selection_revision:
+		return _gizmo_selection_bounds
+	var low := Vector3i.MAX
+	var high := Vector3i.MIN
+	for cell: Vector3i in State.selection.all_cells():
+		low = low.min(cell)
+		high = high.max(cell)
+	var bounds := AABB()
+	if low.x <= high.x:
+		bounds = AABB(Vector3(low) - Vector3.ONE * 0.5, Vector3(high - low + Vector3i.ONE))
+	_gizmo_selection_revision = State.selection.revision
+	_gizmo_selection_bounds = bounds
+	return bounds
 
 
 func _begin_grab(_origin: Vector3, _dir: Vector3) -> void:

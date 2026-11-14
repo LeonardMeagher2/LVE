@@ -1,6 +1,14 @@
 [gd_scene format=3]
 
 [ext_resource type="Script" path="res://plugins/Transform/tools/MoveTool.gd" id="1_script"]
+[ext_resource type="Script" path="res://plugins/Transform/tools/TransformGizmo.gd" id="2_gizmo"]
 
 [node name="MoveTool" type="Node3D"]
 script = ExtResource("1_script")
+
+[node name="Gizmo" type="MeshInstance3D" parent="."]
+top_level = true
+visible = false
+cast_shadow = 0
+script = ExtResource("2_gizmo")
+kind = 0

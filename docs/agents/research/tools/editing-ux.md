@@ -252,7 +252,11 @@ The undo action name is `Stroke`.
 Move uses a view-plane offset in whole cells.
 Rotate uses an angle around the bounds center on the view axis.
 Scale uses a factor from a view-plane reference vector.
-There is no transform gizmo.
+A camera-facing pivot gizmo shows the source pivot.
+It is a grab target, not an axis constraint.
+Move draws four view-plane arrows.
+Rotate draws a Pose-style bone from the pivot to the pointer.
+Scale draws a view-plane square with corner arrows.
 There is no duplicate mode.
 There is no destination mask.
 
@@ -354,7 +358,7 @@ Read `Open` as a question that this research cannot settle.
 | Box and Lasso modes | Replace, add, subtract, intersect. | S4 Selecting, S5 Selections, S6 Selecting, S1 Selection Brushes | Replace, add, subtract. No intersect. ScreenSelection subtract also adds covered selected cells. Wand subtract does not. | Gap for intersect. Intentional for subtract detail. | High |
 | Wand | Connected flood or global match. Material match. Combine modes. | S5 Selections, S1 Region Select | Six-face flood or full scan. Exact material. Current selection is not a barrier. Ignores depth and empty options. | Gap for tolerance. Intentional for exact material. | Medium |
 | Visibility and depth | Select visible only or select through. Use an explicit toggle. | S6 X-Ray, S1 Rect Select, S4 Selecting | Box and Lasso have `depth_test` true by default. `include_empty` is optional. Wand ignores both. | Gap for Wand parity. Intentional for per-tool option. | Medium |
-| Transform commit | Release or click confirms. Escape cancels. Exact values are available. | S6 Move, S5 Transform, S4 Transformations | Release leaves the transform pending. Enter, option bar, context, or switch commits. Escape cancels. No gizmo. | Intentional for pending release. Gap for a weak pending hint. | High for difference, Medium for gap |
+| Transform commit | Release or click confirms. Escape cancels. Exact values are available. | S6 Move, S5 Transform, S4 Transformations | Release leaves the transform pending. Enter, option bar, context, or switch commits. Escape cancels. A pivot gizmo marks the source and follows the pending result. | Intentional for pending release. The gizmo adds a pending hint but no axis constraint. | High for difference, Medium for gap |
 | Transform snap | Grid snap, angle snap, uniform scale. | S6 Snapping, S5 Transform, S1 Rotate snap | Whole-cell move. Quarter-turn or 1 degree rotate. 0.0001 scale. Uniform option. | Parity. | High |
 | Clipboard | Copy has no change. Cut has one undo. Paste has a commit and cancel point. | S4 Edit Menu, S5 Selections | Copy has no undo. Cut has one `Cut`. Paste previews, then commits one `Paste`. Escape or switch cancels. | Intentional for paste placement mode. | High for policy, Medium for expectation |
 | Undo names | History names the action. | S6 Undo History | Transform action is `Stroke`. Cut is `Cut`. Paste is `Paste`. Selection names are specific. | Gap for transform name. | Medium |

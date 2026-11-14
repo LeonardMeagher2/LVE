@@ -34,15 +34,16 @@ The plugins add their tool nodes to the viewport with `VoxelPlugin.add_editor_no
 `PasteTool.tscn` instances `plugins/brush/LineTool.tscn` and sets `PasteTool.gd`.
 `PasteTool` therefore uses the line preview engine in `LineTool.gd` and the stamp job in `StrokeTool.gd`.
 
-There is no transform gizmo in the current code.
+Each transform tool owns a camera-facing gizmo at the source pivot.
 `TransformTool.handle_input` reads the left mouse button and mouse motion.
 A transform press grabs the selection or the whole frame.
 It does not call `pick_start` and it does not require a model hit.
+A press on the gizmo uses the same grab path as a press anywhere else.
 The selection tools use a screen shape or a voxel seed pick instead.
 
 | Input | Transform | Selection |
 | --- | --- | --- |
-| Left press | Grab source. No gizmo. No voxel pick. | Box and Lasso start a screen band. Wand picks a seed voxel. |
+| Left press | Grab source at the gizmo or anywhere in the viewport. No voxel pick. | Box and Lasso start a screen band. Wand picks a seed voxel. |
 | Drag | Update the offset, angle, or factor. | Update the screen band. |
 | Release | Leave the transform pending. | Box and Lasso apply the outline. Wand is already streaming or done. |
 | Click without drag | Open the exact-value dialog. | Box and Lasso use a 7 px rectangle. Wand uses the seed. |
@@ -81,7 +82,7 @@ A press during a pending transform calls `_reanchor` and skips `SourceJob`.
 
 ```mermaid
 flowchart TD
-  T1["Input: left press<br/>Main, no gizmo"] --> T2["Check source, open edit, capture<br/>frame copy, selection snapshot"]
+  T1["Input: left press<br/>Main, gizmo or free press"] --> T2["Check source, open edit, capture<br/>frame copy, selection snapshot"]
   T2 --> T3["Start SourceJob<br/>see source capture"]
   T3 --> T4["Wait + recheck<br/>input revision + context"]
   T4 --> T5["Prepare gesture: Move offset<br/>Rotate angle<br/>Scale factor"]
@@ -114,6 +115,32 @@ The preview therefore writes the live frame inside the open edit.
 | Option | None. | `snap`. | `uniform`. |
 | Selection follow | `_track_selection` restores `destination_selection`. | Same. | Same. |
 | Symmetry | `_reduce_to_fundamental_domain` then `_mirror_destination`. | Same. | Same. |
+
+### Transform gizmo
+
+Each tool scene owns one `Gizmo` node with `TransformGizmo.gd`.
+The gizmo is visible while the tool is active and the source bounds have volume.
+The source is the selection bounds when the selection is not empty.
+Otherwise it is the current frame bounds.
+During a grab, the gizmo uses the destination bounds for Move.
+Rotate and Scale keep the pivot that their grab captured.
+Move and Scale keep a constant screen radius.
+Rotate keeps constant joint and tip marks.
+The gizmo draws over geometry.
+
+| Tool | Gizmo |
+| --- | --- |
+| Move | Four view-plane arrows. |
+| Rotate | A Pose-style bone from the pivot to the pointer, with a joint square and a tip cross. |
+| Scale | A view-plane square with corner arrows. |
+
+The Rotate bone uses the pointer ray and a plane through the pivot.
+A drag passes the captured plane normal, so a camera move does not change the bone plane.
+A press on the gizmo starts the same free gesture as a press elsewhere in the viewport.
+The gizmo adds no axis constraint.
+
+The gizmo hides when the tool is inactive or the source is empty.
+It refreshes on selection, frame, document, history, cell, chunk, camera, and viewport size changes.
 
 ### Transform modes and masks
 
@@ -433,7 +460,7 @@ Each candidate names the existing mechanism, its consumers, the contract to pres
 
 - The verification history is in the composition guide. This page does not claim a performance result.
 - The transform history action is `Stroke`. It is not named `Transform`.
-- Transform has no gizmo. Transform has no duplicate mode. Transform has no destination mask.
+- Transform has a camera-facing pivot gizmo. It adds no axis constraint, duplicate mode, or destination mask.
 - Transform previews write the live frame. Paste previews write only the cursor.
 - An active transform commits on a context change and on a tool switch. An active paste cancels on a tool switch.
 - A held Box or Lasso drag applies the current outline on a tool switch. A streaming wand continues after a switch.
@@ -453,7 +480,7 @@ The inventory lists the exact files used for the claims above.
 | Area | Files read |
 | --- | --- |
 | Registration | [`project.godot`](../../../project.godot), [`VoxelPlugin.gd`](../../../VoxelPlugin.gd), [`State.gd`](../../../Globals/State/State.gd) |
-| Transform | [`TransformPlugin.gd`](../../../plugins/Transform/TransformPlugin.gd), [`TransformTool.gd`](../../../plugins/Transform/tools/TransformTool.gd), [`MoveTool.gd`](../../../plugins/Transform/tools/MoveTool.gd), [`RotateTool.gd`](../../../plugins/Transform/tools/RotateTool.gd), [`ScaleTool.gd`](../../../plugins/Transform/tools/ScaleTool.gd), [`TransformDialog.gd`](../../../plugins/Transform/tools/TransformDialog.gd), [`TransformToolSettings.gd`](../../../plugins/Transform/TransformToolSettings.gd), [`Options.gd`](../../../plugins/Transform/Options.gd), [`RotSprite.gd`](../../../plugins/Transform/RotSprite.gd), [`settings.tres`](../../../plugins/Transform/settings.tres) |
+| Transform | [`TransformPlugin.gd`](../../../plugins/Transform/TransformPlugin.gd), [`TransformTool.gd`](../../../plugins/Transform/tools/TransformTool.gd), [`TransformGizmo.gd`](../../../plugins/Transform/tools/TransformGizmo.gd), [`MoveTool.gd`](../../../plugins/Transform/tools/MoveTool.gd), [`RotateTool.gd`](../../../plugins/Transform/tools/RotateTool.gd), [`ScaleTool.gd`](../../../plugins/Transform/tools/ScaleTool.gd), [`TransformDialog.gd`](../../../plugins/Transform/tools/TransformDialog.gd), [`TransformToolSettings.gd`](../../../plugins/Transform/TransformToolSettings.gd), [`Options.gd`](../../../plugins/Transform/Options.gd), [`RotSprite.gd`](../../../plugins/Transform/RotSprite.gd), [`settings.tres`](../../../plugins/Transform/settings.tres) |
 | Transform scenes | [`MoveTool.tscn`](../../../plugins/Transform/tools/MoveTool.tscn), [`RotateTool.tscn`](../../../plugins/Transform/tools/RotateTool.tscn), [`ScaleTool.tscn`](../../../plugins/Transform/tools/ScaleTool.tscn), [`TransformDialog.tscn`](../../../plugins/Transform/tools/TransformDialog.tscn), [`Options.tscn`](../../../plugins/Transform/Options.tscn) |
 | Clipboard | [`ClipboardPlugin.gd`](../../../plugins/Clipboard/ClipboardPlugin.gd), [`PasteTool.gd`](../../../plugins/Clipboard/PasteTool.gd), [`PasteTool.tscn`](../../../plugins/Clipboard/PasteTool.tscn), [`LineTool.gd`](../../../plugins/brush/LineTool.gd), [`BrushTool.gd`](../../../plugins/brush/BrushTool.gd), [`StrokeTool.gd`](../../../plugins/brush/StrokeTool.gd), [`StampCopyJob.gd`](../../../plugins/brush/StampCopyJob.gd), [`BrushToolSettings.gd`](../../../plugins/brush/BrushToolSettings.gd) |
 | Selection | [`SelectionPlugin.gd`](../../../plugins/selection/SelectionPlugin.gd), [`SelectTool.gd`](../../../plugins/selection/tools/SelectTool.gd), [`BoxSelectTool.gd`](../../../plugins/selection/tools/BoxSelectTool.gd), [`LassoSelectTool.gd`](../../../plugins/selection/tools/LassoSelectTool.gd), [`WandSelectTool.gd`](../../../plugins/selection/tools/WandSelectTool.gd), [`ScreenSelection.gd`](../../../plugins/selection/ScreenSelection.gd), [`ScreenBand.gd`](../../../plugins/selection/ScreenBand.gd), [`SelectionToolSettings.gd`](../../../plugins/selection/SelectionToolSettings.gd), [`Options.gd`](../../../plugins/selection/Options.gd), [`settings.tres`](../../../plugins/selection/settings.tres) |

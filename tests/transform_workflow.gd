@@ -1,8 +1,10 @@
 extends "res://tests/test.gd"
 
-# One process runs the three transform-workflow tests. Each test keeps the steps
-# and checks of its original scene. The user arguments after `--` name the tests
-# to run, so an old scene name still selects its own test.
+# One process runs the transform-workflow tests. Each test keeps the steps and
+# checks of its original scene. The user arguments after `--` name the tests to
+# run, so an old scene name still selects its own test.
+
+const TransformGizmoScript := preload("res://plugins/Transform/tools/TransformGizmo.gd")
 
 var viewport: SubViewport
 
@@ -15,12 +17,14 @@ var _defaults_ready := false
 var _default_tool := 0
 var _default_snap := true
 var _default_uniform := true
+var _gizmo_radius := 0.0
 
 
 func _ready() -> void:
 	test("the transform toolbar swaps tools and the option bar reflects tool state", _transform_mode, "transform_mode")
 	test("the move tool drags a whole shape, keeps the selection in sync, and commits or cancels", _transform_move, "transform_move")
 	test("moving a selection over a stationary voxel hides it, restores it if passed, and overwrites it if landed on", _transform_obstacle, "transform_obstacle")
+	test("the transform gizmo shows the source pivot and follows the transform", _transform_gizmo, "transform_gizmo")
 
 
 # Each test starts from an empty frame, no selection, no history, the Move tool,
@@ -112,6 +116,157 @@ func _transform_mode() -> void:
 
 	step("Then snap shows for the rotate tool", func():
 		expect(_option("Snap to 90 degrees").visible, "snap is shown for the rotate tool")
+	)
+
+
+func _transform_gizmo() -> void:
+	step("Given a selected bar with the move tool active", func():
+		_view_setup()
+		State.undo_redo.clear_history()
+		State.selection.clear()
+		_frame().clear()
+		_paint_bar()
+		_select_bar()
+		activate_tool("transform")
+		select_toolbar_item("transform", "Move")
+	)
+	await get_tree().process_frame
+
+	step("Then the move gizmo sits at the selection center", func():
+		var p := plugin("TransformPlugin")
+		var gizmo = p._move.get_node("Gizmo")
+		expect(gizmo.is_visible_in_tree(), "the move gizmo is visible")
+		expect(gizmo.global_position.is_equal_approx(Vector3(1, 0, 0)), "the move gizmo sits at the selection bounds center")
+		var mesh := gizmo.mesh as ArrayMesh
+		expect(mesh != null and mesh.get_surface_count() == 1, "the move gizmo has one line surface")
+		var vertices: PackedVector3Array = mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+		expect(vertices.size() > 0, "the move gizmo has line vertices")
+		var material := gizmo.material_override as StandardMaterial3D
+		expect(material != null and material.no_depth_test, "the gizmo draws over geometry")
+		expect(material.shading_mode == BaseMaterial3D.SHADING_MODE_UNSHADED, "the gizmo ignores the light")
+	)
+
+	step("When the user zooms in on the move gizmo", func():
+		var gizmo = plugin("TransformPlugin")._move.get_node("Gizmo")
+		_gizmo_radius = _gizmo_screen_radius(gizmo)
+		camera_rig().set_zoom_percent(200)
+	)
+
+	step("Then the gizmo keeps its screen radius", func():
+		var gizmo = plugin("TransformPlugin")._move.get_node("Gizmo")
+		expect(absf(_gizmo_screen_radius(gizmo) - _gizmo_radius) <= 1.0, "the gizmo keeps a constant screen radius")
+		camera_rig().set_zoom_percent(100)
+	)
+
+	step("When the user switches to Rotate and hovers away from the pivot", func():
+		select_toolbar_item("transform", "Rotate")
+		var gizmo = plugin("TransformPlugin")._rotate.get_node("Gizmo")
+		var pointer := camera_rig().unproject_position(gizmo.global_position + Vector3(2, 1, 0))
+		_hover_motion(pointer)
+	)
+
+	step("Then the rotate gizmo draws a bone to the pointer", func():
+		var gizmo = plugin("TransformPlugin")._rotate.get_node("Gizmo")
+		expect(gizmo.is_visible_in_tree(), "the rotate gizmo is visible")
+		expect(gizmo.kind == TransformGizmoScript.Kind.ROTATE, "the rotate gizmo uses the rotate kind")
+		expect(gizmo._has_tip, "the bone has a tip at the pointer")
+		var pointer := camera_rig().unproject_position(gizmo.global_position + Vector3(2, 1, 0))
+		expect(camera_rig().unproject_position(gizmo._last_tip).distance_to(pointer) <= 1.0, "the bone tip follows the pointer")
+	)
+
+	step("When the user drags the rotate bone", func():
+		var gizmo = plugin("TransformPlugin")._rotate.get_node("Gizmo")
+		var pivot: Vector3 = gizmo.global_position
+		var from := camera_rig().unproject_position(pivot)
+		var to := camera_rig().unproject_position(pivot + Vector3(0, 3, 0))
+		_mouse_button(from, true)
+		_mouse_motion(to)
+	)
+
+	step("Then the bone stays on the rotation pivot and follows the drag", func():
+		var gizmo = plugin("TransformPlugin")._rotate.get_node("Gizmo")
+		expect(gizmo.global_position.is_equal_approx(Vector3(1, 0, 0)), "the rotate gizmo stays on the rotation pivot")
+		var drag_point := camera_rig().unproject_position(Vector3(1, 3, 0))
+		expect(camera_rig().unproject_position(gizmo._last_tip).distance_to(drag_point) <= 1.0, "the bone tip follows the drag")
+		_release_at(_last_mouse_pos)
+		_press_option("Cancel")
+	)
+
+	step("When the user switches to Scale", func():
+		select_toolbar_item("transform", "Scale")
+	)
+
+	step("Then the scale gizmo sits at the selection center", func():
+		var gizmo = plugin("TransformPlugin")._scale.get_node("Gizmo")
+		expect(gizmo.is_visible_in_tree(), "the scale gizmo is visible")
+		expect(gizmo.kind == TransformGizmoScript.Kind.SCALE, "the scale gizmo uses the scale kind")
+		expect(gizmo.global_position.is_equal_approx(Vector3(1, 0, 0)), "the scale gizmo starts at the selection center")
+	)
+
+	step("When the selection moves to one cell", func():
+		State.selection.clear()
+		State.selection.add(Vector3i(10, 0, 0))
+		State.selection_changed.emit()
+	)
+
+	step("Then the gizmo follows the new selection", func():
+		var gizmo = plugin("TransformPlugin")._scale.get_node("Gizmo")
+		expect(gizmo.global_position.is_equal_approx(Vector3(10, 0, 0)), "the gizmo follows the selection bounds")
+	)
+
+	step("When the user switches to Move and grabs the gizmo", func():
+		select_toolbar_item("transform", "Move")
+		var gizmo = plugin("TransformPlugin")._move.get_node("Gizmo")
+		var pivot: Vector3 = gizmo.global_position
+		var from := camera_rig().unproject_position(pivot)
+		var to := camera_rig().unproject_position(pivot + Vector3(1, 0, 0))
+		_mouse_button(from, true)
+		_mouse_motion(to)
+		_mouse_button(to, false)
+	)
+
+	step("Then the move is pending and the gizmo follows the destination", func():
+		var move = plugin("TransformPlugin")._move
+		expect(move._pending, "the gizmo press starts a transform")
+		var gizmo = move.get_node("Gizmo")
+		expect(gizmo.global_position.is_equal_approx(Vector3(11, 0, 0)), "the move gizmo follows the destination center")
+		_press_option("Commit")
+	)
+
+	step("When the frame and selection are empty", func():
+		State.selection.clear()
+		_frame().clear()
+		State.selection_changed.emit()
+		sync_viewport()
+	)
+
+	step("Then the move gizmo hides", func():
+		var gizmo = plugin("TransformPlugin")._move.get_node("Gizmo")
+		expect(not gizmo.is_visible_in_tree(), "the gizmo hides when the source is empty")
+	)
+
+	step("When the user switches to the brush", func():
+		activate_tool("Toolbar")
+	)
+
+	step("Then the gizmo hides with the transform tool", func():
+		var gizmo = plugin("TransformPlugin")._move.get_node("Gizmo")
+		expect(not gizmo.is_visible_in_tree(), "the gizmo hides while the transform tool is inactive")
+	)
+
+	step("When the user returns to the transform tool with one selected cell", func():
+		_frame().set_cell(Vector3i(0, 0, 0), VoxelFrame.material(Color.RED))
+		State.selection.add(Vector3i(0, 0, 0))
+		State.selection_changed.emit()
+		activate_tool("transform")
+	)
+	await get_tree().process_frame
+
+	step("Then the gizmo shows again", func():
+		var p := plugin("TransformPlugin")
+		var gizmo = p._current_tool.get_node("Gizmo")
+		expect(gizmo.is_visible_in_tree(), "the gizmo returns with the transform tool")
+		expect(gizmo.global_position.is_equal_approx(Vector3.ZERO), "the gizmo sits on the new selection")
 	)
 
 
@@ -433,6 +588,20 @@ func _mouse_motion(pos: Vector2) -> void:
 	ev.button_mask = MOUSE_BUTTON_MASK_LEFT
 	viewport.push_input(ev)
 	_last_mouse_pos = pos
+
+
+func _hover_motion(pos: Vector2) -> void:
+	var ev := InputEventMouseMotion.new()
+	ev.position = pos
+	ev.button_mask = 0
+	viewport.push_input(ev)
+	_last_mouse_pos = pos
+
+
+func _gizmo_screen_radius(gizmo) -> float:
+	var center := camera_rig().unproject_position(gizmo.global_position)
+	var edge := camera_rig().unproject_position(gizmo.global_transform * Vector3.RIGHT)
+	return center.distance_to(edge)
 
 
 func _key(code: Key) -> void:
