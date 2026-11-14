@@ -13,8 +13,8 @@ Read each graph from top to bottom.
 
 - **Baseline**: the frame snapshot that the press copies. Every drag result
   starts from it.
-- **Ring**: the one white leaf mesh named `Footprint`. It lies on the entered
-  face and predicts no voxel.
+- **Circle**: the one white line mesh named `Footprint`. It lies in the view plane
+  at the reach of the active tool and predicts no voxel.
 - **Bone**: the line that Pose draws from the joint to the picked cell.
 - **Joint**: the point that Pose turns a limb around.
 - **Limb**: the connected occupied cells on the near side of the joint.
@@ -123,7 +123,9 @@ A destination may leave the selection, so a small selection still moves.
 The job sorts the moves by weight, then by the canonical cell, so overlapping
 destinations resolve the same way on every run.
 
-The tool poses the ring on the entered face.
+The tool poses the circle in the view plane. Grab shows its capture ball.
+Pose shows the joint reach, one brush diameter, so a base outside the brush is
+inside the circle.
 Grab draws no bone.
 
 Source:

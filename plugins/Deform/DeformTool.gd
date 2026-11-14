@@ -9,12 +9,14 @@ extends VoxelTool
 ## release commits the whole gesture as one history action. Escape, an edit
 ## context change, and a history change roll it back.
 ##
-## The ring is one white leaf mesh on the entered face. It is the whole cursor
-## and it predicts no voxel. A tool that also draws a bone poses it from the
+## The cursor is one white circle in the view plane. It shows the reach of the
+## tool and predicts no voxel. A tool that also draws a bone poses it from the
 ## press onward, like Blender's Pose brush.
 
 const TerrainRing := preload("res://plugins/Terrain/TerrainRing.gd")
-const TerrainFrameScript := preload("res://plugins/Terrain/TerrainFrame.gd")
+## The segments of the cursor circle. The radius depends on the tool, so the count
+## stays fixed and the circle reads smooth at every size.
+const CIRCLE_SEGMENTS := 32
 
 ## The estimated work above which a drag runs on the worker pool.
 const INLINE_EDIT_LIMIT := 4096
@@ -179,7 +181,7 @@ func _disconnect_state_subscriptions() -> void:
 
 
 func _on_settings_changed() -> void:
-	# The ring follows the size. A drag keeps the size it captured at the press.
+	# The cursor follows the size. A drag keeps the size it captured at the press.
 	if _edit == null:
 		_update_visual(_last_pick)
 
@@ -558,7 +560,7 @@ func _hover(pos: Vector2) -> void:
 	_update_visual(pick)
 
 
-# Poses the cursor for the drag target. The ring follows the pointer, and the
+# Poses the cursor for the drag target. The circle follows the pointer, and the
 # entry face of the press keeps its normal.
 func _drag_visual(target: Vector3i) -> void:
 	if _last_pick == null:
@@ -581,12 +583,6 @@ func _update_visual(pick: PickResult) -> void:
 	_pose_bone(pick)
 
 
-## Returns the frame of the entered face. The ring lies on it, so it shows the
-## face the gesture pulls from.
-func _face_frame(pick: PickResult) -> TerrainFrame:
-	return TerrainFrameScript.from_face(pick.hit, pick.entry)
-
-
 ## Poses the bone of the gesture. The base tool draws no bone.
 func _pose_bone(_pick: PickResult) -> void:
 	pass
@@ -599,7 +595,7 @@ func _setup_footprint() -> void:
 	var material := StandardMaterial3D.new()
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	material.albedo_color = Color.WHITE
-	# The ring must stay readable inside geometry, so it skips the depth test.
+	# The cursor must stay readable inside geometry, so it skips the depth test.
 	material.no_depth_test = true
 	material.cull_mode = BaseMaterial3D.CULL_DISABLED
 	_footprint.material_override = material
@@ -607,29 +603,53 @@ func _setup_footprint() -> void:
 	_footprint.visible = false
 
 
-## Shows the ring on the entered face of the picked cell.
+## Shows the cursor circle of the tool, centered on the picked cell.
 ##
-## The mesh depends on the size only, so a size builds one mesh and every cell
-## reuses it. The ring snaps to the cell center and lies half a cell out along
-## the entered normal, so its cells cover the voxel cells of the footprint.
+## The circle lies in the view plane, so its screen size is the reach of the
+## tool, and it stays a true circle from every view. The mesh depends on the
+## radius only, so a radius builds one mesh and every cell reuses it. The pose
+## reach and the grab ball differ, so each tool reports its own radius.
 func _pose_footprint(pick: PickResult) -> void:
 	if _footprint == null or pick.hit == VoxelPicking.NONE:
 		return
-	var size := clampi(_settings.size, 1, 32)
-	var mesh: ArrayMesh = _footprint_meshes.get(size)
-	if mesh == null:
-		mesh = TerrainRing.build_mesh(TerrainRing.legacy_plane_ring(size))
-		_footprint_meshes[size] = mesh
-	_footprint.mesh = mesh
-	var frame := _face_frame(pick)
-	_footprint.global_transform = Transform3D(
-		Basis(frame.tangent_u, frame.tangent_v, frame.normal),
-		Vector3(pick.hit) + frame.normal * 0.5
-	)
+	var radius := _cursor_radius()
+	_footprint.mesh = _cursor_mesh(radius)
+	var right := Vector3.RIGHT
+	var up := Vector3.UP
+	if is_inside_tree():
+		var camera := get_viewport().get_camera_3d()
+		if camera != null:
+			right = camera.global_transform.basis.x.normalized()
+			up = camera.global_transform.basis.y.normalized()
+	var basis := Basis(right, up, right.cross(up))
+	_footprint.global_transform = Transform3D(basis, Vector3(pick.hit))
 	# The tool node carries the hide state. A hide sets it false, so a pose must
-	# set it true or an invisible parent keeps the ring off screen forever.
+	# set it true or an invisible parent keeps the cursor off screen forever.
 	visible = true
 	_footprint.visible = true
+
+
+## Returns the reach of the cursor circle, in cells. The base tool shows its
+## capture ball; a tool with a wider reach overrides it.
+func _cursor_radius() -> float:
+	return float(clampi(_settings.size, 1, 32)) * 0.5
+
+
+# Returns the cursor circle mesh of one radius. The vertices lie in the local XY
+# plane, so the node transform carries the view orientation.
+func _cursor_mesh(radius: float) -> ArrayMesh:
+	var mesh: ArrayMesh = _footprint_meshes.get(radius)
+	if mesh != null:
+		return mesh
+	var vertices := PackedVector3Array()
+	for index in CIRCLE_SEGMENTS:
+		var first := TAU * float(index) / float(CIRCLE_SEGMENTS)
+		var second := TAU * float(index + 1) / float(CIRCLE_SEGMENTS)
+		vertices.append(Vector3(cos(first), sin(first), 0.0) * radius)
+		vertices.append(Vector3(cos(second), sin(second), 0.0) * radius)
+	mesh = TerrainRing.build_mesh(vertices)
+	_footprint_meshes[radius] = mesh
+	return mesh
 
 
 func _hide_footprint() -> void:

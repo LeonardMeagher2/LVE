@@ -50,6 +50,7 @@ func _ready() -> void:
 	
 	test("pose bends the connected limb and keeps the far side still", _pose_limb, "pose_limb")
 	test("a hover shows the rotation point before the press", _pose_hover_pivot, "pose_hover_pivot")
+	test("the cursor circle spans the joint reach around the picked cell", _pose_cursor_circle, "pose_cursor_circle")
 	test("pose keeps the bent limb solid", _pose_solid, "pose_solid")
 	test("a bone that points at the viewer still turns the limb", _pose_end_on, "pose_end_on")
 	test("pose mirrors its bend through the symmetry", _pose_symmetry, "pose_symmetry")
@@ -872,6 +873,35 @@ func _pose_large_blob() -> void:
 	step("Then the block keeps its cells", func():
 		expect(frame.count() >= pose_count - 8, "the footprint bend keeps the block solid")
 		expect(not State.edit_busy(), "the pose releases the edit")
+	)
+
+
+func _pose_cursor_circle() -> void:
+	# The circle shows the joint reach, not the flat footprint. A base outside
+	# the brush is then still inside the circle.
+	step("Given a bar and a hover with the Pose tool", func():
+		_use(_settings.Tools.POSE)
+		_settings.size = 4
+		_settings.falloff = 0.0
+		_view("front")
+		_bar(-8, 8)
+		_hover(_pos(Vector3(6.0, 0.0, 0.0)))
+	)
+	await get_tree().process_frame
+	step("Then the circle spans the joint reach and centers on the picked cell", func():
+		var circle := tool.get_node("Footprint") as MeshInstance3D
+		expect(circle.is_visible_in_tree(), "the cursor is visible")
+		var vertices: PackedVector3Array = (circle.mesh as ArrayMesh).surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+		expect(vertices.size() > 0, "the circle holds segments")
+		var radius := 0.0
+		for vertex in vertices:
+			radius = maxf(radius, vertex.length())
+		expect(is_equal_approx(radius, 4.0), "the circle radius is one brush diameter")
+		var center := circle.global_transform.origin
+		expect(center.is_equal_approx(Vector3(6, 0, 0)), "the circle centers on the picked cell")
+		var joint: Vector3 = tool._hover_joint["pivot"]
+		expect(Vector3(joint).distance_to(center) <= 4.0, "the joint sits inside the circle")
+		expect(frame.has(Vector3i(joint)), "the joint is an occupied cell")
 	)
 
 
