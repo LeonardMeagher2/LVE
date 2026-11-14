@@ -58,6 +58,7 @@ func _enter_tree() -> void:
 
 func _ready() -> void:
 	_setup_handle()
+	_setup_plane_borders()
 	_rebuild()
 
 
@@ -84,6 +85,27 @@ func _setup_handle() -> void:
 	$DragLine.material_override = _line_material(0.65)
 	_hide_drag_visuals()
 	_sync_cursor()
+
+
+## Adds one opaque border child to every plane. The border uses the plane color,
+## so an edge-on plane still shows a line.
+func _setup_plane_borders() -> void:
+	for axis in 3:
+		var plane: MeshInstance3D = get_node(["XPlane", "YPlane", "ZPlane"][axis])
+		var border := MeshInstance3D.new()
+		border.name = "Border"
+		border.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var material := StandardMaterial3D.new()
+		material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		var color: Color = plane.material_override.albedo_color
+		color.a = 1.0
+		material.albedo_color = color
+		material.no_depth_test = true
+		material.cull_mode = BaseMaterial3D.CULL_DISABLED
+		material.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
+		material.render_priority = 2
+		border.material_override = material
+		plane.add_child(border)
 
 
 func _rebuild() -> void:
@@ -120,6 +142,13 @@ func _rebuild() -> void:
 		var surface := ArrayMesh.new()
 		surface.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 		plane.mesh = surface
+		var border: MeshInstance3D = plane.get_node_or_null("Border")
+		if border != null:
+			var border_vertices := PackedVector3Array()
+			for index in 4:
+				border_vertices.append(vertices[index])
+				border_vertices.append(vertices[(index + 1) % 4])
+			border.mesh = VoxelLineMesh.build(border_vertices)
 
 
 func _process(_delta: float) -> void:

@@ -51,7 +51,19 @@ func _run() -> void:
 	step("Then each plane stays enabled independently", func():
 		expect(State.symmetry_axes == 7, "all three symmetry axes are enabled")
 		for plane_name in ["XPlane", "YPlane", "ZPlane"]:
-			expect(symmetry._tool.get_node(plane_name).visible, "the enabled symmetry plane is visible")
+			var plane: MeshInstance3D = symmetry._tool.get_node(plane_name)
+			expect(plane.visible, "the enabled symmetry plane is visible")
+			var border: MeshInstance3D = plane.get_node("Border")
+			var fill: Color = plane.material_override.albedo_color
+			var border_color: Color = border.material_override.albedo_color
+			expect(border.visible, "the enabled plane shows its border")
+			expect(border_color.a == 1.0, "the plane border is opaque")
+			expect(
+				is_equal_approx(border_color.r, fill.r)
+				and is_equal_approx(border_color.g, fill.g)
+				and is_equal_approx(border_color.b, fill.b),
+				"the plane border uses the plane color"
+			)
 	)
 	step("When the user drags the symmetry origin", func():
 		_button(Vector3.ZERO, true)

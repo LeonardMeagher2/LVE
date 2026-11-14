@@ -319,6 +319,7 @@ The tool opens no edit and records no undo action.
 LVE Symmetry shows the mirror planes and moves their origin [Symmetry](../../tool-flows/shared-and-utilities.md#symmetry).
 The X, Y, and Z keys toggle one axis.
 The origin handle is a white square with a center cross. It grows on hover.
+Each visible plane has an opaque border in its color, so an edge-on plane still shows a line.
 A drag moves the origin. A ghost square and a line show the start origin and the move.
 Escape restores the origin.
 The origin snaps to half units.
@@ -362,7 +363,7 @@ Read `Open` as a question that this research cannot settle.
 | Undo names | History names the action. | S6 Undo History | Transform action is `Stroke`. Cut is `Cut`. Paste is `Paste`. Selection names are specific. | Gap for transform name. | Medium |
 | Eyedropper | Pick color. Sampling options. Sometimes pick material. | S4 Eyedropper, S5 Color Sampler, S2 Alt pick | Picks the full material. Records `Set Material`. Exact palette match. No cell change. | Intentional for full material. Open for a color-only modifier. | High for policy, Medium for expectation |
 | Plane | Visible ground or grid. Move it. Switch axis. | S6 3D Cursor, S1 Ground reference | Drag sets floor index. X, Y, Z set axis. Grid and picking follow. No undo. | Intentional for state-only. No undo action. | Low |
-| Symmetry | X, Y, Z toggles. Visible planes. Draggable origin. Reset to center. | S4 Symmetry, S2 Mirror Mode, S3 Mirror | X, Y, Z toggle. Planes are visible. Square handle with a center cross. Drag moves origin. Escape cancels. Half-unit snap. Center and origin fields exist. Frozen per edit. No undo. | Parity for controls. Intentional for no undo. | High |
+| Symmetry | X, Y, Z toggles. Visible planes. Draggable origin. Reset to center. | S4 Symmetry, S2 Mirror Mode, S3 Mirror | X, Y, Z toggle. Planes are visible and have opaque colored borders. Square handle with a center cross. Drag moves origin. Escape cancels. Half-unit snap. Center and origin fields exist. Frozen per edit. No undo. | Parity for controls. Intentional for no undo. | High |
 | Feedback latency | Cursor reacts under 0.1 second. Long jobs show progress and cancel. | S9 Response Times, S10 100 ms study, S5 Instant Preview | Cursor preview is separate from model install. Jobs use workers and inline limits. Operation status exists. | Open for measured latency. This file has no measurement. | Low |
 
 ## What the performance evidence shows

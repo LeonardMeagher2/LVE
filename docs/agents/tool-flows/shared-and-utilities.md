@@ -566,6 +566,8 @@ Terrain clips its planning at the slice and size boundary.
 ### Symmetry
 
 The Symmetry tool shows the mirror planes and moves their origin.
+Each visible plane has an opaque border in the plane color.
+The border stays visible when the view is edge-on.
 The X, Y, and Z keys toggle one axis.
 The origin handle is a white square with a center cross.
 It uses the same line style as the other voxel gizmos.
