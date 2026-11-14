@@ -22,25 +22,25 @@ enum Kind {
 ## The handle radius in screen pixels.
 const RADIUS_PX := 64.0
 ## The Move arrow reach as a fraction of the handle radius.
-const MOVE_REACH := 0.35
+const MOVE_REACH := 0.25
 ## The Move arrow shaft start as a fraction of the handle radius.
-const MOVE_INNER := 0.08
+const MOVE_INNER := 0.06
 ## The Move arrowhead length as a fraction of the handle radius.
-const MOVE_HEAD := 0.12
+const MOVE_HEAD := 0.09
 ## The Move arrowhead half width as a fraction of the handle radius.
-const MOVE_SIDE := 0.07
+const MOVE_SIDE := 0.055
 ## The Move center square half size as a fraction of the handle radius.
-const MOVE_CENTER := 0.05
+const MOVE_CENTER := 0.04
 ## The Scale square reach as a fraction of the handle radius.
-const SCALE_REACH := 0.35
+const SCALE_REACH := 0.25
 ## The Scale arrow shaft start as a fraction of the handle radius.
-const SCALE_INNER := 0.10
+const SCALE_INNER := 0.07
 ## The Scale arrowhead length as a fraction of the handle radius.
-const SCALE_HEAD := 0.10
+const SCALE_HEAD := 0.08
 ## The Scale arrowhead half width as a fraction of the handle radius.
-const SCALE_SIDE := 0.07
+const SCALE_SIDE := 0.055
 ## The Scale center square half size as a fraction of the handle radius.
-const SCALE_CENTER := 0.05
+const SCALE_CENTER := 0.04
 ## The half size of the Rotate joint square in screen pixels.
 const JOINT_HALF_PX := 7.0
 ## The Rotate mark arc radius in screen pixels.
