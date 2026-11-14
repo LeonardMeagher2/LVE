@@ -15,7 +15,7 @@ Read each graph from top to bottom.
   starts from it.
 - **Circle**: the one white line mesh named `Footprint`. It lies in the view plane
   at the reach of the active tool and predicts no voxel.
-- **Bone**: the line that Pose draws from the joint to the picked cell.
+- **Bone**: the one line that Pose draws from the joint to the pointer.
 - **Joint**: the point that Pose turns a limb around.
 - **Limb**: the connected occupied cells on the near side of the joint.
 - **Latest target**: the newest pointer cell. Only it waits for a running job.
@@ -149,7 +149,7 @@ flowchart TD
     P6["Turn by the screen angle from the bone to the pointer"]
     P7["Lower the angle until every moved cell fits"]
     P8["Job: write the turn, then clear replaced sources"]
-    P9["Bone cursor with the joint and the drag arm"]
+    P9["Bone cursor with the joint and the pointer"]
   end
   P1 --> P2 --> P3 --> P4 --> P5 --> P6 --> P7 --> P8
   P2 --> P9
@@ -158,7 +158,7 @@ flowchart TD
 
 The behaviour follows the [Pose brush spec](../research/tools/pose-brush-spec.md).
 
-The bone runs from the joint to the picked cell, so a limb that lies across the
+The bone runs from the joint to the pointer, so a limb that lies across the
 view bends in the view plane.
 `DeformLimb.joint_pivot` reads no cell axis and no face normal.
 The entered face has no effect on the bend.

@@ -434,9 +434,10 @@ func _hover_key_for(pick: PickResult, frame: VoxelFrame, context: VoxelFrame.Edi
 	])
 
 
-# Poses the bone. It runs from the joint to the picked cell, and a small marker
-# cross shows the joint. An idle hover shows the same, so the user sees the
-# rotation point before the press.
+# Poses the bone. It runs from the joint to the pointer: the exact drag point
+# during a drag, and the cell center on a hover. A small marker cross shows the
+# joint. An idle hover shows the same, so the user sees the rotation point before
+# the press.
 func _pose_bone(pick: PickResult) -> void:
 	if _bone == null:
 		return
@@ -444,6 +445,7 @@ func _pose_bone(pick: PickResult) -> void:
 		_hide_bone()
 		return
 	var pivot := _pivot
+	var tip := Vector3(pick.hit)
 	if _edit == null:
 		var state := _hover_state(pick)
 		if state.is_empty() or not bool(state["joint"]["found"]) or not bool(state["moves"]):
@@ -453,17 +455,17 @@ func _pose_bone(pick: PickResult) -> void:
 	elif not _joint_found:
 		_hide_bone()
 		return
+	else:
+		# One line only. The rounded drag cell and the exact pointer are within
+		# half a cell, so a second arm would read as a doubled bone.
+		tip = _drag_point
 	var vertices := PackedVector3Array()
 	vertices.append(pivot)
-	vertices.append(Vector3(pick.hit))
+	vertices.append(tip)
 	# The joint marker is a three-axis cross, so it reads from any view.
 	for offset in [Vector3.RIGHT, Vector3.UP, Vector3.BACK]:
 		vertices.append(pivot - offset * MARKER)
 		vertices.append(pivot + offset * MARKER)
-	# The drag arm shows the bend the current pointer asks for.
-	if _edit != null:
-		vertices.append(pivot)
-		vertices.append(_drag_point)
 	_bone.global_transform = Transform3D(Basis.IDENTITY, Vector3.ZERO)
 	_bone.mesh = TerrainRing.build_mesh(vertices)
 	visible = true
