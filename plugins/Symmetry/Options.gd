@@ -11,7 +11,7 @@ func _ready() -> void:
 		get_node(["OriginX", "OriginY", "OriginZ"][axis]).value_changed.connect(_on_origin_changed.bind(axis))
 	State.symmetry_changed.connect(_sync)
 	State.activity_changed.connect(_sync)
-	$Reset.pressed.connect(_reset_origin)
+	$Center.pressed.connect(_center_origin)
 	_sync()
 
 
@@ -24,7 +24,7 @@ func _sync() -> void:
 		var control: SpinBox = get_node(["OriginX", "OriginY", "OriginZ"][axis])
 		control.set_value_no_signal(State.symmetry_origin[axis])
 		control.editable = not busy
-	$Reset.disabled = busy
+	$Center.disabled = busy
 
 
 func _on_axis_toggled(on: bool, axis: int) -> void:
@@ -40,5 +40,21 @@ func _on_origin_changed(value: float, axis: int) -> void:
 	State.symmetry_origin = origin
 
 
-func _reset_origin() -> void:
-	State.symmetry_origin = State.DEFAULT_SYMMETRY_ORIGIN
+## Places the origin at the selection center, or the model center when the
+## selection is empty.
+func _center_origin() -> void:
+	var bounds := _selection_bounds()
+	if not bounds.has_volume():
+		bounds = State.document.bounds()
+	if not bounds.has_volume():
+		bounds = State.document.workspace_bounds()
+	State.symmetry_origin = bounds.get_center()
+
+
+## Returns the box of the selected cells. An empty selection has no volume.
+func _selection_bounds() -> AABB:
+	var bounds := AABB()
+	for cell in State.selection.all_cells():
+		var cell_bounds := AABB(Vector3(cell) - Vector3.ONE * 0.5, Vector3.ONE)
+		bounds = cell_bounds if not bounds.has_volume() else bounds.merge(cell_bounds)
+	return bounds

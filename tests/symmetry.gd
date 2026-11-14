@@ -236,11 +236,23 @@ func _run() -> void:
 		expect(frame.get_color(Vector3i(-2, 0, 2)) == Color.RED, "one undo restores the reflected fill color")
 	)
 	State.symmetry_axes = 0
-	step("When the user resets the symmetry origin", func():
-		symmetry._options.get_node("Reset").pressed.emit()
+	step("Given a selection away from the model center", func():
+		State.selection.add(Vector3i(4, 0, 4))
+		State.selection.add(Vector3i(6, 0, 4))
+		State.selection_changed.emit()
 	)
-	step("Then the origin returns to the default voxel boundary", func():
-		expect(State.symmetry_origin == Vector3(-0.5, -0.5, -0.5), "Reset restores the default half-voxel origin")
+	step("When the user centers the symmetry origin", func():
+		symmetry._options.get_node("Center").pressed.emit()
+	)
+	step("Then the origin moves to the selection center", func():
+		expect(State.symmetry_origin == Vector3(5.0, 0.0, 4.0), "Center uses the selection bounds")
+		State.clear_selection()
+	)
+	step("When the user centers with no selection", func():
+		symmetry._options.get_node("Center").pressed.emit()
+	)
+	step("Then the origin moves to the model center", func():
+		expect(State.symmetry_origin == Vector3(0.0, 0.0, 2.5), "Center uses the model bounds")
 	)
 
 

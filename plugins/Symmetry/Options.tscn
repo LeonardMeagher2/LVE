@@ -1,7 +1,7 @@
 [gd_scene format=3]
 
 [ext_resource type="Script" path="res://plugins/Symmetry/Options.gd" id="1_script"]
-[ext_resource type="Texture2D" path="res://icons/center.svg" id="2_reset"]
+[ext_resource type="Texture2D" path="res://icons/center.svg" id="2_center"]
 
 [node name="SymmetryOptions" type="HBoxContainer"]
 script = ExtResource("1_script")
@@ -60,8 +60,8 @@ allow_greater = true
 allow_lesser = true
 prefix = "Z"
 
-[node name="Reset" type="Button" parent="."]
+[node name="Center" type="Button" parent="."]
 layout_mode = 2
-tooltip_text = "Reset the symmetry origin"
-icon = ExtResource("2_reset")
+tooltip_text = "Center the symmetry origin on the selection or the model"
+icon = ExtResource("2_center")
 icon_alignment = 1

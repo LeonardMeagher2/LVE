@@ -620,6 +620,10 @@ The source is [`VoxelFrame.gd`](../../../Globals/State/Document/VoxelFrame.gd).
 The symmetry origin snaps to half units.
 The source is [`State.gd:195`](../../../Globals/State/State.gd#L195).
 
+The Center button places the origin at the selection center, or at the model
+center when the selection is empty.
+The source is [`Options.gd`](../../../plugins/Symmetry/Options.gd).
+
 ### Eyedropper
 
 The Eyedropper copies the full material of one cell to the current material.
