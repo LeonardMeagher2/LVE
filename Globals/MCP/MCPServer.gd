@@ -293,7 +293,7 @@ const TOOLS := [
 				"tag": {"type": "integer", "minimum": -1, "description": "Export only this tag. -1 exports every tag. Defaults to -1."},
 				"smooth_normals": {"type": "boolean", "description": "Use smooth normals. Defaults to the document setting."},
 				"ao": {"type": "number", "minimum": 0, "maximum": 1, "description": "Ambient occlusion strength. Defaults to the document setting."},
-				"unlit": {"type": "boolean", "description": "Export an unlit material. Defaults to the saved export setting."},
+				"unlit": {"type": "boolean", "description": "Export an unlit material. Defaults to lit materials."},
 			},
 			"additionalProperties": false,
 		},

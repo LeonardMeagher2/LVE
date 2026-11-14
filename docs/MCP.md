@@ -160,7 +160,7 @@ The server logs one line per tool call with its response bytes in `user://mcp_se
 
 `get_export_settings` reads the values the export tab uses now: the sheet view, the tile size, the tag, and the model options.
 
-`export_model` writes a `.glb` or `.gltf` file. It accepts `center`, `tag`, `smooth_normals`, `ao`, and `unlit`. `export_sprite_sheet` writes a PNG and the Aseprite JSON sidecar. It accepts `first_frame`, `last_frame`, `tag`, `tile_size`, `view`, `views`, `orthographic`, `center`, and `metadata`. Omit `path` on either tool to write beside the document. An unsaved document exports to the user directory. `get_export_settings` returns both default paths.
+`export_model` writes a `.glb` or `.gltf` file. It accepts `center`, `tag`, `smooth_normals`, `ao`, and `unlit`. It exports lit materials by default. `export_sprite_sheet` writes a PNG and the Aseprite JSON sidecar. It accepts `first_frame`, `last_frame`, `tag`, `tile_size`, `view`, `views`, `orthographic`, `center`, and `metadata`. Omit `path` on either tool to write beside the document. An unsaved document exports to the user directory. `get_export_settings` returns both default paths.
 
 Pass a key only when the call needs a value that differs from the export tab. The call does not change the document or the saved export settings. Both tools return the resolved path and the resolved values.
 

@@ -72,6 +72,7 @@ func _ready() -> void:
 	_model_renderer.report_activity = false
 	_model_renderer.source_frame = State.get_current_voxel_frame().copy_frame()
 	_model_back_renderer = preload("res://ui/Viewport/VoxelRenderer.tscn").instantiate()
+	_model_back_renderer.name = "VoxelRendererBack"
 	_model_back_renderer.report_activity = false
 	_model_back_renderer.source_frame = VoxelFrame.new()
 	_model_back_renderer.visible = false
@@ -122,8 +123,6 @@ func _ready() -> void:
 	_sheet_settings.get_node("TurntableRow/Turntable").toggled.connect(_sheet_settings_changed.unbind(1))
 	_sheet_settings.get_node("TurntableRow/Metadata").toggled.connect(_save_export_settings.unbind(1))
 	_model.get_node("AnimationRow/Center").toggled.connect(_model_settings_changed.unbind(1))
-	_model.get_node("ModelOptions/Lit").toggled.connect(_on_model_lit_toggled)
-	_model.get_node("ModelOptions/AO").value_changed.connect(_on_model_ao_changed)
 	_model.get_node("AnimationRow/Tags").item_selected.connect(_on_model_tag_selected)
 	_model.get_node("AnimationRow/Play").toggled.connect(_on_play_toggled)
 	_model_camera.view_changed.connect(_on_preview_camera_changed)
@@ -142,19 +141,6 @@ func _ready() -> void:
 	_sync()
 
 
-func _on_model_lit_toggled(_pressed: bool) -> void:
-	# The viewport shading comes from the Environment row. This option chooses
-	# the material for the exported GLB.
-	_save_export_settings()
-
-
-func _on_model_ao_changed(value: float) -> void:
-	# AO belongs to the document. The editor, the model preview, and the export all
-	# read the same setting.
-	State.set_ao_strength(value, false)
-	_save_export_settings()
-
-
 func _capture_export_camera() -> Dictionary:
 	return {"yaw": _model_camera._yaw, "pitch": _model_camera._pitch, "distance": _model_camera._dist, "initial_distance": _model_camera._init_dist, "target": _model_camera._target, "orthographic": _model_camera.is_orthogonal, "fov": _model_camera.fov}
 
@@ -171,8 +157,6 @@ func _save_export_settings() -> void:
 		"views": _sheet_settings.get_node("TurntableRow/Views").value,
 		"metadata": _sheet_settings.get_node("TurntableRow/Metadata").button_pressed,
 		"center": _model.get_node("AnimationRow/Center").button_pressed,
-		"unlit": not _model.get_node("ModelOptions/Lit").button_pressed,
-		"ao": State.document.ao_strength,
 		"model_tag": State.document.tags.find(_selected_tag),
 		"sheet_tag": State.document.tags.find(_sheet_tag),
 		"lighting": _sheet_lighting(),
@@ -196,9 +180,6 @@ func _restore_export_settings() -> void:
 	_sheet_settings.get_node("TurntableRow/Views").set_value_no_signal(saved.get("views", 8))
 	_sheet_settings.get_node("TurntableRow/Metadata").set_pressed_no_signal(saved.get("metadata", true))
 	_model.get_node("AnimationRow/Center").set_pressed_no_signal(saved.get("center", true))
-	var lit: bool = not saved.get("unlit", false)
-	_model.get_node("ModelOptions/Lit").set_pressed_no_signal(lit)
-	_model.get_node("ModelOptions/AO").set_value_no_signal(State.document.ao_strength)
 	var lighting: Dictionary = saved.get("lighting", _default_lighting)
 	_model_scene.set_lighting_settings(lighting)
 	_pending_export_camera = saved.get("camera", {}).duplicate()
@@ -237,7 +218,8 @@ func current_export_settings() -> Dictionary:
 			"tag": model_tag_index,
 			"smooth_normals": State.document.smooth_normals,
 			"ao": State.document.ao_strength,
-			"unlit": bool(State.document.export_settings.get("unlit", false)),
+			# The panel always exports lit materials. A caller can override one export.
+			"unlit": false,
 			"first_frame": model_range.x,
 			"last_frame": model_range.y,
 		},
@@ -300,13 +282,8 @@ func _on_workspace_visibility_changed() -> void:
 
 func _source_changed() -> void:
 	_sync_tags()
-	_sync_model_options()
 	_model_dirty = true
 	_sheet_settings_changed()
-
-
-func _sync_model_options() -> void:
-	_model.get_node("ModelOptions/AO").set_value_no_signal(State.document.ao_strength)
 
 
 func _on_document_changed() -> void:
@@ -396,7 +373,16 @@ func _sheet_lighting() -> Dictionary:
 
 
 func _on_model_lighting_changed() -> void:
+	_sync_model_shading()
 	_sheet_settings_changed()
+
+
+## Applies the preview's shading option to both preview renderers. The preview
+## swaps between two renderers, so one renderer would keep a stale state.
+func _sync_model_shading() -> void:
+	var unshaded: bool = not bool(_sheet_lighting().get("shaded", true))
+	_model_renderer.unshaded = unshaded
+	_model_back_renderer.unshaded = unshaded
 
 
 func _on_preview_camera_changed() -> void:
@@ -477,6 +463,7 @@ func _show_model_frame() -> void:
 func _present_model_frame() -> void:
 	if _model_pending_frame < 0 or not _model_back_renderer.is_settled():
 		return
+	_sync_model_shading()
 	_model_renderer.visible = false
 	_model_back_renderer.visible = true
 	var previous := _model_renderer
@@ -619,8 +606,9 @@ func export_gltf(path: String) -> Error:
 ## Exports the model as a GLB file with explicit settings. Keys: [code]center[/code],
 ## [code]tag[/code] (-1 for every tag), [code]smooth_normals[/code], [code]ao[/code],
 ## and [code]unlit[/code]. An absent [code]center[/code] is true and an absent
-## [code]tag[/code] is -1. Each other absent key keeps the document value. The
-## call does not change the document.
+## [code]tag[/code] is -1. An absent [code]smooth_normals[/code] or [code]ao[/code]
+## keeps the document value. An absent [code]unlit[/code] exports lit materials.
+## The call does not change the document.
 func export_gltf_settings(path: String, settings: Dictionary) -> Error:
 	if _exporting or State.edit_busy():
 		return ERR_BUSY
