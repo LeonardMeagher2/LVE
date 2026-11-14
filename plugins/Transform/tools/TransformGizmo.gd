@@ -21,6 +21,10 @@ enum Kind {
 
 ## The handle radius in screen pixels.
 const RADIUS_PX := 64.0
+## The half size of the Rotate joint square in screen pixels.
+const JOINT_HALF_PX := 7.0
+## The local half size of a center square that matches the joint square.
+const CENTER_HALF := JOINT_HALF_PX / RADIUS_PX
 ## The Move arrow reach as a fraction of the handle radius.
 const MOVE_REACH := 0.25
 ## The Move arrow shaft start as a fraction of the handle radius.
@@ -29,8 +33,6 @@ const MOVE_INNER := 0.06
 const MOVE_HEAD := 0.09
 ## The Move arrowhead half width as a fraction of the handle radius.
 const MOVE_SIDE := 0.055
-## The Move center square half size as a fraction of the handle radius.
-const MOVE_CENTER := 0.04
 ## The Scale square reach as a fraction of the handle radius.
 const SCALE_REACH := 0.25
 ## The Scale arrow shaft start as a fraction of the handle radius.
@@ -39,10 +41,6 @@ const SCALE_INNER := 0.07
 const SCALE_HEAD := 0.08
 ## The Scale arrowhead half width as a fraction of the handle radius.
 const SCALE_SIDE := 0.055
-## The Scale center square half size as a fraction of the handle radius.
-const SCALE_CENTER := 0.04
-## The half size of the Rotate joint square in screen pixels.
-const JOINT_HALF_PX := 7.0
 ## The Rotate mark arc radius in screen pixels.
 const ROTATE_ARC_PX := 8.0
 ## The Rotate mark arrowhead length in screen pixels.
@@ -227,7 +225,7 @@ func _append_move(vertices: PackedVector3Array) -> void:
 		var side := Vector3(-direction.y * MOVE_SIDE, direction.x * MOVE_SIDE, 0.0)
 		_append_line(vertices, end, back + side)
 		_append_line(vertices, end, back - side)
-	_append_square(vertices, Vector3.ZERO, MOVE_CENTER)
+	_append_square(vertices, Vector3.ZERO, CENTER_HALF)
 
 
 func _append_scale(vertices: PackedVector3Array) -> void:
@@ -242,7 +240,7 @@ func _append_scale(vertices: PackedVector3Array) -> void:
 		var side := Vector2(-direction.y, direction.x) * SCALE_SIDE
 		_append_line(vertices, end, Vector3(back.x + side.x, back.y + side.y, 0.0))
 		_append_line(vertices, end, Vector3(back.x - side.x, back.y - side.y, 0.0))
-	_append_square(vertices, Vector3.ZERO, SCALE_CENTER)
+	_append_square(vertices, Vector3.ZERO, CENTER_HALF)
 
 
 func _corner(corner: Vector2, scale: float) -> Vector3:
