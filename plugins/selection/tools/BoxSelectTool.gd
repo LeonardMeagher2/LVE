@@ -2,8 +2,8 @@ extends "./SelectTool.gd"
 
 ## The box selection tool.
 ##
-## It selects the volume behind a dragged screen rectangle. A press and release
-## in one place selects a small area under the pointer.
+## It selects the volume behind a dragged screen rectangle. A click selects the
+## picked voxel. A double click selects every voxel in the current frame.
 
 # The box tool selects the volume behind a dragged rectangle.
 
@@ -18,3 +18,8 @@ func _update_shape(pos: Vector2) -> void:
 
 func _commit_shape(pos: Vector2) -> void:
 	_commit_screen(_screen_rectangle(pos), PackedVector2Array())
+
+
+func _double_click(_pos: Vector2) -> bool:
+	_select_all()
+	return true
