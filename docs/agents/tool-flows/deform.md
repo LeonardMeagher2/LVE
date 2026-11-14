@@ -104,7 +104,7 @@ flowchart TD
   G1 --> G2 --> G3 --> G4 --> G5 --> G6
 ```
 
-A press captures the occupied cells of a ball one brush size out in every direction.
+A press captures the occupied cells of a ball of the brush radius around the picked cell.
 It does this for every active symmetry mask.
 A source must pass the frozen selection, and its falloff weight must be above
 zero, because a zero weight cannot move.
@@ -123,9 +123,7 @@ A destination may leave the selection, so a small selection still moves.
 The job sorts the moves by weight, then by the canonical cell, so overlapping
 destinations resolve the same way on every run.
 
-The tool poses the circle in the view plane. Grab shows its capture ball.
-Pose shows the joint reach, one brush diameter, so a base outside the brush is
-inside the circle.
+The tool poses the circle in the view plane. It shows the brush footprint, and a joint outside it is legal.
 Grab draws no bone.
 
 Source:
@@ -142,7 +140,7 @@ Source:
 flowchart TD
   subgraph Main["Main"]
     P1["Press on a voxel"]
-    P2["Find the farthest limb cell within the brush radius"]
+    P2["Find the farthest limb cell within one brush size"]
     P3["Capture the limb at the joint band"]
     P4["Build one pose entry per symmetry mask"]
     P5["Drag: view-plane cell"]
@@ -163,7 +161,7 @@ view bends in the view plane.
 `DeformLimb.joint_pivot` reads no cell axis and no face normal.
 The entered face has no effect on the bend.
 
-The joint is the farthest cell of the limb within the brush radius.
+The joint is the farthest cell of the limb within one brush size. The bound is the search bound, not the brush reach, so it sees past the near end of the limb.
 The brush walks the connected cells from the picked cell and stops at that bound.
 It does not walk back, so the base is the limb root and not a cell under the
 pointer.

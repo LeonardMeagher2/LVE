@@ -43,12 +43,13 @@ static func masks_for(context: VoxelFrame.EditContext) -> Array:
 ## [code]reach[/code] as the distance from the anchor to the pivot, and
 ## [code]found[/code] as whether the limb extends past the picked cell.
 ##
-## The joint is the farthest cell of the limb within one brush diameter. The
+## The joint is the farthest cell of the limb within one brush size. The
 ## search walks the connected cells from the picked cell and stops at that bound,
 ## so the joint stays on the limb and the picked face has no effect.
 ##
-## The bound is one brush size. It reaches past the near end of the limb, so a
-## press near a tip keeps the joint on the side that continues. The walk also
+## The bound is the search bound, not the brush reach: it must see past the
+## near end of the limb, or a press near a tip keeps the joint on the tip side.
+## The walk also
 ## stops at [constant JOINT_CELL_LIMIT] cells.
 static func joint_pivot(frame: VoxelFrame, anchor: Vector3i, size: int, context: VoxelFrame.EditContext) -> Dictionary:
 	var result := {"found": false, "pivot": Vector3(anchor), "bone_dir": Vector3.ZERO, "reach": 0.0}

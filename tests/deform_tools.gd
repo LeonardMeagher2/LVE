@@ -896,7 +896,7 @@ func _pose_cursor_circle() -> void:
 		var extent := 0.0
 		for vertex in vertices:
 			extent = maxf(extent, maxf(absf(vertex.x), absf(vertex.y)))
-		expect(is_equal_approx(extent, 4.0), "the circle spans one brush diameter from the picked cell")
+		expect(is_equal_approx(extent, 2.0), "the circle spans the brush footprint from the picked cell")
 		var center := circle.global_transform.origin
 		expect(center.is_equal_approx(Vector3(6, 0, 0)), "the circle centers on the picked cell")
 		var joint: Vector3 = tool._hover_joint["pivot"]

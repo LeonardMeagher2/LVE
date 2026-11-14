@@ -627,10 +627,10 @@ func _pose_footprint(pick: PickResult) -> void:
 	_footprint.visible = true
 
 
-## Returns the reach of the cursor circle, in cells. Both deform tools reach one
-## brush diameter, so the circle shows the same reach for each.
+## Returns the reach of the cursor circle, in cells: the brush radius. The circle
+## is the footprint of the brush, so a size of one is one cell.
 func _cursor_reach() -> float:
-	return float(clampi(_settings.size, 1, 32))
+	return float(clampi(_settings.size, 1, 32)) * 0.5
 
 
 # Returns the cursor mesh of one reach. The line is the stepped voxel circle, so
