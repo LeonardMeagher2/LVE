@@ -467,7 +467,7 @@ func _pose_bone(pick: PickResult) -> void:
 		vertices.append(pivot - offset * MARKER)
 		vertices.append(pivot + offset * MARKER)
 	_bone.global_transform = Transform3D(Basis.IDENTITY, Vector3.ZERO)
-	_bone.mesh = TerrainRing.build_mesh(vertices)
+	_bone.mesh = VoxelLineMesh.build(vertices)
 	visible = true
 	_bone.visible = true
 

@@ -13,10 +13,8 @@ extends VoxelTool
 ## tool and predicts no voxel. A tool that also draws a bone poses it from the
 ## press onward, like Blender's Pose brush.
 
-const TerrainRing := preload("res://plugins/Terrain/TerrainRing.gd")
-## The segments of the cursor circle. The reach depends on the tool, so the count
-## stays fixed and the circle reads smooth at every size.
-const CIRCLE_SEGMENTS := 32
+const BrushSize := preload("res://Globals/State/Tools/VoxelBrushSize.gd")
+const VoxelLineMesh := preload("res://Globals/Rendering/VoxelLineMesh.gd")
 
 ## The estimated work above which a drag runs on the worker pool.
 const INLINE_EDIT_LIMIT := 4096
@@ -605,10 +603,10 @@ func _setup_footprint() -> void:
 
 ## Shows the cursor circle of the tool, centered on the picked cell.
 ##
-## The circle lies in the view plane, so its screen size is the reach of the
-## tool, and it stays a true circle from every view. The mesh depends on the
-## reach only, so a reach builds one mesh and every cell reuses it. The pose
-## bound and the grab ball reach are the same, so one circle serves both.
+## The circle is the stepped voxel outline and lies in the view plane, so its
+## screen size is the reach of the tool and it stays a true circle from every
+## view. The mesh depends on the reach only, so a reach builds one mesh and every
+## cell reuses it.
 func _pose_footprint(pick: PickResult) -> void:
 	if _footprint == null or pick.hit == VoxelPicking.NONE:
 		return
@@ -635,19 +633,23 @@ func _cursor_reach() -> float:
 	return float(clampi(_settings.size, 1, 32))
 
 
-# Returns the cursor circle mesh of one reach. The vertices lie in the local XY
-# plane, so the node transform carries the view orientation.
+# Returns the cursor mesh of one reach. The line is the stepped voxel circle, so
+# it reads like the brush footprint and not like a smooth drawn circle. The
+# vertices lie in the local XY plane, so the node transform carries the view
+# orientation.
 func _cursor_mesh(reach: float) -> ArrayMesh:
 	var mesh: ArrayMesh = _footprint_meshes.get(reach)
 	if mesh != null:
 		return mesh
-	var vertices := PackedVector3Array()
-	for index in CIRCLE_SEGMENTS:
-		var first := TAU * float(index) / float(CIRCLE_SEGMENTS)
-		var second := TAU * float(index + 1) / float(CIRCLE_SEGMENTS)
-		vertices.append(Vector3(cos(first), sin(first), 0.0) * reach)
-		vertices.append(Vector3(cos(second), sin(second), 0.0) * reach)
-	mesh = TerrainRing.build_mesh(vertices)
+	# The helper centers an even size half a cell below zero, so an even outline
+	# needs that same half-cell shift back onto the picked cell.
+	var size := clampi(roundi(reach * 2.0), 1, 64)
+	var vertices := BrushSize.disk_outline(size)
+	if size % 2 == 0:
+		var shift := Vector3(0.5, 0.5, 0.0)
+		for index in vertices.size():
+			vertices[index] += shift
+	mesh = VoxelLineMesh.build(vertices)
 	_footprint_meshes[reach] = mesh
 	return mesh
 

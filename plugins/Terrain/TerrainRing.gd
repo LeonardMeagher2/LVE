@@ -200,50 +200,6 @@ static func plane_ring(surface_frame: TerrainFrame, center_point: Vector3, size:
 	return vertices
 
 
-## Returns one legacy brush outline in the local XY plane at z = 0.
-##
-## The outline is a stepped voxelized circle. It is the boundary of the disk of
-## cells whose centers are within radius + 0.5 of the local origin. Every cell
-## of the disk whose neighbor is not in the disk emits the shared edge as one
-## axis aligned unit segment. The outline is centered on the origin and keeps
-## fourfold symmetry, so a caller poses it on the brush cell center. The result
-## is a line list for [constant Mesh.PRIMITIVE_LINES]. It reads no frame and
-## runs no terrain query.
-static func legacy_plane_ring(size: int) -> PackedVector3Array:
-	var use_size := clampi(size, 1, 64)
-	var cells := {}
-	for entry in BrushSize.disk_offsets(use_size):
-		cells[Vector2i(entry["u"], entry["v"])] = true
-	var vertices := PackedVector3Array()
-	var edges := [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
-	for key in cells:
-		for edge in edges:
-			if cells.has(key + edge):
-				continue
-			# The cell (i, j) is centered on its integer coordinates, so the
-			# shared edge sits half a cell away from the center.
-			var mid := Vector3(key.x + 0.5 * edge.x, key.y + 0.5 * edge.y, 0.0)
-			var half := Vector3(-0.5 * edge.y, 0.5 * edge.x, 0.0)
-			vertices.append(mid - half)
-			vertices.append(mid + half)
-	return vertices
-
-
-## Returns a line mesh for one line list. Call it on the main thread only.
-##
-## The mesh carries no surface material, so a caller owns the material choice and
-## no shared resource is touched.
-static func build_mesh(vertices: PackedVector3Array) -> ArrayMesh:
-	var surface := ArrayMesh.new()
-	if vertices.is_empty():
-		return surface
-	var arrays := []
-	arrays.resize(Mesh.ARRAY_MAX)
-	arrays[Mesh.ARRAY_VERTEX] = vertices
-	surface.add_surface_from_arrays(Mesh.PRIMITIVE_LINES, arrays)
-	return surface
-
-
 # Walks one rim in order and emits its segments.
 #
 # A run of whole samples becomes one tread. A sample whose front face is the

@@ -10,7 +10,7 @@ extends "./DeformTool.gd"
 ##
 ## The scene has the shared `Footprint` ring only. Grab draws no bone.
 
-const TerrainGeometry := preload("res://plugins/Terrain/TerrainGeometry.gd")
+const VoxelFalloff := preload("res://Globals/State/Tools/VoxelFalloff.gd")
 const DeformLimb := preload("./DeformLimb.gd")
 
 ## The largest drag distance in voxels.
@@ -121,7 +121,7 @@ func _capture_gesture(pick: PickResult) -> bool:
 				continue
 			# The weight reach is the ball reach. The helper takes a width and halves
 			# it, so it receives twice the reach.
-			var weight := TerrainGeometry.weight_at(Vector3(offset).length(), float(_stroke_size) * 2.0, _stroke_falloff)
+			var weight := VoxelFalloff.weight_at(Vector3(offset).length(), float(_stroke_size) * 2.0, _stroke_falloff)
 			# A zero weight cannot move, so the source never joins the drag.
 			if weight <= 0.0:
 				continue

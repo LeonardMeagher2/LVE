@@ -19,6 +19,7 @@ extends "res://tests/test.gd"
 # exactly up and the reference needs no surface scan.
 
 const ProbeScript := preload("./terrain_build_profile_probe.gd")
+const VoxelFalloff := preload("res://Globals/State/Tools/VoxelFalloff.gd")
 const TerrainGeometryScript := preload("res://plugins/Terrain/TerrainGeometry.gd")
 
 var _settings := preload("res://plugins/Terrain/settings.tres")
@@ -165,7 +166,7 @@ func _reference_credit(anchors: Array, falloff: float) -> Dictionary:
 	var credit := {}
 	for anchor: Vector3i in anchors:
 		for entry in TerrainGeometryScript.disk_offsets(radius):
-			var weight := TerrainGeometryScript.weight_at(entry["distance"], float(radius), falloff, TerrainGeometryScript.disk_inner(radius))
+			var weight := VoxelFalloff.weight_at(entry["distance"], float(radius), falloff, TerrainGeometryScript.disk_inner(radius))
 			if weight <= 0.0:
 				continue
 			var column := Vector2i(anchor.x + int(entry["u"]), anchor.z + int(entry["v"]))

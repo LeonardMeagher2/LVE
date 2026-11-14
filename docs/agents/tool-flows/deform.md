@@ -13,7 +13,7 @@ Read each graph from top to bottom.
 
 - **Baseline**: the frame snapshot that the press copies. Every drag result
   starts from it.
-- **Circle**: the one white line mesh named `Footprint`. It lies in the view plane
+- **Circle**: the one white stepped line mesh named `Footprint`. It lies in the view plane
   at the reach of the active tool and predicts no voxel.
 - **Bone**: the one line that Pose draws from the joint to the pointer.
 - **Joint**: the point that Pose turns a limb around.

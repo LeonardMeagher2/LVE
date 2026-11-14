@@ -893,10 +893,10 @@ func _pose_cursor_circle() -> void:
 		expect(circle.is_visible_in_tree(), "the cursor is visible")
 		var vertices: PackedVector3Array = (circle.mesh as ArrayMesh).surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
 		expect(vertices.size() > 0, "the circle holds segments")
-		var radius := 0.0
+		var extent := 0.0
 		for vertex in vertices:
-			radius = maxf(radius, vertex.length())
-		expect(is_equal_approx(radius, 4.0), "the circle radius is one brush diameter")
+			extent = maxf(extent, maxf(absf(vertex.x), absf(vertex.y)))
+		expect(is_equal_approx(extent, 4.0), "the circle spans one brush diameter from the picked cell")
 		var center := circle.global_transform.origin
 		expect(center.is_equal_approx(Vector3(6, 0, 0)), "the circle centers on the picked cell")
 		var joint: Vector3 = tool._hover_joint["pivot"]

@@ -33,6 +33,7 @@ extends RefCounted
 ## captured view, so a camera change drops a stale result.
 
 const CANCEL_CHECKPOINT := 16
+const VoxelFalloff := preload("res://Globals/State/Tools/VoxelFalloff.gd")
 ## The disc offsets between two worker cancel checks of one surface read. One offset is one
 
 ## Returns the bounded surface search depth of one radius.
@@ -84,7 +85,7 @@ static func compute_sample_map(frame: VoxelFrame, terrain_frame: TerrainFrame, c
 		var reflected := terrain_frame.reflected(context, mask)
 		var center := center_point if mask == 0 else TerrainFrame.mirror_point(center_point, context, mask)
 		for entry in TerrainGeometry.disk_offsets(radius):
-			var weight := TerrainGeometry.weight_at(entry["distance"], float(radius), falloff, TerrainGeometry.disk_inner(radius))
+			var weight := VoxelFalloff.weight_at(entry["distance"], float(radius), falloff, TerrainGeometry.disk_inner(radius))
 			if weight <= 0.0:
 				continue
 			var point: Vector3 = center + float(entry["u"]) * reflected.tangent_u + float(entry["v"]) * reflected.tangent_v
@@ -160,7 +161,7 @@ static func compute_smooth_fields(center_point: Vector3, radius: int, falloff: f
 		var region := {}
 		for entry in offsets:
 			var cell: Vector3i = base + entry["offset"]
-			var weight := TerrainGeometry.weight_at(float(entry["distance"]), float(radius), falloff, 0.0)
+			var weight := VoxelFalloff.weight_at(float(entry["distance"]), float(radius), falloff, 0.0)
 			if weight <= 0.0:
 				continue
 			# A cell reached by two mirrors keeps the strongest weight, so the

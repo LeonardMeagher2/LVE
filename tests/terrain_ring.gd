@@ -11,6 +11,7 @@ extends "res://tests/test.gd"
 # open a tool, an edit, or a document.
 
 const Ring := preload("res://plugins/Terrain/TerrainRing.gd")
+const VoxelLineMesh := preload("res://Globals/Rendering/VoxelLineMesh.gd")
 const Geometry := preload("res://plugins/Terrain/TerrainGeometry.gd")
 const BrushSize := preload("res://Globals/State/Tools/VoxelBrushSize.gd")
 
@@ -430,7 +431,7 @@ func _isolation() -> void:
 		var surface_frame := _plane_frame(Vector3(0, TOP, 0), Vector3.UP, Vector3.RIGHT, Vector3.BACK)
 		var small := _frame_of(_slab(-8, 8, 0, 0, -8, 8))
 		var vertices := Ring.surface_ring(small, surface_frame, surface_frame.origin, 8, _context(), Callable(), null, null, 0.0)
-		var mesh := Ring.build_mesh(vertices)
+		var mesh := VoxelLineMesh.build(vertices)
 		expect(vertices.size() > 0, "the small ring emits vertices")
 		expect(mesh.get_surface_count() == 1, "the mesh holds one line surface")
 		expect(mesh.surface_get_material(0) == null, "the mesh carries no surface material")
@@ -457,7 +458,7 @@ func _legacy_plane() -> void:
 	for size in [1, 2, 3, 4, 5, 9]:
 		var label := "size %d" % size
 		var cells: Array = BrushSize.disk_offsets(size)
-		var vertices := Ring.legacy_plane_ring(size)
+		var vertices := BrushSize.disk_outline(size)
 		step("Given the legacy ring of %s" % label, func() -> void:
 			expect(vertices.size() > 0, "%s emits a ring" % label)
 			expect(is_equal_approx(_ring_area(vertices), float(cells.size())), "%s encloses the %d cells the brush changes" % [label, cells.size()])
@@ -500,7 +501,7 @@ func _legacy_plane() -> void:
 
 func _legacy_small() -> void:
 	step("Given the smallest brush size", func() -> void:
-		var vertices := Ring.legacy_plane_ring(1)
+		var vertices := BrushSize.disk_outline(1)
 		expect(is_equal_approx(_ring_area(vertices), 1.0), "the size-one ring encloses one cell")
 		var first := BrushSize.first_offset(1)
 		var low := INF

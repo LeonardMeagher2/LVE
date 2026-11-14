@@ -184,6 +184,32 @@ static func disk_offsets(size: int) -> Array:
 	return offsets
 
 
+## Returns the stepped outline of the disk of the size.
+##
+## The outline is the boundary of the cells of [method disk_offsets]. Every cell
+## whose neighbour is not in the disk emits the shared edge as one axis aligned
+## unit segment. The result is a line list for [constant Mesh.PRIMITIVE_LINES],
+## centered on the disk center, so a caller poses it on the brush center.
+static func disk_outline(size: int) -> PackedVector3Array:
+	var use_size := clampi(size, 1, 64)
+	var cells := {}
+	for entry in disk_offsets(use_size):
+		cells[Vector2i(entry["u"], entry["v"])] = true
+	var vertices := PackedVector3Array()
+	var edges := [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
+	for key in cells:
+		for edge in edges:
+			if cells.has(key + edge):
+				continue
+			# The cell (i, j) is centered on its integer coordinates, so the
+			# shared edge sits half a cell away from the center.
+			var mid := Vector3(key.x + 0.5 * edge.x, key.y + 0.5 * edge.y, 0.0)
+			var half := Vector3(-0.5 * edge.y, 0.5 * edge.x, 0.0)
+			vertices.append(mid - half)
+			vertices.append(mid + half)
+	return vertices
+
+
 ## Returns the size that spans the same width as an old radius of [param radius]
 ## cells. The old radius r spanned 2r + 1 cells, so it maps to the size 2r + 1.
 ## Use it to convert legacy integer radii while preserving their physical width.
