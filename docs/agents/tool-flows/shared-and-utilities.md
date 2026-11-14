@@ -567,8 +567,12 @@ Terrain clips its planning at the slice and size boundary.
 
 The Symmetry tool shows the mirror planes and moves their origin.
 The X, Y, and Z keys toggle one axis.
-A drag moves the origin.
-The source is [`SymmetryTool.gd:91`](../../../plugins/Symmetry/SymmetryTool.gd#L91).
+The origin handle is a white square with a center cross.
+It uses the same line style as the other voxel gizmos.
+The square grows on hover.
+A drag moves the origin. A ghost square and a line show the start and the move.
+Escape restores the origin.
+The source is [`SymmetryTool.gd`](../../../plugins/Symmetry/SymmetryTool.gd).
 
 ```mermaid
 flowchart LR
@@ -579,7 +583,7 @@ flowchart LR
     D["State.symmetry_axes"]
     E["State.symmetry_origin"]
     F["symmetry_changed"]
-    G["_rebuild planes and Origin"]
+    G["_rebuild planes and handle"]
     H["Options sync"]
     I["State.drawing_context"]
     L["No edit transaction, no undo"]
@@ -603,7 +607,7 @@ flowchart LR
 
 The symmetry tool overrides `handle_input`.
 It does not open an edit and it does not add an undo action.
-The source is [`SymmetryTool.gd:91`](../../../plugins/Symmetry/SymmetryTool.gd#L91).
+The source is [`SymmetryTool.gd`](../../../plugins/Symmetry/SymmetryTool.gd).
 
 Drawing tools consume the symmetry through `State.drawing_context`.
 An open edit supplies its frozen context.

@@ -28,6 +28,22 @@ func _run() -> void:
 		camera_rig().set_view("front")
 		camera_rig().center_on(AABB(Vector3(-10, -10, -1), Vector3(20, 20, 2)))
 	)
+	step("When the pointer rests on the origin handle", func():
+		var motion := InputEventMouseMotion.new()
+		motion.position = camera_rig().unproject_position(State.symmetry_origin)
+		viewport.push_input(motion)
+	)
+	step("Then the handle reports hover", func():
+		expect(symmetry._tool._hovered, "the origin handle reports hover")
+	)
+	step("When the pointer leaves the handle", func():
+		var motion := InputEventMouseMotion.new()
+		motion.position = Vector2(4, 4)
+		viewport.push_input(motion)
+	)
+	step("Then the hover ends", func():
+		expect(not symmetry._tool._hovered, "the origin handle stops hover")
+	)
 	step("When the user enables the three cardinal symmetry planes", func():
 		for axis in ["X", "Y", "Z"]:
 			symmetry._options.get_node(axis).button_pressed = true
@@ -43,6 +59,8 @@ func _run() -> void:
 		motion.button_mask = MOUSE_BUTTON_MASK_LEFT
 		motion.position = camera_rig().unproject_position(Vector3(2, 1, 0))
 		viewport.push_input(motion)
+		expect(symmetry._tool.get_node("OriginGhost").visible, "the drag shows the press-time ghost")
+		expect(symmetry._tool.get_node("DragLine").visible, "the drag shows the move line")
 		_button(Vector3(2, 1, 0), false)
 	)
 	step("Then the origin and coordinate controls follow the drag", func():
@@ -50,23 +68,34 @@ func _run() -> void:
 		expect(symmetry._options.get_node("OriginX").value == 2.0, "the X origin control follows the drag")
 		expect(symmetry._options.get_node("OriginY").value == 1.0, "the Y origin control follows the drag")
 		expect(not State.undo_redo.has_undo(), "origin setup adds no document undo action")
+		expect(not symmetry._tool.get_node("OriginGhost").visible, "the release hides the ghost")
+		expect(not symmetry._tool.get_node("DragLine").visible, "the release hides the move line")
+		expect(symmetry._tool._hovered, "the released origin stays under the pointer")
 	)
-	step("When the user presses far from the origin and presses Escape", func():
+	step("When the user drags the origin away from the handle and presses Escape", func():
 		_button(Vector3(6, 5, 0), true)
 		expect(State.symmetry_origin == Vector3(2, 1, 0), "pressing elsewhere keeps the origin in place")
-		var event := InputEventKey.new()
-		event.keycode = KEY_ESCAPE
-		event.pressed = true
-		viewport.push_input(event)
-		expect(State.symmetry_origin == Vector3(2, 1, 0), "Escape keeps the origin in place")
 		var motion := InputEventMouseMotion.new()
 		motion.button_mask = MOUSE_BUTTON_MASK_LEFT
 		motion.position = camera_rig().unproject_position(Vector3(7, 7, 0))
 		viewport.push_input(motion)
-		_button(Vector3(7, 7, 0), false)
+		expect(State.symmetry_origin == Vector3(3, 3, 0), "the drag follows the pointer offset")
+		expect(symmetry._tool.get_node("OriginGhost").visible, "the drag shows the press-time ghost")
+		var event := InputEventKey.new()
+		event.keycode = KEY_ESCAPE
+		event.pressed = true
+		viewport.push_input(event)
+		expect(State.symmetry_origin == Vector3(2, 1, 0), "Escape restores the start origin")
+		expect(not symmetry._tool.get_node("OriginGhost").visible, "Escape hides the drag ghost")
+		expect(not symmetry._tool.get_node("DragLine").visible, "Escape hides the move line")
+		var later := InputEventMouseMotion.new()
+		later.button_mask = MOUSE_BUTTON_MASK_LEFT
+		later.position = camera_rig().unproject_position(Vector3(8, 8, 0))
+		viewport.push_input(later)
+		_button(Vector3(8, 8, 0), false)
 	)
-	step("Then dragging uses the pointer offset and continues after Escape", func():
-		expect(State.symmetry_origin == Vector3(3, 3, 0), "the origin follows the drag offset without jumping to the pointer")
+	step("Then later motion is ignored", func():
+		expect(State.symmetry_origin == Vector3(2, 1, 0), "the origin stays after Escape")
 	)
 	step("When the user drags the origin in an angled top-facing view", func():
 		camera_rig().set_view("isometric")

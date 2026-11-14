@@ -23,17 +23,6 @@ cull_mode = 2
 depth_draw_mode = 2
 albedo_color = Color(0.25, 0.45, 0.95, 0.07)
 
-[sub_resource type="SphereMesh" id="OriginMesh"]
-radius = 0.5
-height = 1.0
-radial_segments = 12
-rings = 6
-
-[sub_resource type="StandardMaterial3D" id="OriginMaterial"]
-shading_mode = 0
-no_depth_test = true
-albedo_color = Color(1, 1, 1, 1)
-
 [node name="SymmetryTool" type="Node3D"]
 script = ExtResource("1_script")
 
@@ -50,6 +39,12 @@ material_override = SubResource("ZMaterial")
 cast_shadow = 0
 
 [node name="Origin" type="MeshInstance3D" parent="."]
-material_override = SubResource("OriginMaterial")
-mesh = SubResource("OriginMesh")
+cast_shadow = 0
+
+[node name="OriginGhost" type="MeshInstance3D" parent="."]
+visible = false
+cast_shadow = 0
+
+[node name="DragLine" type="MeshInstance3D" parent="."]
+visible = false
 cast_shadow = 0
