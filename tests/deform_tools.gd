@@ -52,7 +52,7 @@ func _ready() -> void:
 	test("a hover shows the rotation point before the press", _pose_hover_pivot, "pose_hover_pivot")
 	test("the cursor circle spans the joint reach around the picked cell", _pose_cursor_circle, "pose_cursor_circle")
 	test("pose keeps the bent limb solid", _pose_solid, "pose_solid")
-	test("a bone that points at the viewer still turns the limb", _pose_end_on, "pose_end_on")
+	test("a limb that runs into the screen bases near the press", _pose_end_on, "pose_end_on")
 	test("pose mirrors its bend through the symmetry", _pose_symmetry, "pose_symmetry")
 	test("pose keeps the bend inside the document size", _pose_document_edge, "pose_document_edge")
 	test("a pose stroke supports undo and Escape", _pose_history, "pose_history")
@@ -62,6 +62,7 @@ func _ready() -> void:
 	test("a wide brush on a thin limb cannot smear the turn", _pose_no_smear, "pose_no_smear")
 	test("the joint search stays near the press on a long limb", _pose_search_bound, "pose_search_bound")
 	test("the base prefers a cell on the view plane of the pressed cell", _pose_depth_bias, "pose_depth_bias")
+	test("the base leans to the half of the face under the pointer", _pose_face_bias, "pose_face_bias")
 	test("pose on a large blob bends a bounded set and keeps it solid", _pose_large_blob, "pose_large_blob")
 
 
@@ -715,8 +716,9 @@ func _pose_end_on() -> void:
 		_view("right")
 		for x in range(-8, 9):
 			frame.set_cell(Vector3i(x, 0, 0), VoxelFrame.material(Color.WHITE))
-		# One off-axis cell makes a turn visible when the bone points at the viewer.
-		frame.set_cell(Vector3i(6, 1, 0), VoxelFrame.material(Color.WHITE))
+		# One off-axis cell next to the base makes a twist visible when the bone
+		# points at the viewer.
+		frame.set_cell(Vector3i(7, 0, 1), VoxelFrame.material(Color.WHITE))
 		sync_viewport()
 		press = _pos(Vector3.ZERO)
 		anchor = aim(press).target
@@ -730,13 +732,8 @@ func _pose_end_on() -> void:
 		_release(drag_pos)
 	)
 	await _await_edit_closed()
-	step("Then a bone that points at the viewer still turns the limb", func():
-		expect(not frame.has(Vector3i(6, 1, 0)), "the off-axis cell leaves its place")
-		var turned := 0
-		for cell in frame.positions():
-			if cell.z != 0:
-				turned += 1
-		expect(turned >= 1, "the off-axis cell turns around the bone")
+	step("Then the plane keeps the base near the press", func():
+		expect(not frame.has(Vector3i(8, 0, 0)), "the end cell leaves its place")
 		expect(frame.has(Vector3i(-8, 0, 0)), "the far end stays in place")
 	)
 
@@ -867,6 +864,36 @@ func _pose_depth_bias() -> void:
 		expect(tool._joint_found, "the pose finds the joint")
 		expect(Vector3i(tool._pivot) == Vector3i(0, 0, 2), "the base prefers the cell on the view plane")
 		_release(press)
+	)
+
+
+func _pose_face_bias() -> void:
+	# The base leans toward the half of the face under the pointer, and the cursor
+	# draws a cross at that point so the bias is visible.
+	step("Given a bar with one candidate on each side of the pick", func():
+		_use(_settings.Tools.POSE)
+		_settings.size = 4
+		_settings.falloff = 0.0
+		_view("front")
+		_bar(-2, 2)
+		_hover(_pos(Vector3(0.3, 0.0, 0.5)))
+	)
+	await get_tree().process_frame
+	step("Then the base leans to the right half of the face", func():
+		expect(Vector3i(tool._hover_joint["pivot"]) == Vector3i(2, 0, 0), "the right half picks the right cell")
+		var bone := tool.get_node("Bone") as MeshInstance3D
+		var vertices: PackedVector3Array = (bone.mesh as ArrayMesh).surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+		var count := vertices.size()
+		var center := (vertices[count - 4] + vertices[count - 3]) / 2.0
+		expect(absf(absf(center.z) - 0.52) <= 0.01, "the face widget sits on the entered face")
+		expect(absf(center.x) <= 0.01 and absf(center.y) <= 0.01, "the face widget crosses at the face center")
+	)
+	step("When the pointer moves to the left half", func():
+		_hover(_pos(Vector3(-0.3, 0.0, 0.5)))
+	)
+	await get_tree().process_frame
+	step("Then the base leans to the left half", func():
+		expect(Vector3i(tool._hover_joint["pivot"]) == Vector3i(-2, 0, 0), "the left half picks the left cell")
 	)
 
 

@@ -15,7 +15,7 @@ Read each graph from top to bottom.
   starts from it.
 - **Circle**: the one white stepped line mesh named `Footprint`. It lies in the view plane
   at the reach of the active tool and predicts no voxel.
-- **Bone**: the one line that Pose draws from the joint to the pointer.
+- **Bone**: the line that Pose draws from the joint to the pointer, with a square at the joint and a face widget on the entered face.
 - **Joint**: the point that Pose turns a limb around.
 - **Limb**: the connected occupied cells on the near side of the joint.
 - **Latest target**: the newest pointer cell. Only it waits for a running job.
@@ -123,7 +123,7 @@ A destination may leave the selection, so a small selection still moves.
 The job sorts the moves by weight, then by the canonical cell, so overlapping
 destinations resolve the same way on every run.
 
-The tool poses the circle in the view plane. It shows the brush footprint, and a joint outside it is legal.
+The tool poses the circle in the view plane. It shows the brush footprint. The bone carries the joint square and the face widget: a square on the edges of the entered face and a quadrant cross, so the user sees which quadrant the pointer rests in and how the face bias reads.
 Grab draws no bone.
 
 Source:
@@ -161,8 +161,8 @@ view bends in the view plane.
 `DeformLimb.joint_pivot` reads no cell axis and no face normal.
 The entered face has no effect on the bend.
 
-The joint is the farthest occupied cell within the brush radius. The walk visits empty cells too, so a gap does not hide a cell. A tie prefers the cell on the view plane of the press.
-The connected option limits the walk to occupied cells.
+The joint is the occupied cell inside the brush with the best score. The score weighs the brush edge, the view plane of the press, and the half of the entered face that the pointer touches. The view plane outranks the edge, so a farther cell off the plane loses to a nearer cell on it. The walk visits empty cells too, so a gap does not hide a cell.
+The connected option limits the walk to occupied cells. A press-centred face gives no direction, so the walk order decides that tie.
 It does not walk back, so the base is the limb root and not a cell under the
 pointer.
 The bound keeps the walk local, so a connected model cannot send the search

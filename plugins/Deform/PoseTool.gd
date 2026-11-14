@@ -24,8 +24,8 @@ const LIMB_LIMIT_FACTOR := 16
 const LIMB_MIN_LIMIT := 64
 ## The rotation below which the drag changes nothing.
 const ANGLE_EPSILON := 0.0002
-## The arm length of the joint marker, in cells.
-const MARKER := 0.6
+## The half width of the joint square, in cells.
+const BASE_HALF := 0.3
 ## The bone screen length below which the bone has no screen direction. A bone
 ## that points at the viewer cannot show a screen angle, so the tool turns the
 ## limb by the pointer travel instead.
@@ -239,7 +239,7 @@ func _clear_state() -> void:
 
 func _capture_gesture(pick: PickResult) -> bool:
 	_stroke_connected = _settings.connected
-	var joint := DeformLimb.joint_pivot(_source_frame, _anchor, _stroke_size, _stroke_context, _stroke_connected, _view_forward)
+	var joint := DeformLimb.joint_pivot(_source_frame, _anchor, _stroke_size, _stroke_context, _stroke_connected, _view_forward, _stroke_face, _stroke_touch)
 	_joint_found = bool(joint["found"])
 	if not _joint_found:
 		return false
@@ -411,7 +411,7 @@ func _hover_state(pick: PickResult) -> Dictionary:
 	var key := _hover_key_for(pick, frame, context)
 	if key == _hover_key:
 		return {"joint": _hover_joint, "moves": _hover_moves}
-	var joint := DeformLimb.joint_pivot(frame, pick.hit, _settings.size, context, _settings.connected, _cursor_forward())
+	var joint := DeformLimb.joint_pivot(frame, pick.hit, _settings.size, context, _settings.connected, _cursor_forward(), _hover_face, _hover_touch)
 	var moves := false
 	if bool(joint["found"]):
 		# The hover answers one question: can the press capture a cell? One cell
@@ -431,7 +431,8 @@ func _hover_state(pick: PickResult) -> Dictionary:
 func _hover_key_for(pick: PickResult, frame: VoxelFrame, context: VoxelFrame.EditContext) -> String:
 	return str([
 		frame.get_instance_id(), pick.hit,
-		_settings.size, _settings.falloff, _settings.connected, _cursor_forward(),
+		_settings.size, _settings.falloff, _settings.connected, _cursor_forward(), _hover_face,
+		Vector2i(roundi(_hover_touch.x * 4.0), roundi(_hover_touch.y * 4.0)),
 		State.selection.revision,
 		context.slice_axis, context.slice_index, context.slice_count,
 		context.bounded_axes, context.bounds_min, context.bounds_max,
@@ -439,9 +440,10 @@ func _hover_key_for(pick: PickResult, frame: VoxelFrame, context: VoxelFrame.Edi
 
 
 # Poses the bone. It runs from the joint to the pointer: the exact drag point
-# during a drag, and the cell center on a hover. A small marker cross shows the
-# joint. An idle hover shows the same, so the user sees the rotation point before
-# the press.
+# during a drag, and the cell center on a hover. A small square marks the joint,
+# and a cross marks the pointer point on the entered face, which is the input of
+# the face bias. An idle hover shows the same, so the user sees the rotation point
+# before the press.
 func _pose_bone(pick: PickResult) -> void:
 	if _bone == null:
 		return
@@ -466,14 +468,61 @@ func _pose_bone(pick: PickResult) -> void:
 	var vertices := PackedVector3Array()
 	vertices.append(pivot)
 	vertices.append(tip)
-	# The joint marker is a three-axis cross, so it reads from any view.
-	for offset in [Vector3.RIGHT, Vector3.UP, Vector3.BACK]:
-		vertices.append(pivot - offset * MARKER)
-		vertices.append(pivot + offset * MARKER)
+	_append_joint_square(vertices, pivot)
+	_append_face_widget(vertices, pick)
 	_bone.global_transform = Transform3D(Basis.IDENTITY, Vector3.ZERO)
 	_bone.mesh = VoxelLineMesh.build(vertices)
 	visible = true
 	_bone.visible = true
+
+
+# Appends the joint square in the view plane, so it reads as a square from any
+# view.
+func _append_joint_square(vertices: PackedVector3Array, pivot: Vector3) -> void:
+	var forward := _cursor_forward()
+	var up := Vector3.UP
+	if absf(forward.dot(Vector3.UP)) > 0.99:
+		up = Vector3.RIGHT
+	var right := forward.cross(up).normalized()
+	up = right.cross(forward).normalized()
+	var corners := [
+		pivot + (-right - up) * BASE_HALF,
+		pivot + (right - up) * BASE_HALF,
+		pivot + (right + up) * BASE_HALF,
+		pivot + (-right + up) * BASE_HALF,
+	]
+	for index in 4:
+		vertices.append(corners[index])
+		vertices.append(corners[(index + 1) % 4])
+
+
+# Appends the face widget of the entered face: the square on its edges and the
+# quadrant lines. The user then sees which quadrant of the face the pointer rests
+# in and how the face bias reads.
+func _append_face_widget(vertices: PackedVector3Array, pick: PickResult) -> void:
+	var axis := _face_axis(pick)
+	if axis < 0 or pick.hit == VoxelPicking.NONE:
+		return
+	var center := Vector3(pick.hit)
+	# The widget sits a hair outside the face, so it never hides in the voxel.
+	center[axis] += (0.5 if pick.entry[axis] > 0 else -0.5) + 0.02 * float(pick.entry[axis])
+	var half_u := Vector3.ZERO
+	half_u[(axis + 1) % 3] = 0.5
+	var half_v := Vector3.ZERO
+	half_v[(axis + 2) % 3] = 0.5
+	var corners := [
+		center - half_u - half_v,
+		center + half_u - half_v,
+		center + half_u + half_v,
+		center - half_u + half_v,
+	]
+	for index in 4:
+		vertices.append(corners[index])
+		vertices.append(corners[(index + 1) % 4])
+	vertices.append(center - half_u)
+	vertices.append(center + half_u)
+	vertices.append(center - half_v)
+	vertices.append(center + half_v)
 
 
 func _hide_bone() -> void:

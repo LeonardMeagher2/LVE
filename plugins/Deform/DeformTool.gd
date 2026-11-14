@@ -79,6 +79,13 @@ var _footprint_meshes := {}
 var _stroke_id := 0
 var _stroke_tx: VoxelEditTransaction
 var _stroke_size := 4
+# The entered face of the press, and the pointer point on it, for the pose joint
+# score. The face is a world axis, or -1.
+var _stroke_face := -1
+var _stroke_touch := Vector2.ZERO
+# The same two values of the last hover.
+var _hover_face := -1
+var _hover_touch := Vector2.ZERO
 var _stroke_falloff := 0.5
 var _stroke_context: VoxelFrame.EditContext
 ## The same context without the selection. A moved cell may land outside the
@@ -235,6 +242,8 @@ func _press(pos: Vector2) -> void:
 	var pick := VoxelPicking.start_pick(ray[0], ray[1], State.get_current_voxel_frame(), _forward(), State.slice_enabled)
 	if pick.hit == VoxelPicking.NONE:
 		return
+	_stroke_face = _face_axis(pick)
+	_stroke_touch = _face_touch(ray[0], ray[1], pick)
 	_capture_view()
 	if open_stroke() == null:
 		return
@@ -554,8 +563,51 @@ func _hover(pos: Vector2) -> void:
 	if ray[1] == Vector3.ZERO:
 		return
 	var pick := VoxelPicking.start_pick(ray[0], ray[1], State.get_current_voxel_frame(), _forward(), State.slice_enabled)
+	_hover_face = _face_axis(pick)
+	_hover_touch = _face_touch(ray[0], ray[1], pick)
 	_last_pick = pick
 	_update_visual(pick)
+
+
+## Returns the world axis of the entered face normal of one pick, or -1.
+func _face_axis(pick: PickResult) -> int:
+	if pick == null:
+		return -1
+	for axis in 3:
+		if pick.entry[axis] != 0:
+			return axis
+	return -1
+
+
+## Returns the pointer point on the entered face of one pick, in world space. A
+## zero vector means the ray misses the face plane.
+func _face_point(origin: Vector3, dir: Vector3, pick: PickResult) -> Vector3:
+	var axis := _face_axis(pick)
+	if axis < 0 or pick.hit == VoxelPicking.NONE or absf(dir[axis]) < 1e-8:
+		return Vector3.ZERO
+	var center := Vector3(pick.hit)
+	var plane: float = center[axis] + (0.5 if pick.entry[axis] > 0 else -0.5)
+	var t: float = (plane - origin[axis]) / dir[axis]
+	if t <= 0.0:
+		return Vector3.ZERO
+	return origin + dir * t
+
+
+## Returns the pointer point on the entered face, in cells from the face center
+## on the two face tangents. Each axis clamps to half a cell, so a corner touch
+## reads as a diagonal and a centered touch reads as zero.
+func _face_touch(origin: Vector3, dir: Vector3, pick: PickResult) -> Vector2:
+	var axis := _face_axis(pick)
+	var point := _face_point(origin, dir, pick)
+	if axis < 0 or point == Vector3.ZERO:
+		return Vector2.ZERO
+	var center := Vector3(pick.hit)
+	var axis_u := (axis + 1) % 3
+	var axis_v := (axis + 2) % 3
+	return Vector2(
+		clampf(point[axis_u] - center[axis_u], -0.5, 0.5),
+		clampf(point[axis_v] - center[axis_v], -0.5, 0.5)
+	)
 
 
 # Poses the cursor for the drag target. The circle follows the pointer, and the
