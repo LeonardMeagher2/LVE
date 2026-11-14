@@ -21,6 +21,14 @@ enum Kind {
 
 ## The handle radius in screen pixels.
 const RADIUS_PX := 64.0
+## The Move arrow reach as a fraction of the handle radius.
+const MOVE_REACH := 0.55
+## The Move arrow shaft start as a fraction of the handle radius.
+const MOVE_INNER := 0.12
+## The Move arrowhead length as a fraction of the handle radius.
+const MOVE_HEAD := 0.16
+## The Move arrowhead half width as a fraction of the handle radius.
+const MOVE_SIDE := 0.09
 ## The half size of the Rotate joint square in screen pixels.
 const JOINT_HALF_PX := 7.0
 ## The half size of the Rotate tip cross in screen pixels.
@@ -181,14 +189,14 @@ func _build_static_mesh(gizmo_kind: Kind) -> ArrayMesh:
 func _append_move(vertices: PackedVector3Array) -> void:
 	var directions: Array[Vector2] = [Vector2.RIGHT, Vector2.LEFT, Vector2.UP, Vector2.DOWN]
 	for direction in directions:
-		var start := Vector3(direction.x * 0.18, direction.y * 0.18, 0.0)
-		var end := Vector3(direction.x, direction.y, 0.0)
+		var start := Vector3(direction.x * MOVE_INNER, direction.y * MOVE_INNER, 0.0)
+		var end := Vector3(direction.x * MOVE_REACH, direction.y * MOVE_REACH, 0.0)
 		_append_line(vertices, start, end)
-		var back := Vector3(direction.x * 0.78, direction.y * 0.78, 0.0)
-		var side := Vector3(-direction.y * 0.12, direction.x * 0.12, 0.0)
+		var back := Vector3(direction.x * (MOVE_REACH - MOVE_HEAD), direction.y * (MOVE_REACH - MOVE_HEAD), 0.0)
+		var side := Vector3(-direction.y * MOVE_SIDE, direction.x * MOVE_SIDE, 0.0)
 		_append_line(vertices, end, back + side)
 		_append_line(vertices, end, back - side)
-	_append_square(vertices, Vector3.ZERO, 0.1)
+	_append_square(vertices, Vector3.ZERO, 0.07)
 
 
 func _append_scale(vertices: PackedVector3Array) -> void:

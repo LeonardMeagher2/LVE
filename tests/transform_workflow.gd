@@ -600,7 +600,7 @@ func _hover_motion(pos: Vector2) -> void:
 
 func _gizmo_screen_radius(gizmo) -> float:
 	var center := camera_rig().unproject_position(gizmo.global_position)
-	var edge := camera_rig().unproject_position(gizmo.global_transform * Vector3.RIGHT)
+	var edge := camera_rig().unproject_position(gizmo.global_transform * Vector3(TransformGizmoScript.MOVE_REACH, 0.0, 0.0))
 	return center.distance_to(edge)
 
 
