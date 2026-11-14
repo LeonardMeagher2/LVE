@@ -3,7 +3,8 @@ extends "./SelectTool.gd"
 ## The lasso selection tool.
 ##
 ## It selects the volume behind a dragged screen outline. The pointer path is
-## sampled. The samples bound the polygon test.
+## sampled. The samples bound the polygon test. A double click selects every
+## voxel in the current frame.
 
 # The lasso tool selects the volume behind a dragged outline.
 # The pointer path is sampled. The samples bound the polygon test.
@@ -32,6 +33,23 @@ func _commit_shape(pos: Vector2) -> void:
 		_commit_screen(Rect2(), _points)
 		return
 	_commit_screen(_screen_rectangle(pos), PackedVector2Array())
+
+
+func _double_click(_pos: Vector2) -> bool:
+	_select_all()
+	return true
+
+
+# A lasso click stays near the press point. A path that returns to its start is
+# still a drag.
+func _is_click(release_pos: Vector2) -> bool:
+	if not super._is_click(release_pos):
+		return false
+	for point in _points:
+		var travel := (point - _screen_press).abs()
+		if travel.x >= CLICK_SIZE or travel.y >= CLICK_SIZE:
+			return false
+	return true
 
 
 func _reset_shape() -> void:

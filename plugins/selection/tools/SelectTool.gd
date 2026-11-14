@@ -118,6 +118,8 @@ func _screen_button(event: InputEventMouseButton, pos: Vector2) -> bool:
 	if event.button_index != MOUSE_BUTTON_LEFT:
 		return false
 	if event.pressed:
+		if event.double_click and _double_click(pos):
+			return true
 		if open_stroke() == null:
 			return false
 		_screen_press = pos
@@ -129,7 +131,7 @@ func _screen_button(event: InputEventMouseButton, pos: Vector2) -> bool:
 		_stroke_active = false
 		$ScreenBand.hide_band()
 		_end()
-		_commit_shape(pos)
+		_commit_release(pos)
 	return true
 
 
@@ -154,7 +156,74 @@ func finish_on_switch() -> void:
 	_stroke_active = false
 	$ScreenBand.hide_band()
 	_end()
-	_commit_shape(_last_pos)
+	_commit_release(_last_pos)
+
+
+# A click selects the picked cell. A drag commits its screen shape.
+func _commit_release(pos: Vector2) -> void:
+	if _is_click(pos):
+		_commit_click(pos)
+		return
+	_commit_shape(pos)
+
+
+# A click selects the frontmost voxel under the pointer through the normal pick.
+# A click on empty space keeps the screen path, so the empty cell option applies.
+func _commit_click(pos: Vector2) -> void:
+	if _screen_job != null or State.edit_busy():
+		return
+	var frame := State.get_current_voxel_frame()
+	if frame == null:
+		return
+	var ray := _ray(pos)
+	var pick := _pick_start(ray[0], ray[1])
+	if pick.hit == VoxelPicking.NONE:
+		if _settings.include_empty:
+			_commit_screen(_screen_rectangle(pos), PackedVector2Array())
+		else:
+			_apply_region({}, "Click selection")
+		return
+	var region := {pick.hit: true}
+	region = State.selection_context().expand(region, frame, false, null)
+	_apply_region(region, "Click selection")
+
+
+# Applies a region through the current selection mode. Replace takes the region as
+# the new selection. A forced replace ignores the mode.
+func _apply_region(region: Dictionary, action: String, replace := false) -> void:
+	if region.is_empty() and not replace and _settings.mode != _settings.SelectMode.REPLACE:
+		return
+	var tx := State.begin_edit()
+	if tx == null:
+		return
+	if replace or _settings.mode == _settings.SelectMode.REPLACE:
+		State.selection.restore(region)
+	elif _settings.mode == _settings.SelectMode.ADD:
+		for cell in region:
+			State.selection.add(cell)
+	else:
+		for cell in region:
+			State.selection.erase(cell)
+	State.finish_edit(tx, action)
+	State.selection_changed.emit()
+
+
+# Override to handle a double click. Returns true when the tool consumes it.
+func _double_click(_pos: Vector2) -> bool:
+	return false
+
+
+# Select every occupied cell in the current frame as one history action.
+func _select_all() -> void:
+	if _screen_job != null or State.edit_busy():
+		return
+	var frame := State.get_current_voxel_frame()
+	if frame == null:
+		return
+	var region := {}
+	for cell in frame.positions():
+		region[cell] = true
+	_apply_region(region, "Select all", true)
 
 
 func _cancel_key(event: InputEventKey) -> bool:
@@ -196,10 +265,15 @@ func _commit_shape(_pos: Vector2) -> void:
 	pass
 
 
+func _is_click(release_pos: Vector2) -> bool:
+	var travel := (release_pos - _screen_press).abs()
+	return travel.x < CLICK_SIZE and travel.y < CLICK_SIZE
+
+
 # A press and release in one place select the voxels under the pointer.
 func _screen_rectangle(release_pos: Vector2) -> Rect2:
 	var travel := (release_pos - _screen_press).abs()
-	if travel.x < CLICK_SIZE and travel.y < CLICK_SIZE:
+	if _is_click(release_pos):
 		var half := Vector2(CLICK_SIZE, CLICK_SIZE) * 0.5
 		return Rect2(_screen_press - half, Vector2(CLICK_SIZE, CLICK_SIZE))
 	var near_corner := Vector2(minf(_screen_press.x, release_pos.x), minf(_screen_press.y, release_pos.y))
