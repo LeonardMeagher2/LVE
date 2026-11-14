@@ -14,12 +14,12 @@ signal tool_changed(tool: Tools)
 enum Tools {
 	## Stretch the voxels under the pointer.
 	GRAB,
-	## Bend a connected limb around its joint.
+	## Bend the voxels inside the brush around its joint.
 	POSE
 }
 
-## The active deform tool.
-@export var tool: Tools = Tools.GRAB:
+## The active deform tool. Pose is the default.
+@export var tool: Tools = Tools.POSE:
 	set(value):
 		if value == tool:
 			return
@@ -58,11 +58,10 @@ enum Tools {
 		falloff = value
 		emit_changed()
 
-## Whether the pose joint walk follows the connected limb only. On walks
-## occupied cells only, so the joint stays on the connected limb. Off searches
-## every cell inside the brush, so a gap does not hide an occupied cell. It
-## starts on, so a gap does not move the base by surprise.
-@export var connected := true:
+## Whether the pose uses only the six face neighbors. On follows faces for the
+## joint search and the captured set. Off adds every edge and corner neighbor, so
+## a diagonal contact joins both. It starts off.
+@export var connected := false:
 	set(value):
 		if value == connected:
 			return

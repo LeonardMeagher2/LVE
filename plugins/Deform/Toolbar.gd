@@ -14,6 +14,7 @@ var _settings := preload("./settings.tres")
 
 func _ready() -> void:
 	get_popup().index_pressed.connect(_on_index_pressed)
+	_sync_icon(_settings.tool)
 
 
 func _on_index_pressed(index: int) -> void:
@@ -27,8 +28,15 @@ func _select_id(id: int) -> void:
 	if item_index < 0:
 		return
 	_settings.tool = _tool_for_id(id)
-	icon = get_popup().get_item_icon(item_index)
+	_sync_icon(_settings.tool)
 	button_pressed = true
+
+
+func _sync_icon(tool: int) -> void:
+	var id := POSE_ID if tool == _settings.Tools.POSE else GRAB_ID
+	var item_index := get_popup().get_item_index(id)
+	if item_index >= 0:
+		icon = get_popup().get_item_icon(item_index)
 
 
 func _tool_for_id(id: int) -> int:

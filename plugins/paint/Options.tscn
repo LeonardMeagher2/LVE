@@ -84,7 +84,7 @@ layout_mode = 2
 
 [node name="SpotSize" parent="Spray" instance=ExtResource("7_value")]
 layout_mode = 2
-tooltip_text = "Diameter in voxels of one paint spot. The spot paints every existing voxel inside a sphere of this diameter. Diameter 1 paints one voxel per spot."
+tooltip_text = "How wide one paint spot is."
 icon = ExtResource("6_diameter")
 min_value = 1.0
 max_value = 64.0
@@ -94,7 +94,7 @@ value = 1.0
 
 [node name="SpraySize" parent="Spray" instance=ExtResource("7_value")]
 layout_mode = 2
-tooltip_text = "Width in voxels of the spray search area. The spray samples its spot centers from the existing voxels inside a sphere of this width. Width 1 offers the brush cell alone."
+tooltip_text = "How far spray may land from the pointer."
 icon = ExtResource("9_width")
 min_value = 1.0
 max_value = 64.0
@@ -104,7 +104,7 @@ value = 9.0
 
 [node name="Speed" parent="Spray" instance=ExtResource("7_value")]
 layout_mode = 2
-tooltip_text = "Spot centers sampled per click or per brush cell change. A spot diameter above one can paint more voxels than this count."
+tooltip_text = "How many spots one press can paint."
 icon = ExtResource("10_speed")
 min_value = 1.0
 max_value = 64.0

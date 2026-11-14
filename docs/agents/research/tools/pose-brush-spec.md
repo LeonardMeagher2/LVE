@@ -5,14 +5,14 @@ Blender facts come from the pages in [References](#references). A claim that I c
 
 ## 1. Purpose
 
-The Pose brush bends one limb of occupied cells about a joint.
+The Pose brush bends the occupied cells inside the brush about a joint.
 It gives an armature-like result without a rig [R1].
-The user poses a limb or corrects its proportions, then commits the result as one stroke.
+The user poses a limb one brush span at a time, then commits the result as one stroke.
 
 ## 2. The gesture
 
 - The pointer shows a ring of cells. The ring diameter equals the brush size [R2].
-- On press, the brush captures the cells that the ring touches. The captured set stays fixed for the stroke, as with Grab [R5].
+- On press, the brush captures the occupied cells inside the brush ball. The captured set stays fixed for the stroke, as with Grab [R5].
 - On drag, the pointer sets the bend angle only. The joint stays still.
 - On release, the stroke commits as one undo action.
 - On Escape, every captured cell returns to its first position. The stroke adds no undo action.
@@ -21,8 +21,9 @@ The user poses a limb or corrects its proportions, then commits the result as on
 ## 3. The joint
 
 - The joint is one point in cell space. It is the only centre of rotation.
-- The brush takes the occupied cells that touch the ring. This set is the limb.
-- The brush walks every cell inside the brush radius, occupied or not, and the joint is the farthest occupied cell it reached. A gap therefore does not hide a cell.
+- The brush takes the occupied cells inside the brush ball. This set is the limb.
+- The captured set joins cells through the Connected neighbor set. On uses faces. Off adds edges and corners.
+- The joint search walks the brush ball through occupied cells. With Connected on, it uses the six face neighbors. Off adds every edge and corner neighbor.
 - The bound keeps the walk local, so a connected model cannot send it across the whole frame.
 - The joint is that entry cell, so it always sits on an occupied cell of the limb.
 - Before the press, the cursor shows the joint as a dot and the bone from the joint to the picked cell. Blender shows its pose origin as a white line on the brush cursor [R1].
@@ -31,10 +32,12 @@ The user poses a limb or corrects its proportions, then commits the result as on
 
 ## 4. Affected region
 
-Every occupied cell on the tip side of the joint moves.
-The brush uses face-connected cells only, as Blender's Connected Only does [R1].
+Every occupied cell inside the brush on the tip side of the joint moves.
+The brush joins face neighbors when Connected is on.
+Off adds edge and corner neighbors, as Blender's Connected Only does when it is off [R1].
 
-Tradeoff: a limb keeps the silhouette smooth. It moves every connected cell, so a touching shape moves too. A cell selection keeps the bend local.
+Tradeoff: a local bend keeps the rest of the model still. A long limb bends one
+brush span per stroke, so the user moves the brush along the limb.
 
 ## 5. The rotation
 
@@ -51,11 +54,11 @@ Tradeoff: a limb keeps the silhouette smooth. It moves every connected cell, so 
 ## 6. Joint blend
 
 - The brush gives each moved cell a share of the full angle.
-- The share grows with the distance from the joint along the limb. It runs from 0 at the far edge of the band to 1 at its near edge.
+- The share grows with the distance from the joint along the limb. The joint cell stays. The share reaches 1 at the near edge of the band. The base ends the walk, so its side neighbors are not captured. Cells behind the joint are not captured.
 - The edge falloff sets the width of the blend band. Blender's falloff curve maps distance to brush strength in the same way [R3].
 - At falloff 0, the band is one cell wide. The limb folds with a sharp crease at the joint.
 - At falloff 1, the half width reaches the brush size, and it stops at two cells. The limb bends in an arc without shearing the rest.
-- The band never reaches past the limb root or the limb tip.
+- The capture never reaches past the joint or the limb tip.
 - A sharp crease keeps the cells on the outer side and pinches the inner side. The brush adds no cell to close the pinch.
 - Blender's Hardness sets how near the edge the falloff starts [R6]. This editor uses the shared edge falloff for the same purpose.
 
@@ -72,7 +75,7 @@ Tradeoff: a limb keeps the silhouette smooth. It moves every connected cell, so 
 | --- | --- | --- | --- |
 | Brush size | 1 to 32 cells, as a diameter | 4 | Sets the ring and the captured set. Blender states that only Size and Auto-Masking change this brush [R1]. |
 | Edge falloff | 0 to 1 | 0.5 | Sets the width of the joint neck (section 6) [R3]. |
-| Connected | on or off | on | Limits the joint walk to connected occupied cells. Off searches the whole brush ball, so a gap does not hide a cell. |
+| Connected | on or off | off | Limits the joint search and the captured set to the six face neighbors. Off adds edge and corner contacts. |
 | Snap | on or off | off | Rounds the requested angle to a quarter turn before the fit (section 5). |
 | Mirror planes | X, Y, Z | as set | Repeats the bend through each active plane [R4]. |
 
@@ -81,8 +84,8 @@ The cell selection is not an option. It always limits the brush, like the transf
 
 ## 9. Limits and edge cases
 
-- **Limb larger than the view.** Every connected cell moves. The user must use a cell selection. The joint still sits at the brush edge.
-- **Limb that touches unrelated geometry.** A shared face makes one limb, so the bend moves both shapes.
+- **Limb larger than the brush.** Only the cells inside the brush move. The user moves the brush along the limb for the next span. The joint still sits at the brush edge.
+- **Limb that touches unrelated geometry.** A shared face connects the shapes. With Connected off, a shared edge or corner also connects them.
 - **Bend that leaves the writable slice or the document limit.** The brush lowers the angle until every moved cell fits. If no angle fits, the brush shows a blocked state and the stroke does nothing.
 - **Bend that leaves the selection.** Only selected cells move. An unselected occupied cell blocks the bend. The brush lowers the angle until no moved cell lands on one.
 - **No selected cell in the picked set.** The brush shows a blocked state and starts no stroke.
@@ -93,9 +96,8 @@ The cell selection is not an option. It always limits the brush, like the transf
 ## 10. Behaviour that this editor must not copy
 
 - **Scale/Translate and Squash/Stretch deformation types** [R1]. A voxel limb cannot stretch without added or removed cells.
-- **Face Sets and Face Sets FK rotation origins** [R1]. This editor has no face sets. The limb is the unit.
+- **Face Sets and Face Sets FK rotation origins** [R1]. This editor has no face sets. The brush is the unit.
 - **Max Element Distance** [R1]. Cells are adjacent or not adjacent, so no search distance is necessary.
-- **Connected Only as an option** [R1]. A merged set would move geometry that the user did not pick. The editor always uses face connection.
 - **Auto-masking** [R1]. The editor uses an explicit cell selection.
 - **A free-moving root**, which Blender permits when Keep Anchor Point is off and which gives snake-like shapes [R1]. That behaviour duplicates Grab. The Pose brush always keeps the root fixed.
 - **The IK solver** [R7]. A solver balances many segments against a target. The editor turns one rigid limb about one joint, so it needs no solver.
@@ -126,12 +128,15 @@ The cell selection is not an option. It always limits the brush, like the transf
 These rules supersede the earlier sections where they differ. They match the
 shipped tool.
 
-- The joint comes from the connected cells, not from a fixed offset or an axis
+- The joint comes from the occupied cells, not from a fixed offset or an axis
   estimate. The search walks the brush ball from the press and the joint is its
   farthest occupied cell, so it always sits on an occupied cell. A tie prefers
   the cell on the view plane of the press.
   The bound keeps the walk local, so a connected model cannot send the search
   across the whole frame.
+- The Connected option applies to the joint search and the captured set. On
+  follows the six face neighbors. Off adds edge and corner contacts. It starts
+  off.
 - The pointer is the tip of the bone. The arm runs from the joint to the pointer,
   and the angle is the screen angle from the bone to that arm. A travel-based
   angle leaves the tip off the pointer.
@@ -144,6 +149,8 @@ shipped tool.
   cells may land outside it, and the selection then follows them. The transform
   tools work this way: a transform moves the selection, and a write filter on the
   destination would make a small selection unmovable. Grab keeps the same rule.
+- The captured cells stay inside the brush ball. A long limb bends one brush span
+  per stroke.
 - A drag that returns to its first position restores the press selection.
 - A turn is a rigid resample. Each destination cell samples one source cell, and
   each source that the resample misses writes exactly one cell. A source never

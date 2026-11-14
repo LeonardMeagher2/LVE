@@ -8,7 +8,7 @@
 [node name="deform" type="MenuButton"]
 tooltip_text = "Deform tools"
 button_group = ExtResource("1_bg")
-icon = ExtResource("2_grab")
+icon = ExtResource("3_pose")
 flat = false
 icon_alignment = 1
 item_count = 2

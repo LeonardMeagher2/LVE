@@ -1,6 +1,7 @@
 # Deform tool flows
 
 This page shows the current high-level flows of the Deform Grab and Pose tools.
+Pose is the default tool.
 It covers the press capture, the drag queue, the worker map, and the commit.
 It cites the current source only.
 It does not describe a target design.
@@ -17,7 +18,7 @@ Read each graph from top to bottom.
   at the reach of the active tool and predicts no voxel.
 - **Bone**: the line that Pose draws from the joint to the pointer, with a square at the joint and a face widget on the entered face.
 - **Joint**: the point that Pose turns a limb around.
-- **Limb**: the connected occupied cells on the near side of the joint.
+- **Limb**: the occupied cells inside the brush on the near side of the joint.
 - **Latest target**: the newest pointer cell. Only it waits for a running job.
 - **Published union**: every chunk the drag has written since the press.
 
@@ -141,7 +142,7 @@ flowchart TD
   subgraph Main["Main"]
     P1["Press on a voxel"]
     P2["Find where the limb enters the brush"]
-    P3["Capture the limb at the joint band"]
+    P3["Capture the brush ball at the joint band"]
     P4["Build one pose entry per symmetry mask"]
     P5["Drag: view-plane cell"]
     P6["Turn by the screen angle from the bone to the pointer"]
@@ -163,7 +164,7 @@ The pointer point on the entered face only scores the joint, so the face picks
 between candidates. It never turns the limb.
 
 The joint is the occupied cell inside the brush with the best score. The score weighs the brush edge, the view plane of the press, and the half of the entered face that the pointer touches. The view plane outranks the edge, so a farther cell off the plane loses to a nearer cell on it. The walk visits empty cells too, so a gap does not hide a cell.
-The connected option limits the walk to occupied cells. A press-centred face gives no direction, so the walk order decides that tie.
+The connected option selects the joint and capture neighbor set. On uses the six face neighbors. Off adds every edge and corner neighbor. A press-centred face gives no direction, so the walk order decides that tie.
 It does not walk back, so the base is the limb root and not a cell under the
 pointer.
 The bound keeps the walk local, so a connected model cannot send the search
@@ -171,17 +172,19 @@ across the whole frame.
 The joint is therefore always an occupied voxel on the limb, and the pointer is
 the tip of the bone.
 
-The moved cells are the connected occupied cells from the picked cell.
-The walk stops where the limb crosses the joint band, so the cells behind the
-joint keep still.
-The walk also stops at the limb allowance, so a solid blob bends a bounded set.
+The moved cells are the occupied cells inside the brush.
+The walk joins face neighbors when Connected is on. Off adds edge and corner
+neighbors.
+The walk stops at the brush radius, so the rest of the model keeps still.
+The walk also stops at the joint and does not search its neighbors, so no cell beside or behind the base moves.
+The walk stops at the limb cell bound, so a huge blob stays bounded.
 The falloff sets the half width of the joint neck, in cells.
 It ramps from half a cell at zero to two cells at one, and stops at
 `DeformLimb.NECK_LIMIT`.
-A wider neck would shear the whole limb, so the cap keeps the turn rigid.
+A wider neck would shear the captured cells, so the cap keeps the turn rigid.
 
-A drag turns the limb around the view normal, so the bend stays in the view
-plane.
+A drag turns the captured cells around the view normal, so the bend stays in the
+view plane.
 The arm runs from the joint to the pointer, and the angle is the screen angle
 from the bone to that arm.
 The tip therefore lands under the pointer, and no other rule can move it there.
@@ -253,7 +256,7 @@ Source:
 The toolbar holds Grab and Pose with fixed ids.
 The option bar shows the shared size and falloff, and the pose Connected and Snap
 options.
-The Pose Snap option starts off, and the Pose Connected option starts on.
+The Pose Snap option starts off, and the Pose Connected option starts off.
 The rotate tool snap also starts off, so a plain drag is free.
 Neither tool shows a strength control, because neither uses one.
 

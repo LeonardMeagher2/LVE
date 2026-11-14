@@ -187,7 +187,7 @@ texture = ExtResource("22_size")
 [node name="Size" type="SpinBox" parent="Panels/SheetPanel/Margin/Sheet/Settings/SizeRow" unique_id=376245174]
 layout_mode = 2
 size_flags_horizontal = 3
-tooltip_text = "Set the square frame size in pixels. Changing projection or pressing Reset recalculates the size."
+tooltip_text = "Set the square frame size in pixels. Reset fits it to the current camera framing."
 min_value = 1.0
 max_value = 2048.0
 value = 64.0

@@ -12,7 +12,7 @@ script = ExtResource("1_script")
 
 [node name="Size" parent="." instance=ExtResource("2_value")]
 layout_mode = 2
-tooltip_text = "Deform size in voxels."
+tooltip_text = "How wide the brush is, in voxels."
 icon = ExtResource("3_size")
 min_value = 1.0
 max_value = 32.0
@@ -22,14 +22,14 @@ value = 4.0
 
 [node name="Falloff" parent="." instance=ExtResource("2_value")]
 layout_mode = 2
-tooltip_text = "Deform edge falloff. Zero is a hard edge and one is a smooth edge."
+tooltip_text = "How soft the bend edge is. Zero folds sharply, and one blends smoothly."
 icon = ExtResource("4_falloff")
 step = 0.05
 value = 0.5
 
 [node name="Connected" type="Button" parent="."]
 layout_mode = 2
-tooltip_text = "Pose walks the connected limb only"
+tooltip_text = "Keep the pose on one joined piece. Turn this off to include pieces that only touch at a corner."
 toggle_mode = true
 icon = ExtResource("5_connected")
 icon_alignment = 1

@@ -3,7 +3,8 @@ extends "res://tests/test.gd"
 # The deform tools: Grab and Pose.
 #
 # Grab moves every captured source by a weighted, mirrored offset from one
-# baseline snapshot. Pose bends the connected limb around its joint. Both commit
+# baseline snapshot. Pose bends the connected cells inside the brush around its
+# joint. Both commit
 # one history action on release and roll back on Escape.
 #
 # The cases drive the real pointer input through the viewport, so the pick, the
@@ -18,6 +19,7 @@ const FLOOR_AXIS := {
 	"right": Vector3.Axis.AXIS_X,
 	"isometric": Vector3.Axis.AXIS_Y,
 }
+const DEFORM_LIMB := preload("res://plugins/Deform/DeformLimb.gd")
 
 var _settings := preload("res://plugins/Deform/settings.tres")
 var viewport: SubViewport
@@ -67,6 +69,9 @@ func _ready() -> void:
 	test("the base leans to the half of the face under the pointer", _pose_face_bias, "pose_face_bias")
 	test("the pose snap turns the limb in a quarter turn", _pose_snap, "pose_snap")
 	test("pose on a large blob bends a bounded set and keeps it solid", _pose_large_blob, "pose_large_blob")
+	test("pose moves only the cells inside the brush ball", _pose_brush_ball, "pose_brush_ball")
+	test("pose includes diagonal neighbors when Connected is off", _pose_diagonal_neighbors, "pose_diagonal_neighbors")
+	test("the pose capture never searches past the base", _pose_base_stop, "pose_base_stop")
 
 
 func before_test() -> void:
@@ -563,7 +568,8 @@ func _deform_controls() -> void:
 		expect(options.get_node_or_null("UseSelection") == null, "the pose row holds no selection control")
 		expect(options.get_node_or_null("Connected") != null, "the pose row holds a connected control")
 		expect(options.get_node_or_null("Snap") != null, "the pose row holds a snap control")
-		expect(_settings.connected, "the pose connected option is on by default")
+		expect(not DeformToolSettings.new().connected, "the pose connected option is off by default")
+		expect(DeformToolSettings.new().tool == DeformToolSettings.Tools.POSE, "the pose tool is the default")
 		expect(not _settings.snap, "the pose snap is off by default")
 		expect(not bool(load("res://plugins/Transform/settings.tres").snap), "the rotate tool snap is off by default")
 		var popup := toolbar.get_popup()
@@ -620,6 +626,11 @@ func _pose_limb() -> void:
 		expect(tool._pivot.distance_to(Vector3(0, 0, 0)) <= 2.5, "the joint sits within the brush radius")
 		expect(tool._pivot.distance_to(Vector3(0, 0, 0)) >= 1.0, "the joint keeps a lever")
 		expect(not tool._limb.is_empty(), "the pose captures the limb")
+		var behind := 0
+		for cell: Vector3i in tool._limb:
+			if (Vector3(cell) - tool._pivot).dot(tool._bone_dir) < 0.0:
+				behind += 1
+		expect(behind == 0, "the captured limb stays in front of the joint")
 	)
 	step("When the user drags the tip upward", func():
 		var drag_pos := press + Vector2(0.0, -300.0)
@@ -689,7 +700,7 @@ func _pose_hover_pivot() -> void:
 func _pose_solid() -> void:
 	step("Given a thicker bar and the Pose tool", func():
 		_use(_settings.Tools.POSE)
-		_settings.size = 4
+		_settings.size = 20
 		_settings.falloff = 0.5
 		_view("front")
 		for x in range(-8, 9):
@@ -717,6 +728,77 @@ func _pose_solid() -> void:
 				moved += 1
 		expect(moved > 0, "the bent part of the bar leaves the original block")
 	)
+
+
+func _pose_brush_ball() -> void:
+	step("Given a wide body under a narrow stalk and the Pose tool", func():
+		_use(_settings.Tools.POSE)
+		_settings.size = 8
+		_settings.falloff = 0.0
+		_view("front")
+		for x in range(-10, 11):
+			for z in range(-10, 11):
+				for y in range(2, 4):
+					frame.set_cell(Vector3i(x, y, z), VoxelFrame.material(Color.WHITE))
+		for y in range(3, 9):
+			frame.set_cell(Vector3i(0, y, 0), VoxelFrame.material(Color.WHITE))
+		sync_viewport()
+		press = _pos(Vector3(0.0, 6.0, 0.0))
+	)
+	step("When the user presses the stalk", func():
+		_press(press)
+		expect(tool._joint_found, "the pose finds the joint")
+		expect(tool._limb.has(Vector3i(0, 5, 0)), "the pose captures the stalk inside the brush")
+		expect(not tool._limb.has(Vector3i(5, 3, 0)), "the pose leaves the body outside the brush")
+	)
+	step("When the user drags the stalk", func():
+		var drag_pos := press + Vector2(0.0, -40.0)
+		_motion(drag_pos, drag_pos - press)
+		_release(drag_pos)
+	)
+	await _await_edit_closed()
+	step("Then the body outside the brush stays in place", func():
+		expect(frame.has(Vector3i(5, 3, 0)), "the body outside the brush keeps its cell")
+	)
+
+
+func _pose_diagonal_neighbors() -> void:
+	step("Given a bar with a diagonal cell and the Pose tool", func():
+		_use(_settings.Tools.POSE)
+		_settings.size = 8
+		_settings.falloff = 0.0
+		_view("front")
+		for x in [-2, -1, 0]:
+			frame.set_cell(Vector3i(x, 1, 0), VoxelFrame.material(Color.WHITE))
+		frame.set_cell(Vector3i(1, 2, 0), VoxelFrame.material(Color.WHITE))
+		frame.set_cell(Vector3i(6, 1, 0), VoxelFrame.material(Color.WHITE))
+		sync_viewport()
+		press = _pos(Vector3(0.0, 1.0, 0.0))
+		_settings.connected = true
+	)
+	step("When the connected pose presses the bar", func():
+		_press(press)
+		expect(tool._joint_found, "the connected pose finds the joint")
+		expect(not tool._limb.has(Vector3i(1, 2, 0)), "the connected limb stops at the corner contact")
+		expect(not tool._limb.has(Vector3i(6, 1, 0)), "the limb leaves the cell outside the brush")
+	)
+	step("When the user releases", func():
+		_release(press)
+	)
+	await _await_edit_closed()
+	step("When the user turns Connected off", func():
+		_settings.connected = false
+	)
+	step("When the disconnected pose presses the bar", func():
+		_press(press)
+		expect(tool._joint_found, "the disconnected pose finds the joint")
+		expect(tool._limb.has(Vector3i(1, 2, 0)), "the disconnected limb captures the diagonal cell")
+		expect(not tool._limb.has(Vector3i(6, 1, 0)), "the limb still leaves the cell outside the brush")
+	)
+	step("When the user releases", func():
+		_release(press)
+	)
+	await _await_edit_closed()
 
 
 func _pose_end_on() -> void:
@@ -897,12 +979,13 @@ func _pose_depth_bias() -> void:
 		_use(_settings.Tools.POSE)
 		_settings.size = 4
 		_settings.falloff = 0.0
-		# The two candidates are not connected, so the walk must search the whole
-		# brush ball.
+		# The two candidates connect through the brush, so the walk reaches both.
 		_settings.connected = false
 		_view("right")
 		frame.set_cell(Vector3i(0, 0, 0), VoxelFrame.material(Color.WHITE))
+		frame.set_cell(Vector3i(-1, 0, 0), VoxelFrame.material(Color.WHITE))
 		frame.set_cell(Vector3i(-2, 0, 0), VoxelFrame.material(Color.WHITE))
+		frame.set_cell(Vector3i(0, 0, 1), VoxelFrame.material(Color.WHITE))
 		frame.set_cell(Vector3i(0, 0, 2), VoxelFrame.material(Color.WHITE))
 		sync_viewport()
 		press = _pos(Vector3(0.0, 0.0, 0.0))
@@ -1192,4 +1275,18 @@ func _pose_search_bound() -> void:
 		expect(not frame.has(Vector3i(2, 0, 0)), "the tip leaves its old cell")
 		expect(frame.has(Vector3i(10, 0, 0)), "the rest of the limb stays in place")
 		expect(frame.has(Vector3i(40, 0, 0)), "the far end stays in place")
+	)
+
+
+func _pose_base_stop() -> void:
+	step("Given a stalk with a side cell at the base", func():
+		frame = VoxelFrame.new()
+		for y in 7:
+			frame.set_cell(Vector3i(0, y, 0), VoxelFrame.material(Color.WHITE))
+		frame.set_cell(Vector3i(1, 3, 0), VoxelFrame.material(Color.WHITE))
+	)
+	step("When the capture walks from the tip to the base", func():
+		var limb: Dictionary = DEFORM_LIMB.capture_limb(frame, Vector3i(0, 6, 0), Vector3(0, 3, 0), Vector3.UP, 0.5, 4.0, 8192, null, true)
+		expect(limb.has(Vector3i(0, 3, 0)), "the base stays in the captured set")
+		expect(not limb.has(Vector3i(1, 3, 0)), "the capture stops at the base")
 	)

@@ -3,11 +3,13 @@ extends "./DeformTool.gd"
 ## The pose deform tool.
 ##
 ## A press finds the joint of the voxel limb at the picked cell and captures the
-## cells that the joint can bend. A drag turns the limb around the view normal by
-## the screen angle from the bone to the joint-to-pointer arm, so the bend stays in
-## the view plane and the tip lands under the pointer. Only a narrow neck at the
-## joint blends the turn, so the rest of the limb stays rigid. A release commits
-## one history action.
+## cells inside the brush that the joint can bend. The Connected option chooses the
+## neighbor set for the joint and the captured cells. On uses faces. Off adds
+## edges and corners. A drag turns the captured
+## cells around the view normal by the screen angle from the bone to the
+## joint-to-pointer arm, so the bend stays in the view plane and the tip lands
+## under the pointer. Only a narrow neck at the joint blends the turn, so the rest
+## of the captured cells stays rigid. A release commits one history action.
 ##
 ## The bone shows the joint on every hover and through the drag, so the user sees
 ## the rotation point before the press.
@@ -15,13 +17,8 @@ extends "./DeformTool.gd"
 const DeformLimb := preload("./DeformLimb.gd")
 
 ## The most limb cells that one pose bends. The walk stops at this bound, so a
-## hover stays cheap and a connected blob bends a bounded set.
+## connected blob bends a bounded set.
 const LIMB_CELL_LIMIT := 8192
-## The limb allowance as a multiple of the footprint ball. A limb may be much
-## longer than the brush, so a narrow brush still bends a whole arm.
-const LIMB_LIMIT_FACTOR := 16
-## The smallest limb allowance, in cells.
-const LIMB_MIN_LIMIT := 64
 ## The rotation below which the drag changes nothing.
 const ANGLE_EPSILON := 0.0002
 ## The half width of the joint square, in cells.
@@ -251,11 +248,9 @@ func _capture_gesture(pick: PickResult) -> bool:
 	_bone_dir = joint["bone_dir"]
 	_reach = float(joint["reach"])
 	_band = DeformLimb.joint_band(_stroke_size, _stroke_falloff)
-	# The allowance follows the footprint, so a small brush still bends a short
-	# limb and a huge connected blob keeps its bend inside the brush.
-	var ball := roundi(0.5236 * float(_stroke_size * _stroke_size * _stroke_size))
-	var allowance := clampi(ball * LIMB_LIMIT_FACTOR, LIMB_MIN_LIMIT, LIMB_CELL_LIMIT)
-	_limb = DeformLimb.capture_limb(_source_frame, _anchor, _pivot, _bone_dir, _band, allowance, _stroke_context)
+	# The captured set stays inside the brush, so a wide model keeps its shape.
+	var brush_reach := float(clampi(_stroke_size, 1, 32)) * 0.5
+	_limb = DeformLimb.capture_limb(_source_frame, _anchor, _pivot, _bone_dir, _band, brush_reach, LIMB_CELL_LIMIT, _stroke_context, _stroke_connected)
 	if _limb.is_empty():
 		return false
 	_poses = _build_poses()
@@ -440,7 +435,8 @@ func _hover_state(pick: PickResult) -> Dictionary:
 		# The hover answers one question: can the press capture a cell? One cell
 		# is enough, so the walk never reads the whole limb.
 		var band := DeformLimb.joint_band(_settings.size, _settings.falloff)
-		var limb := DeformLimb.capture_limb(frame, pick.hit, joint["pivot"], joint["bone_dir"], band, 1, context)
+		var brush_reach := float(clampi(_settings.size, 1, 32)) * 0.5
+		var limb := DeformLimb.capture_limb(frame, pick.hit, joint["pivot"], joint["bone_dir"], band, brush_reach, 1, context, _settings.connected)
 		moves = not limb.is_empty()
 	_hover_key = key
 	_hover_joint = joint

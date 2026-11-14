@@ -2,20 +2,33 @@ extends RefCounted
 
 ## Pure geometry helpers for the Pose brush of the deform tools.
 ##
-## The helpers find the joint of one voxel limb, capture the connected cells
-## that the joint can bend, and turn them about that joint. They read one frame
-## snapshot and plain values, so a worker can run them.
+## The helpers find the joint of one voxel limb, capture the touching cells
+## inside the brush that the joint can bend, and turn them about that joint.
+## They read one frame snapshot and plain values, so a worker can run them.
 ##
-## A limb is the connected component of occupied cells at the picked cell. The
-## joint is the cell where the limb enters the brush on its way to the far end of
-## the limb. The joint therefore sits on an occupied cell, and the pointer is the
-## tip of the bone.
+## A limb is the occupied component at the picked cell, joined by faces when
+## Connected is on, or by faces, edges, and corners when it is off, cut at the
+## brush radius. The joint is the cell where the limb enters the brush on its way
+## to the far end of the limb. The joint therefore sits on an occupied cell, and
+## the pointer is the tip of the bone.
 
-## The neighbor offsets of the limb walk, in a fixed order.
+## The face neighbor offsets of the joint search, in a fixed order.
 const NEIGHBORS: Array[Vector3i] = [
 	Vector3i(1, 0, 0), Vector3i(-1, 0, 0),
 	Vector3i(0, 1, 0), Vector3i(0, -1, 0),
 	Vector3i(0, 0, 1), Vector3i(0, 0, -1),
+]
+## The neighbor offsets of the touching walk. It adds every edge and corner
+## neighbor, so a diagonal contact joins the set.
+const NEIGHBORS_26: Array[Vector3i] = [
+	Vector3i(1, 0, 0), Vector3i(-1, 0, 0),
+	Vector3i(0, 1, 0), Vector3i(0, -1, 0),
+	Vector3i(0, 0, 1), Vector3i(0, 0, -1),
+	Vector3i(1, 1, 0), Vector3i(1, -1, 0), Vector3i(-1, 1, 0), Vector3i(-1, -1, 0),
+	Vector3i(1, 0, 1), Vector3i(1, 0, -1), Vector3i(-1, 0, 1), Vector3i(-1, 0, -1),
+	Vector3i(0, 1, 1), Vector3i(0, 1, -1), Vector3i(0, -1, 1), Vector3i(0, -1, -1),
+	Vector3i(1, 1, 1), Vector3i(1, 1, -1), Vector3i(1, -1, 1), Vector3i(1, -1, -1),
+	Vector3i(-1, 1, 1), Vector3i(-1, 1, -1), Vector3i(-1, -1, 1), Vector3i(-1, -1, -1),
 ]
 ## The most cells that one joint search reads. The search follows the limb, so a
 ## hover stays cheap on a large model.
@@ -57,11 +70,10 @@ static func masks_for(context: VoxelFrame.EditContext) -> Array:
 ## face that the pointer touches, so the base sits near the edge, stays on the
 ## plane the user sees, and leans toward the side the pointer is on.
 ##
-## The search walks every cell inside the brush, so a gap does not end it, and
-## only an occupied cell can be the joint.
+## The search follows occupied cells inside the brush. A gap ends it.
 ##
-## [param connected] limits the walk to occupied cells, so a gap ends it and the
-## joint stays on the connected limb.
+## [param connected] selects the neighbor set. On uses the six face neighbors. Off
+## adds every edge and corner neighbor, so a diagonal contact joins the walk.
 ##
 ## [param view_forward] is the press view direction, or a zero vector to skip the
 ## view plane term.
@@ -87,30 +99,29 @@ static func joint_pivot(frame: VoxelFrame, anchor: Vector3i, size: int, context:
 			touch_strength = clampf(touch_length / 0.5, 0.0, 1.0)
 	var axis_u := (face_axis + 1) % 3 if face_axis >= 0 else 0
 	var axis_v := (face_axis + 2) % 3 if face_axis >= 0 else 0
-	var steps := {anchor: 0}
+	var offsets := NEIGHBORS
+	if not connected:
+		offsets = NEIGHBORS_26
+	var visited := {anchor: true}
 	var queue: Array[Vector3i] = [anchor]
 	var head := 0
 	var base := anchor
 	var base_score := -INF
-	while head < queue.size() and steps.size() < JOINT_CELL_LIMIT:
+	while head < queue.size() and visited.size() < JOINT_CELL_LIMIT:
 		var cell: Vector3i = queue[head]
 		head += 1
-		var depth := int(steps[cell])
-		for offset: Vector3i in NEIGHBORS:
+		for offset: Vector3i in offsets:
 			var next := cell + offset
-			if steps.has(next):
+			if visited.has(next):
 				continue
 			if Vector3(next).distance_to(origin) > brush_reach:
 				continue
 			if context != null and not context.allows(next):
 				continue
-			var occupied := frame.has(next)
-			if connected and not occupied:
+			if not frame.has(next):
 				continue
-			steps[next] = depth + 1
+			visited[next] = true
 			queue.append(next)
-			if not occupied:
-				continue
 			# Only an occupied cell can be the joint, so every occupied cell of
 			# the brush is scored and the best one wins.
 			var delta := Vector3(next) - origin
@@ -141,20 +152,28 @@ static func joint_pivot(frame: VoxelFrame, anchor: Vector3i, size: int, context:
 ## Returns the captured limb cells of one joint, keyed by cell, with their
 ## weight.
 ##
-## The walk starts at [param anchor] and follows every connected occupied cell
-## that the context allows. It stops where the limb crosses the joint band, so
-## the cells behind the joint keep still. A limb longer than the brush therefore
-## bends as a whole.
+## The walk starts at [param anchor] and follows every occupied cell that touches
+## the set. It stops at the brush radius, so only the cells inside the brush move.
+## It also stops at the joint, so no cell behind the base moves. The base ends the
+## walk, so its neighbors are never searched.
 ##
-## [param band] is the half width of the joint blend along the bone. The walk
-## stops at [param limit] cells, so a connected blob bends a bounded set instead
-## of the whole model. A caller that only needs to know whether the limb holds a
-## cell passes one.
-static func capture_limb(frame: VoxelFrame, anchor: Vector3i, pivot: Vector3, bone_dir: Vector3, band: float, limit: int, context: VoxelFrame.EditContext, job: VoxelFrame.EditJob = null) -> Dictionary:
+## [param radius] is the brush radius in cells. [param band] is the half width of
+## the joint blend along the bone. [param connected] selects the neighbor set. On
+## uses the six face neighbors. Off adds every edge and corner neighbor. The walk
+## stops at [param limit] cells, so a large blob bends a bounded set instead of
+## the whole model. A caller that only needs to know whether the limb holds a cell
+## passes one.
+static func capture_limb(frame: VoxelFrame, anchor: Vector3i, pivot: Vector3, bone_dir: Vector3, band: float, radius: float, limit: int, context: VoxelFrame.EditContext, connected := true, job: VoxelFrame.EditJob = null) -> Dictionary:
 	var captured := {}
 	if frame == null or anchor == VoxelPicking.NONE or bone_dir == Vector3.ZERO:
 		return captured
 	var cap := maxi(limit, 1)
+	var reach := maxf(radius, 0.5)
+	var reach_squared := reach * reach
+	var origin := Vector3(anchor)
+	var offsets := NEIGHBORS
+	if not connected:
+		offsets = NEIGHBORS_26
 	var visited := {anchor: true}
 	var queue: Array[Vector3i] = [anchor]
 	var head := 0
@@ -166,12 +185,18 @@ static func capture_limb(frame: VoxelFrame, anchor: Vector3i, pivot: Vector3, bo
 		head += 1
 		if context != null and not context.allows(cell):
 			continue
+		if Vector3(cell).distance_squared_to(origin) > reach_squared:
+			continue
 		var along := (Vector3(cell) - pivot).dot(bone_dir)
-		if along < -band:
+		if along < 0.0:
 			# The limb continues behind the joint, so this branch stops here.
 			continue
 		captured[cell] = limb_weight(along, band)
-		for offset: Vector3i in NEIGHBORS:
+		if along <= 0.0:
+			# The base ends the limb. Never search its neighbors, so no cell
+			# beside or behind the base joins the capture.
+			continue
+		for offset: Vector3i in offsets:
 			var next := cell + offset
 			if visited.has(next) or not frame.has(next):
 				continue
