@@ -200,3 +200,17 @@ func _run() -> void:
 		expect(settings.diameter == 1, "the paint diameter is back to the default")
 		expect(settings.shape == PaintToolSettings.BrushShape.CUBE, "the paint shape is back to the cube")
 	)
+
+	step("Given the brush tool is active", func():
+		brush_button.get_popup().index_pressed.emit(0)
+		expect(plugin("BrushPlugin")._tool.is_inside_tree(), "the brush tool is in the viewport")
+	)
+	step("When a plugin is activated directly without pressing its button", func():
+		plugin("PaintPlugin").activate_tool()
+	)
+	step("Then the shared group deactivates the brush implicitly", func():
+		expect(not brush_button.button_pressed, "the brush button is released")
+		expect(paint_button.button_pressed, "the paint button is pressed")
+		expect(not plugin("BrushPlugin")._tool.is_inside_tree(), "the brush tool left the viewport")
+		expect(plugin("PaintPlugin")._tool.is_inside_tree(), "the paint tool entered the viewport")
+	)

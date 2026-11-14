@@ -621,7 +621,10 @@ func export_gltf_settings(path: String, settings: Dictionary) -> Error:
 	for key in ["smooth_normals", "ao", "unlit"]:
 		if settings.has(key):
 			overrides[key] = settings[key]
-	var error: Error = await _gltf.export_gltf(path, bool(settings.get("center", false)), tag_index, overrides)
+	var error: Error = OK
+	_exporting = true
+	error = await _gltf.export_gltf(path, bool(settings.get("center", false)), tag_index, overrides)
+	_exporting = false
 	_sync()
 	_preview_due_ms = Time.get_ticks_msec() + PREVIEW_DELAY_MS
 	return error

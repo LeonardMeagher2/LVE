@@ -22,13 +22,16 @@ func _notification(what: int) -> void:
 
 ## Activates the eyedropper tool.
 func activate_tool() -> void:
-	_toolbar.set_pressed_no_signal(true)
+	if not _toolbar.button_pressed:
+		_toolbar.button_pressed = true
+		return
 	add_editor_node(_tool)
 
 
 ## Deactivates the eyedropper tool.
 func deactivate_tool() -> void:
 	remove_editor_node(_tool)
+	_toolbar.set_pressed_no_signal(false)
 
 
 func _on_toolbar_toggled(on: bool) -> void:

@@ -15,11 +15,16 @@ const ENDPOINT := "https://api.github.com/repos/LeonardMeagher2/LVE/releases/lat
 const RELEASES_PREFIX := "https://github.com/LeonardMeagher2/LVE/releases/"
 ## The request timeout in seconds.
 const REQUEST_TIMEOUT := 10.0
+## The wait before a failed request is retried.
+const RETRY_DELAY_SEC := 3.0
+## The maximum request attempts for one start.
+const MAX_ATTEMPTS := 3
 
 @onready var _request: HTTPRequest = $HTTPRequest
 
 var _current_version := ""
 var _started := false
+var _attempts := 0
 
 
 func _ready() -> void:
@@ -34,14 +39,32 @@ func start() -> void:
 	if _started:
 		return
 	_started = true
+	_attempts = 0
+	_request_release()
+
+
+# Sends one request. A request that cannot start uses the same retry as a failed
+# one, so a transient network fault does not leave the fallback page forever.
+func _request_release() -> void:
 	if not _enabled() or _current_version.is_empty():
 		return
+	_attempts += 1
 	var headers := PackedStringArray([
 		"User-Agent: LVE/%s" % _current_version,
 		"Accept: application/vnd.github+json",
 		"X-GitHub-Api-Version: 2022-11-28",
 	])
-	_request.request(ENDPOINT, headers)
+	if _request.request(ENDPOINT, headers) != OK:
+		_retry_later()
+
+
+func _retry_later() -> void:
+	if _attempts >= MAX_ATTEMPTS or not is_inside_tree():
+		return
+	await get_tree().create_timer(RETRY_DELAY_SEC).timeout
+	if not is_inside_tree():
+		return
+	_request_release()
 
 
 func _enabled() -> bool:
@@ -54,6 +77,7 @@ func _enabled() -> bool:
 
 func _on_request_completed(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
 	if result != HTTPRequest.RESULT_SUCCESS or response_code != 200:
+		_retry_later()
 		return
 	var parsed: Variant = JSON.parse_string(body.get_string_from_utf8())
 	if not parsed is Dictionary:

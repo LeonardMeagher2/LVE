@@ -46,6 +46,7 @@ func _run() -> void:
 		expect(not State.edit_busy(), "opening the PNG completes without a placement step")
 		expect(State.selection.is_empty(), "the new document has no old selection")
 		expect(not State.undo_redo.has_undo(), "opening the PNG starts a new edit history")
+		expect(State.document.edit_dirty, "the imported PNG stays unsaved")
 		expect(main.find_child("MenuBar", true, false).current_save_path.is_empty(), "the PNG uses a new voxel save path")
 	)
 	step("Then the PNG retains its clipped shape, orientation, and opaque colors", func():

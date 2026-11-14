@@ -14,6 +14,7 @@ func _ready() -> void:
 	test("autosave writes and deletes a recovery copy", _save_delete, "autosave_save")
 	test("recovery lists and loads an autosave file", _recover, "autosave_recover")
 	test("discard removes a recovery copy", _discard, "autosave_discard")
+	test("a failed recovery copy keeps the dirty flag", _retry_failure, "autosave_retry")
 
 
 func before_test() -> void:
@@ -127,6 +128,33 @@ func _discard() -> void:
 		expect(not FileAccess.file_exists(recovery), "the recovery file is gone")
 		expect(autosave.recovery_entries().is_empty(), "the manager drops the entry")
 		expect(autosave.list_recovery().is_empty(), "the startup list is empty")
+	)
+
+
+## A recovery folder that cannot hold a file makes both save paths fail. The
+## manager must keep its dirty mark, or only the next edit retries the copy.
+func _retry_failure() -> void:
+	var blocked := DIR.path_join("blocked")
+	step("Given a recovery folder that is an ordinary file", func():
+		var file := FileAccess.open(blocked, FileAccess.WRITE)
+		expect(file != null, "the blocker file is created")
+		if file != null:
+			file.close()
+		autosave.recovery_dir = blocked
+		autosave.manifest_path = blocked.path_join("manifest.json")
+		State.document.edit_save_path = ""
+		State.document.file_path = ""
+		State.get_current_voxel_frame().set_cell(Vector3i.ZERO, VoxelFrame.material(Color.RED))
+		State.document.edit_dirty = true
+		autosave._dirty = true
+	)
+	step("When autosave runs", func():
+		autosave.save_now()
+	)
+	step("Then the copy failure keeps the dirty flag for a retry", func():
+		expect(autosave._dirty, "a failed copy keeps the dirty flag")
+		expect(autosave.recovery_entries().is_empty(), "no entry is recorded")
+		expect(State.document.edit_dirty, "the document stays unsaved")
 	)
 
 

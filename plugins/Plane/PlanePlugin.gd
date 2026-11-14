@@ -24,7 +24,9 @@ func _notification(what: int) -> void:
 
 ## Activates the plane tool and shows its option bar.
 func activate_tool() -> void:
-	_toolbar.set_pressed_no_signal(true)
+	if not _toolbar.button_pressed:
+		_toolbar.button_pressed = true
+		return
 	add_editor_node(_tool)
 	add_option_bar_item(_options)
 
@@ -33,6 +35,7 @@ func activate_tool() -> void:
 func deactivate_tool() -> void:
 	remove_editor_node(_tool)
 	remove_option_bar_item(_options)
+	_toolbar.set_pressed_no_signal(false)
 
 
 func _on_toolbar_toggled(on: bool) -> void:

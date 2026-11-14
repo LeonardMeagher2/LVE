@@ -49,8 +49,10 @@ func _on_selection_changed() -> void:
 
 ## Activates the current selection tool and shows the option bar.
 func activate_tool() -> void:
+	if not _toolbar.button_pressed:
+		_toolbar.button_pressed = true
+		return
 	_active = true
-	_toolbar.set_pressed_no_signal(true)
 	add_option_bar_item(_options)
 	_on_tool_changed(_settings.tool)
 

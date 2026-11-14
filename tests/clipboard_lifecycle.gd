@@ -35,6 +35,7 @@ func _ready() -> void:
 	test("the copy and import runners keep one operation and adopt no stale result", _import_context, "clipboard_import_context")
 	test("the paste placement and its preview share one operation and commit once", _paste_status, "paste_single_status")
 	test("a cancelled paste releases its placement operation", _paste_cancel, "paste_cancel_status")
+	test("a malformed voxel payload clears the Paste availability", _malformed_payload, "paste_malformed")
 
 
 func before_test() -> void:
@@ -47,6 +48,7 @@ func before_test() -> void:
 	clipboard._material_pattern = {}
 	clipboard._clipboard_text = ""
 	clipboard._has_clipboard_voxels = false
+	clipboard._rejected_clipboard_text = ""
 	State.document = VoxelDocument.new()
 	State.undo_redo.clear_history()
 	State.clear_selection()
@@ -223,6 +225,32 @@ func _await_paste_preview() -> void:
 	var deadline := Time.get_ticks_msec() + 8000
 	while (paste._job != null or paste._preview_result == null or paste._preview_result.revision != paste._revision) and Time.get_ticks_msec() < deadline:
 		await get_tree().process_frame
+
+
+# The clipboard can hold the voxel prefix and still contain an invalid record.
+# The parse failure must clear the Paste availability, not leave the button inert.
+func _malformed_payload() -> void:
+	step("Given a clipboard with the voxel prefix and an invalid record", func():
+		var text := CLIPBOARD_PREFIX + "{}}"
+		if DisplayServer.has_feature(DisplayServer.FEATURE_CLIPBOARD):
+			DisplayServer.clipboard_set(text)
+		else:
+			clipboard._clipboard_text = text
+		clipboard._has_clipboard_voxels = true
+		clipboard._pattern = {}
+	)
+	step("When the user pastes", func():
+		clipboard.paste_voxels()
+	)
+	var deadline := Time.get_ticks_msec() + 8000
+	while clipboard._import_job != null and Time.get_ticks_msec() < deadline:
+		await get_tree().process_frame
+	await get_tree().process_frame
+	step("Then the Paste state clears and no preview starts", func():
+		expect(not clipboard._has_clipboard_voxels, "a malformed payload disables Paste")
+		expect(clipboard._pattern.is_empty(), "no pattern is adopted")
+		expect(not clipboard._paste_tool._active, "no paste preview starts")
+	)
 
 
 func _foreground_count() -> int:

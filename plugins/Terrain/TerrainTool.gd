@@ -1008,6 +1008,8 @@ func open_stroke() -> VoxelEditTransaction:
 	_samples = {}
 	_base_surfaces = {}
 	_stroke_columns = {}
+	_stroke_chunks = {}
+	_stroke_flush_queued = false
 	_clear_pending()
 	_stroke_frame = null
 	_cursor_frame = null
@@ -1191,6 +1193,11 @@ func _finish_stroke() -> void:
 	_close_action = _action_name()
 	_end_requested = false
 	_clear_pending()
+	# Flush the last tick's chunks before the close. A deferred flush would run
+	# after the stroke state is gone.
+	_flush_stroke_chunks()
+	_stroke_chunks = {}
+	_stroke_flush_queued = false
 	_stroke_context = null
 	_stroke_selection = {}
 	_stroke_frame = null
@@ -1226,6 +1233,8 @@ func _cancel_edit() -> void:
 		_smooth_job.cancel()
 	# Drop the accepted path, so a stale completion cannot apply a cancelled dab.
 	_clear_pending()
+	_stroke_chunks = {}
+	_stroke_flush_queued = false
 	# The zombie drain retires itself through its token, so the cancel leaves the
 	# flag alone. A new stroke starts its own drain at once.
 	_samples = {}
@@ -1797,7 +1806,10 @@ func _flush_stroke_chunks() -> void:
 	var chunks: Array[Vector3i] = []
 	chunks.assign(_stroke_chunks.keys())
 	_stroke_chunks.clear()
-	State.chunks_changed.emit(State.current_frame, chunks)
+	# Name the frame the stroke captured. A frame switch or a cancel must not
+	# attribute these chunks to the live frame.
+	var frame := _stroke_frame_index if _stroke_frame_index >= 0 else State.current_frame
+	State.chunks_changed.emit(frame, chunks)
 
 
 # --- Smooth -----------------------------------------------------------------

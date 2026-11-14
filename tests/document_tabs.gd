@@ -21,6 +21,7 @@ func _ready() -> void:
 	test("the session stores the open tab paths", _session, "tab_session")
 	test("the runtime editor state is not serialized", _serialize, "tab_serialize")
 	test("quitting asks to save each edited document", _quit, "quit_confirmation")
+	test("a cancelled quit clears a pending close target", _close_target, "quit_close_target")
 	test("the recovery prompt lists unsaved documents", _recovery_dialog, "recovery_dialog")
 
 
@@ -248,6 +249,27 @@ func _quit() -> void:
 
 func _on_test_quit() -> void:
 	_quit_seen = true
+
+
+# A quit can start while a close Save As is open. Cancelling the shared dialog
+# must clear the close target too, or the next Save As closes a stale tab.
+func _close_target() -> void:
+	var menu := main.get_node("%MenuBar")
+	step("Given a pending close Save As and a quit that interrupts it", func():
+		menu._close_after_save_document = State.document
+		menu._pending_close_index = 0
+		menu._quit_active = true
+		menu._quit_after_save = true
+	)
+	step("When the shared file dialog is cancelled", func():
+		menu._on_file_dialog_canceled()
+	)
+	step("Then no close target or quit wait survives", func():
+		expect(menu._close_after_save_document == null, "the close target is cleared")
+		expect(menu._pending_close_index == -1, "the pending close index is cleared")
+		expect(not menu._quit_active, "the quit is cancelled")
+		expect(not menu._quit_after_save, "the quit save wait is cleared")
+	)
 
 
 func _recovery_dialog() -> void:

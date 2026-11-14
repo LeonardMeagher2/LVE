@@ -35,8 +35,10 @@ func _notification(what: int) -> void:
 
 ## Activates the current deform tool and shows the option bar.
 func activate_tool() -> void:
+	if not _toolbar.button_pressed:
+		_toolbar.button_pressed = true
+		return
 	_active = true
-	_toolbar.set_pressed_no_signal(true)
 	add_option_bar_item(_options)
 	_on_tool_changed(_settings.tool)
 
@@ -49,6 +51,7 @@ func deactivate_tool() -> void:
 	if _current_tool:
 		_current_tool.finish_on_switch()
 		remove_editor_node(_current_tool)
+	_toolbar.set_pressed_no_signal(false)
 
 
 func _on_toolbar_toggled(on: bool) -> void:

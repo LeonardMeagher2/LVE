@@ -180,6 +180,12 @@ func _finished() -> bool:
 	return _play_repeats() > 0 and _play_passes >= _play_repeats()
 
 
+## Resets the completed pass count after the active tag's loop settings change.
+## The current frame and the direction do not move.
+func reset_passes() -> void:
+	_play_passes = 0
+
+
 func _current_delay() -> float:
 	if current_frame < 0 or current_frame >= document.frames.size():
 		return 1.0

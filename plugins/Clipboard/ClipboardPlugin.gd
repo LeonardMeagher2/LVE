@@ -25,6 +25,9 @@ var _clipboard_text := ""
 var _copy_job: ClipboardCopyJob
 var _import_job: ClipboardImportJob
 var _has_clipboard_voxels := false
+# The clipboard text whose voxel record failed to parse. A focus refresh must
+# not re-enable Paste for the same text.
+var _rejected_clipboard_text := ""
 var _shutting_down := false
 
 ## One cancellable copy or cut job.
@@ -216,7 +219,8 @@ func _on_cells_changed(_frame: int, _affected: Array[Vector3i]) -> void:
 # only in another window, so a focus event covers it. A large voxel record costs
 # one full read here, not one read every half second.
 func _refresh_clipboard() -> void:
-	var has_voxels := _read_clipboard().begins_with(CLIPBOARD_PREFIX)
+	var text := _read_clipboard()
+	var has_voxels := text.begins_with(CLIPBOARD_PREFIX) and text != _rejected_clipboard_text
 	if has_voxels == _has_clipboard_voxels:
 		return
 	_has_clipboard_voxels = has_voxels
@@ -280,6 +284,7 @@ func _copy_voxels(cut_source: bool) -> void:
 		_material_pattern.make_read_only()
 		_center = job.center
 		_clipboard_text = job.text
+		_rejected_clipboard_text = ""
 		_has_clipboard_voxels = true
 		if DisplayServer.has_feature(DisplayServer.FEATURE_CLIPBOARD):
 			DisplayServer.clipboard_set(job.text)
@@ -351,7 +356,15 @@ func paste_voxels() -> void:
 			return
 		_import_job = null
 		State.finish_operation(operation_id)
-		if _shutting_down or State.document != document or State.get_current_voxel_frame() != frame or not job.checkpoint(0) or job.pattern.is_empty():
+		if _shutting_down or State.document != document or State.get_current_voxel_frame() != frame or not job.checkpoint(0):
+			return
+		if job.pattern.is_empty():
+			# A malformed payload with the voxel prefix must not leave Paste
+			# enabled with no parsed pattern behind it. Keep the rejected text,
+			# so a focus refresh does not enable the same payload again.
+			_has_clipboard_voxels = false
+			_rejected_clipboard_text = text
+			_sync_buttons()
 			return
 		_pattern = job.pattern
 		_pattern.make_read_only()
@@ -360,6 +373,7 @@ func paste_voxels() -> void:
 		_material_pattern.make_read_only()
 		_center = Vector3i.ZERO
 		_clipboard_text = text
+		_rejected_clipboard_text = ""
 	add_editor_node(_paste_tool)
 	_paste_tool.begin_paste(_pattern, _selection_pattern, _center, _material_pattern)
 

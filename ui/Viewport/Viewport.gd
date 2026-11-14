@@ -442,6 +442,11 @@ func _input(event: InputEvent) -> void:
 	elif event is InputEventMouseMotion:
 		var mm := event as InputEventMouseMotion
 		var mask := mm.button_mask
+		if _drag_mode != ViewMode.NONE and not (mask & MOUSE_BUTTON_MASK_LEFT):
+			# A release outside the window sends no button event. The first
+			# motion with the button up ends the drag.
+			_drag_mode = ViewMode.NONE
+			_restore_view_toggles()
 		var active := _drag_mode
 		if active == ViewMode.NONE and view_mode in [ViewMode.PAN, ViewMode.ROTATE]:
 			active = view_mode

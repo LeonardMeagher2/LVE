@@ -625,6 +625,12 @@ func _mark_dirty() -> void:
 	tabs_changed.emit()
 
 
+## Marks the active document dirty. A caller uses it when it installs content
+## that no history action produced, such as an imported image.
+func mark_dirty() -> void:
+	_mark_dirty()
+
+
 func _commit_history(execute: bool = true) -> void:
 	undo_redo.commit_action(execute)
 	history_changed.emit()
@@ -1915,6 +1921,7 @@ func _apply_tag_loop_mode(index: int, mode: int) -> void:
 	if tag == null:
 		return
 	tag.loop_mode = mode as AnimationTag.LoopMode
+	_reset_playback_passes()
 	_mark_dirty()
 	tag_changed.emit()
 
@@ -1937,8 +1944,17 @@ func _apply_tag_repeats(index: int, value: int) -> void:
 	if tag == null:
 		return
 	tag.repeats = value
+	_reset_playback_passes()
 	_mark_dirty()
 	tag_changed.emit()
+
+
+# A new loop mode or repeat count applies to a fresh pass count. Without this,
+# passes counted during an infinite play stop a newly finite tag on its next
+# boundary instead of after the requested number of passes.
+func _reset_playback_passes() -> void:
+	if is_playing:
+		playback.reset_passes()
 
 
 ## Sets a tag name and records a history action.

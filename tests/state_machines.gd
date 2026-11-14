@@ -23,6 +23,7 @@ func _ready() -> void:
 	test("playback catches up to the elapsed time instead of dropping it", _playback_catch_up, "playback_catch_up")
 	test("a finite single-frame tag stops playing", _playback_single_stop, "playback_single_stop")
 	test("removing a tag without an active tag changes nothing", _remove_tag_without_active, "remove_tag_without_active")
+	test("a new repeat count applies to a fresh pass count", _playback_repeat_reset, "playback_repeat_reset")
 
 
 func before_test() -> void:
@@ -181,4 +182,31 @@ func _remove_tag_without_active() -> void:
 		expect(State.document.get_tag(0).name == "First", "the first tag keeps its identity")
 		expect(State.document.get_tag(1).name == "Second", "the second tag keeps its identity")
 		expect(not State.undo_redo.has_undo(), "the refused removal adds no history")
+	)
+
+
+# An infinite tag counts passes forever. A later finite repeat count must apply
+# to a fresh count, or the playback stops on the next boundary instead of after
+# the requested passes.
+func _playback_repeat_reset() -> void:
+	step("Given a two-frame tag that played several infinite passes", func():
+		_playback_document = VoxelDocument.new()
+		_playback_document.frames[0].delay_ms = 10
+		_playback_document.add_frame()
+		_playback_document.frames[1].delay_ms = 10
+		_playback_document.add_tag("Loop", 0, 1)
+		State.document = _playback_document
+		State.active_tag = 0
+		State.is_playing = true
+		for advance_index in 6:
+			State.playback.advance()
+		expect(State.is_playing, "an infinite tag keeps playing")
+	)
+	step("When the tag becomes finite while playing", func():
+		State.set_tag_repeats(0, 3)
+	)
+	step("Then one completed pass does not stop the playback", func():
+		State.playback.advance()
+		State.playback.advance()
+		expect(State.is_playing, "the new repeat count starts a fresh pass count")
 	)
