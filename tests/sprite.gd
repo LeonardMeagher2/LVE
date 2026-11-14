@@ -102,13 +102,13 @@ func _center_run() -> void:
 		exporter._refresh_model()
 		bounds = State.document.bounds()
 		center_prefix = "user://sprite_center_%s" % Time.get_ticks_usec()
-		expect(settings.get_node("ViewRow/Center").button_pressed, "sprite centering is enabled by default")
+		expect(not settings.get_node("ViewRow/Center").button_pressed, "sprite centering is off by default")
 	)
 	get_tree().process_frame.connect(_capture_pose)
 	for view in [1, 0]:
 		for orthographic in [true, false]:
 			step("When the user exports centered sprites", func():
-				settings.get_node("ViewRow/Perspective").button_pressed = not orthographic
+				exporter._model_camera.is_orthogonal = orthographic
 				settings.get_node("ViewRow/Center").button_pressed = true
 				captured = false
 				planes_stable = true
@@ -189,7 +189,6 @@ func _projection_run() -> void:
 		exporter._model_camera.size = 9.0
 		exporter._model_camera.fov = 90.0
 		exporter._model_camera.transform = Transform3D(Basis.IDENTITY, Vector3(0, 0, 10))
-		exporter._sheet_settings.get_node("ViewRow/Perspective").button_pressed = true
 		projection_path = "user://sprite_projection_%s.png" % Time.get_ticks_usec()
 	)
 	for view in [2, 0]:
@@ -199,20 +198,32 @@ func _projection_run() -> void:
 			selector.item_selected.emit(view)
 			exporter._sheet_settings.get_node("SizeRow/Size").value = 99
 		)
-		step("When the user exports an orthographic sprite from view %s" % view, func():
-			exporter._sheet_settings.get_node("ViewRow/Perspective").button_pressed = false
+		step("When the camera turns orthographic", func():
+			exporter._model_camera.is_orthogonal = true
+			exporter._model_camera.size = 9.0
+		)
+		step("Then the projection change keeps the manual frame size", func():
+			expect(exporter._sheet_settings.get_node("SizeRow/Size").value == 99, "the orthographic projection keeps the manual frame size")
+			exporter._sheet_settings.get_node("SizeRow/Reset").pressed.emit()
 		)
 		var ortho_size := 17 if view == 2 else 9
-		expect(exporter._sheet_settings.get_node("SizeRow/Size").value == ortho_size, "switching to orthographic resets the manual frame size")
+		expect(exporter._sheet_settings.get_node("SizeRow/Size").value == ortho_size, "Reset fits the orthographic framing")
 		var error: Error = await exporter.export_sprite_sheet(projection_path, 0, 0, -1, view, false)
 		var orthographic := Image.new()
 		orthographic.load(projection_path)
 		expect(error == OK, "the orthographic sprite exports")
-		step("When the user switches the sprite to perspective", func():
-			exporter._sheet_settings.get_node("ViewRow/Perspective").button_pressed = true
+		step("When the camera turns perspective", func():
+			exporter._model_camera._dist = 10.0
+			exporter._model_camera.is_orthogonal = false
+			exporter._model_camera.fov = 90.0
+			exporter._model_camera.view_changed.emit()
+		)
+		step("Then the projection change keeps the manual frame size", func():
+			expect(exporter._sheet_settings.get_node("SizeRow/Size").value == ortho_size, "the perspective projection keeps the manual frame size")
+			exporter._sheet_settings.get_node("SizeRow/Reset").pressed.emit()
 		)
 		var perspective_size := 74 if view == 2 else 20
-		expect(exporter._sheet_settings.get_node("SizeRow/Size").value == perspective_size, "switching to perspective resets the frame size for the field of view")
+		expect(exporter._sheet_settings.get_node("SizeRow/Size").value == perspective_size, "Reset fits the perspective field of view")
 		error = await exporter.export_sprite_sheet(projection_path, 0, 0, -1, view, false)
 		var perspective := Image.new()
 		perspective.load(projection_path)
@@ -239,13 +250,12 @@ func _sampling_run() -> void:
 	)
 	for orthographic in [true, false]:
 		step("When the user exports six-pixel square frames with orthographic=%s" % orthographic, func():
-			exporter._sheet_settings.get_node("ViewRow/Perspective").button_pressed = not orthographic
 			exporter._model_camera.is_orthogonal = orthographic
 			exporter._model_camera.size = 4.0
 			exporter._model_camera.fov = 90.0
 			exporter._model_camera.transform = Transform3D(Basis.IDENTITY, Vector3(-0.4, -0.4, 2.0))
 		)
-		var error: Error = await exporter.export_sprite_sheet(sampling_path, 0, 1, 6, 0)
+		var error: Error = await exporter.export_sprite_sheet(sampling_path, 0, 1, 6, 0, true)
 		step("Then the PNG retains hard voxel edges at the selected size", func():
 			expect(error == OK, "the small sprite sheet exports")
 			var image := Image.new()
@@ -297,6 +307,7 @@ func _sheet_run() -> void:
 	)
 	step("Then the controls use simple defaults and describe the output size", func():
 		expect(settings.get_node("SizeRow/Size").value == 64, "new documents start with a fixed sixty-four-pixel frame size")
+		expect(not controls.get_node("ExportRow/Metadata").button_pressed, "new documents leave the JSON sidecar off by default")
 		var document_size: float = settings.get_node("SizeRow/Size").value
 		var frames: OptionButton = settings.get_node("FrameRow/Frames")
 		frames.select(2)
@@ -308,36 +319,37 @@ func _sheet_run() -> void:
 		expect(exporter._selected_frames() == Vector2i(0, 2), "the all-frames range includes the empty frame")
 	)
 	step("When the user resets the sprite size", func():
+		exporter._model_camera.is_orthogonal = true
 		settings.get_node("SizeRow/Reset").pressed.emit()
 	)
 	step("Then Reset calculates the frame size from the document framing", func():
 		expect(settings.get_node("SizeRow/Size").value == 3, "Reset fits the document with a three-pixel square frame")
 	)
-	step("When the user enables perspective for a preset view", func():
-		settings.get_node("ViewRow/Perspective").button_pressed = true
+	step("When the camera turns perspective for a preset view", func():
+		exporter._model_camera.is_orthogonal = false
 	)
-	step("Then the preset resets the size for perspective framing", func():
+	step("Then the preset follows the camera and Reset fits its framing", func():
 		var camera_settings: Dictionary = exporter._sheet_camera(1)
-		expect(camera_settings.projection == Camera3D.PROJECTION_PERSPECTIVE, "the preset uses perspective projection")
+		expect(camera_settings.projection == Camera3D.PROJECTION_PERSPECTIVE, "the preset uses the camera projection")
 		var bounds := State.document.bounds()
 		var perspective_span: int = exporter._sprite_span(bounds, camera_settings)
-		expect(settings.get_node("SizeRow/Size").value == perspective_span, "switching to perspective resets the frame size")
-		settings.get_node("ViewRow/Perspective").button_pressed = false
+		expect(settings.get_node("SizeRow/Size").value == 3, "the projection change keeps the manual frame size")
+		settings.get_node("SizeRow/Reset").pressed.emit()
+		expect(settings.get_node("SizeRow/Size").value == perspective_span, "Reset fits the perspective framing")
+		exporter._model_camera.is_orthogonal = true
 		var orthographic_span: int = exporter._sprite_span(bounds, exporter._sheet_camera(1))
-		expect(settings.get_node("SizeRow/Size").value == orthographic_span, "switching to orthographic resets the frame size")
-		expect(perspective_span != orthographic_span, "the frame size follows the selected camera framing")
-		settings.get_node("ViewRow/Perspective").button_pressed = false
+		expect(settings.get_node("SizeRow/Size").value == perspective_span, "the projection change keeps the manual frame size")
+		settings.get_node("SizeRow/Reset").pressed.emit()
+		expect(settings.get_node("SizeRow/Size").value == orthographic_span, "Reset fits the orthographic framing")
+		expect(perspective_span != orthographic_span, "the frame size follows the camera framing")
 	)
-	step("Then the projection toggle overrides the 3D preview projection without changing its camera", func():
-		var original_projection: int = exporter._model_camera.projection
-		var ortho_settings: Dictionary = exporter._sheet_camera(0)
-		expect(ortho_settings.projection == Camera3D.PROJECTION_ORTHOGONAL, "the 3D preview sprite uses orthographic projection")
-		settings.get_node("ViewRow/Perspective").button_pressed = true
-		var perspective_settings: Dictionary = exporter._sheet_camera(0)
-		expect(perspective_settings.projection == Camera3D.PROJECTION_PERSPECTIVE, "the 3D preview sprite uses perspective projection")
-		expect(ortho_settings.transforms == perspective_settings.transforms, "both projections retain the same camera pose")
-		expect(exporter._model_camera.projection == original_projection, "the model camera retains its projection")
-		settings.get_node("ViewRow/Perspective").button_pressed = false
+	step("Then a fixed view follows the camera projection without a size reset", func():
+		var original_size: float = settings.get_node("SizeRow/Size").value
+		exporter._model_camera.is_orthogonal = false
+		expect(exporter._sheet_camera(1).projection == Camera3D.PROJECTION_PERSPECTIVE, "the fixed view uses the perspective camera projection")
+		exporter._model_camera.is_orthogonal = true
+		expect(exporter._sheet_camera(1).projection == Camera3D.PROJECTION_ORTHOGONAL, "the fixed view uses the orthographic camera projection")
+		expect(settings.get_node("SizeRow/Size").value == original_size, "the projection changes keep the frame size")
 	)
 	if DisplayServer.get_name() == "headless":
 		return
@@ -376,19 +388,20 @@ func _sheet_run() -> void:
 		expect(_visible_pixels(image, Rect2i(0, 0, 9, 9)) == 1, "camera framing preserves one visible pixel for one voxel")
 	)
 	step("When the user chooses a perspective camera ten units from the bounds center", func():
+		exporter._model_camera._dist = 10.0
 		exporter._model_camera.is_orthogonal = false
 		exporter._model_camera.fov = 90.0
-		exporter._model_camera.transform = Transform3D(Basis.IDENTITY, Vector3(0, 0, 10))
 		exporter._model_camera.view_changed.emit()
-		settings.get_node("ViewRow/Perspective").button_pressed = true
 	)
-	step("Then the projection switch resets the size for the new camera", func():
+	step("Then the projection keeps the manual size and Reset uses the camera", func():
+		expect(settings.get_node("SizeRow/Size").value == 9, "the projection change keeps the nine-pixel frame size")
+		settings.get_node("SizeRow/Reset").pressed.emit()
 		expect(settings.get_node("SizeRow/Size").value == 20, "the ninety-degree view spans twenty units at the bounds center")
 		settings.get_node("ViewRow/View").select(1)
 		settings.get_node("ViewRow/View").item_selected.emit(1)
-		settings.get_node("ViewRow/Perspective").button_pressed = false
+		exporter._model_camera.is_orthogonal = true
 	)
-	var error: Error = await exporter.export_sprite_sheet(sheet_path, 0, 2, 32, 2)
+	var error: Error = await exporter.export_sprite_sheet(sheet_path, 0, 2, 32, 2, true)
 	step("Then the PNG contains all frames in row order with transparent unused space", func():
 		expect(error == OK, "the sprite sheet export completes")
 		var image := Image.new()
@@ -555,7 +568,7 @@ func _shadows_run() -> void:
 		var orthographic: bool = camera_case.ortho
 		var view: int = camera_case.view
 		step("When the user exports with shadows disabled", func():
-			settings.get_node("ViewRow/Perspective").button_pressed = not orthographic
+			exporter._model_camera.is_orthogonal = orthographic
 			shadow_lighting.get_node("%Shadows").button_pressed = false
 		)
 		var error: Error = await exporter.export_sprite_sheet(shadow_prefix + "_off.png", 0, 1, 128, view, false, 2)
@@ -565,7 +578,7 @@ func _shadows_run() -> void:
 		if orthographic:
 			orthographic_image = baseline
 		else:
-			expect(baseline.get_data() != orthographic_image.get_data(), "the projection toggle changes the rendered projection")
+			expect(baseline.get_data() != orthographic_image.get_data(), "the camera projection changes the rendered projection")
 		step("When the user exports with shadows enabled", func():
 			shadow_lighting.get_node("%Shadows").button_pressed = true
 		)

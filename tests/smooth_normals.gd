@@ -153,6 +153,7 @@ func _run() -> void:
 		expect(_has_smooth_normals(renderer._chunk_instances[Vector3i.ZERO].mesh), "the loaded document renders with smooth normals")
 		_expect_source_colors()
 	)
+	exporter._model.get_node("AnimationRow/Center").button_pressed = true
 	export_error = await exporter.export_gltf(MODEL_PATH)
 	step("Then glTF preserves smooth normals and valid geometry", func():
 		expect(export_error == OK, "the smooth model exports successfully")

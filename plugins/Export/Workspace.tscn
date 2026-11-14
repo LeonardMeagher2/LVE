@@ -8,7 +8,6 @@
 [ext_resource type="Texture2D" uid="uid://by28nxj3x7ily" path="res://icons/undo.svg" id="6_reset"]
 [ext_resource type="Texture2D" uid="uid://dif3h4ri2n0me" path="res://icons/camera.svg" id="7_view"]
 [ext_resource type="Texture2D" uid="uid://bshoasjpvru2h" path="res://icons/play.svg" id="12_play"]
-[ext_resource type="Texture2D" uid="uid://denrh23gr1h30" path="res://icons/ortho.svg" id="21_ortho"]
 [ext_resource type="Texture2D" uid="uid://denrh23gr1h2a" path="res://icons/size.svg" id="22_size"]
 [ext_resource type="Texture2D" uid="uid://denrh23gr1h20" path="res://icons/turntable.svg" id="23_turntable"]
 [ext_resource type="Texture2D" uid="uid://denrh23gr1h21" path="res://icons/json.svg" id="24_json"]
@@ -64,7 +63,7 @@ size_flags_horizontal = 3
 layout_mode = 2
 tooltip_text = "Center the exported model. Disable this to preserve the document origin."
 toggle_mode = true
-button_pressed = true
+button_pressed = false
 icon = ExtResource("5_center")
 icon_alignment = 1
 
@@ -167,19 +166,11 @@ texture = ExtResource("7_view")
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="Perspective" type="Button" parent="Panels/SheetPanel/Margin/Sheet/Settings/ViewRow" unique_id=756504249]
-layout_mode = 2
-tooltip_text = "Use perspective projection for the sprites. Turn this off to use orthographic projection. Changing projection resets the frame size."
-toggle_mode = true
-button_pressed = false
-icon = ExtResource("21_ortho")
-icon_alignment = 1
-
 [node name="Center" type="Button" parent="Panels/SheetPanel/Margin/Sheet/Settings/ViewRow" unique_id=1060883390]
 layout_mode = 2
 tooltip_text = "Center the voxel model before rendering sprites. Disable this to preserve the document origin."
 toggle_mode = true
-button_pressed = true
+button_pressed = false
 icon = ExtResource("5_center")
 icon_alignment = 1
 
@@ -228,14 +219,6 @@ max_value = 64.0
 value = 8.0
 suffix = "views"
 
-[node name="Metadata" type="Button" parent="Panels/SheetPanel/Margin/Sheet/Settings/TurntableRow" unique_id=530597979]
-layout_mode = 2
-tooltip_text = "Include Aseprite-style frame rectangles, delays, and tags."
-toggle_mode = true
-button_pressed = true
-icon = ExtResource("24_json")
-icon_alignment = 1
-
 [node name="ExportRow" type="HBoxContainer" parent="Panels/SheetPanel/Margin/Sheet"]
 layout_mode = 2
 
@@ -251,3 +234,11 @@ layout_mode = 2
 size_flags_horizontal = 3
 tooltip_text = "Export the sprite sheet as a PNG image"
 text = "Export"
+
+[node name="Metadata" type="Button" parent="Panels/SheetPanel/Margin/Sheet/ExportRow" unique_id=530597979]
+layout_mode = 2
+tooltip_text = "Include Aseprite-style frame rectangles, delays, and tags."
+toggle_mode = true
+button_pressed = false
+icon = ExtResource("24_json")
+icon_alignment = 1

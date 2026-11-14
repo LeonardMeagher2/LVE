@@ -40,6 +40,7 @@ func _run() -> void:
 		source_document.add_tag("LoopOnce", 0, 1, AnimationTag.LoopMode.FORWARD, 1)
 		menu_bar = main.get_node("Content/VBoxContainer/MenuBar")
 		exporter = plugin("ExportPlugin")
+		exporter._model.get_node("AnimationRow/Center").button_pressed = true
 		menu_bar.current_save_path = "user://original.tres"
 	)
 	step("When the user opens the Export workspace and chooses glTF", func():

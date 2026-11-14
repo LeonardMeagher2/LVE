@@ -33,7 +33,14 @@ func _run() -> void:
 		exporter._sheet_settings.get_node("ViewRow/View").select(2)
 		exporter._sheet_settings.get_node("ViewRow/View").item_selected.emit(2)
 		exporter._sheet_settings.get_node("TurntableRow/Turntable").button_pressed = false
-		exporter._sheet_settings.get_node("TurntableRow/Metadata").button_pressed = false
+		exporter._controls.get_node("ExportRow/Metadata").button_pressed = true
+		exporter._model_camera._yaw = deg_to_rad(30.0)
+		exporter._model_camera._pitch = deg_to_rad(20.0)
+		exporter._model_camera._dist = 17.0
+		exporter._model_camera._init_dist = 21.0
+		exporter._model_camera._target = Vector3(2, 3, 4)
+		exporter._model_camera.is_orthogonal = true
+		exporter._model_camera._update()
 		exporter._model_scene.get_node("%LightColor").color_changed.emit(Color(0, 0, 1))
 		var export_lighting: Dictionary = exporter._model_scene.get_lighting_settings()
 		export_lighting.basis = export_light_basis
@@ -53,6 +60,11 @@ func _run() -> void:
 		expect(State.document.lighting_settings.basis.is_equal_approx(light_basis), "the document stores the editor light direction")
 		expect(State.document.export_settings.lighting.basis.is_equal_approx(export_light_basis), "the document stores the independent export light direction")
 		expect(State.document.export_settings.lighting.view_locked, "the document stores the export view lock")
+		var camera: Dictionary = State.document.export_settings.camera
+		expect(camera.orthographic, "the document stores the export projection")
+		expect(is_equal_approx(camera.yaw, deg_to_rad(30.0)) and is_equal_approx(camera.pitch, deg_to_rad(20.0)), "the document stores the export camera angle")
+		expect(camera.target.is_equal_approx(Vector3(2, 3, 4)), "the document stores the export camera offset")
+		expect(is_equal_approx(camera.distance, 17.0) and is_equal_approx(camera.initial_distance, 21.0), "the document stores the export camera zoom")
 		expect(not State.document.lighting_settings.has("view_locked"), "the editor lock stays a session option")
 	)
 	step("When the user saves under another file name", func():
@@ -74,9 +86,15 @@ func _run() -> void:
 		expect(exporter._sheet_settings.get_node("SizeRow/Size").value == 24, "the manual frame size is restored")
 		expect(exporter._sheet_settings.get_node("ViewRow/View").selected == 2, "the selected sprite view is restored")
 		expect(not exporter._sheet_settings.get_node("TurntableRow/Turntable").button_pressed, "the saved turntable choice is restored")
-		expect(not exporter._sheet_settings.get_node("TurntableRow/Metadata").button_pressed, "the saved metadata choice is restored")
+		expect(exporter._controls.get_node("ExportRow/Metadata").button_pressed, "the saved metadata choice is restored")
 		expect(exporter._sheet_lighting().color == Color(0, 0, 1), "the export color is restored")
 		expect(exporter._model_scene.get_lighting_settings().view_locked, "the export view lock is restored")
+		exporter._refresh_model()
+		expect(exporter._model_camera.is_orthogonal, "the export orthographic projection is restored")
+		expect(is_equal_approx(exporter._model_camera._yaw, deg_to_rad(30.0)) and is_equal_approx(exporter._model_camera._pitch, deg_to_rad(20.0)), "the export camera angle is restored")
+		expect(exporter._model_camera._target.is_equal_approx(Vector3(2, 3, 4)), "the export camera offset is restored")
+		expect(is_equal_approx(exporter._model_camera._dist, 17.0), "the export camera zoom is restored")
+		expect(exporter.current_export_settings().sprite.orthographic, "the sprite projection follows the restored camera")
 	)
 	step("When the user edits the document and opens the same file again", func():
 		State.paint(Vector3i(100, 100, 100), VoxelFrame.material(Color.RED))

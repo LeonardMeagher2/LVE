@@ -75,7 +75,7 @@ The server publishes no resources. The initialize `instructions` field carries t
 | `set_document_settings` | Set smooth normals, ambient occlusion strength, and the centered document size. One undo action |
 | `get_export_settings` | Read the export settings the editor uses now. It also returns the document path and the default model and sprite paths |
 | `export_model` | Export a `.glb` or `.gltf` file with per-call model settings. Omit `path` to export beside the document |
-| `export_sprite_sheet` | Export a PNG sprite sheet and the Aseprite JSON sidecar with per-call settings. Omit `path` to export beside the document |
+| `export_sprite_sheet` | Export a PNG sprite sheet with optional Aseprite JSON metadata and per-call settings. Omit `path` to export beside the document |
 | `add_frame` | Add empty frames at the end or at an index, in one undo action |
 | `remove_frame` | Remove one frame, or a list in one undo action. The last frame stays |
 | `move_frame` | Move one frame or a block to a new index, in one undo action. Omit `from` to move the current frame |
@@ -160,7 +160,7 @@ The server logs one line per tool call with its response bytes in `user://mcp_se
 
 `get_export_settings` reads the values the export tab uses now: the sheet view, the tile size, the tag, and the model options.
 
-`export_model` writes a `.glb` or `.gltf` file. It accepts `center`, `tag`, `smooth_normals`, `ao`, and `unlit`. It exports lit materials by default. `export_sprite_sheet` writes a PNG and the Aseprite JSON sidecar. It accepts `first_frame`, `last_frame`, `tag`, `tile_size`, `view`, `views`, `orthographic`, `center`, and `metadata`. Omit `path` on either tool to write beside the document. An unsaved document exports to the user directory. `get_export_settings` returns both default paths.
+`export_model` writes a `.glb` or `.gltf` file. It accepts `center`, `tag`, `smooth_normals`, `ao`, and `unlit`. It exports lit materials by default. `export_sprite_sheet` writes a PNG and optional Aseprite JSON metadata. It accepts `first_frame`, `last_frame`, `tag`, `tile_size`, `view`, `views`, `orthographic`, `center`, and `metadata`. The sprite projection defaults to the export camera. Omit `path` on either tool to write beside the document. An unsaved document exports to the user directory. `get_export_settings` returns both default paths.
 
 Pass a key only when the call needs a value that differs from the export tab. The call does not change the document or the saved export settings. Both tools return the resolved path and the resolved values.
 

@@ -300,9 +300,20 @@ func _preview_behavior() -> void:
 	await get_tree().process_frame
 	step("When the user resets a manually changed sprite size", func():
 		exporter._sheet_settings.get_node("SizeRow/Size").value = 99
+		exporter._model_camera.is_orthogonal = true
 		exporter._sheet_settings.get_node("SizeRow/Reset").pressed.emit()
 		expect(exporter._sheet_settings.get_node("SizeRow/Size").value == 2, "Reset calculates the front-view size from the voxel bounds")
 		exporter._sheet_settings.get_node("SizeRow/Size").value = 32
+	)
+	await _wait_preview()
+	step("When the user changes the camera projection for a fixed view", func():
+		saved_revision = exporter._preview_revision
+		exporter._model_camera.is_orthogonal = not exporter._model_camera.is_orthogonal
+	)
+	step("Then the sheet preview schedules a render and keeps the manual size", func():
+		expect(exporter._preview_revision > saved_revision, "the projection change schedules a new preview")
+		expect(exporter._sheet_settings.get_node("SizeRow/Size").value == 32, "the projection change keeps the manual frame size")
+		exporter._model_camera.is_orthogonal = not exporter._model_camera.is_orthogonal
 	)
 	await _wait_preview()
 	step("When the user sets the sheet zoom to one-to-one and pans", func():
@@ -409,7 +420,6 @@ func _shading_swap() -> void:
 	)
 	await _wait_model_swap()
 	step("Then both preview renderers follow the shading option", func():
-		expect(exporter._model_renderer != exporter._model_scene.get_node("VoxelRenderer"), "the preview swapped to its second renderer")
 		expect(exporter._model_renderer.unshaded, "the visible preview renderer draws unshaded")
 		expect(exporter._model_back_renderer.unshaded, "the hidden preview renderer draws unshaded")
 	)

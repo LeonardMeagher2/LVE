@@ -159,7 +159,7 @@ func _export_run() -> void:
 		exporter._model_scene.set_lighting_settings(lighting)
 		exporter._sheet_settings.get_node("ViewRow/View").select(2)
 		exporter._sheet_settings.get_node("ViewRow/View").item_selected.emit(2)
-		exporter._sheet_settings.get_node("ViewRow/Perspective").set_pressed_no_signal(false)
+		exporter._model_camera.is_orthogonal = true
 		exporter._sheet_settings.get_node("ViewRow/Center").set_pressed_no_signal(true)
 		exporter._sheet_settings.get_node("SizeRow/Size").set_value_no_signal(32)
 		exporter._sheet_settings.get_node("TurntableRow/Turntable").set_pressed_no_signal(true)
@@ -218,7 +218,7 @@ func _preview_run() -> void:
 		State.frames_changed.emit()
 		exporter._sheet_settings.get_node("ViewRow/View").select(2)
 		exporter._sheet_settings.get_node("ViewRow/View").item_selected.emit(2)
-		exporter._sheet_settings.get_node("ViewRow/Perspective").set_pressed_no_signal(false)
+		exporter._model_camera.is_orthogonal = true
 		exporter._sheet_settings.get_node("ViewRow/Center").set_pressed_no_signal(true)
 		exporter._sheet_settings.get_node("SizeRow/Size").set_value_no_signal(32)
 		exporter._sheet_settings.get_node("TurntableRow/Turntable").set_pressed_no_signal(true)
