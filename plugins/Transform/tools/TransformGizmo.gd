@@ -34,17 +34,15 @@ const ARROW_HEAD := 0.07
 ## The arrowhead half width as a fraction of the handle radius. Equal to the
 ## head length, so each arrowhead closes at a right angle.
 const ARROW_SIDE := ARROW_HEAD
-## The Rotate mark bend radius in screen pixels.
-const ROTATE_BEND_PX := 8.0
-## The straight run before and after the Rotate mark bend, in screen pixels.
+## The Rotate mark corner offset in screen pixels.
+const ROTATE_OFFSET_PX := 8.0
+## The straight run before and after the Rotate mark corner, in screen pixels.
 const ROTATE_RUN_PX := 13.0
 ## The Rotate mark arrowhead length in screen pixels.
 const ROTATE_HEAD_PX := 3.5
 ## The Rotate mark arrowhead half width in screen pixels. Equal to the head
 ## length, so each arrowhead closes at a right angle.
 const ROTATE_SIDE_PX := ROTATE_HEAD_PX
-## The line segments in one Rotate mark bend.
-const ROTATE_BEND_SEGMENTS := 6
 
 ## The shape to draw.
 @export var kind: Kind = Kind.MOVE
@@ -256,33 +254,23 @@ func _append_square(vertices: PackedVector3Array, center: Vector3, half: float) 
 
 
 func _append_rotate_marks(vertices: PackedVector3Array, half: float, world_px: float) -> void:
-	var bend := world_px * ROTATE_BEND_PX
+	var offset := world_px * ROTATE_OFFSET_PX
 	var run := world_px * ROTATE_RUN_PX
 	var head := world_px * ROTATE_HEAD_PX
 	var side := world_px * ROTATE_SIDE_PX
 	var down := Vector2(0.0, -1.0)
 	var up := Vector2(0.0, 1.0)
-	_append_turn_arrow(vertices, Vector2(half + bend, half + bend), Vector2.RIGHT, down, run, bend, head, side)
-	_append_turn_arrow(vertices, Vector2(-half - bend, -half - bend), Vector2.LEFT, up, run, bend, head, side)
+	_append_turn_arrow(vertices, Vector2(half + offset, half + offset), Vector2.RIGHT, down, run, head, side)
+	_append_turn_arrow(vertices, Vector2(-half - offset, -half - offset), Vector2.LEFT, up, run, head, side)
 
 
-# Draws one arrow that runs along a straight [param across] arm, turns a quarter
-# circle, then runs along [param along] to a right-angle head. The two arms meet
-# at [param corner], and each one is [param run] long.
-func _append_turn_arrow(vertices: PackedVector3Array, corner: Vector2, across: Vector2, along: Vector2, run: float, bend: float, head: float, side: float) -> void:
-	var start := corner - across * run
-	var bend_start := corner - across * bend
-	var bend_end := corner + along * bend
+# Draws one arrow that runs along a straight [param across] arm, turns a right
+# angle at [param corner], then runs along [param along] to a right-angle head.
+# Each arm is [param run] long from the corner.
+func _append_turn_arrow(vertices: PackedVector3Array, corner: Vector2, across: Vector2, along: Vector2, run: float, head: float, side: float) -> void:
 	var tip := corner + along * run
-	_append_line(vertices, _plane_point(start), _plane_point(bend_start))
-	var center := corner - across * bend + along * bend
-	var previous := bend_start
-	for index in range(1, ROTATE_BEND_SEGMENTS + 1):
-		var angle := PI * 0.5 * (1.0 - float(index) / ROTATE_BEND_SEGMENTS)
-		var point := center + (across * cos(angle) - along * sin(angle)) * bend
-		_append_line(vertices, _plane_point(previous), _plane_point(point))
-		previous = point
-	_append_line(vertices, _plane_point(bend_end), _plane_point(tip))
+	_append_line(vertices, _plane_point(corner - across * run), _plane_point(corner))
+	_append_line(vertices, _plane_point(corner), _plane_point(tip))
 	var back := tip - along * head
 	_append_line(vertices, _plane_point(tip), _plane_point(back + across * side))
 	_append_line(vertices, _plane_point(tip), _plane_point(back - across * side))
