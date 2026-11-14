@@ -18,14 +18,6 @@ enum Tools {
 	POSE
 }
 
-## The set of cells that the Pose brush moves.
-enum Reach {
-	## Every connected cell on the tip side of the joint.
-	LIMB,
-	## Only the cells inside the brush ring.
-	SPHERE
-}
-
 ## The active deform tool.
 @export var tool: Tools = Tools.GRAB:
 	set(value):
@@ -54,13 +46,5 @@ enum Reach {
 		if value == falloff:
 			return
 		falloff = value
-		emit_changed()
-
-## The set of cells that the Pose brush moves.
-@export var reach: Reach = Reach.LIMB:
-	set(value):
-		if value == reach:
-			return
-		reach = value
 		emit_changed()
 

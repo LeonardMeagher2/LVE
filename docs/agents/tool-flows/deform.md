@@ -141,7 +141,7 @@ flowchart TD
   subgraph Main["Main"]
     P1["Press on a voxel"]
     P2["Find the farthest limb cell within the brush radius"]
-    P3["Capture the limb or the sphere at the joint band"]
+    P3["Capture the limb at the joint band"]
     P4["Build one pose entry per symmetry mask"]
     P5["Drag: view-plane cell"]
     P6["Turn by the screen angle from the bone to the pointer"]
@@ -170,12 +170,10 @@ across the whole frame.
 The joint is therefore always an occupied voxel on the limb, and the pointer is
 the tip of the bone.
 
-The Reach option selects the moved cells.
-Limb walks the connected occupied cells from the picked cell.
+The moved cells are the connected occupied cells from the picked cell.
 The walk stops where the limb crosses the joint band, so the cells behind the
 joint keep still.
 The walk also stops at the limb allowance, so a solid blob bends a bounded set.
-Sphere keeps the occupied cells inside the ring.
 The falloff sets the half width of the joint neck, in cells.
 It ramps from half a cell at zero to two cells at one, and stops at
 `DeformLimb.NECK_LIMIT`.
@@ -224,14 +222,13 @@ The bone is the whole cursor.
 A hover shows the joint and the bone to the cell under the pointer.
 The hover reads one captured cell only, because it answers one question: can the
 press capture a cell?
-The scan runs again only when the picked cell, the size, the falloff, the reach,
-the selection, the slice, the document size, or the frame changes.
+The scan runs again only when the picked cell, the size, the falloff, the
+selection, the slice, the document size, or the frame changes.
 
 Source:
 
 - [`DeformLimb.joint_pivot`](../../../plugins/Deform/DeformLimb.gd)
 - [`DeformLimb.capture_limb`](../../../plugins/Deform/DeformLimb.gd)
-- [`DeformLimb.capture_sphere`](../../../plugins/Deform/DeformLimb.gd)
 - [`DeformLimb.turn_point`](../../../plugins/Deform/DeformLimb.gd)
 - [`PoseTool._capture_gesture`](../../../plugins/Deform/PoseTool.gd)
 - [`PoseTool._make_job`](../../../plugins/Deform/PoseTool.gd)
@@ -245,10 +242,7 @@ Source:
 `DeformPlugin` owns the two tools, one `MenuButton`, and one option bar.
 `State.reset_plugins` adds it after the terrain plugin.
 The toolbar holds Grab and Pose with fixed ids.
-The option bar shows the shared size and falloff.
-Grab uses those two only. The Pose controls hide while Grab is active.
-The Pose control is the reach set. It shares the size and the falloff with Grab.
-The reach button shows the set of the next press in its icon and its tooltip.
+The option bar shows the shared size and falloff. Both tools use them.
 Neither tool shows a strength control, because neither uses one.
 
 Source:

@@ -136,40 +136,6 @@ static func capture_limb(frame: VoxelFrame, anchor: Vector3i, pivot: Vector3, bo
 	return captured
 
 
-## Returns the sphere cells of one joint, keyed by cell, with their weight.
-##
-## The result holds every allowed occupied cell inside the brush ring. A cell
-## behind the joint has no weight, so it is not captured and the joint blend
-## still applies to the cells in front of it.
-##
-## [param limit] stops the scan after that many cells. Zero reads the whole ring.
-## A caller that only needs to know whether the ring holds a cell passes one.
-static func capture_sphere(frame: VoxelFrame, anchor: Vector3i, pivot: Vector3, bone_dir: Vector3, band: float, size: int, context: VoxelFrame.EditContext, limit := 0) -> Dictionary:
-	var captured := {}
-	if frame == null or anchor == VoxelPicking.NONE:
-		return captured
-	var use_radius := float(clampi(size, 1, 32)) * 0.5
-	var reach := ceili(use_radius)
-	for x in range(-reach, reach + 1):
-		for y in range(-reach, reach + 1):
-			for z in range(-reach, reach + 1):
-				if x * x + y * y + z * z > use_radius * use_radius:
-					continue
-				var cell := anchor + Vector3i(x, y, z)
-				if not frame.has(cell):
-					continue
-				if context != null and not context.allows(cell):
-					continue
-				var along := (Vector3(cell) - pivot).dot(bone_dir)
-				var weight := limb_weight(along, band)
-				if weight <= 0.0:
-					continue
-				captured[cell] = weight
-				if limit > 0 and captured.size() >= limit:
-					return captured
-	return captured
-
-
 ## Returns the pose weight of one cell from its distance along the bone.
 ##
 ## The weight runs from zero at the far side of the joint band to one at its

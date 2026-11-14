@@ -186,9 +186,6 @@ var _limb := {}
 var _poses: Array = []
 var _bone: MeshInstance3D
 
-# The captured options of the open stroke.
-var _stroke_reach := 0
-
 
 # The hover joint and whether the press can capture a cell, keyed by the inputs
 # that shape them. A pointer move inside one cell then costs no scan.
@@ -238,7 +235,6 @@ func _clear_state() -> void:
 
 
 func _capture_gesture(pick: PickResult) -> bool:
-	_stroke_reach = _settings.reach
 	var joint := DeformLimb.joint_pivot(_source_frame, _anchor, _stroke_size, _stroke_context)
 	_joint_found = bool(joint["found"])
 	if not _joint_found:
@@ -251,10 +247,7 @@ func _capture_gesture(pick: PickResult) -> bool:
 	# limb and a huge connected blob keeps its bend inside the brush.
 	var ball := roundi(0.5236 * float(_stroke_size * _stroke_size * _stroke_size))
 	var allowance := clampi(ball * LIMB_LIMIT_FACTOR, LIMB_MIN_LIMIT, LIMB_CELL_LIMIT)
-	if _stroke_reach == _settings.Reach.SPHERE:
-		_limb = DeformLimb.capture_sphere(_source_frame, _anchor, _pivot, _bone_dir, _band, _stroke_size, _stroke_context)
-	else:
-		_limb = DeformLimb.capture_limb(_source_frame, _anchor, _pivot, _bone_dir, _band, allowance, _stroke_context)
+	_limb = DeformLimb.capture_limb(_source_frame, _anchor, _pivot, _bone_dir, _band, allowance, _stroke_context)
 	if _limb.is_empty():
 		return false
 	_poses = _build_poses()
@@ -420,11 +413,7 @@ func _hover_state(pick: PickResult) -> Dictionary:
 		# The hover answers one question: can the press capture a cell? One cell
 		# is enough, so the walk never reads the whole limb.
 		var band := DeformLimb.joint_band(_settings.size, _settings.falloff)
-		var limb := {}
-		if _settings.reach == _settings.Reach.SPHERE:
-			limb = DeformLimb.capture_sphere(frame, pick.hit, joint["pivot"], joint["bone_dir"], band, _settings.size, context, 1)
-		else:
-			limb = DeformLimb.capture_limb(frame, pick.hit, joint["pivot"], joint["bone_dir"], band, 1, context)
+		var limb := DeformLimb.capture_limb(frame, pick.hit, joint["pivot"], joint["bone_dir"], band, 1, context)
 		moves = not limb.is_empty()
 	_hover_key = key
 	_hover_joint = joint
@@ -438,7 +427,7 @@ func _hover_state(pick: PickResult) -> Dictionary:
 func _hover_key_for(pick: PickResult, frame: VoxelFrame, context: VoxelFrame.EditContext) -> String:
 	return str([
 		frame.get_instance_id(), pick.hit,
-		_settings.size, _settings.falloff, _settings.reach,
+		_settings.size, _settings.falloff,
 		State.selection.revision,
 		context.slice_axis, context.slice_index, context.slice_count,
 		context.bounded_axes, context.bounds_min, context.bounds_max,

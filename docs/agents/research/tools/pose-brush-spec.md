@@ -31,13 +31,10 @@ The user poses a limb or corrects its proportions, then commits the result as on
 
 ## 4. Affected region
 
-The Reach option selects one of two sets.
+Every occupied cell on the tip side of the joint moves.
+The brush uses face-connected cells only, as Blender's Connected Only does [R1].
 
-- **Limb**: every occupied cell on the tip side of the joint moves. The brush uses face-connected cells only, as Blender's Connected Only does [R1].
-- **Sphere**: only the cells inside the ring at the press move, as with Grab [R5].
-
-Tradeoff: Sphere keeps unrelated geometry still. It cuts the limb at the ring, so the bend looks like a dent.
-Limb keeps the silhouette smooth. It moves every connected cell, so a touching shape moves too.
+Tradeoff: a limb keeps the silhouette smooth. It moves every connected cell, so a touching shape moves too. A cell selection keeps the bend local.
 
 ## 5. The rotation
 
@@ -74,7 +71,6 @@ Limb keeps the silhouette smooth. It moves every connected cell, so a touching s
 | --- | --- | --- | --- |
 | Brush size | 1 to 32 cells, as a diameter | 4 | Sets the ring and the captured set. Blender states that only Size and Auto-Masking change this brush [R1]. |
 | Edge falloff | 0 to 1 | 0.5 | Sets the width of the joint neck (section 6) [R3]. |
-| Reach | Limb, Sphere | Limb | Sets the moved cells (section 4) [R1]. |
 | Mirror planes | X, Y, Z | as set | Repeats the bend through each active plane [R4]. |
 
 The brush size and the edge falloff are the shared inputs of the tool set.
@@ -82,8 +78,8 @@ The cell selection is not an option. It always limits the brush, like the transf
 
 ## 9. Limits and edge cases
 
-- **Limb larger than the view.** Reach Limb moves every connected cell. The user must use Reach Sphere or a selection. The joint still sits at the brush edge.
-- **Limb that touches unrelated geometry.** A shared face makes one limb, so Reach Limb bends both shapes.
+- **Limb larger than the view.** Every connected cell moves. The user must use a cell selection. The joint still sits at the brush edge.
+- **Limb that touches unrelated geometry.** A shared face makes one limb, so the bend moves both shapes.
 - **Bend that leaves the writable slice or the document limit.** The brush lowers the angle until every moved cell fits. If no angle fits, the brush shows a blocked state and the stroke does nothing.
 - **Bend that leaves the selection.** Only selected cells move. An unselected occupied cell blocks the bend. The brush lowers the angle until no moved cell lands on one.
 - **No selected cell in the picked set.** The brush shows a blocked state and starts no stroke.
@@ -137,8 +133,8 @@ shipped tool.
   and the angle is the screen angle from the bone to that arm. A travel-based
   angle leaves the tip off the pointer.
 - The cursor shows the joint and the bone. It shows no cell count.
-- The option bar holds the reach only. It shares the size and the falloff with
-  Grab. Blend passes, joint count, joint offset, and the angle limit are gone. A
+- The option bar holds the size and the falloff, shared with Grab. Blend passes,
+  joint count, joint offset, and the angle limit are gone. A
   single rigid turn is easier to predict, and the falloff already softens the
   joint neck.
 - The cell selection limits the limb search and the captured cells. The moved

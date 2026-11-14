@@ -30,7 +30,6 @@ var anchor := Vector3i.ZERO
 var pose_before := {}
 var pose_bent := {}
 var pose_count := 0
-var pose_reach := 0.0
 
 
 func _ready() -> void:
@@ -51,7 +50,6 @@ func _ready() -> void:
 	
 	test("pose bends the connected limb and keeps the far side still", _pose_limb, "pose_limb")
 	test("a hover shows the rotation point before the press", _pose_hover_pivot, "pose_hover_pivot")
-	test("the reach option keeps the cells outside the ring still", _pose_reach_sphere, "pose_reach_sphere")
 	test("pose keeps the bent limb solid", _pose_solid, "pose_solid")
 	test("a bone that points at the viewer still turns the limb", _pose_end_on, "pose_end_on")
 	test("pose mirrors its bend through the symmetry", _pose_symmetry, "pose_symmetry")
@@ -78,7 +76,6 @@ func before_test() -> void:
 	_use(_settings.Tools.GRAB)
 	_settings.size = 5
 	_settings.falloff = 0.5
-	_settings.reach = _settings.Reach.LIMB
 	viewport = editor_viewport()
 	viewport.get_parent().stretch = false
 	viewport.size = Vector2i(800, 500)
@@ -875,31 +872,6 @@ func _pose_large_blob() -> void:
 	step("Then the block keeps its cells", func():
 		expect(frame.count() >= pose_count - 8, "the footprint bend keeps the block solid")
 		expect(not State.edit_busy(), "the pose releases the edit")
-	)
-
-
-func _pose_reach_sphere() -> void:
-	step("Given a long bar and the Sphere reach", func():
-		_use(_settings.Tools.POSE)
-		_settings.size = 4
-		_settings.falloff = 0.0
-		_settings.reach = _settings.Reach.SPHERE
-		_view("front")
-		_bar(-8, 8)
-		press = _pos(Vector3(0.0, 0.0, 0.0))
-	)
-	step("When the user presses and drags", func():
-		_press(press)
-		expect(tool._joint_found, "the pose finds the joint")
-		expect(tool._limb.size() < 17, "the sphere reach keeps fewer cells than the whole limb")
-		var drag_pos := press + Vector2(0.0, -260.0)
-		_motion(drag_pos, drag_pos - press)
-		_release(drag_pos)
-	)
-	await _await_edit_closed()
-	step("Then the cells outside the ring keep their place", func():
-		expect(frame.has(Vector3i(-8, 0, 0)), "the far end stays in place")
-		expect(frame.has(Vector3i(8, 0, 0)), "the other end stays in place")
 	)
 
 
