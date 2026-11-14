@@ -33,6 +33,7 @@ func _ready() -> void:
 	test("a drag selects the volume behind the shape, the empty cells, and the depth test front layer", _selection, "selection")
 	test("a click selects the voxels under the pointer and the optional empty cells", _selection_click, "selection_click")
 	test("the lasso selects the volume inside a dragged outline", _lasso, "lasso")
+	test("a click away from the voxel center selects that voxel", _click_off_center, "click_off_center")
 
 
 # Each test starts from a fresh document, the default selection options, and the
@@ -455,6 +456,47 @@ func _lasso() -> void:
 	step("Then the cancelled drag selects nothing and hides the band", func():
 		expect(State.selection.is_empty(), "Escape cancels the drag without selecting")
 		expect(not _band().visible, "the band hides after the cancel")
+	)
+
+
+func _click_off_center() -> void:
+	step("Given the box tool, a plate, and the top view", func():
+		_view_setup()
+		select_toolbar_item("selection", "Box")
+		camera_rig().is_orthogonal = true
+		camera_rig().set_view("top")
+		plate_frame = State.document.frames[State.current_frame]
+		_place_plate()
+		camera_rig().center_on(_plate_bounds())
+		spacing = _screen_of(Vector3i.ZERO).distance_to(_screen_of(Vector3i(1, 0, 0)))
+		expect(spacing > 20.0, "the voxel spacing is wide enough for an off-center click")
+	)
+
+	step("When the user clicks away from the center of a voxel", func():
+		var point := _screen_of(Vector3i(1, 0, 1)) + Vector2(spacing, spacing) * 0.25
+		expect(aim(point).target == Vector3i(1, 0, 1), "the box click point stays over the voxel")
+		_click(point)
+	)
+
+	step("Then only the voxel under the pointer is selected", func():
+		expect(State.selection.count() == 1, "the off-center click selects one cell")
+		expect(State.selection.contains(Vector3i(1, 0, 1)), "the clicked voxel is selected")
+	)
+
+	step("Given the lasso tool and an empty selection", func():
+		select_toolbar_item("selection", "Lasso")
+		State.clear_selection()
+	)
+
+	step("When the user clicks away from the center of another voxel", func():
+		var point := _screen_of(Vector3i(3, 0, 3)) + Vector2(spacing, spacing) * 0.25
+		expect(aim(point).target == Vector3i(3, 0, 3), "the lasso click point stays over the voxel")
+		_click(point)
+	)
+
+	step("Then only the lasso-clicked voxel is selected", func():
+		expect(State.selection.count() == 1, "the lasso off-center click selects one cell")
+		expect(State.selection.contains(Vector3i(3, 0, 3)), "the lasso clicked voxel is selected")
 	)
 
 

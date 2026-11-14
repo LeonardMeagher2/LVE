@@ -34,6 +34,18 @@ func _commit_shape(pos: Vector2) -> void:
 	_commit_screen(_screen_rectangle(pos), PackedVector2Array())
 
 
+# A lasso click stays near the press point. A path that returns to its start is
+# still a drag.
+func _is_click(release_pos: Vector2) -> bool:
+	if not super._is_click(release_pos):
+		return false
+	for point in _points:
+		var travel := (point - _screen_press).abs()
+		if travel.x >= CLICK_SIZE or travel.y >= CLICK_SIZE:
+			return false
+	return true
+
+
 func _reset_shape() -> void:
 	_points = PackedVector2Array()
 

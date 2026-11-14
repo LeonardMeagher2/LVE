@@ -53,6 +53,9 @@ func _ready() -> void:
 	%FileDialog.file_selected.connect(_on_file_selected)
 	%FileDialog.canceled.connect(_on_file_dialog_canceled)
 	%FileDialog.visibility_changed.connect(_on_file_dialog_visibility_changed)
+	var window := get_window()
+	if not window.files_dropped.is_connected(_on_files_dropped):
+		window.files_dropped.connect(_on_files_dropped)
 	_restore_file_dialog()
 	_save_format.add_item("LVE document (.lve)")
 	_save_format.add_item("LVE document with PNG preview (.lve.png)")
@@ -132,6 +135,14 @@ func _remember_session() -> void:
 func _show_file_error(message: String) -> void:
 	%FileError.dialog_text = message
 	%FileError.popup_centered()
+
+
+## Opens each file from an operating system file drop in order. A document
+## reuses the active empty tab or opens a new tab. An image imports as a new
+## document tab.
+func _on_files_dropped(files: PackedStringArray) -> void:
+	for path in files:
+		await _on_file_opened(path)
 
 
 func _on_file_selected(path: String) -> void:

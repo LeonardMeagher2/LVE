@@ -7,6 +7,7 @@ extends VoxelPlugin
 ## JSON sidecar.
 
 const GLTF_EXPORT := preload("./GLTFExport.gd")
+const GIF_ENCODER := preload("./GifEncoder.gd")
 ## The camera view names of the sprite sheet.
 const VIEWS := ["3D preview", "Isometric", "Front", "Back", "Left", "Right", "Top", "Bottom"]
 ## The stable API names of the sprite sheet views. They match the screenshot tool.
@@ -23,8 +24,11 @@ const SPRITE_GAP := 1
 @onready var _model: VBoxContainer = _workspace.get_node("%Model")
 @onready var _controls: VBoxContainer = _workspace.get_node("%Sheet")
 @onready var _sheet_settings: GridContainer = _controls.get_node("Settings")
+@onready var _export_button: Button = _controls.get_node("ExportRow/Export")
+@onready var _gif_button: Button = _controls.get_node("ExportRow/Gif")
 @onready var _dialog: FileDialog = _menu_item.get_node("ExportDialog")
 @onready var _sheet_dialog: FileDialog = _menu_item.get_node("SpriteSheetDialog")
+@onready var _gif_dialog: FileDialog = _menu_item.get_node("GifDialog")
 
 var _gltf: RefCounted
 var _exporting := false
@@ -97,7 +101,9 @@ func _ready() -> void:
 	_model.get_node("Export").pressed.connect(_choose_gltf_file)
 	_dialog.file_selected.connect(_on_gltf_file_selected)
 	_sheet_dialog.file_selected.connect(_on_sheet_file_selected)
-	_controls.get_node("Export").pressed.connect(_choose_sheet_file)
+	_gif_dialog.file_selected.connect(_on_gif_file_selected)
+	_export_button.pressed.connect(_choose_export_file)
+	_gif_button.toggled.connect(_on_gif_toggled)
 	var sheet_preview: Control = _controls.get_node("Preview")
 	var sheet_bar: HBoxContainer = _controls.get_node("ControlBar")
 	sheet_bar.get_node("PanToggle").toggled.connect(sheet_preview.set_pan_mode)
@@ -200,6 +206,8 @@ func _restore_export_settings() -> void:
 	_model_camera._pitch = _pending_export_camera.get("pitch", _default_camera.pitch)
 	_model_camera.fov = _pending_export_camera.get("fov", _default_camera.fov)
 	_model_camera.is_orthogonal = _pending_export_camera.get("orthographic", _default_camera.orthographic)
+	_gif_button.set_pressed_no_signal(false)
+	_controls.get_node("Preview").clear_animation()
 	_restoring_export_settings = false
 
 
@@ -376,7 +384,9 @@ func _sheet_settings_changed() -> void:
 	_preview_revision += 1
 	_preview_due_ms = Time.get_ticks_msec() + PREVIEW_DELAY_MS
 	_preview_image = null
-	_controls.get_node("Preview").texture = null
+	var preview: Control = _controls.get_node("Preview")
+	preview.clear_animation()
+	preview.texture = null
 	_save_export_settings()
 	_sync()
 
@@ -492,9 +502,12 @@ func _sync() -> void:
 	var tile_size := int(_sheet_settings.get_node("SizeRow/Size").value)
 	_sheet_settings.get_node("SizeRow/Size").tooltip_text = "Frame size: %d × %d px. Use Reset for the camera framing." % [tile_size, tile_size]
 	var layout := sheet_layout(count * views, tile_size)
+	var gif := _gif_enabled()
 	_menu_item.get_node("ExportBtn").disabled = busy
 	_model.get_node("Export").disabled = busy
-	_controls.get_node("Export").disabled = busy or layout.size.x > Image.MAX_WIDTH or layout.size.y > Image.MAX_HEIGHT
+	_export_button.disabled = busy or (not gif and (layout.size.x > Image.MAX_WIDTH or layout.size.y > Image.MAX_HEIGHT))
+	_export_button.tooltip_text = "Export the animation as a GIF" if gif else "Export the sprite sheet as a PNG image"
+	_gif_button.disabled = busy
 	for path in ["FrameRow/Frames", "ViewRow/View", "ViewRow/Perspective", "ViewRow/Center"]:
 		_sheet_settings.get_node(path).disabled = busy
 	_sheet_settings.get_node("SizeRow/Size").editable = not busy
@@ -511,8 +524,15 @@ func _sync() -> void:
 func _export_status() -> Dictionary:
 	var frame_range := _selected_frames()
 	var count := frame_range.y - frame_range.x + 1
-	var layout := sheet_layout(count * _view_count(), int(_sheet_settings.get_node("SizeRow/Size").value))
-	var message := _result_message if not _result_message.is_empty() else "%d × %d pixels · %d frames × %d views" % [layout.size.x, layout.size.y, count, _view_count()]
+	var views := _view_count()
+	var tile_size := int(_sheet_settings.get_node("SizeRow/Size").value)
+	var message := _result_message
+	if message.is_empty():
+		if _gif_enabled():
+			message = "%d × %d pixels · %d GIF frames" % [tile_size, tile_size, count * views]
+		else:
+			var layout := sheet_layout(count * views, tile_size)
+			message = "%d × %d pixels · %d frames × %d views" % [layout.size.x, layout.size.y, count, views]
 	return {
 		"left": "%s   #%d/%d   %d%%" % [
 			message,
@@ -557,9 +577,30 @@ func _choose_gltf_file() -> void:
 	_dialog.popup_centered()
 
 
+func _gif_enabled() -> bool:
+	return _gif_button.button_pressed
+
+
+func _choose_export_file() -> void:
+	if _gif_enabled():
+		_choose_gif_file()
+	else:
+		_choose_sheet_file()
+
+
 func _choose_sheet_file() -> void:
 	_sheet_dialog.current_file = State.document.get_file_name().get_basename() + "_sheet.png"
 	_sheet_dialog.popup_centered()
+
+
+func _choose_gif_file() -> void:
+	_gif_dialog.current_file = State.document.get_file_name().get_basename() + ".gif"
+	_gif_dialog.popup_centered()
+
+
+func _on_gif_toggled(_pressed: bool) -> void:
+	_apply_preview_animation()
+	_sync()
 
 
 func _on_gltf_file_selected(path: String) -> void:
@@ -602,6 +643,10 @@ func _on_sheet_file_selected(path: String) -> void:
 	var resolution := int(_sheet_settings.get_node("SizeRow/Size").value)
 	var tag_name: String = _sheet_tag.name if _sheet_tag else ""
 	_report_result(await export_sprite_sheet(path, frame_range.x, frame_range.y, resolution, _sheet_settings.get_node("ViewRow/View").selected, _sheet_settings.get_node("TurntableRow/Metadata").button_pressed, _view_count(), tag_name), path)
+
+
+func _on_gif_file_selected(path: String) -> void:
+	_report_result(await export_gif(path), path)
 
 
 func _report_result(error: Error, path: String) -> void:
@@ -691,28 +736,15 @@ func _render_sheet(frames: Array[VoxelFrame], settings: Dictionary, document: Vo
 	var lighting_settings: Dictionary = settings.lighting
 	var transforms: Array[Transform3D] = settings.transforms
 	var layout: Dictionary = settings.layout
-	var viewport: SubViewport = VoxelImageRenderer.VIEWPORT_SCENE.instantiate()
-	viewport.size = layout.tile_size * 2
+	var viewport := _open_image_viewport(settings, layout.tile_size * 2)
 	if revision >= 0:
 		_preview_viewport = viewport
 	else:
 		_export_viewport = viewport
-	add_child(viewport)
-	var environment_node: WorldEnvironment = viewport.get_node("Node3D/WorldEnvironment")
-	environment_node.environment = environment_node.environment.duplicate()
-	var light: DirectionalLight3D = viewport.get_node("Node3D/Light")
-	VoxelImageRenderer.apply_lighting(light, environment_node.environment, lighting_settings)
 	var renderer: VoxelRenderer = viewport.get_node("%VoxelRenderer")
-	renderer.unshaded = not lighting_settings.shaded
-	renderer.transform = settings.model_transform
 	var camera: Camera3D = viewport.get_node("Node3D/Camera3D")
+	var light: DirectionalLight3D = viewport.get_node("Node3D/Light")
 	camera.transform = transforms[0]
-	camera.projection = settings.projection
-	camera.size = settings.size
-	camera.fov = settings.fov
-	camera.near = settings.near
-	camera.far = settings.far
-	VoxelImageRenderer.apply_directional_shadow(light, camera)
 	var count: int = layout.rects.size()
 	var sheet := Image.create(layout.size.x, layout.size.y, false, Image.FORMAT_RGBA8)
 	sheet.fill(Color.TRANSPARENT)
@@ -754,26 +786,116 @@ func _render_sheet(frames: Array[VoxelFrame], settings: Dictionary, document: Vo
 	return sheet if index == count else null
 
 
+## Builds one temporary render viewport for the sprite sheet or the GIF export.
+func _open_image_viewport(settings: Dictionary, viewport_size: Vector2i) -> SubViewport:
+	var lighting_settings: Dictionary = settings.lighting
+	var viewport: SubViewport = VoxelImageRenderer.VIEWPORT_SCENE.instantiate()
+	viewport.size = viewport_size
+	add_child(viewport)
+	var environment_node: WorldEnvironment = viewport.get_node("Node3D/WorldEnvironment")
+	environment_node.environment = environment_node.environment.duplicate()
+	var light: DirectionalLight3D = viewport.get_node("Node3D/Light")
+	VoxelImageRenderer.apply_lighting(light, environment_node.environment, lighting_settings)
+	var renderer: VoxelRenderer = viewport.get_node("%VoxelRenderer")
+	renderer.unshaded = not lighting_settings.shaded
+	renderer.transform = settings.model_transform
+	var camera: Camera3D = viewport.get_node("Node3D/Camera3D")
+	camera.projection = settings.projection
+	camera.size = settings.size
+	camera.fov = settings.fov
+	camera.near = settings.near
+	camera.far = settings.far
+	VoxelImageRenderer.apply_directional_shadow(light, camera)
+	return viewport
+
+
+## Renders one GIF frame at a time and passes it to [param encoder]. It returns
+## [constant OK], [constant ERR_BUSY] after a cancel or document change, or the
+## encoder error.
+func _render_gif_frames(frames: Array[VoxelFrame], settings: Dictionary, document: VoxelDocument, encoder) -> Error:
+	var tile_size: Vector2i = settings.tile_size
+	var viewport := _open_image_viewport(settings, tile_size * 2)
+	_export_viewport = viewport
+	var lighting_settings: Dictionary = settings.lighting
+	var transforms: Array[Transform3D] = settings.transforms
+	var renderer: VoxelRenderer = viewport.get_node("%VoxelRenderer")
+	var camera: Camera3D = viewport.get_node("Node3D/Camera3D")
+	var light: DirectionalLight3D = viewport.get_node("Node3D/Light")
+	var count := frames.size() * transforms.size()
+	var error := OK
+	var index := 0
+	for pose in transforms:
+		if not _render_current(document, -1):
+			error = ERR_BUSY
+			break
+		camera.transform = pose
+		if lighting_settings.view_locked:
+			light.basis = camera.basis * lighting_settings.view_basis
+		for frame in frames:
+			if not _render_current(document, -1):
+				error = ERR_BUSY
+				break
+			State.update_operation(_operation_id, index, count, "Rendering GIF frame %d" % (index + 1))
+			renderer.source_frame = frame
+			while _render_current(document, -1) and not renderer.is_settled():
+				await get_tree().process_frame
+			if not _render_current(document, -1):
+				error = ERR_BUSY
+				break
+			# Render the changed geometry and camera before capturing the image.
+			viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
+			await RenderingServer.frame_post_draw
+			if not _render_current(document, -1):
+				error = ERR_BUSY
+				break
+			viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
+			await RenderingServer.frame_post_draw
+			if not _render_current(document, -1):
+				error = ERR_BUSY
+				break
+			var image := viewport.get_texture().get_image()
+			image.convert(Image.FORMAT_RGBA8)
+			image.resize(tile_size.x, tile_size.y, Image.INTERPOLATE_NEAREST)
+			error = encoder.add_frame(image, frame.delay_ms)
+			if error != OK:
+				break
+			index += 1
+			await get_tree().process_frame
+		if error != OK:
+			break
+	if is_instance_valid(viewport):
+		viewport.free()
+	_export_viewport = null
+	if error == OK and not _render_current(document, -1):
+		error = ERR_BUSY
+	return error
+
+
 func _update_sheet_preview() -> void:
 	_preview_due_ms = -1
-	if DisplayServer.get_name() == "headless" or _controls.get_node("Export").disabled:
+	if DisplayServer.get_name() == "headless":
+		return
+	var frame_range := _selected_frames()
+	var count := frame_range.y - frame_range.x + 1
+	var views := _view_count()
+	var resolution := int(_sheet_settings.get_node("SizeRow/Size").value)
+	var layout := sheet_layout(count * views, resolution)
+	if layout.size.x > Image.MAX_WIDTH or layout.size.y > Image.MAX_HEIGHT:
 		return
 	_preview_running = true
 	var revision := _preview_revision
-	var frame_range := _selected_frames()
 	var frames: Array[VoxelFrame] = []
 	for index in range(frame_range.x, frame_range.y + 1):
 		frames.append(State.get_voxel_frame(index).copy_frame())
-	var resolution := int(_sheet_settings.get_node("SizeRow/Size").value)
 	var settings := _sheet_render_settings(
 		_sheet_settings.get_node("ViewRow/View").selected,
-		_view_count(),
+		views,
 		not _sheet_settings.get_node("ViewRow/Perspective").button_pressed,
 		_sheet_settings.get_node("ViewRow/Center").button_pressed,
 		_sheet_lighting()
 	)
-	settings.layout = sheet_layout(frames.size() * settings.transforms.size(), resolution)
-	_preview_operation_id = State.begin_operation("Rendering preview", frames.size() * settings.transforms.size(), false, self)
+	settings.layout = layout
+	_preview_operation_id = State.begin_operation("Rendering preview", frames.size() * views, false, self)
 	var image := await _render_sheet(frames, settings, State.document, revision)
 	_preview_running = false
 	State.finish_operation(_preview_operation_id)
@@ -782,6 +904,27 @@ func _update_sheet_preview() -> void:
 	if image and revision == _preview_revision:
 		_preview_image = image
 		_controls.get_node("Preview").texture = ImageTexture.create_from_image(image)
+		_apply_preview_animation()
+
+
+## Applies the GIF preview mode to the current sheet image. The preview shows
+## one tile at a time with the source frame delays.
+func _apply_preview_animation() -> void:
+	var preview: Control = _controls.get_node("Preview")
+	if not _gif_enabled() or _preview_image == null:
+		preview.clear_animation()
+		return
+	var frame_range := _selected_frames()
+	var count := frame_range.y - frame_range.x + 1
+	var views := _view_count()
+	var tile_size := int(_sheet_settings.get_node("SizeRow/Size").value)
+	var layout := sheet_layout(count * views, tile_size)
+	var delays := PackedInt32Array()
+	for index in count * views:
+		var source_index := frame_range.x + index % count
+		var frame := State.get_voxel_frame(source_index)
+		delays.append(frame.delay_ms if frame else 100)
+	preview.set_animation(layout.rects, delays)
 
 
 ## Exports a PNG sprite sheet and returns the error code. [param first_frame]
@@ -864,6 +1007,83 @@ func export_sprite_sheet_settings(path: String, settings: Dictionary) -> Error:
 			error = file.get_error()
 		else:
 			error = FileAccess.get_open_error()
+	_finish_export()
+	return error
+
+
+## Exports the selected frames as an animated GIF and returns the error code.
+## It uses the sprite sheet settings: frames, views, view, tile size,
+## projection, centering, lighting, and frame delays. The GIF loops forever.
+func export_gif(path: String) -> Error:
+	return await export_gif_settings(path, current_export_settings().sprite)
+
+
+## Exports a GIF with explicit settings. Keys: [code]first_frame[/code],
+## [code]last_frame[/code], [code]tile_size[/code] (1 to 2048), [code]view[/code]
+## (an API name from [constant VIEW_KEYS]), [code]views[/code],
+## [code]orthographic[/code], [code]center[/code], and [code]lighting[/code].
+## An absent key keeps the value of the export tab. The frame order matches the
+## sprite sheet: each view plays the selected frames in order. The call does not
+## change the document or the export settings.
+func export_gif_settings(path: String, settings: Dictionary) -> Error:
+	if _exporting or State.edit_busy():
+		return ERR_BUSY
+	if DisplayServer.get_name() == "headless":
+		return ERR_UNAVAILABLE
+	var tab: Dictionary = current_export_settings().sprite
+	var frame_count := State.get_frame_count()
+	var first := int(settings.get("first_frame", tab.first_frame))
+	var last := int(settings.get("last_frame", tab.last_frame))
+	if last < 0:
+		last = frame_count - 1
+	var tile_size := int(settings.get("tile_size", -1))
+	if tile_size < 0:
+		tile_size = tab.tile_size
+	var view := VIEW_KEYS.find(str(settings.get("view", tab.view)))
+	var views := int(settings.get("views", tab.views))
+	var orthographic := bool(settings.get("orthographic", tab.orthographic))
+	var center := bool(settings.get("center", tab.center))
+	var lighting: Dictionary = settings.get("lighting", {})
+	if lighting.is_empty():
+		lighting = _sheet_lighting()
+	if first < 0 or last < first or last >= frame_count or view < 0 or views < 1 or tile_size < 1 or tile_size > 2048:
+		return ERR_INVALID_PARAMETER
+	var frames: Array[VoxelFrame] = []
+	for index in range(first, last + 1):
+		var frame := State.get_voxel_frame(index)
+		if frame == null:
+			return ERR_INVALID_PARAMETER
+		frames.append(frame.copy_frame())
+	var render_settings := _sheet_render_settings(view, views, orthographic, center, lighting)
+	render_settings.tile_size = Vector2i(tile_size, tile_size)
+	if path.get_extension().to_lower() != "gif":
+		path += ".gif"
+	var source_document := State.document
+	var base_colors := PackedColorArray()
+	for entry in source_document.palette:
+		var material: PackedFloat32Array = entry
+		var color := VoxelFrame.material_color(material)
+		if color.a <= 0.5:
+			continue
+		if base_colors.size() >= 255:
+			break
+		base_colors.append(color)
+	State.stop()
+	_exporting = true
+	_cancel_requested = false
+	_preview_revision += 1
+	_operation_id = State.begin_operation("Exporting GIF", frames.size() * render_settings.transforms.size(), true, self, _cancel_export)
+	var encoder = GIF_ENCODER.new(tile_size, tile_size, 0, base_colors)
+	var error: Error = await _render_gif_frames(frames, render_settings, source_document, encoder)
+	if error == OK:
+		var gif: PackedByteArray = encoder.finish()
+		var file := FileAccess.open(path, FileAccess.WRITE)
+		if file == null:
+			error = FileAccess.get_open_error()
+		else:
+			file.store_buffer(gif)
+			error = file.get_error()
+			file.close()
 	_finish_export()
 	return error
 
