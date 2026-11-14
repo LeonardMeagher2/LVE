@@ -258,12 +258,6 @@ func _allows(cell: Vector3i) -> bool:
 	return _write_context == null or _write_context.allows(cell)
 
 
-# The pose circle shows the joint reach, which is one brush diameter. The joint
-# may sit that far out, so the circle must show it.
-func _cursor_radius() -> float:
-	return float(clampi(_settings.size, 1, 32))
-
-
 func _reflect(cell: Vector3i, mask: int) -> Vector3i:
 	return _stroke_context.reflect(cell, mask) if _stroke_context != null else cell
 

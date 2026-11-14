@@ -104,7 +104,7 @@ flowchart TD
   G1 --> G2 --> G3 --> G4 --> G5 --> G6
 ```
 
-A press captures the occupied cells of a ball around the picked cell.
+A press captures the occupied cells of a ball one brush size out in every direction.
 It does this for every active symmetry mask.
 A source must pass the frozen selection, and its falloff weight must be above
 zero, because a zero weight cannot move.

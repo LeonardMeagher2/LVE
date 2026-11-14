@@ -14,7 +14,7 @@ extends VoxelTool
 ## press onward, like Blender's Pose brush.
 
 const TerrainRing := preload("res://plugins/Terrain/TerrainRing.gd")
-## The segments of the cursor circle. The radius depends on the tool, so the count
+## The segments of the cursor circle. The reach depends on the tool, so the count
 ## stays fixed and the circle reads smooth at every size.
 const CIRCLE_SEGMENTS := 32
 
@@ -607,13 +607,13 @@ func _setup_footprint() -> void:
 ##
 ## The circle lies in the view plane, so its screen size is the reach of the
 ## tool, and it stays a true circle from every view. The mesh depends on the
-## radius only, so a radius builds one mesh and every cell reuses it. The pose
-## reach and the grab ball differ, so each tool reports its own radius.
+## reach only, so a reach builds one mesh and every cell reuses it. The pose
+## bound and the grab ball reach are the same, so one circle serves both.
 func _pose_footprint(pick: PickResult) -> void:
 	if _footprint == null or pick.hit == VoxelPicking.NONE:
 		return
-	var radius := _cursor_radius()
-	_footprint.mesh = _cursor_mesh(radius)
+	var reach := _cursor_reach()
+	_footprint.mesh = _cursor_mesh(reach)
 	var right := Vector3.RIGHT
 	var up := Vector3.UP
 	if is_inside_tree():
@@ -629,26 +629,26 @@ func _pose_footprint(pick: PickResult) -> void:
 	_footprint.visible = true
 
 
-## Returns the reach of the cursor circle, in cells. The base tool shows its
-## capture ball; a tool with a wider reach overrides it.
-func _cursor_radius() -> float:
-	return float(clampi(_settings.size, 1, 32)) * 0.5
+## Returns the reach of the cursor circle, in cells. Both deform tools reach one
+## brush diameter, so the circle shows the same reach for each.
+func _cursor_reach() -> float:
+	return float(clampi(_settings.size, 1, 32))
 
 
-# Returns the cursor circle mesh of one radius. The vertices lie in the local XY
+# Returns the cursor circle mesh of one reach. The vertices lie in the local XY
 # plane, so the node transform carries the view orientation.
-func _cursor_mesh(radius: float) -> ArrayMesh:
-	var mesh: ArrayMesh = _footprint_meshes.get(radius)
+func _cursor_mesh(reach: float) -> ArrayMesh:
+	var mesh: ArrayMesh = _footprint_meshes.get(reach)
 	if mesh != null:
 		return mesh
 	var vertices := PackedVector3Array()
 	for index in CIRCLE_SEGMENTS:
 		var first := TAU * float(index) / float(CIRCLE_SEGMENTS)
 		var second := TAU * float(index + 1) / float(CIRCLE_SEGMENTS)
-		vertices.append(Vector3(cos(first), sin(first), 0.0) * radius)
-		vertices.append(Vector3(cos(second), sin(second), 0.0) * radius)
+		vertices.append(Vector3(cos(first), sin(first), 0.0) * reach)
+		vertices.append(Vector3(cos(second), sin(second), 0.0) * reach)
 	mesh = TerrainRing.build_mesh(vertices)
-	_footprint_meshes[radius] = mesh
+	_footprint_meshes[reach] = mesh
 	return mesh
 
 

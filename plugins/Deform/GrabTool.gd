@@ -119,7 +119,9 @@ func _capture_gesture(pick: PickResult) -> bool:
 				continue
 			if not _allows(cell):
 				continue
-			var weight := TerrainGeometry.weight_at(Vector3(offset).length(), float(_stroke_size), _stroke_falloff)
+			# The weight reach is the ball reach. The helper takes a width and halves
+			# it, so it receives twice the reach.
+			var weight := TerrainGeometry.weight_at(Vector3(offset).length(), float(_stroke_size) * 2.0, _stroke_falloff)
 			# A zero weight cannot move, so the source never joins the drag.
 			if weight <= 0.0:
 				continue
@@ -189,13 +191,15 @@ func _ball_offsets(size: int) -> Array[Vector3i]:
 	if _ball_cache.has(size):
 		return _ball_cache[size]
 	var offsets: Array[Vector3i] = []
-	var radius := float(size) * 0.5
-	var radius_squared := radius * radius
-	var reach := ceili(radius)
+	# The ball reaches one brush size in every direction, like the pose joint
+	# bound, so both deform tools feel the same.
+	var ball_reach := float(size)
+	var reach_squared := ball_reach * ball_reach
+	var reach := ceili(ball_reach)
 	for x in range(-reach, reach + 1):
 		for y in range(-reach, reach + 1):
 			for z in range(-reach, reach + 1):
-				if x * x + y * y + z * z <= radius_squared:
+				if x * x + y * y + z * z <= reach_squared:
 					offsets.append(Vector3i(x, y, z))
 	_ball_cache[size] = offsets
 	return offsets
