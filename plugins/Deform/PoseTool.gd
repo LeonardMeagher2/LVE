@@ -185,10 +185,13 @@ var _band := 0.0
 var _limb := {}
 var _poses: Array = []
 var _bone: MeshInstance3D
+# Whether the open stroke walks only the connected limb.
+var _stroke_connected := false
 
 
 # The hover joint and whether the press can capture a cell, keyed by the inputs
 # that shape them. A pointer move inside one cell then costs no scan.
+# The connected option of the open stroke.
 var _hover_key := ""
 var _hover_joint := {}
 var _hover_moves := false
@@ -235,7 +238,8 @@ func _clear_state() -> void:
 
 
 func _capture_gesture(pick: PickResult) -> bool:
-	var joint := DeformLimb.joint_pivot(_source_frame, _anchor, _stroke_size, _stroke_context)
+	_stroke_connected = _settings.connected
+	var joint := DeformLimb.joint_pivot(_source_frame, _anchor, _stroke_size, _stroke_context, _stroke_connected, _view_forward)
 	_joint_found = bool(joint["found"])
 	if not _joint_found:
 		return false
@@ -407,7 +411,7 @@ func _hover_state(pick: PickResult) -> Dictionary:
 	var key := _hover_key_for(pick, frame, context)
 	if key == _hover_key:
 		return {"joint": _hover_joint, "moves": _hover_moves}
-	var joint := DeformLimb.joint_pivot(frame, pick.hit, _settings.size, context)
+	var joint := DeformLimb.joint_pivot(frame, pick.hit, _settings.size, context, _settings.connected, _cursor_forward())
 	var moves := false
 	if bool(joint["found"]):
 		# The hover answers one question: can the press capture a cell? One cell
@@ -427,7 +431,7 @@ func _hover_state(pick: PickResult) -> Dictionary:
 func _hover_key_for(pick: PickResult, frame: VoxelFrame, context: VoxelFrame.EditContext) -> String:
 	return str([
 		frame.get_instance_id(), pick.hit,
-		_settings.size, _settings.falloff,
+		_settings.size, _settings.falloff, _settings.connected, _cursor_forward(),
 		State.selection.revision,
 		context.slice_axis, context.slice_index, context.slice_count,
 		context.bounded_axes, context.bounds_min, context.bounds_max,

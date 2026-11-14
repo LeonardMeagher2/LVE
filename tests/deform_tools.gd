@@ -61,6 +61,7 @@ func _ready() -> void:
 	test("the rotation angle is the angle from the base to the pointer", _pose_pointer_angle, "pose_pointer_angle")
 	test("a wide brush on a thin limb cannot smear the turn", _pose_no_smear, "pose_no_smear")
 	test("the joint search stays near the press on a long limb", _pose_search_bound, "pose_search_bound")
+	test("the base prefers a cell on the view plane of the pressed cell", _pose_depth_bias, "pose_depth_bias")
 	test("pose on a large blob bends a bounded set and keeps it solid", _pose_large_blob, "pose_large_blob")
 
 
@@ -595,17 +596,17 @@ func _pose_limb() -> void:
 		_settings.falloff = 0.0
 		_view("front")
 		_bar(-8, 8)
-		press = _pos(Vector3(6.0, 0.0, 0.0))
+		press = _pos(Vector3(0.0, 0.0, 0.0))
 		anchor = aim(press).target
-		expect(anchor == Vector3i(6, 0, 0), "the front view picks the cell under the pointer")
+		expect(anchor == Vector3i(0, 0, 0), "the front view picks the cell under the pointer")
 	)
 	step("When the user presses the bar", func():
 		_press(press)
 		expect(tool._edit != null, "the pose press opens an edit")
 		expect(tool._joint_found, "the pose finds the joint")
-		expect(tool._bone_dir.is_equal_approx(Vector3.RIGHT), "the bone runs from the joint to the picked cell")
-		expect(tool._pivot.distance_to(Vector3(6, 0, 0)) <= 4.5, "the joint sits within the brush radius")
-		expect(tool._pivot.distance_to(Vector3(6, 0, 0)) >= 1.0, "the joint keeps a lever")
+		expect(tool._bone_dir.is_equal_approx(Vector3.LEFT), "the bone runs from the joint to the picked cell")
+		expect(tool._pivot.distance_to(Vector3(0, 0, 0)) <= 2.5, "the joint sits within the brush radius")
+		expect(tool._pivot.distance_to(Vector3(0, 0, 0)) >= 1.0, "the joint keeps a lever")
 		expect(not tool._limb.is_empty(), "the pose captures the limb")
 	)
 	step("When the user drags the tip upward", func():
@@ -615,8 +616,9 @@ func _pose_limb() -> void:
 	)
 	await _await_edit_closed()
 	step("Then the limb turns in the view plane", func():
-		expect(frame.has(Vector3i(-4, 0, 0)), "the body behind the joint stays in place")
-		expect(frame.has(Vector3i(-8, 0, 0)), "the far end stays in place")
+		expect(frame.has(Vector3i(4, 0, 0)), "the limb beyond the joint stays in place")
+		expect(frame.has(Vector3i(8, 0, 0)), "the far end stays in place")
+		expect(not frame.has(Vector3i(0, 0, 0)), "the picked cell leaves the row")
 		var raised := 0
 		var off_plane := 0
 		for cell in frame.positions():
@@ -781,7 +783,7 @@ func _pose_document_edge() -> void:
 		_bar(-8, 8)
 		State.set_size(Vector3i(0, 6, 0))
 		sync_viewport()
-		press = _pos(Vector3(6.0, 0.0, 0.0))
+		press = _pos(Vector3(0.0, 0.0, 0.0))
 		anchor = aim(press).target
 	)
 	step("When the user bends the tip up", func():
@@ -799,7 +801,7 @@ func _pose_document_edge() -> void:
 			if cell.y < range_y.x or cell.y > range_y.y:
 				outside += 1
 		expect(outside == 0, "every posed cell stays inside the document size")
-		expect(frame.has(Vector3i(-8, 0, 0)), "the far end stays in place")
+		expect(frame.has(Vector3i(8, 0, 0)), "the far end stays in place")
 	)
 
 
@@ -842,6 +844,29 @@ func _pose_history() -> void:
 		expect(tool._edit == null, "Escape cancels the pose")
 		expect(_cell_colors(frame) == pose_before, "the cancelled pose restores the bar")
 		expect(not State.undo_redo.has_undo(), "the cancelled pose adds no history")
+	)
+
+
+func _pose_depth_bias() -> void:
+	# Two occupied cells tie at the same depth. The one behind the view plane of
+	# the press must lose, so a screen-plane bend does not pick a cell that sits
+	# in front of or behind the pointer.
+	step("Given a pick with one candidate on the view plane and one behind it", func():
+		_use(_settings.Tools.POSE)
+		_settings.size = 4
+		_settings.falloff = 0.0
+		_view("right")
+		frame.set_cell(Vector3i(0, 0, 0), VoxelFrame.material(Color.WHITE))
+		frame.set_cell(Vector3i(-2, 0, 0), VoxelFrame.material(Color.WHITE))
+		frame.set_cell(Vector3i(0, 0, 2), VoxelFrame.material(Color.WHITE))
+		sync_viewport()
+		press = _pos(Vector3(0.0, 0.0, 0.0))
+	)
+	step("When the user presses the pick", func():
+		_press(press)
+		expect(tool._joint_found, "the pose finds the joint")
+		expect(Vector3i(tool._pivot) == Vector3i(0, 0, 2), "the base prefers the cell on the view plane")
+		_release(press)
 	)
 
 
@@ -933,7 +958,7 @@ func _pose_selection() -> void:
 		expect(frame.has(Vector3i(-8, 0, 0)), "an unselected cell stays")
 		expect(State.selection.count() > 0, "the moved cells stay selected")
 		expect(not State.selection.contains(Vector3i(6, 0, 0)), "a cell that the turn emptied leaves the selection")
-		expect(State.selection.contains(Vector3i(2, 0, 0)), "a selected cell that stays keeps its place")
+		expect(not State.selection.contains(Vector3i(-8, 0, 0)), "an unselected cell stays out of the selection")
 		var raised := 0
 		for cell in State.selection.to_array():
 			if cell.y > 0:
@@ -954,7 +979,7 @@ func _pose_stable() -> void:
 		for x in range(3, 7):
 			frame.set_cell(Vector3i(x, 2, 0), VoxelFrame.material(Color.WHITE))
 		sync_viewport()
-		press = _pos(Vector3(6.0, 0.0, 0.0))
+		press = _pos(Vector3(0.0, 0.0, 0.0))
 	)
 	step("When the user reaches one point in a single motion", func():
 		_press(press)
@@ -978,7 +1003,7 @@ func _pose_stable() -> void:
 	step("Then the pointer path changes nothing", func():
 		expect(not pose_bent.is_empty(), "the single motion bends the bar")
 		expect(_cell_colors(frame) == pose_bent, "a second motion does not flash the bend")
-		expect(frame.has(Vector3i(-8, 0, 0)), "the far end stays in place")
+		expect(frame.has(Vector3i(8, 0, 0)), "the far end stays in place")
 	)
 
 func _pose_pointer_angle() -> void:
@@ -988,19 +1013,19 @@ func _pose_pointer_angle() -> void:
 		_settings.falloff = 0.0
 		_view("front")
 		_bar(-8, 8)
-		press = _pos(Vector3(6.0, 0.0, 0.0))
+		press = _pos(Vector3(0.0, 0.0, 0.0))
 	)
 	step("When the user drags the pointer to one cell beside the joint", func():
 		_press(press)
-		var drag_pos := _pos(Vector3(4.0, 4.0, 0.0))
+		var drag_pos := _pos(Vector3(2.0, 2.0, 0.0))
 		_motion(drag_pos, drag_pos - press)
 		_release(drag_pos)
 	)
 	await _await_edit_closed()
 	step("Then the tip lands under the pointer", func():
-		expect(frame.has(Vector3i(4, 4, 0)), "the tip cell sits at the pointer")
-		expect(not frame.has(Vector3i(8, 0, 0)), "the tip leaves its old cell")
-		expect(frame.has(Vector3i(-8, 0, 0)), "the far end stays in place")
+		expect(frame.has(Vector3i(2, 2, 0)), "the tip cell sits at the pointer")
+		expect(not frame.has(Vector3i(0, 0, 0)), "the tip leaves its old cell")
+		expect(frame.has(Vector3i(8, 0, 0)), "the far end stays in place")
 	)
 
 func _pose_no_smear() -> void:

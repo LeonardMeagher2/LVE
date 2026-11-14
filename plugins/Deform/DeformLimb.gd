@@ -43,53 +43,64 @@ static func masks_for(context: VoxelFrame.EditContext) -> Array:
 ## [code]reach[/code] as the distance from the anchor to the pivot, and
 ## [code]found[/code] as whether the limb extends past the picked cell.
 ##
-## The joint is the farthest cell of the limb within the brush radius. The search
-## walks the connected cells from the picked cell one brush size out, then walks
-## back to the brush radius, so the joint stays on the limb and the picked face
-## has no effect.
+## The joint is the farthest occupied cell of the limb within the brush radius.
+## The search walks every cell inside the brush, so a gap does not end it, and
+## only an occupied cell can be the joint.
 ##
-## The search looks one brush radius past the joint bound. Without that lookahead
-## both ends of a limb tie, and a press near a tip keeps the joint on the tip
-## side. The walk also stops at [constant JOINT_CELL_LIMIT] cells.
-static func joint_pivot(frame: VoxelFrame, anchor: Vector3i, size: int, context: VoxelFrame.EditContext) -> Dictionary:
+## [param connected] limits the walk to occupied cells, so a gap ends it and the
+## joint stays on the connected limb.
+##
+## [param view_forward] breaks a tie between cells at the same depth: the joint
+## prefers the cell on the view plane of the picked cell, so a bend in the screen
+## plane does not pick a cell that sits behind it. A zero vector keeps the first
+## cell found.
+##
+## The walk also stops at [constant JOINT_CELL_LIMIT] cells.
+static func joint_pivot(frame: VoxelFrame, anchor: Vector3i, size: int, context: VoxelFrame.EditContext, connected := false, view_forward := Vector3.ZERO) -> Dictionary:
 	var result := {"found": false, "pivot": Vector3(anchor), "bone_dir": Vector3.ZERO, "reach": 0.0}
 	if frame == null or anchor == VoxelPicking.NONE or not frame.has(anchor):
 		return result
 	var origin := Vector3(anchor)
 	var brush_reach := float(clampi(size, 1, 32)) * 0.5
-	var search := brush_reach * 2.0
-	var parent := {}
+	var ahead := view_forward.normalized()
 	var steps := {anchor: 0}
 	var queue: Array[Vector3i] = [anchor]
 	var head := 0
 	var far := anchor
 	var far_steps := 0
+	var far_depth := INF
 	while head < queue.size() and steps.size() < JOINT_CELL_LIMIT:
 		var cell: Vector3i = queue[head]
 		head += 1
 		var depth := int(steps[cell])
-		if depth > far_steps:
-			far = cell
-			far_steps = depth
 		for offset: Vector3i in NEIGHBORS:
 			var next := cell + offset
-			if steps.has(next) or not frame.has(next):
+			if steps.has(next):
 				continue
-			if Vector3(next).distance_to(origin) > search:
+			if Vector3(next).distance_to(origin) > brush_reach:
 				continue
 			if context != null and not context.allows(next):
 				continue
+			var occupied := frame.has(next)
+			if connected and not occupied:
+				continue
 			steps[next] = depth + 1
-			parent[next] = cell
 			queue.append(next)
+			if not occupied:
+				continue
+			# Only an occupied cell can be the joint, so the walk tracks the
+			# deepest one it reached. A tie prefers the cell on the view plane.
+			var use_steps := depth + 1
+			var depth_offset := 0.0
+			if ahead != Vector3.ZERO:
+				depth_offset = absf((Vector3(next) - origin).dot(ahead))
+			if use_steps > far_steps or (use_steps == far_steps and depth_offset < far_depth):
+				far = next
+				far_steps = use_steps
+				far_depth = depth_offset
 	if far_steps < 1:
 		return result
-	# Walk back from the far end of the limb. The first cell inside the brush is
-	# the base, so the joint sits where the limb enters the brush.
-	var base := far
-	while parent.has(base) and Vector3(base).distance_to(origin) > brush_reach:
-		base = parent[base]
-	var bone := origin - Vector3(base)
+	var bone := origin - Vector3(far)
 	var reach := bone.length()
 	if reach < 0.5:
 		return result

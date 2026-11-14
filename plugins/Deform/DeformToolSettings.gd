@@ -48,3 +48,13 @@ enum Tools {
 		falloff = value
 		emit_changed()
 
+## Whether the pose joint walk follows the connected limb only. Off searches
+## every cell inside the brush, so a gap does not hide an occupied cell. On walks
+## occupied cells only, so the joint stays on the connected limb.
+@export var connected := false:
+	set(value):
+		if value == connected:
+			return
+		connected = value
+		emit_changed()
+

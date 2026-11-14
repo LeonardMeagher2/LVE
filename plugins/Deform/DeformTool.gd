@@ -627,6 +627,18 @@ func _pose_footprint(pick: PickResult) -> void:
 	_footprint.visible = true
 
 
+## Returns the current camera forward. An open stroke keeps the press basis, so a
+## camera move cannot change an accepted drag.
+func _cursor_forward() -> Vector3:
+	if _edit != null:
+		return _view_forward
+	if is_inside_tree():
+		var camera := get_viewport().get_camera_3d()
+		if camera != null:
+			return -camera.global_transform.basis.z.normalized()
+	return _view_forward
+
+
 ## Returns the reach of the cursor circle, in cells: the brush radius. The circle
 ## is the footprint of the brush, so a size of one is one cell.
 func _cursor_reach() -> float:

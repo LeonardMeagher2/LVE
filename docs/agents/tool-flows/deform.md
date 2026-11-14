@@ -161,8 +161,8 @@ view bends in the view plane.
 `DeformLimb.joint_pivot` reads no cell axis and no face normal.
 The entered face has no effect on the bend.
 
-The joint is the cell where the limb enters the brush. The search looks one brush size out, then walks back to the brush radius.
-The brush walks the connected cells from the picked cell and stops at that bound.
+The joint is the farthest occupied cell within the brush radius. The walk visits empty cells too, so a gap does not hide a cell. A tie prefers the cell on the view plane of the press.
+The connected option limits the walk to occupied cells.
 It does not walk back, so the base is the limb root and not a cell under the
 pointer.
 The bound keeps the walk local, so a connected model cannot send the search
@@ -242,7 +242,7 @@ Source:
 `DeformPlugin` owns the two tools, one `MenuButton`, and one option bar.
 `State.reset_plugins` adds it after the terrain plugin.
 The toolbar holds Grab and Pose with fixed ids.
-The option bar shows the shared size and falloff. Both tools use them.
+The option bar shows the shared size and falloff, and the pose Connected option.
 Neither tool shows a strength control, because neither uses one.
 
 Source:
@@ -260,8 +260,7 @@ Source:
 - Pose turns around the view normal only. It cannot turn out of the view plane.
 - A limb walk stops at 8192 cells, so a bend stays inside the brush bound. A
   hover reads one cell of the limb.
-- The joint search reads at most 2048 cells. It looks one brush size out and
-  walks back to the brush radius.
+- The joint search reads at most 2048 cells of the brush ball, occupied or not.
 - A bend lowers its angle until every moved cell fits. It never splits a
   symmetric pair.
 - The joint share comes from the joint neck. It is not a

@@ -22,7 +22,7 @@ The user poses a limb or corrects its proportions, then commits the result as on
 
 - The joint is one point in cell space. It is the only centre of rotation.
 - The brush takes the occupied cells that touch the ring. This set is the limb.
-- The brush walks the connected cells from the picked cell one brush size out, then walks back to the brush radius. The joint is where the limb enters the brush.
+- The brush walks every cell inside the brush radius, occupied or not, and the joint is the farthest occupied cell it reached. A gap therefore does not hide a cell.
 - The bound keeps the walk local, so a connected model cannot send it across the whole frame.
 - The joint is that entry cell, so it always sits on an occupied cell of the limb.
 - Before the press, the cursor shows the joint as a dot and the bone from the joint to the picked cell. Blender shows its pose origin as a white line on the brush cursor [R1].
@@ -124,9 +124,9 @@ These rules supersede the earlier sections where they differ. They match the
 shipped tool.
 
 - The joint comes from the connected cells, not from a fixed offset or an axis
-  estimate. The search walks the limb one brush size out from the press, then
-  walks back to the brush radius. The joint is where the limb enters the
-  brush, so it always sits on an occupied cell.
+  estimate. The search walks the brush ball from the press and the joint is its
+  farthest occupied cell, so it always sits on an occupied cell. A tie prefers
+  the cell on the view plane of the press.
   The bound keeps the walk local, so a connected model cannot send the search
   across the whole frame.
 - The pointer is the tip of the bone. The arm runs from the joint to the pointer,
