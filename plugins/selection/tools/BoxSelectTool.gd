@@ -2,8 +2,8 @@ extends "./SelectTool.gd"
 
 ## The box selection tool.
 ##
-## It selects the volume behind a dragged screen rectangle. A press and release
-## in one place selects a small area under the pointer.
+## It selects the volume behind a dragged screen rectangle. A click selects the
+## picked voxel.
 
 # The box tool selects the volume behind a dragged rectangle.
 

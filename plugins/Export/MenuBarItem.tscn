@@ -22,3 +22,9 @@ title = "Export Sprite Sheet"
 file_mode = 4
 access = 2
 filters = PackedStringArray("*.png ; PNG sprite sheet")
+
+[node name="GifDialog" type="FileDialog" parent="."]
+title = "Export Animation GIF"
+file_mode = 4
+access = 2
+filters = PackedStringArray("*.gif ; Animated GIF")
