@@ -30,19 +30,21 @@ const ARROW_REACH := 0.25
 ## The arrow shaft start as a fraction of the handle radius.
 const ARROW_INNER := 0.06
 ## The arrowhead length as a fraction of the handle radius.
-const ARROW_HEAD := 0.09
-## The arrowhead half width as a fraction of the handle radius.
-const ARROW_SIDE := 0.055
-## The Rotate mark arc radius in screen pixels.
-const ROTATE_ARC_PX := 8.0
+const ARROW_HEAD := 0.07
+## The arrowhead half width as a fraction of the handle radius. Equal to the
+## head length, so each arrowhead closes at a right angle.
+const ARROW_SIDE := ARROW_HEAD
+## The Rotate mark bend radius in screen pixels.
+const ROTATE_BEND_PX := 8.0
+## The straight run before and after the Rotate mark bend, in screen pixels.
+const ROTATE_RUN_PX := 13.0
 ## The Rotate mark arrowhead length in screen pixels.
-const ROTATE_HEAD_PX := 4.0
-## The Rotate mark arrowhead half width in screen pixels.
-const ROTATE_SIDE_PX := 2.5
-## The Rotate mark straight tail in screen pixels.
-const ROTATE_TAIL_PX := 3.0
-## The line segments in one Rotate mark arc.
-const ROTATE_ARC_SEGMENTS := 8
+const ROTATE_HEAD_PX := 3.5
+## The Rotate mark arrowhead half width in screen pixels. Equal to the head
+## length, so each arrowhead closes at a right angle.
+const ROTATE_SIDE_PX := ROTATE_HEAD_PX
+## The line segments in one Rotate mark bend.
+const ROTATE_BEND_SEGMENTS := 6
 
 ## The shape to draw.
 @export var kind: Kind = Kind.MOVE
@@ -254,31 +256,36 @@ func _append_square(vertices: PackedVector3Array, center: Vector3, half: float) 
 
 
 func _append_rotate_marks(vertices: PackedVector3Array, half: float, world_px: float) -> void:
-	var radius := world_px * ROTATE_ARC_PX
+	var bend := world_px * ROTATE_BEND_PX
+	var run := world_px * ROTATE_RUN_PX
 	var head := world_px * ROTATE_HEAD_PX
 	var side := world_px * ROTATE_SIDE_PX
-	var tail := world_px * ROTATE_TAIL_PX
-	var top_start := Vector2(half, half + radius)
-	var bottom_start := Vector2(-half, -half - radius)
-	_append_line(vertices, _plane_point(top_start + Vector2(0.0, tail)), _plane_point(top_start))
-	_append_bent_arrow(vertices, Vector2(half + radius, half + radius), radius, PI, PI * 1.5, head, side)
-	_append_line(vertices, _plane_point(bottom_start - Vector2(0.0, tail)), _plane_point(bottom_start))
-	_append_bent_arrow(vertices, Vector2(-half - radius, -half - radius), radius, 0.0, PI * 0.5, head, side)
+	var down := Vector2(0.0, -1.0)
+	var up := Vector2(0.0, 1.0)
+	_append_turn_arrow(vertices, Vector2(half + bend, half + bend), Vector2.RIGHT, down, run, bend, head, side)
+	_append_turn_arrow(vertices, Vector2(-half - bend, -half - bend), Vector2.LEFT, up, run, bend, head, side)
 
 
-func _append_bent_arrow(vertices: PackedVector3Array, center: Vector2, radius: float, start_angle: float, end_angle: float, head: float, side: float) -> void:
-	var previous := center + Vector2(cos(start_angle), sin(start_angle)) * radius
-	for index in range(1, ROTATE_ARC_SEGMENTS + 1):
-		var angle := lerpf(start_angle, end_angle, float(index) / ROTATE_ARC_SEGMENTS)
-		var point := center + Vector2(cos(angle), sin(angle)) * radius
+# Draws one arrow that runs along a straight [param across] arm, turns a quarter
+# circle, then runs along [param along] to a right-angle head. The two arms meet
+# at [param corner], and each one is [param run] long.
+func _append_turn_arrow(vertices: PackedVector3Array, corner: Vector2, across: Vector2, along: Vector2, run: float, bend: float, head: float, side: float) -> void:
+	var start := corner - across * run
+	var bend_start := corner - across * bend
+	var bend_end := corner + along * bend
+	var tip := corner + along * run
+	_append_line(vertices, _plane_point(start), _plane_point(bend_start))
+	var center := corner - across * bend + along * bend
+	var previous := bend_start
+	for index in range(1, ROTATE_BEND_SEGMENTS + 1):
+		var angle := PI * 0.5 * (1.0 - float(index) / ROTATE_BEND_SEGMENTS)
+		var point := center + (across * cos(angle) - along * sin(angle)) * bend
 		_append_line(vertices, _plane_point(previous), _plane_point(point))
 		previous = point
-	var direction := Vector2(-sin(end_angle), cos(end_angle))
-	var end_point := center + Vector2(cos(end_angle), sin(end_angle)) * radius
-	var back := end_point - direction * head
-	var normal := Vector2(-direction.y, direction.x)
-	_append_line(vertices, _plane_point(end_point), _plane_point(back + normal * side))
-	_append_line(vertices, _plane_point(end_point), _plane_point(back - normal * side))
+	_append_line(vertices, _plane_point(bend_end), _plane_point(tip))
+	var back := tip - along * head
+	_append_line(vertices, _plane_point(tip), _plane_point(back + across * side))
+	_append_line(vertices, _plane_point(tip), _plane_point(back - across * side))
 
 
 func _plane_point(point: Vector2) -> Vector3:
