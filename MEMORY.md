@@ -252,6 +252,10 @@
 - 2026-08-21T00:00Z [imp:5] [notes/materials-and-export] AnimationPlayer tracks resolve paths from `root_node`, not directly from the player.
 - 2026-10-04T00:00Z [imp:5] [notes/materials-and-export] Convert Aseprite JSON tag repeat counts from strings to integers.
 - 2026-10-06T00:00Z [imp:5] [notes/materials-and-export] Sprite JSON frame names use `<tag>_<frame>`. Multiple views append `_<view>` to frame and tag names. Preserve spaces in tags.
+- 2026-11-14T00:00Z [imp:7] [notes/materials-and-export] Godot 4.7.2 Image has no GIF save or load method. Write GIF89a in GDScript and decode the test files with a test-only reader.
+- 2026-11-14T00:00Z [imp:7] [notes/materials-and-export] GIF LZW uses an early code-size change. The encoder increases the width before it assigns code `2^width`. The decoder adds the previous entry after it reads the prior code, so the two stay in step.
+- 2026-11-14T00:00Z [imp:6] [notes/materials-and-export] A full-frame GIF with a transparent background uses disposal 2 and transparent index 0. The next frame then clears a moved voxel instead of leaving a trail.
+- 2026-11-14T00:00Z [imp:6] [notes/materials-and-export] A GIF global table of 256 colors plus a shared color cache keeps colors stable across frames. Start with the document palette colors and fill the rest with a 6 by 6 by 6 RGB cube. The exact palette path stays exact, and the cube handles shaded colors.
 - 2026-08-19T00:00Z [imp:5] [notes/tools-and-undo] Brush strokes connect consecutive picks and include the final cell.
 - 2026-08-19T00:00Z [imp:5] [notes/tools-and-undo] Pixel-perfect strokes hold a pending cell to prevent gaps. Flush that cell on release.
 - 2026-08-23T00:00Z [imp:5] [notes/tools-and-undo] Under angled views, projected cell centers can pick neighboring cells. Use the actual picking functions in tests.
