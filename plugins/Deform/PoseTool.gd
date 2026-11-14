@@ -469,7 +469,10 @@ func _pose_bone(pick: PickResult) -> void:
 	vertices.append(pivot)
 	vertices.append(tip)
 	_append_joint_square(vertices, pivot)
-	_append_face_widget(vertices, pick)
+	# The face widget is a hover aid. Once the press fixes the bias, it would only
+	# sit on a face that no longer follows the pointer.
+	if _edit == null:
+		_append_face_widget(vertices, pick)
 	_bone.global_transform = Transform3D(Basis.IDENTITY, Vector3.ZERO)
 	_bone.mesh = VoxelLineMesh.build(vertices)
 	visible = true
