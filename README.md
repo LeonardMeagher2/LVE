@@ -28,6 +28,7 @@ Export a low-poly glTF mesh or a sprite sheet.
 - `.lve` is a compact binary document.
 - `.lve.png` adds a rendered first-frame preview.
 - Open either format to restore the animation and saved settings.
+- Drop a `.lve` document or an image file on the window to open it.
 - Share the original PNG file to preserve its document data.
 
 See [docs/DOCUMENT_FORMAT.md](docs/DOCUMENT_FORMAT.md) for the format.
