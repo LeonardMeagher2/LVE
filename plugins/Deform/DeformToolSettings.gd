@@ -38,12 +38,12 @@ enum Reach {
 ## The circular footprint size in voxels. It clamps to 1 through 32. A size of
 ## one is one voxel. An even size centers between cells, like the shared brush
 ## size.
-@export var radius := 4:
+@export var size := 4:
 	set(value):
 		value = clampi(value, 1, 32)
-		if value == radius:
+		if value == size:
 			return
-		radius = value
+		size = value
 		emit_changed()
 
 ## The edge softness. Zero is a hard edge and one is a smooth edge. Grab scales

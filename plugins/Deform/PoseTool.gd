@@ -239,20 +239,20 @@ func _clear_state() -> void:
 
 func _capture_gesture(pick: PickResult) -> bool:
 	_stroke_reach = _settings.reach
-	var joint := DeformLimb.joint_pivot(_source_frame, _anchor, _stroke_radius, _stroke_context)
+	var joint := DeformLimb.joint_pivot(_source_frame, _anchor, _stroke_size, _stroke_context)
 	_joint_found = bool(joint["found"])
 	if not _joint_found:
 		return false
 	_pivot = joint["pivot"]
 	_bone_dir = joint["bone_dir"]
 	_reach = float(joint["reach"])
-	_band = DeformLimb.joint_band(_stroke_radius, _stroke_falloff)
+	_band = DeformLimb.joint_band(_stroke_size, _stroke_falloff)
 	# The allowance follows the footprint, so a small brush still bends a short
 	# limb and a huge connected blob keeps its bend inside the brush.
-	var ball := roundi(0.5236 * float(_stroke_radius * _stroke_radius * _stroke_radius))
+	var ball := roundi(0.5236 * float(_stroke_size * _stroke_size * _stroke_size))
 	var allowance := clampi(ball * LIMB_LIMIT_FACTOR, LIMB_MIN_LIMIT, LIMB_CELL_LIMIT)
 	if _stroke_reach == _settings.Reach.SPHERE:
-		_limb = DeformLimb.capture_sphere(_source_frame, _anchor, _pivot, _bone_dir, _band, _stroke_radius, _stroke_context)
+		_limb = DeformLimb.capture_sphere(_source_frame, _anchor, _pivot, _bone_dir, _band, _stroke_size, _stroke_context)
 	else:
 		_limb = DeformLimb.capture_limb(_source_frame, _anchor, _pivot, _bone_dir, _band, allowance, _stroke_context)
 	if _limb.is_empty():
@@ -323,7 +323,7 @@ func _make_job(_target: Vector3i) -> DeformJob:
 			# becomes a twist by the pointer travel. A mirrored mask turns the other
 			# way. The lever has a floor, so a short bone cannot turn small pointer
 			# motion into a large angle.
-			var lever := maxf(DeformLimb.screen_length(bone, _view_right, _view_up), maxf(float(_stroke_radius) * 0.5, 0.5))
+			var lever := maxf(DeformLimb.screen_length(bone, _view_right, _view_up), maxf(float(_stroke_size) * 0.5, 0.5))
 			angle = DeformLimb.screen_vector(travel, _view_right, _view_up).length() / lever * DeformLimb.mask_handedness(mask)
 		else:
 			# The angle is the screen angle from the bone to the joint-to-pointer
@@ -414,15 +414,15 @@ func _hover_state(pick: PickResult) -> Dictionary:
 	var key := _hover_key_for(pick, frame, context)
 	if key == _hover_key:
 		return {"joint": _hover_joint, "moves": _hover_moves}
-	var joint := DeformLimb.joint_pivot(frame, pick.hit, _settings.radius, context)
+	var joint := DeformLimb.joint_pivot(frame, pick.hit, _settings.size, context)
 	var moves := false
 	if bool(joint["found"]):
 		# The hover answers one question: can the press capture a cell? One cell
 		# is enough, so the walk never reads the whole limb.
-		var band := DeformLimb.joint_band(_settings.radius, _settings.falloff)
+		var band := DeformLimb.joint_band(_settings.size, _settings.falloff)
 		var limb := {}
 		if _settings.reach == _settings.Reach.SPHERE:
-			limb = DeformLimb.capture_sphere(frame, pick.hit, joint["pivot"], joint["bone_dir"], band, _settings.radius, context, 1)
+			limb = DeformLimb.capture_sphere(frame, pick.hit, joint["pivot"], joint["bone_dir"], band, _settings.size, context, 1)
 		else:
 			limb = DeformLimb.capture_limb(frame, pick.hit, joint["pivot"], joint["bone_dir"], band, 1, context)
 		moves = not limb.is_empty()
@@ -438,7 +438,7 @@ func _hover_state(pick: PickResult) -> Dictionary:
 func _hover_key_for(pick: PickResult, frame: VoxelFrame, context: VoxelFrame.EditContext) -> String:
 	return str([
 		frame.get_instance_id(), pick.hit,
-		_settings.radius, _settings.falloff, _settings.reach,
+		_settings.size, _settings.falloff, _settings.reach,
 		State.selection.revision,
 		context.slice_axis, context.slice_index, context.slice_count,
 		context.bounded_axes, context.bounds_min, context.bounds_max,

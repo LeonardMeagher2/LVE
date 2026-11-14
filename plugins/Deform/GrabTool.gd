@@ -113,13 +113,13 @@ func _capture_gesture(pick: PickResult) -> bool:
 	_source_cells = {}
 	for mask in DeformLimb.masks_for(_stroke_context):
 		var center := _stroke_context.reflect(_anchor, mask)
-		for offset: Vector3i in _ball_offsets(_stroke_radius):
+		for offset: Vector3i in _ball_offsets(_stroke_size):
 			var cell := center + offset
 			if _source_cells.has(cell) or not _source_frame.has(cell):
 				continue
 			if not _allows(cell):
 				continue
-			var weight := TerrainGeometry.weight_at(Vector3(offset).length(), float(_stroke_radius), _stroke_falloff)
+			var weight := TerrainGeometry.weight_at(Vector3(offset).length(), float(_stroke_size), _stroke_falloff)
 			# A zero weight cannot move, so the source never joins the drag.
 			if weight <= 0.0:
 				continue

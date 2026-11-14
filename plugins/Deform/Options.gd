@@ -2,8 +2,8 @@ extends HBoxContainer
 
 ## The deform option bar.
 ##
-## It shows the shared radius and falloff, and the Pose reach. Grab uses the
-## radius and the falloff only, so the Pose reach hides for Grab.
+## It shows the shared size and falloff, and the Pose reach. Grab uses the
+## size and the falloff only, so the Pose reach hides for Grab.
 
 const LIMB_ICON := preload("res://icons/connected.svg")
 const SPHERE_ICON := preload("res://icons/cube.svg")
@@ -23,7 +23,7 @@ func _ready() -> void:
 
 func _sync() -> void:
 	$Reach.visible = _settings.tool == _settings.Tools.POSE
-	$Radius.set_value_no_signal(_settings.radius)
+	$Size.set_value_no_signal(_settings.size)
 	$Falloff.set_value_no_signal(_settings.falloff)
 	$Reach.set_pressed_no_signal(_settings.reach == _settings.Reach.LIMB)
 	_sync_reach_icon()
@@ -36,8 +36,8 @@ func _sync_reach_icon() -> void:
 	$Reach.tooltip_text = "Pose moves the whole connected limb" if limb else "Pose moves only the cells inside the ring"
 
 
-func _on_radius_changed(value: float) -> void:
-	_settings.radius = int(value)
+func _on_size_changed(value: float) -> void:
+	_settings.size = int(value)
 
 
 func _on_falloff_changed(value: float) -> void:

@@ -22,8 +22,8 @@ The user poses a limb or corrects its proportions, then commits the result as on
 
 - The joint is one point in cell space. It is the only centre of rotation.
 - The brush takes the occupied cells that touch the ring. This set is the limb.
-- The brush walks the connected cells from the picked cell to the far end of the limb, then walks back until it enters the brush.
-- The walk stops two brush radii from the picked cell, so a connected model cannot send it across the whole frame.
+- The brush walks the connected cells from the picked cell and stops at the brush radius. The farthest cell of that walk is the joint.
+- The bound keeps the walk local, so a connected model cannot send it across the whole frame.
 - The joint is that entry cell, so it always sits on an occupied cell of the limb.
 - Before the press, the cursor shows the joint as a dot and the bone from the joint to the picked cell. Blender shows its pose origin as a white line on the brush cursor [R1].
 - During the drag, the joint stays drawn on top of the preview.
@@ -128,15 +128,16 @@ These rules supersede the earlier sections where they differ. They match the
 shipped tool.
 
 - The joint comes from the connected cells, not from a fixed offset or an axis
-  estimate. The search walks to the far end of the limb, then walks back until
-  it enters the brush. The joint therefore always sits on an occupied cell.
-  The walk stops two brush radii from the press, so a connected model cannot send
-  the search across the whole frame.
+  estimate. The search walks the limb from the press and stops at the brush
+  radius. It does not walk back. The joint is the farthest cell of that walk,
+  so it always sits on an occupied cell.
+  The bound keeps the walk local, so a connected model cannot send the search
+  across the whole frame.
 - The pointer is the tip of the bone. The arm runs from the joint to the pointer,
   and the angle is the screen angle from the bone to that arm. A travel-based
   angle leaves the tip off the pointer.
 - The cursor shows the joint and the bone. It shows no cell count.
-- The option bar holds the reach only. It shares the radius and the falloff with
+- The option bar holds the reach only. It shares the size and the falloff with
   Grab. Blend passes, joint count, joint offset, and the angle limit are gone. A
   single rigid turn is easier to predict, and the falloff already softens the
   joint neck.

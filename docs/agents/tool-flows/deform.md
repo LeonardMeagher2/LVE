@@ -140,7 +140,7 @@ Source:
 flowchart TD
   subgraph Main["Main"]
     P1["Press on a voxel"]
-    P2["Find the joint where the limb enters the brush"]
+    P2["Find the farthest limb cell within the brush radius"]
     P3["Capture the limb or the sphere at the joint band"]
     P4["Build one pose entry per symmetry mask"]
     P5["Drag: view-plane cell"]
@@ -161,11 +161,12 @@ view bends in the view plane.
 `DeformLimb.joint_pivot` reads no cell axis and no face normal.
 The entered face has no effect on the bend.
 
-The joint is the cell where the limb enters the brush on its way to the far end.
-The brush walks the connected cells to the far end of the limb, then walks back
-until it enters the brush.
-The walk reads cells up to two brush radii from the press, so a connected model
-cannot send the search across the whole frame.
+The joint is the farthest cell of the limb within the brush radius.
+The brush walks the connected cells from the picked cell and stops at that bound.
+It does not walk back, so the base is the limb root and not a cell under the
+pointer.
+The bound keeps the walk local, so a connected model cannot send the search
+across the whole frame.
 The joint is therefore always an occupied voxel on the limb, and the pointer is
 the tip of the bone.
 
@@ -244,9 +245,9 @@ Source:
 `DeformPlugin` owns the two tools, one `MenuButton`, and one option bar.
 `State.reset_plugins` adds it after the terrain plugin.
 The toolbar holds Grab and Pose with fixed ids.
-The option bar shows the shared radius and falloff.
+The option bar shows the shared size and falloff.
 Grab uses those two only. The Pose controls hide while Grab is active.
-The Pose control is the reach set. It shares the radius and the falloff with Grab.
+The Pose control is the reach set. It shares the size and the falloff with Grab.
 The reach button shows the set of the next press in its icon and its tooltip.
 Neither tool shows a strength control, because neither uses one.
 
@@ -265,8 +266,8 @@ Source:
 - Pose turns around the view normal only. It cannot turn out of the view plane.
 - A limb walk stops at 8192 cells, so a bend stays inside the brush bound. A
   hover reads one cell of the limb.
-- The joint search reads at most 2048 cells and stops two brush radii from the
-  press.
+- The joint search reads at most 2048 cells and stops at the brush
+  radius. It has no walk back.
 - A bend lowers its angle until every moved cell fits. It never splits a
   symmetric pair.
 - The joint share comes from the joint neck. It is not a

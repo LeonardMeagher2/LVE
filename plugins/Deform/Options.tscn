@@ -2,17 +2,17 @@
 
 [ext_resource type="Script" path="res://plugins/Deform/Options.gd" id="1_script"]
 [ext_resource type="PackedScene" uid="uid://kxi223occ3vl" path="res://ui/ValueButton/ValueButton.tscn" id="2_value"]
-[ext_resource type="Texture2D" uid="uid://bbt7tj3kwq42w" path="res://icons/brush_diameter.svg" id="3_radius"]
+[ext_resource type="Texture2D" uid="uid://bbt7tj3kwq42w" path="res://icons/brush_diameter.svg" id="3_size"]
 [ext_resource type="Texture2D" uid="uid://denrh23gr1h22" path="res://icons/shadow.svg" id="4_falloff"]
 [ext_resource type="Texture2D" path="res://icons/connected.svg" id="8_reach"]
 
 [node name="Options" type="HBoxContainer"]
 script = ExtResource("1_script")
 
-[node name="Radius" parent="." instance=ExtResource("2_value")]
+[node name="Size" parent="." instance=ExtResource("2_value")]
 layout_mode = 2
-tooltip_text = "Deform radius in voxels."
-icon = ExtResource("3_radius")
+tooltip_text = "Deform size in voxels."
+icon = ExtResource("3_size")
 min_value = 1.0
 max_value = 32.0
 step = 1.0
@@ -34,6 +34,6 @@ button_pressed = true
 icon = ExtResource("8_reach")
 icon_alignment = 1
 
-[connection signal="value_changed" from="Radius" to="." method="_on_radius_changed"]
+[connection signal="value_changed" from="Size" to="." method="_on_size_changed"]
 [connection signal="value_changed" from="Falloff" to="." method="_on_falloff_changed"]
 [connection signal="toggled" from="Reach" to="." method="_on_reach_toggled"]

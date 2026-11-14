@@ -22,10 +22,6 @@ const NEIGHBORS: Array[Vector3i] = [
 const JOINT_CELL_LIMIT := 2048
 ## The completed cells between two worker cancel checks.
 const CHECKPOINT := 512
-## The search reach as a multiple of the brush radius. The walk looks one brush
-## radius past the brush, so it can see which side the limb continues on, and it
-## stops there instead of reading the whole connected model.
-const SEARCH_FACTOR := 2.0
 
 
 ## Returns the active symmetry masks of one context. A null context is one mask.
@@ -47,21 +43,19 @@ static func masks_for(context: VoxelFrame.EditContext) -> Array:
 ## [code]reach[/code] as the distance from the anchor to the pivot, and
 ## [code]found[/code] as whether the limb extends past the picked cell.
 ##
-## The joint is the cell where the limb leaves the brush on its way to the far end
-## of the limb. The search walks the connected cells to find that far end, then
-## walks back until it enters the brush. The joint therefore stays on the limb and
-## the picked face has no effect.
+## The joint is the farthest cell of the limb within one brush diameter. The
+## search walks the connected cells from the picked cell and stops at that bound,
+## so the joint stays on the limb and the picked face has no effect.
 ##
-## The walk reads cells up to [constant SEARCH_FACTOR] brush radii from the
-## anchor, so a connected model cannot send it across the whole frame.
-static func joint_pivot(frame: VoxelFrame, anchor: Vector3i, radius: int, context: VoxelFrame.EditContext) -> Dictionary:
+## The bound is one brush size. It reaches past the near end of the limb, so a
+## press near a tip keeps the joint on the side that continues. The walk also
+## stops at [constant JOINT_CELL_LIMIT] cells.
+static func joint_pivot(frame: VoxelFrame, anchor: Vector3i, size: int, context: VoxelFrame.EditContext) -> Dictionary:
 	var result := {"found": false, "pivot": Vector3(anchor), "bone_dir": Vector3.ZERO, "reach": 0.0}
 	if frame == null or anchor == VoxelPicking.NONE or not frame.has(anchor):
 		return result
 	var origin := Vector3(anchor)
-	var limit := float(clampi(radius, 1, 32)) * 0.5
-	var search := limit * SEARCH_FACTOR
-	var parent := {}
+	var limit := float(clampi(size, 1, 32))
 	var steps := {anchor: 0}
 	var queue: Array[Vector3i] = [anchor]
 	var head := 0
@@ -78,28 +72,22 @@ static func joint_pivot(frame: VoxelFrame, anchor: Vector3i, radius: int, contex
 			var next := cell + offset
 			if steps.has(next) or not frame.has(next):
 				continue
-			if Vector3(next).distance_to(origin) > search:
+			if Vector3(next).distance_to(origin) > limit:
 				continue
 			if context != null and not context.allows(next):
 				continue
 			steps[next] = depth + 1
-			parent[next] = cell
 			queue.append(next)
 	if far_steps < 1:
 		return result
-	# Walk back from the far end of the limb. The first cell inside the brush is
-	# the base, so the joint sits where the limb enters the brush.
-	var base := far
-	while parent.has(base) and Vector3(base).distance_to(origin) > limit:
-		base = parent[base]
-	var bone := origin - Vector3(base)
+	var bone := origin - Vector3(far)
 	var reach := bone.length()
 	if reach < 0.5:
 		return result
 	result["found"] = true
 	result["bone_dir"] = bone / reach
 	result["reach"] = reach
-	result["pivot"] = Vector3(base)
+	result["pivot"] = Vector3(far)
 	return result
 
 
@@ -156,11 +144,11 @@ static func capture_limb(frame: VoxelFrame, anchor: Vector3i, pivot: Vector3, bo
 ##
 ## [param limit] stops the scan after that many cells. Zero reads the whole ring.
 ## A caller that only needs to know whether the ring holds a cell passes one.
-static func capture_sphere(frame: VoxelFrame, anchor: Vector3i, pivot: Vector3, bone_dir: Vector3, band: float, radius: int, context: VoxelFrame.EditContext, limit := 0) -> Dictionary:
+static func capture_sphere(frame: VoxelFrame, anchor: Vector3i, pivot: Vector3, bone_dir: Vector3, band: float, size: int, context: VoxelFrame.EditContext, limit := 0) -> Dictionary:
 	var captured := {}
 	if frame == null or anchor == VoxelPicking.NONE:
 		return captured
-	var use_radius := float(clampi(radius, 1, 32)) * 0.5
+	var use_radius := float(clampi(size, 1, 32)) * 0.5
 	var reach := ceili(use_radius)
 	for x in range(-reach, reach + 1):
 		for y in range(-reach, reach + 1):

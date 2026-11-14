@@ -78,7 +78,7 @@ var _footprint_meshes := {}
 # The stroke state.
 var _stroke_id := 0
 var _stroke_tx: VoxelEditTransaction
-var _stroke_radius := 4
+var _stroke_size := 4
 var _stroke_falloff := 0.5
 var _stroke_context: VoxelFrame.EditContext
 ## The same context without the selection. A moved cell may land outside the
@@ -240,7 +240,7 @@ func _press(pos: Vector2) -> void:
 		return
 	_stroke_id += 1
 	_stroke_tx = _edit
-	_stroke_radius = _settings.radius
+	_stroke_size = _settings.size
 	_stroke_falloff = _settings.falloff
 	_stroke_context = _stroke_tx.edit_context
 	_stroke_selection = _stroke_context.selection
@@ -615,7 +615,7 @@ func _setup_footprint() -> void:
 func _pose_footprint(pick: PickResult) -> void:
 	if _footprint == null or pick.hit == VoxelPicking.NONE:
 		return
-	var size := clampi(_settings.radius, 1, 32)
+	var size := clampi(_settings.size, 1, 32)
 	var mesh: ArrayMesh = _footprint_meshes.get(size)
 	if mesh == null:
 		mesh = TerrainRing.build_mesh(TerrainRing.legacy_plane_ring(size))
