@@ -348,7 +348,7 @@ func _sheet_run() -> void:
 	await RenderingServer.frame_post_draw
 	step("Then the export controls are visible before choosing a file", func():
 		expect(exporter._workspace.visible, "the export button opens the sprite sheet workspace")
-		expect(controls.get_node("Export").text == "Export", "the settings provide the export action")
+		expect(controls.get_node("ExportRow/Export").text == "Export", "the settings provide the export action")
 		expect(main.get_node("%StatusBar").get_node("StatusLeft").text.contains("7 × 7"), "the bottom status bar describes the sheet dimensions")
 		exporter.show_editor_tab()
 	)

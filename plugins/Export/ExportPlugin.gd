@@ -24,6 +24,8 @@ const SPRITE_GAP := 1
 @onready var _model: VBoxContainer = _workspace.get_node("%Model")
 @onready var _controls: VBoxContainer = _workspace.get_node("%Sheet")
 @onready var _sheet_settings: GridContainer = _controls.get_node("Settings")
+@onready var _export_button: Button = _controls.get_node("ExportRow/Export")
+@onready var _gif_button: Button = _controls.get_node("ExportRow/Gif")
 @onready var _dialog: FileDialog = _menu_item.get_node("ExportDialog")
 @onready var _sheet_dialog: FileDialog = _menu_item.get_node("SpriteSheetDialog")
 @onready var _gif_dialog: FileDialog = _menu_item.get_node("GifDialog")
@@ -100,8 +102,8 @@ func _ready() -> void:
 	_dialog.file_selected.connect(_on_gltf_file_selected)
 	_sheet_dialog.file_selected.connect(_on_sheet_file_selected)
 	_gif_dialog.file_selected.connect(_on_gif_file_selected)
-	_controls.get_node("Export").pressed.connect(_choose_export_file)
-	_controls.get_node("Gif").toggled.connect(_on_gif_toggled)
+	_export_button.pressed.connect(_choose_export_file)
+	_gif_button.toggled.connect(_on_gif_toggled)
 	var sheet_preview: Control = _controls.get_node("Preview")
 	var sheet_bar: HBoxContainer = _controls.get_node("ControlBar")
 	sheet_bar.get_node("PanToggle").toggled.connect(sheet_preview.set_pan_mode)
@@ -204,7 +206,7 @@ func _restore_export_settings() -> void:
 	_model_camera._pitch = _pending_export_camera.get("pitch", _default_camera.pitch)
 	_model_camera.fov = _pending_export_camera.get("fov", _default_camera.fov)
 	_model_camera.is_orthogonal = _pending_export_camera.get("orthographic", _default_camera.orthographic)
-	_controls.get_node("Gif").set_pressed_no_signal(false)
+	_gif_button.set_pressed_no_signal(false)
 	_controls.get_node("Preview").clear_animation()
 	_restoring_export_settings = false
 
@@ -503,9 +505,9 @@ func _sync() -> void:
 	var gif := _gif_enabled()
 	_menu_item.get_node("ExportBtn").disabled = busy
 	_model.get_node("Export").disabled = busy
-	_controls.get_node("Export").disabled = busy or (not gif and (layout.size.x > Image.MAX_WIDTH or layout.size.y > Image.MAX_HEIGHT))
-	_controls.get_node("Export").tooltip_text = "Export the animation as a GIF" if gif else "Export the sprite sheet as a PNG image"
-	_controls.get_node("Gif").disabled = busy
+	_export_button.disabled = busy or (not gif and (layout.size.x > Image.MAX_WIDTH or layout.size.y > Image.MAX_HEIGHT))
+	_export_button.tooltip_text = "Export the animation as a GIF" if gif else "Export the sprite sheet as a PNG image"
+	_gif_button.disabled = busy
 	for path in ["FrameRow/Frames", "ViewRow/View", "ViewRow/Perspective", "ViewRow/Center"]:
 		_sheet_settings.get_node(path).disabled = busy
 	_sheet_settings.get_node("SizeRow/Size").editable = not busy
@@ -576,7 +578,7 @@ func _choose_gltf_file() -> void:
 
 
 func _gif_enabled() -> bool:
-	return _controls.get_node("Gif").button_pressed
+	return _gif_button.button_pressed
 
 
 func _choose_export_file() -> void:

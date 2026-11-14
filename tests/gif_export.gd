@@ -166,10 +166,14 @@ func _export_run() -> void:
 		exporter._sheet_settings.get_node("TurntableRow/Views").set_value_no_signal(2)
 		State.current_frame = 1
 		renderer_count = VoxelRenderer._active_renderer_count
-		var gif_button: Button = exporter._controls.get_node("Gif")
+		var gif_button: Button = exporter._gif_button
 		expect(not gif_button.button_pressed, "GIF mode starts off")
-		expect(exporter._controls.get_node("Export").text == "Export", "the sheet panel has one export action")
-		expect(gif_button.text == "GIF", "the sheet panel provides a GIF toggle")
+		expect(exporter._export_button.text == "Export", "the sheet panel has one export action")
+		expect(gif_button.toggle_mode and gif_button.icon != null, "the sheet panel provides a GIF icon toggle")
+		var row: HBoxContainer = exporter._controls.get_node("ExportRow")
+		expect(exporter._gif_button.get_parent() == row and exporter._export_button.get_parent() == row, "the GIF toggle and Export share one row")
+		expect(exporter._gif_button.get_index() < exporter._export_button.get_index(), "the GIF toggle sits left of Export")
+		expect(exporter._export_button.size_flags_horizontal & Control.SIZE_EXPAND != 0, "Export fills the rest of the row")
 		expect(exporter._gif_dialog.filters.size() > 0 and exporter._gif_dialog.filters[0].begins_with("*.gif"), "the GIF dialog filters GIF files")
 		gif_button.button_pressed = true
 		expect(exporter._selected_frames() == Vector2i(0, 2), "the all-frames range covers every frame")
@@ -219,7 +223,7 @@ func _preview_run() -> void:
 		exporter._sheet_settings.get_node("SizeRow/Size").set_value_no_signal(32)
 		exporter._sheet_settings.get_node("TurntableRow/Turntable").set_pressed_no_signal(true)
 		exporter._sheet_settings.get_node("TurntableRow/Views").set_value_no_signal(2)
-		exporter._controls.get_node("Gif").set_pressed_no_signal(false)
+		exporter._gif_button.set_pressed_no_signal(false)
 		exporter._menu_item.get_node("ExportBtn").button_pressed = true
 	)
 	await get_tree().process_frame
@@ -230,7 +234,7 @@ func _preview_run() -> void:
 		expect(exporter._preview_image != null and not preview.is_animating(), "the preview shows the whole sheet")
 	)
 	step("When the user enables GIF mode", func():
-		exporter._controls.get_node("Gif").button_pressed = true
+		exporter._gif_button.button_pressed = true
 	)
 	await get_tree().process_frame
 	step("Then the preview plays the sheet tiles with the frame delays", func():
@@ -246,7 +250,7 @@ func _preview_run() -> void:
 		preview.set_process(true)
 	)
 	step("When the user disables GIF mode", func():
-		exporter._controls.get_node("Gif").button_pressed = false
+		exporter._gif_button.button_pressed = false
 	)
 	step("Then the preview shows the whole sheet again", func():
 		var preview = exporter._controls.get_node("Preview")
