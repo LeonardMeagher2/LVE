@@ -2,10 +2,10 @@ extends MeshInstance3D
 
 ## The camera-facing transform pivot gizmo.
 ##
-## Move and Scale draw one fixed view-plane handle. Rotate draws a Pose-style
-## bone from the pivot to the pointer, with a joint square at the pivot and a
-## cross at the tip. The fixed handles keep a constant screen size. The gizmo
-## draws over geometry.
+## Move and Scale draw one fixed view-plane handle. Rotate draws a joint square
+## with quarter-turn arrows at the pivot. A bone to the pointer appears during a
+## drag. The fixed handles keep a constant screen size. The gizmo draws over
+## geometry.
 
 const VoxelLineMesh := preload("res://Globals/Rendering/VoxelLineMesh.gd")
 
@@ -29,10 +29,26 @@ const MOVE_INNER := 0.12
 const MOVE_HEAD := 0.16
 ## The Move arrowhead half width as a fraction of the handle radius.
 const MOVE_SIDE := 0.09
+## The Scale square reach as a fraction of the handle radius.
+const SCALE_REACH := 0.55
+## The Scale arrow shaft start as a fraction of the handle radius.
+const SCALE_INNER := 0.15
+## The Scale arrowhead length as a fraction of the handle radius.
+const SCALE_HEAD := 0.14
+## The Scale arrowhead half width as a fraction of the handle radius.
+const SCALE_SIDE := 0.09
+## The Scale center square half size as a fraction of the handle radius.
+const SCALE_CENTER := 0.06
 ## The half size of the Rotate joint square in screen pixels.
 const JOINT_HALF_PX := 7.0
-## The half size of the Rotate tip cross in screen pixels.
-const TIP_HALF_PX := 4.0
+## The Rotate mark arc radius in screen pixels.
+const ROTATE_ARC_PX := 8.0
+## The Rotate mark arrowhead length in screen pixels.
+const ROTATE_HEAD_PX := 4.0
+## The Rotate mark arrowhead half width in screen pixels.
+const ROTATE_SIDE_PX := 2.5
+## The line segments in one Rotate mark arc.
+const ROTATE_ARC_SEGMENTS := 8
 
 ## The shape to draw.
 @export var kind: Kind = Kind.MOVE
@@ -43,6 +59,7 @@ var _pointer := Vector2.INF
 var _plane_normal := Vector3.ZERO
 var _last_tip := Vector3.ZERO
 var _has_tip := false
+var _dragging := false
 var _size_viewport: Viewport
 
 
@@ -100,6 +117,15 @@ func set_pointer(screen_pos: Vector2, plane_normal := Vector3.ZERO) -> void:
 		_pose()
 
 
+## Shows or hides the Rotate bone. The joint marks stay visible.
+func set_dragging(dragging: bool) -> void:
+	if dragging == _dragging:
+		return
+	_dragging = dragging
+	if _has_pivot and kind == Kind.ROTATE:
+		_pose()
+
+
 ## Poses the gizmo again after a camera or viewport change.
 func refresh_pose() -> void:
 	if _has_pivot:
@@ -138,26 +164,29 @@ func _pose_rotate(camera: Camera3D) -> void:
 	if world_px <= 0.0:
 		visible = false
 		return
-	var pointer := _pointer
-	if pointer == Vector2.INF:
-		pointer = get_viewport().get_mouse_position()
-	var normal := _plane_normal if not _plane_normal.is_zero_approx() else -camera.global_transform.basis.z
-	var tip := _pivot + camera.global_transform.basis.x * (world_px * RADIUS_PX) if not _has_tip else _last_tip
-	var origin := camera.project_ray_origin(pointer)
-	var direction := camera.project_ray_normal(pointer)
-	var denom := direction.dot(normal)
-	if absf(denom) > 0.000001:
-		var t: float = (_pivot - origin).dot(normal) / denom
-		if t > 0.0:
-			tip = origin + direction * t
-			_last_tip = tip
-			_has_tip = true
 	var basis := camera.global_transform.basis
-	var local_tip := basis.inverse() * (tip - _pivot)
 	var vertices := PackedVector3Array()
-	_append_line(vertices, Vector3.ZERO, local_tip)
-	_append_square(vertices, Vector3.ZERO, world_px * JOINT_HALF_PX)
-	_append_cross(vertices, local_tip, world_px * TIP_HALF_PX)
+	if _dragging:
+		var pointer := _pointer
+		if pointer == Vector2.INF:
+			pointer = get_viewport().get_mouse_position()
+		var normal := _plane_normal if not _plane_normal.is_zero_approx() else -basis.z
+		var tip := _pivot + basis.x * (world_px * RADIUS_PX) if not _has_tip else _last_tip
+		var origin := camera.project_ray_origin(pointer)
+		var direction := camera.project_ray_normal(pointer)
+		var denom := direction.dot(normal)
+		if absf(denom) > 0.000001:
+			var t: float = (_pivot - origin).dot(normal) / denom
+			if t > 0.0:
+				tip = origin + direction * t
+				_last_tip = tip
+				_has_tip = true
+		_append_line(vertices, Vector3.ZERO, basis.inverse() * (tip - _pivot))
+	else:
+		_has_tip = false
+	var half := world_px * JOINT_HALF_PX
+	_append_square(vertices, Vector3.ZERO, half)
+	_append_rotate_marks(vertices, half, world_px)
 	mesh = VoxelLineMesh.build(vertices)
 	global_transform = Transform3D(basis, _pivot)
 	visible = true
@@ -202,16 +231,16 @@ func _append_move(vertices: PackedVector3Array) -> void:
 func _append_scale(vertices: PackedVector3Array) -> void:
 	var corners: Array[Vector2] = [Vector2(-1, -1), Vector2(1, -1), Vector2(1, 1), Vector2(-1, 1)]
 	for index in 4:
-		_append_line(vertices, _corner(corners[index], 0.8), _corner(corners[(index + 1) % 4], 0.8))
+		_append_line(vertices, _corner(corners[index], SCALE_REACH), _corner(corners[(index + 1) % 4], SCALE_REACH))
 	for corner in corners:
 		var direction := corner.normalized()
-		var end := _corner(corner, 0.8)
-		_append_line(vertices, _corner(corner, 0.2), end)
-		var back := corner * 0.62
-		var side := Vector2(-direction.y, direction.x) * 0.14
+		var end := _corner(corner, SCALE_REACH)
+		_append_line(vertices, _corner(corner, SCALE_INNER), end)
+		var back := corner * (SCALE_REACH - SCALE_HEAD)
+		var side := Vector2(-direction.y, direction.x) * SCALE_SIDE
 		_append_line(vertices, end, Vector3(back.x + side.x, back.y + side.y, 0.0))
 		_append_line(vertices, end, Vector3(back.x - side.x, back.y - side.y, 0.0))
-	_append_square(vertices, Vector3.ZERO, 0.1)
+	_append_square(vertices, Vector3.ZERO, SCALE_CENTER)
 
 
 func _corner(corner: Vector2, scale: float) -> Vector3:
@@ -234,6 +263,28 @@ func _append_square(vertices: PackedVector3Array, center: Vector3, half: float) 
 		_append_line(vertices, points[index], points[(index + 1) % 4])
 
 
-func _append_cross(vertices: PackedVector3Array, center: Vector3, half: float) -> void:
-	_append_line(vertices, center - Vector3.RIGHT * half, center + Vector3.RIGHT * half)
-	_append_line(vertices, center - Vector3.UP * half, center + Vector3.UP * half)
+func _append_rotate_marks(vertices: PackedVector3Array, half: float, world_px: float) -> void:
+	var radius := world_px * ROTATE_ARC_PX
+	var head := world_px * ROTATE_HEAD_PX
+	var side := world_px * ROTATE_SIDE_PX
+	_append_arc_arrow(vertices, Vector2(half, half), radius, PI * 0.5, 0.0, head, side)
+	_append_arc_arrow(vertices, Vector2(-half, -half), radius, PI * 1.5, PI, head, side)
+
+
+func _append_arc_arrow(vertices: PackedVector3Array, center: Vector2, radius: float, start_angle: float, end_angle: float, head: float, side: float) -> void:
+	var previous := center + Vector2(cos(start_angle), sin(start_angle)) * radius
+	for index in range(1, ROTATE_ARC_SEGMENTS + 1):
+		var angle := lerpf(start_angle, end_angle, float(index) / ROTATE_ARC_SEGMENTS)
+		var point := center + Vector2(cos(angle), sin(angle)) * radius
+		_append_line(vertices, _plane_point(previous), _plane_point(point))
+		previous = point
+	var direction := Vector2(sin(end_angle), -cos(end_angle))
+	var end_point := center + Vector2(cos(end_angle), sin(end_angle)) * radius
+	var back := end_point - direction * head
+	var normal := Vector2(-direction.y, direction.x)
+	_append_line(vertices, _plane_point(end_point), _plane_point(back + normal * side))
+	_append_line(vertices, _plane_point(end_point), _plane_point(back - normal * side))
+
+
+func _plane_point(point: Vector2) -> Vector3:
+	return Vector3(point.x, point.y, 0.0)

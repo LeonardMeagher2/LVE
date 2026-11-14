@@ -125,16 +125,17 @@ Otherwise it is the current frame bounds.
 During a grab, the gizmo uses the destination bounds for Move.
 Rotate and Scale keep the pivot that their grab captured.
 Move and Scale keep a constant screen radius.
-Rotate keeps constant joint and tip marks.
+Rotate keeps constant joint and turn-mark size.
 The gizmo draws over geometry.
 
 | Tool | Gizmo |
 | --- | --- |
 | Move | Four view-plane arrows. |
-| Rotate | A Pose-style bone from the pivot to the pointer, with a joint square and a tip cross. |
+| Rotate | A joint square with two quarter-turn arrows. The bone to the pointer appears during a drag. |
 | Scale | A view-plane square with corner arrows. |
 
 The Rotate bone uses the pointer ray and a plane through the pivot.
+It is visible only during a drag.
 A drag passes the captured plane normal, so a camera move does not change the bone plane.
 A press on the gizmo starts the same free gesture as a press elsewhere in the viewport.
 The gizmo adds no axis constraint.

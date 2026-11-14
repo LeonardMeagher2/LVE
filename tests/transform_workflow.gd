@@ -165,13 +165,15 @@ func _transform_gizmo() -> void:
 		_hover_motion(pointer)
 	)
 
-	step("Then the rotate gizmo draws a bone to the pointer", func():
+	step("Then the rotate gizmo shows its marks and waits for a drag", func():
 		var gizmo = plugin("TransformPlugin")._rotate.get_node("Gizmo")
 		expect(gizmo.is_visible_in_tree(), "the rotate gizmo is visible")
 		expect(gizmo.kind == TransformGizmoScript.Kind.ROTATE, "the rotate gizmo uses the rotate kind")
-		expect(gizmo._has_tip, "the bone has a tip at the pointer")
-		var pointer := camera_rig().unproject_position(gizmo.global_position + Vector3(2, 1, 0))
-		expect(camera_rig().unproject_position(gizmo._last_tip).distance_to(pointer) <= 1.0, "the bone tip follows the pointer")
+		expect(not gizmo._dragging, "the rotate bone waits for a drag")
+		expect(not gizmo._has_tip, "a hover draws no bone")
+		var mesh := gizmo.mesh as ArrayMesh
+		var vertices: PackedVector3Array = mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+		expect(vertices.size() > 8, "the rotate gizmo shows its rotation marks")
 	)
 
 	step("When the user drags the rotate bone", func():
@@ -185,10 +187,14 @@ func _transform_gizmo() -> void:
 
 	step("Then the bone stays on the rotation pivot and follows the drag", func():
 		var gizmo = plugin("TransformPlugin")._rotate.get_node("Gizmo")
+		expect(gizmo._dragging, "the drag shows the rotate bone")
+		expect(gizmo._has_tip, "the bone has a tip at the pointer")
 		expect(gizmo.global_position.is_equal_approx(Vector3(1, 0, 0)), "the rotate gizmo stays on the rotation pivot")
 		var drag_point := camera_rig().unproject_position(Vector3(1, 3, 0))
 		expect(camera_rig().unproject_position(gizmo._last_tip).distance_to(drag_point) <= 1.0, "the bone tip follows the drag")
 		_release_at(_last_mouse_pos)
+		expect(not gizmo._dragging, "the bone hides after the release")
+		expect(not gizmo._has_tip, "the released gizmo holds no bone")
 		_press_option("Cancel")
 	)
 
@@ -201,6 +207,12 @@ func _transform_gizmo() -> void:
 		expect(gizmo.is_visible_in_tree(), "the scale gizmo is visible")
 		expect(gizmo.kind == TransformGizmoScript.Kind.SCALE, "the scale gizmo uses the scale kind")
 		expect(gizmo.global_position.is_equal_approx(Vector3(1, 0, 0)), "the scale gizmo starts at the selection center")
+		var mesh := gizmo.mesh as ArrayMesh
+		var vertices: PackedVector3Array = mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+		var extent := 0.0
+		for vertex in vertices:
+			extent = maxf(extent, maxf(absf(vertex.x), absf(vertex.y)))
+		expect(extent <= TransformGizmoScript.SCALE_REACH + 0.001, "the scale gizmo fits its compact reach")
 	)
 
 	step("When the selection moves to one cell", func():

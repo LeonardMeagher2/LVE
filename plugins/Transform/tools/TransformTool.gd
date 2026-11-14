@@ -332,6 +332,11 @@ func _set_gizmo_pointer(pos: Vector2) -> void:
 	_gizmo.set_pointer(pos, normal)
 
 
+func _set_gizmo_dragging(dragging: bool) -> void:
+	if _gizmo != null:
+		_gizmo.set_dragging(dragging)
+
+
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_PREDELETE:
 		for job in _jobs:
@@ -455,6 +460,7 @@ func _press(origin: Vector3, dir: Vector3) -> void:
 	_grab_waiting = false
 	_begin_grab(origin, dir)
 	_gizmo_grab_ready = true
+	_set_gizmo_dragging(true)
 	_refresh_gizmo()
 	_dragging = true
 	_dragged = false
@@ -514,6 +520,7 @@ func _release() -> void:
 	if not _dragging:
 		return
 	_dragging = false
+	_set_gizmo_dragging(false)
 	if _dragged:
 		_pending = true
 		_refresh_gizmo()
@@ -681,6 +688,7 @@ func _clear_grab() -> void:
 	_source_bounds = AABB()
 	_destination_bounds = AABB()
 	_gizmo_grab_ready = false
+	_set_gizmo_dragging(false)
 	_covered = {}
 	_covered_materials = {}
 	_source_document = null
