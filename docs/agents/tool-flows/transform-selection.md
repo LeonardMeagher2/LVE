@@ -131,8 +131,8 @@ The gizmo draws over geometry.
 | Tool | Gizmo |
 | --- | --- |
 | Move | Four view-plane arrows. |
-| Rotate | A joint square with two quarter-turn arrows. The bone to the pointer appears during a drag. |
-| Scale | A view-plane square with corner arrows. |
+| Rotate | A joint square with two bent arrows. The bone to the pointer appears during a drag. |
+| Scale | Four diagonal arrows at the square corners, matching Move rotated 45 degrees. |
 
 The Rotate bone uses the pointer ray and a plane through the pivot.
 It is visible only during a drag.

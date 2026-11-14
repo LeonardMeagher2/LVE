@@ -2,10 +2,10 @@ extends MeshInstance3D
 
 ## The camera-facing transform pivot gizmo.
 ##
-## Move and Scale draw one fixed view-plane handle. Rotate draws a joint square
-## with quarter-turn arrows at the pivot. A bone to the pointer appears during a
-## drag. The fixed handles keep a constant screen size. The gizmo draws over
-## geometry.
+## Move draws four axis arrows. Scale draws the same arrows on the diagonals.
+## Rotate draws a joint square with two bent arrows at the pivot. A bone to the
+## pointer appears during a drag. The fixed handles keep a constant screen size.
+## The gizmo draws over geometry.
 
 const VoxelLineMesh := preload("res://Globals/Rendering/VoxelLineMesh.gd")
 
@@ -25,28 +25,22 @@ const RADIUS_PX := 64.0
 const JOINT_HALF_PX := 7.0
 ## The local half size of a center square that matches the joint square.
 const CENTER_HALF := JOINT_HALF_PX / RADIUS_PX
-## The Move arrow reach as a fraction of the handle radius.
-const MOVE_REACH := 0.25
-## The Move arrow shaft start as a fraction of the handle radius.
-const MOVE_INNER := 0.06
-## The Move arrowhead length as a fraction of the handle radius.
-const MOVE_HEAD := 0.09
-## The Move arrowhead half width as a fraction of the handle radius.
-const MOVE_SIDE := 0.055
-## The Scale square reach as a fraction of the handle radius.
-const SCALE_REACH := 0.25
-## The Scale arrow shaft start as a fraction of the handle radius.
-const SCALE_INNER := 0.07
-## The Scale arrowhead length as a fraction of the handle radius.
-const SCALE_HEAD := 0.08
-## The Scale arrowhead half width as a fraction of the handle radius.
-const SCALE_SIDE := 0.055
+## The arrow reach as a fraction of the handle radius.
+const ARROW_REACH := 0.25
+## The arrow shaft start as a fraction of the handle radius.
+const ARROW_INNER := 0.06
+## The arrowhead length as a fraction of the handle radius.
+const ARROW_HEAD := 0.09
+## The arrowhead half width as a fraction of the handle radius.
+const ARROW_SIDE := 0.055
 ## The Rotate mark arc radius in screen pixels.
 const ROTATE_ARC_PX := 8.0
 ## The Rotate mark arrowhead length in screen pixels.
 const ROTATE_HEAD_PX := 4.0
 ## The Rotate mark arrowhead half width in screen pixels.
 const ROTATE_SIDE_PX := 2.5
+## The Rotate mark straight tail in screen pixels.
+const ROTATE_TAIL_PX := 3.0
 ## The line segments in one Rotate mark arc.
 const ROTATE_ARC_SEGMENTS := 8
 
@@ -217,34 +211,30 @@ func _build_static_mesh(gizmo_kind: Kind) -> ArrayMesh:
 
 func _append_move(vertices: PackedVector3Array) -> void:
 	var directions: Array[Vector2] = [Vector2.RIGHT, Vector2.LEFT, Vector2.UP, Vector2.DOWN]
-	for direction in directions:
-		var start := Vector3(direction.x * MOVE_INNER, direction.y * MOVE_INNER, 0.0)
-		var end := Vector3(direction.x * MOVE_REACH, direction.y * MOVE_REACH, 0.0)
-		_append_line(vertices, start, end)
-		var back := Vector3(direction.x * (MOVE_REACH - MOVE_HEAD), direction.y * (MOVE_REACH - MOVE_HEAD), 0.0)
-		var side := Vector3(-direction.y * MOVE_SIDE, direction.x * MOVE_SIDE, 0.0)
-		_append_line(vertices, end, back + side)
-		_append_line(vertices, end, back - side)
+	_append_arrows(vertices, directions)
 	_append_square(vertices, Vector3.ZERO, CENTER_HALF)
 
 
 func _append_scale(vertices: PackedVector3Array) -> void:
-	var corners: Array[Vector2] = [Vector2(-1, -1), Vector2(1, -1), Vector2(1, 1), Vector2(-1, 1)]
-	for index in 4:
-		_append_line(vertices, _corner(corners[index], SCALE_REACH), _corner(corners[(index + 1) % 4], SCALE_REACH))
-	for corner in corners:
-		var direction := corner.normalized()
-		var end := _corner(corner, SCALE_REACH)
-		_append_line(vertices, _corner(corner, SCALE_INNER), end)
-		var back := corner * (SCALE_REACH - SCALE_HEAD)
-		var side := Vector2(-direction.y, direction.x) * SCALE_SIDE
-		_append_line(vertices, end, Vector3(back.x + side.x, back.y + side.y, 0.0))
-		_append_line(vertices, end, Vector3(back.x - side.x, back.y - side.y, 0.0))
+	var directions: Array[Vector2] = [
+		Vector2(1, 1).normalized(),
+		Vector2(-1, 1).normalized(),
+		Vector2(-1, -1).normalized(),
+		Vector2(1, -1).normalized(),
+	]
+	_append_arrows(vertices, directions)
 	_append_square(vertices, Vector3.ZERO, CENTER_HALF)
 
 
-func _corner(corner: Vector2, scale: float) -> Vector3:
-	return Vector3(corner.x * scale, corner.y * scale, 0.0)
+func _append_arrows(vertices: PackedVector3Array, directions: Array[Vector2]) -> void:
+	for direction in directions:
+		var start := Vector3(direction.x * ARROW_INNER, direction.y * ARROW_INNER, 0.0)
+		var end := Vector3(direction.x * ARROW_REACH, direction.y * ARROW_REACH, 0.0)
+		_append_line(vertices, start, end)
+		var back := Vector3(direction.x * (ARROW_REACH - ARROW_HEAD), direction.y * (ARROW_REACH - ARROW_HEAD), 0.0)
+		var side := Vector3(-direction.y * ARROW_SIDE, direction.x * ARROW_SIDE, 0.0)
+		_append_line(vertices, end, back + side)
+		_append_line(vertices, end, back - side)
 
 
 func _append_line(vertices: PackedVector3Array, first: Vector3, second: Vector3) -> void:
@@ -267,18 +257,23 @@ func _append_rotate_marks(vertices: PackedVector3Array, half: float, world_px: f
 	var radius := world_px * ROTATE_ARC_PX
 	var head := world_px * ROTATE_HEAD_PX
 	var side := world_px * ROTATE_SIDE_PX
-	_append_arc_arrow(vertices, Vector2(half, half), radius, PI * 0.5, 0.0, head, side)
-	_append_arc_arrow(vertices, Vector2(-half, -half), radius, PI * 1.5, PI, head, side)
+	var tail := world_px * ROTATE_TAIL_PX
+	var top_start := Vector2(half, half + radius)
+	var bottom_start := Vector2(-half, -half - radius)
+	_append_line(vertices, _plane_point(top_start + Vector2(0.0, tail)), _plane_point(top_start))
+	_append_bent_arrow(vertices, Vector2(half + radius, half + radius), radius, PI, PI * 1.5, head, side)
+	_append_line(vertices, _plane_point(bottom_start - Vector2(0.0, tail)), _plane_point(bottom_start))
+	_append_bent_arrow(vertices, Vector2(-half - radius, -half - radius), radius, 0.0, PI * 0.5, head, side)
 
 
-func _append_arc_arrow(vertices: PackedVector3Array, center: Vector2, radius: float, start_angle: float, end_angle: float, head: float, side: float) -> void:
+func _append_bent_arrow(vertices: PackedVector3Array, center: Vector2, radius: float, start_angle: float, end_angle: float, head: float, side: float) -> void:
 	var previous := center + Vector2(cos(start_angle), sin(start_angle)) * radius
 	for index in range(1, ROTATE_ARC_SEGMENTS + 1):
 		var angle := lerpf(start_angle, end_angle, float(index) / ROTATE_ARC_SEGMENTS)
 		var point := center + Vector2(cos(angle), sin(angle)) * radius
 		_append_line(vertices, _plane_point(previous), _plane_point(point))
 		previous = point
-	var direction := Vector2(sin(end_angle), -cos(end_angle))
+	var direction := Vector2(-sin(end_angle), cos(end_angle))
 	var end_point := center + Vector2(cos(end_angle), sin(end_angle)) * radius
 	var back := end_point - direction * head
 	var normal := Vector2(-direction.y, direction.x)

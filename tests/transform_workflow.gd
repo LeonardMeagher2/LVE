@@ -209,10 +209,10 @@ func _transform_gizmo() -> void:
 		expect(gizmo.global_position.is_equal_approx(Vector3(1, 0, 0)), "the scale gizmo starts at the selection center")
 		var mesh := gizmo.mesh as ArrayMesh
 		var vertices: PackedVector3Array = mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
-		var extent := 0.0
+		var reach := 0.0
 		for vertex in vertices:
-			extent = maxf(extent, maxf(absf(vertex.x), absf(vertex.y)))
-		expect(extent <= TransformGizmoScript.SCALE_REACH + 0.001, "the scale gizmo fits its compact reach")
+			reach = maxf(reach, Vector2(vertex.x, vertex.y).length())
+		expect(reach <= TransformGizmoScript.ARROW_REACH + 0.001, "the scale arrows share the move reach")
 	)
 
 	step("When the selection moves to one cell", func():
@@ -612,7 +612,7 @@ func _hover_motion(pos: Vector2) -> void:
 
 func _gizmo_screen_radius(gizmo) -> float:
 	var center := camera_rig().unproject_position(gizmo.global_position)
-	var edge := camera_rig().unproject_position(gizmo.global_transform * Vector3(TransformGizmoScript.MOVE_REACH, 0.0, 0.0))
+	var edge := camera_rig().unproject_position(gizmo.global_transform * Vector3(TransformGizmoScript.ARROW_REACH, 0.0, 0.0))
 	return center.distance_to(edge)
 
 
