@@ -604,6 +604,7 @@ func _pose_limb() -> void:
 	step("When the user presses the bar", func():
 		_press(press)
 		expect(tool._edit != null, "the pose press opens an edit")
+		expect(not (tool.get_node("Footprint") as MeshInstance3D).visible, "the brush circle hides during the drag")
 		expect(tool._joint_found, "the pose finds the joint")
 		expect(tool._bone_dir.is_equal_approx(Vector3.LEFT), "the bone runs from the joint to the picked cell")
 		expect(tool._pivot.distance_to(Vector3(0, 0, 0)) <= 2.5, "the joint sits within the brush radius")

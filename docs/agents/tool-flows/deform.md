@@ -123,7 +123,7 @@ A destination may leave the selection, so a small selection still moves.
 The job sorts the moves by weight, then by the canonical cell, so overlapping
 destinations resolve the same way on every run.
 
-The tool poses the circle in the view plane. It shows the brush footprint. The bone carries the joint square and the face widget: a square on the edges of the entered face and a quadrant cross, so the user sees which quadrant the pointer rests in and how the face bias reads.
+The tool poses the circle in the view plane. It shows the brush footprint. A pose drag hides the circle, so only the bone and the joint square remain. The bone carries the joint square and the face widget: a square on the edges of the entered face and a quadrant cross, so the user sees which quadrant the pointer rests in and how the face bias reads.
 Grab draws no bone.
 
 Source:

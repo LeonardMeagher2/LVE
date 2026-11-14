@@ -258,6 +258,15 @@ func _capture_gesture(pick: PickResult) -> bool:
 	return true
 
 
+# The pose hides the brush circle during a drag. The bone already shows the
+# angle, and the joint square shows the base, so the circle only adds noise.
+func _pose_footprint(pick: PickResult) -> void:
+	if _edit != null:
+		_hide_footprint()
+		return
+	super._pose_footprint(pick)
+
+
 func _allows(cell: Vector3i) -> bool:
 	return _write_context == null or _write_context.allows(cell)
 
