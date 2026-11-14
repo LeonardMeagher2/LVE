@@ -260,12 +260,13 @@ button_pressed = true
 icon = ExtResource("24_json")
 icon_alignment = 1
 
+[node name="Gif" type="Button" parent="Panels/SheetPanel/Margin/Sheet"]
+layout_mode = 2
+tooltip_text = "Show the animated GIF preview and export a GIF. Turn this off to show and export the sprite sheet."
+toggle_mode = true
+text = "GIF"
+
 [node name="Export" type="Button" parent="Panels/SheetPanel/Margin/Sheet" unique_id=1792495167]
 layout_mode = 2
 tooltip_text = "Export the sprite sheet as a PNG image"
-text = "PNG"
-
-[node name="Gif" type="Button" parent="Panels/SheetPanel/Margin/Sheet"]
-layout_mode = 2
-tooltip_text = "Export the animation as a GIF. It uses the selected frames, view, size, and frame delays. The turntable and metadata options do not apply."
-text = "GIF"
+text = "Export"

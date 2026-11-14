@@ -1,8 +1,8 @@
 extends "res://tests/test.gd"
 
-# GIF export: the encoder stream, the palette, the tag loop modes, the export
-# workspace path, and cancellation. The encoder cases run headless. The render
-# cases need a visible window, like the sprite sheet cases.
+# GIF export: the encoder stream, the palette, the export workspace path, the
+# animated preview, and cancellation. The encoder cases run headless. The
+# render cases need a visible window, like the sprite sheet cases.
 
 const GIF_ENCODER := preload("res://plugins/Export/GifEncoder.gd")
 const GIF_READER := preload("res://tests/gif_reader.gd")
@@ -20,10 +20,10 @@ func _ready() -> void:
 	timeout = 20.0
 	test("the GIF encoder writes a decodable animation", _encoder_run, "gif_encoder")
 	test("the GIF palette keeps document colors and resets LZW", _palette_run, "gif_palette")
-	test("GIF frame sequences follow tag loop modes", _sequence_run, "gif_sequence")
 	if DisplayServer.get_name() != "headless":
 		timeout = 30.0
-		test("the export workspace writes the tagged animation as a GIF", _export_run, "gif_export")
+		test("the export workspace writes the sprite animation as a GIF", _export_run, "gif_export")
+		test("the GIF toggle animates the sheet preview", _preview_run, "gif_preview")
 		test("a cancelled GIF export writes no file", _cancel_run, "gif_cancel")
 
 
@@ -142,37 +142,9 @@ func _palette_run() -> void:
 	)
 
 
-func _sequence_run() -> void:
-	var tag := AnimationTag.new()
-	tag.from = 0
-	tag.to = 2
-	tag.repeats = 0
-	step("Given one three-frame tag", func():
-		expect(exporter.gif_frame_indices(0, 2, tag) == PackedInt32Array([0, 1, 2]), "forward order keeps the frames")
-		tag.loop_mode = AnimationTag.LoopMode.REVERSE
-		expect(exporter.gif_frame_indices(0, 2, tag) == PackedInt32Array([2, 1, 0]), "reverse order flips the frames")
-		tag.loop_mode = AnimationTag.LoopMode.PING_PONG
-		expect(exporter.gif_frame_indices(0, 2, tag) == PackedInt32Array([0, 1, 2, 1]), "ping-pong repeats the inner frames")
-		tag.loop_mode = AnimationTag.LoopMode.PING_PONG_REVERSE
-		expect(exporter.gif_frame_indices(0, 2, tag) == PackedInt32Array([2, 1, 0, 1]), "reverse ping-pong starts at the last frame")
-		expect(exporter.gif_frame_indices(1, 1, tag) == PackedInt32Array([1]), "a one-frame tag stays one frame")
-	)
-	step("Then the repeat count sets the GIF loop", func():
-		expect(exporter.gif_loop_count(null) == 0, "no tag loops forever")
-		tag.repeats = 0
-		expect(exporter.gif_loop_count(tag) == 0, "zero repeats loops forever")
-		tag.repeats = 1
-		expect(exporter.gif_loop_count(tag) == -1, "one repeat omits the loop extension")
-		tag.repeats = 2
-		expect(exporter.gif_loop_count(tag) == 1, "two repeats adds one extra loop")
-		tag.repeats = 5
-		expect(exporter.gif_loop_count(tag) == 4, "five repeats adds four extra loops")
-	)
-
-
 func _export_run() -> void:
 	gif_path = "user://voxel_gif_%s.gif" % Time.get_ticks_usec()
-	step("Given three colored frames and a ping-pong tag", func():
+	step("Given three colored frames, two turntable views, and GIF mode", func():
 		State.document.set_cell(0, Vector3i.ZERO, VoxelFrame.material(Color.RED))
 		State.document.add_frame()
 		State.document.set_cell(1, Vector3i.ZERO, VoxelFrame.material(Color.BLUE))
@@ -181,37 +153,38 @@ func _export_run() -> void:
 		State.document.add_frame()
 		State.document.set_cell(2, Vector3i.ZERO, VoxelFrame.material(Color.GREEN))
 		State.document.frames[2].delay_ms = 50
-		var tag_index := State.document.add_tag("Ping", 0, 2, AnimationTag.LoopMode.PING_PONG, 2)
 		State.frames_changed.emit()
-		State.tag_changed.emit()
 		var lighting: Dictionary = exporter._model_scene.get_lighting_settings()
 		lighting.shaded = false
 		exporter._model_scene.set_lighting_settings(lighting)
-		var selector: OptionButton = exporter._sheet_settings.get_node("FrameRow/Frames")
-		selector.select(tag_index + 1)
-		selector.item_selected.emit(tag_index + 1)
 		exporter._sheet_settings.get_node("ViewRow/View").select(2)
 		exporter._sheet_settings.get_node("ViewRow/View").item_selected.emit(2)
 		exporter._sheet_settings.get_node("ViewRow/Perspective").set_pressed_no_signal(false)
 		exporter._sheet_settings.get_node("ViewRow/Center").set_pressed_no_signal(true)
 		exporter._sheet_settings.get_node("SizeRow/Size").set_value_no_signal(32)
+		exporter._sheet_settings.get_node("TurntableRow/Turntable").set_pressed_no_signal(true)
+		exporter._sheet_settings.get_node("TurntableRow/Views").set_value_no_signal(2)
 		State.current_frame = 1
 		renderer_count = VoxelRenderer._active_renderer_count
-		expect(exporter._selected_frames() == Vector2i(0, 2), "the selected tag covers every frame")
-		expect(exporter._controls.get_node("Gif").text == "GIF", "the sheet panel provides a GIF action")
+		var gif_button: Button = exporter._controls.get_node("Gif")
+		expect(not gif_button.button_pressed, "GIF mode starts off")
+		expect(exporter._controls.get_node("Export").text == "Export", "the sheet panel has one export action")
+		expect(gif_button.text == "GIF", "the sheet panel provides a GIF toggle")
 		expect(exporter._gif_dialog.filters.size() > 0 and exporter._gif_dialog.filters[0].begins_with("*.gif"), "the GIF dialog filters GIF files")
+		gif_button.button_pressed = true
+		expect(exporter._selected_frames() == Vector2i(0, 2), "the all-frames range covers every frame")
 	)
 	var error: Error = await exporter.export_gif(gif_path)
-	step("Then the GIF follows the tag order and frame delays", func():
+	step("Then the GIF follows the sheet tiles and frame delays", func():
 		expect(error == OK, "the GIF export completes")
 		var bytes := FileAccess.get_file_as_bytes(gif_path)
 		var reader = GIF_READER.new()
 		expect(reader.read(bytes), "the exported GIF parses")
 		expect(reader.width == 32 and reader.height == 32, "the GIF uses the selected tile size")
-		expect(reader.frames.size() == 4, "ping-pong exports four frames for three source frames")
-		expect(reader.loop_count == 1, "two tag repeats write one extra GIF loop")
-		var expected_delays: Array[int] = [10, 25, 5, 25]
-		var expected_hues: Array[String] = ["r", "b", "g", "b"]
+		expect(reader.frames.size() == 6, "the GIF contains every sheet tile")
+		expect(reader.loop_count == 0, "the GIF loops forever")
+		var expected_delays: Array[int] = [10, 25, 5, 10, 25, 5]
+		var expected_hues: Array[String] = ["r", "b", "g", "r", "b", "g"]
 		var actual_delays: Array[int] = []
 		var actual_hues: Array[String] = []
 		for frame: Dictionary in reader.frames:
@@ -219,13 +192,72 @@ func _export_run() -> void:
 			var image: Image = frame.image
 			actual_hues.append(_dominant_hue(image))
 		expect(actual_delays == expected_delays, "each GIF frame keeps its document delay")
-		expect(actual_hues == expected_hues, "the GIF follows the ping-pong frame order")
+		expect(actual_hues == expected_hues, "the GIF follows the sheet tile order")
 		expect(State.document.frames.size() == 3 and State.current_frame == 1, "the export leaves the document and frame in place")
 		expect(not State.edit_busy(), "the export releases editing")
 		expect(State.get_activity() == null, "the export releases its activity")
 		expect(exporter._export_viewport == null, "the export releases its render viewport")
 		expect(VoxelRenderer._active_renderer_count == renderer_count, "the export releases its temporary renderer")
 	)
+
+
+func _preview_run() -> void:
+	step("Given three colored frames and two turntable views", func():
+		State.document.set_cell(0, Vector3i.ZERO, VoxelFrame.material(Color.RED))
+		State.document.add_frame()
+		State.document.set_cell(1, Vector3i.ZERO, VoxelFrame.material(Color.BLUE))
+		State.document.frames[0].delay_ms = 100
+		State.document.frames[1].delay_ms = 250
+		State.document.add_frame()
+		State.document.set_cell(2, Vector3i.ZERO, VoxelFrame.material(Color.GREEN))
+		State.document.frames[2].delay_ms = 50
+		State.frames_changed.emit()
+		exporter._sheet_settings.get_node("ViewRow/View").select(2)
+		exporter._sheet_settings.get_node("ViewRow/View").item_selected.emit(2)
+		exporter._sheet_settings.get_node("ViewRow/Perspective").set_pressed_no_signal(false)
+		exporter._sheet_settings.get_node("ViewRow/Center").set_pressed_no_signal(true)
+		exporter._sheet_settings.get_node("SizeRow/Size").set_value_no_signal(32)
+		exporter._sheet_settings.get_node("TurntableRow/Turntable").set_pressed_no_signal(true)
+		exporter._sheet_settings.get_node("TurntableRow/Views").set_value_no_signal(2)
+		exporter._controls.get_node("Gif").set_pressed_no_signal(false)
+		exporter._menu_item.get_node("ExportBtn").button_pressed = true
+	)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	await _wait_preview()
+	step("Then the preview shows the sprite sheet while GIF mode is off", func():
+		var preview = exporter._controls.get_node("Preview")
+		expect(exporter._preview_image != null and not preview.is_animating(), "the preview shows the whole sheet")
+	)
+	step("When the user enables GIF mode", func():
+		exporter._controls.get_node("Gif").button_pressed = true
+	)
+	await get_tree().process_frame
+	step("Then the preview plays the sheet tiles with the frame delays", func():
+		var preview = exporter._controls.get_node("Preview")
+		expect(preview.is_animating(), "the preview shows one tile at a time")
+		expect(preview._animation_rects.size() == 6, "the preview contains every sheet tile")
+		expect(preview._animation_delays == PackedInt32Array([100, 250, 50, 100, 250, 50]), "the preview uses the document frame delays")
+		expect(main.get_node("%StatusBar").get_node("StatusLeft").text.contains("6 GIF frames"), "the status bar describes the GIF")
+		preview.set_animation(preview._animation_rects, preview._animation_delays)
+		preview.set_process(false)
+		preview._process(0.101)
+		expect(preview._animation_index == 1, "the preview advances after the first frame delay")
+		preview.set_process(true)
+	)
+	step("When the user disables GIF mode", func():
+		exporter._controls.get_node("Gif").button_pressed = false
+	)
+	step("Then the preview shows the whole sheet again", func():
+		var preview = exporter._controls.get_node("Preview")
+		expect(not preview.is_animating(), "the preview returns to the sprite sheet")
+		exporter.show_editor_tab()
+	)
+
+
+func _wait_preview() -> void:
+	while exporter._preview_running or exporter._preview_due_ms >= 0 or exporter._preview_image == null:
+		await get_tree().process_frame
 
 
 func _cancel_run() -> void:
