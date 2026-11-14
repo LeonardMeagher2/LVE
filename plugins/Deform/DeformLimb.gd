@@ -22,10 +22,15 @@ const NEIGHBORS: Array[Vector3i] = [
 const JOINT_CELL_LIMIT := 2048
 ## The completed cells between two worker cancel checks.
 const CHECKPOINT := 512
-## The search reach as a multiple of the brush radius. The walk looks one brush
-## radius past the brush, so it can see which side the limb continues on, and it
-## stops there instead of reading the whole connected model.
-const SEARCH_FACTOR := 2.0
+## The weight of the brush edge in the joint score. The base should sit near the
+## edge, so the limb bends about a point that is far from the pointer.
+const JOINT_EDGE_WEIGHT := 1.0
+## The weight of the view plane in the joint score. It outranks the edge, so a
+## farther cell off the press plane loses to a nearer cell on it.
+const JOINT_PLANE_WEIGHT := 3.0
+## The weight of the pointer point on the entered face. It decides between cells
+## that are otherwise close, so the base leans to the half of the face touched.
+const JOINT_FACE_WEIGHT := 1.0
 
 
 ## Returns the active symmetry masks of one context. A null context is one mask.
@@ -47,51 +52,81 @@ static func masks_for(context: VoxelFrame.EditContext) -> Array:
 ## [code]reach[/code] as the distance from the anchor to the pivot, and
 ## [code]found[/code] as whether the limb extends past the picked cell.
 ##
-## The joint is the cell where the limb leaves the brush on its way to the far end
-## of the limb. The search walks the connected cells to find that far end, then
-## walks back until it enters the brush. The joint therefore stays on the limb and
-## the picked face has no effect.
+## The joint is the occupied cell in the brush with the best score. The score
+## weighs the brush edge, the view plane of the press, and the half of the entered
+## face that the pointer touches, so the base sits near the edge, stays on the
+## plane the user sees, and leans toward the side the pointer is on.
 ##
-## The walk reads cells up to [constant SEARCH_FACTOR] brush radii from the
-## anchor, so a connected model cannot send it across the whole frame.
-static func joint_pivot(frame: VoxelFrame, anchor: Vector3i, radius: int, context: VoxelFrame.EditContext) -> Dictionary:
+## The search walks every cell inside the brush, so a gap does not end it, and
+## only an occupied cell can be the joint.
+##
+## [param connected] limits the walk to occupied cells, so a gap ends it and the
+## joint stays on the connected limb.
+##
+## [param view_forward] is the press view direction, or a zero vector to skip the
+## view plane term.
+##
+## [param face_axis] is the world axis of the entered face normal, or -1. The
+## other two axes are the face tangents. [param touch] is the pointer point on
+## that face, in cells from the face center, clamped to half a cell per axis.
+##
+## The walk also stops at [constant JOINT_CELL_LIMIT] cells.
+static func joint_pivot(frame: VoxelFrame, anchor: Vector3i, size: int, context: VoxelFrame.EditContext, connected := false, view_forward := Vector3.ZERO, face_axis := -1, touch := Vector2.ZERO) -> Dictionary:
 	var result := {"found": false, "pivot": Vector3(anchor), "bone_dir": Vector3.ZERO, "reach": 0.0}
 	if frame == null or anchor == VoxelPicking.NONE or not frame.has(anchor):
 		return result
 	var origin := Vector3(anchor)
-	var limit := float(clampi(radius, 1, 32)) * 0.5
-	var search := limit * SEARCH_FACTOR
-	var parent := {}
+	var brush_reach := float(clampi(size, 1, 32)) * 0.5
+	var ahead := view_forward.normalized()
+	var touch_dir := Vector2.ZERO
+	var touch_strength := 0.0
+	if face_axis >= 0:
+		var touch_length := touch.length()
+		if touch_length > 0.0:
+			touch_dir = touch / touch_length
+			touch_strength = clampf(touch_length / 0.5, 0.0, 1.0)
+	var axis_u := (face_axis + 1) % 3 if face_axis >= 0 else 0
+	var axis_v := (face_axis + 2) % 3 if face_axis >= 0 else 0
 	var steps := {anchor: 0}
 	var queue: Array[Vector3i] = [anchor]
 	var head := 0
-	var far := anchor
-	var far_steps := 0
+	var base := anchor
+	var base_score := -INF
 	while head < queue.size() and steps.size() < JOINT_CELL_LIMIT:
 		var cell: Vector3i = queue[head]
 		head += 1
 		var depth := int(steps[cell])
-		if depth > far_steps:
-			far = cell
-			far_steps = depth
 		for offset: Vector3i in NEIGHBORS:
 			var next := cell + offset
-			if steps.has(next) or not frame.has(next):
+			if steps.has(next):
 				continue
-			if Vector3(next).distance_to(origin) > search:
+			if Vector3(next).distance_to(origin) > brush_reach:
 				continue
 			if context != null and not context.allows(next):
 				continue
+			var occupied := frame.has(next)
+			if connected and not occupied:
+				continue
 			steps[next] = depth + 1
-			parent[next] = cell
 			queue.append(next)
-	if far_steps < 1:
+			if not occupied:
+				continue
+			# Only an occupied cell can be the joint, so every occupied cell of
+			# the brush is scored and the best one wins.
+			var delta := Vector3(next) - origin
+			var score := JOINT_EDGE_WEIGHT * (delta.length() / brush_reach)
+			if ahead != Vector3.ZERO:
+				score += JOINT_PLANE_WEIGHT * (1.0 - absf(delta.dot(ahead)) / brush_reach)
+			if touch_strength > 0.0:
+				var in_face := Vector2(delta[axis_u], delta[axis_v])
+				var in_face_length := in_face.length()
+				if in_face_length > 0.0:
+					score += JOINT_FACE_WEIGHT * (in_face / in_face_length).dot(touch_dir) * touch_strength
+			if score > base_score:
+				base = next
+				base_score = score
+	if base == anchor:
 		return result
-	# Walk back from the far end of the limb. The first cell inside the brush is
-	# the base, so the joint sits where the limb enters the brush.
-	var base := far
-	while parent.has(base) and Vector3(base).distance_to(origin) > limit:
-		base = parent[base]
 	var bone := origin - Vector3(base)
 	var reach := bone.length()
 	if reach < 0.5:
@@ -145,40 +180,6 @@ static func capture_limb(frame: VoxelFrame, anchor: Vector3i, pivot: Vector3, bo
 		completed += 1
 		if job != null and completed % CHECKPOINT == 0 and not job.checkpoint(completed):
 			return {}
-	return captured
-
-
-## Returns the sphere cells of one joint, keyed by cell, with their weight.
-##
-## The result holds every allowed occupied cell inside the brush ring. A cell
-## behind the joint has no weight, so it is not captured and the joint blend
-## still applies to the cells in front of it.
-##
-## [param limit] stops the scan after that many cells. Zero reads the whole ring.
-## A caller that only needs to know whether the ring holds a cell passes one.
-static func capture_sphere(frame: VoxelFrame, anchor: Vector3i, pivot: Vector3, bone_dir: Vector3, band: float, radius: int, context: VoxelFrame.EditContext, limit := 0) -> Dictionary:
-	var captured := {}
-	if frame == null or anchor == VoxelPicking.NONE:
-		return captured
-	var use_radius := float(clampi(radius, 1, 32)) * 0.5
-	var reach := ceili(use_radius)
-	for x in range(-reach, reach + 1):
-		for y in range(-reach, reach + 1):
-			for z in range(-reach, reach + 1):
-				if x * x + y * y + z * z > use_radius * use_radius:
-					continue
-				var cell := anchor + Vector3i(x, y, z)
-				if not frame.has(cell):
-					continue
-				if context != null and not context.allows(cell):
-					continue
-				var along := (Vector3(cell) - pivot).dot(bone_dir)
-				var weight := limb_weight(along, band)
-				if weight <= 0.0:
-					continue
-				captured[cell] = weight
-				if limit > 0 and captured.size() >= limit:
-					return captured
 	return captured
 
 
@@ -243,6 +244,16 @@ static func mask_handedness(mask: int) -> float:
 		if mask & (1 << axis):
 			odd ^= 1
 	return -1.0 if odd == 1 else 1.0
+
+
+## Returns the mirror of one world direction through a symmetry mask. A direction
+## has no position, so only the mirrored components flip.
+static func mirror_direction(direction: Vector3, mask: int) -> Vector3:
+	var mirrored := direction
+	for axis in 3:
+		if mask & (1 << axis):
+			mirrored[axis] = -mirrored[axis]
+	return mirrored
 
 
 ## Returns the mirror of one world point through a symmetry mask. The origin is

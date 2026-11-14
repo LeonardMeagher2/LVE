@@ -22,8 +22,8 @@ The user poses a limb or corrects its proportions, then commits the result as on
 
 - The joint is one point in cell space. It is the only centre of rotation.
 - The brush takes the occupied cells that touch the ring. This set is the limb.
-- The brush walks the connected cells from the picked cell to the far end of the limb, then walks back until it enters the brush.
-- The walk stops two brush radii from the picked cell, so a connected model cannot send it across the whole frame.
+- The brush walks every cell inside the brush radius, occupied or not, and the joint is the farthest occupied cell it reached. A gap therefore does not hide a cell.
+- The bound keeps the walk local, so a connected model cannot send it across the whole frame.
 - The joint is that entry cell, so it always sits on an occupied cell of the limb.
 - Before the press, the cursor shows the joint as a dot and the bone from the joint to the picked cell. Blender shows its pose origin as a white line on the brush cursor [R1].
 - During the drag, the joint stays drawn on top of the preview.
@@ -31,17 +31,15 @@ The user poses a limb or corrects its proportions, then commits the result as on
 
 ## 4. Affected region
 
-The Reach option selects one of two sets.
+Every occupied cell on the tip side of the joint moves.
+The brush uses face-connected cells only, as Blender's Connected Only does [R1].
 
-- **Limb**: every occupied cell on the tip side of the joint moves. The brush uses face-connected cells only, as Blender's Connected Only does [R1].
-- **Sphere**: only the cells inside the ring at the press move, as with Grab [R5].
-
-Tradeoff: Sphere keeps unrelated geometry still. It cuts the limb at the ring, so the bend looks like a dent.
-Limb keeps the silhouette smooth. It moves every connected cell, so a touching shape moves too.
+Tradeoff: a limb keeps the silhouette smooth. It moves every connected cell, so a touching shape moves too. A cell selection keeps the bend local.
 
 ## 5. The rotation
 
 - The axis is the view direction through the joint. The bend therefore lies in the screen plane.
+- A mirrored copy turns about the mirror of that axis, by the mirror of the angle. The bend of a copy can therefore leave the screen plane, so the two sides stay exact mirrors from any view.
 - The axis passes through the joint and does not move during the stroke.
 - The arm runs from the joint to the pointer. The angle is the screen angle from the bone to that arm, so the tip lands under the pointer.
 - Radial pointer motion, toward or away from the joint, changes no angle.
@@ -74,7 +72,8 @@ Limb keeps the silhouette smooth. It moves every connected cell, so a touching s
 | --- | --- | --- | --- |
 | Brush size | 1 to 32 cells, as a diameter | 4 | Sets the ring and the captured set. Blender states that only Size and Auto-Masking change this brush [R1]. |
 | Edge falloff | 0 to 1 | 0.5 | Sets the width of the joint neck (section 6) [R3]. |
-| Reach | Limb, Sphere | Limb | Sets the moved cells (section 4) [R1]. |
+| Connected | on or off | on | Limits the joint walk to connected occupied cells. Off searches the whole brush ball, so a gap does not hide a cell. |
+| Snap | on or off | off | Rounds the requested angle to a quarter turn before the fit (section 5). |
 | Mirror planes | X, Y, Z | as set | Repeats the bend through each active plane [R4]. |
 
 The brush size and the edge falloff are the shared inputs of the tool set.
@@ -82,12 +81,12 @@ The cell selection is not an option. It always limits the brush, like the transf
 
 ## 9. Limits and edge cases
 
-- **Limb larger than the view.** Reach Limb moves every connected cell. The user must use Reach Sphere or a selection. The joint still sits at the brush edge.
-- **Limb that touches unrelated geometry.** A shared face makes one limb, so Reach Limb bends both shapes.
+- **Limb larger than the view.** Every connected cell moves. The user must use a cell selection. The joint still sits at the brush edge.
+- **Limb that touches unrelated geometry.** A shared face makes one limb, so the bend moves both shapes.
 - **Bend that leaves the writable slice or the document limit.** The brush lowers the angle until every moved cell fits. If no angle fits, the brush shows a blocked state and the stroke does nothing.
 - **Bend that leaves the selection.** Only selected cells move. An unselected occupied cell blocks the bend. The brush lowers the angle until no moved cell lands on one.
 - **No selected cell in the picked set.** The brush shows a blocked state and starts no stroke.
-- **Symmetry.** The brush repeats the bend on each mirrored copy. Each active X, Y, and Z plane gives one copy [R4]. It lowers one angle for all copies, so the result stays symmetric. An obstacle on one side limits both sides.
+- **Symmetry.** The brush repeats the bend on each mirrored copy. Each active X, Y, and Z plane gives one copy [R4]. Each copy turns the mirror of the primary turn about the mirror of the primary axis, so the result stays an exact mirror from any view. It lowers one angle for all copies. An obstacle on one side limits both sides.
 - **Cell on a mirror plane.** A cell that maps to itself counts once.
 - **Escape during a drag.** The preview clears at once. The cells return to their first position.
 
@@ -128,16 +127,17 @@ These rules supersede the earlier sections where they differ. They match the
 shipped tool.
 
 - The joint comes from the connected cells, not from a fixed offset or an axis
-  estimate. The search walks to the far end of the limb, then walks back until
-  it enters the brush. The joint therefore always sits on an occupied cell.
-  The walk stops two brush radii from the press, so a connected model cannot send
-  the search across the whole frame.
+  estimate. The search walks the brush ball from the press and the joint is its
+  farthest occupied cell, so it always sits on an occupied cell. A tie prefers
+  the cell on the view plane of the press.
+  The bound keeps the walk local, so a connected model cannot send the search
+  across the whole frame.
 - The pointer is the tip of the bone. The arm runs from the joint to the pointer,
   and the angle is the screen angle from the bone to that arm. A travel-based
   angle leaves the tip off the pointer.
 - The cursor shows the joint and the bone. It shows no cell count.
-- The option bar holds the reach only. It shares the radius and the falloff with
-  Grab. Blend passes, joint count, joint offset, and the angle limit are gone. A
+- The option bar holds the size and the falloff, shared with Grab. Blend passes,
+  joint count, joint offset, and the angle limit are gone. A
   single rigid turn is easier to predict, and the falloff already softens the
   joint neck.
 - The cell selection limits the limb search and the captured cells. The moved

@@ -25,7 +25,10 @@ func _run() -> void:
 		State.selection_changed.emit()
 		activate_tool("transform")
 		select_toolbar_item("transform", "Rotate")
-		press_option("Snap to 90 degrees")
+		# Snap starts off now, so turn it off only when an earlier case left it on.
+		var snap := _find_option_button("Snap to 90 degrees")
+		if snap != null and snap.button_pressed:
+			press_option("Snap to 90 degrees")
 	)
 
 	step("When the user drags a small angle short of a quarter turn", func():

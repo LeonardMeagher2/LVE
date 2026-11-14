@@ -9,12 +9,12 @@ extends VoxelTool
 ## release commits the whole gesture as one history action. Escape, an edit
 ## context change, and a history change roll it back.
 ##
-## The ring is one white leaf mesh on the entered face. It is the whole cursor
-## and it predicts no voxel. A tool that also draws a bone poses it from the
+## The cursor is one white circle in the view plane. It shows the reach of the
+## tool and predicts no voxel. A tool that also draws a bone poses it from the
 ## press onward, like Blender's Pose brush.
 
-const TerrainRing := preload("res://plugins/Terrain/TerrainRing.gd")
-const TerrainFrameScript := preload("res://plugins/Terrain/TerrainFrame.gd")
+const BrushSize := preload("res://Globals/State/Tools/VoxelBrushSize.gd")
+const VoxelLineMesh := preload("res://Globals/Rendering/VoxelLineMesh.gd")
 
 ## The estimated work above which a drag runs on the worker pool.
 const INLINE_EDIT_LIMIT := 4096
@@ -78,7 +78,14 @@ var _footprint_meshes := {}
 # The stroke state.
 var _stroke_id := 0
 var _stroke_tx: VoxelEditTransaction
-var _stroke_radius := 4
+var _stroke_size := 4
+# The entered face of the press, and the pointer point on it, for the pose joint
+# score. The face is a world axis, or -1.
+var _stroke_face := -1
+var _stroke_touch := Vector2.ZERO
+# The same two values of the last hover.
+var _hover_face := -1
+var _hover_touch := Vector2.ZERO
 var _stroke_falloff := 0.5
 var _stroke_context: VoxelFrame.EditContext
 ## The same context without the selection. A moved cell may land outside the
@@ -179,7 +186,7 @@ func _disconnect_state_subscriptions() -> void:
 
 
 func _on_settings_changed() -> void:
-	# The ring follows the size. A drag keeps the size it captured at the press.
+	# The cursor follows the size. A drag keeps the size it captured at the press.
 	if _edit == null:
 		_update_visual(_last_pick)
 
@@ -235,12 +242,14 @@ func _press(pos: Vector2) -> void:
 	var pick := VoxelPicking.start_pick(ray[0], ray[1], State.get_current_voxel_frame(), _forward(), State.slice_enabled)
 	if pick.hit == VoxelPicking.NONE:
 		return
+	_stroke_face = _face_axis(pick)
+	_stroke_touch = _face_touch(ray[0], ray[1], pick)
 	_capture_view()
 	if open_stroke() == null:
 		return
 	_stroke_id += 1
 	_stroke_tx = _edit
-	_stroke_radius = _settings.radius
+	_stroke_size = _settings.size
 	_stroke_falloff = _settings.falloff
 	_stroke_context = _stroke_tx.edit_context
 	_stroke_selection = _stroke_context.selection
@@ -554,11 +563,54 @@ func _hover(pos: Vector2) -> void:
 	if ray[1] == Vector3.ZERO:
 		return
 	var pick := VoxelPicking.start_pick(ray[0], ray[1], State.get_current_voxel_frame(), _forward(), State.slice_enabled)
+	_hover_face = _face_axis(pick)
+	_hover_touch = _face_touch(ray[0], ray[1], pick)
 	_last_pick = pick
 	_update_visual(pick)
 
 
-# Poses the cursor for the drag target. The ring follows the pointer, and the
+## Returns the world axis of the entered face normal of one pick, or -1.
+func _face_axis(pick: PickResult) -> int:
+	if pick == null:
+		return -1
+	for axis in 3:
+		if pick.entry[axis] != 0:
+			return axis
+	return -1
+
+
+## Returns the pointer point on the entered face of one pick, in world space. A
+## zero vector means the ray misses the face plane.
+func _face_point(origin: Vector3, dir: Vector3, pick: PickResult) -> Vector3:
+	var axis := _face_axis(pick)
+	if axis < 0 or pick.hit == VoxelPicking.NONE or absf(dir[axis]) < 1e-8:
+		return Vector3.ZERO
+	var center := Vector3(pick.hit)
+	var plane: float = center[axis] + (0.5 if pick.entry[axis] > 0 else -0.5)
+	var t: float = (plane - origin[axis]) / dir[axis]
+	if t <= 0.0:
+		return Vector3.ZERO
+	return origin + dir * t
+
+
+## Returns the pointer point on the entered face, in cells from the face center
+## on the two face tangents. Each axis clamps to half a cell, so a corner touch
+## reads as a diagonal and a centered touch reads as zero.
+func _face_touch(origin: Vector3, dir: Vector3, pick: PickResult) -> Vector2:
+	var axis := _face_axis(pick)
+	var point := _face_point(origin, dir, pick)
+	if axis < 0 or point == Vector3.ZERO:
+		return Vector2.ZERO
+	var center := Vector3(pick.hit)
+	var axis_u := (axis + 1) % 3
+	var axis_v := (axis + 2) % 3
+	return Vector2(
+		clampf(point[axis_u] - center[axis_u], -0.5, 0.5),
+		clampf(point[axis_v] - center[axis_v], -0.5, 0.5)
+	)
+
+
+# Poses the cursor for the drag target. The circle follows the pointer, and the
 # entry face of the press keeps its normal.
 func _drag_visual(target: Vector3i) -> void:
 	if _last_pick == null:
@@ -581,12 +633,6 @@ func _update_visual(pick: PickResult) -> void:
 	_pose_bone(pick)
 
 
-## Returns the frame of the entered face. The ring lies on it, so it shows the
-## face the gesture pulls from.
-func _face_frame(pick: PickResult) -> TerrainFrame:
-	return TerrainFrameScript.from_face(pick.hit, pick.entry)
-
-
 ## Poses the bone of the gesture. The base tool draws no bone.
 func _pose_bone(_pick: PickResult) -> void:
 	pass
@@ -599,7 +645,7 @@ func _setup_footprint() -> void:
 	var material := StandardMaterial3D.new()
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	material.albedo_color = Color.WHITE
-	# The ring must stay readable inside geometry, so it skips the depth test.
+	# The cursor must stay readable inside geometry, so it skips the depth test.
 	material.no_depth_test = true
 	material.cull_mode = BaseMaterial3D.CULL_DISABLED
 	_footprint.material_override = material
@@ -607,29 +653,69 @@ func _setup_footprint() -> void:
 	_footprint.visible = false
 
 
-## Shows the ring on the entered face of the picked cell.
+## Shows the cursor circle of the tool, centered on the picked cell.
 ##
-## The mesh depends on the size only, so a size builds one mesh and every cell
-## reuses it. The ring snaps to the cell center and lies half a cell out along
-## the entered normal, so its cells cover the voxel cells of the footprint.
+## The circle is the stepped voxel outline and lies in the view plane, so its
+## screen size is the reach of the tool and it stays a true circle from every
+## view. The mesh depends on the reach only, so a reach builds one mesh and every
+## cell reuses it.
 func _pose_footprint(pick: PickResult) -> void:
 	if _footprint == null or pick.hit == VoxelPicking.NONE:
 		return
-	var size := clampi(_settings.radius, 1, 32)
-	var mesh: ArrayMesh = _footprint_meshes.get(size)
-	if mesh == null:
-		mesh = TerrainRing.build_mesh(TerrainRing.legacy_plane_ring(size))
-		_footprint_meshes[size] = mesh
-	_footprint.mesh = mesh
-	var frame := _face_frame(pick)
-	_footprint.global_transform = Transform3D(
-		Basis(frame.tangent_u, frame.tangent_v, frame.normal),
-		Vector3(pick.hit) + frame.normal * 0.5
-	)
+	var reach := _cursor_reach()
+	_footprint.mesh = _cursor_mesh(reach)
+	var right := Vector3.RIGHT
+	var up := Vector3.UP
+	if is_inside_tree():
+		var camera := get_viewport().get_camera_3d()
+		if camera != null:
+			right = camera.global_transform.basis.x.normalized()
+			up = camera.global_transform.basis.y.normalized()
+	var basis := Basis(right, up, right.cross(up))
+	_footprint.global_transform = Transform3D(basis, Vector3(pick.hit))
 	# The tool node carries the hide state. A hide sets it false, so a pose must
-	# set it true or an invisible parent keeps the ring off screen forever.
+	# set it true or an invisible parent keeps the cursor off screen forever.
 	visible = true
 	_footprint.visible = true
+
+
+## Returns the current camera forward. An open stroke keeps the press basis, so a
+## camera move cannot change an accepted drag.
+func _cursor_forward() -> Vector3:
+	if _edit != null:
+		return _view_forward
+	if is_inside_tree():
+		var camera := get_viewport().get_camera_3d()
+		if camera != null:
+			return -camera.global_transform.basis.z.normalized()
+	return _view_forward
+
+
+## Returns the reach of the cursor circle, in cells: the brush radius. The circle
+## is the footprint of the brush, so a size of one is one cell.
+func _cursor_reach() -> float:
+	return float(clampi(_settings.size, 1, 32)) * 0.5
+
+
+# Returns the cursor mesh of one reach. The line is the stepped voxel circle, so
+# it reads like the brush footprint and not like a smooth drawn circle. The
+# vertices lie in the local XY plane, so the node transform carries the view
+# orientation.
+func _cursor_mesh(reach: float) -> ArrayMesh:
+	var mesh: ArrayMesh = _footprint_meshes.get(reach)
+	if mesh != null:
+		return mesh
+	# The helper centers an even size half a cell below zero, so an even outline
+	# needs that same half-cell shift back onto the picked cell.
+	var size := clampi(roundi(reach * 2.0), 1, 64)
+	var vertices := BrushSize.disk_outline(size)
+	if size % 2 == 0:
+		var shift := Vector3(0.5, 0.5, 0.0)
+		for index in vertices.size():
+			vertices[index] += shift
+	mesh = VoxelLineMesh.build(vertices)
+	_footprint_meshes[reach] = mesh
+	return mesh
 
 
 func _hide_footprint() -> void:

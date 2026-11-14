@@ -24,8 +24,8 @@ const LIMB_LIMIT_FACTOR := 16
 const LIMB_MIN_LIMIT := 64
 ## The rotation below which the drag changes nothing.
 const ANGLE_EPSILON := 0.0002
-## The arm length of the joint marker, in cells.
-const MARKER := 0.6
+## The half width of the joint square, in cells.
+const BASE_HALF := 0.3
 ## The bone screen length below which the bone has no screen direction. A bone
 ## that points at the viewer cannot show a screen angle, so the tool turns the
 ## limb by the pointer travel instead.
@@ -185,13 +185,15 @@ var _band := 0.0
 var _limb := {}
 var _poses: Array = []
 var _bone: MeshInstance3D
-
-# The captured options of the open stroke.
-var _stroke_reach := 0
+# Whether the open stroke walks only the connected limb.
+var _stroke_connected := false
+# Whether the open stroke snaps its angle to a quarter turn.
+var _stroke_snap := false
 
 
 # The hover joint and whether the press can capture a cell, keyed by the inputs
 # that shape them. A pointer move inside one cell then costs no scan.
+# The connected option of the open stroke.
 var _hover_key := ""
 var _hover_joint := {}
 var _hover_moves := false
@@ -238,27 +240,35 @@ func _clear_state() -> void:
 
 
 func _capture_gesture(pick: PickResult) -> bool:
-	_stroke_reach = _settings.reach
-	var joint := DeformLimb.joint_pivot(_source_frame, _anchor, _stroke_radius, _stroke_context)
+	_stroke_connected = _settings.connected
+	# Snap the pose angle to a quarter turn. It starts off, so a drag is free.
+	_stroke_snap = _settings.snap
+	var joint := DeformLimb.joint_pivot(_source_frame, _anchor, _stroke_size, _stroke_context, _stroke_connected, _view_forward, _stroke_face, _stroke_touch)
 	_joint_found = bool(joint["found"])
 	if not _joint_found:
 		return false
 	_pivot = joint["pivot"]
 	_bone_dir = joint["bone_dir"]
 	_reach = float(joint["reach"])
-	_band = DeformLimb.joint_band(_stroke_radius, _stroke_falloff)
+	_band = DeformLimb.joint_band(_stroke_size, _stroke_falloff)
 	# The allowance follows the footprint, so a small brush still bends a short
 	# limb and a huge connected blob keeps its bend inside the brush.
-	var ball := roundi(0.5236 * float(_stroke_radius * _stroke_radius * _stroke_radius))
+	var ball := roundi(0.5236 * float(_stroke_size * _stroke_size * _stroke_size))
 	var allowance := clampi(ball * LIMB_LIMIT_FACTOR, LIMB_MIN_LIMIT, LIMB_CELL_LIMIT)
-	if _stroke_reach == _settings.Reach.SPHERE:
-		_limb = DeformLimb.capture_sphere(_source_frame, _anchor, _pivot, _bone_dir, _band, _stroke_radius, _stroke_context)
-	else:
-		_limb = DeformLimb.capture_limb(_source_frame, _anchor, _pivot, _bone_dir, _band, allowance, _stroke_context)
+	_limb = DeformLimb.capture_limb(_source_frame, _anchor, _pivot, _bone_dir, _band, allowance, _stroke_context)
 	if _limb.is_empty():
 		return false
 	_poses = _build_poses()
 	return true
+
+
+# The pose hides the brush circle during a drag. The bone already shows the
+# angle, and the joint square shows the base, so the circle only adds noise.
+func _pose_footprint(pick: PickResult) -> void:
+	if _edit != null:
+		_hide_footprint()
+		return
+	super._pose_footprint(pick)
 
 
 func _allows(cell: Vector3i) -> bool:
@@ -306,6 +316,7 @@ func _make_job(_target: Vector3i) -> DeformJob:
 	var entries := []
 	var work := 0
 	var magnitude := 0.0
+	var primary := NAN
 	for pose in _poses:
 		var mask: int = pose["mask"]
 		var cells: Dictionary = pose["cells"]
@@ -320,15 +331,22 @@ func _make_job(_target: Vector3i) -> DeformJob:
 		var angle := 0.0
 		if screen_bone.length() < DEGENERATE_SCREEN or screen_arm.length() < DEGENERATE_SCREEN:
 			# A bone that points at the viewer has no screen direction, so the bend
-			# becomes a twist by the pointer travel. A mirrored mask turns the other
-			# way. The lever has a floor, so a short bone cannot turn small pointer
-			# motion into a large angle.
-			var lever := maxf(DeformLimb.screen_length(bone, _view_right, _view_up), maxf(float(_stroke_radius) * 0.5, 0.5))
-			angle = DeformLimb.screen_vector(travel, _view_right, _view_up).length() / lever * DeformLimb.mask_handedness(mask)
+			# becomes a twist by the pointer travel. The lever has a floor, so a
+			# short bone cannot turn small pointer motion into a large angle.
+			var lever := maxf(DeformLimb.screen_length(bone, _view_right, _view_up), maxf(float(_stroke_size) * 0.5, 0.5))
+			angle = DeformLimb.screen_vector(travel, _view_right, _view_up).length() / lever
 		else:
 			# The angle is the screen angle from the bone to the joint-to-pointer
 			# arm, so the tip lands under the pointer.
 			angle = screen_bone.angle_to(screen_arm)
+		if is_nan(primary):
+			primary = angle
+		else:
+			# A mirrored mask must turn the mirror of the primary turn about the
+			# mirror of the primary axis. A screen angle about the view axis is not
+			# a mirror when the view is oblique, so it breaks the symmetry between
+			# the two sides.
+			angle = primary * DeformLimb.mask_handedness(mask)
 		work += cells.size()
 		entries.append({
 			"mask": mask,
@@ -336,9 +354,11 @@ func _make_job(_target: Vector3i) -> DeformJob:
 			"bone": bone.normalized(),
 			"cells": cells,
 			"angle": angle,
-			"axis": axis,
+			"axis": DeformLimb.mirror_direction(axis, mask),
 		})
 		magnitude = maxf(magnitude, absf(float(entries[entries.size() - 1]["angle"])))
+	if _stroke_snap:
+		magnitude = snappedf(magnitude, PI * 0.5)
 	if magnitude < ANGLE_EPSILON:
 		return null
 	# One magnitude serves every mask, so an obstacle on one side limits both sides.
@@ -414,17 +434,13 @@ func _hover_state(pick: PickResult) -> Dictionary:
 	var key := _hover_key_for(pick, frame, context)
 	if key == _hover_key:
 		return {"joint": _hover_joint, "moves": _hover_moves}
-	var joint := DeformLimb.joint_pivot(frame, pick.hit, _settings.radius, context)
+	var joint := DeformLimb.joint_pivot(frame, pick.hit, _settings.size, context, _settings.connected, _cursor_forward(), _hover_face, _hover_touch)
 	var moves := false
 	if bool(joint["found"]):
 		# The hover answers one question: can the press capture a cell? One cell
 		# is enough, so the walk never reads the whole limb.
-		var band := DeformLimb.joint_band(_settings.radius, _settings.falloff)
-		var limb := {}
-		if _settings.reach == _settings.Reach.SPHERE:
-			limb = DeformLimb.capture_sphere(frame, pick.hit, joint["pivot"], joint["bone_dir"], band, _settings.radius, context, 1)
-		else:
-			limb = DeformLimb.capture_limb(frame, pick.hit, joint["pivot"], joint["bone_dir"], band, 1, context)
+		var band := DeformLimb.joint_band(_settings.size, _settings.falloff)
+		var limb := DeformLimb.capture_limb(frame, pick.hit, joint["pivot"], joint["bone_dir"], band, 1, context)
 		moves = not limb.is_empty()
 	_hover_key = key
 	_hover_joint = joint
@@ -438,16 +454,19 @@ func _hover_state(pick: PickResult) -> Dictionary:
 func _hover_key_for(pick: PickResult, frame: VoxelFrame, context: VoxelFrame.EditContext) -> String:
 	return str([
 		frame.get_instance_id(), pick.hit,
-		_settings.radius, _settings.falloff, _settings.reach,
+		_settings.size, _settings.falloff, _settings.connected, _cursor_forward(), _hover_face,
+		Vector2i(roundi(_hover_touch.x * 4.0), roundi(_hover_touch.y * 4.0)),
 		State.selection.revision,
 		context.slice_axis, context.slice_index, context.slice_count,
 		context.bounded_axes, context.bounds_min, context.bounds_max,
 	])
 
 
-# Poses the bone. It runs from the joint to the picked cell, and a small marker
-# cross shows the joint. An idle hover shows the same, so the user sees the
-# rotation point before the press.
+# Poses the bone. It runs from the joint to the pointer: the exact drag point
+# during a drag, and the cell center on a hover. A small square marks the joint,
+# and a cross marks the pointer point on the entered face, which is the input of
+# the face bias. An idle hover shows the same, so the user sees the rotation point
+# before the press.
 func _pose_bone(pick: PickResult) -> void:
 	if _bone == null:
 		return
@@ -455,6 +474,7 @@ func _pose_bone(pick: PickResult) -> void:
 		_hide_bone()
 		return
 	var pivot := _pivot
+	var tip := Vector3(pick.hit)
 	if _edit == null:
 		var state := _hover_state(pick)
 		if state.is_empty() or not bool(state["joint"]["found"]) or not bool(state["moves"]):
@@ -464,21 +484,71 @@ func _pose_bone(pick: PickResult) -> void:
 	elif not _joint_found:
 		_hide_bone()
 		return
+	else:
+		# One line only. The rounded drag cell and the exact pointer are within
+		# half a cell, so a second arm would read as a doubled bone.
+		tip = _drag_point
 	var vertices := PackedVector3Array()
 	vertices.append(pivot)
-	vertices.append(Vector3(pick.hit))
-	# The joint marker is a three-axis cross, so it reads from any view.
-	for offset in [Vector3.RIGHT, Vector3.UP, Vector3.BACK]:
-		vertices.append(pivot - offset * MARKER)
-		vertices.append(pivot + offset * MARKER)
-	# The drag arm shows the bend the current pointer asks for.
-	if _edit != null:
-		vertices.append(pivot)
-		vertices.append(_drag_point)
+	vertices.append(tip)
+	_append_joint_square(vertices, pivot)
+	# The face widget is a hover aid. Once the press fixes the bias, it would only
+	# sit on a face that no longer follows the pointer.
+	if _edit == null:
+		_append_face_widget(vertices, pick)
 	_bone.global_transform = Transform3D(Basis.IDENTITY, Vector3.ZERO)
-	_bone.mesh = TerrainRing.build_mesh(vertices)
+	_bone.mesh = VoxelLineMesh.build(vertices)
 	visible = true
 	_bone.visible = true
+
+
+# Appends the joint square in the view plane, so it reads as a square from any
+# view.
+func _append_joint_square(vertices: PackedVector3Array, pivot: Vector3) -> void:
+	var forward := _cursor_forward()
+	var up := Vector3.UP
+	if absf(forward.dot(Vector3.UP)) > 0.99:
+		up = Vector3.RIGHT
+	var right := forward.cross(up).normalized()
+	up = right.cross(forward).normalized()
+	var corners := [
+		pivot + (-right - up) * BASE_HALF,
+		pivot + (right - up) * BASE_HALF,
+		pivot + (right + up) * BASE_HALF,
+		pivot + (-right + up) * BASE_HALF,
+	]
+	for index in 4:
+		vertices.append(corners[index])
+		vertices.append(corners[(index + 1) % 4])
+
+
+# Appends the face widget of the entered face: the square on its edges and the
+# quadrant lines. The user then sees which quadrant of the face the pointer rests
+# in and how the face bias reads.
+func _append_face_widget(vertices: PackedVector3Array, pick: PickResult) -> void:
+	var axis := _face_axis(pick)
+	if axis < 0 or pick.hit == VoxelPicking.NONE:
+		return
+	var center := Vector3(pick.hit)
+	# The widget sits a hair outside the face, so it never hides in the voxel.
+	center[axis] += (0.5 if pick.entry[axis] > 0 else -0.5) + 0.02 * float(pick.entry[axis])
+	var half_u := Vector3.ZERO
+	half_u[(axis + 1) % 3] = 0.5
+	var half_v := Vector3.ZERO
+	half_v[(axis + 2) % 3] = 0.5
+	var corners := [
+		center - half_u - half_v,
+		center + half_u - half_v,
+		center + half_u + half_v,
+		center - half_u + half_v,
+	]
+	for index in 4:
+		vertices.append(corners[index])
+		vertices.append(corners[(index + 1) % 4])
+	vertices.append(center - half_u)
+	vertices.append(center + half_u)
+	vertices.append(center - half_v)
+	vertices.append(center + half_v)
 
 
 func _hide_bone() -> void:

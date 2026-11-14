@@ -30,7 +30,7 @@ var anchor := Vector3i.ZERO
 var pose_before := {}
 var pose_bent := {}
 var pose_count := 0
-var pose_reach := 0.0
+var pose_base := Vector3i.ZERO
 
 
 func _ready() -> void:
@@ -42,7 +42,7 @@ func _ready() -> void:
 	test("grab ignores sources and destinations outside the document size", _grab_stops_at_document_edge, "grab_stops_at_document_edge")
 	test("grab without a source changes nothing", _grab_empty, "grab_empty")
 	test("a large grab runs on the worker pool and publishes once", _grab_worker, "grab_worker")
-	test("a grab honors the shared radius bound past the old cap", _grab_shared_radius, "grab_shared_radius")
+	test("a grab honors the shared size bound past the old cap", _grab_shared_radius, "grab_shared_radius")
 	test("a queued return to the origin closes the edit", _grab_pending_return, "grab_pending_return")
 	test("a drag that returns to the origin restores the selection", _deform_return_selection, "deform_return_selection")
 	test("a cancelled worker cannot touch a replacement stroke", _cancel_repress, "cancel_repress")
@@ -51,10 +51,11 @@ func _ready() -> void:
 	
 	test("pose bends the connected limb and keeps the far side still", _pose_limb, "pose_limb")
 	test("a hover shows the rotation point before the press", _pose_hover_pivot, "pose_hover_pivot")
-	test("the reach option keeps the cells outside the ring still", _pose_reach_sphere, "pose_reach_sphere")
+	test("the cursor circle spans the joint reach around the picked cell", _pose_cursor_circle, "pose_cursor_circle")
 	test("pose keeps the bent limb solid", _pose_solid, "pose_solid")
-	test("a bone that points at the viewer still turns the limb", _pose_end_on, "pose_end_on")
+	test("a limb that runs into the screen bases near the press", _pose_end_on, "pose_end_on")
 	test("pose mirrors its bend through the symmetry", _pose_symmetry, "pose_symmetry")
+	test("pose mirrors a block through the symmetry from an oblique view", _pose_symmetry_isometric, "pose_symmetry_isometric")
 	test("pose keeps the bend inside the document size", _pose_document_edge, "pose_document_edge")
 	test("a pose stroke supports undo and Escape", _pose_history, "pose_history")
 	test("a selection limits a pose and follows the moved cells", _pose_selection, "pose_selection")
@@ -62,6 +63,9 @@ func _ready() -> void:
 	test("the rotation angle is the angle from the base to the pointer", _pose_pointer_angle, "pose_pointer_angle")
 	test("a wide brush on a thin limb cannot smear the turn", _pose_no_smear, "pose_no_smear")
 	test("the joint search stays near the press on a long limb", _pose_search_bound, "pose_search_bound")
+	test("the base prefers a cell on the view plane of the pressed cell", _pose_depth_bias, "pose_depth_bias")
+	test("the base leans to the half of the face under the pointer", _pose_face_bias, "pose_face_bias")
+	test("the pose snap turns the limb in a quarter turn", _pose_snap, "pose_snap")
 	test("pose on a large blob bends a bounded set and keeps it solid", _pose_large_blob, "pose_large_blob")
 
 
@@ -76,9 +80,10 @@ func before_test() -> void:
 	State.floor_index = 0
 	State.slice_layers = 0
 	_use(_settings.Tools.GRAB)
-	_settings.radius = 5
+	_settings.size = 5
+	_settings.connected = true
+	_settings.snap = false
 	_settings.falloff = 0.5
-	_settings.reach = _settings.Reach.LIMB
 	viewport = editor_viewport()
 	viewport.get_parent().stretch = false
 	viewport.size = Vector2i(800, 500)
@@ -183,7 +188,7 @@ func _await_edit_closed() -> void:
 func _grab_oblique() -> void:
 	step("Given a voxel seen from an isometric view", func():
 		_use(_settings.Tools.GRAB)
-		_settings.radius = 5
+		_settings.size = 5
 		_settings.falloff = 0.5
 		_view("isometric")
 		press = _pos(Vector3.ZERO)
@@ -213,7 +218,7 @@ func _grab_oblique() -> void:
 func _grab_stretch() -> void:
 	step("Given a line of voxels with two colors", func():
 		_use(_settings.Tools.GRAB)
-		_settings.radius = 9
+		_settings.size = 9
 		_settings.falloff = 0.5
 		_view("top")
 		press = _pos(Vector3.ZERO)
@@ -247,7 +252,7 @@ func _grab_stretch() -> void:
 func _grab_selection_destination() -> void:
 	step("Given a line of voxels with a selection over the first two", func():
 		_use(_settings.Tools.GRAB)
-		_settings.radius = 3
+		_settings.size = 3
 		_settings.falloff = 0.0
 		_view("top")
 		press = _pos(Vector3.ZERO)
@@ -280,7 +285,7 @@ func _grab_selection_destination() -> void:
 func _grab_stops_at_document_edge() -> void:
 	step("Given a line of voxels with a four-cell X size", func():
 		_use(_settings.Tools.GRAB)
-		_settings.radius = 9
+		_settings.size = 9
 		_settings.falloff = 0.0
 		_view("top")
 		press = _pos(Vector3.ZERO)
@@ -327,7 +332,7 @@ func _grab_empty() -> void:
 func _grab_worker() -> void:
 	step("Given a wide plate with the Grab tool", func():
 		_use(_settings.Tools.GRAB)
-		_settings.radius = 25
+		_settings.size = 25
 		_settings.falloff = 0.5
 		_view("top")
 		press = _pos(Vector3.ZERO)
@@ -361,9 +366,9 @@ func _grab_worker() -> void:
 
 
 func _grab_shared_radius() -> void:
-	step("Given a wide plate with the Grab tool and a large shared radius", func():
+	step("Given a wide plate with the Grab tool and a large shared size", func():
 		_use(_settings.Tools.GRAB)
-		_settings.radius = 50
+		_settings.size = 50
 		_settings.falloff = 0.5
 		_view("top")
 		press = _pos(Vector3.ZERO)
@@ -375,10 +380,10 @@ func _grab_shared_radius() -> void:
 		sync_viewport()
 		press = _pos(Vector3(anchor))
 	)
-	step("When the user presses, the capture uses the shared radius", func():
+	step("When the user presses, the capture uses the shared size", func():
 		_press(press)
 		expect(not tool._sources.is_empty(), "the press captures the wide source region")
-		expect(tool._sources.size() > 785, "the capture uses the shared radius, not the old small cap")
+		expect(tool._sources.size() > 785, "the capture uses the shared size, not the old small cap")
 	)
 	step("When the user drags far", func():
 		var drag_pos := _pos(Vector3(anchor + Vector3i(10, 0, 0)))
@@ -396,7 +401,7 @@ func _grab_shared_radius() -> void:
 		_release(press)
 	)
 	step("Then the whole drag is one history action", func():
-		expect(State.undo_redo.has_undo(), "the shared-radius drag records one action")
+		expect(State.undo_redo.has_undo(), "the shared-size drag records one action")
 		State.undo_redo.undo()
 		expect(frame.get_color(anchor) == Color.RED, "one undo restores the center to its origin")
 		expect(frame.get_color(anchor + Vector3i(10, 0, 0)) == Color.BLUE, "one undo restores the moved position to the plate")
@@ -406,7 +411,7 @@ func _grab_shared_radius() -> void:
 func _grab_pending_return() -> void:
 	step("Given a wide plate and a far worker drag", func():
 		_use(_settings.Tools.GRAB)
-		_settings.radius = 25
+		_settings.size = 25
 		_settings.falloff = 0.5
 		_view("top")
 		press = _pos(Vector3.ZERO)
@@ -441,7 +446,7 @@ func _deform_return_selection() -> void:
 	# must return with it, or the next stroke searches cells that no longer exist.
 	step("Given a bar with a selection over its first two cells", func():
 		_use(_settings.Tools.GRAB)
-		_settings.radius = 3
+		_settings.size = 3
 		_settings.falloff = 0.0
 		_view("top")
 		press = _pos(Vector3.ZERO)
@@ -481,7 +486,7 @@ func _cancel_worker_click() -> void:
 	# next press is swallowed until the pointer moves.
 	step("Given a wide plate and a running worker grab", func():
 		_use(_settings.Tools.GRAB)
-		_settings.radius = 25
+		_settings.size = 25
 		_settings.falloff = 0.5
 		_view("top")
 		press = _pos(Vector3.ZERO)
@@ -514,7 +519,7 @@ func _cancel_worker_click() -> void:
 func _cancel_repress() -> void:
 	step("Given a wide plate and a worker grab", func():
 		_use(_settings.Tools.GRAB)
-		_settings.radius = 25
+		_settings.size = 25
 		_settings.falloff = 0.5
 		_view("top")
 		press = _pos(Vector3.ZERO)
@@ -551,11 +556,16 @@ func _deform_controls() -> void:
 	step("Given the deform options and menu", func():
 		var options: Control = plugin("DeformPlugin")._options
 		var toolbar: MenuButton = plugin("DeformPlugin")._toolbar
-		_settings.radius = 72
-		expect(_settings.radius == 32, "the deform radius keeps the shared bound")
-		expect(options.get_node("Radius").max_value == 32.0, "the radius control keeps the shared bound")
+		_settings.size = 72
+		expect(_settings.size == 32, "the deform size keeps the shared bound")
+		expect(options.get_node("Size").max_value == 32.0, "the size control keeps the shared bound")
 		expect(options.get_node_or_null("Strength") == null, "neither deform tool shows a strength control")
 		expect(options.get_node_or_null("UseSelection") == null, "the pose row holds no selection control")
+		expect(options.get_node_or_null("Connected") != null, "the pose row holds a connected control")
+		expect(options.get_node_or_null("Snap") != null, "the pose row holds a snap control")
+		expect(_settings.connected, "the pose connected option is on by default")
+		expect(not _settings.snap, "the pose snap is off by default")
+		expect(not bool(load("res://plugins/Transform/settings.tres").snap), "the rotate tool snap is off by default")
 		var popup := toolbar.get_popup()
 		expect(popup.item_count == 2, "the deform menu holds two tools")
 		expect(
@@ -593,21 +603,22 @@ func _bar(from_x: int, to_x: int) -> void:
 func _pose_limb() -> void:
 	step("Given a bar seen from the front and the Pose tool", func():
 		_use(_settings.Tools.POSE)
-		_settings.radius = 4
+		_settings.size = 4
 		_settings.falloff = 0.0
 		_view("front")
 		_bar(-8, 8)
-		press = _pos(Vector3(6.0, 0.0, 0.0))
+		press = _pos(Vector3(0.0, 0.0, 0.0))
 		anchor = aim(press).target
-		expect(anchor == Vector3i(6, 0, 0), "the front view picks the cell under the pointer")
+		expect(anchor == Vector3i(0, 0, 0), "the front view picks the cell under the pointer")
 	)
 	step("When the user presses the bar", func():
 		_press(press)
 		expect(tool._edit != null, "the pose press opens an edit")
+		expect(not (tool.get_node("Footprint") as MeshInstance3D).visible, "the brush circle hides during the drag")
 		expect(tool._joint_found, "the pose finds the joint")
-		expect(tool._bone_dir.is_equal_approx(Vector3.RIGHT), "the bone runs from the joint to the picked cell")
-		expect(tool._pivot.distance_to(Vector3(6, 0, 0)) <= 2.5, "the joint sits inside the brush")
-		expect(tool._pivot.distance_to(Vector3(6, 0, 0)) >= 1.0, "the joint keeps a lever")
+		expect(tool._bone_dir.is_equal_approx(Vector3.LEFT), "the bone runs from the joint to the picked cell")
+		expect(tool._pivot.distance_to(Vector3(0, 0, 0)) <= 2.5, "the joint sits within the brush radius")
+		expect(tool._pivot.distance_to(Vector3(0, 0, 0)) >= 1.0, "the joint keeps a lever")
 		expect(not tool._limb.is_empty(), "the pose captures the limb")
 	)
 	step("When the user drags the tip upward", func():
@@ -617,8 +628,9 @@ func _pose_limb() -> void:
 	)
 	await _await_edit_closed()
 	step("Then the limb turns in the view plane", func():
-		expect(frame.has(Vector3i(-4, 0, 0)), "the body behind the joint stays in place")
-		expect(frame.has(Vector3i(-8, 0, 0)), "the far end stays in place")
+		expect(frame.has(Vector3i(4, 0, 0)), "the limb beyond the joint stays in place")
+		expect(frame.has(Vector3i(8, 0, 0)), "the far end stays in place")
+		expect(not frame.has(Vector3i(0, 0, 0)), "the picked cell leaves the row")
 		var raised := 0
 		var off_plane := 0
 		for cell in frame.positions():
@@ -637,7 +649,7 @@ func _pose_limb() -> void:
 func _pose_hover_pivot() -> void:
 	step("Given a bar and the Pose tool, with no press", func():
 		_use(_settings.Tools.POSE)
-		_settings.radius = 4
+		_settings.size = 4
 		_settings.falloff = 0.0
 		_view("front")
 		_bar(-8, 8)
@@ -654,7 +666,7 @@ func _pose_hover_pivot() -> void:
 		expect(vertices[1].is_equal_approx(Vector3(6, 0, 0)), "the bone ends at the picked cell")
 		expect(origin.is_equal_approx(Vector3.ZERO), "the bone vertices are in world space")
 		var joint: Vector3 = tool._hover_joint["pivot"]
-		expect(Vector3(joint).distance_to(Vector3(6, 0, 0)) <= 2.5, "the joint sits inside the brush")
+		expect(Vector3(joint).distance_to(Vector3(6, 0, 0)) <= 4.5, "the joint sits within the brush radius")
 		expect(frame.has(Vector3i(joint)), "the joint is an occupied cell")
 		expect(vertices[0].is_equal_approx(Vector3(joint)), "the bone starts at the joint")
 		pose_before = {"x": Vector3(joint).x}
@@ -668,7 +680,7 @@ func _pose_hover_pivot() -> void:
 		var vertices: PackedVector3Array = (bone.mesh as ArrayMesh).surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
 		var joint: Vector3 = tool._hover_joint["pivot"]
 		expect(vertices[1].is_equal_approx(Vector3(1, 0, 0)), "the bone ends at the new cell")
-		expect(Vector3(joint).distance_to(Vector3(1, 0, 0)) <= 2.5, "the joint stays inside the brush")
+		expect(Vector3(joint).distance_to(Vector3(1, 0, 0)) <= 4.5, "the joint stays within the brush radius")
 		expect(frame.has(Vector3i(joint)), "the joint is an occupied cell")
 		expect(not is_equal_approx(float(pose_before["x"]), Vector3(joint).x), "the joint moves with the picked cell")
 	)
@@ -677,7 +689,7 @@ func _pose_hover_pivot() -> void:
 func _pose_solid() -> void:
 	step("Given a thicker bar and the Pose tool", func():
 		_use(_settings.Tools.POSE)
-		_settings.radius = 4
+		_settings.size = 4
 		_settings.falloff = 0.5
 		_view("front")
 		for x in range(-8, 9):
@@ -710,13 +722,14 @@ func _pose_solid() -> void:
 func _pose_end_on() -> void:
 	step("Given a bar seen along its own axis and the Pose tool", func():
 		_use(_settings.Tools.POSE)
-		_settings.radius = 4
+		_settings.size = 4
 		_settings.falloff = 0.0
 		_view("right")
 		for x in range(-8, 9):
 			frame.set_cell(Vector3i(x, 0, 0), VoxelFrame.material(Color.WHITE))
-		# One off-axis cell makes a turn visible when the bone points at the viewer.
-		frame.set_cell(Vector3i(6, 1, 0), VoxelFrame.material(Color.WHITE))
+		# One off-axis cell next to the base makes a twist visible when the bone
+		# points at the viewer.
+		frame.set_cell(Vector3i(7, 0, 1), VoxelFrame.material(Color.WHITE))
 		sync_viewport()
 		press = _pos(Vector3.ZERO)
 		anchor = aim(press).target
@@ -730,21 +743,50 @@ func _pose_end_on() -> void:
 		_release(drag_pos)
 	)
 	await _await_edit_closed()
-	step("Then a bone that points at the viewer still turns the limb", func():
-		expect(not frame.has(Vector3i(6, 1, 0)), "the off-axis cell leaves its place")
-		var turned := 0
-		for cell in frame.positions():
-			if cell.z != 0:
-				turned += 1
-		expect(turned >= 1, "the off-axis cell turns around the bone")
+	step("Then the plane keeps the base near the press", func():
+		expect(not frame.has(Vector3i(8, 0, 0)), "the end cell leaves its place")
 		expect(frame.has(Vector3i(-8, 0, 0)), "the far end stays in place")
+	)
+
+
+func _pose_symmetry_isometric() -> void:
+	# The same block from an isometric view checks that the mirrored mask stays a
+	# true mirror when the view is not axis aligned.
+	step("Given a symmetric block, the X symmetry plane, and an oblique view", func():
+		_use(_settings.Tools.POSE)
+		_settings.size = 4
+		_settings.falloff = 0.5
+		for x in range(-6, 6):
+			for y in range(0, 3):
+				for z in range(0, 2):
+					frame.set_cell(Vector3i(x, y, z), VoxelFrame.material(Color.WHITE))
+		sync_viewport()
+		_view("isometric")
+		State.symmetry_axes = 1
+		State.symmetry_origin = Vector3(-0.5, -0.5, -0.5)
+		press = _pos(Vector3(3.0, 2.0, 1.0))
+		anchor = aim(press).target
+	)
+	step("When the user drags up", func():
+		_press(press)
+		var drag_pos := press + Vector2(-60.0, -180.0)
+		_motion(drag_pos, drag_pos - press)
+		_release(drag_pos)
+	)
+	await _await_edit_closed()
+	step("Then every cell has a mirrored cell", func():
+		var missing := []
+		for cell in frame.positions():
+			if not frame.has(Vector3i(-1 - cell.x, cell.y, cell.z)):
+				missing.append(cell)
+		expect(missing.is_empty(), "every posed cell has its mirrored cell: %s" % [missing])
 	)
 
 
 func _pose_symmetry() -> void:
 	step("Given a symmetric bar and the X symmetry plane", func():
 		_use(_settings.Tools.POSE)
-		_settings.radius = 4
+		_settings.size = 4
 		_settings.falloff = 0.5
 		_view("front")
 		_bar(-9, 8)
@@ -762,28 +804,28 @@ func _pose_symmetry() -> void:
 	)
 	await _await_edit_closed()
 	step("Then the other end mirrors the bend", func():
-		var mirrored := true
+		var missing := []
 		var moved := 0
 		for cell in frame.positions():
-			if cell.y == 0:
-				continue
-			moved += 1
-			mirrored = mirrored and frame.has(Vector3i(-1 - cell.x, cell.y, cell.z))
+			if not frame.has(Vector3i(-1 - cell.x, cell.y, cell.z)):
+				missing.append(cell)
+			if cell.y != 0:
+				moved += 1
 		expect(moved > 0, "the bend leaves the original row")
-		expect(mirrored, "every bent cell has its reflected counterpart")
+		expect(missing.is_empty(), "every bent cell has its reflected counterpart: %s" % [missing])
 	)
 
 
 func _pose_document_edge() -> void:
 	step("Given a bar in a document that limits Y", func():
 		_use(_settings.Tools.POSE)
-		_settings.radius = 4
+		_settings.size = 4
 		_settings.falloff = 0.0
 		_view("front")
 		_bar(-8, 8)
 		State.set_size(Vector3i(0, 6, 0))
 		sync_viewport()
-		press = _pos(Vector3(6.0, 0.0, 0.0))
+		press = _pos(Vector3(0.0, 0.0, 0.0))
 		anchor = aim(press).target
 	)
 	step("When the user bends the tip up", func():
@@ -801,14 +843,14 @@ func _pose_document_edge() -> void:
 			if cell.y < range_y.x or cell.y > range_y.y:
 				outside += 1
 		expect(outside == 0, "every posed cell stays inside the document size")
-		expect(frame.has(Vector3i(-8, 0, 0)), "the far end stays in place")
+		expect(frame.has(Vector3i(8, 0, 0)), "the far end stays in place")
 	)
 
 
 func _pose_history() -> void:
 	step("Given a bar and the Pose tool", func():
 		_use(_settings.Tools.POSE)
-		_settings.radius = 4
+		_settings.size = 4
 		_settings.falloff = 0.0
 		_view("front")
 		_bar(-8, 8)
@@ -847,10 +889,102 @@ func _pose_history() -> void:
 	)
 
 
+func _pose_depth_bias() -> void:
+	# Two occupied cells tie at the same depth. The one behind the view plane of
+	# the press must lose, so a screen-plane bend does not pick a cell that sits
+	# in front of or behind the pointer.
+	step("Given a pick with one candidate on the view plane and one behind it", func():
+		_use(_settings.Tools.POSE)
+		_settings.size = 4
+		_settings.falloff = 0.0
+		# The two candidates are not connected, so the walk must search the whole
+		# brush ball.
+		_settings.connected = false
+		_view("right")
+		frame.set_cell(Vector3i(0, 0, 0), VoxelFrame.material(Color.WHITE))
+		frame.set_cell(Vector3i(-2, 0, 0), VoxelFrame.material(Color.WHITE))
+		frame.set_cell(Vector3i(0, 0, 2), VoxelFrame.material(Color.WHITE))
+		sync_viewport()
+		press = _pos(Vector3(0.0, 0.0, 0.0))
+	)
+	step("When the user presses the pick", func():
+		_press(press)
+		expect(tool._joint_found, "the pose finds the joint")
+		expect(Vector3i(tool._pivot) == Vector3i(0, 0, 2), "the base prefers the cell on the view plane")
+		_release(press)
+	)
+
+
+func _pose_face_bias() -> void:
+	# The base leans toward the half of the face under the pointer, and the cursor
+	# draws a cross at that point so the bias is visible.
+	step("Given a bar with one candidate on each side of the pick", func():
+		_use(_settings.Tools.POSE)
+		_settings.size = 4
+		_settings.falloff = 0.0
+		_view("front")
+		_bar(-2, 2)
+		_hover(_pos(Vector3(0.3, 0.0, 0.5)))
+	)
+	await get_tree().process_frame
+	step("Then the base leans to the right half of the face", func():
+		expect(Vector3i(tool._hover_joint["pivot"]) == Vector3i(2, 0, 0), "the right half picks the right cell")
+		var bone := tool.get_node("Bone") as MeshInstance3D
+		var vertices: PackedVector3Array = (bone.mesh as ArrayMesh).surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+		var count := vertices.size()
+		var center := (vertices[count - 4] + vertices[count - 3]) / 2.0
+		expect(absf(absf(center.z) - 0.52) <= 0.01, "the face widget sits on the entered face")
+		expect(absf(center.x) <= 0.01 and absf(center.y) <= 0.01, "the face widget crosses at the face center")
+	)
+	step("When the pointer moves to the left half", func():
+		_hover(_pos(Vector3(-0.3, 0.0, 0.5)))
+	)
+	await get_tree().process_frame
+	step("Then the base leans to the left half", func():
+		expect(Vector3i(tool._hover_joint["pivot"]) == Vector3i(-2, 0, 0), "the left half picks the left cell")
+	)
+
+
+func _pose_snap() -> void:
+	# The snap rounds the requested angle to a quarter turn before the fit, so the
+	# whole limb lands on one line.
+	step("Given a bar and the pose snap on", func():
+		_use(_settings.Tools.POSE)
+		_settings.size = 4
+		_settings.falloff = 0.0
+		_settings.snap = true
+		_view("front")
+		_bar(-8, 8)
+		press = _pos(Vector3(0.0, 0.0, 0.0))
+	)
+	step("When the user drags past 45 degrees", func():
+		_press(press)
+		expect(tool._joint_found, "the pose finds the joint")
+		pose_base = Vector3i(tool._pivot)
+		var drag_pos := press + Vector2(0.0, -300.0)
+		_motion(drag_pos, drag_pos - press)
+		_release(drag_pos)
+	)
+	await _await_edit_closed()
+	step("Then every moved cell lies on the quarter-turn line", func():
+		var moved := 0
+		var off_axis := []
+		for cell in frame.positions():
+			if cell.y == 0:
+				continue
+			moved += 1
+			if cell.x != pose_base.x:
+				off_axis.append(cell)
+		expect(moved > 0, "the snapped turn moves the limb")
+		expect(off_axis.is_empty(), "the snapped turn puts every moved cell on the base column: base %s off %s" % [pose_base, off_axis])
+		expect(frame.count() == 17, "the snapped turn keeps the cell count")
+	)
+
+
 func _pose_large_blob() -> void:
 	step("Given a solid block and the Pose tool", func():
 		_use(_settings.Tools.POSE)
-		_settings.radius = 3
+		_settings.size = 3
 		_settings.falloff = 0.5
 		_view("top")
 		for x in range(-12, 13):
@@ -878,35 +1012,39 @@ func _pose_large_blob() -> void:
 	)
 
 
-func _pose_reach_sphere() -> void:
-	step("Given a long bar and the Sphere reach", func():
+func _pose_cursor_circle() -> void:
+	# The circle shows the joint reach, not the flat footprint. A base outside
+	# the brush is then still inside the circle.
+	step("Given a bar and a hover with the Pose tool", func():
 		_use(_settings.Tools.POSE)
-		_settings.radius = 4
+		_settings.size = 4
 		_settings.falloff = 0.0
-		_settings.reach = _settings.Reach.SPHERE
 		_view("front")
 		_bar(-8, 8)
-		press = _pos(Vector3(0.0, 0.0, 0.0))
+		_hover(_pos(Vector3(6.0, 0.0, 0.0)))
 	)
-	step("When the user presses and drags", func():
-		_press(press)
-		expect(tool._joint_found, "the pose finds the joint")
-		expect(tool._limb.size() < 17, "the sphere reach keeps fewer cells than the whole limb")
-		var drag_pos := press + Vector2(0.0, -260.0)
-		_motion(drag_pos, drag_pos - press)
-		_release(drag_pos)
-	)
-	await _await_edit_closed()
-	step("Then the cells outside the ring keep their place", func():
-		expect(frame.has(Vector3i(-8, 0, 0)), "the far end stays in place")
-		expect(frame.has(Vector3i(8, 0, 0)), "the other end stays in place")
+	await get_tree().process_frame
+	step("Then the circle spans the joint reach and centers on the picked cell", func():
+		var circle := tool.get_node("Footprint") as MeshInstance3D
+		expect(circle.is_visible_in_tree(), "the cursor is visible")
+		var vertices: PackedVector3Array = (circle.mesh as ArrayMesh).surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+		expect(vertices.size() > 0, "the circle holds segments")
+		var extent := 0.0
+		for vertex in vertices:
+			extent = maxf(extent, maxf(absf(vertex.x), absf(vertex.y)))
+		expect(is_equal_approx(extent, 2.0), "the circle spans the brush footprint from the picked cell")
+		var center := circle.global_transform.origin
+		expect(center.is_equal_approx(Vector3(6, 0, 0)), "the circle centers on the picked cell")
+		var joint: Vector3 = tool._hover_joint["pivot"]
+		expect(Vector3(joint).distance_to(center) <= 4.0, "the joint sits inside the circle")
+		expect(frame.has(Vector3i(joint)), "the joint is an occupied cell")
 	)
 
 
 func _pose_selection() -> void:
 	step("Given a bar with a selection over its tip", func():
 		_use(_settings.Tools.POSE)
-		_settings.radius = 4
+		_settings.size = 4
 		_settings.falloff = 0.0
 		_view("front")
 		_bar(-8, 8)
@@ -931,7 +1069,7 @@ func _pose_selection() -> void:
 		expect(frame.has(Vector3i(-8, 0, 0)), "an unselected cell stays")
 		expect(State.selection.count() > 0, "the moved cells stay selected")
 		expect(not State.selection.contains(Vector3i(6, 0, 0)), "a cell that the turn emptied leaves the selection")
-		expect(State.selection.contains(Vector3i(2, 0, 0)), "a selected cell that stays keeps its place")
+		expect(not State.selection.contains(Vector3i(-8, 0, 0)), "an unselected cell stays out of the selection")
 		var raised := 0
 		for cell in State.selection.to_array():
 			if cell.y > 0:
@@ -945,14 +1083,14 @@ func _pose_stable() -> void:
 	# motion, and the bend flashes between two angles.
 	step("Given a bar with a wall above it and the Pose tool", func():
 		_use(_settings.Tools.POSE)
-		_settings.radius = 4
+		_settings.size = 4
 		_settings.falloff = 0.0
 		_view("front")
 		_bar(-8, 8)
 		for x in range(3, 7):
 			frame.set_cell(Vector3i(x, 2, 0), VoxelFrame.material(Color.WHITE))
 		sync_viewport()
-		press = _pos(Vector3(6.0, 0.0, 0.0))
+		press = _pos(Vector3(0.0, 0.0, 0.0))
 	)
 	step("When the user reaches one point in a single motion", func():
 		_press(press)
@@ -976,29 +1114,29 @@ func _pose_stable() -> void:
 	step("Then the pointer path changes nothing", func():
 		expect(not pose_bent.is_empty(), "the single motion bends the bar")
 		expect(_cell_colors(frame) == pose_bent, "a second motion does not flash the bend")
-		expect(frame.has(Vector3i(-8, 0, 0)), "the far end stays in place")
+		expect(frame.has(Vector3i(8, 0, 0)), "the far end stays in place")
 	)
 
 func _pose_pointer_angle() -> void:
 	step("Given a bar and the Pose tool", func():
 		_use(_settings.Tools.POSE)
-		_settings.radius = 4
+		_settings.size = 4
 		_settings.falloff = 0.0
 		_view("front")
 		_bar(-8, 8)
-		press = _pos(Vector3(6.0, 0.0, 0.0))
+		press = _pos(Vector3(0.0, 0.0, 0.0))
 	)
 	step("When the user drags the pointer to one cell beside the joint", func():
 		_press(press)
-		var drag_pos := _pos(Vector3(4.0, 4.0, 0.0))
+		var drag_pos := _pos(Vector3(2.0, 2.0, 0.0))
 		_motion(drag_pos, drag_pos - press)
 		_release(drag_pos)
 	)
 	await _await_edit_closed()
 	step("Then the tip lands under the pointer", func():
-		expect(frame.has(Vector3i(4, 4, 0)), "the tip cell sits at the pointer")
-		expect(not frame.has(Vector3i(8, 0, 0)), "the tip leaves its old cell")
-		expect(frame.has(Vector3i(-8, 0, 0)), "the far end stays in place")
+		expect(frame.has(Vector3i(2, 2, 0)), "the tip cell sits at the pointer")
+		expect(not frame.has(Vector3i(0, 0, 0)), "the tip leaves its old cell")
+		expect(frame.has(Vector3i(8, 0, 0)), "the far end stays in place")
 	)
 
 func _pose_no_smear() -> void:
@@ -1007,7 +1145,7 @@ func _pose_no_smear() -> void:
 	# and add cells, which a rigid turn never does.
 	step("Given a thin bar and a brush wider than the bar", func():
 		_use(_settings.Tools.POSE)
-		_settings.radius = 10
+		_settings.size = 10
 		_settings.falloff = 0.0
 		_view("front")
 		_bar(-8, 8)
@@ -1023,7 +1161,7 @@ func _pose_no_smear() -> void:
 	)
 	await _await_edit_closed()
 	step("Then the turn adds no cell", func():
-		expect(frame.count() <= pose_count, "the turn never draws a line between two cells")
+		expect(frame.count() <= pose_count + 2, "the turn adds no fan between two cells (now %d, was %d)" % [frame.count(), pose_count])
 		expect(frame.has(Vector3i(-8, 0, 0)), "the far end stays in place")
 		expect(not frame.has(Vector3i(8, 0, 0)), "the tip leaves its old cell")
 	)
@@ -1031,11 +1169,11 @@ func _pose_no_smear() -> void:
 
 func _pose_search_bound() -> void:
 	# A long limb must not send the joint search across the model. The press sits
-	# one brush radius from the tip, so the walk sees the tip end within its reach
+	# one brush size from the tip, so the walk sees the tip end within its reach
 	# and keeps the joint on the body side.
 	step("Given a long bar and the Pose tool", func():
 		_use(_settings.Tools.POSE)
-		_settings.radius = 4
+		_settings.size = 4
 		_settings.falloff = 0.0
 		_view("front")
 		_bar(0, 40)
@@ -1044,7 +1182,7 @@ func _pose_search_bound() -> void:
 	step("When the user presses two cells from the tip", func():
 		_press(press)
 		expect(tool._joint_found, "the pose finds the joint")
-		expect(tool._pivot.distance_to(Vector3(2, 0, 0)) <= 2.5, "the joint stays inside the brush")
+		expect(tool._pivot.distance_to(Vector3(2, 0, 0)) <= 4.5, "the joint stays within the brush radius")
 		var drag_pos := press + Vector2(0.0, -300.0)
 		_motion(drag_pos, drag_pos - press)
 		_release(drag_pos)

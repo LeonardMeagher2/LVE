@@ -10,7 +10,7 @@ extends "./DeformTool.gd"
 ##
 ## The scene has the shared `Footprint` ring only. Grab draws no bone.
 
-const TerrainGeometry := preload("res://plugins/Terrain/TerrainGeometry.gd")
+const VoxelFalloff := preload("res://Globals/State/Tools/VoxelFalloff.gd")
 const DeformLimb := preload("./DeformLimb.gd")
 
 ## The largest drag distance in voxels.
@@ -113,13 +113,13 @@ func _capture_gesture(pick: PickResult) -> bool:
 	_source_cells = {}
 	for mask in DeformLimb.masks_for(_stroke_context):
 		var center := _stroke_context.reflect(_anchor, mask)
-		for offset: Vector3i in _ball_offsets(_stroke_radius):
+		for offset: Vector3i in _ball_offsets(_stroke_size):
 			var cell := center + offset
 			if _source_cells.has(cell) or not _source_frame.has(cell):
 				continue
 			if not _allows(cell):
 				continue
-			var weight := TerrainGeometry.weight_at(Vector3(offset).length(), float(_stroke_radius), _stroke_falloff)
+			var weight := VoxelFalloff.weight_at(Vector3(offset).length(), float(_stroke_size), _stroke_falloff)
 			# A zero weight cannot move, so the source never joins the drag.
 			if weight <= 0.0:
 				continue
@@ -189,13 +189,14 @@ func _ball_offsets(size: int) -> Array[Vector3i]:
 	if _ball_cache.has(size):
 		return _ball_cache[size]
 	var offsets: Array[Vector3i] = []
-	var radius := float(size) * 0.5
-	var radius_squared := radius * radius
-	var reach := ceili(radius)
+	# The ball reaches the brush radius in every direction.
+	var ball_reach := float(size) * 0.5
+	var reach_squared := ball_reach * ball_reach
+	var reach := ceili(ball_reach)
 	for x in range(-reach, reach + 1):
 		for y in range(-reach, reach + 1):
 			for z in range(-reach, reach + 1):
-				if x * x + y * y + z * z <= radius_squared:
+				if x * x + y * y + z * z <= reach_squared:
 					offsets.append(Vector3i(x, y, z))
 	_ball_cache[size] = offsets
 	return offsets

@@ -13,9 +13,9 @@ Read each graph from top to bottom.
 
 - **Baseline**: the frame snapshot that the press copies. Every drag result
   starts from it.
-- **Ring**: the one white leaf mesh named `Footprint`. It lies on the entered
-  face and predicts no voxel.
-- **Bone**: the line that Pose draws from the joint to the picked cell.
+- **Circle**: the one white stepped line mesh named `Footprint`. It lies in the view plane
+  at the reach of the active tool and predicts no voxel.
+- **Bone**: the line that Pose draws from the joint to the pointer, with a square at the joint and a face widget on the entered face.
 - **Joint**: the point that Pose turns a limb around.
 - **Limb**: the connected occupied cells on the near side of the joint.
 - **Latest target**: the newest pointer cell. Only it waits for a running job.
@@ -104,7 +104,7 @@ flowchart TD
   G1 --> G2 --> G3 --> G4 --> G5 --> G6
 ```
 
-A press captures the occupied cells of a ball around the picked cell.
+A press captures the occupied cells of a ball of the brush radius around the picked cell.
 It does this for every active symmetry mask.
 A source must pass the frozen selection, and its falloff weight must be above
 zero, because a zero weight cannot move.
@@ -123,7 +123,7 @@ A destination may leave the selection, so a small selection still moves.
 The job sorts the moves by weight, then by the canonical cell, so overlapping
 destinations resolve the same way on every run.
 
-The tool poses the ring on the entered face.
+The tool poses the circle in the view plane. It shows the brush footprint. A pose drag hides the circle, so only the bone and the joint square remain. The bone carries the joint square and the face widget: a square on the edges of the entered face and a quadrant cross, so the user sees which quadrant the pointer rests in and how the face bias reads.
 Grab draws no bone.
 
 Source:
@@ -140,14 +140,14 @@ Source:
 flowchart TD
   subgraph Main["Main"]
     P1["Press on a voxel"]
-    P2["Find the joint where the limb enters the brush"]
-    P3["Capture the limb or the sphere at the joint band"]
+    P2["Find where the limb enters the brush"]
+    P3["Capture the limb at the joint band"]
     P4["Build one pose entry per symmetry mask"]
     P5["Drag: view-plane cell"]
     P6["Turn by the screen angle from the bone to the pointer"]
     P7["Lower the angle until every moved cell fits"]
     P8["Job: write the turn, then clear replaced sources"]
-    P9["Bone cursor with the joint and the drag arm"]
+    P9["Bone cursor with the joint and the pointer"]
   end
   P1 --> P2 --> P3 --> P4 --> P5 --> P6 --> P7 --> P8
   P2 --> P9
@@ -156,25 +156,25 @@ flowchart TD
 
 The behaviour follows the [Pose brush spec](../research/tools/pose-brush-spec.md).
 
-The bone runs from the joint to the picked cell, so a limb that lies across the
+The bone runs from the joint to the pointer, so a limb that lies across the
 view bends in the view plane.
-`DeformLimb.joint_pivot` reads no cell axis and no face normal.
-The entered face has no effect on the bend.
+`DeformLimb.joint_pivot` reads no cell axis.
+The pointer point on the entered face only scores the joint, so the face picks
+between candidates. It never turns the limb.
 
-The joint is the cell where the limb enters the brush on its way to the far end.
-The brush walks the connected cells to the far end of the limb, then walks back
-until it enters the brush.
-The walk reads cells up to two brush radii from the press, so a connected model
-cannot send the search across the whole frame.
+The joint is the occupied cell inside the brush with the best score. The score weighs the brush edge, the view plane of the press, and the half of the entered face that the pointer touches. The view plane outranks the edge, so a farther cell off the plane loses to a nearer cell on it. The walk visits empty cells too, so a gap does not hide a cell.
+The connected option limits the walk to occupied cells. A press-centred face gives no direction, so the walk order decides that tie.
+It does not walk back, so the base is the limb root and not a cell under the
+pointer.
+The bound keeps the walk local, so a connected model cannot send the search
+across the whole frame.
 The joint is therefore always an occupied voxel on the limb, and the pointer is
 the tip of the bone.
 
-The Reach option selects the moved cells.
-Limb walks the connected occupied cells from the picked cell.
+The moved cells are the connected occupied cells from the picked cell.
 The walk stops where the limb crosses the joint band, so the cells behind the
 joint keep still.
 The walk also stops at the limb allowance, so a solid blob bends a bounded set.
-Sphere keeps the occupied cells inside the ring.
 The falloff sets the half width of the joint neck, in cells.
 It ramps from half a cell at zero to two cells at one, and stops at
 `DeformLimb.NECK_LIMIT`.
@@ -185,9 +185,17 @@ plane.
 The arm runs from the joint to the pointer, and the angle is the screen angle
 from the bone to that arm.
 The tip therefore lands under the pointer, and no other rule can move it there.
-The only limit is the fit, so no angle option caps the stroke.
+The Snap option rounds the requested angle to a quarter turn before the fit, so
+a blocked snap falls back to the largest angle that fits.
+Apart from the snap, the fit is the only limit.
 A bone that points at the viewer has no screen direction, so the bend becomes a
-twist by the pointer travel. A mirrored mask turns the other way.
+twist by the pointer travel.
+
+A mirrored mask turns the mirror of the primary turn, about the mirror of the
+primary axis.
+A screen angle about the view axis is not a mirror when the view is oblique.
+The axis mirror keeps the two sides exact mirrors from any view, so the far limb
+does not turn about the near view axis.
 
 The cell selection limits the limb search and the captured cells, like the
 transform tools: an empty selection allows every cell.
@@ -223,14 +231,13 @@ The bone is the whole cursor.
 A hover shows the joint and the bone to the cell under the pointer.
 The hover reads one captured cell only, because it answers one question: can the
 press capture a cell?
-The scan runs again only when the picked cell, the size, the falloff, the reach,
-the selection, the slice, the document size, or the frame changes.
+The scan runs again only when the picked cell, the size, the falloff, the
+selection, the slice, the document size, or the frame changes.
 
 Source:
 
 - [`DeformLimb.joint_pivot`](../../../plugins/Deform/DeformLimb.gd)
 - [`DeformLimb.capture_limb`](../../../plugins/Deform/DeformLimb.gd)
-- [`DeformLimb.capture_sphere`](../../../plugins/Deform/DeformLimb.gd)
 - [`DeformLimb.turn_point`](../../../plugins/Deform/DeformLimb.gd)
 - [`PoseTool._capture_gesture`](../../../plugins/Deform/PoseTool.gd)
 - [`PoseTool._make_job`](../../../plugins/Deform/PoseTool.gd)
@@ -244,10 +251,10 @@ Source:
 `DeformPlugin` owns the two tools, one `MenuButton`, and one option bar.
 `State.reset_plugins` adds it after the terrain plugin.
 The toolbar holds Grab and Pose with fixed ids.
-The option bar shows the shared radius and falloff.
-Grab uses those two only. The Pose controls hide while Grab is active.
-The Pose control is the reach set. It shares the radius and the falloff with Grab.
-The reach button shows the set of the next press in its icon and its tooltip.
+The option bar shows the shared size and falloff, and the pose Connected and Snap
+options.
+The Pose Snap option starts off, and the Pose Connected option starts on.
+The rotate tool snap also starts off, so a plain drag is free.
 Neither tool shows a strength control, because neither uses one.
 
 Source:
@@ -265,8 +272,7 @@ Source:
 - Pose turns around the view normal only. It cannot turn out of the view plane.
 - A limb walk stops at 8192 cells, so a bend stays inside the brush bound. A
   hover reads one cell of the limb.
-- The joint search reads at most 2048 cells and stops two brush radii from the
-  press.
+- The joint search reads at most 2048 cells of the brush ball, occupied or not.
 - A bend lowers its angle until every moved cell fits. It never splits a
   symmetric pair.
 - The joint share comes from the joint neck. It is not a

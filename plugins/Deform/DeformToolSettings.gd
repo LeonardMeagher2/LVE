@@ -18,14 +18,6 @@ enum Tools {
 	POSE
 }
 
-## The set of cells that the Pose brush moves.
-enum Reach {
-	## Every connected cell on the tip side of the joint.
-	LIMB,
-	## Only the cells inside the brush ring.
-	SPHERE
-}
-
 ## The active deform tool.
 @export var tool: Tools = Tools.GRAB:
 	set(value):
@@ -38,12 +30,22 @@ enum Reach {
 ## The circular footprint size in voxels. It clamps to 1 through 32. A size of
 ## one is one voxel. An even size centers between cells, like the shared brush
 ## size.
-@export var radius := 4:
+@export var size := 4:
 	set(value):
 		value = clampi(value, 1, 32)
-		if value == radius:
+		if value == size:
 			return
-		radius = value
+		size = value
+		emit_changed()
+
+## Whether the pose angle snaps to a 90 degree step. The fit can still lower it,
+## so a blocked snap falls back to the largest angle that fits. It starts off, so
+## a drag is free.
+@export var snap := false:
+	set(value):
+		if value == snap:
+			return
+		snap = value
 		emit_changed()
 
 ## The edge softness. Zero is a hard edge and one is a smooth edge. Grab scales
@@ -56,11 +58,14 @@ enum Reach {
 		falloff = value
 		emit_changed()
 
-## The set of cells that the Pose brush moves.
-@export var reach: Reach = Reach.LIMB:
+## Whether the pose joint walk follows the connected limb only. On walks
+## occupied cells only, so the joint stays on the connected limb. Off searches
+## every cell inside the brush, so a gap does not hide an occupied cell. It
+## starts on, so a gap does not move the base by surprise.
+@export var connected := true:
 	set(value):
-		if value == reach:
+		if value == connected:
 			return
-		reach = value
+		connected = value
 		emit_changed()
 

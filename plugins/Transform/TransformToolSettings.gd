@@ -41,8 +41,9 @@ enum Tools {
 		emit_changed()
 
 ## Whether a rotate drag snaps every angle to a 90 degree step. When it is off,
-## the drag snaps to one degree and pulls to a nearby cardinal angle.
-@export var snap: bool = true :
+## the drag snaps to one degree and pulls to a nearby cardinal angle. It starts
+## off, so a plain drag is free.
+@export var snap: bool = false :
 	set(value):
 		if value == snap:
 			return

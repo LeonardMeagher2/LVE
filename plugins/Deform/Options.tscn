@@ -2,17 +2,18 @@
 
 [ext_resource type="Script" path="res://plugins/Deform/Options.gd" id="1_script"]
 [ext_resource type="PackedScene" uid="uid://kxi223occ3vl" path="res://ui/ValueButton/ValueButton.tscn" id="2_value"]
-[ext_resource type="Texture2D" uid="uid://bbt7tj3kwq42w" path="res://icons/brush_diameter.svg" id="3_radius"]
+[ext_resource type="Texture2D" uid="uid://bbt7tj3kwq42w" path="res://icons/brush_diameter.svg" id="3_size"]
 [ext_resource type="Texture2D" uid="uid://denrh23gr1h22" path="res://icons/shadow.svg" id="4_falloff"]
-[ext_resource type="Texture2D" path="res://icons/connected.svg" id="8_reach"]
+[ext_resource type="Texture2D" path="res://icons/connected.svg" id="5_connected"]
+[ext_resource type="Texture2D" path="res://icons/snap.svg" id="6_snap"]
 
 [node name="Options" type="HBoxContainer"]
 script = ExtResource("1_script")
 
-[node name="Radius" parent="." instance=ExtResource("2_value")]
+[node name="Size" parent="." instance=ExtResource("2_value")]
 layout_mode = 2
-tooltip_text = "Deform radius in voxels."
-icon = ExtResource("3_radius")
+tooltip_text = "Deform size in voxels."
+icon = ExtResource("3_size")
 min_value = 1.0
 max_value = 32.0
 step = 1.0
@@ -26,14 +27,21 @@ icon = ExtResource("4_falloff")
 step = 0.05
 value = 0.5
 
-[node name="Reach" type="Button" parent="."]
+[node name="Connected" type="Button" parent="."]
 layout_mode = 2
-tooltip_text = "Pose moves the whole connected limb"
+tooltip_text = "Pose walks the connected limb only"
 toggle_mode = true
-button_pressed = true
-icon = ExtResource("8_reach")
+icon = ExtResource("5_connected")
 icon_alignment = 1
 
-[connection signal="value_changed" from="Radius" to="." method="_on_radius_changed"]
+[node name="Snap" type="Button" parent="."]
+layout_mode = 2
+tooltip_text = "Snap the pose to 90 degrees"
+toggle_mode = true
+icon = ExtResource("6_snap")
+icon_alignment = 1
+
+[connection signal="value_changed" from="Size" to="." method="_on_size_changed"]
 [connection signal="value_changed" from="Falloff" to="." method="_on_falloff_changed"]
-[connection signal="toggled" from="Reach" to="." method="_on_reach_toggled"]
+[connection signal="toggled" from="Connected" to="." method="_on_connected_toggled"]
+[connection signal="toggled" from="Snap" to="." method="_on_snap_toggled"]

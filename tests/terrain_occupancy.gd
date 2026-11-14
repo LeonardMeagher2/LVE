@@ -16,6 +16,7 @@ extends "res://tests/test.gd"
 # never pays for it.
 
 const REFERENCE := preload("res://tests/terrain_occupancy_reference.gd")
+const VoxelFalloff := preload("res://Globals/State/Tools/VoxelFalloff.gd")
 const TERRAIN := preload("res://plugins/Terrain/TerrainTool.gd")
 const SmoothOperation := preload("res://plugins/Terrain/SmoothOperation.gd")
 const TerrainGeometry := preload("res://plugins/Terrain/TerrainGeometry.gd")
@@ -181,7 +182,7 @@ func _patch(frame: VoxelFrame, center: Vector3, radius: int, falloff: float, nor
 	var depth := mini(64, maxi(8, radius * 2))
 	var region := {}
 	for entry in TerrainGeometry.disk_offsets(radius):
-		var weight := TerrainGeometry.weight_at(entry["distance"], float(radius), falloff, TerrainGeometry.disk_inner(radius))
+		var weight := VoxelFalloff.weight_at(entry["distance"], float(radius), falloff, TerrainGeometry.disk_inner(radius))
 		if weight <= 0.0:
 			continue
 		var point: Vector3 = center + float(entry["u"]) * tangent_u + float(entry["v"]) * tangent_v

@@ -34,6 +34,8 @@ extends VoxelTool
 const TerrainSettings := preload("./TerrainToolSettings.gd")
 const SmoothOperation := preload("./SmoothOperation.gd")
 const TerrainRing := preload("./TerrainRing.gd")
+const BrushSize := preload("res://Globals/State/Tools/VoxelBrushSize.gd")
+const VoxelLineMesh := preload("res://Globals/Rendering/VoxelLineMesh.gd")
 # The shared pure preparation math. The tool and its worker jobs preload it, so
 # a job resolves it without the global class cache.
 const Prep := preload("./TerrainPrep.gd")
@@ -2090,7 +2092,7 @@ func _pose_footprint(pick: PickResult) -> void:
 	var size := clampi(_settings.radius, 1, 32)
 	var mesh: ArrayMesh = _footprint_meshes.get(size)
 	if mesh == null:
-		mesh = TerrainRing.build_mesh(TerrainRing.legacy_plane_ring(size))
+		mesh = VoxelLineMesh.build(BrushSize.disk_outline(size))
 		_footprint_meshes[size] = mesh
 	_footprint.mesh = mesh
 	var frame := _footprint_frame(pick)

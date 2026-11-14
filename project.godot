@@ -15,8 +15,8 @@ config/description="Made with LVE. Create voxel art and animation."
 config/version="0.7"
 run/main_scene="res://Main.tscn"
 config/features=PackedStringArray("4.7")
-config/icon="res://icon.svg"
 run/flush_stdout_on_print=true
+config/icon="res://icon.svg"
 
 [autoload]
 

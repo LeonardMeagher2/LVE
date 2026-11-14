@@ -2,6 +2,7 @@ class_name TerrainGeometry
 extends RefCounted
 
 const BrushSize := preload("res://Globals/State/Tools/VoxelBrushSize.gd")
+const VoxelFalloff := preload("res://Globals/State/Tools/VoxelFalloff.gd")
 
 ## Pure geometry and surface helpers for the terrain tools.
 ##
@@ -123,34 +124,12 @@ static func build_layer_cells(frame: VoxelFrame, changes: Dictionary, surface: V
 	return {"cells": cells, "next": next}
 
 
-## Returns the falloff weight for one distance from the center. The size is the
-## brush diameter, so the falloff radius is half of it.
-##
-## A zero falloff gives a hard edge. A falloff of one gives a smooth edge.
-##
-## [param inner] is the distance of the nearest brush cell. An odd size centers
-## on one cell, so its nearest distance is zero. An even size centers between
-## four cells, so its nearest distance is not zero. The falloff starts at that
-## ring, so the center ring of every size weighs exactly one. A weight that never
-## reaches one would lose the whole step of a strength-one dab.
-static func weight_at(distance: float, size: float, falloff: float, inner := 0.0) -> float:
-	var radius := size * 0.5
-	if radius <= 0.0:
-		return 1.0
-	var start := clampf(inner, 0.0, radius)
-	var span := radius - start
-	if span <= 0.0:
-		return 1.0
-	var t := clampf((distance - start) / span, 0.0, 1.0)
-	var smooth := 1.0 - (t * t * (3.0 - 2.0 * t))
-	return lerpf(1.0, smooth, clampf(falloff, 0.0, 1.0))
-
-
 ## Returns the distance of the nearest disk cell from the disk center.
 ##
 ## It is the start of the disk falloff. An odd size centers on a cell, so the
 ## result is zero. An even size centers half a cell from four cells, so the
-## result is the half-cell diagonal. Pass it to [method weight_at] for a disk.
+## result is the half-cell diagonal. Pass it to `VoxelFalloff.weight_at` for a
+## disk.
 static func disk_inner(size: int) -> float:
 	var center := BrushSize.center_offset(clampi(size, 1, 64))
 	var offset := absf(float(roundi(center)) - center)
@@ -558,7 +537,7 @@ static func surface_points(frame: VoxelFrame, hit: Vector3i, entry: Vector3i, ra
 		var key := Vector2i(offset["u"], offset["v"])
 		columns[key] = {
 			"point": Vector3(surface) + entry_normal * 0.5,
-			"weight": weight_at(offset["distance"], float(use_radius), 0.5, disk_inner(use_radius)),
+			"weight": VoxelFalloff.weight_at(offset["distance"], float(use_radius), 0.5, disk_inner(use_radius)),
 		}
 	# Keep the surface patch connected across the disc. Empty columns separate
 	# unrelated islands. Sample heights, not the normals of individual cube faces.
