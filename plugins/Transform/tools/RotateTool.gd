@@ -422,6 +422,12 @@ func _did_restore_baseline() -> void:
 	_pivot = _source_bbox().get_center()
 
 
+func _gizmo_pivot() -> Vector3:
+	if _gizmo_grab_ready and (_dragging or _pending):
+		return _pivot
+	return super._gizmo_pivot()
+
+
 func _connect_tool_dialog() -> void:
 	_dialog.connect("values_changed", _on_dialog_values)
 	_dialog.connect("confirmed", _on_dialog_confirmed)
