@@ -5,9 +5,9 @@ extends "./TransformTool.gd"
 ## A drag rotates the source around its bounds center. The axis is the view
 ## normal or the nearest world axis. A smooth angle turns around the centre. An
 ## exact quarter turn permutes from the source low corner, then recentres on the
-## pivot. The smooth path does not recentre per preview, so it stays steady
-## during the drag. A click opens the rotate dialog for exact angles. Any other
-## angle uses [RotSprite].
+## previous preview's centre. The smooth path does not recentre per preview, so
+## it stays steady during the drag. A click opens the rotate dialog for exact
+## angles. Any other angle uses [RotSprite].
 
 const TransformDialog := preload("./TransformDialog.gd")
 
@@ -42,6 +42,9 @@ class RotateJob extends TransformJob:
 	var axis_vector := Vector3.ZERO
 	## The rotation angle in radians about [member axis_vector].
 	var angle_radians := 0.0
+	## The point that a snapped result centres on. [constant Vector3.INF] uses
+	## [member pivot].
+	var recenter_center := Vector3.INF
 	## The pivot in cell units.
 	var pivot := Vector3.ZERO
 	## The single-axis angle in radians.
@@ -275,10 +278,11 @@ class RotateJob extends TransformJob:
 			low = low.min(key)
 			high = high.max(key)
 		var center := (Vector3(low) + Vector3(high)) * 0.5
+		var target := recenter_center if recenter_center != Vector3.INF else pivot
 		var offset := Vector3i(
-			_round_half_to_zero(pivot.x - center.x),
-			_round_half_to_zero(pivot.y - center.y),
-			_round_half_to_zero(pivot.z - center.z))
+			_round_half_to_zero(target.x - center.x),
+			_round_half_to_zero(target.y - center.y),
+			_round_half_to_zero(target.z - center.z))
 		if offset == Vector3i.ZERO:
 			return
 		destination_colors = _shift_keys(destination_colors, offset)
@@ -467,12 +471,22 @@ func _update_params(origin: Vector3, dir: Vector3) -> bool:
 func _make_job() -> TransformJob:
 	var job := RotateJob.new()
 	job.pivot = _pivot
+	job.recenter_center = _snap_center()
 	if not _job_axis.is_zero_approx():
 		job.axis_vector = _job_axis
 		job.angle_radians = _job_angle
 	else:
 		job.euler = _euler
 	return job
+
+
+# A snapped result keeps the previous preview's centre. That avoids a one-cell
+# jump when the magnetic pull switches from the smooth path to the exact path.
+func _snap_center() -> Vector3:
+	var turns := absf(_job_angle) / QUARTER
+	if _destination_bounds.has_volume() and is_equal_approx(turns, roundf(turns)):
+		return _destination_bounds.get_center()
+	return _pivot
 
 
 func _on_click_without_drag() -> bool:

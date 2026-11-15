@@ -71,7 +71,7 @@ An exact quarter turn permutes the cells from the source low corner, then recent
 That keeps every voxel and lets four turns return the same box.
 The exact quarter turn stays exact in either direction.
 A non-square result can move by half a cell when the width and height parity differs.
-The smooth path does not recentre per preview. A sampled preview can differ from the exact quarter turn by one cell at the snap.
+The smooth path does not recentre per preview. A snapped quarter turn keeps the previous smooth preview's centre. A sampled preview can still differ from the exact quarter turn by one cell at the edge.
 
 ```mermaid
 flowchart TD
