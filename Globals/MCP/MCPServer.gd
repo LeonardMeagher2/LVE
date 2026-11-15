@@ -4322,26 +4322,12 @@ func _active_tool_info() -> Dictionary:
 
 
 func _activate_plugin(name: String) -> void:
-	for other in ["BrushPlugin", "PaintPlugin", "TerrainPlugin", "DeformPlugin", "SelectionPlugin", "TransformPlugin", "EyedropperPlugin"]:
-		if other == name:
-			continue
-		var plugin: Node = _plugin(other)
-		if plugin != null and _toolbar_pressed(plugin):
-			var toolbar: BaseButton = plugin.get("_toolbar")
-			if toolbar != null:
-				toolbar.button_pressed = false
 	var target: Node = _plugin(name)
-	if target == null:
+	if target == null or not target.has_method("activate_tool"):
 		return
-	var target_toolbar: BaseButton = target.get("_toolbar")
-	if target_toolbar == null:
-		return
-	if target_toolbar.button_pressed:
-		target.call("activate_tool")
-		return
-	target_toolbar.button_pressed = true
-	if not target_toolbar.button_pressed:
-		target.call("activate_tool")
+	# The shared tool button group unpresses the previous plugin, so its own
+	# toggle handler deactivates it. No caller lists the other plugins.
+	target.call("activate_tool")
 
 
 func _plugin(plugin_name: String) -> Node:

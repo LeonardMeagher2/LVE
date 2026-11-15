@@ -167,8 +167,6 @@ func create_material(template: StandardMaterial3D = null) -> StandardMaterial3D:
 	material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
 	material.texture_repeat = false
 	material.vertex_color_use_as_albedo = false
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
-	material.specular_mode = BaseMaterial3D.SPECULAR_SCHLICK_GGX
 	if albedo == null:
 		return material
 	material.albedo_texture = ImageTexture.create_from_image(albedo)

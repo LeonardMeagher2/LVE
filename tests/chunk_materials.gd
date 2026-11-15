@@ -251,6 +251,10 @@ func _atlas_run() -> void:
 		expect(material.cull_mode == template.cull_mode, "the atlas retains the template cull mode")
 		expect(material.rim_enabled == template.rim_enabled and is_equal_approx(material.rim, template.rim) and is_equal_approx(material.rim_tint, template.rim_tint), "the atlas retains the template rim settings")
 		expect(material.stencil_flags == template.stencil_flags and material.stencil_color == template.stencil_color and is_equal_approx(material.stencil_outline_thickness, template.stencil_outline_thickness), "the atlas retains the template stencil settings")
+		expect(material.specular_mode == template.specular_mode, "the atlas retains the template specular mode")
+		expect(material.specular_mode == BaseMaterial3D.SPECULAR_SCHLICK_GGX, "the voxel material matches the exported specular model")
+		expect(material.shading_mode == template.shading_mode, "the atlas retains the template shading mode")
+		expect(material.shading_mode == BaseMaterial3D.SHADING_MODE_PER_PIXEL, "the voxel material shades per pixel")
 	)
 	step("When the user clears the material of the chunk", func():
 		State.get_current_voxel_frame().set_cells({Vector3i(1, 0, 0): VoxelFrame.material(Color.BLUE)})

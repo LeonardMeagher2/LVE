@@ -15,9 +15,23 @@ var _settings := preload("./settings.tres")
 
 func _ready() -> void:
 	get_popup().index_pressed.connect(_on_index_pressed)
+	_settings.changed.connect(_sync_icon)
+	_sync_icon()
+
 
 func _on_index_pressed(index: int) -> void:
 	_select_id(get_popup().get_item_id(index))
+
+
+func _sync_icon() -> void:
+	var id := PENCIL_ID
+	if _settings.mode == _settings.BrushMode.LINE:
+		id = LINE_ID
+	elif _settings.mode == _settings.BrushMode.ERASER:
+		id = ERASER_ID
+	var item_index := get_popup().get_item_index(id)
+	if item_index >= 0:
+		icon = get_popup().get_item_icon(item_index)
 
 
 # Select one mode by its popup item id. The icon comes from the matching item,

@@ -19,6 +19,9 @@ signal document_deactivating()
 signal cells_changed(frame: int, affected: Array[Vector3i])
 ## Emitted when a document is saved to a path. The unsaved mark is already clear.
 signal document_saved(document: VoxelDocument)
+## Emitted before a document is encoded for a save or an autosave copy. Observers
+## capture the active editor workspace into the active document.
+signal workspace_capture_requested()
 ## Emitted when chunks in a frame need a surface rebuild. [param frame] is the
 ## frame index. [param affected] lists one cell per changed chunk.
 signal chunks_changed(frame: int, affected: Array[Vector3i])
@@ -517,6 +520,14 @@ func open_tab(value: VoxelDocument) -> int:
 	return index
 
 
+## Captures the active editor workspace into [param document] before it is
+## encoded. Only the active document has live editor state. An inactive document
+## keeps the state that its deactivation captured.
+func capture_workspace(document: VoxelDocument) -> void:
+	if document == null or document == _active_document:
+		workspace_capture_requested.emit()
+
+
 ## Records a saved document path in its tab and the session. It clears the
 ## unsaved mark and refreshes the tab strip.
 func record_saved(document: VoxelDocument, path: String) -> void:
@@ -611,7 +622,7 @@ func _adopt_document(value: VoxelDocument) -> void:
 	_active_document.edit_frame = clampi(_active_document.edit_frame, 0, _active_document.frames.size() - 1)
 	_active_document.edit_tag = clampi(_active_document.edit_tag, -1, _active_document.tags.size() - 1)
 	playback.document = _active_document
-	playback.is_playing = false
+	playback.restore_playback()
 	document_changed.emit()
 	size_changed.emit()
 	palette_changed.emit()
@@ -633,6 +644,12 @@ func _mark_dirty() -> void:
 		return
 	_active_document.edit_dirty = true
 	tabs_changed.emit()
+
+
+## Marks the active document dirty. A caller uses it when it installs content
+## that no history action produced, such as an imported image.
+func mark_dirty() -> void:
+	_mark_dirty()
 
 
 func _commit_history(execute: bool = true) -> void:
@@ -1086,6 +1103,13 @@ func select_palette_entry(index: int) -> void:
 		return
 	end_material_edit()
 	_apply_material(document.palette[index])
+
+
+## Applies a saved workspace material without a history action. An invalid
+## material is ignored.
+func apply_workspace_material(material: PackedFloat32Array) -> void:
+	if VoxelDocument.valid_material(material):
+		_apply_material(material)
 
 
 ## Adds the current material to the palette. An existing equal entry is selected
@@ -1997,6 +2021,7 @@ func _apply_tag_loop_mode(index: int, mode: int) -> void:
 	if tag == null:
 		return
 	tag.loop_mode = mode as AnimationTag.LoopMode
+	_reset_playback_passes()
 	_mark_dirty()
 	tag_changed.emit()
 
@@ -2019,8 +2044,17 @@ func _apply_tag_repeats(index: int, value: int) -> void:
 	if tag == null:
 		return
 	tag.repeats = value
+	_reset_playback_passes()
 	_mark_dirty()
 	tag_changed.emit()
+
+
+# A new loop mode or repeat count applies to a fresh pass count. Without this,
+# passes counted during an infinite play stop a newly finite tag on its next
+# boundary instead of after the requested number of passes.
+func _reset_playback_passes() -> void:
+	if is_playing:
+		playback.reset_passes()
 
 
 ## Sets a tag name and records a history action.

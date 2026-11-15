@@ -26,7 +26,9 @@ func _notification(what: int) -> void:
 
 ## Activates the symmetry tool and shows its option bar.
 func activate_tool() -> void:
-	_toolbar.set_pressed_no_signal(true)
+	if not _toolbar.button_pressed:
+		_toolbar.button_pressed = true
+		return
 	_tool.active = true
 	add_option_bar_item(_options)
 
@@ -35,6 +37,7 @@ func activate_tool() -> void:
 func deactivate_tool() -> void:
 	_tool.active = false
 	remove_option_bar_item(_options)
+	_toolbar.set_pressed_no_signal(false)
 
 
 func _on_toolbar_toggled(on: bool) -> void:

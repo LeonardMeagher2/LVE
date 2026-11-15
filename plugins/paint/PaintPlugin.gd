@@ -23,7 +23,7 @@ func _ready() -> void:
 	name = "PaintPlugin"
 	_toolbar.toggled.connect(_on_toolbar_toggled)
 	_settings.tool_changed.connect(_on_tool_changed)
-	add_tool_bar_item(_toolbar)
+	add_tool_bar_item(_toolbar, _settings)
 	_set_tool(_settings.tool)
 
 
@@ -36,8 +36,10 @@ func _notification(what: int) -> void:
 
 ## Activates the current paint tool and shows its option bar.
 func activate_tool() -> void:
+	if not _toolbar.button_pressed:
+		_toolbar.button_pressed = true
+		return
 	_active = true
-	_toolbar.set_pressed_no_signal(true)
 	add_editor_node(_tool)
 	add_option_bar_item(_options)
 
@@ -52,6 +54,7 @@ func deactivate_tool() -> void:
 	_tool.finish_on_switch()
 	remove_editor_node(_tool)
 	remove_option_bar_item(_options)
+	_toolbar.set_pressed_no_signal(false)
 
 
 func _on_toolbar_toggled(on: bool) -> void:

@@ -20,7 +20,7 @@ func _ready() -> void:
 	_active_mode = _settings.mode
 	_toolbar.toggled.connect(_on_toolbar_toggled)
 	_settings.changed.connect(_on_settings_changed)
-	add_tool_bar_item(_toolbar)
+	add_tool_bar_item(_toolbar, _settings)
 	add_option_bar_item(_options)
 	activate_tool()
 
@@ -34,7 +34,11 @@ func _notification(what: int) -> void:
 
 ## Activates the brush tool and shows its option bar.
 func activate_tool() -> void:
-	_toolbar.set_pressed_no_signal(true)
+	# The tool bar shares one button group. Pressing the button unpresses the
+	# previous tool, so that plugin deactivates itself through its own toggle.
+	if not _toolbar.button_pressed:
+		_toolbar.button_pressed = true
+		return
 	add_editor_node(_tool)
 	add_option_bar_item(_options)
 
@@ -47,6 +51,7 @@ func deactivate_tool() -> void:
 	_tool.finish_on_switch()
 	remove_editor_node(_tool)
 	remove_option_bar_item(_options)
+	_toolbar.set_pressed_no_signal(false)
 
 
 func _on_settings_changed() -> void:

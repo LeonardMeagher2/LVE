@@ -23,6 +23,7 @@ func _ready() -> void:
 	test("a corrupt settings file is not overwritten by a session save", _corrupt_session, "corrupt_session")
 	test("the runtime editor state is not serialized", _serialize, "tab_serialize")
 	test("quitting asks to save each edited document", _quit, "quit_confirmation")
+	test("a cancelled quit clears a pending close target", _close_target, "quit_close_target")
 	test("the recovery prompt lists unsaved documents", _recovery_dialog, "recovery_dialog")
 
 
@@ -205,7 +206,11 @@ func _corrupt_session() -> void:
 func _serialize() -> void:
 	step("Given a document with runtime editor state", func():
 		var document := VoxelDocument.new()
-		document.edit_frame = 2
+		document.add_frame()
+		document.add_tag("Walk", 0, 1)
+		document.edit_frame = 1
+		document.edit_tag = 0
+		document.edit_playing = true
 		document.edit_dirty = true
 		document.edit_save_path = "user://tabs_test.lve"
 		document.edit_selection.add(Vector3i.ONE)
@@ -213,7 +218,9 @@ func _serialize() -> void:
 		expect(not data.is_empty(), "the document encodes")
 		var loaded := VoxelDocument.decode_document(data)
 		expect(loaded != null, "the document decodes")
-		expect(loaded.edit_frame == 0, "the frame is not stored")
+		expect(loaded.edit_frame == 1, "the frame is stored")
+		expect(loaded.edit_tag == 0, "the active tag is stored")
+		expect(loaded.edit_playing, "the playback state is stored")
 		expect(not loaded.edit_dirty, "the dirty flag is not stored")
 		expect(loaded.edit_save_path.is_empty(), "the save path is not stored")
 		expect(loaded.edit_selection.is_empty(), "the selection is not stored")
@@ -287,6 +294,27 @@ func _quit() -> void:
 
 func _on_test_quit() -> void:
 	_quit_seen = true
+
+
+# A quit can start while a close Save As is open. Cancelling the shared dialog
+# must clear the close target too, or the next Save As closes a stale tab.
+func _close_target() -> void:
+	var menu := main.get_node("%MenuBar")
+	step("Given a pending close Save As and a quit that interrupts it", func():
+		menu._close_after_save_document = State.document
+		menu._pending_close_index = 0
+		menu._quit_active = true
+		menu._quit_after_save = true
+	)
+	step("When the shared file dialog is cancelled", func():
+		menu._on_file_dialog_canceled()
+	)
+	step("Then no close target or quit wait survives", func():
+		expect(menu._close_after_save_document == null, "the close target is cleared")
+		expect(menu._pending_close_index == -1, "the pending close index is cleared")
+		expect(not menu._quit_active, "the quit is cancelled")
+		expect(not menu._quit_after_save, "the quit save wait is cleared")
+	)
 
 
 func _recovery_dialog() -> void:

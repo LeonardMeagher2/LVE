@@ -79,9 +79,16 @@ func add_control_bar_item(control:Control) -> void:
 func remove_control_bar_item(control:Control) -> void:
 	_safe_remove(_main().get_node("%Viewport").get_node("%ControlBar"), control)
 
-## Adds a control to the tool bar.
-func add_tool_bar_item(control:Control) -> void:
-	_safe_add(_main().get_node("%ToolBar"), control)
+## Adds a control to the tool bar. An optional settings resource registers with
+## the editor workspace, so its values follow the active document.
+func add_tool_bar_item(control:Control, settings: Resource = null) -> void:
+	var main := _main()
+	if main == null:
+		return
+	_safe_add(main.get_node("%ToolBar"), control)
+	var workspace := main.get_node_or_null("%EditorWorkspace")
+	if workspace != null and control is BaseButton:
+		workspace.call("register_tool", "%s/%s" % [name, control.name], control, settings)
 
 ## Removes a control from the tool bar.
 func remove_tool_bar_item(control:Control) -> void:

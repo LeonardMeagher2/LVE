@@ -373,8 +373,6 @@ static func _apply_material(target: StandardMaterial3D, cell_material: PackedFlo
 	target.emission_energy_multiplier = 1.0
 	target.metallic = cell_material[VoxelFrame.MATERIAL_METALLIC]
 	target.roughness = cell_material[VoxelFrame.MATERIAL_ROUGHNESS]
-	target.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
-	target.specular_mode = BaseMaterial3D.SPECULAR_SCHLICK_GGX
 
 
 # Mirrors a carrier's values onto the per-instance lit material, so the visible
@@ -646,15 +644,17 @@ func submit_prepared(payload: SolidPayload) -> void:
 func _install_cached(cache_key: String, cached: Dictionary) -> void:
 	mesh = cached.surface
 	position = Vector3.ZERO
-	visible = true
+	# An empty cached surface draws nothing, so it must not report visible cells.
+	var shown: bool = cached.surface != null and cached.surface.get_surface_count() > 0
+	visible = shown
 	_cache_order.erase(cache_key)
 	_cache_order.append(cache_key)
 	_installed_revision = _request_revision
 	# The cached entry holds the cells of the request that built it. The token
 	# comes from the request that asked for the hit, so an equal cached surface
 	# still reports the identity of the current request.
-	_installed_cells = cached.cells
-	_installed_token = _requested_token
+	_installed_cells = cached.cells if shown else {}
+	_installed_token = _requested_token if shown else null
 	_finish_activity()
 
 
@@ -1014,13 +1014,15 @@ func _install_surface(job: PreviewJob, cache: bool) -> void:
 		_cache_mesh(job, surface)
 	mesh = surface
 	position = Vector3.ZERO
-	visible = surface.get_surface_count() > 0
+	var shown := surface.get_surface_count() > 0
+	visible = shown
 	# Record the exact cells that this surface draws. A caller reads them through
 	# [method installed_cells] to match a visible preview to a later click. The
 	# token keeps the identity of the request that produced this result, so a
-	# coalesced intermediate surface still names its own request.
-	_installed_cells = job.cells
-	_installed_token = job.token
+	# coalesced intermediate surface still names its own request. An empty
+	# surface draws nothing, so it reports no cells and no token.
+	_installed_cells = job.cells if shown else {}
+	_installed_token = job.token if shown else null
 
 
 ## Returns the immutable cells of the last installed surface, or an empty
@@ -1050,8 +1052,6 @@ static func _atlas_material(job: VoxelMeshBuilder) -> StandardMaterial3D:
 		material = job.atlas.create_material(material)
 	else:
 		material.vertex_color_use_as_albedo = false
-		material.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
-		material.specular_mode = BaseMaterial3D.SPECULAR_SCHLICK_GGX
 		material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
 		material.albedo_texture = _atlas_texture(job.atlas_size, job.atlas_albedo)
 		var material_texture := _atlas_texture(job.atlas_size, job.atlas_orm)

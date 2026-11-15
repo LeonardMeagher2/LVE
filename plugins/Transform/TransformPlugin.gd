@@ -21,7 +21,7 @@ func _ready() -> void:
 	name = "TransformPlugin"
 	_toolbar.toggled.connect(_on_toolbar_toggled)
 	_settings.tool_changed.connect(_on_tool_changed)
-	add_tool_bar_item(_toolbar)
+	add_tool_bar_item(_toolbar, _settings)
 
 
 func _notification(what: int) -> void:
@@ -33,8 +33,10 @@ func _notification(what: int) -> void:
 
 ## Activates the current transform tool and shows the option bar.
 func activate_tool() -> void:
+	if not _toolbar.button_pressed:
+		_toolbar.button_pressed = true
+		return
 	_active = true
-	_toolbar.set_pressed_no_signal(true)
 	add_option_bar_item(_options)
 	_on_tool_changed(_settings.tool)
 
@@ -45,6 +47,7 @@ func deactivate_tool() -> void:
 	remove_option_bar_item(_options)
 	if _current_tool:
 		remove_editor_node(_current_tool)
+	_toolbar.set_pressed_no_signal(false)
 
 
 func _on_toolbar_toggled(on: bool) -> void:

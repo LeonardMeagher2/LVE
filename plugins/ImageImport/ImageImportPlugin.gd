@@ -172,6 +172,9 @@ func import_image(path: String) -> Error:
 	if job.error != OK:
 		return job.error
 	State.document = job.imported_document
+	# The import replaced the document with content that no history action
+	# produced. Mark it dirty, so Close, Quit, and Autosave keep it.
+	State.mark_dirty()
 	return OK
 
 

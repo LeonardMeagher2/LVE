@@ -56,6 +56,7 @@ The source is [`State.gd:252`](../../../Globals/State/State.gd#L252).
 
 The plugin base class supplies the registration helpers.
 The helpers are `add_tool_bar_item`, `add_option_bar_item`, `add_editor_node`, `add_menu_bar_item`, and `add_tab`.
+`add_tool_bar_item` also registers the toolbar and its optional settings resource with `Main.%EditorWorkspace`.
 The source is [`VoxelPlugin.gd`](../../../VoxelPlugin.gd).
 
 ### Input actions
@@ -207,7 +208,7 @@ The operation must keep the values it needs and must not depend on later shared 
 
 | Item | Lifetime | Owner | Evidence |
 | --- | --- | --- | --- |
-| `settings.tres` | Whole session | Tool plugin and options | `BrushPlugin._settings` at [`BrushPlugin.gd:13`](../../../plugins/brush/BrushPlugin.gd#L13) |
+| `settings.tres` | Shared instance, values saved per document | Tool plugin and options | `BrushPlugin._settings` at [`BrushPlugin.gd:13`](../../../plugins/brush/BrushPlugin.gd#L13) |
 | Stroke diameter, shape, and mode | One stroke | `StrokeTool` | `_stroke_diameter` and `_stroke_shape` at [`StrokeTool.gd`](../../../plugins/brush/StrokeTool.gd) |
 | Stroke material pattern | One stroke | `StrokeTool` | `_stroke_material` and `_stroke_material_pattern` at [`StrokeTool.gd`](../../../plugins/brush/StrokeTool.gd) |
 | Edit context | One edit | `VoxelEditTransaction` | `edit_context` at [`VoxelEditTransaction.gd:22`](../../../Globals/State/VoxelEditTransaction.gd#L22) |
@@ -814,7 +815,7 @@ Two earlier Eyedropper ambiguities are resolved in current code.
 `EyedropperTool.apply` still records one `Set Material` action. The empty edit adds no stroke action.
 The selected modular tests cover these facts. The final verification is in the composition guide.
 
-1. `State.floor_axis`, `State.floor_index`, `State.symmetry_axes`, and `State.symmetry_origin` are not document fields. They survive a document change in one session. They do not survive a restart. Confirm that this behavior is intended.
+1. `State.floor_axis`, `State.floor_index`, `State.symmetry_axes`, and `State.symmetry_origin` are saved in the document `tools.editing` field. They follow the active document and survive a restart. Resolved.
 2. `ClipboardPlugin._sync_options` attaches the shared controls only to Brush, Paint, Selection, and Transform. The controls are absent for Terrain, Plane, Symmetry, and Eyedropper. Confirm that this behavior is intended.
 3. `ImageImportPlugin` has no direct command. A user opens an image through the Open dialog or a file drop. Confirm that a direct import command is not required.
 4. `TerrainPlugin` has no keyboard action. The sculpt menu is the only entry point. Confirm that a shortcut is not required.

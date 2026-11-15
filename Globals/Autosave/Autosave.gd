@@ -123,22 +123,28 @@ func _on_timer_timeout() -> void:
 func save_now() -> void:
 	if not enabled:
 		return
-	_dirty = false
 	DirAccess.make_dir_recursive_absolute(recovery_dir)
 	var current_ids := {}
+	var failed := false
 	for document in State.tabs:
 		if document == null:
 			continue
 		var id := document.get_instance_id()
 		current_ids[id] = true
 		if document.edit_dirty:
-			_save_document(document)
+			if not _save_document(document):
+				failed = true
 		else:
 			_remove_entry(id)
 	for id in _entries.keys():
 		if not current_ids.has(id):
 			_remove_entry(id)
 	_write_manifest()
+	# A failed copy must keep the dirty mark, or only the next model change
+	# would retry it.
+	_dirty = failed
+	if failed and _timer != null and _timer.is_stopped():
+		_timer.start()
 
 
 ## Returns the recovery entries that are still on disk.
@@ -228,11 +234,12 @@ func recovery_entries() -> Array:
 	return _entries.values()
 
 
-func _save_document(document: VoxelDocument) -> void:
+func _save_document(document: VoxelDocument) -> bool:
 	var id := document.get_instance_id()
+	State.capture_workspace(document)
 	var encoded := document.encode_document()
 	if encoded.is_empty():
-		return
+		return false
 	var preferred := _recovery_path_for(document)
 	var file := preferred
 	var error := document.save_file(file, null, encoded)
@@ -240,7 +247,7 @@ func _save_document(document: VoxelDocument) -> void:
 		file = _fallback_path(document)
 		error = document.save_file(file, null, encoded)
 		if error != OK:
-			return
+			return false
 	var entry: Dictionary
 	if _entries.has(id):
 		entry = _entries[id]
@@ -254,6 +261,7 @@ func _save_document(document: VoxelDocument) -> void:
 	entry["path"] = document.edit_save_path if not document.edit_save_path.is_empty() else document.file_path
 	entry["name"] = document.get_file_name()
 	entry["updated"] = int(Time.get_unix_time_from_system())
+	return true
 
 
 func _recovery_path_for(document: VoxelDocument) -> String:

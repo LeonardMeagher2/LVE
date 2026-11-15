@@ -574,8 +574,6 @@ func _build_material(surface_job: VoxelMeshBuilder) -> StandardMaterial3D:
 		material.metallic = 1.0
 		material.roughness = 1.0
 		material.vertex_color_use_as_albedo = false
-		material.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
-		material.specular_mode = BaseMaterial3D.SPECULAR_SCHLICK_GGX
 		material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
 	if surface_job.ao_strength > 0.0:
 		# The vertex color is a linear AO multiplier on the atlas albedo.

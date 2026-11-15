@@ -12,6 +12,8 @@ const SLICE_MATTE_SCRIPT := preload("res://ui/Viewport/SliceMatte.gd")
 
 ## Whether the lighting settings load from and save to the document.
 @export var document_lighting := true
+## Whether the view settings load from and save to the document.
+@export var document_view := true
 
 ## The view drag mode.
 enum ViewMode {
@@ -40,8 +42,10 @@ var _light_trackball_start := Vector3.BACK
 var _light_trackball_rotation := Quaternion.IDENTITY
 var _default_lighting := {}
 var _loading_document_lighting := false
+var _loading_document_view := false
 var _view_light_basis := Basis.IDENTITY
 var _lighting_document: VoxelDocument
+var _view_document: VoxelDocument
 var _camera_shadow_projection := Camera3D.PROJECTION_PERSPECTIVE
 const LIGHT_HANDLE_RADIUS := 12.0
 
@@ -64,6 +68,7 @@ func _ready() -> void:
 	if document_lighting:
 		lighting_changed.connect(_save_document_lighting)
 		State.document_changed.connect(_restore_document_lighting)
+		State.workspace_capture_requested.connect(_save_document_lighting)
 		_restore_document_lighting()
 	State.slice_changed.connect(_on_slice_changed)
 	State.floor_plane_changed.connect(_on_slice_changed)
@@ -71,6 +76,11 @@ func _ready() -> void:
 	slice_matte.name = "SliceMatte"
 	add_child(slice_matte)
 	_on_slice_changed()
+	_view_document = State.document
+	if document_view:
+		State.document_changed.connect(_restore_document_view)
+		State.workspace_capture_requested.connect(_save_document_view)
+		_restore_document_view()
 
 
 # Shows only the slice slab while the slice is on. The renderer keeps its mesh
@@ -93,7 +103,15 @@ func _save_document_lighting() -> void:
 	var ambient_color: Color = settings.ambient_color
 	light_color.a = settings.energy
 	ambient_color.a = settings.ambient_energy
-	State.document.lighting_settings = {"basis": settings.basis, "color": light_color, "ambient_color": ambient_color}
+	State.document.lighting_settings = {
+		"basis": settings.basis,
+		"color": light_color,
+		"ambient_color": ambient_color,
+		"shadows": settings.shadows,
+		"shaded": settings.shaded,
+		"view_locked": settings.view_locked,
+		"view_basis": settings.view_basis,
+	}
 
 
 func _restore_document_lighting() -> void:
@@ -109,9 +127,10 @@ func _restore_document_lighting() -> void:
 	ambient_color.a = 1.0
 	settings.color = light_color
 	settings.ambient_color = ambient_color
-	# The editor light lock is a session option.
-	settings.view_locked = false
-	settings.view_basis = Basis.IDENTITY
+	settings.shadows = saved.get("shadows", settings.shadows)
+	settings.shaded = saved.get("shaded", settings.shaded)
+	settings.view_locked = saved.get("view_locked", false)
+	settings.view_basis = saved.get("view_basis", Basis.IDENTITY)
 	_loading_document_lighting = true
 	set_lighting_settings(settings)
 	_loading_document_lighting = false
@@ -143,9 +162,9 @@ func _on_camera_index_pressed(index:int) -> void:
 	
 	match text:
 		"orthographic":
-			%CameraRig.is_orthogonal = popup.is_item_checked(index)
+			_set_orthographic(popup.is_item_checked(index))
 		"wireframe":
-			%Viewport.debug_draw = Viewport.DEBUG_DRAW_WIREFRAME if popup.is_item_checked(index) else Viewport.DEBUG_DRAW_DISABLED
+			_set_wireframe(popup.is_item_checked(index))
 		_:
 			%CameraRig.set_view(text)
 
@@ -162,14 +181,111 @@ func set_lighting_settings(settings: Dictionary) -> void:
 	VoxelImageRenderer.apply_lighting($Light, $WorldEnvironment.environment, settings)
 	$VoxelRenderer.unshaded = not settings.get("shaded", true)
 	%Viewport.debug_draw = settings.get("debug_draw", %Viewport.debug_draw)
-	var popup: PopupMenu = %CameraMenu.get_popup()
-	for index in popup.item_count:
-		if popup.get_item_text(index).to_lower() == "wireframe":
-			popup.set_item_checked(index, %Viewport.debug_draw == Viewport.DEBUG_DRAW_WIREFRAME)
+	_sync_camera_menu_checks()
 	_sync_lighting_controls(settings)
 	_sync_shading_controls()
 	_update_light_handle()
 	lighting_changed.emit()
+
+
+## Returns the editor view settings. The keys match the `view` dictionary in
+## `docs/DOCUMENT_FORMAT.md`.
+func get_view_settings() -> Dictionary:
+	return {
+		"grid": %Grid.visible,
+		"wireframe": %Viewport.debug_draw == Viewport.DEBUG_DRAW_WIREFRAME,
+		"orthographic": %CameraRig.is_orthogonal,
+		"view_mode": int(view_mode),
+		"environment_open": %EnvironmentMenu.button_pressed,
+	}
+
+
+func _save_document_view() -> void:
+	if not document_view or _loading_document_view or State.document != _view_document:
+		return
+	State.document.view_settings = get_view_settings()
+
+
+func _restore_document_view() -> void:
+	if not document_view:
+		return
+	var saved: Dictionary = State.document.view_settings
+	_loading_document_view = true
+	if not saved.is_empty():
+		var grid: bool = saved.get("grid", %Grid.visible)
+		var wireframe: bool = saved.get("wireframe", %Viewport.debug_draw == Viewport.DEBUG_DRAW_WIREFRAME)
+		var orthographic: bool = saved.get("orthographic", %CameraRig.is_orthogonal)
+		_set_grid_visible(grid, false)
+		_set_wireframe(wireframe, false)
+		_set_orthographic(orthographic, false)
+		# Apply the drag mode before the row. A closed row turns the light
+		# widget off.
+		_set_view_mode(int(saved.get("view_mode", int(view_mode))))
+		var open: bool = saved.get("environment_open", %EnvironmentMenu.button_pressed)
+		_set_environment_open(open)
+	_loading_document_view = false
+	_view_document = State.document
+
+
+func _set_grid_visible(value: bool, save := true) -> void:
+	%Grid.visible = value
+	%ControlBar.get_node("GridToggle").set_pressed_no_signal(value)
+	if save:
+		_save_document_view()
+
+
+func _set_wireframe(value: bool, save := true) -> void:
+	%Viewport.debug_draw = Viewport.DEBUG_DRAW_WIREFRAME if value else Viewport.DEBUG_DRAW_DISABLED
+	_sync_camera_menu_checks()
+	if save:
+		_save_document_view()
+
+
+func _set_orthographic(value: bool, save := true) -> void:
+	%CameraRig.is_orthogonal = value
+	_sync_camera_menu_checks()
+	if save:
+		_save_document_view()
+
+
+func _set_view_mode(mode: ViewMode) -> void:
+	# A disabled light control cannot own the drag.
+	if mode == ViewMode.LIGHT and not %Shaded.button_pressed:
+		mode = ViewMode.NONE
+	if mode == ViewMode.LIGHT:
+		_on_light_toggle_toggled(true)
+	else:
+		_set_light_widget(false)
+		view_mode = mode
+	%ControlBar.get_node("PanToggle").set_pressed_no_signal(view_mode == ViewMode.PAN)
+	%ControlBar.get_node("RotateToggle").set_pressed_no_signal(view_mode == ViewMode.ROTATE)
+	%LightToggle.set_pressed_no_signal(view_mode == ViewMode.LIGHT)
+
+
+func _set_environment_open(value: bool) -> void:
+	%EnvironmentMenu.set_pressed_no_signal(value)
+	_on_environment_toggled(value)
+
+
+## Resets the view to the editor defaults without saving them.
+func reset_view_state() -> void:
+	_loading_document_view = true
+	_set_grid_visible(true, false)
+	_set_wireframe(false, false)
+	_set_orthographic(false, false)
+	_set_view_mode(ViewMode.NONE)
+	_set_environment_open(false)
+	_loading_document_view = false
+
+
+func _sync_camera_menu_checks() -> void:
+	var popup: PopupMenu = %CameraMenu.get_popup()
+	for index in popup.item_count:
+		match popup.get_item_text(index).to_lower():
+			"orthographic":
+				popup.set_item_checked(index, %CameraRig.is_orthogonal)
+			"wireframe":
+				popup.set_item_checked(index, %Viewport.debug_draw == Viewport.DEBUG_DRAW_WIREFRAME)
 
 
 func _sync_lighting_controls(settings: Dictionary) -> void:
@@ -203,6 +319,8 @@ func _on_environment_toggled(pressed: bool) -> void:
 	if not pressed:
 		%LightToggle.set_pressed_no_signal(false)
 		_set_light_widget(false)
+	if not _loading_document_view:
+		_save_document_view()
 
 
 func _on_light_color_changed(color: Color) -> void:
@@ -232,6 +350,9 @@ func _on_shadows_toggled(pressed: bool) -> void:
 func _on_shaded_toggled(pressed: bool) -> void:
 	$VoxelRenderer.unshaded = not pressed
 	_sync_shading_controls()
+	# Shading off turns the light widget off, which changes the view mode.
+	if not _loading_document_view:
+		_save_document_view()
 	lighting_changed.emit()
 
 
@@ -253,6 +374,8 @@ func _set_light_widget(pressed: bool) -> void:
 
 func _on_light_toggle_toggled(pressed: bool) -> void:
 	_set_light_widget(pressed)
+	if not _loading_document_view:
+		_save_document_view()
 
 
 func _process(_delta: float) -> void:
@@ -343,6 +466,8 @@ func _on_pan_toggle_toggled(toggled_on: bool) -> void:
 		view_mode = ViewMode.PAN
 	elif view_mode == ViewMode.PAN:
 		view_mode = ViewMode.NONE
+	if not _loading_document_view:
+		_save_document_view()
 
 
 func _on_rotate_toggle_toggled(toggled_on: bool) -> void:
@@ -350,10 +475,12 @@ func _on_rotate_toggle_toggled(toggled_on: bool) -> void:
 		view_mode = ViewMode.ROTATE
 	elif view_mode == ViewMode.ROTATE:
 		view_mode = ViewMode.NONE
+	if not _loading_document_view:
+		_save_document_view()
 
 
 func _on_grid_toggle_toggled(toggled_on: bool) -> void:
-	%Grid.visible = toggled_on
+	_set_grid_visible(toggled_on)
 
 
 func _on_center_btn_pressed() -> void:
@@ -442,6 +569,11 @@ func _input(event: InputEvent) -> void:
 	elif event is InputEventMouseMotion:
 		var mm := event as InputEventMouseMotion
 		var mask := mm.button_mask
+		if _drag_mode != ViewMode.NONE and not (mask & MOUSE_BUTTON_MASK_LEFT):
+			# A release outside the window sends no button event. The first
+			# motion with the button up ends the drag.
+			_drag_mode = ViewMode.NONE
+			_restore_view_toggles()
 		var active := _drag_mode
 		if active == ViewMode.NONE and view_mode in [ViewMode.PAN, ViewMode.ROTATE]:
 			active = view_mode

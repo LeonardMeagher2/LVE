@@ -540,7 +540,12 @@ func update_visual(pick: PickResult) -> void:
 		_show_spots(_batch_cells)
 		return
 	_ensure_hover_batch(pick.hit, State.get_current_voxel_frame(), State.drawing_context(), State.current_material)
-	_show_spots(_batch_cells)
+	# A cleared cursor and a pending sample leave the old batch visible nowhere.
+	# Show it only while it still matches the live context.
+	if _batch_matches(State.drawing_context()):
+		_show_spots(_batch_cells)
+	else:
+		_show_spots([])
 
 
 # Ends the stroke like a release. The stroke closes only when no accepted sample
@@ -1085,6 +1090,11 @@ func _offered_cells_valid(shown: Dictionary) -> bool:
 func _clear_cursor_preview() -> void:
 	if has_node("Cursor"):
 		$Cursor.show_selection(null)
+	# The cursor shows nothing now, so the shown-batch latch must say so.
+	_preview_active = false
+	_preview_version = -1
+	_shown_spots = {}
+	_shown_witness = {}
 
 
 # Builds one spray sample job from explicit inputs. The job snapshots only the
@@ -1195,12 +1205,11 @@ func _spot_offsets(diameter: int) -> Array[Vector3i]:
 # batch holds, so a still hover submits nothing.
 func _show_spots(cells: Array[Vector3i]) -> void:
 	if cells.is_empty():
-		if _preview_active:
-			_preview_active = false
-			_preview_version = -1
-			_shown_spots = {}
-			_shown_witness = {}
-			$Cursor.show_voxels({}, VoxelFrame.material_color(_batch_material), false, 0, false)
+		_preview_active = false
+		_preview_version = -1
+		_shown_spots = {}
+		_shown_witness = {}
+		$Cursor.show_voxels({}, VoxelFrame.material_color(_batch_material), false, 0, false)
 		return
 	# The material updates even when the batch holds, so a color change reaches
 	# the cursor without a new sample.

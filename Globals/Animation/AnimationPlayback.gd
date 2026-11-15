@@ -31,15 +31,18 @@ var current_frame: int:
 		document.edit_frame = value
 		frame_changed.emit()
 
-## Whether playback runs. Setting it to [code]true[/code] restarts the range.
-var is_playing := false:
+## Whether playback runs. It is stored on the document, so a saved document
+## opens playing. Setting it to [code]true[/code] restarts the range.
+var is_playing: bool:
+	get:
+		return document.edit_playing
 	set(value):
-		if value == is_playing:
+		if value == document.edit_playing:
 			return
-		is_playing = value
-		if is_playing:
+		document.edit_playing = value
+		if value:
 			_restart()
-		is_playing_toggled.emit(is_playing)
+		is_playing_toggled.emit(value)
 
 ## The active tag index, or -1 when no tag is active. It is stored on the
 ## document, so a tab switch restores it.
@@ -91,6 +94,14 @@ func _restart() -> void:
 	current_frame = last_frame() if _play_mode() in [AnimationTag.LoopMode.REVERSE, AnimationTag.LoopMode.PING_PONG_REVERSE] else first_frame()
 	if _play_mode() == AnimationTag.LoopMode.PING_PONG_REVERSE:
 		_play_dir = -1
+
+
+## Restores the active document's saved playback state after a document switch.
+## A saved playing document restarts its range.
+func restore_playback() -> void:
+	if document.edit_playing:
+		_restart()
+	is_playing_toggled.emit(document.edit_playing)
 
 
 ## Returns the first frame of the active tag, or frame zero.
@@ -178,6 +189,12 @@ func advance() -> void:
 
 func _finished() -> bool:
 	return _play_repeats() > 0 and _play_passes >= _play_repeats()
+
+
+## Resets the completed pass count after the active tag's loop settings change.
+## The current frame and the direction do not move.
+func reset_passes() -> void:
+	_play_passes = 0
 
 
 func _current_delay() -> float:

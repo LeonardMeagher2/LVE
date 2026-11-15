@@ -58,7 +58,11 @@ func _gui_input(event: InputEvent) -> void:
 			_begin_drag(event)
 		elif _dragging:
 			_dragging = false
-			State.commit_tag_range(_drag_tag, _drag_range)
+			# A tag switch during the drag makes this target name another tag or a
+			# removed one. The motion path already refuses those updates, so the
+			# release drops the commit too.
+			if State.active_tag == _drag_tag:
+				State.commit_tag_range(_drag_tag, _drag_range)
 	elif event is InputEventMouseMotion and _dragging:
 		_drag_range_to(event)
 

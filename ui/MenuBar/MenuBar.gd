@@ -27,8 +27,9 @@ var current_save_path: String:
 var _save_format := OptionButton.new()
 # The tab that the close prompt is about, or -1.
 var _pending_close_index := -1
-# The tab to close after a successful Save As, or -1.
-var _close_after_save := -1
+# The document to close after a successful Save As, or null. The find by
+# identity prevents a shifted tab index from closing a different document.
+var _close_after_save_document: VoxelDocument
 # Whether the quit flow is active.
 var _quit_active := false
 # The edited tab indices that the quit flow must visit.
@@ -102,6 +103,7 @@ func save_doc(path: String) -> Error:
 	if State.edit_busy():
 		return ERR_BUSY
 	var document := State.document
+	State.capture_workspace(document)
 	var encoded := document.encode_document()
 	if encoded.is_empty():
 		_show_file_error("The document exceeds the format limits or contains invalid data.")
@@ -146,8 +148,8 @@ func _on_file_selected(path: String) -> void:
 	if %FileDialog.file_mode == FileDialog.FILE_MODE_OPEN_FILE:
 		await _on_file_opened(path)
 		return
-	var close_index := _close_after_save
-	_close_after_save = -1
+	var close_document := _close_after_save_document
+	_close_after_save_document = null
 	var error := await save_doc(path)
 	if _quit_after_save:
 		_quit_after_save = false
@@ -156,9 +158,11 @@ func _on_file_selected(path: String) -> void:
 		else:
 			_cancel_quit()
 		return
-	if error == OK and close_index >= 0 and close_index < State.tabs.size():
-		State.close_tab(close_index)
-		_remember_session()
+	if error == OK and close_document != null:
+		var close_index := State.tabs.find(close_document)
+		if close_index >= 0:
+			State.close_tab(close_index)
+			_remember_session()
 
 
 ## Starts the quit flow. It asks to save each edited document, one at a time.
@@ -265,11 +269,11 @@ func _on_close_tab_save() -> void:
 		return
 	var document := State.document
 	if document.edit_save_path.is_empty():
-		_close_after_save = index
+		_close_after_save_document = document
 		# A dialog that cannot open would leave the flag set, and the next Save As
 		# would then close this tab.
 		if not _on_save_as_btn_pressed():
-			_close_after_save = -1
+			_close_after_save_document = null
 		return
 	var error := await save_doc(document.edit_save_path)
 	if error == OK:
@@ -304,12 +308,13 @@ func _on_close_tab_cancel() -> void:
 
 
 func _on_file_dialog_canceled() -> void:
+	# Clear the close target before the quit branch. A quit that interrupts a
+	# close Save As must not leave a stale tab target behind.
+	_close_after_save_document = null
+	_pending_close_index = -1
 	if _quit_after_save:
 		_quit_after_save = false
 		_cancel_quit()
-		return
-	_close_after_save = -1
-	_pending_close_index = -1
 
 
 ## Shows the recovery prompt for the entries that the autosave manager found.

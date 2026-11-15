@@ -344,6 +344,10 @@ func _notification(what: int) -> void:
 			# Retire the handle, so the helper that is awaiting the job stops
 			# instead of waiting on a disposed task again.
 			job.wait_for_worker()
+		_jobs.clear()
+		# A pending grab or preview holds the one open edit. A freed tool cannot
+		# finish it, so roll it back here or every later edit stays blocked.
+		abort_stroke()
 
 
 func _disconnect_context_if_idle() -> void:

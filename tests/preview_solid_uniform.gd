@@ -46,6 +46,7 @@ func _ready() -> void:
 	test("a prepared payload never installs after a clear or a newer submit", _prepared_lifecycle, "preview_prepared_lifecycle")
 	test("a uniform batch costs less than a varied batch on a large preview", _uniform_cost, "preview_uniform_cost")
 	test("the solid build reports its per-chunk mesher phases", _mesher_phases, "preview_mesher_phases")
+	test("a zero-surface preview reports no installed cells", _empty_surface_cells, "preview_empty_surface")
 
 
 func before_test() -> void:
@@ -220,6 +221,22 @@ func _uniform_installed_cells() -> void:
 		expect(preview.installed_cells().is_read_only(), "the installed cells are immutable")
 		expect(preview.installed_cells().size() == CHUNK * CHUNK * CHUNK, "the installed cells hold the whole chunk")
 		expect(preview.installed_cells() == _requested, "the installed cells are the requested cells")
+	)
+
+
+# A fully transparent batch erases its cells, so the build emits no surface. The
+# preview must not claim cells it does not draw.
+func _empty_surface_cells() -> void:
+	step("Given a solid preview whose only cell is transparent", func():
+		preview = PREVIEW.new()
+		add_child(preview)
+		var cells := {Vector3i(_base, 0, 0): VoxelFrame.material(Color.TRANSPARENT)}
+		preview.show_voxels(cells, Color.WHITE, false, 0, true)
+	)
+	await _await_settled(preview)
+	step("Then the hidden preview reports no installed cells", func():
+		expect(not preview.visible, "a zero-surface preview is hidden")
+		expect(preview.installed_cells().is_empty(), "a hidden preview reports no cells")
 	)
 
 

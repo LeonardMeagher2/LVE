@@ -69,6 +69,7 @@ func _ready() -> void:
 	_model_viewport = _model.get_node("Viewport/PanelContainer/SubViewportContainer/Viewport")
 	_model_viewport.own_world_3d = true
 	_model_viewport.get_node("ViewportScene").document_lighting = false
+	_model_viewport.get_node("ViewportScene").document_view = false
 	_model_renderer = _model_viewport.get_node("ViewportScene/VoxelRenderer")
 	_model_renderer.report_activity = false
 	_model_renderer.source_frame = State.get_current_voxel_frame().copy_frame()
@@ -418,6 +419,8 @@ func _refresh_model() -> void:
 		_model_frames.append(State.get_voxel_frame(index).copy_frame())
 	_model_renderer.transform = _model_transform()
 	_model_back_renderer.transform = _model_renderer.transform
+	var was_playing := _model_playback.is_playing
+	var was_frame := _model_playback.current_frame
 	var preview_document := VoxelDocument.new()
 	preview_document.frames.assign(_model_frames)
 	preview_document.tags.clear()
@@ -431,10 +434,13 @@ func _refresh_model() -> void:
 	# A running preview keeps its own position. A stopped preview follows the
 	# editor frame. Rebuilding the content must not restart the preview clock.
 	_model_playback.current_frame = clampi(
-		_model_playback.current_frame if _model_playback.is_playing else State.current_frame - frame_range.x,
+		was_frame if was_playing else State.current_frame - frame_range.x,
 		0,
 		maxi(0, _model_frames.size() - 1)
 	)
+	# The replacement document starts stopped. Restore the running state after
+	# the setters above, so they do not restart the clock.
+	preview_document.edit_playing = was_playing
 	_show_model_frame()
 	_restoring_export_settings = true
 	if _model_camera_needs_center or not _pending_export_camera.is_empty():
@@ -621,7 +627,10 @@ func export_gltf_settings(path: String, settings: Dictionary) -> Error:
 	for key in ["smooth_normals", "ao", "unlit"]:
 		if settings.has(key):
 			overrides[key] = settings[key]
-	var error: Error = await _gltf.export_gltf(path, bool(settings.get("center", false)), tag_index, overrides)
+	var error: Error = OK
+	_exporting = true
+	error = await _gltf.export_gltf(path, bool(settings.get("center", false)), tag_index, overrides)
+	_exporting = false
 	_sync()
 	_preview_due_ms = Time.get_ticks_msec() + PREVIEW_DELAY_MS
 	return error
