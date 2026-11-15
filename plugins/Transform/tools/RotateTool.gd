@@ -3,10 +3,9 @@ extends "./TransformTool.gd"
 ## The rotate transform tool.
 ##
 ## A drag rotates the source around its bounds center. The axis is the view
-## normal or the nearest world axis. The drag angle stays on the camera plane,
-## so a quarter turn follows the pointer in an oblique view. A click opens the
-## rotate dialog for exact angles. A quarter turn uses an exact integer
-## rotation. Any other angle uses [RotSprite].
+## normal or the nearest world axis. A click opens the rotate dialog for exact
+## angles. A quarter turn uses an exact integer rotation. Any other angle uses
+## [RotSprite].
 
 const TransformDialog := preload("./TransformDialog.gd")
 
@@ -139,7 +138,9 @@ class RotateJob extends TransformJob:
 		var world_axis := _world_axis(normal)
 		if world_axis >= 0:
 			axis = world_axis
-			axis_sign = 1.0 if normal[world_axis] > 0.0 else -1.0
+			# The axis sign carries the drag direction, so a negative angle
+			# turns the shape the other way.
+			axis_sign = (1.0 if normal[world_axis] > 0.0 else -1.0) * (1.0 if angle_radians >= 0.0 else -1.0)
 			angle = absf(angle_radians)
 			if is_equal_approx(angle / QUARTER, roundf(angle / QUARTER)):
 				_compute_exact()
@@ -386,9 +387,7 @@ class RotateJob extends TransformJob:
 func _begin_grab(origin: Vector3, dir: Vector3) -> void:
 	_pivot = _source_bbox().get_center()
 	_view_normal = _drag_normal()
-	# The rotation axis can snap to a world axis, but the drag angle stays on
-	# the screen plane so a quarter turn follows the pointer.
-	_plane = _screen_plane_through(_pivot)
+	_plane = _drag_plane_through(_pivot)
 	var v := _cursor_vec(origin, dir)
 	if v.is_zero_approx():
 		v = _fallback_vec()
@@ -536,21 +535,18 @@ func _on_dialog_canceled() -> void:
 
 
 func _cursor_vec(origin: Vector3, dir: Vector3) -> Vector3:
-	var normal := _plane.normal if _plane != null else -_grab_forward
 	var rel := _plane_point(origin, dir) - _pivot
-	return rel - normal * rel.dot(normal)
+	return rel - _view_normal * rel.dot(_view_normal)
 
 
 func _signed_angle(a: Vector3, b: Vector3) -> float:
-	var normal := _plane.normal if _plane != null else -_grab_forward
-	return atan2(a.cross(b).dot(normal), a.dot(b))
+	return atan2(a.cross(b).dot(_view_normal), a.dot(b))
 
 
 func _fallback_vec() -> Vector3:
-	var normal := _plane.normal if _plane != null else -_grab_forward
-	var right := _grab_camera_right - normal * _grab_camera_right.dot(normal)
+	var right := _grab_camera_right - _view_normal * _grab_camera_right.dot(_view_normal)
 	if not right.is_zero_approx():
 		return right.normalized()
 	var fallback := Vector3.ZERO
-	fallback[(normal.abs().max_axis_index() + 1) % 3] = 1.0
+	fallback[(_view_normal.abs().max_axis_index() + 1) % 3] = 1.0
 	return fallback

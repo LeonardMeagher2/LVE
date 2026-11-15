@@ -795,17 +795,6 @@ func _drag_normal() -> Vector3:
 	return toward.normalized()
 
 
-## Returns a plane through one point that faces the camera. Rotation uses it to
-## measure the drag angle, even when the rotation axis snaps to a world axis.
-func _screen_plane_through(point: Vector3) -> StrokePlane:
-	var plane := StrokePlane.new()
-	plane.axis = _nearest_axis()
-	plane.idx = roundi(point[plane.axis])
-	plane.point = point
-	plane.normal = -_grab_forward
-	return plane
-
-
 ## Returns a plane through one point that faces the drag normal. The transform
 ## tools use only the point and the normal.
 func _drag_plane_through(point: Vector3) -> StrokePlane:

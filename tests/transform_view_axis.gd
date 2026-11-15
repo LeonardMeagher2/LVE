@@ -21,7 +21,7 @@ func _ready() -> void:
 	test("a non-uniform view scale uses the camera plane and resamples", _scale, "transform_view_axis_scale")
 	test("a top view stays on the exact world axis", _top, "transform_view_axis_top")
 	test("a plane-mode quarter turn keeps every voxel in each named view", _plane_rotation, "transform_view_axis_plane_rotation")
-	test("a plane-mode rotation measures the drag on the screen plane", _plane_screen_angle, "transform_view_axis_plane_screen_angle")
+	test("a negative rotation drag turns the shape the other way", _negative_drag, "transform_view_axis_negative_drag")
 
 
 func before_test() -> void:
@@ -291,29 +291,35 @@ func _plane_rotation() -> void:
 		)
 
 
-func _plane_screen_angle() -> void:
-	step("Given a selected shape in the default view with the view axis off and snap off", func():
-		_view_setup("default")
-		_paint_shape()
+func _negative_drag() -> void:
+	step("Given a bar with a green end in the front view with the view axis off and snap on", func():
+		_view_setup("front")
+		_paint_bar()
+		_frame().set_cell(Vector3i(2, 0, 0), VoxelFrame.material(Color.GREEN))
+		_select_cells([Vector3i(0, 0, 0), Vector3i(1, 0, 0), Vector3i(2, 0, 0)])
 		activate_tool("transform")
 		select_toolbar_item("transform", "Rotate")
-		_settings().snap = false
+		_settings().snap = true
 		_settings().view_axis = false
 	)
 
-	step("When the user drags sixty degrees on screen", func():
+	step("When the user drags a quarter turn down on screen", func():
 		var from := _screen(_current_center())
-		var to := from + Vector2(60.0, -103.923)
+		var to := from + Vector2(0, 120)
 		_mouse_button(from, true)
 		_mouse_motion(to)
+		_press_option("Commit")
 	)
 
-	step("Then the drag angle follows the screen and the axis is Y", func():
-		var tool := _rotate_tool()
-		expect(tool._axis_of(tool._view_normal) == 1, "the rotation axis is the nearest world axis")
-		expect(absf(rad_to_deg(tool._job_angle) - 60.0) <= 2.0, "the drag angle follows the screen (was %.1f degrees)" % rad_to_deg(tool._job_angle))
-		_press_option("Cancel")
+	step("Then the green end turns to the bottom of the bar", func():
+		expect(_frame().count() == 3, "the bar keeps three voxels")
+		expect(_color_at(Vector3i(0, 0, 0)) == Color.GREEN, "the green end is at the bottom")
+		expect(_color_at(Vector3i(0, 2, 0)) == Color.RED, "the red end is at the top")
 	)
+
+
+func _color_at(cell: Vector3i) -> Color:
+	return State.document.get_color_at(0, cell)
 
 
 func _view_setup(view_name: String) -> void:

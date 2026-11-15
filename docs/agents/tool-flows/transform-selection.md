@@ -64,10 +64,9 @@ Within two degrees of a world axis, the camera normal snaps to that axis.
 This keeps the named views exact and lets a quarter turn keep every voxel.
 A non-axis view rotation or non-uniform view scale resamples the destination cells.
 
-Rotate is the exception. Its drag angle always uses the camera plane.
-The option selects only the rotation axis.
-A world plane at an oblique angle can reverse the projected drag.
-The camera plane keeps the drag angle under the pointer.
+A snapped-axis rotation carries the drag sign.
+A negative drag turns the shape the other way.
+The exact quarter turn stays exact in either direction.
 
 ```mermaid
 flowchart TD
@@ -120,7 +119,7 @@ The preview therefore writes the live frame inside the open edit.
 
 | Aspect | Move | Rotate | Scale |
 | --- | --- | --- | --- |
-| Gesture | Offset in whole cells on the view-axis plane or the nearest world axis plane. | Angle around the bounds center on the view normal or the nearest world axis. The drag angle stays on the camera plane. | Factor from a reference vector on the view-axis plane or the nearest world axis plane. |
+| Gesture | Offset in whole cells on the view-axis plane or the nearest world axis plane. | Angle around the bounds center on the view normal or the nearest world axis. | Factor from a reference vector on the view-axis plane or the nearest world axis plane. |
 | Exact dialog | `open_for_move` offset. | `open_for_rotate` angles in degrees. | `open_for_scale` factors. |
 | Job | `TransformJob` with `offset`. | `RotateJob` with exact quarter turns, cardinal Euler rotation, `RotSprite`, or basis resampling. | `ScaleJob` with 3D, per-layer 2D, or basis resampling. |
 | Snap | Whole cells by `roundi`. | `_settings.snap` quarter turns, or 1 degree steps and a 2 degree magnetic pull. | Factors snapped to 0.0001 and clamped to `MIN_SCALE`. |
@@ -146,9 +145,9 @@ The gizmo draws over geometry.
 | Rotate | A joint square with two quarter-turn arrows. The bone to the pointer appears during a drag. |
 | Scale | Two diagonal arrows on opposite corners, matching Move rotated 45 degrees. The line to the pointer appears during a drag. |
 
-The Rotate bone uses the camera plane through the pivot. The Scale line uses the captured drag plane.
+The Rotate bone and the Scale line use the pointer ray and a plane through the pivot.
 Both are visible only during a drag.
-A drag passes the captured plane normal, so a camera move does not change the line plane.
+A drag passes the captured plane normal, so a camera move does not change the bone plane.
 A press on the gizmo starts the same free gesture as a press elsewhere in the viewport.
 The gizmo adds no axis constraint.
 
