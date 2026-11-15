@@ -43,12 +43,12 @@ func _run() -> void:
 		tool._angle = NEAR
 	)
 
-	step("Then the smooth preview already sits at the same bounding box the exact rotation would land on", func():
+	step("Then the smooth preview stays within one cell of the exact rotation", func():
 		var tool := _rotate_tool()
 		tool._apply_preview()
 		var smooth: Dictionary = tool._dest_colors
 		var min_c := _min_corner(smooth)
-		expect(min_c == Vector2i(0, 0), "the rotated block's low corner is (0, 0) (was %s)" % min_c)
+		expect(abs(min_c.x) <= 1 and abs(min_c.y) <= 1, "the smooth low corner stays within one cell (was %s)" % min_c)
 		expect(smooth.size() >= 5, "the rotated block keeps nearly all 6 voxels (has %d)" % smooth.size())
 	)
 

@@ -5,9 +5,9 @@ extends "./TransformTool.gd"
 ## A drag rotates the source around its bounds center. The axis is the view
 ## normal or the nearest world axis. A smooth angle turns around the centre. An
 ## exact quarter turn permutes from the source low corner, then recentres on the
-## pivot. Smooth and exact turns round a half-cell tie toward zero, so the snap
-## keeps the same anchor. A click opens the rotate dialog for exact angles. Any
-## other angle uses [RotSprite].
+## pivot. The smooth path does not recentre per preview, so it stays steady
+## during the drag. A click opens the rotate dialog for exact angles. Any other
+## angle uses [RotSprite].
 
 const TransformDialog := preload("./TransformDialog.gd")
 
@@ -361,8 +361,6 @@ class RotateJob extends TransformJob:
 				return
 		var layer_results := {}
 		var selection_results := {}
-		var low := Vector2i.MAX
-		var high := Vector2i.MIN
 		var has_output := false
 		stage("Calculating rotation", layers.size())
 		completed = 0
@@ -377,27 +375,19 @@ class RotateJob extends TransformJob:
 				var sampler := RotSprite.new(selection_layers[layer])
 				selection_results[layer] = sampler.rotate(pivot2d, direction * angle)
 				alignment_layer = selection_results[layer]
-			for uv: Vector2i in alignment_layer:
+			if not alignment_layer.is_empty():
 				has_output = true
-				low = low.min(uv)
-				high = high.max(uv)
 			completed += 1
 			if not checkpoint(completed):
 				return
 		if not has_output:
 			return
-		# Match the exact turn's recentre so the snap at a cardinal angle does
-		# not move the model.
-		var center := Vector2((low.x + high.x) * 0.5, (low.y + high.y) * 0.5)
-		var correction := Vector2i(
-			_round_half_to_zero(pivot2d.x - center.x),
-			_round_half_to_zero(pivot2d.y - center.y))
 		for layer in layer_results:
 			for uv: Vector2i in layer_results[layer]:
 				var destination := Vector3i.ZERO
 				destination[axis] = layer
-				destination[p] = uv.x + correction.x
-				destination[q] = uv.y + correction.y
+				destination[p] = uv.x
+				destination[q] = uv.y
 				destination_colors[destination] = layer_results[layer][uv]
 				var source_uv := _source_cell(uv, pivot2d, direction * angle)
 				var layer_materials: Dictionary = material_layers.get(layer, {})
@@ -416,8 +406,8 @@ class RotateJob extends TransformJob:
 				for uv: Vector2i in selection_results[layer]:
 					var destination := Vector3i.ZERO
 					destination[axis] = layer
-					destination[p] = uv.x + correction.x
-					destination[q] = uv.y + correction.y
+					destination[p] = uv.x
+					destination[q] = uv.y
 					destination_selection[destination] = true
 			if not checkpoint(completed):
 				return
