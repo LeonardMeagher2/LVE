@@ -1,9 +1,9 @@
 [gd_resource type="StandardMaterial3D" format=3 uid="uid://chy7xjjy4hcwu"]
 
 [resource]
-shading_mode = 2
+shading_mode = 1
 diffuse_mode = 1
-specular_mode = 2
+specular_mode = 0
 vertex_color_use_as_albedo = true
 vertex_color_is_srgb = true
 rim = 0.05

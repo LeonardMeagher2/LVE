@@ -373,8 +373,6 @@ static func _apply_material(target: StandardMaterial3D, cell_material: PackedFlo
 	target.emission_energy_multiplier = 1.0
 	target.metallic = cell_material[VoxelFrame.MATERIAL_METALLIC]
 	target.roughness = cell_material[VoxelFrame.MATERIAL_ROUGHNESS]
-	target.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
-	target.specular_mode = BaseMaterial3D.SPECULAR_SCHLICK_GGX
 
 
 # Mirrors a carrier's values onto the per-instance lit material, so the visible
@@ -1050,8 +1048,6 @@ static func _atlas_material(job: VoxelMeshBuilder) -> StandardMaterial3D:
 		material = job.atlas.create_material(material)
 	else:
 		material.vertex_color_use_as_albedo = false
-		material.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
-		material.specular_mode = BaseMaterial3D.SPECULAR_SCHLICK_GGX
 		material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
 		material.albedo_texture = _atlas_texture(job.atlas_size, job.atlas_albedo)
 		var material_texture := _atlas_texture(job.atlas_size, job.atlas_orm)
