@@ -98,8 +98,8 @@ func _run() -> void:
 	)
 
 	step("Then each voxel keeps its material through the quarter turn", func():
-		_expect_cells([Vector3i(0, 0, 0), Vector3i(0, 1, 0), Vector3i(0, 2, 0)])
-		for cell in [Vector3i(0, 0, 0), Vector3i(0, 1, 0), Vector3i(0, 2, 0)]:
+		_expect_cells([Vector3i(1, 0, 0), Vector3i(1, -1, 0), Vector3i(1, -2, 0)])
+		for cell in [Vector3i(1, 0, 0), Vector3i(1, -1, 0), Vector3i(1, -2, 0)]:
 			expect(_material_at(cell) == _material_for_color(_color_at(cell)), "cell %s keeps the material of its own voxel" % cell)
 	)
 
