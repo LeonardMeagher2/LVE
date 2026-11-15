@@ -47,6 +47,7 @@ func _ready() -> void:
 	test("a same-tool commit reentry keeps the new stroke", _same_tool_reentrant_commit, "same_tool_reentrant_commit")
 	test("a same-tool cancel reentry keeps the new stroke", _same_tool_reentrant_cancel, "same_tool_reentrant_cancel")
 	test("a same-tool transform cancel keeps the new stroke", _same_tool_reentrant_transform_cancel, "same_tool_reentrant_transform_cancel")
+	test("freeing a transform tool releases its open edit", _transform_predelete, "transform_predelete")
 	test("a tool reacquires an edit after a document reset", _tool_reacquire_after_document, "tool_reacquire_after_document")
 	test("closed transactions are released while history keeps the frame", _transaction_release, "transaction_release")
 	test("one edit scope limits the selection, the slice, and the writes", _scope_filter, "scope_filter")
@@ -506,6 +507,28 @@ func _same_tool_reentrant_transform_cancel() -> void:
 		transform_tool._dragging = false
 		transform_tool.abort_stroke()
 		expect(State.active_edit() == null, "the replacement edit releases cleanly")
+	)
+
+
+# A freed tool cannot finish its open stroke, so it must roll the stroke back.
+# Without that rollback, every later edit stays blocked.
+func _transform_predelete() -> void:
+	step("Given a real move tool with an open stroke", func():
+		transform_tool = MOVE_SCENE.instantiate()
+		add_child(transform_tool)
+		committed = transform_tool.open_stroke()
+		transform_tool._dragging = true
+		expect(committed != null, "the move tool opened a stroke")
+		expect(State.active_edit() == committed, "the open stroke is active")
+	)
+	step("When the tool is freed", func():
+		transform_tool.free()
+		transform_tool = null
+	)
+	step("Then the freed tool releases the edit", func():
+		expect(committed.is_closed(), "the freed tool closes the transaction")
+		expect(State.active_edit() == null, "the freed tool releases the active edit")
+		expect(not State.edit_busy(), "the freed tool releases editing")
 	)
 
 

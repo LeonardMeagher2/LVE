@@ -64,7 +64,12 @@ func rebuild() -> void:
 
 # Registers the grid with the camera, so the far plane cannot cut its edge.
 func _push_far_bounds() -> void:
-	var camera := get_viewport().get_camera_3d()
+	# A tool can roll back its edit while the scene is torn down. The grid is
+	# then outside the tree, so it has no viewport or camera to update.
+	var viewport := get_viewport()
+	if viewport == null:
+		return
+	var camera := viewport.get_camera_3d()
 	if not camera is EditorCameraRig:
 		return
 	if visible and mesh != null:

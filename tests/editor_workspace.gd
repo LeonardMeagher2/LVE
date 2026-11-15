@@ -22,6 +22,7 @@ func _ready() -> void:
 	test("workspace changes do not mark the document dirty", _dirty_run, "dirty")
 	test("the frame, tag, and playback state follow the document", _switch_run, "switch")
 	test("the document stores its playback state", _playback_run, "playback")
+	test("a new-version startup restores each saved workspace after the splash", _startup_workspace_run, "startup_workspace")
 
 
 func before_test() -> void:
@@ -460,4 +461,56 @@ func _playback_run() -> void:
 		expect(play_button.button_pressed, "the Play button shows the playing state")
 		State.stop()
 		DirAccess.remove_absolute(path)
+	)
+
+
+func _startup_workspace_run() -> void:
+	var stamp := Time.get_ticks_usec()
+	var config_path := "user://workspace_startup_%s.cfg" % stamp
+	var first_path := "user://workspace_first_%s.lve" % stamp
+	var second_path := "user://workspace_second_%s.lve" % stamp
+	var previous_settings := str(main.get("settings_path"))
+	var first := VoxelDocument.new()
+	first.add_frame()
+	first.tool_settings = {"BrushPlugin": {"diameter": 7}, "PaintPlugin": {"diameter": 5}, "active": "BrushPlugin/Toolbar"}
+	var second := VoxelDocument.new()
+	second.add_frame()
+	second.tool_settings = {"BrushPlugin": {"diameter": 9}, "PaintPlugin": {"diameter": 11}, "active": "PaintPlugin/Toolbar"}
+	step("Given two saved documents with different workspaces and a new version", func():
+		expect(first.save_file(first_path, null, first.encode_document()) == OK, "the first copy saves")
+		expect(second.save_file(second_path, null, second.encode_document()) == OK, "the second copy saves")
+		var settings := ConfigFile.new()
+		settings.set_value("application", "version", "0.0")
+		settings.set_value("files", "tabs", PackedStringArray([first_path, second_path]))
+		settings.set_value("files", "active", 1)
+		expect(settings.save(config_path) == OK, "the settings file saves")
+		main.set("settings_path", config_path)
+	)
+	step("When the editor starts with a new version", func():
+		main._restore_startup_document(true, config_path)
+	)
+	step("Then the splash is active and inherits the restored setup", func():
+		expect(State.active_tab == 0, "the splash is the active tab")
+		expect(State.document.file_path == "res://splash.lve", "the splash is the active document")
+		expect(_brush.diameter == 9, "the splash keeps the restored active setup")
+	)
+	step("When the user opens the first saved tab", func():
+		expect(State.activate_tab(1), "the first saved tab activates")
+	)
+	step("Then the first saved workspace restores", func():
+		expect(_brush.diameter == 7, "the first brush diameter returns")
+		expect(_paint.diameter == 5, "the first paint diameter returns")
+	)
+	step("When the user opens the second saved tab", func():
+		expect(State.activate_tab(2), "the second saved tab activates")
+	)
+	step("Then the second saved workspace restores", func():
+		expect(_brush.diameter == 9, "the second brush diameter returns")
+		expect(_paint.diameter == 11, "the second paint diameter returns")
+	)
+	step("Then the temporary files are removed", func():
+		main.set("settings_path", previous_settings)
+		for path in [config_path, first_path, second_path]:
+			if FileAccess.file_exists(path):
+				DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 	)
