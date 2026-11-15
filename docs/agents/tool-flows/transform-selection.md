@@ -71,6 +71,7 @@ An exact quarter turn permutes the cells from the source low corner, then recent
 That keeps every voxel and lets four turns return the same box.
 The exact quarter turn stays exact in either direction.
 A non-square result can move by half a cell when the width and height parity differs.
+The smooth and exact paths round a half-cell recentre tie toward zero, so the snap at a cardinal angle keeps the same anchor.
 
 ```mermaid
 flowchart TD

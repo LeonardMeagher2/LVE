@@ -15,7 +15,7 @@ const SHAPE: Array = [
 	Vector3i(0, 1, 0), Vector3i(1, 1, 0), Vector3i(2, 1, 0),
 ]
 
-const NEAR := PI / 2.0 - deg_to_rad(1.0)
+const NEAR := PI / 2.0 - deg_to_rad(2.1)
 
 
 func _ready() -> void:
@@ -37,7 +37,10 @@ func _run() -> void:
 	)
 
 	step("When the live angle is forced just short of 90 degrees, where a real drag hands off to the smooth path", func():
-		_rotate_tool()._angle = NEAR
+		var tool := _rotate_tool()
+		tool._job_axis = Vector3.BACK
+		tool._job_angle = NEAR
+		tool._angle = NEAR
 	)
 
 	step("Then the smooth preview already sits at the same bounding box the exact rotation would land on", func():

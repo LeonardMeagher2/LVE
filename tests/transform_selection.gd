@@ -50,9 +50,9 @@ func _run() -> void:
 	)
 	step("Then the full rectangle rotates with its empty cells", func():
 		var expected := VoxelSelection.new()
-		expected.from_box(Vector3i(1, -1, 0), Vector3i(2, 1, 0))
+		expected.from_box(Vector3i.ZERO, Vector3i(1, 2, 0))
 		expect(State.selection.capture() == expected.capture(), "the rotated selection contains the full two-by-three rectangle")
-		expect(frame.count() == 1 and frame.has(Vector3i(2, -1, 0)), "the source voxel rotates inside the full selection")
+		expect(frame.count() == 1 and frame.has(Vector3i(1, 0, 0)), "the source voxel rotates inside the full selection")
 		State.undo_redo.undo()
 		expect(State.selection.capture() == source_selection, "undo restores the full source rectangle")
 	)

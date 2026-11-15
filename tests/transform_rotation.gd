@@ -24,9 +24,9 @@ const SHAPE: Array = [
 # view). Each exact turn recentres its result on the pivot, matching RotateTool's exact integer
 # rotation convention.
 const EXPECTED: Array = [
-	Vector3i(2, 0, 1), Vector3i(1, 1, 1), Vector3i(2, 1, 1),
-	Vector3i(2, 1, 2), Vector3i(1, 0, 3), Vector3i(2, 1, 3),
-	Vector3i(1, -2, 2), Vector3i(2, -1, 2), Vector3i(2, -2, 3),
+	Vector3i(1, 2, 0), Vector3i(0, 3, 0), Vector3i(1, 3, 0),
+	Vector3i(0, 0, 1), Vector3i(1, 1, 1), Vector3i(1, 3, 1),
+	Vector3i(1, 0, 2), Vector3i(0, 2, 2), Vector3i(1, 3, 2),
 ]
 
 var _originals_captured := false
