@@ -4,8 +4,8 @@ extends "./TransformTool.gd"
 ##
 ## A drag rotates the source around its bounds center. The axis is the view
 ## normal or the nearest world axis. A smooth angle turns around the centre. An
-## exact quarter turn keeps the source low corner, so four turns return the same
-## box. A click opens the rotate dialog for exact angles. Any other angle uses
+## exact quarter turn permutes from the source low corner, then recentres on the
+## pivot. A click opens the rotate dialog for exact angles. Any other angle uses
 ## [RotSprite].
 
 const TransformDialog := preload("./TransformDialog.gd")
@@ -260,10 +260,35 @@ class RotateJob extends TransformJob:
 			completed += 1
 			if completed % 4096 == 0 and not checkpoint(completed):
 				return
+		_recenter_exact()
 
-	# Permute cell indices within the source bounds to keep cardinal rotations
-	# exact. The source low corner stays fixed. A non-square box then keeps every
-	# voxel and four quarter turns return the same box.
+	# The exact permutation starts at the source low corner. Move the whole
+	# result so its bounds centre sits on the pivot. The shift is whole cells.
+	func _recenter_exact() -> void:
+		var keys: Array = destination_selection.keys() if track_selection else destination_colors.keys()
+		if keys.is_empty():
+			return
+		var low := Vector3i.MAX
+		var high := Vector3i.MIN
+		for key in keys:
+			low = low.min(key)
+			high = high.max(key)
+		var center := (Vector3(low) + Vector3(high)) * 0.5
+		var offset := Vector3i(roundi(pivot.x - center.x), roundi(pivot.y - center.y), roundi(pivot.z - center.z))
+		if offset == Vector3i.ZERO:
+			return
+		destination_colors = _shift_keys(destination_colors, offset)
+		destination_materials = _shift_keys(destination_materials, offset)
+		destination_selection = _shift_keys(destination_selection, offset)
+
+	func _shift_keys(source: Dictionary, offset: Vector3i) -> Dictionary:
+		var shifted := {}
+		for key in source:
+			shifted[key + offset] = source[key]
+		return shifted
+
+	# Permute cell indices with the source low corner as the origin to keep
+	# cardinal rotations exact. The caller recentres the result on the pivot.
 	func _rotate_cell(source: Vector3i, p: int, q: int, min_c: Vector3i, max_c: Vector3i, direction: int, turns: int) -> Vector3i:
 		var lp := source[p] - min_c[p]
 		var lq := source[q] - min_c[q]

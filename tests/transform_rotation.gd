@@ -21,13 +21,12 @@ const SHAPE: Array = [
 ]
 
 # Hand-derived: SHAPE rotated 90 degrees around Z (front view), then 90 degrees around X (right
-# view), both with the bounding box's own min corner held fixed, matching RotateTool's exact
-# integer rotation convention.
+# view). Each exact turn recentres its result on the pivot, matching RotateTool's exact integer
+# rotation convention.
 const EXPECTED: Array = [
-	Vector3i(1, 3, 0), Vector3i(1, 3, 1), Vector3i(1, 3, 2),
-	Vector3i(0, 3, 0), Vector3i(0, 2, 2),
-	Vector3i(1, 1, 1), Vector3i(0, 0, 1),
-	Vector3i(1, 2, 0), Vector3i(1, 0, 2),
+	Vector3i(2, 0, 1), Vector3i(1, 1, 1), Vector3i(2, 1, 1),
+	Vector3i(2, 1, 2), Vector3i(1, 0, 3), Vector3i(2, 1, 3),
+	Vector3i(1, -2, 2), Vector3i(2, -1, 2), Vector3i(2, -2, 3),
 ]
 
 var _originals_captured := false
@@ -88,8 +87,8 @@ func _transform_rotate() -> void:
 		_press_option("Commit")
 	)
 
-	step("Then the bar sits vertical, its bounding box's near corner unmoved", func():
-		_expect_cells([Vector3i(0, 0, 0), Vector3i(0, 1, 0), Vector3i(0, 2, 0)])
+	step("Then the bar sits vertical, centered on the pivot", func():
+		_expect_cells([Vector3i(1, -1, 0), Vector3i(1, 0, 0), Vector3i(1, 1, 0)])
 		expect(State.undo_redo.has_undo(), "the committed rotation is undoable")
 	)
 
@@ -107,8 +106,8 @@ func _transform_rotate() -> void:
 	)
 
 	step("Then the cells and selection sit vertical", func():
-		_expect_cells([Vector3i(0, 0, 0), Vector3i(0, 1, 0), Vector3i(0, 2, 0)])
-		_expect_selection([Vector3i(0, 0, 0), Vector3i(0, 1, 0), Vector3i(0, 2, 0)])
+		_expect_cells([Vector3i(1, -1, 0), Vector3i(1, 0, 0), Vector3i(1, 1, 0)])
+		_expect_selection([Vector3i(1, -1, 0), Vector3i(1, 0, 0), Vector3i(1, 1, 0)])
 	)
 
 	step("Given the selected bar with the rotate tool again", func():

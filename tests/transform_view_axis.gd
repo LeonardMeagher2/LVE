@@ -314,8 +314,8 @@ func _negative_drag() -> void:
 
 	step("Then the green end turns to the bottom of the bar", func():
 		expect(_frame().count() == 3, "the bar keeps three voxels")
-		expect(_color_at(Vector3i(0, 0, 0)) == Color.GREEN, "the green end is at the bottom")
-		expect(_color_at(Vector3i(0, 2, 0)) == Color.RED, "the red end is at the top")
+		expect(_color_at(Vector3i(1, -1, 0)) == Color.GREEN, "the green end is at the bottom")
+		expect(_color_at(Vector3i(1, 1, 0)) == Color.RED, "the red end is at the top")
 	)
 
 

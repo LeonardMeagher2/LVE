@@ -50,7 +50,7 @@ func _run() -> void:
 
 	step("Then the viewport previews the upright L before commit", func():
 		expect(_frame().count() == 4, "the preview holds 4 voxels (has %d)" % _frame().count())
-		_expect_bounds(Vector3i(0, 0, 0), Vector3i(1, 2, 0))
+		_expect_bounds(Vector3i(1, -1, 0), Vector3i(2, 1, 0))
 	)
 
 	step("When the user commits the dialog rotation", func():

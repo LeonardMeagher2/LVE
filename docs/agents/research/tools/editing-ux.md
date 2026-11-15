@@ -257,7 +257,8 @@ When it is off, the drag uses the nearest world axis plane.
 Within two degrees of a world axis, the camera normal snaps to that axis.
 A snapped-axis rotation carries the drag sign, so a negative drag turns the other way.
 A smooth rotation turns around the source bounds centre.
-An exact quarter turn keeps the source low corner for a stable four-turn result.
+An exact quarter turn permutes from the source low corner, then recentres on the pivot.
+Four turns return the same box. A non-square result can move by half a cell.
 A non-axis rotation or non-uniform view scale resamples the voxel lattice.
 A camera-facing pivot gizmo shows the source pivot.
 It is a grab target, not an axis constraint.
