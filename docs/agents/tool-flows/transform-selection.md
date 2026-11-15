@@ -66,6 +66,9 @@ A non-axis view rotation or non-uniform view scale resamples the destination cel
 
 A snapped-axis rotation carries the drag sign.
 A negative drag turns the shape the other way.
+A smooth rotation turns around the source bounds centre.
+An exact quarter turn keeps the source low corner.
+That keeps every voxel and lets four turns return the same box.
 The exact quarter turn stays exact in either direction.
 
 ```mermaid

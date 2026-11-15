@@ -22,6 +22,7 @@ func _ready() -> void:
 	test("a top view stays on the exact world axis", _top, "transform_view_axis_top")
 	test("a plane-mode quarter turn keeps every voxel in each named view", _plane_rotation, "transform_view_axis_plane_rotation")
 	test("a negative rotation drag turns the shape the other way", _negative_drag, "transform_view_axis_negative_drag")
+	test("a smooth plane rotation stays near the pivot", _smooth_center, "transform_view_axis_smooth_center")
 
 
 func before_test() -> void:
@@ -315,6 +316,30 @@ func _negative_drag() -> void:
 		expect(_frame().count() == 3, "the bar keeps three voxels")
 		expect(_color_at(Vector3i(0, 0, 0)) == Color.GREEN, "the green end is at the bottom")
 		expect(_color_at(Vector3i(0, 2, 0)) == Color.RED, "the red end is at the top")
+	)
+
+
+func _smooth_center() -> void:
+	step("Given the asymmetric shape in the default view with the view axis off and snap off", func():
+		_view_setup("default")
+		_paint_shape()
+		activate_tool("transform")
+		select_toolbar_item("transform", "Rotate")
+		_settings().snap = false
+		_settings().view_axis = false
+	)
+
+	step("When the user drags a thirty degree smooth turn", func():
+		var from := _screen(_current_center())
+		var to := from + Vector2.RIGHT.rotated(-PI / 6.0) * 120.0
+		_mouse_button(from, true)
+		_mouse_motion(to)
+	)
+
+	step("Then the model stays near the pivot", func():
+		var moved := _current_center().distance_to(Vector3(1.0, 0.5, 1.5))
+		expect(moved <= 2.0, "the model stays near the pivot (moved %.2f cells)" % moved)
+		_press_option("Cancel")
 	)
 
 

@@ -3,8 +3,9 @@ extends "./TransformTool.gd"
 ## The rotate transform tool.
 ##
 ## A drag rotates the source around its bounds center. The axis is the view
-## normal or the nearest world axis. A click opens the rotate dialog for exact
-## angles. A quarter turn uses an exact integer rotation. Any other angle uses
+## normal or the nearest world axis. A smooth angle turns around the centre. An
+## exact quarter turn keeps the source low corner, so four turns return the same
+## box. A click opens the rotate dialog for exact angles. Any other angle uses
 ## [RotSprite].
 
 const TransformDialog := preload("./TransformDialog.gd")
@@ -260,7 +261,9 @@ class RotateJob extends TransformJob:
 			if completed % 4096 == 0 and not checkpoint(completed):
 				return
 
-	# Permute cell indices within the source bounds to keep cardinal rotations exact.
+	# Permute cell indices within the source bounds to keep cardinal rotations
+	# exact. The source low corner stays fixed. A non-square box then keeps every
+	# voxel and four quarter turns return the same box.
 	func _rotate_cell(source: Vector3i, p: int, q: int, min_c: Vector3i, max_c: Vector3i, direction: int, turns: int) -> Vector3i:
 		var lp := source[p] - min_c[p]
 		var lq := source[q] - min_c[q]
@@ -318,8 +321,7 @@ class RotateJob extends TransformJob:
 				return
 		var layer_results := {}
 		var selection_results := {}
-		var natural_min := Vector2i.ZERO
-		var first := true
+		var has_output := false
 		stage("Calculating rotation", layers.size())
 		completed = 0
 		for layer in layers:
@@ -333,26 +335,19 @@ class RotateJob extends TransformJob:
 				var sampler := RotSprite.new(selection_layers[layer])
 				selection_results[layer] = sampler.rotate(pivot2d, direction * angle)
 				alignment_layer = selection_results[layer]
-			for uv: Vector2i in alignment_layer:
-				if first:
-					natural_min = uv
-					first = false
-				else:
-					natural_min = Vector2i(mini(natural_min.x, uv.x), mini(natural_min.y, uv.y))
+			if not alignment_layer.is_empty():
+				has_output = true
 			completed += 1
 			if not checkpoint(completed):
 				return
-		if first:
+		if not has_output:
 			return
-		# Align the occupied corner with the exact rotation convention.
-		var min_c := Vector3i(source_bounds.position + Vector3.ONE * 0.5)
-		var correction := Vector2i(min_c[p], min_c[q]) - natural_min
 		for layer in layer_results:
 			for uv: Vector2i in layer_results[layer]:
 				var destination := Vector3i.ZERO
 				destination[axis] = layer
-				destination[p] = uv.x + correction.x
-				destination[q] = uv.y + correction.y
+				destination[p] = uv.x
+				destination[q] = uv.y
 				destination_colors[destination] = layer_results[layer][uv]
 				var source_uv := _source_cell(uv, pivot2d, direction * angle)
 				var layer_materials: Dictionary = material_layers.get(layer, {})
@@ -371,8 +366,8 @@ class RotateJob extends TransformJob:
 				for uv: Vector2i in selection_results[layer]:
 					var destination := Vector3i.ZERO
 					destination[axis] = layer
-					destination[p] = uv.x + correction.x
-					destination[q] = uv.y + correction.y
+					destination[p] = uv.x
+					destination[q] = uv.y
 					destination_selection[destination] = true
 			if not checkpoint(completed):
 				return
