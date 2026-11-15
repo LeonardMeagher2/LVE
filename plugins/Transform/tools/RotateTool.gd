@@ -15,14 +15,15 @@ const DEGREE := PI / 180.0
 ## The magnetic pull to the nearest quarter turn, in radians.
 const MAGNETIC_PULL := DEGREE * 2.0
 
-var _axis := 1
-var _axis_sign := 1.0
+var _view_normal := Vector3.BACK
 var _pivot := Vector3.ZERO
 var _v0 := Vector3.ZERO
 var _angle := 0.0
 var _euler := Vector3.ZERO
-var _gesture_base_euler := Vector3.ZERO
-var _job_euler := Vector3.ZERO
+var _total_basis := Basis.IDENTITY
+var _gesture_base_basis := Basis.IDENTITY
+var _job_axis := Vector3.ZERO
+var _job_angle := 0.0
 
 ## One cancellable rotate transform job.
 ##
@@ -34,6 +35,10 @@ class RotateJob extends TransformJob:
 	var axis := 1
 	## The rotation direction on the axis.
 	var axis_sign := 1.0
+	## A rotation axis that is not a world axis. A zero vector uses [member euler].
+	var axis_vector := Vector3.ZERO
+	## The rotation angle in radians about [member axis_vector].
+	var angle_radians := 0.0
 	## The pivot in cell units.
 	var pivot := Vector3.ZERO
 	## The single-axis angle in radians.
@@ -42,10 +47,15 @@ class RotateJob extends TransformJob:
 	## The total rotation as XYZ Euler angles in radians. It applies Z first, then
 	## Y, then X.
 	var euler := Vector3.ZERO
+	## The dot product above which an axis counts as a world axis. It matches the
+	## tool dead zone of about two degrees.
+	const AXIS_DOT := 0.99939
 	var _candidate_total := 0
 	var _candidate_completed := 0
 
 	func estimated_work() -> int:
+		if not axis_vector.is_zero_approx():
+			return _axis_estimated_work()
 		var single := _euler_single()
 		if not single[0]:
 			if _is_cardinal():
@@ -53,6 +63,24 @@ class RotateJob extends TransformJob:
 			var extent := source_bounds.size.x + source_bounds.size.y + source_bounds.size.z + 6.0
 			return maxi(source_positions.size(), ceili(extent * extent * extent))
 		return _single_estimated_work(single[1], single[2])
+
+	func _axis_estimated_work() -> int:
+		var normal := axis_vector.normalized()
+		var world_axis := _world_axis(normal)
+		if world_axis >= 0:
+			var magnitude := absf(angle_radians)
+			if is_equal_approx(magnitude / QUARTER, roundf(magnitude / QUARTER)):
+				return source_positions.size()
+			return _single_estimated_work(magnitude, world_axis)
+		var extent := source_bounds.size.x + source_bounds.size.y + source_bounds.size.z + 6.0
+		return maxi(source_positions.size(), ceili(extent * extent * extent))
+
+	# Returns the world axis that a unit normal faces, or -1 when it is not close.
+	func _world_axis(normal: Vector3) -> int:
+		var index := normal.abs().max_axis_index()
+		if absf(normal[index]) >= AXIS_DOT:
+			return index
+		return -1
 
 	# True when every Euler component is a whole quarter turn.
 	func _is_cardinal() -> bool:
@@ -89,6 +117,9 @@ class RotateJob extends TransformJob:
 	func compute_destination() -> void:
 		if source_positions.is_empty():
 			return
+		if not axis_vector.is_zero_approx():
+			_compute_axis_angle()
+			return
 		var single := _euler_single()
 		if not single[0]:
 			_compute_euler_3d()
@@ -101,16 +132,32 @@ class RotateJob extends TransformJob:
 		else:
 			_compute_smooth()
 
+	func _compute_axis_angle() -> void:
+		var normal := axis_vector.normalized()
+		var world_axis := _world_axis(normal)
+		if world_axis >= 0:
+			axis = world_axis
+			axis_sign = 1.0 if normal[world_axis] > 0.0 else -1.0
+			angle = absf(angle_radians)
+			if is_equal_approx(angle / QUARTER, roundf(angle / QUARTER)):
+				_compute_exact()
+			else:
+				_compute_smooth()
+			return
+		_compute_basis(Basis(normal, angle_radians))
+
 	func _compute_euler_3d() -> void:
 		if _is_cardinal():
 			_compute_euler_cardinal()
 			return
+		_compute_basis(Basis(Vector3.RIGHT, euler.x) * Basis(Vector3.UP, euler.y) * Basis(Vector3.BACK, euler.z))
+
+	func _compute_basis(basis: Basis) -> void:
 		var selected := {}
 		if track_selection:
 			stage("Preparing rotation selection", source_positions.size())
 			for cell_position in source_positions:
 				selected[cell_position] = true
-		var basis := Basis(Vector3.RIGHT, euler.x) * Basis(Vector3.UP, euler.y) * Basis(Vector3.BACK, euler.z)
 		var inverse := basis.inverse()
 		var lo := Vector3(INF, INF, INF)
 		var hi := Vector3(-INF, -INF, -INF)
@@ -336,20 +383,21 @@ class RotateJob extends TransformJob:
 
 func _begin_grab(origin: Vector3, dir: Vector3) -> void:
 	_pivot = _source_bbox().get_center()
-	_axis = _view_axis()
-	_axis_sign = _view_axis_sign()
-	_plane = _view_plane_through(_pivot)
+	_view_normal = _drag_normal()
+	_plane = _drag_plane_through(_pivot)
 	var v := _cursor_vec(origin, dir)
 	if v.is_zero_approx():
 		v = _fallback_vec()
 	_v0 = v.normalized()
 	_angle = 0.0
-	_job_euler = Vector3.ZERO
+	_job_axis = Vector3.ZERO
+	_job_angle = 0.0
 	if _was_pending:
-		_gesture_base_euler = _euler
+		_gesture_base_basis = _total_basis
 	else:
 		_euler = Vector3.ZERO
-		_gesture_base_euler = Vector3.ZERO
+		_total_basis = Basis.IDENTITY
+		_gesture_base_basis = Basis.IDENTITY
 
 
 func _update_params(origin: Vector3, dir: Vector3) -> bool:
@@ -367,32 +415,25 @@ func _update_params(origin: Vector3, dir: Vector3) -> bool:
 	if is_equal_approx(total, _angle):
 		return false
 	_angle = total
-	var single := Vector3.ZERO
-	single[_axis] = _axis_sign * _angle
-	# The gesture turns the cells as they are now, so the job uses one axis only.
-	_job_euler = single
-	# The dialog reports a running total. It adds up while the view axis stays the same.
-	if _base_matches_axis(_gesture_base_euler, _axis):
-		var running := _gesture_base_euler
-		running[_axis] = _gesture_base_euler[_axis] + _axis_sign * _angle
-		_euler = running
-	else:
-		_euler = single
-	return true
-
-
-# True when the base rotation is zero or turns about this axis alone.
-func _base_matches_axis(base: Vector3, axis: int) -> bool:
-	for i in 3:
-		if i != axis and absf(base[i]) > 0.000000001:
-			return false
+	# The gesture turns the cells as they are now. The job rotates about the
+	# captured normal, so any axis works.
+	_job_axis = _view_normal
+	_job_angle = _angle
+	# The dialog reports a running total. Compose the gesture with the base
+	# rotation so the total stays right across grabs and view changes.
+	_total_basis = Basis(_view_normal, _angle) * _gesture_base_basis
+	_euler = _total_basis.get_euler(EULER_ORDER_XYZ)
 	return true
 
 
 func _make_job() -> TransformJob:
 	var job := RotateJob.new()
 	job.pivot = _pivot
-	job.euler = _job_euler
+	if not _job_axis.is_zero_approx():
+		job.axis_vector = _job_axis
+		job.angle_radians = _job_angle
+	else:
+		job.euler = _euler
 	return job
 
 
@@ -402,14 +443,18 @@ func _on_click_without_drag() -> bool:
 	if _was_pending and _has_base:
 		_restore_grab_baseline()
 		_pending = true
-		_job_euler = _euler
+		_job_axis = Vector3.ZERO
+		_job_angle = 0.0
+		_total_basis = Basis.from_euler(_euler, EULER_ORDER_XYZ)
 		_open_rotate_dialog(_euler_degrees())
 		return true
 	if _cells.is_empty():
 		return false
 	_pending = true
 	_euler = Vector3.ZERO
-	_job_euler = Vector3.ZERO
+	_total_basis = Basis.IDENTITY
+	_job_axis = Vector3.ZERO
+	_job_angle = 0.0
 	_open_rotate_dialog(Vector3.ZERO)
 	return true
 
@@ -420,6 +465,17 @@ func _euler_degrees() -> Vector3:
 
 func _did_restore_baseline() -> void:
 	_pivot = _source_bbox().get_center()
+	_total_basis = Basis.from_euler(_euler, EULER_ORDER_XYZ)
+
+
+func _clear_grab() -> void:
+	_view_normal = Vector3.BACK
+	_euler = Vector3.ZERO
+	_job_axis = Vector3.ZERO
+	_job_angle = 0.0
+	_total_basis = Basis.IDENTITY
+	_gesture_base_basis = Basis.IDENTITY
+	super._clear_grab()
 
 
 func _gizmo_pivot() -> Vector3:
@@ -447,7 +503,9 @@ func _on_dialog_values(state: Dictionary) -> void:
 	if angles.is_equal_approx(_euler):
 		return
 	_euler = angles
-	_job_euler = angles
+	_total_basis = Basis.from_euler(angles, EULER_ORDER_XYZ)
+	_job_axis = Vector3.ZERO
+	_job_angle = 0.0
 	_dialog_dirty = true
 	_apply_preview()
 
@@ -465,35 +523,27 @@ func _on_dialog_canceled() -> void:
 			var open := Vector3(deg_to_rad(raw.x), deg_to_rad(raw.y), deg_to_rad(raw.z))
 			if not open.is_equal_approx(_euler):
 				_euler = open
-				_job_euler = open
+				_total_basis = Basis.from_euler(open, EULER_ORDER_XYZ)
+				_job_axis = Vector3.ZERO
+				_job_angle = 0.0
 				_apply_preview()
 		return
 	_cancel()
 
 
-func _axis_vec() -> Vector3:
-	var v := Vector3.ZERO
-	v[_axis] = _axis_sign
-	return v
-
-
-func _in_plane(v: Vector3) -> Vector3:
-	v[_axis] = 0.0
-	return v
-
-
 func _cursor_vec(origin: Vector3, dir: Vector3) -> Vector3:
-	return _in_plane(_plane_point(origin, dir) - _pivot)
+	var rel := _plane_point(origin, dir) - _pivot
+	return rel - _view_normal * rel.dot(_view_normal)
 
 
 func _signed_angle(a: Vector3, b: Vector3) -> float:
-	return atan2(a.cross(b).dot(_axis_vec()), a.dot(b))
+	return atan2(a.cross(b).dot(_view_normal), a.dot(b))
 
 
 func _fallback_vec() -> Vector3:
-	var right := _in_plane(_grab_camera_right)
+	var right := _grab_camera_right - _view_normal * _grab_camera_right.dot(_view_normal)
 	if not right.is_zero_approx():
 		return right.normalized()
-	var v := Vector3.ZERO
-	v[(_axis + 1) % 3] = 1.0
-	return v
+	var forward := Vector3.ZERO
+	forward[(_view_normal.abs().max_axis_index() + 1) % 3] = 1.0
+	return forward

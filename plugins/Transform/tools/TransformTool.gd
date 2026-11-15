@@ -10,6 +10,9 @@ extends VoxelTool
 const INLINE_EDIT_LIMIT := 4096
 ## The pointer travel in pixels above which a press becomes a drag.
 const CLICK_SLOP_PX := 4.0
+## The dot product above which a view normal counts as a world axis. It holds a
+## snap within about two degrees, so a named view keeps exact grid alignment.
+const VIEW_AXIS_SNAP_DOT := 0.99939
 const TOOL_DIALOG_SCENE := preload("./TransformDialog.tscn")
 
 var _settings := preload("../settings.tres")
@@ -51,6 +54,7 @@ var _dialog_open_had_pending := false
 var _dialog_dirty := false
 var _grab_forward := Vector3.FORWARD
 var _grab_camera_right := Vector3.RIGHT
+var _grab_camera_up := Vector3.UP
 var _jobs: Array[VoxelFrame.EditJob] = []
 var _active_preview_job: TransformJob
 var _symmetry_axes := 0
@@ -399,6 +403,7 @@ func _press(origin: Vector3, dir: Vector3) -> void:
 	var camera := get_viewport().get_camera_3d()
 	_grab_forward = -camera.basis.z if camera else Vector3.FORWARD
 	_grab_camera_right = camera.basis.x if camera else Vector3.RIGHT
+	_grab_camera_up = camera.basis.y if camera else Vector3.UP
 	var input_revision := _input_revision
 	_grab_waiting = true
 	_queued_drag_ray = []
@@ -770,18 +775,49 @@ func _plane_point(origin: Vector3, dir: Vector3) -> Vector3:
 	return origin + dir * t
 
 
-func _view_axis() -> int:
+func _nearest_axis() -> int:
 	return VoxelPicking.view_axis(_grab_forward)
 
 
-func _view_axis_sign() -> float:
+## Returns the unit normal of the drag plane. A view-axis drag faces the camera.
+## The nearest world axis is used within two degrees, so a named view keeps exact
+## grid alignment.
+func _drag_normal() -> Vector3:
 	var toward := -_grab_forward
-	var a := _view_axis()
-	return 1.0 if toward[a] >= 0.0 else -1.0
+	if not _settings.view_axis:
+		var axis_normal := Vector3.ZERO
+		axis_normal[_nearest_axis()] = 1.0
+		return axis_normal * signf(toward[_nearest_axis()])
+	var nearest := Vector3.ZERO
+	nearest[_nearest_axis()] = 1.0
+	if absf(toward.dot(nearest)) >= VIEW_AXIS_SNAP_DOT:
+		return nearest * signf(toward[_nearest_axis()])
+	return toward.normalized()
 
 
-func _view_plane_through(point: Vector3) -> StrokePlane:
-	return VoxelPicking.view_plane_through(point, _grab_forward)
+## Returns a plane through one point that faces the drag normal. The transform
+## tools use only the point and the normal.
+func _drag_plane_through(point: Vector3) -> StrokePlane:
+	var plane := StrokePlane.new()
+	plane.axis = _nearest_axis()
+	plane.idx = roundi(point[plane.axis])
+	plane.point = point
+	plane.normal = _drag_normal()
+	return plane
+
+
+## Returns the world axis that one normal faces, or -1 when it is not a world
+## axis.
+func _axis_of(normal: Vector3) -> int:
+	var axis := normal.abs().max_axis_index()
+	if absf(normal[axis]) >= VIEW_AXIS_SNAP_DOT:
+		return axis
+	return -1
+
+
+## Returns the captured camera basis. It maps screen X and Y to the view plane.
+func _screen_basis() -> Basis:
+	return Basis(_grab_camera_right, _grab_camera_up, -_grab_forward)
 
 
 func _source_bbox() -> AABB:

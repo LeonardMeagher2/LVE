@@ -250,8 +250,12 @@ Escape cancels and restores the start.
 The undo action name is `Stroke`.
 
 Move uses a view-plane offset in whole cells.
-Rotate uses an angle around the bounds center on the view axis.
+Rotate uses an angle around the bounds center on the view normal.
 Scale uses a factor from a view-plane reference vector.
+`view_axis` starts on, so the drag follows the camera plane.
+When it is off, the drag uses the nearest world axis plane.
+Within two degrees of a world axis, the camera normal snaps to that axis.
+A non-axis rotation or non-uniform view scale resamples the voxel lattice.
 A camera-facing pivot gizmo shows the source pivot.
 It is a grab target, not an axis constraint.
 Move draws four view-plane arrows.

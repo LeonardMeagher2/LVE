@@ -40,6 +40,15 @@ enum Tools {
 		tool_changed.emit(tool)
 		emit_changed()
 
+## Whether a drag follows the camera plane. When it is off, a drag follows the
+## nearest world axis plane. It starts on, so a drag follows the screen.
+@export var view_axis: bool = true :
+	set(value):
+		if value == view_axis:
+			return
+		view_axis = value
+		emit_changed()
+
 ## Whether a rotate drag snaps every angle to a 90 degree step. When it is off,
 ## the drag snaps to one degree and pulls to a nearby cardinal angle. It starts
 ## off, so a plain drag is free.

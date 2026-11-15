@@ -20,7 +20,7 @@ func _begin_grab(origin: Vector3, dir: Vector3) -> void:
 	else:
 		_total_offset = Vector3i.ZERO
 		_gesture_base = Vector3i.ZERO
-	_plane = _view_plane_through(_source_bbox().get_center())
+	_plane = _drag_plane_through(_source_bbox().get_center())
 	_grab_point = _plane_point(origin, dir)
 
 
@@ -63,7 +63,7 @@ func _on_click_without_drag() -> bool:
 
 
 func _did_restore_baseline() -> void:
-	_plane = _view_plane_through(_source_bbox().get_center())
+	_plane = _drag_plane_through(_source_bbox().get_center())
 
 
 func _connect_tool_dialog() -> void:

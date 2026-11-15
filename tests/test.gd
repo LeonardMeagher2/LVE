@@ -62,6 +62,7 @@ func reset_environment() -> void:
 	_selection_settings_resource.depth_test = true
 	# TransformToolSettings.Tools.MOVE is zero.
 	_transform_settings_resource.tool = 0
+	_transform_settings_resource.view_axis = true
 	_transform_settings_resource.snap = false
 	_transform_settings_resource.uniform = true
 	activate_tool("Toolbar")

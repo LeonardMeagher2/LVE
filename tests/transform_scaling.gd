@@ -270,6 +270,7 @@ func _reset_transform_settings() -> void:
 	if p == null:
 		return
 	p._settings.tool = p._settings.Tools.MOVE
+	p._settings.view_axis = true
 	p._settings.snap = true
 	p._settings.uniform = true
 	p._settings.transforming = false

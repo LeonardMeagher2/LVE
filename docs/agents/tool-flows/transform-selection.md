@@ -57,6 +57,13 @@ The source capture and the shared lifecycle are below.
 The source graph expands the press. The lifecycle graph shows the full press-to-commit path.
 The variant table lists only the actual policy differences.
 
+`TransformToolSettings.view_axis` starts on.
+When it is on, a drag uses the camera normal through the pivot.
+When it is off, a drag uses the nearest world axis plane.
+Within two degrees of a world axis, the camera normal snaps to that axis.
+This keeps the named views exact and lets a quarter turn keep every voxel.
+A non-axis view rotation or non-uniform view scale resamples the destination cells.
+
 ```mermaid
 flowchart TD
   TS1["Input: left press<br/>Main"] --> TS2["Read source count<br/>before open edit"]
@@ -108,11 +115,11 @@ The preview therefore writes the live frame inside the open edit.
 
 | Aspect | Move | Rotate | Scale |
 | --- | --- | --- | --- |
-| Gesture | View-plane offset in whole cells. | Angle around the bounds center on the view axis. | Factor from a view-plane reference vector. |
+| Gesture | Offset in whole cells on the view-axis plane or the nearest world axis plane. | Angle around the bounds center on the view normal or the nearest world axis. | Factor from a reference vector on the view-axis plane or the nearest world axis plane. |
 | Exact dialog | `open_for_move` offset. | `open_for_rotate` angles in degrees. | `open_for_scale` factors. |
-| Job | `TransformJob` with `offset`. | `RotateJob` with exact quarter turns, cardinal Euler rotation, or `RotSprite`. | `ScaleJob` with 3D or per-layer 2D sampling. |
+| Job | `TransformJob` with `offset`. | `RotateJob` with exact quarter turns, cardinal Euler rotation, `RotSprite`, or basis resampling. | `ScaleJob` with 3D, per-layer 2D, or basis resampling. |
 | Snap | Whole cells by `roundi`. | `_settings.snap` quarter turns, or 1 degree steps and a 2 degree magnetic pull. | Factors snapped to 0.0001 and clamped to `MIN_SCALE`. |
-| Option | None. | `snap`. | `uniform`. |
+| Option | `view_axis`. | `view_axis`, `snap`. | `view_axis`, `uniform`. |
 | Selection follow | `_track_selection` restores `destination_selection`. | Same. | Same. |
 | Symmetry | `_reduce_to_fundamental_domain` then `_mirror_destination`. | Same. | Same. |
 
@@ -428,8 +435,8 @@ Both apply symmetry before the mode step.
 | Flow | Mode and captured state | Main or worker | Undo action | Cancel |
 | --- | --- | --- | --- | --- |
 | Transform Move | Selection or whole frame, frame copy, selection snapshot, symmetry. | Main input and install. Worker above 4096. | `Stroke` | Abort edit, restore start. |
-| Transform Rotate | Same, plus pivot, view axis, Euler angles. | Same. | `Stroke` | Same. |
-| Transform Scale | Same, plus pivot, scale factors, `uniform`. | Same. | `Stroke` | Same. |
+| Transform Rotate | Same, plus pivot, view normal, Euler angles. | Same. | `Stroke` | Same. |
+| Transform Scale | Same, plus pivot, scale factors, screen basis, `uniform`. | Same. | `Stroke` | Same. |
 | Copy | Context signal, selection or whole frame, frame copy. | Inline at 4096 or below. `State.run_edit_job` above. | None | Cancel job. No model write. |
 | Cut | Same, plus `cut_source`. | Same. | `Cut` | Cancel job. No install. |
 | Paste | Pattern, selection pattern, material pattern, line snapshot. | Preview runner inline or worker. Commit on main. | `Paste` | `_cancel_edit`. No install. |
@@ -462,6 +469,7 @@ Each candidate names the existing mechanism, its consumers, the contract to pres
 - The verification history is in the composition guide. This page does not claim a performance result.
 - The transform history action is `Stroke`. It is not named `Transform`.
 - Transform has a camera-facing pivot gizmo. It adds no axis constraint, duplicate mode, or destination mask.
+- Transform view-axis drags follow the camera normal. The exact dialog keeps world XYZ values. A non-axis rotation or non-uniform scale resamples the voxel lattice.
 - Transform previews write the live frame. Paste previews write only the cursor.
 - An active transform commits on a context change and on a tool switch. An active paste cancels on a tool switch.
 - A held Box or Lasso drag applies the current outline on a tool switch. A streaming wand continues after a switch.

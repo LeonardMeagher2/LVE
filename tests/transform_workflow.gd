@@ -15,6 +15,7 @@ var _mouse_held := false
 var _last_mouse_pos := Vector2.ZERO
 var _defaults_ready := false
 var _default_tool := 0
+var _default_view_axis := true
 var _default_snap := true
 var _default_uniform := true
 var _gizmo_radius := 0.0
@@ -692,10 +693,12 @@ func _reset_transform_settings() -> void:
 		return
 	if not _defaults_ready:
 		_default_tool = p._settings.tool
+		_default_view_axis = p._settings.view_axis
 		_default_snap = p._settings.snap
 		_default_uniform = p._settings.uniform
 		_defaults_ready = true
 	p._settings.tool = _default_tool
+	p._settings.view_axis = _default_view_axis
 	p._settings.snap = _default_snap
 	p._settings.uniform = _default_uniform
 	p._settings.transforming = false

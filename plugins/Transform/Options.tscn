@@ -1,6 +1,7 @@
 [gd_scene format=3 uid="uid://ep06h86t32q7"]
 
 [ext_resource type="Script" uid="uid://cscx342uvh5am" path="res://plugins/Transform/Options.gd" id="1_script"]
+[ext_resource type="Texture2D" path="res://icons/view.svg" id="6_view"]
 [ext_resource type="Texture2D" uid="uid://8m24dpr5faeh" path="res://icons/snap.svg" id="2_snap"]
 [ext_resource type="Texture2D" uid="uid://bsbljlu17soe3" path="res://icons/check.svg" id="3_check"]
 [ext_resource type="Texture2D" uid="uid://dj33i6smxtptq" path="res://icons/cross.svg" id="4_cross"]
@@ -8,6 +9,14 @@
 
 [node name="Options" type="HBoxContainer" unique_id=1914023151]
 script = ExtResource("1_script")
+
+[node name="view_axis" type="Button" parent="." unique_id=251207527]
+layout_mode = 2
+tooltip_text = "Use the view axis. When off, snap to the nearest world axis plane."
+toggle_mode = true
+button_pressed = true
+icon = ExtResource("6_view")
+icon_alignment = 1
 
 [node name="snap" type="Button" parent="." unique_id=251207526]
 layout_mode = 2
@@ -38,6 +47,7 @@ disabled = true
 icon = ExtResource("4_cross")
 icon_alignment = 1
 
+[connection signal="toggled" from="view_axis" to="." method="_on_view_axis_toggled"]
 [connection signal="toggled" from="snap" to="." method="_on_snap_toggled"]
 [connection signal="toggled" from="uniform" to="." method="_on_uniform_toggled"]
 [connection signal="pressed" from="commit" to="." method="_on_commit_pressed"]
