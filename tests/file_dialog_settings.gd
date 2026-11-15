@@ -36,7 +36,7 @@ func _run() -> void:
 	favorite = ProjectSettings.globalize_path("user://")
 	step("Given a file dialog with a favorite folder", func():
 		menu = MENU_SCENE.instantiate()
-		menu.file_settings_path = SETTINGS_PATH
+		menu.settings_path = SETTINGS_PATH
 		main.add_child(menu)
 	)
 	await get_tree().process_frame
@@ -55,4 +55,15 @@ func _run() -> void:
 		expect(FileDialog.get_favorite_list() == PackedStringArray([favorite]), "the favorites are restored")
 		expect(FileDialog.get_recent_list() == PackedStringArray([favorite]), "the recent folders are restored")
 		expect(menu._last_dir == saved_dir, "the last folder is restored")
+	)
+	step("When the settings file is corrupt", func():
+		var file := FileAccess.open(SETTINGS_PATH, FileAccess.WRITE)
+		expect(file != null, "the corrupt fixture opens")
+		if file != null:
+			file.store_string("[broken\n")
+			file.close()
+		menu._save_file_dialog()
+	)
+	step("Then the corrupt file is not overwritten", func():
+		expect(FileAccess.get_file_as_string(SETTINGS_PATH) == "[broken\n", "the corrupt file keeps its bytes")
 	)

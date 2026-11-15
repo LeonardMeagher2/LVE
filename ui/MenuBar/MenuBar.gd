@@ -14,12 +14,9 @@ signal recovery_discarded(entries: Array)
 ## Emitted when a tab is closed without saving.
 signal document_discarded(document: VoxelDocument)
 
-## The user path of the file dialog settings.
-const FILE_SETTINGS_PATH := "user://file_dialog.cfg"
-
-## The file that stores the favorites and the last folder. Tests set a temporary
-## path before the node enters the tree.
-var file_settings_path := FILE_SETTINGS_PATH
+## The settings file override. Tests set a temporary file. An empty value uses
+## [member State.settings_path].
+var settings_path := ""
 
 ## The save path of the active document, or an empty string for a new document.
 var current_save_path: String:
@@ -395,11 +392,16 @@ func _clear_recovery_options() -> void:
 	_recovery_checkboxes.clear()
 
 
+# Returns the settings file. Tests can set a temporary override.
+func _settings_file() -> String:
+	return State.settings_path if settings_path.is_empty() else settings_path
+
+
 # Restores the favorite folders and the last folder. The favorite list is
 # shared by all FileDialog nodes, so set it before the dialog is shown.
 func _restore_file_dialog() -> void:
 	var config := ConfigFile.new()
-	if config.load(file_settings_path) != OK:
+	if config.load(_settings_file()) != OK:
 		return
 	var favorites: Variant = config.get_value("files", "favorites", PackedStringArray())
 	if favorites is PackedStringArray:
@@ -413,16 +415,25 @@ func _restore_file_dialog() -> void:
 
 
 func _save_file_dialog() -> void:
+	# A test scene must not write the real settings file. The dialog test sets
+	# its own path, so it still covers the save path.
+	if settings_path.is_empty() and not State.is_app_session():
+		return
 	var dialog: FileDialog = %FileDialog
 	var current := dialog.current_dir
 	if not current.is_empty() and DirAccess.dir_exists_absolute(current):
 		_last_dir = current
 	var config := ConfigFile.new()
-	config.load(file_settings_path)
+	var error := config.load(_settings_file())
+	if error != OK and error != ERR_FILE_NOT_FOUND:
+		push_warning("Cannot read the user settings: %s" % error_string(error))
+		return
 	config.set_value("files", "favorites", FileDialog.get_favorite_list())
 	config.set_value("files", "recent", FileDialog.get_recent_list())
 	config.set_value("files", "last_dir", _last_dir)
-	config.save(file_settings_path)
+	error = config.save(_settings_file())
+	if error != OK:
+		push_warning("Cannot save the user settings: %s" % error_string(error))
 
 
 func _on_file_dialog_visibility_changed() -> void:

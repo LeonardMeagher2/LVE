@@ -8,7 +8,7 @@ Click the server icon in the status bar. The icon is dim when the server is off.
 
 The server listens on `http://127.0.0.1:17373/mcp` while it runs. Use `--mcp-port=<port>` to change the port.
 
-The app remembers the last state in `user://interface.cfg`. The server starts with the app when the saved state is on.
+The app remembers the last state in `user://settings.cfg`. The server starts with the app when the saved state is on.
 
 To start the server for one run, use the MCP flag:
 

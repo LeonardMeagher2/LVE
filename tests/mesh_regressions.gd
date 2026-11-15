@@ -85,7 +85,7 @@ func _planar_merge() -> void:
 	)
 
 	step("Then the sample document meshes without a fallback", func():
-		var document := VoxelDocument.load_file("res://Flamingo.lve")
+		var document := VoxelDocument.load_file("res://splash.lve")
 		expect(document != null, "the sample document loads")
 		if document == null:
 			return
@@ -93,7 +93,7 @@ func _planar_merge() -> void:
 		var triangles := 0
 		for chunk_location: Vector3i in frame.chunks:
 			triangles += _mesh(frame, chunk_location, true, false)[1]
-		print("MEASURE flamingo: %d voxels, %d triangles, %d chunks" % [
+		print("MEASURE splash: %d voxels, %d triangles, %d chunks" % [
 			frame.count(), triangles, frame.chunks.size(),
 		])
 		expect(triangles > 0, "the sample document produces triangles")

@@ -8,18 +8,20 @@ extends Control
 ## The MCP server started or stopped.
 signal mcp_changed(enabled: bool, port: int)
 
-## The user path of the saved interface settings.
-const UI_SETTINGS_PATH := "user://interface.cfg"
-## The document that opens when no last document exists.
-const STARTUP_DOCUMENT := "res://Flamingo.lve"
+## The splash document that opens when no document exists or a version is new.
+const SPLASH_DOCUMENT := "res://splash.lve"
+## The settings section and key that hold the last used application version.
+const VERSION_SECTION := "application"
+const VERSION_KEY := "version"
 ## The MCP server and bridge scripts.
 const MCP_SERVER_SCRIPT := preload("res://Globals/MCP/MCPServer.gd")
 const MCP_BRIDGE_SCRIPT := preload("res://Globals/MCP/MCPBridge.gd")
 const AUTOSAVE_SCRIPT := preload("res://Globals/Autosave/Autosave.gd")
 ## The default loopback MCP port.
 const MCP_PORT := 17373
-## The interface settings file. Tests point it at a temporary file.
-var interface_settings_path := UI_SETTINGS_PATH
+## The settings file override. Tests set a temporary file. An empty value uses
+## [member State.settings_path].
+var settings_path := ""
 ## The MCP port. Tests set zero to take a free port.
 var mcp_port := MCP_PORT
 ## Tests turn this off, so a saved state cannot bind a port in the test process.
@@ -158,7 +160,9 @@ func _restore_startup_document(force: bool = false, session_path: String = "") -
 	if not force and not State.is_app_session():
 		return
 	if session_path.is_empty():
-		session_path = State.SESSION_PATH
+		session_path = _settings_file()
+	var version := _current_version()
+	var new_version := not version.is_empty() and _stored_version() != version
 	var saved_active := State.last_tab_index(session_path)
 	var paths := State.last_tabs(session_path)
 	var documents: Array[VoxelDocument] = []
@@ -174,14 +178,55 @@ func _restore_startup_document(force: bool = false, session_path: String = "") -
 		if index == saved_active:
 			active = documents.size()
 		documents.append(document)
-	if not documents.is_empty():
+	if documents.is_empty():
+		var last := State.last_document_path(session_path)
+		var opened := false
+		if not last.is_empty() and FileAccess.file_exists(last):
+			opened = bool(%MenuBar.open_document(last, true, true))
+		if not opened and FileAccess.file_exists(SPLASH_DOCUMENT):
+			%MenuBar.open_document(SPLASH_DOCUMENT, false, true)
+	else:
 		State.set_tabs(documents, active)
-		return
-	var last := State.last_document_path(session_path)
-	if not last.is_empty() and FileAccess.file_exists(last) and %MenuBar.open_document(last, true, true):
-		return
-	if FileAccess.file_exists(STARTUP_DOCUMENT):
-		%MenuBar.open_document(STARTUP_DOCUMENT, false, true)
+	if new_version:
+		_open_splash()
+		_write_setting(VERSION_SECTION, VERSION_KEY, version)
+
+
+## Returns the settings file. Tests can set a temporary override.
+func _settings_file() -> String:
+	return State.settings_path if settings_path.is_empty() else settings_path
+
+
+## Returns the application version from the project settings.
+func _current_version() -> String:
+	return str(ProjectSettings.get_setting("application/config/version", ""))
+
+
+## Returns the last version that stored settings, or an empty string.
+func _stored_version() -> String:
+	return str(_read_interface_settings().get_value(VERSION_SECTION, VERSION_KEY, ""))
+
+
+## Makes the splash the first and active tab. It reuses an open splash tab.
+func _open_splash() -> bool:
+	for index in State.tabs.size():
+		if State.tabs[index].file_path == SPLASH_DOCUMENT:
+			if index == 0:
+				State.activate_tab(index)
+				return true
+			var opened: Array[VoxelDocument] = [State.tabs[index]]
+			for other in State.tabs.size():
+				if other != index:
+					opened.append(State.tabs[other])
+			State.set_tabs(opened, 0)
+			return true
+	var splash := VoxelDocument.load_file(SPLASH_DOCUMENT)
+	if splash == null:
+		return false
+	var documents: Array[VoxelDocument] = [splash]
+	documents.append_array(State.tabs)
+	State.set_tabs(documents, 0)
+	return true
 
 
 ## Sets the UI scale. A zero value uses the automatic scale. When [param save]
@@ -196,17 +241,22 @@ func set_ui_scale(value: float, save: bool = true) -> void:
 ## Reads the interface settings. A missing file gives default values.
 func _read_interface_settings() -> ConfigFile:
 	var settings := ConfigFile.new()
-	settings.load(interface_settings_path)
+	settings.load(_settings_file())
 	return settings
 
 
-## Writes one interface setting and keeps the other sections.
+## Writes one setting and keeps the other sections. A settings file that
+## cannot be read is not overwritten.
 func _write_setting(section: String, key: String, value: Variant) -> void:
-	var settings := _read_interface_settings()
+	var settings := ConfigFile.new()
+	var error := settings.load(_settings_file())
+	if error != OK and error != ERR_FILE_NOT_FOUND:
+		push_warning("Cannot read the user settings: %s" % error_string(error))
+		return
 	settings.set_value(section, key, value)
-	var error := settings.save(interface_settings_path)
+	error = settings.save(_settings_file())
 	if error != OK:
-		push_warning("Cannot save the interface settings: %s" % error_string(error))
+		push_warning("Cannot save the user settings: %s" % error_string(error))
 
 
 func _automatic_ui_scale() -> float:

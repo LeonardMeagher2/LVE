@@ -5,7 +5,7 @@ Create voxel art and animation.
 - [Download for Windows](https://github.com/LeonardMeagher2/LVE/releases/latest/download/LVE-windows-x86_64.zip)
 - [Download for Linux](https://github.com/LeonardMeagher2/LVE/releases/latest/download/LVE-linux-x86_64.zip)
 
-![Leonard's Voxel Editor with the Flamingo document](docs/lve-editor.png)
+![Leonard's Voxel Editor with the splash document](docs/lve-editor.png)
 
 LVE is a voxel editor for 3D pixel art and animation.
 Paint and sculpt voxels, set per-voxel materials, and animate frames with tags.

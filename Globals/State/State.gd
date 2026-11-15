@@ -69,8 +69,15 @@ signal active_tab_changed()
 const WORK_SLICE_US := 3000
 ## The user path of the saved default palette.
 const DEFAULT_PALETTE_PATH := "user://default_palette.cfg"
-## The user path of the session file.
-const SESSION_PATH := "user://session.cfg"
+## The one user settings file. It stores the interface, agent, version, session,
+## and file dialog state.
+const SETTINGS_PATH := "user://settings.cfg"
+## The legacy files that the migration reads once.
+const LEGACY_SETTINGS_PATHS := [
+	"user://interface.cfg",
+	"user://session.cfg",
+	"user://file_dialog.cfg",
+]
 ## The default symmetry origin, at the corner between eight cells.
 const DEFAULT_SYMMETRY_ORIGIN := Vector3(-0.5, -0.5, -0.5)
 ## The image file extensions that the importer supports.
@@ -78,6 +85,8 @@ const IMAGE_EXTENSIONS := ["bmp", "dds", "exr", "hdr", "jpg", "jpeg", "ktx", "kt
 
 ## The palette that the New Document action applies.
 var default_palette := get_builtin_palette()
+## The settings file. Tests set a temporary path.
+var settings_path := SETTINGS_PATH
 
 ## One tracked operation for the status display.
 ##
@@ -420,6 +429,7 @@ func _init() -> void:
 	playback.document = _active_document
 
 func _ready() -> void:
+	migrate_settings()
 	load_default_palette()
 	document.palette = _copy_palette(default_palette)
 	_apply_material(default_palette[0])
@@ -1292,16 +1302,72 @@ func reset_default_palette(path: String = DEFAULT_PALETTE_PATH) -> Error:
 	return OK
 
 
-## Stores the last document path in the session file.
-func remember_document(path: String, config_path: String = SESSION_PATH) -> void:
+## Loads a settings file. A missing file gives an empty configuration. Returns
+## [code]null[/code] when the file exists but cannot be read.
+func _load_settings(path: String) -> ConfigFile:
 	var config := ConfigFile.new()
-	config.load(config_path)
+	var error := config.load(path)
+	if error == OK or error == ERR_FILE_NOT_FOUND:
+		return config
+	push_warning("Cannot read the user settings: %s" % error_string(error))
+	return null
+
+
+## Returns the path for a settings read or write. An empty path uses the one
+## settings file.
+func _settings_path(path: String) -> String:
+	return settings_path if path.is_empty() else path
+
+
+## Moves every missing key from the legacy files into the target file. The
+## target wins on a conflict. It removes only the legacy files that it read.
+func migrate_settings(target_path: String = "", legacy_paths: PackedStringArray = PackedStringArray()) -> Error:
+	if target_path.is_empty():
+		target_path = settings_path
+	if legacy_paths.is_empty():
+		legacy_paths = PackedStringArray(LEGACY_SETTINGS_PATHS)
+	var target := _load_settings(target_path)
+	if target == null:
+		return ERR_FILE_CORRUPT
+	var merged := false
+	var loaded_legacy_paths := PackedStringArray()
+	for legacy_path in legacy_paths:
+		var legacy := ConfigFile.new()
+		if legacy.load(legacy_path) != OK:
+			continue
+		loaded_legacy_paths.append(legacy_path)
+		for section in legacy.get_sections():
+			for key in legacy.get_section_keys(section):
+				if target.has_section_key(section, key):
+					continue
+				target.set_value(section, key, legacy.get_value(section, key))
+				merged = true
+	if merged:
+		var error := target.save(target_path)
+		if error != OK:
+			push_warning("Cannot save the user settings: %s" % error_string(error))
+			return error
+	for legacy_path in loaded_legacy_paths:
+		if FileAccess.file_exists(legacy_path):
+			DirAccess.remove_absolute(ProjectSettings.globalize_path(legacy_path))
+	return OK
+
+
+## Stores the last document path in the settings file.
+func remember_document(path: String, config_path: String = "") -> void:
+	config_path = _settings_path(config_path)
+	var config := _load_settings(config_path)
+	if config == null:
+		return
 	config.set_value("files", "last_document", path)
-	config.save(config_path)
+	var error := config.save(config_path)
+	if error != OK:
+		push_warning("Cannot save the user settings: %s" % error_string(error))
 
 
-## Removes the last document path from the session file.
-func forget_document(config_path: String = SESSION_PATH) -> void:
+## Removes the last document path from the settings file.
+func forget_document(config_path: String = "") -> void:
+	config_path = _settings_path(config_path)
 	var config := ConfigFile.new()
 	if config.load(config_path) != OK:
 		return
@@ -1311,7 +1377,8 @@ func forget_document(config_path: String = SESSION_PATH) -> void:
 
 
 ## Returns the stored last document path, or an empty string.
-func last_document_path(config_path: String = SESSION_PATH) -> String:
+func last_document_path(config_path: String = "") -> String:
+	config_path = _settings_path(config_path)
 	var config := ConfigFile.new()
 	if config.load(config_path) != OK:
 		return ""
@@ -1320,7 +1387,8 @@ func last_document_path(config_path: String = SESSION_PATH) -> String:
 
 
 ## Returns the saved tab paths, or an empty array.
-func last_tabs(config_path: String = SESSION_PATH) -> PackedStringArray:
+func last_tabs(config_path: String = "") -> PackedStringArray:
+	config_path = _settings_path(config_path)
 	var config := ConfigFile.new()
 	if config.load(config_path) != OK:
 		return PackedStringArray()
@@ -1336,7 +1404,8 @@ func last_tabs(config_path: String = SESSION_PATH) -> PackedStringArray:
 
 
 ## Returns the saved active tab index, or zero.
-func last_tab_index(config_path: String = SESSION_PATH) -> int:
+func last_tab_index(config_path: String = "") -> int:
+	config_path = _settings_path(config_path)
 	var config := ConfigFile.new()
 	if config.load(config_path) != OK:
 		return 0
@@ -1345,11 +1414,14 @@ func last_tab_index(config_path: String = SESSION_PATH) -> int:
 
 ## Writes the open documents that have a path, and the active index. A tab that
 ## was never saved has no path, so a restart cannot reopen it.
-func remember_session(config_path: String = SESSION_PATH) -> void:
-	var config := ConfigFile.new()
-	config.load(config_path)
+func remember_session(config_path: String = "") -> void:
+	config_path = _settings_path(config_path)
+	var config := _load_settings(config_path)
+	if config == null:
+		return
+	var stored_active := int(config.get_value("files", "active", 0))
 	var paths := PackedStringArray()
-	var active := 0
+	var active_path := -1
 	for index in tabs.size():
 		var document := tabs[index]
 		# Only a written path is a save path. A bundled sample has a file path
@@ -1358,20 +1430,30 @@ func remember_session(config_path: String = SESSION_PATH) -> void:
 		if path.is_empty():
 			continue
 		if index == active_tab:
-			active = paths.size()
+			active_path = paths.size()
 		paths.append(path)
+	# A pathless active tab, such as the splash, must not discard the saved
+	# active tab. Keep the stored index when it still fits the saved paths.
+	var active := active_path
+	if active < 0:
+		active = clampi(stored_active, 0, maxi(paths.size() - 1, 0))
 	config.set_value("files", "tabs", paths)
 	config.set_value("files", "active", active)
 	if not paths.is_empty():
 		config.set_value("files", "last_document", paths[active])
-	config.save(config_path)
+	var error := config.save(config_path)
+	if error != OK:
+		push_warning("Cannot save the user settings: %s" % error_string(error))
 
 
 ## Returns [code]true[/code] when the current scene is the application Main
-## scene.
+## scene. A test scene has no current scene, so a null match is not enough.
 func is_app_session() -> bool:
 	var tree := get_tree()
-	return tree != null and tree.current_scene == tree.root.get_node_or_null("Main")
+	if tree == null:
+		return false
+	var main := tree.root.get_node_or_null("Main")
+	return main != null and tree.current_scene == main
 
 
 ## Returns the file dialog filter for the supported image formats.

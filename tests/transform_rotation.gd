@@ -7,7 +7,7 @@ extends "res://tests/test.gd"
 var viewport: SubViewport
 var _source: VoxelFrame
 
-# A shape whose per-axis extents deliberately mismatch parity, mirroring the Flamingo asset that
+# A shape whose per-axis extents deliberately mismatch parity, mirroring the splash asset that
 # exposed the bug: X spans 3 cells, Y spans 2, Z spans 4. Rotating about Z (X,Y in-plane) or about
 # Y (X,Z in-plane) both hit a genuine parity mismatch, which produced holes under the old
 # floating-point rotation. Deliberately irregular (not a solid block), like real voxel art.

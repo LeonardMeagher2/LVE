@@ -1149,7 +1149,7 @@ func _busy() -> void:
 	step("Then a new document is refused", func():
 		expect(_is_error(new_response), "new_document reports busy")
 	)
-	var open_response := await _call("open_document", {"path": ProjectSettings.globalize_path("res://Flamingo.lve")})
+	var open_response := await _call("open_document", {"path": ProjectSettings.globalize_path("res://splash.lve")})
 	step("Then opening a document is refused", func():
 		expect(_is_error(open_response), "open_document reports busy")
 	)

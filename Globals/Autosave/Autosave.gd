@@ -148,7 +148,7 @@ func list_recovery() -> Array:
 	for entry in entries:
 		known[str(entry.get("file", ""))] = true
 	if State.is_app_session():
-		for path in State.last_tabs(State.SESSION_PATH):
+		for path in State.last_tabs(State.settings_path):
 			var original := str(path)
 			if original.is_empty():
 				continue

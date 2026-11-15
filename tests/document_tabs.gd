@@ -4,8 +4,9 @@ extends "res://tests/test.gd"
 ## must stay out of the file format.
 
 const TABS_SCENE := preload("res://ui/MenuBar/document_tabs.tscn")
-const SAMPLE_DOCUMENT := "res://Flamingo.lve"
+const SAMPLE_DOCUMENT := "res://splash.lve"
 const SESSION_PATH := "user://document_tabs_test.cfg"
+const CORRUPT_PATH := "user://document_tabs_corrupt.cfg"
 
 var tabs: TabBar
 var _first: VoxelDocument
@@ -19,6 +20,7 @@ func _ready() -> void:
 	test("the tab strip follows the open documents", _strip, "tab_strip")
 	test("open reuses an empty tab and adds another for a second document", _open, "tab_open")
 	test("the session stores the open tab paths", _session, "tab_session")
+	test("a corrupt settings file is not overwritten by a session save", _corrupt_session, "corrupt_session")
 	test("the runtime editor state is not serialized", _serialize, "tab_serialize")
 	test("quitting asks to save each edited document", _quit, "quit_confirmation")
 	test("the recovery prompt lists unsaved documents", _recovery_dialog, "recovery_dialog")
@@ -52,6 +54,7 @@ func after_test() -> void:
 	var directory := DirAccess.open("user://")
 	if directory:
 		directory.remove(SESSION_PATH.get_file())
+		directory.remove(CORRUPT_PATH.get_file())
 		directory.remove("quit_save_test.lve")
 
 
@@ -155,11 +158,47 @@ func _session() -> void:
 		second.edit_save_path = "user://second.lve"
 		var documents: Array[VoxelDocument] = [first, second]
 		State.set_tabs(documents, 1)
+		var settings := ConfigFile.new()
+		settings.set_value("interface", "scale", 1.25)
+		settings.set_value("agent", "mcp_enabled", true)
+		settings.save(SESSION_PATH)
 		State.remember_session(SESSION_PATH)
 	)
 	step("Then the session stores the paths and the active tab", func():
 		expect(State.last_tabs(SESSION_PATH) == PackedStringArray(["user://first.lve", "user://second.lve"]), "the paths are stored")
 		expect(State.last_tab_index(SESSION_PATH) == 1, "the active tab is stored")
+	)
+	step("Then the other settings survive", func():
+		var settings := ConfigFile.new()
+		expect(settings.load(SESSION_PATH) == OK, "the settings file loads")
+		expect(is_equal_approx(float(settings.get_value("interface", "scale", 0.0)), 1.25), "the interface setting survives")
+		expect(bool(settings.get_value("agent", "mcp_enabled", false)), "the agent setting survives")
+	)
+	step("Then a test scene is not the app session", func():
+		expect(not State.is_app_session(), "a test scene cannot write the real session")
+	)
+
+
+func _corrupt_session() -> void:
+	var original := "[broken\nkey=1\n"
+	step("Given a corrupt settings file", func():
+		var file := FileAccess.open(CORRUPT_PATH, FileAccess.WRITE)
+		expect(file != null, "the corrupt fixture opens")
+		if file != null:
+			file.store_string(original)
+			file.close()
+		var probe := ConfigFile.new()
+		expect(probe.load(CORRUPT_PATH) != OK, "the corrupt fixture is unreadable")
+	)
+	step("When the session is saved", func():
+		var first := VoxelDocument.new()
+		first.edit_save_path = "user://first.lve"
+		var documents: Array[VoxelDocument] = [first]
+		State.set_tabs(documents, 0)
+		State.remember_session(CORRUPT_PATH)
+	)
+	step("Then the corrupt file keeps its bytes", func():
+		expect(FileAccess.get_file_as_string(CORRUPT_PATH) == original, "the corrupt file is not overwritten")
 	)
 
 
