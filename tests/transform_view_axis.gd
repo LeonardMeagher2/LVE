@@ -20,6 +20,8 @@ func _ready() -> void:
 	test("a view-axis rotate turns about the camera normal", _rotate, "transform_view_axis_rotate")
 	test("a non-uniform view scale uses the camera plane and resamples", _scale, "transform_view_axis_scale")
 	test("a top view stays on the exact world axis", _top, "transform_view_axis_top")
+	test("a plane-mode quarter turn keeps every voxel in each named view", _plane_rotation, "transform_view_axis_plane_rotation")
+	test("a plane-mode rotation measures the drag on the screen plane", _plane_screen_angle, "transform_view_axis_plane_screen_angle")
 
 
 func before_test() -> void:
@@ -256,6 +258,61 @@ func _top() -> void:
 
 	step("Then the rotation keeps every voxel", func():
 		expect(_frame().count() == 9, "the quarter turn keeps all 9 voxels (has %d)" % _frame().count())
+	)
+
+
+func _plane_rotation() -> void:
+	var original: Array[Vector3i] = [
+		Vector3i(0, 0, 0), Vector3i(1, 0, 0), Vector3i(2, 0, 0),
+		Vector3i(0, 1, 0), Vector3i(2, 1, 1),
+		Vector3i(1, 0, 2), Vector3i(1, 1, 3),
+		Vector3i(0, 0, 1), Vector3i(2, 0, 3),
+	]
+	for view_name in ["front", "right", "top"]:
+		step("Given the asymmetric shape in the %s view with the view axis off" % view_name, func():
+			_view_setup(view_name)
+			_paint_shape()
+			activate_tool("transform")
+			select_toolbar_item("transform", "Rotate")
+			_settings().snap = true
+			_settings().view_axis = false
+		)
+
+		step("When the user turns the shape four quarter turns in the %s view" % view_name, func():
+			for _i in 4:
+				_drag_screen_from_center(Vector2(0, -120))
+				_press_option("Commit")
+		)
+
+		step("Then the %s view returns the original shape" % view_name, func():
+			expect(_frame().count() == original.size(), "the shape still holds %d voxels (has %d)" % [original.size(), _frame().count()])
+			for cell in original:
+				expect(_frame().has(cell), "cell %s returned" % cell)
+		)
+
+
+func _plane_screen_angle() -> void:
+	step("Given a selected shape in the default view with the view axis off and snap off", func():
+		_view_setup("default")
+		_paint_shape()
+		activate_tool("transform")
+		select_toolbar_item("transform", "Rotate")
+		_settings().snap = false
+		_settings().view_axis = false
+	)
+
+	step("When the user drags sixty degrees on screen", func():
+		var from := _screen(_current_center())
+		var to := from + Vector2(60.0, -103.923)
+		_mouse_button(from, true)
+		_mouse_motion(to)
+	)
+
+	step("Then the drag angle follows the screen and the axis is Y", func():
+		var tool := _rotate_tool()
+		expect(tool._axis_of(tool._view_normal) == 1, "the rotation axis is the nearest world axis")
+		expect(absf(rad_to_deg(tool._job_angle) - 60.0) <= 2.0, "the drag angle follows the screen (was %.1f degrees)" % rad_to_deg(tool._job_angle))
+		_press_option("Cancel")
 	)
 
 

@@ -2,9 +2,11 @@ extends "./TransformTool.gd"
 
 ## The rotate transform tool.
 ##
-## A drag rotates the source around its bounds center on the view axis. A click
-## opens the rotate dialog for exact angles. A quarter turn uses an exact
-## integer rotation. Any other angle uses [RotSprite].
+## A drag rotates the source around its bounds center. The axis is the view
+## normal or the nearest world axis. The drag angle stays on the camera plane,
+## so a quarter turn follows the pointer in an oblique view. A click opens the
+## rotate dialog for exact angles. A quarter turn uses an exact integer
+## rotation. Any other angle uses [RotSprite].
 
 const TransformDialog := preload("./TransformDialog.gd")
 
@@ -384,7 +386,9 @@ class RotateJob extends TransformJob:
 func _begin_grab(origin: Vector3, dir: Vector3) -> void:
 	_pivot = _source_bbox().get_center()
 	_view_normal = _drag_normal()
-	_plane = _drag_plane_through(_pivot)
+	# The rotation axis can snap to a world axis, but the drag angle stays on
+	# the screen plane so a quarter turn follows the pointer.
+	_plane = _screen_plane_through(_pivot)
 	var v := _cursor_vec(origin, dir)
 	if v.is_zero_approx():
 		v = _fallback_vec()
@@ -532,18 +536,21 @@ func _on_dialog_canceled() -> void:
 
 
 func _cursor_vec(origin: Vector3, dir: Vector3) -> Vector3:
+	var normal := _plane.normal if _plane != null else -_grab_forward
 	var rel := _plane_point(origin, dir) - _pivot
-	return rel - _view_normal * rel.dot(_view_normal)
+	return rel - normal * rel.dot(normal)
 
 
 func _signed_angle(a: Vector3, b: Vector3) -> float:
-	return atan2(a.cross(b).dot(_view_normal), a.dot(b))
+	var normal := _plane.normal if _plane != null else -_grab_forward
+	return atan2(a.cross(b).dot(normal), a.dot(b))
 
 
 func _fallback_vec() -> Vector3:
-	var right := _grab_camera_right - _view_normal * _grab_camera_right.dot(_view_normal)
+	var normal := _plane.normal if _plane != null else -_grab_forward
+	var right := _grab_camera_right - normal * _grab_camera_right.dot(normal)
 	if not right.is_zero_approx():
 		return right.normalized()
-	var forward := Vector3.ZERO
-	forward[(_view_normal.abs().max_axis_index() + 1) % 3] = 1.0
-	return forward
+	var fallback := Vector3.ZERO
+	fallback[(normal.abs().max_axis_index() + 1) % 3] = 1.0
+	return fallback
