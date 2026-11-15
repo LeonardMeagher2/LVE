@@ -106,14 +106,16 @@ The view lock stores the light direction relative to the camera.
 The workspace fields restore the editor setup with the document.
 Older files omit them.
 A missing workspace field keeps the current editor setup.
+Missing lighting uses the default lighting.
 A missing camera frames the document content.
 
 ### `tools`
 
 `tools` holds one dictionary per plugin, keyed by the plugin name.
 A plugin entry holds its exported option values.
-The values are booleans, integers, or finite floats.
-A value with the wrong type is ignored.
+The values must be booleans, integers, or finite floats.
+Any other value rejects the document.
+A new option type requires a new format version.
 The selection brush pattern is not stored.
 
 `tools` also holds these keys.
@@ -156,7 +158,8 @@ The angle values are in radians.
 
 `edit_frame` and `edit_tag` store the current frame and tag.
 `edit_playing` opens the document with playback running.
-Playback restarts at the first frame of the active tag.
+Playback restarts at the start of its loop.
+A reverse loop starts at the last frame.
 Workspace changes do not mark the document as edited.
 
 Export settings support these keys.

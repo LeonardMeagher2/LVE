@@ -105,6 +105,7 @@ func save_doc(path: String) -> Error:
 	if State.edit_busy():
 		return ERR_BUSY
 	var document := State.document
+	State.capture_workspace(document)
 	var encoded := document.encode_document()
 	if encoded.is_empty():
 		_show_file_error("The document exceeds the format limits or contains invalid data.")

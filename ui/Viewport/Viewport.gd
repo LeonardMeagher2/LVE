@@ -68,6 +68,7 @@ func _ready() -> void:
 	if document_lighting:
 		lighting_changed.connect(_save_document_lighting)
 		State.document_changed.connect(_restore_document_lighting)
+		State.workspace_capture_requested.connect(_save_document_lighting)
 		_restore_document_lighting()
 	State.slice_changed.connect(_on_slice_changed)
 	State.floor_plane_changed.connect(_on_slice_changed)
@@ -78,6 +79,7 @@ func _ready() -> void:
 	_view_document = State.document
 	if document_view:
 		State.document_changed.connect(_restore_document_view)
+		State.workspace_capture_requested.connect(_save_document_view)
 		_restore_document_view()
 
 

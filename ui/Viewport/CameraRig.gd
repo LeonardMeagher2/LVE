@@ -49,6 +49,7 @@ func _ready() -> void:
 	State.document_changed.connect(configure)
 	if stores_document_pose:
 		State.document_deactivating.connect(_save_pose)
+		State.workspace_capture_requested.connect(_save_pose)
 	set_view("default")
 	configure()
 	if stores_document_pose:

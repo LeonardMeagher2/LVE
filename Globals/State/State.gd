@@ -19,6 +19,9 @@ signal document_deactivating()
 signal cells_changed(frame: int, affected: Array[Vector3i])
 ## Emitted when a document is saved to a path. The unsaved mark is already clear.
 signal document_saved(document: VoxelDocument)
+## Emitted before a document is encoded for a save or an autosave copy. Observers
+## capture the active editor workspace into the active document.
+signal workspace_capture_requested()
 ## Emitted when chunks in a frame need a surface rebuild. [param frame] is the
 ## frame index. [param affected] lists one cell per changed chunk.
 signal chunks_changed(frame: int, affected: Array[Vector3i])
@@ -505,6 +508,14 @@ func open_tab(value: VoxelDocument) -> int:
 	var index := add_tab(value)
 	activate_tab(index)
 	return index
+
+
+## Captures the active editor workspace into [param document] before it is
+## encoded. Only the active document has live editor state. An inactive document
+## keeps the state that its deactivation captured.
+func capture_workspace(document: VoxelDocument) -> void:
+	if document == null or document == _active_document:
+		workspace_capture_requested.emit()
 
 
 ## Records a saved document path in its tab and the session. It clears the

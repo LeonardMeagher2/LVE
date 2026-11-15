@@ -37,6 +37,7 @@ func _ready() -> void:
 	_state_document = State.document
 	State.document_deactivating.connect(_save_current)
 	State.document_changed.connect(_restore_document)
+	State.workspace_capture_requested.connect(_save_current)
 	State.material_changed.connect(_on_material_changed)
 	State.symmetry_changed.connect(_on_editing_changed)
 	State.floor_plane_changed.connect(_on_editing_changed)
@@ -48,6 +49,8 @@ func _exit_tree() -> void:
 		State.document_deactivating.disconnect(_save_current)
 	if State.document_changed.is_connected(_restore_document):
 		State.document_changed.disconnect(_restore_document)
+	if State.workspace_capture_requested.is_connected(_save_current):
+		State.workspace_capture_requested.disconnect(_save_current)
 	if State.material_changed.is_connected(_on_material_changed):
 		State.material_changed.disconnect(_on_material_changed)
 	if State.symmetry_changed.is_connected(_on_editing_changed):
@@ -135,7 +138,7 @@ func _can_save() -> bool:
 
 
 # Writes one top-level tool key and keeps the others. Unknown keys from another
-# build stay in the document.
+# build stay in the document when they use a supported value type.
 func _save_key(key: String, value: Variant) -> void:
 	if not _can_save():
 		return

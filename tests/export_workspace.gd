@@ -18,6 +18,7 @@ func _ready() -> void:
 	timeout = 45.0
 	test("Export shares plugin tabs and previews both formats without changing the editor", _run)
 	test("Export preview shading follows the environment after a model swap", _shading_swap, "shading_swap")
+	test("Export preview playback survives a frame rebuild", _preview_rebuild, "preview_rebuild")
 
 
 func _run() -> void:
@@ -432,6 +433,36 @@ func _shading_swap() -> void:
 	await _wait_model_swap()
 	step("Then both preview renderers draw shaded again", func():
 		expect(not exporter._model_renderer.unshaded and not exporter._model_back_renderer.unshaded, "both preview renderers draw shaded")
+		exporter._menu_item.get_node("ExportBtn").button_pressed = false
+	)
+	await get_tree().process_frame
+
+
+func _preview_rebuild() -> void:
+	step("Given a playing export preview with two frames", func():
+		exporter = plugin("ExportPlugin")
+		State.document = VoxelDocument.new()
+		State.document.set_cell(0, Vector3i.ZERO, VoxelFrame.material(Color.RED))
+		State.document.add_frame()
+		State.document.set_cell(1, Vector3i(1, 0, 0), VoxelFrame.material(Color.BLUE))
+		State.frames_changed.emit()
+		State.document_changed.emit()
+		exporter._menu_item.get_node("ExportBtn").button_pressed = true
+	)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	step("When the preview plays and its frames rebuild", func():
+		exporter._model.get_node("AnimationRow/Play").button_pressed = true
+		exporter._model_playback.current_frame = 1
+		expect(exporter._model_playback.is_playing, "the preview plays")
+		exporter._model_dirty = true
+		exporter._refresh_model()
+	)
+	step("Then the preview keeps its frame and play state", func():
+		expect(exporter._model_playback.is_playing, "the rebuilt preview still plays")
+		expect(exporter._model_playback.current_frame == 1, "the rebuilt preview keeps its frame")
+		expect(exporter._model.get_node("AnimationRow/Play").button_pressed, "the Play button stays pressed")
+		exporter._model.get_node("AnimationRow/Play").button_pressed = false
 		exporter._menu_item.get_node("ExportBtn").button_pressed = false
 	)
 	await get_tree().process_frame

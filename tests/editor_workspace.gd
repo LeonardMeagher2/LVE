@@ -17,6 +17,7 @@ func _ready() -> void:
 	test("tool settings and the active color follow the document", _tools_run, "tools")
 	test("view, environment, and camera settings follow the document", _view_run, "view")
 	test("a saved document restores its workspace", _file_run, "file")
+	test("a save captures the active workspace", _save_capture_run, "save_capture")
 	test("a document without workspace state keeps the current setup", _legacy_run, "legacy")
 	test("workspace changes do not mark the document dirty", _dirty_run, "dirty")
 	test("the frame, tag, and playback state follow the document", _switch_run, "switch")
@@ -302,6 +303,54 @@ func _file_run() -> void:
 		expect(is_equal_approx(camera_rig()._dist, pose[0].dist), "the camera distance returns")
 		expect(is_equal_approx(camera_rig()._init_dist, pose[0].init), "the initial camera distance returns")
 		expect(camera_rig()._target.is_equal_approx(pose[0].target), "the camera target returns")
+		DirAccess.remove_absolute(path)
+	)
+
+
+func _save_capture_run() -> void:
+	var path := "user://editor_workspace_save_%s.lve" % Time.get_ticks_usec()
+	var inherited := VoxelFrame.material(Color(0.3, 0.7, 0.4))
+	var pose := []
+	step("Given a document that inherits the active workspace", func():
+		var first := State.new_document()
+		var second := State.new_document()
+		State.set_tabs([first], 0)
+		_brush.diameter = 6
+		_brush.shape = StampToolSettings.BrushShape.SPHERE
+		State.edit_material(inherited)
+		viewport_scene()._set_grid_visible(false)
+		viewport_scene()._set_wireframe(true)
+		State.open_tab(second)
+		expect(second.tool_settings.is_empty(), "the new document starts without tool state")
+		expect(second.view_settings.is_empty(), "the new document starts without view state")
+		pose.append({"yaw": camera_rig()._yaw, "pitch": camera_rig()._pitch, "dist": camera_rig()._dist, "target": camera_rig()._target})
+		expect(_menu.save_doc(path) == OK, "the inherited workspace saves")
+		expect(second.tool_settings.get("BrushPlugin", {}).get("diameter", 0) == 6, "the save captures the tools")
+		expect(second.tool_settings.has("material"), "the save captures the material")
+		expect(second.view_settings.get("grid", true) == false, "the save captures the view")
+		expect(second.lighting_settings.has("shadows"), "the save captures the lighting")
+		expect(not second.edit_camera.is_empty(), "the save captures the camera")
+	)
+	step("When the first workspace changes and the file opens", func():
+		State.activate_tab(0)
+		_brush.diameter = 2
+		_brush.shape = StampToolSettings.BrushShape.CUBE
+		State.edit_material(VoxelFrame.material(Color.BLACK))
+		viewport_scene()._set_grid_visible(true)
+		viewport_scene()._set_wireframe(false)
+		camera_rig().orbit(Vector2(-30, -10))
+		_menu._on_file_opened(path)
+	)
+	step("Then the saved workspace returns", func():
+		expect(_brush.diameter == 6, "the saved brush diameter returns")
+		expect(_brush.shape == StampToolSettings.BrushShape.SPHERE, "the saved brush shape returns")
+		expect(State.current_material == inherited, "the saved material returns")
+		expect(not viewport_scene().get_node("%Grid").visible, "the saved grid choice returns")
+		expect(editor_viewport().debug_draw == Viewport.DEBUG_DRAW_WIREFRAME, "the saved wireframe returns")
+		expect(not State.document.edit_camera.is_empty(), "the opened document keeps its camera")
+		expect(is_equal_approx(camera_rig()._yaw, pose[0].yaw), "the saved camera yaw returns")
+		expect(is_equal_approx(camera_rig()._dist, pose[0].dist), "the saved camera distance returns")
+		expect(camera_rig()._target.is_equal_approx(pose[0].target), "the saved camera target returns")
 		DirAccess.remove_absolute(path)
 	)
 

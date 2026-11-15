@@ -230,6 +230,7 @@ func recovery_entries() -> Array:
 
 func _save_document(document: VoxelDocument) -> void:
 	var id := document.get_instance_id()
+	State.capture_workspace(document)
 	var encoded := document.encode_document()
 	if encoded.is_empty():
 		return
