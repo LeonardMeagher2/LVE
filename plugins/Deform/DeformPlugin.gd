@@ -22,7 +22,7 @@ func _ready() -> void:
 	_toolbar.toggled.connect(_on_toolbar_toggled)
 	_settings.tool_changed.connect(_on_tool_changed)
 	_options.bind(_settings)
-	add_tool_bar_item(_toolbar)
+	add_tool_bar_item(_toolbar, _settings)
 	_select_tool(_settings.tool)
 
 

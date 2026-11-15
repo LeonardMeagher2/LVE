@@ -31,7 +31,8 @@ The Variant encoding is Godot-specific.
 ## Payload schema
 
 The payload is an untyped dictionary with string keys.
-All document fields are required, except `size`, which older version 3 files omit.
+All document fields are required, except the workspace fields and `size`.
+Older version 3 files omit them.
 A missing `size` means no document bound.
 
 | Key | Type | Contents |
@@ -43,6 +44,12 @@ A missing `size` means no document bound.
 | `ao` | Float from 0 to 1 | Ambient occlusion strength. Zero disables it. |
 | `lighting` | Untyped dictionary | Editor lighting settings |
 | `export` | Untyped dictionary | Export workspace settings |
+| `tools` | Untyped dictionary | Editor tool state. Optional. |
+| `view` | Untyped dictionary | Editor view state. Optional. |
+| `camera` | Untyped dictionary | Editor camera pose. Optional. |
+| `edit_frame` | Integer | The frame that the editor shows. Optional. |
+| `edit_tag` | Integer | The active animation tag, or -1. Optional. |
+| `edit_playing` | Boolean | Whether animation playback runs. Optional. |
 | `size` | `Vector3i` | Optional centered document size. Zero on an axis means that axis is infinite. |
 
 Each frame has these fields.
@@ -90,9 +97,67 @@ Frame ranges are inclusive.
 Loop modes are forward, reverse, ping-pong, and reverse ping-pong, numbered zero through three.
 A repeat count of zero means continuous playback.
 
-Editor lighting supports `basis`, `color`, and `ambient_color`.
-Color alpha stores the editor light strength.
-Editor shading and shadow view options are not document settings.
+Editor lighting supports `basis`, `color`, `ambient_color`, `shadows`, `shaded`, `view_locked`, and `view_basis`.
+Color alpha stores the light strength.
+The view lock stores the light direction relative to the camera.
+
+## Editor workspace state
+
+The workspace fields restore the editor setup with the document.
+Older files omit them.
+A missing workspace field keeps the current editor setup.
+A missing camera frames the document content.
+
+### `tools`
+
+`tools` holds one dictionary per plugin, keyed by the plugin name.
+A plugin entry holds its exported option values.
+The values are booleans, integers, or finite floats.
+A value with the wrong type is ignored.
+The selection brush pattern is not stored.
+
+`tools` also holds these keys.
+
+| Key | Type | Contents |
+| --- | --- | --- |
+| `active` | String | The active toolbar id, `PluginName/ToolbarName` |
+| `material` | `PackedFloat32Array` | The active nine-float material |
+| `editing` | Untyped dictionary | The floor, slice, and symmetry setup |
+
+`editing` supports these keys.
+
+| Key | Type | Range |
+| --- | --- | --- |
+| `symmetry_axes` | Integer | Bit mask from 0 to 7 |
+| `symmetry_origin` | `Vector3` | Finite cell position, snapped to half units |
+| `floor_axis` | Integer | 0 for X, 1 for Y, or 2 for Z |
+| `floor_index` | Integer | Cell index along the floor axis |
+| `slice_layers` | Integer | 0 to 8 layers on each side of the floor |
+
+### `view`
+
+`view` supports these keys.
+
+| Key | Type | Contents |
+| --- | --- | --- |
+| `grid` | Boolean | Whether the grid shows |
+| `wireframe` | Boolean | Whether the view uses the wireframe draw mode |
+| `orthographic` | Boolean | Whether the camera uses an orthographic projection |
+| `view_mode` | Integer | 0 for none, 1 for pan, 2 for rotate, or 3 for the light handle |
+| `environment_open` | Boolean | Whether the environment row shows |
+
+### `camera`
+
+`camera` supports `yaw`, `pitch`, `distance`, `initial_distance`, and `target`.
+The angle values are in radians.
+`initial_distance` keeps the zoom percent stable.
+
+### Frame and playback
+
+`edit_frame` and `edit_tag` store the current frame and tag.
+`edit_playing` opens the document with playback running.
+Playback restarts at the first frame of the active tag.
+Workspace changes do not mark the document as edited.
 
 Export settings support these keys.
 

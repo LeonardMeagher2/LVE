@@ -40,6 +40,9 @@ func reset_environment() -> void:
 	State.floor_index = 0
 	State.symmetry_axes = 0
 	State.clear_selection()
+	var viewport := viewport_scene()
+	if viewport != null:
+		viewport.reset_view_state()
 	_brush_settings_resource.mode = BrushToolSettings.BrushMode.PENCIL
 	_brush_settings_resource.shape = StampToolSettings.BrushShape.CUBE
 	_brush_settings_resource.diameter = 1

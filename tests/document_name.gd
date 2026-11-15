@@ -9,7 +9,7 @@ var export_light_basis := Basis(Vector3.RIGHT, -PI / 4.0)
 
 
 func _ready() -> void:
-	test("document names follow the file and saved settings stay separate from view options", _run)
+	test("document names follow the file and saved settings stay independent", _run)
 
 
 func _run() -> void:
@@ -55,7 +55,8 @@ func _run() -> void:
 		expect(get_window().title == first_path.get_file() + " - " + VoxelDocument.APP_NAME, "the app title follows the saved file name")
 		var data := VoxelDocument.load_file(first_path).document_data()
 		expect(not data.has("title") and not data.has("file_path"), "the file stores no title or source path")
-		expect(not State.document.lighting_settings.has("shaded") and not State.document.lighting_settings.has("shadows"), "editor view options stay outside saved lighting")
+		expect(State.document.lighting_settings.has("shaded") and State.document.lighting_settings.has("shadows"), "the document stores the editor view options")
+		expect(not State.document.lighting_settings.shadows, "the document stores the Shadows choice")
 		expect(State.document.lighting_settings.color == Color.RED, "export color changes preserve the editor light color")
 		expect(State.document.lighting_settings.basis.is_equal_approx(light_basis), "the document stores the editor light direction")
 		expect(State.document.export_settings.lighting.basis.is_equal_approx(export_light_basis), "the document stores the independent export light direction")
@@ -65,7 +66,7 @@ func _run() -> void:
 		expect(is_equal_approx(camera.yaw, deg_to_rad(30.0)) and is_equal_approx(camera.pitch, deg_to_rad(20.0)), "the document stores the export camera angle")
 		expect(camera.target.is_equal_approx(Vector3(2, 3, 4)), "the document stores the export camera offset")
 		expect(is_equal_approx(camera.distance, 17.0) and is_equal_approx(camera.initial_distance, 21.0), "the document stores the export camera zoom")
-		expect(not State.document.lighting_settings.has("view_locked"), "the editor lock stays a session option")
+		expect(not State.document.lighting_settings.view_locked, "the document stores the unlocked state")
 	)
 	step("When the user saves under another file name", func():
 		menu.save_doc(renamed_path)
@@ -78,11 +79,11 @@ func _run() -> void:
 		expect(menu.current_save_path.is_empty(), "the new document has no previous save path")
 		menu._on_file_opened(renamed_path)
 	)
-	step("Then saved settings return without changing editor view options", func():
+	step("Then saved settings and view options return", func():
 		expect(get_window().title == renamed_path.get_file() + " - " + VoxelDocument.APP_NAME, "opening a document changes the app title")
 		expect(viewport_scene().get_lighting_settings().basis.is_equal_approx(light_basis), "the editor light direction is restored")
 		expect(exporter._model_scene.get_lighting_settings().basis.is_equal_approx(export_light_basis), "the export light direction is restored")
-		expect(not viewport_scene().get_lighting_settings().shadows, "the editor keeps its current Shadows view option")
+		expect(not viewport_scene().get_lighting_settings().shadows, "the editor restores the saved Shadows view option")
 		expect(exporter._sheet_settings.get_node("SizeRow/Size").value == 24, "the manual frame size is restored")
 		expect(exporter._sheet_settings.get_node("ViewRow/View").selected == 2, "the selected sprite view is restored")
 		expect(not exporter._sheet_settings.get_node("TurntableRow/Turntable").button_pressed, "the saved turntable choice is restored")

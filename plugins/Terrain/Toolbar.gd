@@ -15,10 +15,18 @@ var _settings := preload("./settings.tres")
 
 func _ready() -> void:
 	get_popup().index_pressed.connect(_on_index_pressed)
+	_settings.tool_changed.connect(_sync_icon)
+	_sync_icon(_settings.tool)
 
 
 func _on_index_pressed(index: int) -> void:
 	_select_id(get_popup().get_item_id(index))
+
+
+func _sync_icon(tool: int) -> void:
+	var item_index := get_popup().get_item_index(tool)
+	if item_index >= 0:
+		icon = get_popup().get_item_icon(item_index)
 
 
 # Select one tool by its popup item id. The icon comes from the matching item,

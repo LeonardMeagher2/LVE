@@ -76,7 +76,7 @@ func _lock_run() -> void:
 	step("Then the light keeps its angle to the camera", func():
 		expect(light.basis.is_equal_approx(camera_rig().basis * _relative), "the locked light follows the camera")
 		expect(scene.get_lighting_settings().view_locked, "the viewport reports the lock")
-		expect(not State.document.lighting_settings.has("view_locked"), "the document lighting does not store the lock")
+		expect(State.document.lighting_settings.view_locked, "the document lighting stores the lock")
 	)
 	step("When the user unlocks and orbits", func():
 		scene.get_node("%LockView").button_pressed = false
@@ -148,6 +148,7 @@ func _environment_run() -> void:
 		expect(not scene.get_node("%Shaded").button_pressed, "the Shaded button shows unpressed")
 		expect(not scene.get_node("%LightToggle").button_pressed, "the light direction turns off")
 		expect(not scene.get_node("%LightHandle").visible, "the light handle hides")
+		expect(State.document.view_settings.get("view_mode", 0) == 0, "shading off clears the light drag mode")
 		for name in ["LightToggle", "LockView", "LightColor", "AmbientColor", "Shadows", "Reset"]:
 			expect(scene.get_node("%" + name).disabled, "%s disables while lighting is off" % name)
 	)

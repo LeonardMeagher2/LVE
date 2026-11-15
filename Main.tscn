@@ -6,6 +6,7 @@
 [ext_resource type="PackedScene" uid="uid://8g827rqodt23" path="res://ui/AnimationTimeline/AnimationTimeline.tscn" id="4_trn2v"]
 [ext_resource type="PackedScene" uid="uid://dnkuglr7qodru" path="res://ui/StatusBar/status_bar.tscn" id="5_03owx"]
 [ext_resource type="Script" uid="uid://c7rjw02xdf5ji" path="res://Main.gd" id="6_main"]
+[ext_resource type="Script" uid="uid://dtev72cdild0v" path="res://Globals/State/EditorWorkspace.gd" id="7_workspace"]
 
 [node name="Main" type="Control" unique_id=692378193]
 layout_mode = 3
@@ -15,6 +16,10 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("6_main")
+
+[node name="EditorWorkspace" type="Node" parent="."]
+unique_name_in_owner = true
+script = ExtResource("7_workspace")
 
 [node name="Content" type="MarginContainer" parent="." unique_id=1928070199]
 layout_mode = 1

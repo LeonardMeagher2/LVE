@@ -601,7 +601,7 @@ func _adopt_document(value: VoxelDocument) -> void:
 	_active_document.edit_frame = clampi(_active_document.edit_frame, 0, _active_document.frames.size() - 1)
 	_active_document.edit_tag = clampi(_active_document.edit_tag, -1, _active_document.tags.size() - 1)
 	playback.document = _active_document
-	playback.is_playing = false
+	playback.restore_playback()
 	document_changed.emit()
 	size_changed.emit()
 	palette_changed.emit()
@@ -1076,6 +1076,13 @@ func select_palette_entry(index: int) -> void:
 		return
 	end_material_edit()
 	_apply_material(document.palette[index])
+
+
+## Applies a saved workspace material without a history action. An invalid
+## material is ignored.
+func apply_workspace_material(material: PackedFloat32Array) -> void:
+	if VoxelDocument.valid_material(material):
+		_apply_material(material)
 
 
 ## Adds the current material to the palette. An existing equal entry is selected

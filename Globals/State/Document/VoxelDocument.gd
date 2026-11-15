@@ -52,6 +52,11 @@ static var _profile_rescan_us := 0
 @export var lighting_settings: Dictionary = {}
 ## The export workspace settings. See `docs/DOCUMENT_FORMAT.md` for the keys.
 @export var export_settings: Dictionary = {}
+## The editor tool state. It holds one entry per plugin, the active tool, the
+## active material, and the editing aids. See `docs/DOCUMENT_FORMAT.md`.
+@export var tool_settings: Dictionary = {}
+## The editor view state. See `docs/DOCUMENT_FORMAT.md` for the keys.
+@export var view_settings: Dictionary = {}
 ## The centered document size in cells. Zero on an axis means that axis is
 ## infinite. The box is centered on the origin.
 @export var size := Vector3i.ZERO
@@ -67,11 +72,15 @@ var _bounds: AABB
 var _bounds_dirty := true
 
 # Runtime editor state. The editor keeps one document per tab, so this state
-# moves with the document. None of these fields are serialized.
+# moves with the document. The frame, the active tag, the playback state, and
+# the camera are serialized. The selection, the history, the save path, and the
+# dirty flag are not.
 ## The frame that the editor shows.
 var edit_frame := 0
 ## The active animation tag index, or -1 when no tag is active.
 var edit_tag := 0
+## Whether animation playback runs. A saved document opens playing.
+var edit_playing := false
 ## The cell selection of this document.
 var edit_selection := VoxelSelection.new()
 ## The undo and redo history of this document.
@@ -80,7 +89,7 @@ var edit_history := UndoRedo.new()
 var edit_save_path := ""
 ## Whether the document changed since the last save.
 var edit_dirty := false
-## The saved editor camera pose. Empty before the first tab switch.
+## The editor camera pose. It is serialized as the `camera` field.
 var edit_camera := {}
 
 
@@ -114,7 +123,7 @@ func document_data() -> Dictionary:
 	var tag_data := []
 	for tag in tags:
 		tag_data.append({"name": tag.name, "from": tag.from, "to": tag.to, "loop_mode": tag.loop_mode, "repeats": tag.repeats})
-	return {"palette": palette_data, "frames": frame_data, "tags": tag_data, "smooth_normals": smooth_normals, "ao": ao_strength, "lighting": _storage_settings(lighting_settings), "export": _storage_settings(export_settings), "size": size}
+	return {"palette": palette_data, "frames": frame_data, "tags": tag_data, "smooth_normals": smooth_normals, "ao": ao_strength, "lighting": _storage_settings(lighting_settings), "export": _storage_settings(export_settings), "tools": _storage_settings(tool_settings), "view": _storage_settings(view_settings), "camera": _storage_settings(edit_camera), "edit_frame": edit_frame, "edit_tag": edit_tag if not tags.is_empty() else -1, "edit_playing": edit_playing, "size": size}
 
 
 static func _storage_settings(settings: Dictionary) -> Dictionary:
@@ -233,6 +242,18 @@ static func decode_document(data: PackedByteArray) -> VoxelDocument:
 	document.ao_strength = 1.0 if stored_ao is bool else float(stored_ao)
 	document.lighting_settings = fields.lighting
 	document.export_settings = fields.export
+	var stored_tools: Variant = fields.get("tools", {})
+	document.tool_settings = stored_tools if stored_tools is Dictionary else {}
+	var stored_view: Variant = fields.get("view", {})
+	document.view_settings = stored_view if stored_view is Dictionary else {}
+	var stored_camera: Variant = fields.get("camera", {})
+	document.edit_camera = stored_camera if stored_camera is Dictionary else {}
+	var stored_frame: Variant = fields.get("edit_frame", 0)
+	document.edit_frame = clampi(int(stored_frame), 0, document.frames.size() - 1)
+	var stored_tag: Variant = fields.get("edit_tag", 0)
+	document.edit_tag = clampi(int(stored_tag), -1, document.tags.size() - 1) if not document.tags.is_empty() else -1
+	var stored_playing: Variant = fields.get("edit_playing", false)
+	document.edit_playing = stored_playing if stored_playing is bool else false
 	var stored_size: Variant = fields.get("size")
 	if stored_size is Vector3i:
 		document.size = stored_size
@@ -394,7 +415,86 @@ static func _valid_document_data(data: Variant) -> bool:
 	var ao: Variant = data.get("ao")
 	if ao != null and not _number_in(ao, 0.0, 1.0):
 		return false
-	return data.get("smooth_normals") is bool and _valid_document_size(data.get("size")) and _valid_lighting(data.get("lighting"), false) and _valid_export(data.get("export"), data.tags.size())
+	if not _integer_in(data.get("edit_frame", 0), 0, MAX_FRAMES - 1):
+		return false
+	if not _integer_in(data.get("edit_tag", 0), -1, MAX_TAGS - 1):
+		return false
+	if not data.get("edit_playing", false) is bool:
+		return false
+	return data.get("smooth_normals") is bool and _valid_document_size(data.get("size")) and _valid_lighting(data.get("lighting"), false) and _valid_export(data.get("export"), data.tags.size()) and _valid_tool_settings(data.get("tools", {})) and _valid_view_settings(data.get("view", {})) and _valid_camera(data.get("camera", {}))
+
+
+static func _valid_tool_settings(data: Variant) -> bool:
+	if not data is Dictionary:
+		return false
+	for key in data:
+		if not (key is String or key is StringName):
+			return false
+		match String(key):
+			"active":
+				if not data[key] is String:
+					return false
+			"material":
+				if not valid_material(data[key]):
+					return false
+			"editing":
+				if not _valid_editing_state(data[key]):
+					return false
+			_:
+				var entry: Variant = data[key]
+				if not entry is Dictionary:
+					return false
+				for setting_key in entry:
+					if not (setting_key is String or setting_key is StringName):
+						return false
+					var value: Variant = entry[setting_key]
+					if not (value is bool or value is int or value is float):
+						return false
+					if value is float and not is_finite(value):
+						return false
+	return true
+
+
+static func _valid_editing_state(data: Variant) -> bool:
+	if not data is Dictionary:
+		return false
+	for key in data:
+		if not (key is String or key is StringName):
+			return false
+		match String(key):
+			"symmetry_axes":
+				if not _integer_in(data[key], 0, 7):
+					return false
+			"symmetry_origin":
+				var origin: Variant = data[key]
+				if not origin is Vector3 or not origin.is_finite():
+					return false
+			"floor_axis":
+				if not _integer_in(data[key], 0, 2):
+					return false
+			"floor_index":
+				if not _integer_in(data[key], -1100000, 1100000):
+					return false
+			"slice_layers":
+				if not _integer_in(data[key], 0, 8):
+					return false
+	return true
+
+
+static func _valid_view_settings(data: Variant) -> bool:
+	if not data is Dictionary:
+		return false
+	for key in data:
+		if not (key is String or key is StringName):
+			return false
+		match String(key):
+			"grid", "wireframe", "orthographic", "environment_open":
+				if not data[key] is bool:
+					return false
+			"view_mode":
+				if not _integer_in(data[key], 0, 3):
+					return false
+	return true
 
 
 static func _valid_document_size(value: Variant) -> bool:

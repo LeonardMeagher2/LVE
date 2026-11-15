@@ -43,13 +43,16 @@ var _pitch := deg_to_rad(45.0)
 var _dist := 24.0
 var _target := Vector3.ZERO
 var _init_dist := 24.0
+var _restoring_pose := false
 
 func _ready() -> void:
-	configure()
 	State.document_changed.connect(configure)
 	if stores_document_pose:
 		State.document_deactivating.connect(_save_pose)
 	set_view("default")
+	configure()
+	if stores_document_pose:
+		view_changed.connect(_save_pose)
 
 ## Frames the document or the provided bounds. A document with a saved pose
 ## restores it, so a tab switch keeps the view.
@@ -57,26 +60,30 @@ func configure() -> void:
 	var bounds: AABB = bounds_provider.call() if bounds_provider.is_valid() else State.document.bounds()
 	_init_dist = maxf(bounds.size.length(), 16.0) * 1.25
 	var pose: Dictionary = State.document.edit_camera if stores_document_pose else {}
+	_restoring_pose = true
 	if pose.is_empty():
 		_dist = _init_dist
 		_target = bounds.get_center()
 	else:
 		_yaw = float(pose.get("yaw", _yaw))
 		_pitch = float(pose.get("pitch", _pitch))
-		_dist = float(pose.get("dist", _init_dist))
+		_dist = float(pose.get("distance", pose.get("dist", _init_dist)))
+		_init_dist = float(pose.get("initial_distance", _init_dist))
 		_target = pose.get("target", bounds.get_center())
 	_update()
+	_restoring_pose = false
 	zoom_changed.emit(zoom_percent())
 
 
 # Stores the view on the document that is about to be inactive.
 func _save_pose() -> void:
-	if not stores_document_pose or not State.document:
+	if not stores_document_pose or not State.document or _restoring_pose:
 		return
 	State.document.edit_camera = {
 		"yaw": _yaw,
 		"pitch": _pitch,
-		"dist": _dist,
+		"distance": _dist,
+		"initial_distance": _init_dist,
 		"target": _target,
 	}
 

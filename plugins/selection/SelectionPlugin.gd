@@ -26,7 +26,7 @@ func _ready() -> void:
 	State.selection_changed.connect(_on_selection_changed)
 	_toolbar.toggled.connect(_on_toolbar_toggled)
 	_settings.tool_changed.connect(_on_tool_changed)
-	add_tool_bar_item(_toolbar)
+	add_tool_bar_item(_toolbar, _settings)
 	add_editor_node(_selection)
 	
 	_on_selection_changed()

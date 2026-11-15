@@ -23,7 +23,7 @@ func _ready() -> void:
 	name = "PaintPlugin"
 	_toolbar.toggled.connect(_on_toolbar_toggled)
 	_settings.tool_changed.connect(_on_tool_changed)
-	add_tool_bar_item(_toolbar)
+	add_tool_bar_item(_toolbar, _settings)
 	_set_tool(_settings.tool)
 
 

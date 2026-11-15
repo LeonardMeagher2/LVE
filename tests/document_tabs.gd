@@ -166,7 +166,11 @@ func _session() -> void:
 func _serialize() -> void:
 	step("Given a document with runtime editor state", func():
 		var document := VoxelDocument.new()
-		document.edit_frame = 2
+		document.add_frame()
+		document.add_tag("Walk", 0, 1)
+		document.edit_frame = 1
+		document.edit_tag = 0
+		document.edit_playing = true
 		document.edit_dirty = true
 		document.edit_save_path = "user://tabs_test.lve"
 		document.edit_selection.add(Vector3i.ONE)
@@ -174,7 +178,9 @@ func _serialize() -> void:
 		expect(not data.is_empty(), "the document encodes")
 		var loaded := VoxelDocument.decode_document(data)
 		expect(loaded != null, "the document decodes")
-		expect(loaded.edit_frame == 0, "the frame is not stored")
+		expect(loaded.edit_frame == 1, "the frame is stored")
+		expect(loaded.edit_tag == 0, "the active tag is stored")
+		expect(loaded.edit_playing, "the playback state is stored")
 		expect(not loaded.edit_dirty, "the dirty flag is not stored")
 		expect(loaded.edit_save_path.is_empty(), "the save path is not stored")
 		expect(loaded.edit_selection.is_empty(), "the selection is not stored")

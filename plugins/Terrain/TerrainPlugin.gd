@@ -21,7 +21,7 @@ func _ready() -> void:
 	_tool = _terrain_tool
 	_toolbar.toggled.connect(_on_toolbar_toggled)
 	_options.bind(_settings)
-	add_tool_bar_item(_toolbar)
+	add_tool_bar_item(_toolbar, _settings)
 
 
 func _notification(what: int) -> void:

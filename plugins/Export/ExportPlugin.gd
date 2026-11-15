@@ -69,6 +69,7 @@ func _ready() -> void:
 	_model_viewport = _model.get_node("Viewport/PanelContainer/SubViewportContainer/Viewport")
 	_model_viewport.own_world_3d = true
 	_model_viewport.get_node("ViewportScene").document_lighting = false
+	_model_viewport.get_node("ViewportScene").document_view = false
 	_model_renderer = _model_viewport.get_node("ViewportScene/VoxelRenderer")
 	_model_renderer.report_activity = false
 	_model_renderer.source_frame = State.get_current_voxel_frame().copy_frame()

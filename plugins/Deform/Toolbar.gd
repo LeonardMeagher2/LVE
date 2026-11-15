@@ -14,6 +14,7 @@ var _settings := preload("./settings.tres")
 
 func _ready() -> void:
 	get_popup().index_pressed.connect(_on_index_pressed)
+	_settings.tool_changed.connect(_sync_icon)
 	_sync_icon(_settings.tool)
 
 

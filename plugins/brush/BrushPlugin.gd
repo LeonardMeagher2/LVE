@@ -20,7 +20,7 @@ func _ready() -> void:
 	_active_mode = _settings.mode
 	_toolbar.toggled.connect(_on_toolbar_toggled)
 	_settings.changed.connect(_on_settings_changed)
-	add_tool_bar_item(_toolbar)
+	add_tool_bar_item(_toolbar, _settings)
 	add_option_bar_item(_options)
 	activate_tool()
 

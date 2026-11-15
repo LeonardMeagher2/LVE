@@ -36,6 +36,16 @@ func _run() -> void:
 			source.add_tag("Tag %s 🦩" % mode, 0, 2, mode, mode)
 		source.smooth_normals = true
 		source.size = Vector3i(5, 6, 7)
+		source.edit_frame = 1
+		source.edit_tag = 2
+		source.tool_settings = {
+			"active": "BrushPlugin/Toolbar",
+			"material": VoxelFrame.material(Color(0.4, 0.5, 0.6, 1.0)),
+			"BrushPlugin": {"mode": 2, "shape": 1, "diameter": 7, "pixel_perfect": true},
+			"editing": {"symmetry_axes": 5, "symmetry_origin": Vector3(0.5, -0.5, 0.5), "floor_axis": 2, "floor_index": -3, "slice_layers": 2},
+		}
+		source.view_settings = {"grid": false, "wireframe": true, "orthographic": true, "view_mode": 2, "environment_open": true}
+		source.edit_camera = {"yaw": 0.25, "pitch": 0.5, "distance": 18.0, "initial_distance": 24.0, "target": Vector3(1, 2, 3)}
 		source.lighting_settings = {"basis": Basis(Vector3.UP, 0.5), "color": Color(1, 0.5, 0.25, 0.75), "ambient_color": Color(0.2, 0.3, 0.4, 0.5)}
 		source.export_settings = {"view": 7, "sprite_ortho": false, "sprite_center": false, "automatic_size": true, "frame_size": 64.0, "turntable": false, "views": 12.0, "metadata": true, "center": false, "model_tag": 1, "sheet_tag": 2,
 			"lighting": {"basis": Basis.IDENTITY, "color": Color.WHITE, "ambient_color": Color.BLUE, "energy": 0.5, "ambient_energy": 0.25, "shadows": false, "shaded": true, "view_locked": true, "view_basis": Basis.IDENTITY},
@@ -66,6 +76,10 @@ func _run() -> void:
 			if loaded:
 				expect(loaded.document_data() == source.document_data(), "the %s file preserves every document field" % suffix)
 				expect(loaded.size == source.size, "the file preserves the centered document size")
+				expect(loaded.edit_frame == 1 and loaded.edit_tag == 2, "the file preserves the frame and tag")
+				expect(loaded.tool_settings == source.tool_settings, "the file preserves the editor tools")
+				expect(loaded.view_settings == source.view_settings, "the file preserves the editor view")
+				expect(loaded.edit_camera == source.edit_camera, "the file preserves the editor camera")
 				expect(not loaded.export_settings.sprite_center, "the file preserves the sprite Center choice")
 				expect(loaded.export_settings.automatic_size, "the file retains compatible legacy export settings")
 				expect(loaded.frames[1].count() == 0, "the empty frame retains its position")
@@ -125,6 +139,10 @@ func _run() -> void:
 		var previous := State.document
 		# This case proves history preservation, not the document size limit.
 		State.document.size = Vector3i.ZERO
+		State.symmetry_axes = 0
+		State.slice_layers = 0
+		State.floor_axis = Vector3.Axis.AXIS_Y
+		State.floor_index = 0
 		var tx := State.begin_edit()
 		State.paint(Vector3i(100, 0, 0), VoxelFrame.material(Color.GREEN))
 		State.finish_edit(tx)
@@ -197,6 +215,24 @@ func _check_invalid_documents() -> void:
 	fields = source.document_data().duplicate(true)
 	fields.export.camera.distance = NAN
 	_reject(_wrap(var_to_bytes(fields)), "non-finite settings are rejected")
+	fields = source.document_data().duplicate(true)
+	fields.tools = []
+	_reject(_wrap(var_to_bytes(fields)), "a non-dictionary tool state is rejected")
+	fields = source.document_data().duplicate(true)
+	fields.tools.BrushPlugin.diameter = "wide"
+	_reject(_wrap(var_to_bytes(fields)), "a non-scalar tool value is rejected")
+	fields = source.document_data().duplicate(true)
+	fields.tools.editing.symmetry_axes = 8
+	_reject(_wrap(var_to_bytes(fields)), "an out-of-range editing aid is rejected")
+	fields = source.document_data().duplicate(true)
+	fields.view.grid = "on"
+	_reject(_wrap(var_to_bytes(fields)), "a non-boolean view flag is rejected")
+	fields = source.document_data().duplicate(true)
+	fields.camera.distance = NAN
+	_reject(_wrap(var_to_bytes(fields)), "a non-finite editor camera is rejected")
+	fields = source.document_data().duplicate(true)
+	fields.edit_playing = "yes"
+	_reject(_wrap(var_to_bytes(fields)), "a non-boolean playback state is rejected")
 	_reject(_wrap(var_to_bytes_with_objects(Resource.new())), "serialized objects are rejected")
 	var typed: Array[Resource] = []
 	_reject(_wrap(var_to_bytes(typed)), "typed object containers are rejected")

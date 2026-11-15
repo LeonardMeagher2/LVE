@@ -73,6 +73,7 @@ Two engines serve the five tools.
 
 The brush tools and the paint tools use separate settings resources.
 A brush size change does not alter a paint size.
+The values are saved per document and applied when that document becomes active.
 Brush and Paint Brush share one engine and one graph.
 Their policy table shows the differences.
 Line extends `BrushTool` but does not use the stroke transaction.
