@@ -58,6 +58,7 @@ func before_test() -> void:
 	clipboard._material_pattern = {}
 	clipboard._clipboard_text = ""
 	clipboard._has_clipboard_voxels = false
+	clipboard._has_clipboard_image = false
 	clipboard._rejected_clipboard_text = ""
 	State.document = VoxelDocument.new()
 	State.undo_redo.clear_history()

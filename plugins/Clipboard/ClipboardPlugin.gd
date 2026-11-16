@@ -13,6 +13,8 @@ const CLIPBOARD_PREFIX := '{"voxel_voxels":'
 const VOXEL_RECORD_SIZE := 3 + VoxelFrame.MATERIAL_STRIDE
 ## The largest copy or cut source that runs on the main thread.
 const INLINE_EDIT_LIMIT := 4096
+## The alpha value above which an image pixel becomes a cell.
+const IMAGE_ALPHA_CLIP := 0.5
 
 @onready var _options := preload("./Options.tscn").instantiate()
 @onready var _paste_tool := preload("./PasteTool.tscn").instantiate()
@@ -24,7 +26,9 @@ var _center := Vector3i.ZERO
 var _clipboard_text := ""
 var _copy_job: ClipboardCopyJob
 var _import_job: ClipboardImportJob
+var _image_job: ClipboardImageJob
 var _has_clipboard_voxels := false
+var _has_clipboard_image := false
 # The clipboard text whose voxel record failed to parse. A focus refresh must
 # not re-enable Paste for the same text.
 var _rejected_clipboard_text := ""
@@ -143,6 +147,42 @@ class ClipboardImportJob extends VoxelFrame.EditJob:
 			if completed % 4096 == 0 and not checkpoint(completed):
 				return
 
+## One cancellable clipboard image conversion job.
+##
+## The job turns the image pixels into a one-voxel-thick pattern on the floor
+## plane. [method VoxelFrame.EditJob.run] is the worker body.
+class ClipboardImageJob extends VoxelFrame.EditJob:
+	## The image data to convert.
+	var image: Image
+	## The world axis that the image plane faces.
+	var plane_axis := Vector3.Axis.AXIS_Y
+	## The parsed colors, keyed by offset from the pattern center.
+	var pattern := {}
+	## The pasted pixels, keyed by offset from the pattern center.
+	var selection_pattern := {}
+
+	## Converts the image pixels. This is the worker body.
+	func run() -> void:
+		if image == null or image.get_width() <= 0 or image.get_height() <= 0:
+			return
+		stage("Reading clipboard image", image.get_width() * image.get_height())
+		var horizontal := Vector3i.BACK if plane_axis == Vector3.Axis.AXIS_X else Vector3i.RIGHT
+		var vertical := Vector3i.FORWARD if plane_axis == Vector3.Axis.AXIS_Y else Vector3i.UP
+		var first_x := -floori(image.get_width() * 0.5)
+		var top_y := floori((image.get_height() - 1) * 0.5)
+		var completed := 0
+		for y in image.get_height():
+			for x in image.get_width():
+				var color := image.get_pixel(x, y)
+				if color.a >= IMAGE_ALPHA_CLIP:
+					color.a = 1.0
+					var offset := horizontal * (x + first_x) + vertical * (top_y - y)
+					pattern[offset] = color
+					selection_pattern[offset] = true
+				completed += 1
+				if completed % 4096 == 0 and not checkpoint(completed):
+					return
+
 
 func _ready() -> void:
 	name = "ClipboardPlugin"
@@ -206,9 +246,9 @@ func _sync_buttons() -> void:
 	var busy := State.edit_busy()
 	_options.get_node("Copy").disabled = busy or frame == null or frame.count() == 0
 	_options.get_node("Cut").disabled = _options.get_node("Copy").disabled
-	_options.get_node("Paste").disabled = busy or not _has_clipboard_voxels
+	_options.get_node("Paste").disabled = busy or not (_has_clipboard_voxels or _has_clipboard_image)
 	_options.get_node("Delete").disabled = busy or State.selection.is_empty()
-	_options.get_node("CancelPaste").visible = _import_job != null or _paste_tool._active
+	_options.get_node("CancelPaste").visible = _import_job != null or _image_job != null or _paste_tool._active
 
 
 func _on_cells_changed(_frame: int, _affected: Array[Vector3i]) -> void:
@@ -221,9 +261,11 @@ func _on_cells_changed(_frame: int, _affected: Array[Vector3i]) -> void:
 func _refresh_clipboard() -> void:
 	var text := _read_clipboard()
 	var has_voxels := text.begins_with(CLIPBOARD_PREFIX) and text != _rejected_clipboard_text
-	if has_voxels == _has_clipboard_voxels:
+	var has_image := _clipboard_has_image()
+	if has_voxels == _has_clipboard_voxels and has_image == _has_clipboard_image:
 		return
 	_has_clipboard_voxels = has_voxels
+	_has_clipboard_image = has_image
 	_sync_buttons()
 
 
@@ -231,6 +273,10 @@ func _read_clipboard() -> String:
 	if DisplayServer.has_feature(DisplayServer.FEATURE_CLIPBOARD):
 		return DisplayServer.clipboard_get()
 	return _clipboard_text
+
+
+func _clipboard_has_image() -> bool:
+	return DisplayServer.has_feature(DisplayServer.FEATURE_CLIPBOARD) and DisplayServer.clipboard_has_image()
 
 
 ## Copies the selection, or the whole frame, to the clipboard.
@@ -286,6 +332,7 @@ func _copy_voxels(cut_source: bool) -> void:
 		_clipboard_text = job.text
 		_rejected_clipboard_text = ""
 		_has_clipboard_voxels = true
+		_has_clipboard_image = false
 		if DisplayServer.has_feature(DisplayServer.FEATURE_CLIPBOARD):
 			DisplayServer.clipboard_set(job.text)
 		if cut_source:
@@ -320,22 +367,35 @@ func cancel_paste() -> bool:
 	if _import_job:
 		_import_job.cancel()
 		return true
+	if _image_job:
+		_image_job.cancel()
+		return true
 	if _paste_tool._active:
 		_paste_tool._cancel_edit()
 		return true
 	return false
 
 
-## Starts a paste from the clipboard. It parses the clipboard text when it
-## changed, then places the paste tool.
+## Starts a paste from the clipboard. It prefers a voxel record, then uses image
+## data. It places the paste tool at the cursor.
 func paste_voxels() -> void:
-	if State.edit_busy() or _import_job:
+	if State.edit_busy() or _import_job or _image_job:
 		return
 	var text := _read_clipboard()
-	if not text.begins_with(CLIPBOARD_PREFIX):
+	var has_voxels := text.begins_with(CLIPBOARD_PREFIX)
+	if not has_voxels and not _has_clipboard_image:
 		return
 	State.edit_context_changing.emit()
 	State.stop()
+	if has_voxels:
+		await _paste_voxel_text(text)
+		return
+	await _paste_clipboard_image()
+
+
+## Parses one voxel clipboard record when it changed, then places the paste
+## tool. The caller emits the context signal and stops the editor first.
+func _paste_voxel_text(text: String) -> void:
 	if text != _clipboard_text or _pattern.is_empty():
 		var document := State.document
 		var frame := State.get_current_voxel_frame()
@@ -378,6 +438,66 @@ func paste_voxels() -> void:
 	_paste_tool.begin_paste(_pattern, _selection_pattern, _center, _material_pattern)
 
 
+## Reads the image on the clipboard and places its pixels as voxels.
+func _paste_clipboard_image() -> void:
+	var image: Image = DisplayServer.clipboard_get_image()
+	if image == null or image.get_width() <= 0 or image.get_height() <= 0:
+		_has_clipboard_image = false
+		_sync_buttons()
+		return
+	if image.is_compressed() and image.decompress() != OK:
+		_has_clipboard_image = false
+		_sync_buttons()
+		return
+	await _start_image_paste(image)
+
+
+## Converts one image and places its pixels as voxels. The caller emits the
+## context signal and stops the editor first.
+func _start_image_paste(image: Image) -> void:
+	if State.edit_busy() or _import_job or _image_job:
+		return
+	if image == null or image.get_width() <= 0 or image.get_height() <= 0:
+		return
+	var document := State.document
+	var frame := State.get_current_voxel_frame()
+	var job := ClipboardImageJob.new()
+	job.image = image
+	job.plane_axis = State.floor_axis
+	_image_job = job
+	var operation_id := State.begin_operation("Reading clipboard image", -1, true, self)
+	# The runner pumps the progress and joins the worker. The frame check
+	# cancels the job when its document or frame changes.
+	await State.run_edit_job(job, operation_id, "Read clipboard image", func() -> void:
+		if State.document != document or State.get_current_voxel_frame() != frame:
+			job.cancel()
+	)
+	# A shutdown or a newer job owns the fields now, so this job cannot start a
+	# paste.
+	if _image_job != job:
+		State.finish_operation(operation_id)
+		return
+	_image_job = null
+	State.finish_operation(operation_id)
+	if not _shutting_down:
+		_sync_buttons()
+	if _shutting_down or State.document != document or State.get_current_voxel_frame() != frame or not job.checkpoint(0):
+		return
+	if job.pattern.is_empty():
+		return
+	_pattern = job.pattern
+	_pattern.make_read_only()
+	_selection_pattern = job.selection_pattern
+	_material_pattern = {}
+	_center = Vector3i.ZERO
+	# The empty text keeps a later voxel record from reusing this image pattern
+	# when the same text returns to the clipboard.
+	_clipboard_text = ""
+	_rejected_clipboard_text = ""
+	add_editor_node(_paste_tool)
+	_paste_tool.begin_paste(_pattern, _selection_pattern, _center, _material_pattern)
+
+
 func _on_paste_finished() -> void:
 	if not _shutting_down:
 		_remove_paste_preview.call_deferred()
@@ -397,7 +517,7 @@ func _exit_tree() -> void:
 	_shutting_down = true
 	# The runner owns the join and retires the task id. This wait is the same
 	# exactly-once join, so a second wait never touches a disposed task.
-	for job in [_copy_job, _import_job]:
+	for job in [_copy_job, _import_job, _image_job]:
 		if job:
 			job.cancel()
 			job.wait_for_worker()
