@@ -13,7 +13,7 @@ Export a low-poly glTF mesh, a sprite sheet, or an animated GIF.
 
 ## Features
 
-- Paint, erase, fill, spray, and pick colors.
+- Paint, erase, fill, spray, dither, and pick colors.
 - Build, dig, flatten, and smooth terrain.
 - Grab and pose connected limbs.
 - Select, move, rotate, and scale voxels.

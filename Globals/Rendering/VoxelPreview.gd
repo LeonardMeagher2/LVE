@@ -41,6 +41,10 @@ const OUTLINE_CELL_BITS := 0xFFFF
 ## The strict default cancels, so Line, Paste, and the selection stay
 ## latest-only.
 @export var coalesce_requests := false
+## The largest solid preview that builds inline on the main thread. A value of 0
+## always uses the worker pool. A small live cursor can opt in, so each pointer
+## move installs its surface in the same frame.
+@export var inline_solid_limit := 0
 
 static var _mesh_cache := {}
 static var _cache_order: Array[String] = []
@@ -923,6 +927,10 @@ func _start_preview() -> void:
 	_pending_cells = {}
 	_start_activity()
 	if _preview_job.style == PreviewStyle.OUTLINE and _preview_job.cells.size() <= INLINE_OUTLINE_LIMIT:
+		_preview_job.run()
+		_finish_preview()
+	elif _preview_job.style == PreviewStyle.SOLID and inline_solid_limit > 0 and _preview_job.cells.size() <= inline_solid_limit:
+		# A live cursor opts in, so it replaces its surface in the same frame.
 		_preview_job.run()
 		_finish_preview()
 	else:

@@ -34,6 +34,7 @@
 - 2026-08-23T00:00Z [imp:5] [notes/lifecycle-and-data] Guard typed returns against null values. A `Variant` can contain an incompatible value.
 - 2026-08-16T00:00Z [imp:5] [notes/lifecycle-and-data] `get_script()` returns the most-derived script. Use `get_base_script()` to reach its base script.
 - 2026-10-04T00:00Z [imp:5] [notes/lifecycle-and-data] Inside a nested class, qualify outer static methods with the outer class name.
+- 2026-11-15T00:00Z [imp:5] [notes/lifecycle-and-data] A GDScript subclass cannot redeclare a constant from its base class. The inherited constant is already in scope, and a duplicate name is a parse error.
 - 2026-10-17T00:00Z [imp:5] [notes/lifecycle-and-data] `PackedFloat32Array.resize()` fills new entries with zero. `append_array()` after `resize()` extends beyond those zeros. Use a write cursor to rebuild the array in place.
 - 2026-10-17T00:00Z [imp:5] [notes/lifecycle-and-data] Dictionary iteration order is hash based. Sort the keys before remapping ids for deterministic serialization.
 - 2026-10-18T00:00Z [imp:5] [notes/lifecycle-and-data] A `PackedInt64Array` works as a Dictionary key with content equality and hashing. `Array[PackedInt64Array]` supports content `has()` and `erase()`.

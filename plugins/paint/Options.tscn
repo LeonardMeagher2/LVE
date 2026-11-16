@@ -10,6 +10,7 @@
 [ext_resource type="Texture2D" uid="uid://dkpjood1t6s8x" path="res://icons/connected.svg" id="8_connected"]
 [ext_resource type="Texture2D" path="res://icons/spray_width.svg" id="9_width"]
 [ext_resource type="Texture2D" path="res://icons/spray_speed.svg" id="10_speed"]
+[ext_resource type="Texture2D" path="res://icons/dither.svg" id="11_dither"]
 
 [sub_resource type="ButtonGroup" id="ShapeGroup"]
 
@@ -66,6 +67,21 @@ toggle_mode = true
 icon = ExtResource("2_pixel")
 icon_alignment = 1
 
+[node name="DitherSeparator" type="VSeparator" parent="Brush"]
+visible = false
+layout_mode = 2
+
+[node name="DitherDensity" parent="Brush" instance=ExtResource("7_value")]
+visible = false
+layout_mode = 2
+tooltip_text = "Dither density from 0 to 1. 0.5 keeps half of the visible brush surface."
+icon = ExtResource("11_dither")
+min_value = 0.0
+max_value = 1.0
+step = 0.01
+decimals = 2
+value = 0.5
+
 [node name="Fill" type="HBoxContainer" parent="."]
 visible = false
 layout_mode = 2
@@ -117,6 +133,7 @@ value = 8.0
 [connection signal="pressed" from="Brush/Shape/Selection" to="." method="_on_selection_pressed"]
 [connection signal="value_changed" from="Brush/Diameter" to="." method="_on_diameter_changed"]
 [connection signal="toggled" from="Brush/PixelPerfect" to="." method="_on_pixel_perfect_toggled"]
+[connection signal="value_changed" from="Brush/DitherDensity" to="." method="_on_dither_density_changed"]
 [connection signal="toggled" from="Fill/Connected" to="." method="_on_connected_toggled"]
 [connection signal="value_changed" from="Spray/SpotSize" to="." method="_on_spot_size_changed"]
 [connection signal="value_changed" from="Spray/SpraySize" to="." method="_on_spray_size_changed"]

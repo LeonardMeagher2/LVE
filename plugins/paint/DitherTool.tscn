@@ -1,0 +1,17 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://plugins/paint/DitherTool.gd" id="1_tool"]
+[ext_resource type="Material" uid="uid://dv7wwwbfihlej" path="res://plugins/CursorMaterial.tres" id="2_material"]
+[ext_resource type="Script" uid="uid://dkv0y2ogaf0tm" path="res://plugins/brush/BrushPreview.gd" id="3_preview"]
+
+[node name="DitherTool" type="Node3D"]
+script = ExtResource("1_tool")
+
+[node name="Cursor" type="MeshInstance3D" parent="."]
+sorting_offset = 0.1
+material_override = ExtResource("2_material")
+cast_shadow = 0
+script = ExtResource("3_preview")
+coalesce_requests = true
+inline_solid_limit = 4096
+apply_edit_symmetry = true

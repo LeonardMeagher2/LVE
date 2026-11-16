@@ -23,7 +23,9 @@ enum Tools {
 	## Recolor a connected or a matching region.
 	FILL,
 	## Paint random spots inside a search size.
-	SPRAY
+	SPRAY,
+	## Recolor existing voxels on a Bayer mask.
+	DITHER
 }
 
 
@@ -97,6 +99,19 @@ var spray_radius: int :
 			return
 		speed = value
 		emit_changed()
+
+## The dither density from 0 through 1. The tool keeps that fraction of the
+## visible surface cells in the brush footprint. The lowest Bayer thresholds win.
+## A value of 0.5 keeps half of the surface cells.
+@export_range(0.0, 1.0, 0.01) var dither_density := 0.5:
+	set(value):
+		value = clampf(value, 0.0, 1.0)
+		if is_equal_approx(value, dither_density):
+			return
+		dither_density = value
+		emit_changed()
+
+
 
 
 func _build_pattern(brush_diameter: int, brush_shape: int) -> Dictionary:

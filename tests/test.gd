@@ -56,6 +56,7 @@ func reset_environment() -> void:
 	_paint_settings_resource.connected = true
 	_paint_settings_resource.spot_diameter = 1
 	_paint_settings_resource.spray_size = 9
+	_paint_settings_resource.dither_density = 0.5
 	_paint_settings_resource.diameter = 1
 	_paint_settings_resource.shape = StampToolSettings.BrushShape.CUBE
 	_paint_settings_resource.pixel_perfect = false

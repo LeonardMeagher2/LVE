@@ -1,4 +1,4 @@
-extends "res://tests/test.gd"
+﻿extends "res://tests/test.gd"
 
 ## Checks that the editor workspace follows the document.
 
@@ -81,6 +81,7 @@ func _reset_workspace() -> void:
 	_paint.spot_diameter = 1
 	_paint.spray_size = 9
 	_paint.speed = 8
+	_paint.dither_density = 0.5
 	_paint.diameter = 1
 	_paint.shape = StampToolSettings.BrushShape.CUBE
 	_paint.pixel_perfect = false
@@ -122,11 +123,12 @@ func _tools_run() -> void:
 		_brush.shape = StampToolSettings.BrushShape.SPHERE
 		_brush.pixel_perfect = true
 		_brush.mode = BrushToolSettings.BrushMode.ERASER
-		_paint.tool = PaintToolSettings.Tools.SPRAY
+		_paint.tool = PaintToolSettings.Tools.DITHER
 		_paint.connected = false
 		_paint.spot_diameter = 3
 		_paint.spray_size = 11
 		_paint.speed = 4
+		_paint.dither_density = 0.75
 		_selection.tool = 2
 		_selection.mode = 1
 		_selection.include_empty = true
@@ -151,7 +153,7 @@ func _tools_run() -> void:
 		State.slice_layers = 2
 		State.edit_material(blue)
 		activate_tool("paint")
-		select_toolbar_item("paint", "Spray Can")
+		select_toolbar_item("paint", "Dither Brush")
 	)
 	step("When the user changes the setup on the second document", func():
 		State.activate_tab(1)
@@ -160,6 +162,7 @@ func _tools_run() -> void:
 		_brush.pixel_perfect = false
 		_brush.mode = BrushToolSettings.BrushMode.PENCIL
 		_paint.tool = PaintToolSettings.Tools.PAINTBRUSH
+		_paint.dither_density = 0.5
 		State.edit_material(VoxelFrame.material(Color.RED))
 		State.symmetry_axes = 0
 		State.symmetry_origin = State.DEFAULT_SYMMETRY_ORIGIN
@@ -174,11 +177,12 @@ func _tools_run() -> void:
 		expect(_brush.shape == StampToolSettings.BrushShape.SPHERE, "the brush shape returns")
 		expect(_brush.pixel_perfect, "the pixel-perfect flag returns")
 		expect(_brush.mode == BrushToolSettings.BrushMode.ERASER, "the brush mode returns")
-		expect(_paint.tool == PaintToolSettings.Tools.SPRAY, "the paint tool returns")
+		expect(_paint.tool == PaintToolSettings.Tools.DITHER, "the paint tool returns")
 		expect(not _paint.connected, "the fill connection returns")
 		expect(_paint.spot_diameter == 3, "the spray spot returns")
 		expect(_paint.spray_size == 11, "the spray size returns")
 		expect(_paint.speed == 4, "the spray speed returns")
+		expect(is_equal_approx(_paint.dither_density, 0.75), "the dither density returns")
 		expect(_selection.tool == 2, "the selection tool returns")
 		expect(_selection.mode == 1, "the selection mode returns")
 		expect(_selection.include_empty, "the include-empty flag returns")
@@ -204,8 +208,8 @@ func _tools_run() -> void:
 		expect(State.current_material == blue, "the active material returns")
 		var paint_button: BaseButton = plugin("PaintPlugin")._toolbar
 		expect(paint_button.button_pressed, "the paint toolbar is pressed")
-		expect(plugin("PaintPlugin")._tool.name == "SprayTool", "the paint plugin mounts the restored tool")
-		expect(paint_button.icon == paint_button.get_popup().get_item_icon(2), "the paint icon shows the restored tool")
+		expect(plugin("PaintPlugin")._tool.name == "DitherTool", "the paint plugin mounts the restored tool")
+		expect(paint_button.icon == paint_button.get_popup().get_item_icon(3), "the paint icon shows the restored tool")
 	)
 
 

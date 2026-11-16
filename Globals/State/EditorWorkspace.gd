@@ -18,7 +18,7 @@ const LEGACY_TOOL_IDS := {
 
 const ENUM_RANGES := {
 	"BrushPlugin": {"mode": Vector2i(0, 2), "shape": Vector2i(0, 2)},
-	"PaintPlugin": {"tool": Vector2i(0, 2), "shape": Vector2i(0, 2)},
+	"PaintPlugin": {"tool": Vector2i(0, 3), "shape": Vector2i(0, 2)},
 	"SelectionPlugin": {"tool": Vector2i(0, 2), "mode": Vector2i(0, 2)},
 	"TransformPlugin": {"tool": Vector2i(0, 2)},
 	"DeformPlugin": {"tool": Vector2i(0, 1)},

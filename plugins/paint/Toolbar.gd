@@ -10,6 +10,7 @@ extends ToolMenuButton
 const PAINTBRUSH_ID := 0
 const FILL_ID := 1
 const SPRAY_ID := 2
+const DITHER_ID := 3
 
 var _settings := preload("./PaintSettings.tres")
 
@@ -46,6 +47,8 @@ func _tool_for_id(id: int) -> int:
 			return _settings.Tools.FILL
 		SPRAY_ID:
 			return _settings.Tools.SPRAY
+		DITHER_ID:
+			return _settings.Tools.DITHER
 	return _settings.Tools.PAINTBRUSH
 
 
@@ -56,6 +59,7 @@ func _shortcut_input(event: InputEvent) -> void:
 		[&"tool_paint", PAINTBRUSH_ID],
 		[&"tool_fill", FILL_ID],
 		[&"tool_spray", SPRAY_ID],
+		[&"tool_dither", DITHER_ID],
 	]:
 		if event.is_action_pressed(binding[0], false, true):
 			_select_id(binding[1])

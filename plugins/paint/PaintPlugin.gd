@@ -2,10 +2,10 @@ extends VoxelPlugin
 
 ## The paint plugin.
 ##
-## It owns the paintbrush, the bucket fill, and the spray can. It adds their
-## toolbar and option bar, and it switches the active tool when the paint tool
-## changes. A tool switch ends an open stroke like a release, so the queued work
-## commits as one history action.
+## It owns the paintbrush, the bucket fill, the spray can, and the dither brush.
+## It adds their toolbar and option bar, and it switches the active tool when the
+## paint tool changes. A tool switch ends an open stroke like a release, so the
+## queued work commits as one history action.
 
 ## The stable id of the paint toolbar. The persisted active tool uses it.
 const TOOL_ID := "paint"
@@ -17,6 +17,7 @@ var _settings := preload("./PaintSettings.tres")
 @onready var _paintbrush_tool := preload("./PaintBrushTool.tscn").instantiate()
 @onready var _fill_tool := preload("./FillTool.tscn").instantiate()
 @onready var _spray_tool := preload("./SprayTool.tscn").instantiate()
+@onready var _dither_tool := preload("./DitherTool.tscn").instantiate()
 
 var _tool: Node3D
 var _active := false
@@ -31,7 +32,7 @@ func _ready() -> void:
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_PREDELETE:
-		for node in [_toolbar, _options, _paintbrush_tool, _fill_tool, _spray_tool]:
+		for node in [_toolbar, _options, _paintbrush_tool, _fill_tool, _spray_tool, _dither_tool]:
 			if is_instance_valid(node):
 				node.free()
 
@@ -74,5 +75,7 @@ func _set_tool(tool: int) -> void:
 			_tool = _fill_tool
 		_settings.Tools.SPRAY:
 			_tool = _spray_tool
+		_settings.Tools.DITHER:
+			_tool = _dither_tool
 		_:
 			_tool = _paintbrush_tool

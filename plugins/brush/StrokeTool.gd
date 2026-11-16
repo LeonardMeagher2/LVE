@@ -14,6 +14,7 @@ extends VoxelTool
 const INLINE_EDIT_LIMIT := 4096
 const StampSettings := preload("./StampToolSettings.gd")
 const StampPattern := preload("./StampPatternJob.gd")
+const DitherMask := preload("res://Globals/State/Tools/DitherMask.gd")
 # The opt-in profiling hook. It lives in a neutral holder, because a static
 # variable in this script kept the document and renderer scripts in use at exit.
 const Profile := preload("res://Globals/State/Tools/StrokeProfile.gd")
@@ -68,6 +69,11 @@ class BrushJob extends VoxelFrame.EditJob:
 	# the offsets, and an array iterates about twice as fast as the dictionary.
 	## The pattern keys in insertion order.
 	var offsets: Array = []
+	## The dither surface fraction from 0 through 1, or -1 when the stamp writes
+	## the whole pattern.
+	var dither_density := -1.0
+	## The first cell of the dither stroke. The pattern starts here.
+	var dither_origin := Vector3i.ZERO
 	# The center of the previous stamp in this stroke, or Vector3i.MAX for the
 	# first one. A short move leaves most of the footprint already written.
 	## The center of the previous stamp, or [constant Vector3i.MAX] for the first.
@@ -122,13 +128,18 @@ class BrushJob extends VoxelFrame.EditJob:
 			# Every cell of this job holds this one material, so the write can
 			# skip its own uniform test.
 			applied_uniform = uniform_material
+		var dither_enabled := dither_density >= 0.0
 		var covered := {}
 		var previous := previous_center
 		var completed := 0
 		var until_checkpoint := 4096
 		for center in centers:
 			var use: Array = offsets
-			if constant_material and previous != Vector3i.MAX:
+			if dither_enabled:
+				# The dither tool writes only the visible surface cells that the
+				# density keeps. Hidden cells keep their material.
+				use = DitherMask.select_offsets(offsets, center, dither_density, edited_frame, dither_origin)
+			elif constant_material and previous != Vector3i.MAX:
 				var delta: Vector3i = center - previous
 				if delta == Vector3i.ZERO:
 					# The previous center wrote this exact footprint already.
@@ -562,6 +573,18 @@ func update_visual(pick: PickResult) -> void:
 	visible = true
 
 
+## Returns the cursor pattern after any tool-specific mask. The default returns
+## [param pattern] unchanged.
+func _cursor_pattern(pattern: Dictionary) -> Dictionary:
+	return pattern
+
+
+## Returns the cube diameter of the cursor, or 0 when the cursor must stay
+## per-cell. A tool with a mask overrides this to keep its visible cells.
+func _cursor_cube_diameter() -> int:
+	return _settings.diameter if _settings.shape == StampSettings.BrushShape.CUBE else 0
+
+
 func _show_brush_shape(axis: int) -> void:
 	var pattern := _settings.pattern()
 	if pattern.is_empty() and _settings.shape != _settings.BrushShape.SELECTION:
@@ -572,12 +595,13 @@ func _show_brush_shape(axis: int) -> void:
 			_hover_operation_id = State.begin_operation("Preparing brush preview", _settings.estimated_size(), false, self)
 			_hover_job.worker_task_id = WorkerThreadPool.add_task(_hover_job.run, false, "Brush shape")
 		return
+	pattern = _cursor_pattern(pattern)
 	var use_voxel_colors: bool = _settings.shape == _settings.BrushShape.SELECTION
 	# A cube's preview is the same six faces as its voxels, so the box is exact and
 	# costs nothing. A sphere's voxels are a stepped shape that no primitive
 	# matches, so its preview always stays per-cell, however long that takes. The
 	# selection shape keeps its own materials and already debounces.
-	var cube_diameter: int = _settings.diameter if _settings.shape == _settings.BrushShape.CUBE else 0
+	var cube_diameter: int = _cursor_cube_diameter()
 	$Cursor.set_brush_material(State.current_material)
 	if use_voxel_colors and _settings.selection_material_pattern.size() == pattern.size():
 		pattern = _settings.selection_material_pattern

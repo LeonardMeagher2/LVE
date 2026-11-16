@@ -1,4 +1,4 @@
-extends "res://tests/test.gd"
+﻿extends "res://tests/test.gd"
 
 var brush_button: MenuButton
 var paint_button: MenuButton
@@ -28,10 +28,11 @@ func _run() -> void:
 	)
 	step("And the paint popup lists the paint tools", func():
 		var popup := paint_button.get_popup()
-		expect(popup.item_count == 3, "the menu lists the three paint tools")
+		expect(popup.item_count == 4, "the menu lists the four paint tools")
 		expect(popup.get_item_text(0) == "Paintbrush", "first tool is Paintbrush")
 		expect(popup.get_item_text(1) == "Bucket Fill", "second tool is Bucket Fill")
 		expect(popup.get_item_text(2) == "Spray Can", "third tool is Spray Can")
+		expect(popup.get_item_text(3) == "Dither Brush", "fourth tool is Dither Brush")
 	)
 
 	step("When the user selects the line mode", func():
@@ -81,6 +82,8 @@ func _run() -> void:
 		expect(paint_button.icon == paint_button.get_popup().get_item_icon(0), "the paint shortcut shows the paintbrush icon")
 		expect(plugin("PaintPlugin")._tool == plugin("PaintPlugin")._paintbrush_tool, "the paintbrush is active in the paint plugin")
 		expect(plugin("PaintPlugin")._options.is_inside_tree(), "the paint options are visible")
+		var options: Node = plugin("PaintPlugin")._options
+		expect(not options.get_node("Brush/DitherDensity").visible, "the dither density stays hidden for the paintbrush")
 	)
 	step("When the user selects the bucket fill tool", func():
 		paint_button.get_popup().index_pressed.emit(1)
@@ -111,6 +114,20 @@ func _run() -> void:
 	step("Then the fill shortcut selects the bucket fill", func():
 		expect(paint_button.icon == paint_button.get_popup().get_item_icon(1), "the fill shortcut shows the bucket fill icon")
 		expect(plugin("PaintPlugin")._tool == plugin("PaintPlugin")._fill_tool, "the bucket fill is active in the paint plugin")
+	)
+	step("When the user selects the paintbrush and presses the dither shortcut", func():
+		paint_button.get_popup().index_pressed.emit(0)
+		var event := InputEventKey.new()
+		event.physical_keycode = KEY_D
+		event.pressed = true
+		paint_button._shortcut_input(event)
+	)
+	step("Then the dither shortcut selects the dither brush and shows its options", func():
+		expect(paint_button.icon == paint_button.get_popup().get_item_icon(3), "the dither shortcut shows the dither icon")
+		expect(plugin("PaintPlugin")._tool == plugin("PaintPlugin")._dither_tool, "the dither brush is active in the paint plugin")
+		var options: Node = plugin("PaintPlugin")._options
+		expect(options.get_node("Brush").visible, "the dither brush uses the brush section")
+		expect(options.get_node("Brush/DitherDensity").visible, "the dither density is visible")
 	)
 	step("When the user selects the eraser mode on the brush", func():
 		brush_button.get_popup().index_pressed.emit(2)

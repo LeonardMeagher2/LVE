@@ -1,7 +1,7 @@
 # Drawing tool flows
 
 This map covers the shipped drawing tools in LVE.
-The tools are Brush, Line, Paint Brush, Fill, and Spray.
+The tools are Brush, Line, Paint Brush, Dither Brush, Fill, and Spray.
 The map shows control flow, not class structure.
 The source links point to the current code.
 See [Shared paths and utilities](shared-and-utilities.md) for the input spine, worker helpers, and preview mesh details.
@@ -64,11 +64,11 @@ flowchart TB
   SRCH -.-> APP
 ```
 
-Two engines serve the five tools.
+Two engines serve the six tools.
 
 | Engine | Tools | Core symbols |
 | --- | --- | --- |
-| Stamp engine | Brush, Line, Paint Brush, Spray | `StrokeTool`, `BrushJob`, `StampPatternJob` |
+| Stamp engine | Brush, Line, Paint Brush, Dither Brush, Spray | `StrokeTool`, `BrushJob`, `StampPatternJob` |
 | Fill engine | Fill | `FillTool`, `FillJob`, `VoxelRegionSearch` |
 
 The brush tools and the paint tools use separate settings resources.
@@ -76,6 +76,8 @@ A brush size change does not alter a paint size.
 The values are saved per document and applied when that document becomes active.
 Brush and Paint Brush share one engine and one graph.
 Their policy table shows the differences.
+Dither Brush extends Paint Brush and adds a 3D Bayer mask.
+It writes only visible surface cells. Hidden cells keep their material.
 Line extends `BrushTool` but does not use the stroke transaction.
 Spray extends `StrokeTool` and adds an accepted sample queue.
 Fill extends `VoxelTool` directly.
@@ -133,15 +135,15 @@ flowchart TB
 
 ### Brush and Paint Brush policy
 
-| Policy | Brush | Paint Brush |
-| --- | --- | --- |
-| Picked cell | Add target for add, hit for erase | Picked hit cell |
-| Requires a hit | No | Yes |
-| Writes | Adds or removes the footprint | Recolors existing cells |
-| Existing-cell filter | Eraser only | Always |
-| Cursor | Pattern and symmetry mirrors | Pattern and symmetry mirrors |
-| Undo name | `Stroke` or `Erase` | `Stroke` |
-| Tool switch | Commits | Commits |
+| Policy | Brush | Paint Brush | Dither Brush |
+| --- | --- | --- | --- |
+| Picked cell | Add target for add, hit for erase | Picked hit cell | Picked hit cell |
+| Requires a hit | No | Yes | Yes |
+| Writes | Adds or removes the footprint | Recolors existing cells | Recolors masked existing cells |
+| Existing-cell filter | Eraser only | Always | Always |
+| Cursor | Pattern and symmetry mirrors | Pattern and symmetry mirrors | Masked pattern and symmetry mirrors |
+| Undo name | `Stroke` or `Erase` | `Stroke` | `Stroke` |
+| Tool switch | Commits | Commits | Commits |
 
 Brush modes are `PENCIL`, `LINE`, and `ERASER`.
 The shipped Brush plugin selects the separate Line tool when the mode is `LINE`.
@@ -163,6 +165,9 @@ A Pencil stroke uses the add target in front of the clicked face.
 - Selection pattern: [`Options._on_selection_pressed`](../../../plugins/brush/Options.gd) builds `StampCopyJob` and calls `use_selection`.
 - Switch: [`BrushPlugin.deactivate_tool`](../../../plugins/brush/BrushPlugin.gd) calls `finish_on_switch`.
 - Paint policy: [`PaintBrushTool`](../../../plugins/paint/PaintBrushTool.gd) returns false from `_pick_adds` and true from `_paints_existing`.
+- Dither mask: [`DitherMask`](../../../Globals/State/Tools/DitherMask.gd) holds the 4 by 4 by 4 Bayer table and selects the lowest thresholds from the visible surface.
+- Dither tool: [`DitherTool`](../../../plugins/paint/DitherTool.gd) captures the density and the first stroke cell. Density runs from 0 through 1. The pattern origin is the first cell of the stroke.
+- Dither cursor: [`StrokeTool._cursor_pattern`](../../../plugins/brush/StrokeTool.gd) and [`StrokeTool._cursor_cube_diameter`](../../../plugins/brush/StrokeTool.gd) let the dither tool replace the box cursor with the masked footprint.
 
 ## Line
 
@@ -435,6 +440,7 @@ flowchart LR
 | Brush | `StrokeTool` | `brush/BrushSettings.tres`, `BrushToolSettings` | `PENCIL`, `LINE`, `ERASER` | Add or remove the footprint |
 | Line | `BrushTool` (extends `StrokeTool`) | `BrushToolSettings` | `LINE` selected by `BrushPlugin` | Add the footprint along a path |
 | Paint Brush | `StrokeTool` | `paint/PaintSettings.tres`, `PaintToolSettings` | `PAINTBRUSH` | Replace existing cells |
+| Dither Brush | `StrokeTool` | `PaintToolSettings` | `DITHER`, density 0 through 1 | Replace selected surface cells |
 | Fill | `VoxelTool` and `FillJob` | `PaintToolSettings` | `FILL`, `connected` true or false | Replace a matching region |
 | Spray | `StrokeTool` | `PaintToolSettings` | `SPRAY` | Replace sampled spots |
 
@@ -444,6 +450,7 @@ flowchart LR
 | --- | --- | --- | --- | --- |
 | Brush | `BrushJob.edited_frame` shares the source frame. Publish writes the changed chunks. | `tx.edit_context.selection` is read-only. The write gate filters the selection and the floor slice. | `EditContext.expand` in `apply_cells`. The cursor mirrors the pattern. | `_stroke_material` at open. Pattern colors for a selection brush. Eraser uses a transparent material. |
 | Paint Brush | Same as Brush. | Same as Brush. `paint_existing` also filters to occupied cells. | Same as Brush. | Same as Brush. The write replaces the material. |
+| Dither Brush | Same as Brush. The job holds the captured density and stroke origin. | Same as Brush. `paint_existing` also filters to occupied cells. | Same as Brush. The mask selects visible surface cells before `EditContext.expand`, so symmetry mirrors the selected stamp. | Same as Brush. The current material is the only color. |
 | Line | `_line_snapshot` is one frame copy. The preview job shares it. Commit publishes the changed chunks. | `State.selection.capture` at `_begin_line`. The job uses its captured context. | `State.drawing_context` at begin. `EditContext.expand` in the job. The preview shows the expanded cells, so the cursor adds no mirror. | `_stroke_material` at begin. A selection brush keeps its copied materials. A color or settings change requests a new preview. |
 | Fill | The live frame and one copy per seed. Inline publishes the changed chunks. Streaming writes slices into the live frame. | `State.selection.capture` when each seed is processed for the search. `_edit.edit_context` for expansion. | `EditContext.expand` per batch. An identity context skips the redundant check. The cursor shows no mirror. | `State.current_material` at the first seed. The target material comes from each seed. |
 | Spray | The worker uses a local `copy_chunks` ROI for the search and spot box. The write job shares the frame. Publish writes the changed chunks. | Hover uses the live context. A stroke uses `_edit_context`. The `BatchToken` records center, frame, axes, origin, selection, and the floor slice. A lagging surface of the same cell and context is allowed. A different cell never paints. One read-only selection index serves the editor snapshot. A mutable selection resamples. | `SpraySampler` expands symmetry. The write sets `centers_are_final`, so it skips the second expansion. The sampler drops sampled cells off the floor slice. The write gate filters the selection and the slice again. | `_stroke_material` at open. The preview payload uses one solid color. |
@@ -454,6 +461,7 @@ flowchart LR
 | --- | --- | --- | --- | --- |
 | Brush | One action on release or switch after the last batch. `Stroke` or `Erase`. | Escape and a context change call `_cancel_edit` and `abort_stroke`. A history change cancels the running job. | Waits for the last `BrushJob`. | Estimated work at or below `INLINE_EDIT_LIMIT` 4096 runs inline. Larger work uses `State.run_edit_job`. |
 | Paint Brush | One `Stroke` action on release or switch after the last batch. | Same as Brush. | Waits for the last `BrushJob`. | Same as Brush. |
+| Dither Brush | One `Stroke` action on release or switch after the last batch. | Same as Brush. | Waits for the last `BrushJob`. | Same as Brush. The job ranks the visible surface cells for each stamp. |
 | Line | One `Line` action at commit. The preview adds no undo action. | Escape, selection change, floor change, cell change, and context change drop the preview. | Waits for the preview runner, then commits. | Estimated work at or below 4096 runs inline. Larger previews use `State.run_edit_job`. `_process` handles idle hover only. |
 | Fill | One `Stroke` action on release or switch after the fill is idle. | Escape and a context change call `_interrupt_fill` and `abort_stroke`. | Waits for `_fill_running` false. | Estimated work at or below 4096 runs inline. Larger fills stream from a worker into a bounded queue. |
 | Spray | One `Stroke` action on release or switch after the sample queue and the last write. | Escape and a context change cancel samples and call `super._cancel_edit`. A history change cancels samples and the running write job. | Waits for `_sample_job`, `_pending_intents`, and the last write batch. | Inline when `work_estimate` is at or below `INLINE_SAMPLE_LIMIT` 2200. Larger samples use the worker pool. The write uses the shared 4096 limit. |
@@ -472,7 +480,8 @@ flowchart LR
 | Spray | A worker captures a local ROI and resolves accepted sizes once. | A later live crop or settings change must not alter accepted work. |
 | Spray | The sample expands symmetry. The write skips the second expansion with `centers_are_final`. | The sampled set is closed under the captured context. The sampler drops cells off the floor slice. The write gate filters the selection, the slice, existing cells, and material. |
 | Spray | The press can paint a lagging installed surface only when its `BatchToken` matches the press cell and context. | A surface of another cell never paints. |
-| Brush, Paint Brush, Fill, Spray | A switch keeps or finishes accepted work. | The accepted edit must not be lost. |
+| Dither Brush | The mask filters the source cells before the symmetry expansion. | Symmetry mirrors the masked stamp. The preview and the write use the same cells. |
+| Brush, Paint Brush, Dither Brush, Fill, Spray | A switch keeps or finishes accepted work. | The accepted edit must not be lost. |
 | Line | A switch drops the pending preview. | A line is not committed until the user confirms it. |
 
 ## Implemented shared mechanisms
@@ -585,7 +594,7 @@ The following items are not solved by this map.
 
 - Maximum-size Spray preview and rendering gaps are open in [TASKS.md](../../../TASKS.md). The open work asks for visible cursor updates during sustained drags and smaller model installation gaps. This map does not claim a fix.
 - Fill has no region preview. Its cursor is a static outline. This is the current policy, not a TODO.
-- Line discards a pending preview on a tool switch. Brush, Paint Brush, Fill, and Spray keep or finish accepted work on a switch. This is the current policy.
+- Line discards a pending preview on a tool switch. Brush, Paint Brush, Dither Brush, Fill, and Spray keep or finish accepted work on a switch. This is the current policy.
 - No performance result in this map is measured. The maps show control flow only.
 
 ## Review checks
@@ -608,6 +617,8 @@ Use these checks when you compare the maps with the code.
 - [`BrushTool`](../../../plugins/brush/BrushTool.gd)
 - [`LineTool`](../../../plugins/brush/LineTool.gd)
 - [`PaintBrushTool`](../../../plugins/paint/PaintBrushTool.gd)
+- [`DitherTool`](../../../plugins/paint/DitherTool.gd)
+- [`DitherMask`](../../../Globals/State/Tools/DitherMask.gd)
 - [`FillTool`](../../../plugins/paint/FillTool.gd)
 - [`SprayTool`](../../../plugins/paint/SprayTool.gd)
 - [`SpraySamplingJob`](../../../plugins/paint/SpraySamplingJob.gd)
