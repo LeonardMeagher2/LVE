@@ -360,6 +360,11 @@ func _unhandled_key_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel") and cancel_paste():
 		get_viewport().set_input_as_handled()
 		return
+	# The Paste option bar is absent for some tools. Keep Ctrl+V available from
+	# every tool. A focused text field consumes its own paste shortcut first.
+	if event is InputEventKey and event.pressed and not event.echo and event.is_command_or_control_pressed() and not event.shift_pressed and not event.alt_pressed and (event.keycode == KEY_V or event.physical_keycode == KEY_V):
+		paste_voxels()
+		get_viewport().set_input_as_handled()
 
 
 ## Cancels a running paste. Returns [code]true[/code] when a paste was canceled.
@@ -383,7 +388,11 @@ func paste_voxels() -> void:
 		return
 	var text := _read_clipboard()
 	var has_voxels := text.begins_with(CLIPBOARD_PREFIX)
-	if not has_voxels and not _has_clipboard_image:
+	var has_image := _clipboard_has_image()
+	if has_image != _has_clipboard_image:
+		_has_clipboard_image = has_image
+		_sync_buttons()
+	if not has_voxels and not has_image:
 		return
 	State.edit_context_changing.emit()
 	State.stop()

@@ -273,6 +273,8 @@ flowchart TD
 ```
 
 `paste_voxels` reads the system clipboard and checks `CLIPBOARD_PREFIX`.
+A Ctrl+V key event starts the paste while any tool is active.
+A focused text field keeps its own paste shortcut.
 A voxel record has priority over image data.
 When the text is new or the pattern is empty, `ClipboardImportJob` parses and validates the JSON.
 When the text has no prefix, `paste_voxels` checks `DisplayServer.clipboard_has_image()`.
