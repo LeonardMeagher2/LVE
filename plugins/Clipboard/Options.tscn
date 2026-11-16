@@ -59,7 +59,7 @@ icon_alignment = 1
 
 [node name="Paste" type="Button" parent="." unique_id=1792386152]
 layout_mode = 2
-tooltip_text = "Paste voxels at the cursor. Click to place. Cancel Paste or Escape cancels."
+tooltip_text = "Paste voxels or an image from the clipboard at the cursor. Click to place. Cancel Paste or Escape cancels."
 shortcut = SubResource("PasteShortcut")
 icon = ExtResource("2_paste")
 icon_alignment = 1

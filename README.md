@@ -18,6 +18,7 @@ Export a low-poly glTF mesh, a sprite sheet, or an animated GIF.
 - Build, dig, flatten, and smooth terrain.
 - Grab and pose connected limbs.
 - Select, move, rotate, and scale voxels.
+- Paste voxel selections or clipboard images.
 - Mirror and slice the model while you work.
 - Animate frames with tags, loops, and playback.
 - Set albedo, metallic, roughness, and emission per voxel.

@@ -270,7 +270,7 @@ The source is [`State.gd:492`](../../../Globals/State/State.gd#L492).
 | Selection | Escape or context change | Screen job wait | Checkpoint and identity | One `Screen selection` action |
 | Erase selection | `edit_context_changing` | `State.run_edit_job` | Document and frame identity | One `Erase Selection` action |
 | Clipboard copy or cut | Document or frame change through the `on_frame` callback | `State.run_edit_job` join, exactly once | Document, frame, and `checkpoint(0)` | Cut records `Cut`. Copy records no undo |
-| Clipboard paste | Escape, context, document, frame, selection, floor, cell, or chunk change. A tool toggle also cancels | `State.run_edit_job` join for import and preview, exactly once | Revision and anchor for preview. Document and frame identity at commit | One `Paste` action |
+| Clipboard paste and image conversion | Escape, context, document, frame, selection, floor, cell, or chunk change. A tool toggle also cancels | `State.run_edit_job` join for image, import, and preview, exactly once | Revision and anchor for preview. Document and frame identity at commit | One `Paste` action |
 | Image import | Document or frame change | `State.run_edit_job` | Document and frame identity | New document resets history |
 | Preview | Strict request or clear | `wait_for_task_completion` | Revision or stream epoch | No undo |
 | Renderer | No cancel | Last renderer joins all tasks | In-flight key and request set | No undo |
