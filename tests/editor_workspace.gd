@@ -26,6 +26,7 @@ func _ready() -> void:
 	test("a cancelled edit reports the stopped playback state", _play_cancel_run, "play_cancel")
 	test("a new-version startup restores each saved workspace after the splash", _startup_workspace_run, "startup_workspace")
 	test("an old brush tool id restores the brush", _legacy_tool_id_run, "legacy_tool_id")
+	test("an old stamp shape without a pattern falls back to the cube", _old_stamp_shape_run, "old_stamp_shape")
 
 
 func before_test() -> void:
@@ -415,6 +416,20 @@ func _legacy_run() -> void:
 		expect(State.current_material == green, "the active material stays")
 		expect(not viewport_scene().get_node("%Grid").visible, "the grid stays off")
 		expect(plugin("BrushPlugin")._toolbar.button_pressed, "the active tool stays")
+	)
+
+
+func _old_stamp_shape_run() -> void:
+	step("Given a document saved with the old stamp shape and no pattern", func():
+		var document := State.new_document()
+		document.tool_settings = {"BrushPlugin": {"shape": int(StampToolSettings.BrushShape.STAMP), "diameter": 4}}
+		State.set_tabs([document], 0)
+	)
+	step("Then the brush shape falls back to the cube", func():
+		expect(_brush.shape == StampToolSettings.BrushShape.CUBE, "the brush uses the cube shape")
+		expect(_brush.diameter == 4, "the brush keeps its saved diameter")
+		var stored: Dictionary = State.document.tool_settings.get("BrushPlugin", {})
+		expect(int(stored.get("shape", -1)) == int(StampToolSettings.BrushShape.CUBE), "the stored shape records the fallback")
 	)
 
 

@@ -34,14 +34,15 @@ Use these words with the same meaning in every diagram.
 
 ## Registration inventory
 
-`State._ready` adds eleven plugins in a fixed order.
-The toolbar follows the plugin order for the eight toolbar plugins.
-The toolbar order is Brush, Eyedropper, Paint, Terrain, Selection, Transform, Symmetry, and Plane.
+`State._ready` adds thirteen plugins in a fixed order.
+The toolbar follows the plugin order for the ten toolbar plugins.
+The toolbar order is Brush, Stamp, Eyedropper, Paint, Terrain, Deform, Selection, Transform, Symmetry, and Plane.
 The source is [`State.gd:252`](../../../Globals/State/State.gd#L252).
 
 | Plugin | UI registration | Options | Tool node | Start state |
 | --- | --- | --- | --- | --- |
 | `BrushPlugin` | `plugins/brush/Toolbar.tscn`, a `MenuButton` with Pencil, Line, and Eraser | `plugins/brush/Options.tscn` | `BrushTool.tscn` and `LineTool.tscn` | Active at startup |
+| `StampPlugin` | `plugins/Stamp/Toolbar.tscn`, a `Button` | `plugins/Stamp/Options.tscn` and the `FramePanel` side widget | `StampTool.tscn` | Inactive |
 | `EyedropperPlugin` | `plugins/Eyedropper/Toolbar.tscn`, a `Button` | None | `EyedropperTool.tscn` | Inactive |
 | `PaintPlugin` | `plugins/paint/Toolbar.tscn`, a `MenuButton` with Paintbrush, Bucket Fill, and Spray Can | `plugins/paint/Options.tscn` | `PaintBrushTool.tscn`, `FillTool.tscn`, and `SprayTool.tscn` | Inactive |
 | `TerrainPlugin` | `plugins/Terrain/Toolbar.tscn`, a `MenuButton` with Build, Flatten, and Smooth | `plugins/Terrain/Options.tscn` | `TerrainTool.tscn` | Inactive |
@@ -269,7 +270,7 @@ The source is [`State.gd:492`](../../../Globals/State/State.gd#L492).
 | Selection | Escape or context change | Screen job wait | Checkpoint and identity | One `Screen selection` action |
 | Erase selection | `edit_context_changing` | `State.run_edit_job` | Document and frame identity | One `Erase Selection` action |
 | Clipboard copy or cut | Document or frame change through the `on_frame` callback | `State.run_edit_job` join, exactly once | Document, frame, and `checkpoint(0)` | Cut records `Cut`. Copy records no undo |
-| Clipboard paste | Escape, context, document, frame, selection, floor, cell, or chunk change. A tool toggle also cancels | `State.run_edit_job` join for import and preview, exactly once | Revision and anchor for preview. Document and frame identity at commit | One `Paste` action |
+| Clipboard paste and image conversion | Escape, context, document, frame, selection, floor, cell, or chunk change. A tool toggle also cancels | `State.run_edit_job` join for image, import, and preview, exactly once | Revision and anchor for preview. Document and frame identity at commit | One `Paste` action |
 | Image import | Document or frame change | `State.run_edit_job` | Document and frame identity | New document resets history |
 | Preview | Strict request or clear | `wait_for_task_completion` | Revision or stream epoch | No undo |
 | Renderer | No cancel | Last renderer joins all tasks | In-flight key and request set | No undo |
@@ -350,7 +351,7 @@ The cache and job sources are [`VoxelRenderer.gd:22`](../../../ui/Viewport/Voxel
 It builds a cursor or selection mesh from a captured cell set.
 A strict request cancels the running job.
 A coalescing request keeps the running job and installs a completed snapshot in request order.
-Preview consumers are `BrushPreview`, `LineTool`, `PasteTool`, `SprayTool`, `TerrainTool`, and `SelectionPlugin`.
+Preview consumers are `BrushPreview`, `LineTool`, `StampTool`, `PasteTool`, `SprayTool`, `TerrainTool`, and `SelectionPlugin`.
 The source is [`VoxelPreview.gd`](../../../Globals/Rendering/VoxelPreview.gd).
 
 ```mermaid
@@ -719,7 +720,7 @@ The verification history is in the composition guide.
 ### F. Publish by chunk location
 
 - Current signature: `VoxelFrame.apply_published(locations: Array[Vector3i], published: VoxelFrame) -> void`
-- Callers: Terrain (tick and Smooth), the deform tools, `StrokeTool` for Brush, Paint Brush, and Spray, `LineTool`, `PasteTool`, the Transform preview, the small Fill path, `EraseJob`, and a clipboard cut.
+- Callers: Terrain (tick and Smooth), the deform tools, `StrokeTool` for Brush, Stamp, Paint Brush, and Spray, `LineTool`, `PasteTool`, the Transform preview, the small Fill path, `EraseJob`, and a clipboard cut.
 - Current mechanism: The method replaces only the listed chunks. It copies no chunk.
 - Marker rule: In a job frame, a shared marker means the job did not write that chunk. A neighbor or a reverted baseline chunk keeps its marker, so the undo snapshot stays frozen.
 - Job frame: `VoxelFrame.job_frame(source)` shares the chunk objects without a whole-frame copy. Use it only when the source is not written while the job runs.
@@ -745,7 +746,7 @@ Evidence: [`VoxelPreview.gd`](../../../Globals/Rendering/VoxelPreview.gd), [`Vox
 ### 2. Share single-tool mount and unmount in `VoxelPlugin`
 
 - Consumers: `PlanePlugin` and `EyedropperPlugin`. Their toolbar toggle and editor node mount and unmount have the same shape. Eyedropper has no option bar. `SymmetryPlugin` shares the toolbar toggle shape but not the tool lifetime.
-- Preserved contract: The toolbar button stays pressed. The option bar shows only for the active tool. The editor node mounts and unmounts with the active state. Each plugin keeps its own finish and cancel policy. Plane and Symmetry open no edit. Eyedropper closes an empty edit. Brush, Paint, and Terrain call `finish_on_switch`. Line cancels its preview. Selection applies a held outline. Transform commits a pending transform on detach.
+- Preserved contract: The toolbar button stays pressed. The option bar shows only for the active tool. The editor node mounts and unmounts with the active state. Each plugin keeps its own finish and cancel policy. Plane and Symmetry open no edit. Eyedropper closes an empty edit. Brush, Stamp, Paint, and Terrain call `finish_on_switch`. Line cancels its preview. Selection applies a held outline. Transform commits a pending transform on detach.
 - Existing mechanism: `VoxelPlugin.add_tool_bar_item`, `add_editor_node`, `add_option_bar_item`, `_safe_add`, and `_safe_remove`.
 - Tradeoff: A helper that also calls `finish_on_switch` would change Line and Selection behavior. It would not fit Transform. A helper for mount and unmount only is safe. Symmetry needs a separate active flag.
 
@@ -804,7 +805,7 @@ Some have no production caller.
 | `VoxelRenderer.refresh` | `VoxelImageRenderer._render_frame` calls it |
 | `VoxelRenderer.reset_profile` and `profile_snapshot` | Tests call them. `profile_surfaces` is off by default |
 | `State.cancel_activity` | `State._input` calls it on Escape |
-| `StrokeTool.finish_on_switch` | `BrushPlugin` and `PaintPlugin` call the stroke tool method. `LineTool` and `FillTool` override it. `TerrainTool` has its own policy |
+| `StrokeTool.finish_on_switch` | `BrushPlugin`, `StampPlugin`, and `PaintPlugin` call the stroke tool method. `LineTool` and `FillTool` override it. `TerrainTool` has its own policy |
 | `ImageImportPlugin.import_image` | `MenuBar._on_file_opened` calls it for image files from the Open dialog or a file drop |
 | `ClipboardPlugin` paste tool | `paste_voxels` mounts it on demand |
 

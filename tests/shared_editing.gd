@@ -12,42 +12,17 @@ func _ready() -> void:
 	timeout = 30.0
 	if DisplayServer.has_feature(DisplayServer.FEATURE_CLIPBOARD):
 		original_clipboard = DisplayServer.clipboard_get()
-	test("voxel brushes use selections or whole frames and shared clipboard controls place one undoable copy", _run)
+	test("shared clipboard controls place one undoable copy", _run)
 
 
 func _run() -> void:
-	step("Given three colored voxels with no selection", func():
+	step("Given two colored voxels with no selection", func():
 		brush = plugin("BrushPlugin")._brush_tool
 		clipboard = plugin("ClipboardPlugin")
 		options = plugin("BrushPlugin")._options
 		_empty()
 		frame.set_cell(Vector3i.ZERO, VoxelFrame.material(Color.RED))
 		frame.set_cell(Vector3i.RIGHT, VoxelFrame.material(Color.BLUE))
-		frame.set_cell(Vector3i.UP, VoxelFrame.material(Color.GREEN))
-	)
-	step("When the user chooses the voxel brush", func():
-		options.get_node("Shape/Selection").pressed.emit()
-		frame.clear()
-		_click(brush, Vector3.ZERO)
-	)
-	step("Then the brush contains the whole frame with its colors", func():
-		expect(frame.count() == 3, "the whole-frame brush contains three voxels")
-		expect(frame.get_color(Vector3i.ZERO) == Color.RED, "the voxel brush preserves red")
-		expect(frame.get_color(Vector3i.RIGHT) == Color.BLUE, "the voxel brush preserves blue")
-		expect(frame.get_color(Vector3i.UP) == Color.GREEN, "the voxel brush preserves depth and green")
-	)
-	step("Given only the two base voxels are selected", func():
-		State.selection.add(Vector3i.ZERO)
-		State.selection.add(Vector3i.RIGHT)
-		State.selection_changed.emit()
-		options.get_node("Shape/Selection").pressed.emit()
-		State.clear_selection()
-		frame.clear()
-		_click(brush, Vector3.ZERO)
-	)
-	step("Then the voxel brush contains only the selected voxels", func():
-		expect(frame.count() == 2, "the selection brush excludes the unselected voxel")
-		expect(not frame.has(Vector3i.UP), "the unselected green voxel is absent")
 	)
 	step("When the user copies all frame voxels through the shared controls", func():
 		State.document.palette.assign([VoxelFrame.material(Color.GREEN)])

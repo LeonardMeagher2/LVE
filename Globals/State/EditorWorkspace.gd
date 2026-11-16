@@ -268,7 +268,7 @@ func _apply_resource(plugin: String, data: Variant) -> void:
 		settings.set(property.name, stored)
 	if settings is StampToolSettings:
 		var stamp: StampToolSettings = settings
-		if stamp.shape == StampToolSettings.BrushShape.SELECTION and stamp.selection_pattern.is_empty():
+		if stamp.shape == StampToolSettings.BrushShape.STAMP and stamp.stamp_pattern.is_empty():
 			stamp.shape = StampToolSettings.BrushShape.CUBE
 			# Keep a later save honest about the fallback.
 			if _state_document != null:

@@ -9,11 +9,11 @@ extends "res://tests/test.gd"
 #
 #   godot --path . res://tests/line_lifecycle.tscn
 #
-# A large selection pattern keeps the first preview on the worker. No frame runs
+# A large stamp pattern keeps the first preview on the worker. No frame runs
 # between two pointer moves, so the running job is still the current job when the
 # newer request arrives.
 
-## The edge of the large selection pattern. A line of two or more centers then
+## The edge of the large stamp pattern. A line of two or more centers then
 ## needs more than [constant StrokeTool.INLINE_EDIT_LIMIT] cells.
 const PATTERN_EDGE := 17
 
@@ -55,7 +55,7 @@ func before_test() -> void:
 
 
 func _supersede() -> void:
-	step("Given a large selection brush and a pending line", func():
+	step("Given a large stamp pattern and a pending line", func():
 		_use_large_pattern()
 		_click(Vector3.ZERO)
 		_motion(Vector3(1, 0, 0))
@@ -193,7 +193,7 @@ func _context_change() -> void:
 	)
 
 
-# Builds a selection pattern above the inline limit. The line tool copies it at
+# Builds a stamp pattern above the inline limit. The line tool copies it at
 # the start of a stroke.
 func _use_large_pattern() -> void:
 	var pattern := {}
@@ -205,7 +205,7 @@ func _use_large_pattern() -> void:
 				var offset := Vector3i(x, y, z)
 				pattern[offset] = Color.RED
 				materials[offset] = VoxelFrame.material(Color.RED)
-	settings.use_selection(pattern, materials)
+	settings.use_stamp(pattern, materials)
 
 
 func _await_preview() -> void:

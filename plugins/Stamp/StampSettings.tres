@@ -1,0 +1,7 @@
+[gd_resource type="Resource" format=3]
+
+[ext_resource type="Script" path="res://plugins/brush/StampToolSettings.gd" id="1_settings"]
+
+[resource]
+script = ExtResource("1_settings")
+shape = 2

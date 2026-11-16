@@ -220,7 +220,7 @@ Each open tool handles the signal with its own policy.
 An active transform commits. An active paste cancels. Active selection jobs cancel.
 This is a source fact. It is not a new universal policy.
 An empty selection copies the whole frame.
-`ClipboardCopyJob` extends `StampCopyJob.CopyJob`.
+`ClipboardCopyJob` extends `StampCopyJob`.
 It builds the pattern, the full materials, and the pattern center.
 It then writes JSON records with 3 integers and 9 material floats.
 It also writes selection offsets relative to the center.
@@ -239,7 +239,7 @@ The caller installs only after the runner returns and the document, frame, and c
 - Command: [`ClipboardPlugin.copy_voxels`](../../../plugins/Clipboard/ClipboardPlugin.gd) and [`cut_voxels`](../../../plugins/Clipboard/ClipboardPlugin.gd) call `_copy_voxels`.
 - Context signal: [`ClipboardPlugin._copy_voxels`](../../../plugins/Clipboard/ClipboardPlugin.gd) emits `State.edit_context_changing` before the capture.
 - Capture: [`ClipboardPlugin._copy_voxels`](../../../plugins/Clipboard/ClipboardPlugin.gd) calls `VoxelFrame.copy_frame` and `VoxelSelection.capture`.
-- Worker: [`ClipboardCopyJob.run`](../../../plugins/Clipboard/ClipboardPlugin.gd) calls `StampCopyJob.CopyJob.run`. A cut then calls `VoxelFrame.set_cells`.
+- Worker: [`ClipboardCopyJob.run`](../../../plugins/Clipboard/ClipboardPlugin.gd) calls `StampCopyJob.run`. A cut then calls `VoxelFrame.set_cells`.
 - Install: [`ClipboardPlugin._copy_voxels`](../../../plugins/Clipboard/ClipboardPlugin.gd) stores read-only patterns and calls `DisplayServer.clipboard_set`.
 - Cut: the same method calls `State.begin_edit`, `VoxelFrame.restore`, `State.clear_selection`, and `State.finish_edit`.
 - Cancel: the runner calls the context callback, which calls `job.cancel` when the document or frame changes. The runner joins exactly once.
@@ -248,11 +248,17 @@ The caller installs only after the runner returns and the document, frame, and c
 
 ```mermaid
 flowchart TD
-  P1["Paste command<br/>read clipboard"] --> P2{"Text changed<br/>or no pattern?"}
-  P2 -->|"Yes"| P3["Runner: import job<br/>parse + validate"]
+  P1["Paste command<br/>read clipboard"] --> P2{"Voxel text prefix?"}
+  P2 -->|"Yes"| P2T{"Text changed<br/>or no pattern?"}
+  P2T -->|"Yes"| P3["Runner: import job<br/>parse + validate"]
   P3 --> P4["Runner on Main<br/>pump + join"]
   P4 --> P5["Install on Main<br/>pattern read-only"]
-  P2 -->|"No"| P5
+  P2T -->|"No"| P5
+  P2 -->|"No"| P2I{"Image data?"}
+  P2I -->|"Yes"| P3I["Runner: image job<br/>pixels to pattern"]
+  P3I --> P4I["Install on Main<br/>centered plane"]
+  P4I --> P5
+  P2I -->|"No"| P20["No paste"]
   P5 --> P6["Begin paste<br/>snapshot + operation"]
   P6 --> P7["Pointer move<br/>preview request"]
   P7 --> P8["Preview runner<br/>inline or worker"]
@@ -267,8 +273,17 @@ flowchart TD
 ```
 
 `paste_voxels` reads the system clipboard and checks `CLIPBOARD_PREFIX`.
+A Ctrl+V key event starts the paste while any tool is active.
+A focused text field keeps its own paste shortcut.
+A voxel record has priority over image data.
 When the text is new or the pattern is empty, `ClipboardImportJob` parses and validates the JSON.
+When the text has no prefix, `paste_voxels` checks `DisplayServer.clipboard_has_image()`.
+`ClipboardImageJob` converts the image pixels on the worker.
+It keeps pixels with alpha at or above 0.5 and sets their alpha to 1.
+It builds a one-voxel-thick plane on `State.floor_axis`, centered on the image rectangle.
 The main thread installs the pattern and the material pattern as read-only dictionaries.
+An image paste installs its colors only. The paste tool rebuilds the default materials.
+The pasted selection holds every image pixel.
 `begin_paste` captures `_line_snapshot = _source_frame.copy_frame()`.
 The preview samples this snapshot, not the live frame.
 `PasteJob` extends `BrushJob`.
@@ -298,8 +313,9 @@ They are not a general hook framework.
 
 #### Paste source edges
 
-- Command: [`ClipboardPlugin.paste_voxels`](../../../plugins/Clipboard/ClipboardPlugin.gd) reads the clipboard and starts the import.
+- Command: [`ClipboardPlugin.paste_voxels`](../../../plugins/Clipboard/ClipboardPlugin.gd) reads the clipboard and starts the import or the image conversion.
 - Import: [`ClipboardImportJob.run`](../../../plugins/Clipboard/ClipboardPlugin.gd) parses and validates the JSON. `ClipboardPlugin.paste_voxels` awaits `State.run_edit_job` for the import.
+- Image: [`ClipboardImageJob.run`](../../../plugins/Clipboard/ClipboardPlugin.gd) converts the image pixels. [`ClipboardPlugin._start_image_paste`](../../../plugins/Clipboard/ClipboardPlugin.gd) awaits `State.run_edit_job` for the conversion.
 - Begin: [`PasteTool.begin_paste`](../../../plugins/Clipboard/PasteTool.gd) captures `_line_snapshot` and starts the placement operation.
 - Preview: [`LineTool._start_preview`](../../../plugins/brush/LineTool.gd) builds `PasteJob` and awaits `State.run_edit_job` above `INLINE_EDIT_LIMIT` with `_cancel_preview_if_stale`.
 - Operation: [`PasteTool._begin_preview_operation`](../../../plugins/Clipboard/PasteTool.gd) returns `_placement_operation_id`. [`PasteTool._finish_preview_operation`](../../../plugins/Clipboard/PasteTool.gd) keeps it open.
@@ -448,7 +464,7 @@ Both apply symmetry before the mode step.
 | Transform Scale | Same, plus pivot, scale factors, screen basis, `uniform`. | Same. | `Stroke` | Same. |
 | Copy | Context signal, selection or whole frame, frame copy. | Inline at 4096 or below. `State.run_edit_job` above. | None | Cancel job. No model write. |
 | Cut | Same, plus `cut_source`. | Same. | `Cut` | Cancel job. No install. |
-| Paste | Pattern, selection pattern, material pattern, line snapshot. | Preview runner inline or worker. Commit on main. | `Paste` | `_cancel_edit`. No install. |
+| Paste | Voxel pattern or clipboard image, selection pattern, material pattern, line snapshot. | Image conversion, then preview runner inline or worker. Commit on main. | `Paste` | `_cancel_edit`. No install. |
 | Box and Lasso | Screen shape, camera, previous selection, options. | Inline at 4096 or below. Worker above. | `Screen selection` | Cancel job, drop result. |
 | Wand small | Seed, material, previous selection, mode. | Inline. | `Wand selection` | Cancel job. |
 | Wand stream | Same, plus queue and cursor. | Worker produces. Main drains. | `Wand selection` | Abort edit, retire job, restore selection. |

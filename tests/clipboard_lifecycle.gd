@@ -46,6 +46,7 @@ func _ready() -> void:
 	test("a cancelled paste releases its placement operation", _paste_cancel, "paste_cancel_status")
 	test("a malformed voxel payload clears the Paste availability", _malformed_payload, "paste_malformed")
 	test("a busy tool leaves input for the operation owner", _busy_input, "busy_input")
+	test("Ctrl+V starts a paste without the clipboard option bar", _global_paste, "paste_global_shortcut")
 
 
 func before_test() -> void:
@@ -58,6 +59,7 @@ func before_test() -> void:
 	clipboard._material_pattern = {}
 	clipboard._clipboard_text = ""
 	clipboard._has_clipboard_voxels = false
+	clipboard._has_clipboard_image = false
 	clipboard._rejected_clipboard_text = ""
 	State.document = VoxelDocument.new()
 	State.undo_redo.clear_history()
@@ -286,6 +288,40 @@ func _malformed_payload() -> void:
 		expect(not clipboard._has_clipboard_voxels, "a malformed payload disables Paste")
 		expect(clipboard._pattern.is_empty(), "no pattern is adopted")
 		expect(not clipboard._paste_tool._active, "no paste preview starts")
+	)
+
+
+# The clipboard controls attach only to some option bars. Ctrl+V must still
+# start a paste while another tool is active.
+func _global_paste() -> void:
+	var text := JSON.stringify({
+		"voxel_voxels": [[0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1]],
+		"voxel_selection": [],
+	}, "", false, true)
+	step("Given a voxel record and no clipboard option bar", func():
+		if DisplayServer.has_feature(DisplayServer.FEATURE_CLIPBOARD):
+			DisplayServer.clipboard_set(text)
+		else:
+			clipboard._clipboard_text = text
+		if clipboard._options.get_parent():
+			clipboard._options.get_parent().remove_child(clipboard._options)
+		clipboard._refresh_clipboard()
+		expect(not clipboard._options.is_inside_tree(), "the clipboard options are absent")
+	)
+	step("When the user presses Ctrl+V", func():
+		var event := InputEventKey.new()
+		event.keycode = KEY_V
+		event.ctrl_pressed = true
+		event.pressed = true
+		get_tree().root.push_input(event)
+	)
+	while clipboard._import_job:
+		await get_tree().process_frame
+	step("Then the paste placement starts", func():
+		expect(clipboard._paste_tool._active, "Ctrl+V starts the paste placement")
+		expect(clipboard._pattern.size() == 1, "Ctrl+V installs the clipboard pattern")
+		clipboard.cancel_paste()
+		clipboard._sync_options()
 	)
 
 

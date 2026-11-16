@@ -163,57 +163,15 @@ func _run() -> void:
 		expect(State.get_palette() == palette_before, "sampling an unsaved material preserves the palette")
 		expect(_same_material(Vector3i.ZERO, metal) and _same_material(Vector3i(3, 0, 0), unsaved), "sampling preserves both voxel materials")
 	)
-	step("Given a selected pair of voxels with different materials", func():
+	step("Given a copied brush with two materials", func():
 		_reset(matte)
-		frame.set_cells({Vector3i(8, 0, 8): metal, Vector3i(8, 0, 9): blue})
-		State.selection.from_box(Vector3i(8, 0, 8), Vector3i(8, 0, 9))
-		State.selection_changed.emit()
-	)
-	step("When the user copies the selection as a voxel brush", func():
-		brush._options.get_node("Shape/Selection").pressed.emit()
-	)
-	await _settle()
-	step("Then copying preserves the source voxels and the selection", func():
-		expect(frame.count() == 2, "copying the brush preserves both source voxels")
-		expect(State.selection.count() == 2, "copying the brush preserves the source selection")
-		expect(settings.shape == settings.BrushShape.SELECTION, "the copied voxel brush becomes active")
-	)
-	step("When the user stamps the copied brush with another current material", func():
-		State.clear_selection()
-		frame.clear()
-		State.set_material(matte)
-		sync_viewport()
-		State.undo_redo.clear_history()
-		_click(Vector3(0, -0.5, 0))
-	)
-	await _settle()
-	step("Then the copied Pencil brush preserves each source material", func():
-		expect(frame.count() == 2, "the copied stamp contains two voxels")
-		expect(_same_material(Vector3i.ZERO, metal), "the first copied voxel retains its full material")
-		expect(_same_material(Vector3i.BACK, blue), "the second copied voxel retains its full material")
-		State.undo_redo.undo()
-		expect(frame.count() == 0, "one undo removes the copied stamp")
-		expect(not State.undo_redo.has_undo(), "the copied stamp creates one undo action")
-		State.undo_redo.redo()
-		expect(_same_material(Vector3i.ZERO, metal) and _same_material(Vector3i.BACK, blue), "redo restores both copied materials")
-	)
-	step("When the user erases with the copied material brush", func():
-		select_toolbar_item("Toolbar", "Eraser")
-		State.undo_redo.clear_history()
-		_click(Vector3(0, 0.5, 0))
-	)
-	await _settle()
-	step("Then the eraser removes the copied voxels instead of repainting them", func():
-		expect(frame.count() == 0, "the copied material brush erases both voxels")
-		State.undo_redo.undo()
-		expect(_same_material(Vector3i.ZERO, metal) and _same_material(Vector3i.BACK, blue), "undo restores both erased materials")
-		expect(not State.undo_redo.has_undo(), "the copied eraser creates one undo action")
-	)
-	step("When the user draws a line with the copied material brush", func():
+		settings.use_stamp({Vector3i.ZERO: Color.RED, Vector3i.BACK: Color.BLUE}, {Vector3i.ZERO: metal, Vector3i.BACK: blue})
 		frame.clear()
 		select_toolbar_item("Toolbar", "Line")
 		sync_viewport()
 		State.undo_redo.clear_history()
+	)
+	step("When the user draws a line with the copied material brush", func():
 		_click(Vector3(0, -0.5, 0))
 		_click(Vector3(2, -0.5, 0))
 	)
@@ -263,7 +221,7 @@ func _motion(world: Vector3) -> void:
 
 
 func _settle() -> void:
-	while State.edit_busy() or brush._brush_tool._edit != null or brush._line_tool._job != null or brush._line_tool._preview_requested or brush._options._source_job != null or not plugin("PaintPlugin")._fill_tool.is_settled():
+	while State.edit_busy() or brush._brush_tool._edit != null or brush._line_tool._job != null or brush._line_tool._preview_requested or not plugin("PaintPlugin")._fill_tool.is_settled():
 		await get_tree().process_frame
 	await get_tree().process_frame
 

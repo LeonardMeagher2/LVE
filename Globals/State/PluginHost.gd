@@ -10,6 +10,7 @@ extends Node
 ## The built-in plugins. The order is the creation order of the tool buttons.
 const PLUGIN_PATHS := [
 	"res://plugins/brush/BrushPlugin.gd",
+	"res://plugins/Stamp/StampPlugin.gd",
 	"res://plugins/Eyedropper/EyedropperPlugin.gd",
 	"res://plugins/paint/PaintPlugin.gd",
 	"res://plugins/Terrain/TerrainPlugin.gd",

@@ -8,8 +8,6 @@ var plugin_nodes: Array[Node] = []
 var document_ref: WeakRef
 var temporary_state: Node
 var temporary_history: UndoRedo
-var copy_options: Node
-var source_job_ref: WeakRef
 
 
 func _ready() -> void:
@@ -73,31 +71,6 @@ func _run() -> void:
 	step("Then its history object is deleted", func():
 		expect(not is_instance_valid(temporary_history), "deleting State frees its UndoRedo object")
 	)
-	step("Given a brush source worker preparing a large voxel pattern", func():
-		State.document = VoxelDocument.new()
-		var colors := {}
-		for x in 32:
-			for y in 32:
-				for z in 32:
-					colors[Vector3i(x, y, z)] = VoxelFrame.material(Color.RED)
-		State.get_current_voxel_frame().set_cells(colors)
-		copy_options = load("res://plugins/brush/Options.tscn").instantiate()
-		main.add_child(copy_options)
-		copy_options._on_selection_pressed()
-		expect(copy_options._source_job != null, "brush source preparation runs on a worker")
-		if copy_options._source_job:
-			source_job_ref = weakref(copy_options._source_job)
-	)
-	step("When the brush controls are deleted during source preparation", func():
-		copy_options.free()
-	)
-	await get_tree().process_frame
-	await get_tree().process_frame
-	step("Then the source worker and its captured frame are released", func():
-		expect(source_job_ref != null and source_job_ref.get_ref() == null, "the cancelled brush source job is released")
-		expect(not State.edit_busy(), "deleting brush controls releases the foreground operation")
-		State.document = VoxelDocument.new()
-	)
 	if DisplayServer.get_name() != "headless":
 		step("When the user opens Export before unloading its live preview", func():
 			State.get_current_voxel_frame().set_cell(Vector3i.ZERO, VoxelFrame.material(Color.RED))
@@ -108,7 +81,7 @@ func _run() -> void:
 		while not plugin("ExportPlugin")._preview_running:
 			await get_tree().process_frame
 	step("Given the editor plugins and their active and parked nodes", func():
-		for plugin_name in ["ExportPlugin", "ImageImportPlugin", "ClipboardPlugin", "SymmetryPlugin", "TransformPlugin", "SelectionPlugin", "PlanePlugin", "PaintPlugin", "EyedropperPlugin", "BrushPlugin"]:
+		for plugin_name in ["ExportPlugin", "ImageImportPlugin", "ClipboardPlugin", "SymmetryPlugin", "TransformPlugin", "SelectionPlugin", "PlanePlugin", "PaintPlugin", "EyedropperPlugin", "StampPlugin", "BrushPlugin"]:
 			var item := plugin(plugin_name)
 			plugins.append(item)
 			for property in item.get_property_list():

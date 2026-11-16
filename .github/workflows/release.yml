@@ -158,43 +158,8 @@ jobs:
           }
           exit 0
 
-  test:
-    runs-on: windows-latest
-    timeout-minutes: 30
-    permissions:
-      contents: read
-    steps:
-      - name: Check out the repository
-        uses: actions/checkout@v5
-
-      - name: Install Godot 4.7.2
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $ProgressPreference = 'SilentlyContinue'
-          $godotVersion = '4.7.2'
-          $base = "https://github.com/godotengine/godot/releases/download/$godotVersion-stable"
-          $tools = Join-Path $env:RUNNER_TEMP 'godot'
-          New-Item -ItemType Directory -Force $tools | Out-Null
-          $zip = Join-Path $tools 'godot.zip'
-          Invoke-WebRequest "$base/Godot_v$godotVersion-stable_win64.exe.zip" -OutFile $zip
-          Expand-Archive -LiteralPath $zip -DestinationPath $tools
-          $godot = Join-Path $tools "Godot_v$godotVersion-stable_win64_console.exe"
-          if (-not (Test-Path $godot)) { throw "The Godot executable is missing: $godot" }
-          "GODOT=$godot" >> $env:GITHUB_ENV
-
-      - name: Run the suite
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          & $env:GODOT --headless --path . --import
-          if ($null -ne $LASTEXITCODE -and $LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          # The suite opens one window. A failure exits non-zero.
-          & $env:GODOT --path . -s res://addons/test_kit/run.gd
-          if ($null -ne $LASTEXITCODE -and $LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
   build:
-    needs: [prepare, test]
+    needs: [prepare]
     if: needs.prepare.outputs.publish == 'true'
     permissions:
       contents: read

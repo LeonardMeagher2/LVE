@@ -104,7 +104,7 @@ func _run() -> void:
 			Vector3i(16, 0, 0): VoxelFrame.material(Color.RED, Color.BLUE, 0.3, 0.7),
 			Vector3i(32, 0, 0): VoxelFrame.material(Color.BLUE),
 		}
-		settings.use_selection(colors, materials)
+		settings.use_stamp(colors, materials)
 		tool._show_brush_shape(1)
 	)
 	await _settle(cursor)
@@ -118,7 +118,7 @@ func _run() -> void:
 	step("When Line and Paste display the same copied materials", func():
 		line = load("res://plugins/brush/LineTool.tscn").instantiate()
 		main.add_child(line)
-		line._stroke_shape = BrushToolSettings.BrushShape.SELECTION
+		line._stroke_shape = BrushToolSettings.BrushShape.STAMP
 		var job := BrushScript.BrushJob.new()
 		job.applied_cells = materials
 		line._show_preview(job)

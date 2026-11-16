@@ -2,40 +2,25 @@ extends HBoxContainer
 
 ## The brush option bar.
 ##
-## It edits the brush diameter, the shape, and the pixel-perfect flag. It also
-## builds a selection brush pattern from the current frame or selection.
+## It edits the brush diameter, the shape, and the pixel-perfect flag.
 
 var _settings := preload("./BrushSettings.tres")
-var _source_job: VoxelFrame.EditJob
-var _operation_id := 0
 
 
 func _ready() -> void:
 	_settings.changed.connect(_sync)
-	State.selection_changed.connect(_sync)
-	State.frame_changed.connect(_sync)
-	State.cells_changed.connect(_on_cells_changed)
-	State.chunks_changed.connect(_on_cells_changed)
-	State.activity_changed.connect(_sync)
 	_sync()
 
 
 func _sync() -> void:
 	$Diameter.set_value_no_signal(_settings.diameter)
-	var shape_buttons := [$Shape/Cube, $Shape/Sphere, $Shape/Selection]
-	shape_buttons[_settings.shape].button_pressed = true
-	_refresh_selection_availability()
-	$Diameter.visible = _settings.shape != _settings.BrushShape.SELECTION
+	var shape_buttons := [$Shape/Cube, $Shape/Sphere]
+	var shape: int = _settings.shape
+	if shape < 0 or shape >= shape_buttons.size():
+		shape = _settings.BrushShape.CUBE
+	shape_buttons[shape].button_pressed = true
 	$PixelPerfect.visible = _settings.mode != _settings.BrushMode.LINE
 	$PixelPerfect.set_pressed_no_signal(_settings.pixel_perfect)
-	$ShapeSeparator.visible = $Diameter.visible
-
-
-# Updates only the selection-source button. A cell or chunk change can cross the
-# empty-frame boundary, so the button is the only control that reacts to it.
-func _refresh_selection_availability() -> void:
-	var frame := State.get_current_voxel_frame()
-	$Shape/Selection.disabled = _source_job != null or State.edit_busy() or frame == null or (frame.count() == 0 and _settings.selection_pattern.is_empty())
 
 
 func _on_diameter_changed(value: float) -> void:
@@ -49,56 +34,6 @@ func _on_cube_pressed() -> void:
 func _on_sphere_pressed() -> void:
 	_settings.shape = _settings.BrushShape.SPHERE
 
-
-func _on_selection_pressed() -> void:
-	if State.edit_busy() or _source_job:
-		return
-	var document := State.document
-	var frame := State.get_current_voxel_frame()
-	if frame.count() == 0:
-		if not _settings.selection_pattern.is_empty():
-			_settings.shape = _settings.BrushShape.SELECTION
-		_sync()
-		return
-	var job := _settings.CopyJob.new()
-	job.source_frame = frame.copy_frame()
-	job.selection_mask = State.selection.capture()
-	_source_job = job
-	_sync()
-	var source_count := job.selection_mask.size() if not job.selection_mask.is_empty() else frame.count()
-	var operation_id := State.begin_operation("Preparing voxel brush", source_count, true, self)
-	_operation_id = operation_id
-	if source_count <= 4096:
-		job.run()
-	else:
-		# The shared helper owns the launch, the progress pump, and the join. The
-		# context check runs once per pumped frame. The closure captures this job
-		# and its source context, so a stale pump cannot cancel a newer job.
-		await State.run_edit_job(job, operation_id, "Voxel brush", func() -> void:
-			if State.document != document or State.get_current_voxel_frame() != frame or not is_inside_tree():
-				job.cancel()
-		)
-	State.finish_operation(operation_id)
-	if _source_job == job:
-		_source_job = null
-		_operation_id = 0
-	if is_inside_tree() and State.document == document and State.get_current_voxel_frame() == frame and job.checkpoint(job.pattern.size()):
-		_settings.use_selection(job.pattern, job.pattern_materials)
-	if is_inside_tree():
-		_sync()
-
-
-func _exit_tree() -> void:
-	if _source_job:
-		_source_job.cancel()
-		_source_job.wait_for_worker()
-		_source_job = null
-	State.finish_operation(_operation_id)
-	_operation_id = 0
-
-
-func _on_cells_changed(_frame: int, _affected: Array[Vector3i]) -> void:
-	_refresh_selection_availability()
 
 func _on_pixel_perfect_toggled(toggled_on: bool) -> void:
 	_settings.pixel_perfect = toggled_on

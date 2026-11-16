@@ -17,6 +17,9 @@ var pattern := {}
 var pattern_materials := {}
 ## The pattern center in cell units.
 var center := Vector3i.ZERO
+## Whether the pattern center is the source bounds center. A false value keeps
+## the source cell positions relative to the origin.
+var center_pattern := true
 var _colors := {}
 var _materials := {}
 var _bounds := AABB()
@@ -39,7 +42,7 @@ func run() -> void:
 			completed += 1
 			if completed % 4096 == 0 and not checkpoint(completed):
 				return
-	center = Vector3i(_bounds.get_center().floor())
+	center = Vector3i(_bounds.get_center().floor()) if center_pattern else Vector3i.ZERO
 	stage("Preparing voxel pattern", _colors.size())
 	completed = 0
 	for cell_position: Vector3i in _colors:
