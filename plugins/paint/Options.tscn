@@ -4,7 +4,6 @@
 [ext_resource type="Texture2D" uid="uid://cl0exu5ldguw" path="res://icons/pixel_perfect.svg" id="2_pixel"]
 [ext_resource type="Texture2D" uid="uid://dtgqku4g3l22e" path="res://icons/cube.svg" id="3_cube"]
 [ext_resource type="Texture2D" uid="uid://broaps7lc7g1u" path="res://icons/sphere.svg" id="4_sphere"]
-[ext_resource type="Texture2D" uid="uid://cwgfstwbiogcd" path="res://icons/select.svg" id="5_selection"]
 [ext_resource type="Texture2D" uid="uid://bbt7tj3kwq42w" path="res://icons/brush_diameter.svg" id="6_diameter"]
 [ext_resource type="PackedScene" uid="uid://kxi223occ3vl" path="res://ui/ValueButton/ValueButton.tscn" id="7_value"]
 [ext_resource type="Texture2D" uid="uid://dkpjood1t6s8x" path="res://icons/connected.svg" id="8_connected"]
@@ -36,14 +35,6 @@ tooltip_text = "Sphere brush"
 toggle_mode = true
 button_group = SubResource("ShapeGroup")
 icon = ExtResource("4_sphere")
-icon_alignment = 1
-
-[node name="Selection" type="Button" parent="Brush/Shape"]
-layout_mode = 2
-tooltip_text = "Use selected voxels as a brush, or all frame voxels when no selection exists"
-toggle_mode = true
-button_group = SubResource("ShapeGroup")
-icon = ExtResource("5_selection")
 icon_alignment = 1
 
 [node name="ShapeSeparator" type="VSeparator" parent="Brush"]
@@ -114,7 +105,6 @@ value = 8.0
 
 [connection signal="pressed" from="Brush/Shape/Cube" to="." method="_on_cube_pressed"]
 [connection signal="pressed" from="Brush/Shape/Sphere" to="." method="_on_sphere_pressed"]
-[connection signal="pressed" from="Brush/Shape/Selection" to="." method="_on_selection_pressed"]
 [connection signal="value_changed" from="Brush/Diameter" to="." method="_on_diameter_changed"]
 [connection signal="toggled" from="Brush/PixelPerfect" to="." method="_on_pixel_perfect_toggled"]
 [connection signal="toggled" from="Fill/Connected" to="." method="_on_connected_toggled"]

@@ -60,7 +60,7 @@ func begin_paste(pattern: Dictionary, selection_pattern: Dictionary, center: Vec
 			for cell in pattern:
 				_preview_pattern[cell] = material_pattern.get(cell, VoxelFrame.material(pattern[cell]))
 			_preview_pattern.make_read_only()
-	_stroke_shape = _settings.BrushShape.SELECTION
+	_stroke_shape = _settings.BrushShape.STAMP
 	_stroke_pattern_size = maxi(pattern.size(), selection_pattern.size())
 	# A paste places its whole pattern, so it ignores the selection and the
 	# symmetry. It still respects the slice, which the write gate applies.

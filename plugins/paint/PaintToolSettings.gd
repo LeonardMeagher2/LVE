@@ -28,7 +28,6 @@ enum Tools {
 
 
 const PatternJob := preload("res://plugins/brush/StampPatternJob.gd")
-const CopyJob := preload("res://plugins/brush/StampCopyJob.gd")
 # The shared size helper comes from StampToolSettings. A second const with the
 # same name here clashes with the inherited one.
 

@@ -118,7 +118,7 @@ A plugin entry holds its exported option values.
 The values must be booleans, integers, or finite floats.
 Any other value rejects the document.
 A new option type requires a new format version.
-The selection brush pattern is not stored.
+The stamp source and pattern are not stored. They follow the document tab in memory.
 
 `tools` also holds these keys.
 

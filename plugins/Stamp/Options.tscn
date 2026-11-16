@@ -1,0 +1,58 @@
+[gd_scene format=3]
+
+[ext_resource type="Texture2D" uid="uid://k4mp2te5yq4y" path="res://icons/open.svg" id="1_open"]
+[ext_resource type="Texture2D" uid="uid://cwgfstwbiogcd" path="res://icons/select.svg" id="2_select"]
+[ext_resource type="Script" path="res://plugins/Stamp/Options.gd" id="3_script"]
+[ext_resource type="Texture2D" uid="uid://mglj26s40ce4" path="res://icons/center.svg" id="4_center"]
+[ext_resource type="Texture2D" uid="uid://ck36gifdqlmx7" path="res://icons/clear.svg" id="5_clear"]
+
+[node name="Options" type="HBoxContainer"]
+script = ExtResource("3_script")
+
+[node name="File" type="Button" parent="."]
+layout_mode = 2
+tooltip_text = "Choose an LVE file for the stamp"
+icon = ExtResource("1_open")
+icon_alignment = 1
+
+[node name="UseSelection" type="Button" parent="."]
+layout_mode = 2
+tooltip_text = "Use the current voxel selection as the stamp"
+icon = ExtResource("2_select")
+icon_alignment = 1
+
+[node name="Clear" type="Button" parent="."]
+layout_mode = 2
+tooltip_text = "Clear the stamp source"
+icon = ExtResource("5_clear")
+icon_alignment = 1
+
+[node name="Center" type="Button" parent="."]
+layout_mode = 2
+tooltip_text = "Use the frame origin. Turn on to center the stamp on the cursor."
+toggle_mode = true
+icon = ExtResource("4_center")
+icon_alignment = 1
+
+[node name="Source" type="Label" parent="."]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "No stamp source"
+text_overrun_behavior = 3
+
+[node name="Error" type="Label" parent="."]
+visible = false
+layout_mode = 2
+text = "Cannot read this LVE file."
+
+[node name="FileDialog" type="FileDialog" parent="."]
+title = "Choose stamp source"
+size = Vector2i(700, 500)
+visible = false
+access = 2
+filters = PackedStringArray("*.lve ; LVE document", "*.lve.png ; LVE document with preview")
+
+[connection signal="pressed" from="File" to="." method="_on_file_pressed"]
+[connection signal="pressed" from="UseSelection" to="." method="_on_use_selection_pressed"]
+[connection signal="pressed" from="Clear" to="." method="_on_clear_pressed"]
+[connection signal="toggled" from="Center" to="." method="_on_center_toggled"]

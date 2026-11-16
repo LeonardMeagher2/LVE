@@ -217,7 +217,7 @@ func _run() -> void:
 	step("Given an asymmetric colored voxel brush", func():
 		State.document = VoxelDocument.new()
 		State.symmetry_axes = 1
-		settings.use_selection({Vector3i(-1, 0, 0): Color.RED, Vector3i(1, 0, 0): Color.BLUE})
+		settings.use_stamp({Vector3i(-1, 0, 0): Color.RED, Vector3i(1, 0, 0): Color.BLUE})
 		select_toolbar_item("Toolbar", "Pencil")
 		_click(Vector3(0, -0.5, 0))
 	)

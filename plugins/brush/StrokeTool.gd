@@ -72,9 +72,9 @@ class BrushJob extends VoxelFrame.EditJob:
 	# first one. A short move leaves most of the footprint already written.
 	## The center of the previous stamp, or [constant Vector3i.MAX] for the first.
 	var previous_center := Vector3i.MAX
-	## The per-offset materials of a selection brush or a paste.
+	## The per-offset materials of a stamp brush or a paste.
 	var material_pattern := {}
-	## Whether a selection pattern keeps its own materials.
+	## Whether a stamp pattern keeps its own materials.
 	var replace_materials := false
 	## The brush diameter in cells.
 	var diameter := 1
@@ -97,7 +97,7 @@ class BrushJob extends VoxelFrame.EditJob:
 
 	## Stamps the centers into the frame snapshot. This is the worker body.
 	func run() -> void:
-		if pattern.is_empty() and shape != StampSettings.BrushShape.SELECTION:
+		if pattern.is_empty() and shape != StampSettings.BrushShape.STAMP:
 			pattern = StampPattern.build_pattern(diameter, shape, self)
 		if offsets.size() != pattern.size():
 			# The stamp reads the offsets, and a caller can leave them out.
@@ -105,8 +105,8 @@ class BrushJob extends VoxelFrame.EditJob:
 		if not checkpoint(0):
 			return
 		stage("Preparing brush", centers.size() * offsets.size())
-		# A shape brush paints one material. A selection brush and a paste keep materials.
-		var uniform := not replace_materials and shape != StampSettings.BrushShape.SELECTION
+		# A shape brush paints one material. A stamp and a paste keep materials.
+		var uniform := not replace_materials and shape != StampSettings.BrushShape.STAMP
 		var uniform_material := VoxelFrame.material(Color.TRANSPARENT) if erase_existing else material
 		# This test does not change inside the loop, and the loop runs once per
 		# pattern cell per center. The edit scope filters the selection and the
@@ -115,7 +115,7 @@ class BrushJob extends VoxelFrame.EditJob:
 		# A shape brush paints one material, so an offset that wrote a cell leaves
 		# the same material behind. That makes it safe to skip the offsets the
 		# previous center already covered, which leaves the new edge alone. A
-		# selection brush and a paste key the material on the offset, so they
+		# stamp and a paste key the material on the offset, so they
 		# cannot skip.
 		var constant_material := erase_existing or uniform
 		if constant_material:
@@ -325,7 +325,7 @@ func open_stroke() -> VoxelEditTransaction:
 	_stroke_pattern = {}
 	_stroke_offsets = []
 	_stroke_last_center = Vector3i.MAX
-	_stroke_material_pattern = _settings.selection_material_pattern.duplicate(true) if _settings.shape == StampSettings.BrushShape.SELECTION else {}
+	_stroke_material_pattern = _settings.stamp_material_pattern.duplicate(true) if _settings.shape == StampSettings.BrushShape.STAMP else {}
 	_stroke_diameter = _settings.diameter
 	_stroke_shape = _settings.shape
 	_stroke_pattern_size = _settings.estimated_size()
@@ -564,7 +564,7 @@ func update_visual(pick: PickResult) -> void:
 
 func _show_brush_shape(axis: int) -> void:
 	var pattern := _settings.pattern()
-	if pattern.is_empty() and _settings.shape != _settings.BrushShape.SELECTION:
+	if pattern.is_empty() and _settings.shape != _settings.BrushShape.STAMP:
 		if _hover_job == null:
 			_hover_job = _settings.create_pattern_job()
 			_hover_job.diameter = _settings.diameter
@@ -572,21 +572,21 @@ func _show_brush_shape(axis: int) -> void:
 			_hover_operation_id = State.begin_operation("Preparing brush preview", _settings.estimated_size(), false, self)
 			_hover_job.worker_task_id = WorkerThreadPool.add_task(_hover_job.run, false, "Brush shape")
 		return
-	var use_voxel_colors: bool = _settings.shape == _settings.BrushShape.SELECTION
+	var use_voxel_colors: bool = _settings.shape == _settings.BrushShape.STAMP
 	# A cube's preview is the same six faces as its voxels, so the box is exact and
 	# costs nothing. A sphere's voxels are a stepped shape that no primitive
 	# matches, so its preview always stays per-cell, however long that takes. The
-	# selection shape keeps its own materials and already debounces.
+	# stamp shape keeps its own materials and already debounces.
 	var cube_diameter: int = _settings.diameter if _settings.shape == _settings.BrushShape.CUBE else 0
 	$Cursor.set_brush_material(State.current_material)
-	if use_voxel_colors and _settings.selection_material_pattern.size() == pattern.size():
-		pattern = _settings.selection_material_pattern
-	elif use_voxel_colors and not _settings.selection_material_pattern.is_empty():
+	if use_voxel_colors and _settings.stamp_material_pattern.size() == pattern.size():
+		pattern = _settings.stamp_material_pattern
+	elif use_voxel_colors and not _settings.stamp_material_pattern.is_empty():
 		pattern = pattern.duplicate()
 		for cell in pattern:
 			var color: Color = pattern[cell]
 			var fallback := State.current_material if color == Color.TRANSPARENT else VoxelFrame.material(color)
-			pattern[cell] = _settings.selection_material_pattern.get(cell, fallback)
+			pattern[cell] = _settings.stamp_material_pattern.get(cell, fallback)
 	$Cursor.show_voxels(pattern, Color.WHITE if use_voxel_colors else State.current_color, _erases(), cube_diameter, use_voxel_colors)
 	_cursor_axis = axis
 

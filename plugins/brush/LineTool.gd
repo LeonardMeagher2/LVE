@@ -154,7 +154,7 @@ func _begin_line(pick: PickResult) -> void:
 	_dragged = false
 	_stroke_pattern = _settings.pattern()
 	_stroke_offsets = _settings.pattern_offsets()
-	_stroke_material_pattern = _settings.selection_material_pattern.duplicate(true) if _settings.shape == StampSettings.BrushShape.SELECTION else {}
+	_stroke_material_pattern = _settings.stamp_material_pattern.duplicate(true) if _settings.shape == StampSettings.BrushShape.STAMP else {}
 	_stroke_diameter = _settings.diameter
 	_stroke_shape = _settings.shape
 	_stroke_pattern_size = _settings.estimated_size()
@@ -280,7 +280,7 @@ func _finish_preview() -> void:
 func _show_preview(job: BrushJob) -> void:
 	position = Vector3.ZERO
 	$Cursor.set_brush_material(_stroke_material)
-	var use_voxel_colors := _stroke_shape == _settings.BrushShape.SELECTION
+	var use_voxel_colors := _stroke_shape == _settings.BrushShape.STAMP
 	$Cursor.show_voxels(job.applied_cells if use_voxel_colors else _preview_colors(job), _stroke_color, false, 0, use_voxel_colors)
 
 
@@ -343,7 +343,7 @@ func _on_settings_changed() -> void:
 	else:
 		_stroke_pattern = _settings.pattern()
 		_stroke_offsets = _settings.pattern_offsets()
-		_stroke_material_pattern = _settings.selection_material_pattern.duplicate(true) if _settings.shape == StampSettings.BrushShape.SELECTION else {}
+		_stroke_material_pattern = _settings.stamp_material_pattern.duplicate(true) if _settings.shape == StampSettings.BrushShape.STAMP else {}
 		_stroke_diameter = _settings.diameter
 		_stroke_shape = _settings.shape
 		_stroke_pattern_size = _settings.estimated_size()

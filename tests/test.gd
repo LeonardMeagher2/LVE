@@ -7,12 +7,14 @@ extends "res://addons/test_kit/test_case.gd"
 
 const BRUSH_SETTINGS_PATH := "res://plugins/brush/BrushSettings.tres"
 const PAINT_SETTINGS_PATH := "res://plugins/paint/PaintSettings.tres"
+const STAMP_SETTINGS_PATH := "res://plugins/Stamp/StampSettings.tres"
 const SELECTION_SETTINGS_PATH := "res://plugins/selection/SelectionSettings.tres"
 const TRANSFORM_SETTINGS_PATH := "res://plugins/Transform/TransformSettings.tres"
 
 var main: Node
 var _brush_settings_resource: BrushToolSettings
 var _paint_settings_resource: PaintToolSettings
+var _stamp_settings_resource: StampToolSettings
 var _selection_settings_resource = null
 var _transform_settings_resource = null
 
@@ -29,6 +31,7 @@ func _enter_tree() -> void:
 	settle_frames = 2
 	_brush_settings_resource = load(BRUSH_SETTINGS_PATH)
 	_paint_settings_resource = load(PAINT_SETTINGS_PATH)
+	_stamp_settings_resource = load(STAMP_SETTINGS_PATH)
 	_selection_settings_resource = load(SELECTION_SETTINGS_PATH)
 	_transform_settings_resource = load(TRANSFORM_SETTINGS_PATH)
 
@@ -59,6 +62,14 @@ func reset_environment() -> void:
 	_paint_settings_resource.diameter = 1
 	_paint_settings_resource.shape = StampToolSettings.BrushShape.CUBE
 	_paint_settings_resource.pixel_perfect = false
+	_stamp_settings_resource.shape = StampToolSettings.BrushShape.STAMP
+	_stamp_settings_resource.clear_stamp()
+	var stamp_plugin := get_tree().root.get_node_or_null("StampPlugin")
+	if stamp_plugin != null:
+		stamp_plugin._center_on_cursor = false
+		var center_button := stamp_plugin._options.get_node_or_null("Center") as Button
+		if center_button != null:
+			center_button.set_pressed_no_signal(false)
 	# The selection settings have no class name. BOX and REPLACE are both zero.
 	_selection_settings_resource.tool = 0
 	_selection_settings_resource.mode = 0

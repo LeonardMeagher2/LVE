@@ -2,6 +2,7 @@ extends "res://tests/test.gd"
 
 var line_tool: Node
 var brush_tool: Node
+var stamp_tool: Node
 var options: Control
 var frame: VoxelFrame
 var tick_count := 0
@@ -92,7 +93,8 @@ func _run() -> void:
 	)
 	step("Given a selected volume with two colors", func():
 		_empty()
-		options = plugin("BrushPlugin")._options
+		plugin("StampPlugin")._center_on_cursor = true
+		stamp_tool = plugin("StampPlugin")._tool
 		for z in 18:
 			for y in 18:
 				for x in 18:
@@ -100,32 +102,32 @@ func _run() -> void:
 		State.selection.from_box(Vector3i.ZERO, Vector3i(17, 17, 17))
 		State.selection_changed.emit()
 	)
-	step("When the user copies the large selection as a brush", func():
-		options.get_node("Shape/Selection").pressed.emit()
-		expect(State.edit_busy(), "copying a large brush reports foreground work")
+	step("When the user copies the large selection as a stamp", func():
+		plugin("StampPlugin").use_current_selection()
+		expect(State.edit_busy(), "copying a large stamp reports foreground work")
 	)
-	while options._source_job:
+	while plugin("StampPlugin")._source_job:
 		await get_tree().process_frame
-	step("Then the brush is available and its source is unchanged", func():
-		expect(options.get_node("Shape/Selection").button_pressed, "the copied volume becomes the brush shape")
+	step("Then the stamp is available and its source is unchanged", func():
+		activate_tool("stamp")
+		expect(plugin("StampPlugin")._settings.stamp_pattern.size() == 5832, "the copied volume becomes the stamp")
 		expect(frame.count() == 5832, "copying preserves all source voxels")
-		expect(State.selection.count() == 5832, "copying preserves the source selection")
+		expect(State.selection.is_empty(), "copying clears the source selection")
 		expect(not State.edit_busy(), "copying releases editing")
-		State.clear_selection()
 		frame.clear()
 	)
-	step("When the user drags the copied brush before its first stamp completes", func():
-		_button(brush_tool, Vector3.ZERO, true)
-		_motion(brush_tool, Vector3(2, 0, 0))
-		_motion(brush_tool, Vector3(4, 0, 0))
-		_button(brush_tool, Vector3(4, 0, 0), false)
+	step("When the user drags the copied stamp before its first stamp completes", func():
+		_button(stamp_tool, Vector3.ZERO, true)
+		_motion(stamp_tool, Vector3(2, 0, 0))
+		_motion(stamp_tool, Vector3(4, 0, 0))
+		_button(stamp_tool, Vector3(4, 0, 0), false)
 		expect(State.edit_busy(), "the large copied stroke reports foreground work")
 	)
-	await _settle(brush_tool)
+	await _settle(stamp_tool)
 	step("Then the queued drag stays connected and supports one undo", func():
 		expect(frame.count() == 7128, "the complete copied stroke contains a connected volume")
-		expect(frame.get_color(Vector3i(-8, 0, 0)) == Color.RED, "the first brush cap keeps its red color")
-		expect(frame.get_color(Vector3i(13, 0, 0)) == Color.BLUE, "the last brush cap keeps its blue color")
+		expect(frame.get_color(Vector3i(-8, 0, 0)) == Color.RED, "the first stamp cap keeps its red color")
+		expect(frame.get_color(Vector3i(13, 0, 0)) == Color.BLUE, "the last stamp cap keeps its blue color")
 		expect(not State.edit_busy(), "the copied stroke releases editing")
 		State.undo_redo.undo()
 		expect(frame.count() == 0, "one undo removes the complete copied stroke")
@@ -133,11 +135,11 @@ func _run() -> void:
 	)
 	step("When the user cancels a copied stroke during preparation", func():
 		State.undo_redo.clear_history()
-		_button(brush_tool, Vector3.ZERO, true)
-		_motion(brush_tool, Vector3(8, 0, 0))
-		_key(brush_tool, KEY_ESCAPE)
+		_button(stamp_tool, Vector3.ZERO, true)
+		_motion(stamp_tool, Vector3(8, 0, 0))
+		_key(stamp_tool, KEY_ESCAPE)
 	)
-	await _settle(brush_tool)
+	await _settle(stamp_tool)
 	step("Then the copied stroke leaves no edit or busy state", func():
 		expect(frame.count() == 0, "the cancelled copied stroke leaves the frame empty")
 		expect(not State.edit_busy(), "copied stroke cancellation releases editing")

@@ -23,7 +23,6 @@ enum BrushMode {
 
 
 const PatternJob := preload("./StampPatternJob.gd")
-const CopyJob := preload("./StampCopyJob.gd")
 
 ## The brush action.
 @export var mode:BrushMode = BrushMode.PENCIL :

@@ -1,7 +1,7 @@
 # Drawing tool flows
 
 This map covers the shipped drawing tools in LVE.
-The tools are Brush, Line, Paint Brush, Fill, and Spray.
+The tools are Brush, Line, Stamp, Paint Brush, Fill, and Spray.
 The map shows control flow, not class structure.
 The source links point to the current code.
 See [Shared paths and utilities](shared-and-utilities.md) for the input spine, worker helpers, and preview mesh details.
@@ -64,11 +64,11 @@ flowchart TB
   SRCH -.-> APP
 ```
 
-Two engines serve the five tools.
+Two engines serve the six tools.
 
 | Engine | Tools | Core symbols |
 | --- | --- | --- |
-| Stamp engine | Brush, Line, Paint Brush, Spray | `StrokeTool`, `BrushJob`, `StampPatternJob` |
+| Stamp engine | Brush, Line, Stamp, Paint Brush, Spray | `StrokeTool`, `BrushJob`, `StampPatternJob`, `StampCopyJob` |
 | Fill engine | Fill | `FillTool`, `FillJob`, `VoxelRegionSearch` |
 
 The brush tools and the paint tools use separate settings resources.
@@ -77,6 +77,7 @@ The values are saved per document and applied when that document becomes active.
 Brush and Paint Brush share one engine and one graph.
 Their policy table shows the differences.
 Line extends `BrushTool` but does not use the stroke transaction.
+Stamp extends `StrokeTool` and uses a prepared file-frame or selection pattern.
 Spray extends `StrokeTool` and adds an accepted sample queue.
 Fill extends `VoxelTool` directly.
 
@@ -160,9 +161,41 @@ A Pencil stroke uses the add target in front of the clicked face.
 - Commit: [`StrokeTool.close_stroke`](../../../plugins/brush/StrokeTool.gd) calls `State.finish_edit` with `Stroke` or `Erase`.
 - Cancel: [`StrokeTool._cancel_edit`](../../../plugins/brush/StrokeTool.gd) calls `abort_stroke`, which calls `State.cancel_edit`.
 - Preview: [`StrokeTool._show_brush_shape`](../../../plugins/brush/StrokeTool.gd) calls `VoxelPreview.show_voxels`.
-- Selection pattern: [`Options._on_selection_pressed`](../../../plugins/brush/Options.gd) builds `StampCopyJob` and calls `use_selection`.
 - Switch: [`BrushPlugin.deactivate_tool`](../../../plugins/brush/BrushPlugin.gd) calls `finish_on_switch`.
 - Paint policy: [`PaintBrushTool`](../../../plugins/paint/PaintBrushTool.gd) returns false from `_pick_adds` and true from `_paints_existing`.
+
+## Stamp
+
+Stamp turns a file frame or the current selection into a pattern.
+The source pattern is prepared once and then placed like a brush stroke.
+The stamp tool has its own option bar and frame side panel.
+The source selection is not a destination mask.
+Symmetry, the slice, and the document size still limit the write.
+
+1. The user selects a file frame in the side panel or chooses the current selection.
+2. `StampPlugin._prepare_stamp` builds a `StampCopyJob` from a frame copy.
+3. A source at or below 4096 cells runs inline. A larger source uses `State.run_edit_job`.
+4. The finished pattern goes to `StampSettings.tres` through `use_stamp`.
+5. `StampTool` stamps the pattern with the shared `StrokeTool` path.
+6. A stroke commits as one `Stamp` action. Escape and a context change roll it back.
+
+A file opens with its first frame selected.
+The frame panel stays open while the tool stamps.
+A new frame selection replaces the pattern without another file dialog.
+The panel hides with the stamp tool and returns with the same file and frame.
+An invalid file leaves the previous stamp and shows an error.
+Use Selection clears the source selection after it captures the pattern.
+Clear removes the file or selection source and hides the frame panel.
+The stamp source and Center option follow the document tab.
+They are not stored in the LVE file.
+The Center option starts off and aligns the source frame origin with the cursor.
+Turn Center on to align the pattern bounds center with the cursor.
+
+- Source: [`StampPlugin.gd`](../../../plugins/Stamp/StampPlugin.gd)
+- Options: [`Options.gd`](../../../plugins/Stamp/Options.gd)
+- Frame panel: [`FramePanel.gd`](../../../plugins/Stamp/FramePanel.gd)
+- Tool: [`StampTool.gd`](../../../plugins/Stamp/StampTool.gd)
+- Pattern job: [`StampCopyJob.gd`](../../../plugins/brush/StampCopyJob.gd)
 
 ## Line
 
@@ -433,6 +466,7 @@ flowchart LR
 | Tool | Engine | Settings | Submode | Writes |
 | --- | --- | --- | --- | --- |
 | Brush | `StrokeTool` | `brush/BrushSettings.tres`, `BrushToolSettings` | `PENCIL`, `LINE`, `ERASER` | Add or remove the footprint |
+| Stamp | `StrokeTool` | `stamp/StampSettings.tres`, `StampToolSettings` | `STAMP` | Add the prepared pattern |
 | Line | `BrushTool` (extends `StrokeTool`) | `BrushToolSettings` | `LINE` selected by `BrushPlugin` | Add the footprint along a path |
 | Paint Brush | `StrokeTool` | `paint/PaintSettings.tres`, `PaintToolSettings` | `PAINTBRUSH` | Replace existing cells |
 | Fill | `VoxelTool` and `FillJob` | `PaintToolSettings` | `FILL`, `connected` true or false | Replace a matching region |
@@ -442,9 +476,10 @@ flowchart LR
 
 | Tool | Snapshot | Selection | Symmetry | Material |
 | --- | --- | --- | --- | --- |
-| Brush | `BrushJob.edited_frame` shares the source frame. Publish writes the changed chunks. | `tx.edit_context.selection` is read-only. The write gate filters the selection and the floor slice. | `EditContext.expand` in `apply_cells`. The cursor mirrors the pattern. | `_stroke_material` at open. Pattern colors for a selection brush. Eraser uses a transparent material. |
+| Brush | `BrushJob.edited_frame` shares the source frame. Publish writes the changed chunks. | `tx.edit_context.selection` is read-only. The write gate filters the selection and the floor slice. | `EditContext.expand` in `apply_cells`. The cursor mirrors the pattern. | `_stroke_material` at open. Eraser uses a transparent material. |
+| Stamp | `BrushJob.edited_frame` shares the source frame. Publish writes the changed chunks. | The prepared source is not a destination mask. The stamp removes the selection from its edit context. | `EditContext.expand` in `apply_cells`. The cursor mirrors the pattern. | The prepared pattern keeps its own materials. |
 | Paint Brush | Same as Brush. | Same as Brush. `paint_existing` also filters to occupied cells. | Same as Brush. | Same as Brush. The write replaces the material. |
-| Line | `_line_snapshot` is one frame copy. The preview job shares it. Commit publishes the changed chunks. | `State.selection.capture` at `_begin_line`. The job uses its captured context. | `State.drawing_context` at begin. `EditContext.expand` in the job. The preview shows the expanded cells, so the cursor adds no mirror. | `_stroke_material` at begin. A selection brush keeps its copied materials. A color or settings change requests a new preview. |
+| Line | `_line_snapshot` is one frame copy. The preview job shares it. Commit publishes the changed chunks. | `State.selection.capture` at `_begin_line`. The job uses its captured context. | `State.drawing_context` at begin. `EditContext.expand` in the job. The preview shows the expanded cells, so the cursor adds no mirror. | `_stroke_material` at begin. A copied stamp pattern keeps its materials. A color or settings change requests a new preview. |
 | Fill | The live frame and one copy per seed. Inline publishes the changed chunks. Streaming writes slices into the live frame. | `State.selection.capture` when each seed is processed for the search. `_edit.edit_context` for expansion. | `EditContext.expand` per batch. An identity context skips the redundant check. The cursor shows no mirror. | `State.current_material` at the first seed. The target material comes from each seed. |
 | Spray | The worker uses a local `copy_chunks` ROI for the search and spot box. The write job shares the frame. Publish writes the changed chunks. | Hover uses the live context. A stroke uses `_edit_context`. The `BatchToken` records center, frame, axes, origin, selection, and the floor slice. A lagging surface of the same cell and context is allowed. A different cell never paints. One read-only selection index serves the editor snapshot. A mutable selection resamples. | `SpraySampler` expands symmetry. The write sets `centers_are_final`, so it skips the second expansion. The sampler drops sampled cells off the floor slice. The write gate filters the selection and the slice again. | `_stroke_material` at open. The preview payload uses one solid color. |
 
@@ -453,6 +488,7 @@ flowchart LR
 | Tool | Undo boundary | Cancel | Release wait | Thread |
 | --- | --- | --- | --- | --- |
 | Brush | One action on release or switch after the last batch. `Stroke` or `Erase`. | Escape and a context change call `_cancel_edit` and `abort_stroke`. A history change cancels the running job. | Waits for the last `BrushJob`. | Estimated work at or below `INLINE_EDIT_LIMIT` 4096 runs inline. Larger work uses `State.run_edit_job`. |
+| Stamp | One `Stamp` action on release or switch after the last batch. | Escape and a context change call `_cancel_edit` and `abort_stroke`. | Waits for the last `BrushJob`. | Same as Brush. Source preparation uses the same 4096 limit. |
 | Paint Brush | One `Stroke` action on release or switch after the last batch. | Same as Brush. | Waits for the last `BrushJob`. | Same as Brush. |
 | Line | One `Line` action at commit. The preview adds no undo action. | Escape, selection change, floor change, cell change, and context change drop the preview. | Waits for the preview runner, then commits. | Estimated work at or below 4096 runs inline. Larger previews use `State.run_edit_job`. `_process` handles idle hover only. |
 | Fill | One `Stroke` action on release or switch after the fill is idle. | Escape and a context change call `_interrupt_fill` and `abort_stroke`. | Waits for `_fill_running` false. | Estimated work at or below 4096 runs inline. Larger fills stream from a worker into a bounded queue. |
@@ -612,6 +648,10 @@ Use these checks when you compare the maps with the code.
 - [`SprayTool`](../../../plugins/paint/SprayTool.gd)
 - [`SpraySamplingJob`](../../../plugins/paint/SpraySamplingJob.gd)
 - [`SpraySampler`](../../../plugins/paint/SpraySampler.gd)
+- [`StampTool`](../../../plugins/Stamp/StampTool.gd)
+- [`StampPlugin`](../../../plugins/Stamp/StampPlugin.gd)
+- [`Stamp Options`](../../../plugins/Stamp/Options.gd)
+- [`Stamp Frame Panel`](../../../plugins/Stamp/FramePanel.gd)
 - [`StampToolSettings`](../../../plugins/brush/StampToolSettings.gd)
 - [`BrushToolSettings`](../../../plugins/brush/BrushToolSettings.gd)
 - [`PaintToolSettings`](../../../plugins/paint/PaintToolSettings.gd)

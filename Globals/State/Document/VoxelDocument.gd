@@ -73,8 +73,8 @@ var _bounds_dirty := true
 
 # Runtime editor state. The editor keeps one document per tab, so this state
 # moves with the document. The frame, the active tag, the playback state, and
-# the camera are serialized. The selection, the history, the save path, and the
-# dirty flag are not.
+# the camera are serialized. The selection, the history, the save path, the
+# dirty flag, and the stamp source are not.
 ## The frame that the editor shows.
 var edit_frame := 0
 ## The active animation tag index, or -1 when no tag is active.
@@ -91,6 +91,8 @@ var edit_save_path := ""
 var edit_dirty := false
 ## The editor camera pose. It is serialized as the `camera` field.
 var edit_camera := {}
+## The runtime stamp source of this document. It is not serialized.
+var edit_stamp := {}
 
 
 func _init() -> void:

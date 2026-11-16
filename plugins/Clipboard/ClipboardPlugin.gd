@@ -8,6 +8,7 @@ extends VoxelPlugin
 
 ## The prefix that marks a voxel clipboard record.
 const CLIPBOARD_PREFIX := '{"voxel_voxels":'
+const StampCopyJob := preload("res://plugins/brush/StampCopyJob.gd")
 # One clipboard record holds the cell and its nine material floats.
 ## The field count of one clipboard voxel record.
 const VOXEL_RECORD_SIZE := 3 + VoxelFrame.MATERIAL_STRIDE
@@ -33,9 +34,8 @@ var _shutting_down := false
 ## One cancellable copy or cut job.
 ##
 ## The job builds the clipboard JSON from a frame snapshot. A cut also erases
-## the source cells. [method BrushToolSettings.CopyJob.run] is the base worker
-## body.
-class ClipboardCopyJob extends BrushToolSettings.CopyJob:
+## the source cells. [method StampCopyJob.run] is the base worker body.
+class ClipboardCopyJob extends StampCopyJob:
 	## The clipboard JSON text.
 	var text := ""
 	## The selected offsets relative to the pattern center.

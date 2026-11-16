@@ -8,7 +8,7 @@ var axis := 1
 
 
 func _ready() -> void:
-	test("cube and sphere brushes paint volumes and retain copied colors", _run)
+	test("cube and sphere brushes paint volumes", _run)
 	test("the mirrored brush cursor flips its normals", _mirror_cursor_normals, "mirror_cursor_normals")
 
 
@@ -47,12 +47,10 @@ func _run() -> void:
 		tool = plugin("BrushPlugin")._tool
 		options.get_node("Diameter").value = 3
 		State.current_color = Color.RED
-		for shape_name in ["Cube", "Sphere", "Selection"]:
+		for shape_name in ["Cube", "Sphere"]:
 			var button := options.get_node("Shape/" + shape_name)
 			expect(button.text.is_empty() and button.icon != null, "the %s shape uses an icon" % shape_name)
 		expect(options.get_node("Shape/Cube").button_pressed, "the cube shape is active by default")
-		expect(options.get_node("Shape/Selection").disabled, "the voxel shape needs source voxels")
-		expect(options.get_node("Shape/Selection").icon == load("res://icons/select.svg"), "the voxel shape uses the selection icon")
 		expect(options.get_node("ShapeSeparator") is VSeparator, "a separator follows the shape controls")
 	)
 	await get_tree().process_frame
@@ -140,42 +138,6 @@ func _run() -> void:
 		expect(State.get_current_voxel_frame().get_bounds().size == Vector3.ONE * 2, "the cube is two voxels wide on each axis")
 		expect(tool.get_node("Cursor").mesh.get_aabb().size == Vector3.ONE * 2, "the solid cursor has the exact even diameter")
 		expect(tool.get_node("Cursor").position == Vector3.ONE * -0.5, "the even cursor aligns with the stamped voxels")
-	)
-	await get_tree().process_frame
-	step("Given a selection with three voxels and two colors", func():
-		_empty("top")
-		var frame := State.get_current_voxel_frame()
-		frame.set_cell(Vector3i(10, 0, 10), VoxelFrame.material(Color.RED))
-		frame.set_cell(Vector3i(11, 0, 10), VoxelFrame.material(Color.BLUE))
-		frame.set_cell(Vector3i(11, 1, 10), VoxelFrame.material(Color.BLUE))
-		State.selection.from_box(Vector3i(10, 0, 10), Vector3i(11, 1, 10))
-		State.selection_changed.emit()
-	)
-	step("When the user copies the selection as a brush", func():
-		options.get_node("Shape/Selection").pressed.emit()
-		expect(State.get_current_voxel_frame().count() == 3, "copying the brush preserves the source voxels")
-		expect(State.selection.count() == 4, "copying the brush preserves the selection")
-		expect(options.get_node("Shape/Selection").button_pressed, "the selection brush is active")
-		expect(not options.get_node("Shape/Selection").disabled, "the copied selection shape is available")
-		expect(not options.get_node("Shape/Cube").button_pressed and not options.get_node("Shape/Sphere").button_pressed, "the selection brush is the only active shape")
-		expect(not options.get_node("Diameter").visible, "the selection brush retains its original size")
-		_click_shape("Cube")
-		expect(options.get_node("Shape/Cube").button_pressed, "the cube shape can replace the voxel brush")
-		_click_shape("Selection")
-		expect(options.get_node("Shape/Selection").button_pressed, "the voxel brush can be selected again")
-		State.clear_selection()
-		State.get_current_voxel_frame().clear()
-		State.current_color = Color.GREEN
-		target = aim(_position(Vector3.ZERO)).target
-		_click(_position(Vector3.ZERO))
-	)
-	step("Then the copied brush keeps its shape and source colors", func():
-		var frame := State.get_current_voxel_frame()
-		expect(frame.count() == 3, "the copied brush contains only the three occupied voxels")
-		expect(frame.get_color(target) == Color.RED, "the first copied voxel keeps its red color")
-		expect(frame.get_color(target + Vector3i(1, 0, 0)) == Color.BLUE, "the second copied voxel keeps its blue color")
-		expect(frame.get_color(target + Vector3i(1, 1, 0)) == Color.BLUE, "the copied brush retains its depth")
-		expect(not frame.has(target + Vector3i(0, 1, 0)), "the copied brush preserves its empty cell")
 	)
 	await get_tree().process_frame
 	step("Given the paintbrush with a cube footprint that overlaps a selection boundary", func():

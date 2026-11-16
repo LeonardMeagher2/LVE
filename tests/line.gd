@@ -254,14 +254,9 @@ func _run() -> void:
 	)
 	step("Given a copied brush with two colors", func():
 		_empty()
-		var frame := State.get_current_voxel_frame()
-		frame.set_cell(Vector3i(8, 0, 8), VoxelFrame.material(Color.RED))
-		frame.set_cell(Vector3i(8, 0, 9), VoxelFrame.material(Color.BLUE))
-		State.selection.from_box(Vector3i(8, 0, 8), Vector3i(8, 0, 9))
-		State.selection_changed.emit()
-		options.get_node("Shape/Selection").pressed.emit()
+		options._settings.use_stamp({Vector3i.ZERO: Color.RED, Vector3i.BACK: Color.BLUE})
 		State.clear_selection()
-		frame.clear()
+		State.get_current_voxel_frame().clear()
 		State.current_color = Color.GREEN
 	)
 	step("When the user draws a line with the copied brush", func():

@@ -5,7 +5,7 @@ extends Resource
 ##
 ## The settings hold the footprint shape, the diameter, the pattern cache, and
 ## the pixel-perfect flag. The brush settings and the paint settings extend this
-## class, so both read the same pattern code.
+## class. The stamp settings use it directly.
 ##
 ## The class names no project script. The pattern jobs live in their own scripts,
 ## and each concrete settings class names them. A shared settings class that
@@ -25,8 +25,8 @@ enum BrushShape {
 	CUBE,
 	## A filled sphere.
 	SPHERE,
-	## The last copied selection pattern.
-	SELECTION
+	## The last prepared stamp pattern.
+	STAMP
 }
 
 ## The stamp diameter in cells. It clamps to the range 1 through 64.
@@ -58,44 +58,52 @@ enum BrushShape {
 		pixel_perfect = value
 		emit_changed()
 
-## The copied selection pattern, keyed by offset from the pattern center.
-var selection_pattern := {}
-## The copied selection materials, keyed by offset from the pattern center.
-var selection_material_pattern := {}
+## The prepared stamp pattern, keyed by offset from the pattern center.
+var stamp_pattern := {}
+## The prepared stamp materials, keyed by offset from the pattern center.
+var stamp_material_pattern := {}
 # The pattern keys in insertion order. A plain array iterates about twice as fast
 # as the dictionary, and a shape stamp needs only the offsets. The dictionary
-# stays for the material lookup that a selection stamp and a paste require.
-## The selection pattern keys in insertion order.
-var selection_offsets: Array = []
+# stays for the material lookup that a stamp and a paste require.
+## The stamp pattern keys in insertion order.
+var stamp_offsets: Array = []
 var _cached_pattern := {}
-var _cached_offsets: Array = []
+var _cached_offsets := []
 
 
-## Uses a copied pattern as the selection stamp shape. [param copied_pattern]
-## maps an offset to a color. [param copied_material_pattern] maps an offset to
-## a full material. An empty pattern is ignored.
-func use_selection(copied_pattern: Dictionary, copied_material_pattern: Dictionary = {}) -> void:
-	if copied_pattern.is_empty():
+## Uses a prepared pattern as the stamp shape. [param copied_pattern] maps an
+## offset to a color. [param copied_material_pattern] maps an offset to a full
+## material. An empty pattern clears the stamp.
+func use_stamp(copied_pattern: Dictionary, copied_material_pattern: Dictionary = {}) -> void:
+	stamp_pattern = copied_pattern
+	stamp_pattern.make_read_only()
+	stamp_offsets = copied_pattern.keys()
+	stamp_material_pattern = copied_material_pattern.duplicate(true)
+	stamp_material_pattern.make_read_only()
+	shape = BrushShape.STAMP
+	emit_changed()
+
+
+## Clears the prepared stamp pattern. The shape stays [constant BrushShape.STAMP].
+func clear_stamp() -> void:
+	if stamp_pattern.is_empty() and stamp_material_pattern.is_empty():
 		return
-	selection_pattern = copied_pattern
-	selection_pattern.make_read_only()
-	selection_offsets = copied_pattern.keys()
-	selection_material_pattern = copied_material_pattern.duplicate(true)
-	selection_material_pattern.make_read_only()
-	shape = BrushShape.SELECTION
+	stamp_pattern = {}
+	stamp_offsets = []
+	stamp_material_pattern = {}
 	emit_changed()
 
 
 ## Returns the estimated pattern cell count.
 func estimated_size() -> int:
-	return selection_pattern.size() if shape == BrushShape.SELECTION else diameter ** 3
+	return stamp_pattern.size() if shape == BrushShape.STAMP else diameter ** 3
 
 
 ## Returns the stamp pattern, keyed by offset from the center. A shape pattern
 ## above 4096 cells is not cached, so the caller must build it.
 func pattern() -> Dictionary:
-	if shape == BrushShape.SELECTION:
-		return selection_pattern
+	if shape == BrushShape.STAMP:
+		return stamp_pattern
 	if _cached_pattern.is_empty() and estimated_size() <= 4096:
 		_cached_pattern = _build_pattern(diameter, shape)
 		_cached_pattern.make_read_only()
@@ -107,17 +115,17 @@ func pattern() -> Dictionary:
 ## Returns the offsets of [method pattern] in the same order. An empty result
 ## means that the caller must derive the offsets from the pattern.
 func pattern_offsets() -> Array:
-	if shape == BrushShape.SELECTION:
-		return selection_offsets
+	if shape == BrushShape.STAMP:
+		return stamp_offsets
 	if _cached_offsets.is_empty() and estimated_size() <= 4096:
 		_cached_offsets = pattern().keys()
 	return _cached_offsets
 
 
 ## Caches a built pattern for the given diameter and shape. It ignores the
-## selection shape.
+## stamp shape.
 func cache_pattern(brush_diameter: int, brush_shape: int, cells: Dictionary, offsets: Array = []) -> void:
-	if diameter == brush_diameter and shape == brush_shape and shape != BrushShape.SELECTION:
+	if diameter == brush_diameter and shape == brush_shape and shape != BrushShape.STAMP:
 		_cached_pattern = cells
 		_cached_pattern.make_read_only()
 		_cached_offsets = offsets

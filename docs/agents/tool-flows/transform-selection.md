@@ -220,7 +220,7 @@ Each open tool handles the signal with its own policy.
 An active transform commits. An active paste cancels. Active selection jobs cancel.
 This is a source fact. It is not a new universal policy.
 An empty selection copies the whole frame.
-`ClipboardCopyJob` extends `StampCopyJob.CopyJob`.
+`ClipboardCopyJob` extends `StampCopyJob`.
 It builds the pattern, the full materials, and the pattern center.
 It then writes JSON records with 3 integers and 9 material floats.
 It also writes selection offsets relative to the center.
@@ -239,7 +239,7 @@ The caller installs only after the runner returns and the document, frame, and c
 - Command: [`ClipboardPlugin.copy_voxels`](../../../plugins/Clipboard/ClipboardPlugin.gd) and [`cut_voxels`](../../../plugins/Clipboard/ClipboardPlugin.gd) call `_copy_voxels`.
 - Context signal: [`ClipboardPlugin._copy_voxels`](../../../plugins/Clipboard/ClipboardPlugin.gd) emits `State.edit_context_changing` before the capture.
 - Capture: [`ClipboardPlugin._copy_voxels`](../../../plugins/Clipboard/ClipboardPlugin.gd) calls `VoxelFrame.copy_frame` and `VoxelSelection.capture`.
-- Worker: [`ClipboardCopyJob.run`](../../../plugins/Clipboard/ClipboardPlugin.gd) calls `StampCopyJob.CopyJob.run`. A cut then calls `VoxelFrame.set_cells`.
+- Worker: [`ClipboardCopyJob.run`](../../../plugins/Clipboard/ClipboardPlugin.gd) calls `StampCopyJob.run`. A cut then calls `VoxelFrame.set_cells`.
 - Install: [`ClipboardPlugin._copy_voxels`](../../../plugins/Clipboard/ClipboardPlugin.gd) stores read-only patterns and calls `DisplayServer.clipboard_set`.
 - Cut: the same method calls `State.begin_edit`, `VoxelFrame.restore`, `State.clear_selection`, and `State.finish_edit`.
 - Cancel: the runner calls the context callback, which calls `job.cancel` when the document or frame changes. The runner joins exactly once.
