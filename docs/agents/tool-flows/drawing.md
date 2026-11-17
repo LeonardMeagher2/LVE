@@ -372,8 +372,9 @@ Policy boundaries:
 - A cone points along the pick plane normal. Its narrow radius is a fraction of the base radius. Zero makes a point and one makes a cylinder.
 - Roundness from 0 to 1 rounds box edges and blends cone ends from flat to round.
 - The blend and the narrow cone radius also use 0 to 1. The blend is a fraction of the largest blend, which is half the smallest extent. The narrow radius is a fraction of the base radius. The tool converts both to cells before it sends the request.
-- The rotation fields hold Euler degrees in XYZ order. The tool turns the shape around its center. A box or an ellipsoid keeps the rotation in its request, and the field samples it in the local frame. A cone has no local frame of its own, so the tool turns its two ends.
-- The wire box, the face crosses, and the corner crosses follow the rotation. A face drag projects the pointer onto the shape's local axis, so a rotated face still moves along its own axis.
+- The pending shape keeps its own rotation. Three rings around the box center turn it around the shape's local X, Y, and Z axes. A ring drag snaps to 15 degrees, or to 5 with Shift. The box center stays fixed.
+- A ring sits just outside the shape, with 84 pixels as the minimum radius and an 18 pixel gap. A press inside the shape moves it, so the body drag keeps its area.
+- The wire box, the face crosses, the corner crosses, and the rings follow the rotation. A face drag projects the pointer onto the shape's local axis, so a rotated face still moves along its own axis.
 - Intersect removes occupied cells outside the field across the current frame. The edit context still filters selection, slice, and document size.
 - Smooth blends the primitives in one request and the committed cells near them.
 - A smooth add keeps committed cells and their materials. It adds only the new fillet and the empty part of the primitive.

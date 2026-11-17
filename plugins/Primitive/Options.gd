@@ -25,9 +25,6 @@ func _sync() -> void:
 	$Shell.set_value_no_signal(_settings.shell)
 	$Roundness.visible = _settings.tool != PrimitiveToolSettings.Tools.ELLIPSOID
 	$Roundness.set_value_no_signal(_settings.roundness)
-	$Rotation/RotateX.set_value_no_signal(_settings.rotation_degrees.x)
-	$Rotation/RotateY.set_value_no_signal(_settings.rotation_degrees.y)
-	$Rotation/RotateZ.set_value_no_signal(_settings.rotation_degrees.z)
 	$Cone.visible = _settings.tool == PrimitiveToolSettings.Tools.CONE
 	$Cone/SecondRadius.set_value_no_signal(_settings.second_radius)
 	$Commit.disabled = not _settings.editing
@@ -60,21 +57,6 @@ func _on_roundness_changed(value: float) -> void:
 
 func _on_second_radius_changed(value: float) -> void:
 	_settings.second_radius = value
-
-
-func _on_rotation_x_changed(value: float) -> void:
-	var turn := _settings.rotation_degrees
-	_settings.rotation_degrees = Vector3(value, turn.y, turn.z)
-
-
-func _on_rotation_y_changed(value: float) -> void:
-	var turn := _settings.rotation_degrees
-	_settings.rotation_degrees = Vector3(turn.x, value, turn.z)
-
-
-func _on_rotation_z_changed(value: float) -> void:
-	var turn := _settings.rotation_degrees
-	_settings.rotation_degrees = Vector3(turn.x, turn.y, value)
 
 
 func _on_commit_pressed() -> void:

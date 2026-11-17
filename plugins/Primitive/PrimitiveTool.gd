@@ -12,6 +12,12 @@
 const PrimitiveField := preload("res://Globals/State/Tools/PrimitiveField.gd")
 const PrimitiveJob := preload("res://Globals/State/Tools/PrimitiveJob.gd")
 const HANDLE_RADIUS_PX := 11.0
+## The rotate ring grab distance in screen pixels.
+const RING_GRAB_PX := 9.0
+## The rotate snap in degrees.
+const ROTATE_SNAP_DEGREES := 15.0
+## The rotate snap in degrees while Shift is held.
+const ROTATE_SNAP_FINE_DEGREES := 5.0
 ## The preview work below which the result runs inline. A larger preview uses a
 ## worker job.
 const INLINE_PREVIEW_CELLS := 512
@@ -55,6 +61,17 @@ var _preview_generation := 0
 var _preview_start_frame := -1
 var _preview_renderer: VoxelRenderer = null
 var _installed_preview_frame: VoxelFrame = null
+## The rotation of the pending shape around its box center.
+var _pending_rotation := Quaternion.IDENTITY
+var _rotating := false
+var _rotate_axis := -1
+var _rotate_center := Vector3.ZERO
+var _rotate_normal := Vector3.ZERO
+var _rotate_u := Vector3.ZERO
+var _rotate_v := Vector3.ZERO
+var _rotate_start := Quaternion.IDENTITY
+var _rotate_last_angle := 0.0
+var _rotate_total := 0.0
 
 
 func _enter_tree() -> void:
@@ -166,7 +183,11 @@ func handle_input(event: InputEvent, pos: Vector2) -> bool:
 				if not hit.is_empty():
 					_begin_handle_drag(hit)
 				else:
-					_begin_move(ray[0], ray[1])
+					var ring := _ring_at(pos)
+					if not ring.is_empty():
+						_begin_ring_drag(ring, ray[0], ray[1])
+					else:
+						_begin_move(ray[0], ray[1])
 				# A pending primitive must be committed or cancelled before a
 				# new drag can start. A press outside the handles moves it.
 				return true
@@ -180,6 +201,11 @@ func handle_input(event: InputEvent, pos: Vector2) -> bool:
 			_handle_side = 0
 			_handle_signs = Vector3i.ZERO
 			_refresh_preview()
+			return true
+		if _rotating:
+			_rotating = false
+			_rotate_axis = -1
+			$Gizmo.set_ring_highlight(-1)
 			return true
 		if _moving:
 			_moving = false
@@ -198,6 +224,10 @@ func handle_input(event: InputEvent, pos: Vector2) -> bool:
 		if _dragging_handle and mm.button_mask & MOUSE_BUTTON_MASK_LEFT:
 			_update_handle(ray[0], ray[1])
 			return true
+		if _rotating and mm.button_mask & MOUSE_BUTTON_MASK_LEFT:
+			_shift = mm.shift_pressed
+			_update_ring(ray[0], ray[1])
+			return true
 		if _moving and mm.button_mask & MOUSE_BUTTON_MASK_LEFT:
 			_update_move(ray[0], ray[1])
 			return true
@@ -209,7 +239,7 @@ func handle_input(event: InputEvent, pos: Vector2) -> bool:
 			_alt = mm.alt_pressed
 			_refresh_preview()
 			return true
-		if (_dragging_handle or _dragging_new or _moving) and mm.button_mask == 0:
+		if (_dragging_handle or _dragging_new or _moving or _rotating) and mm.button_mask == 0:
 			if _dragging_handle:
 				_dragging_handle = false
 				_handle_kind = 0
@@ -217,6 +247,10 @@ func handle_input(event: InputEvent, pos: Vector2) -> bool:
 				_handle_side = 0
 				_handle_signs = Vector3i.ZERO
 				_refresh_preview()
+			elif _rotating:
+				_rotating = false
+				_rotate_axis = -1
+				$Gizmo.set_ring_highlight(-1)
 			elif _moving:
 				_moving = false
 				_refresh_preview()
@@ -226,6 +260,10 @@ func handle_input(event: InputEvent, pos: Vector2) -> bool:
 					_end_cell = pick.target
 				_finish_new_drag()
 			return true
+		if mm.button_mask == 0 and not _primitives.is_empty() and not _dragging_handle and not _moving and not _rotating:
+			var hover := _ring_at(pos)
+			$Gizmo.set_ring_highlight(int(hover.get("axis", -1)))
+			return false
 		if mm.button_mask == 0 and _primitives.is_empty() and not _dragging_new:
 			update_visual(_pick_start(ray[0], ray[1]))
 			return true
@@ -268,6 +306,7 @@ func commit_pending() -> void:
 func cancel_pending() -> void:
 	_cancel_preview_job()
 	_primitives.clear()
+	_reset_rotation_state()
 	_active_index = -1
 	_pending_box = AABB()
 	_dragging_new = false
@@ -321,6 +360,7 @@ func _finish_new_drag() -> void:
 	var box := _draft_box()
 	_pending_box = box
 	_active_axis = _draft_axis
+	_pending_rotation = Quaternion.IDENTITY
 	_primitives.append(_build_primitive(box, _active_axis))
 	_active_index = _primitives.size() - 1
 	_dragging_new = false
@@ -431,7 +471,7 @@ func _refresh_gizmo() -> void:
 	if _primitives.is_empty() or _dragging_new:
 		$Gizmo.hide_box()
 		return
-	$Gizmo.show_box(_pending_box, _rotation(), _handle_axis, _handle_side, true)
+	$Gizmo.show_box(_pending_box, _pending_rotation, _handle_axis, _handle_side, true)
 
 
 func _build_request(include_draft: bool) -> Dictionary:
@@ -458,7 +498,7 @@ func _build_primitive(box: AABB, axis := -1) -> Dictionary:
 	var half := Vector3(absf(box.size.x), absf(box.size.y), absf(box.size.z)) * 0.5
 	match shape:
 		PrimitiveField.KIND_ELLIPSOID:
-			return {"kind": PrimitiveField.KIND_ELLIPSOID, "center": center, "radii": half, "rotation": _rotation()}
+			return {"kind": PrimitiveField.KIND_ELLIPSOID, "center": center, "radii": half, "rotation": _pending_rotation}
 		PrimitiveField.KIND_CONE:
 			return _cone_primitive(box, axis if axis >= 0 else _active_axis)
 		_:
@@ -467,7 +507,7 @@ func _build_primitive(box: AABB, axis := -1) -> Dictionary:
 				"center": center,
 				"half_size": half,
 				"roundness": _settings.roundness,
-				"rotation": _rotation(),
+				"rotation": _pending_rotation,
 			}
 
 
@@ -538,7 +578,7 @@ func _cone_primitive(box: AABB, axis: int) -> Dictionary:
 			b[axis] = ceilf(box.end[axis])
 	# A cone has no local frame of its own, so the rotation turns its two ends
 	# around the shape center. The field then keeps the plain cone math.
-	var turn := _rotation()
+	var turn := _pending_rotation
 	a = center + turn * (a - center)
 	b = center + turn * (b - center)
 	return {
@@ -549,13 +589,6 @@ func _cone_primitive(box: AABB, axis: int) -> Dictionary:
 		"r2": narrow,
 		"roundness": _settings.roundness,
 	}
-
-
-## Returns the tool rotation as a quaternion. The settings hold Euler degrees in
-## XYZ order.
-func _rotation() -> Quaternion:
-	var euler := _settings.rotation_degrees * (PI / 180.0)
-	return Basis.from_euler(euler, EULER_ORDER_XYZ).get_rotation_quaternion()
 
 
 func _handle_at(pos: Vector2) -> Dictionary:
@@ -584,6 +617,120 @@ func _handle_at(pos: Vector2) -> Dictionary:
 			best_distance = distance
 			best = hit
 	return best
+
+
+## Returns the nearest rotate ring under the pointer, or an empty dictionary.
+func _ring_at(pos: Vector2) -> Dictionary:
+	if not has_node("Gizmo"):
+		return {}
+	var camera := get_viewport().get_camera_3d() if get_viewport() != null else null
+	if camera == null:
+		return {}
+	if _inside_shape(pos, camera):
+		# A press inside the shape moves it. Rings answer only outside the
+		# silhouette, so the body drag keeps its area.
+		return {}
+	var best := {}
+	var best_distance := RING_GRAB_PX
+	for value in $Gizmo.rotation_rings():
+		var ring: Dictionary = value
+		var center: Vector3 = ring["center"]
+		if camera.is_position_behind(center):
+			continue
+		var u: Vector3 = ring["u"]
+		var v: Vector3 = ring["v"]
+		var radius: float = ring["radius"]
+		var previous := Vector2.INF
+		for index in 65:
+			var angle := TAU * index / 64.0
+			var screen := camera.unproject_position(center + (u * cos(angle) + v * sin(angle)) * radius)
+			if previous != Vector2.INF:
+				var distance := _segment_distance(pos, previous, screen)
+				if distance < best_distance:
+					best_distance = distance
+					best = ring
+			previous = screen
+	return best
+
+
+## Returns true when the pointer is inside the screen extent of the pending
+## shape. That area belongs to the body drag.
+func _inside_shape(pos: Vector2, camera: Camera3D) -> bool:
+	var center := _pending_box.get_center()
+	if camera.is_position_behind(center):
+		return false
+	var screen_center := camera.unproject_position(center)
+	var farthest := 0.0
+	for x in [-1, 1]:
+		for y in [-1, 1]:
+			for z in [-1, 1]:
+				var point := center
+				point.x = _pending_box.position.x if x < 0 else _pending_box.end.x
+				point.y = _pending_box.position.y if y < 0 else _pending_box.end.y
+				point.z = _pending_box.position.z if z < 0 else _pending_box.end.z
+				var world := center + _pending_rotation * (point - center)
+				farthest = maxf(farthest, screen_center.distance_to(camera.unproject_position(world)))
+	return pos.distance_to(screen_center) < farthest * 0.85
+
+
+func _segment_distance(point: Vector2, start: Vector2, end: Vector2) -> float:
+	var line := end - start
+	var length_squared := line.length_squared()
+	if length_squared <= 0.0:
+		return point.distance_to(start)
+	var amount := clampf((point - start).dot(line) / length_squared, 0.0, 1.0)
+	return point.distance_to(start + line * amount)
+
+
+## Starts a ring drag. [param ring] comes from [method _ring_at].
+func _begin_ring_drag(ring: Dictionary, origin: Vector3, direction: Vector3) -> void:
+	var normal: Vector3 = ring["normal"]
+	if absf(direction.dot(normal)) < 0.15:
+		return
+	var center: Vector3 = ring["center"]
+	var denominator := direction.dot(normal)
+	if absf(denominator) < 1e-6:
+		return
+	var distance := (center - origin).dot(normal) / denominator
+	if distance <= 0.0:
+		return
+	var u: Vector3 = ring["u"]
+	var v: Vector3 = ring["v"]
+	var offset := origin + direction * distance - center
+	_rotating = true
+	_rotate_axis = int(ring["axis"])
+	_rotate_center = center
+	_rotate_normal = normal
+	_rotate_u = u
+	_rotate_v = v
+	_rotate_start = _pending_rotation
+	_rotate_last_angle = atan2(offset.dot(v), offset.dot(u))
+	_rotate_total = 0.0
+	$Gizmo.set_ring_highlight(_rotate_axis)
+
+
+## Turns the pending shape by the angle of the pointer around the grabbed ring.
+func _update_ring(origin: Vector3, direction: Vector3) -> void:
+	if not _rotating or _rotate_axis < 0:
+		return
+	var denominator := direction.dot(_rotate_normal)
+	if absf(denominator) < 1e-6:
+		return
+	var distance := (_rotate_center - origin).dot(_rotate_normal) / denominator
+	if distance <= 0.0:
+		return
+	var offset := origin + direction * distance - _rotate_center
+	var angle := atan2(offset.dot(_rotate_v), offset.dot(_rotate_u))
+	_rotate_total += wrapf(angle - _rotate_last_angle, -PI, PI)
+	_rotate_last_angle = angle
+	var step := deg_to_rad(ROTATE_SNAP_FINE_DEGREES if _shift else ROTATE_SNAP_DEGREES)
+	var snapped := roundf(_rotate_total / step) * step
+	var local_axis := Vector3.ZERO
+	local_axis[_rotate_axis] = 1.0
+	_pending_rotation = _rotate_start * Quaternion(local_axis, snapped)
+	if _active_index >= 0 and _active_index < _primitives.size():
+		_primitives[_active_index] = _build_primitive(_pending_box, _active_axis)
+	_refresh_preview()
 
 
 func _begin_move(origin: Vector3, dir: Vector3) -> void:
@@ -637,7 +784,7 @@ func _begin_handle_drag(hit: Dictionary) -> void:
 	_handle_signs = hit.get("signs", Vector3i.ZERO)
 	_handle_start_box = _pending_box
 	_handle_center = _pending_box.get_center()
-	_handle_rotation = _rotation()
+	_handle_rotation = _pending_rotation
 	var camera := get_viewport().get_camera_3d() if get_viewport() != null else null
 	_handle_plane = -camera.global_transform.basis.z if camera != null else Vector3.BACK
 	_handle_point = hit["position"]
@@ -696,9 +843,19 @@ func _handle_local(point: Vector3) -> Vector3:
 	return _handle_center + _handle_rotation.inverse() * (point - _handle_center)
 
 
+func _reset_rotation_state() -> void:
+	_pending_rotation = Quaternion.IDENTITY
+	_rotating = false
+	_rotate_axis = -1
+	_rotate_total = 0.0
+	if has_node("Gizmo"):
+		$Gizmo.set_ring_highlight(-1)
+
+
 func _clear_pending() -> void:
 	_cancel_preview_job()
 	_primitives.clear()
+	_reset_rotation_state()
 	_active_index = -1
 	_pending_box = AABB()
 	_dragging_new = false

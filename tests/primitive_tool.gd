@@ -33,6 +33,7 @@ func _ready() -> void:
 	test("a no-op subtract creates no history action", _noop, "noop")
 	test("the option values scale with the shape", _option_units, "option_units")
 	test("the tool rotation turns the box and the cone", _rotation, "rotation")
+	test("a rotate ring drag turns the pending shape", _rotate_ring, "rotate_ring")
 	test("the gizmo follows the shape rotation", _gizmo_rotation, "gizmo_rotation")
 	test("the current material is used", _material, "material")
 	test("the shape options build a cone and an ellipsoid", _shape_options, "shape_options")
@@ -697,18 +698,17 @@ func _option_units() -> void:
 
 
 func _rotation() -> void:
-	var settings: PrimitiveToolSettings = plugin("PrimitivePlugin")._settings
-	step("When the tool rotates a long box a quarter turn around Y", func():
-		settings.rotation_degrees = Vector3(0, 90, 0)
+	step("When the pending shape turns a quarter turn around Y", func():
+		tool._pending_rotation = Quaternion(Vector3.UP, deg_to_rad(90.0))
 		var box := AABB(Vector3(-2.5, -0.5, -0.5), Vector3(5, 1, 1))
 		var primitive: Dictionary = tool._build_primitive(box, 2)
 		expect(primitive.has("rotation"), "the box carries a rotation")
 		expect(PrimitiveField.primitive_distance(primitive, Vector3(0, 0, 2)) <= 0.0, "a z cell is inside the rotated box")
 		expect(PrimitiveField.primitive_distance(primitive, Vector3(2, 0, 0)) > 0.0, "an x cell is outside the rotated box")
 	)
-	step("When the tool rotates a cone a quarter turn around Z", func():
-		settings.rotation_degrees = Vector3(0, 0, 90)
-		settings.second_radius = 1.0
+	step("When the pending shape turns a cone around Z", func():
+		plugin("PrimitivePlugin")._settings.second_radius = 1.0
+		tool._pending_rotation = Quaternion(Vector3(0, 0, 1), deg_to_rad(90.0))
 		tool.shape = PrimitiveField.KIND_CONE
 		var box := AABB(Vector3(-0.5, -2.5, -0.5), Vector3(1, 5, 1))
 		var cone: Dictionary = tool._build_primitive(box, 1)
@@ -717,9 +717,36 @@ func _rotation() -> void:
 		expect(is_equal_approx(absf(b.x - a.x), 5.0), "the cone axis turns toward x")
 		expect(is_equal_approx(absf(b.y - a.y), 0.0), "the cone no longer lies along y")
 		tool.shape = PrimitiveField.KIND_BOX
-		settings.rotation_degrees = Vector3.ZERO
-		settings.second_radius = 0.0
+		tool._pending_rotation = Quaternion.IDENTITY
 	)
+
+
+func _rotate_ring() -> void:
+	var gizmo := tool.get_node("Gizmo")
+	var camera := camera_rig()
+	var center: Vector3 = camera._target
+	step("Given a pending box and its rotate rings", func():
+		gizmo.show_box(AABB(center - Vector3.ONE * 2, Vector3.ONE * 4), Quaternion.IDENTITY)
+	)
+	var ring := {}
+	for value in gizmo.rotation_rings():
+		if int(value["axis"]) == 1:
+			ring = value
+	step("When the pointer turns a quarter around the Y ring", func():
+		expect(not ring.is_empty(), "the y ring exists")
+		var radius: float = ring["radius"]
+		var start := camera.unproject_position(center + Vector3.RIGHT * radius)
+		var finish := camera.unproject_position(center + Vector3.BACK * radius)
+		tool._begin_ring_drag(ring, camera.project_ray_origin(start), camera.project_ray_normal(start))
+		tool._update_ring(camera.project_ray_origin(finish), camera.project_ray_normal(finish))
+	)
+	step("Then the pending shape turns a quarter turn", func():
+		var turned: Quaternion = tool._pending_rotation
+		expect(is_equal_approx(absf(turned.get_angle()), deg_to_rad(90.0)), "the drag turns a quarter turn")
+		expect(absf(turned.get_axis().dot(Vector3.UP)) > 0.999, "the turn uses the ring axis")
+	)
+	tool._pending_rotation = Quaternion.IDENTITY
+	gizmo.hide_box()
 
 
 func _gizmo_rotation() -> void:

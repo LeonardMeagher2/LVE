@@ -79,16 +79,6 @@ enum Op {
 		second_radius = value
 		emit_changed()
 
-## The rotation around the shape center in Euler degrees, applied in XYZ order.
-## It turns every primitive that the tool builds.
-@export var rotation_degrees := Vector3.ZERO:
-	set(value):
-		value = Vector3(wrapf(value.x, 0.0, 360.0), wrapf(value.y, 0.0, 360.0), wrapf(value.z, 0.0, 360.0))
-		if value.is_equal_approx(rotation_degrees):
-			return
-		rotation_degrees = value
-		emit_changed()
-
 ## The roundness from 0 to 1. It rounds cube edges and blends the cone between
 ## flat and round ends.
 @export_range(0.0, 1.0, 0.05) var roundness := 0.0:
