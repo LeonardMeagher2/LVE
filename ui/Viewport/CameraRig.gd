@@ -52,9 +52,9 @@ const NEAR_MARGIN := 1.0
 ## The distance kept past the farthest clipped geometry. The grid extends one
 ## cell past the content. The symmetry planes extend four cells past the origin.
 const FAR_MARGIN := 2.0
-## The closest camera distance in world units. About four and a half voxels fill
-## the view height at this distance.
-const MIN_DISTANCE := 3.0
+## The voxels that fill the closest view height. Voxels are one world unit, so
+## this sets the closest camera distance from the field of view.
+const MIN_VIEW_VOXELS := 16.0
 ## The space around the framed bounds. The initial view and the farthest zoom
 ## use the same margin.
 const FRAME_MARGIN := 1.25
@@ -100,7 +100,7 @@ func configure() -> void:
 		_dist = float(pose.get("distance", pose.get("dist", _init_dist)))
 		_init_dist = float(pose.get("initial_distance", _init_dist))
 		_target = pose.get("target", bounds.get_center())
-	_init_dist = maxf(_init_dist, MIN_DISTANCE)
+	_init_dist = maxf(_init_dist, min_distance())
 	_far_distance = maxf(max_distance(), _dist)
 	_update()
 	_restoring_pose = false
@@ -184,9 +184,16 @@ func min_zoom_percent() -> float:
 	return _init_dist / far_distance() * 100.0
 
 
-## Returns the highest zoom percent. It stops at [constant MIN_DISTANCE].
+## Returns the highest zoom percent. It stops at [method min_distance].
 func max_zoom_percent() -> float:
-	return _init_dist / MIN_DISTANCE * 100.0
+	return _init_dist / min_distance() * 100.0
+
+
+## Returns the closest camera distance. It shows [constant MIN_VIEW_VOXELS]
+## voxels across the view height.
+func min_distance() -> float:
+	var half_angle := maxf(tan(deg_to_rad(fov) * 0.5), 0.0001)
+	return MIN_VIEW_VOXELS / (2.0 * half_angle)
 
 
 ## Returns the farthest camera distance. It frames the current bounds with the
@@ -237,7 +244,7 @@ func _zoom_span() -> float:
 ## Sets the zoom percent against the initial distance.
 func set_zoom_percent(percent: float) -> void:
 	var p := clampf(percent, min_zoom_percent(), max_zoom_percent())
-	_dist = clampf(_init_dist / (p / 100.0), MIN_DISTANCE, far_distance())
+	_dist = clampf(_init_dist / (p / 100.0), min_distance(), far_distance())
 	if _dist <= max_distance():
 		_far_distance = max_distance()
 	_update()
@@ -245,7 +252,7 @@ func set_zoom_percent(percent: float) -> void:
 
 ## Multiplies the distance by one factor. A factor above one zooms out.
 func zoom(factor: float) -> void:
-	_dist = clampf(_dist * factor, MIN_DISTANCE, far_distance())
+	_dist = clampf(_dist * factor, min_distance(), far_distance())
 	if _dist <= max_distance():
 		_far_distance = max_distance()
 	_update()

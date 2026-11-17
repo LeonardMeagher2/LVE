@@ -79,7 +79,12 @@ func _zoom_limits() -> void:
 		rig.set_zoom_percent(100000.0)
 	)
 	step("Then the camera stops at the close limit", func():
-		expect(is_equal_approx(rig._dist, EditorCameraRig.MIN_DISTANCE), "the close distance is three units")
+		var close := rig.min_distance()
+		expect(is_equal_approx(rig._dist, close), "the close distance shows sixteen voxels")
+		expect(
+			is_equal_approx(close * 2.0 * tan(deg_to_rad(rig.fov) * 0.5), EditorCameraRig.MIN_VIEW_VOXELS),
+			"the close view height is sixteen voxels"
+		)
 		expect(is_equal_approx(rig.zoom_percent(), rig.max_zoom_percent()), "the zoom stops at the highest percent")
 		expect(is_equal_approx(rig.zoom_step(), EditorCameraRig.ZOOM_STEPS), "the slider reaches its top")
 	)
@@ -103,7 +108,7 @@ func _zoom_limits() -> void:
 	step("Then a wheel zoom stays inside the range", func():
 		for notch in 64:
 			rig.zoom(1.0 / 0.85)
-		expect(rig._dist >= EditorCameraRig.MIN_DISTANCE - 0.0001, "a wheel zoom cannot pass the close limit")
+		expect(rig._dist >= rig.min_distance() - 0.0001, "a wheel zoom cannot pass the close limit")
 	)
 	step("Then the far limit follows the model bounds", func():
 		var framed := rig.max_distance()
@@ -181,13 +186,12 @@ func _run() -> void:
 		expect(is_equal_approx(cam.size, expected), "orthographic height matches the perspective framing")
 	)
 
-	step("When the user zooms in orthographic mode", func():
-		rig.set_zoom_percent(200.0)
+	step("When the user zooms to the close limit in orthographic mode", func():
+		rig.set_zoom_percent(rig.max_zoom_percent())
 	)
 	step("Then the view gets closer", func():
 		var cam := rig
-		var half := rig._init_dist / 2.0
-		var expected := 2.0 * half * tan(deg_to_rad(cam.fov) / 2.0)
+		var expected := 2.0 * rig._dist * tan(deg_to_rad(cam.fov) / 2.0)
 		expect(is_equal_approx(cam.size, expected), "zoom scales the orthographic height")
 	)
 
@@ -197,5 +201,5 @@ func _run() -> void:
 	step("Then the camera uses perspective again", func():
 		var cam := rig
 		expect(cam.projection == Camera3D.PROJECTION_PERSPECTIVE, "the camera uses perspective projection")
-		expect(is_equal_approx(rig.zoom_percent(), 200.0), "zoom level survives the projection switch")
+		expect(is_equal_approx(rig.zoom_percent(), rig.max_zoom_percent()), "zoom level survives the projection switch")
 	)
