@@ -279,9 +279,10 @@ layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 4
 tooltip_text = "Zoom"
-min_value = 4.0
-max_value = 400.0
-value = 100.0
+min_value = 0.0
+max_value = 1000.0
+step = 1.0
+value = 500.0
 
 [node name="ZoomOne" type="Button" parent="ControlBar" unique_id=954156555]
 layout_mode = 2

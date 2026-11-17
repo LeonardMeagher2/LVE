@@ -52,12 +52,15 @@ const NEAR_MARGIN := 1.0
 ## The distance kept past the farthest clipped geometry. The grid extends one
 ## cell past the content. The symmetry planes extend four cells past the origin.
 const FAR_MARGIN := 2.0
-## The closest camera distance in world units. About two voxels fill the view
+## The closest camera distance in world units. About three voxels fill the view
 ## height at this distance.
-const MIN_DISTANCE := 1.0
+const MIN_DISTANCE := 2.0
 ## The farthest camera distance as a multiple of the framed distance. A farther
 ## view only shows empty space around the bounds.
 const MAX_DISTANCE_FACTOR := 4.0
+## The travel of the zoom slider. The value is a position on a logarithmic
+## scale, so a small model and a large one both use the whole track.
+const ZOOM_STEPS := 1000.0
 
 ## Extra world boxes that the orthographic clip range must contain, keyed by
 ## their owner.
@@ -183,6 +186,33 @@ func max_zoom_percent() -> float:
 ## Returns the farthest camera distance for the framed bounds.
 func max_distance() -> float:
 	return _init_dist * MAX_DISTANCE_FACTOR
+
+
+## Returns the zoom slider position. The position is logarithmic, so each equal
+## step changes the distance by an equal ratio.
+func zoom_step() -> float:
+	return _percent_to_step(zoom_percent())
+
+
+## Sets the zoom from a slider position between zero and [constant ZOOM_STEPS].
+func set_zoom_step(step: float) -> void:
+	set_zoom_percent(_step_to_percent(clampf(step, 0.0, ZOOM_STEPS)))
+
+
+## Returns the slider travel of one distance factor. A factor above one zooms in.
+func zoom_step_for_factor(factor: float) -> float:
+	var span := log(max_zoom_percent() / min_zoom_percent())
+	return log(factor) / span * ZOOM_STEPS
+
+
+func _percent_to_step(percent: float) -> float:
+	var span := log(max_zoom_percent() / min_zoom_percent())
+	return log(percent / min_zoom_percent()) / span * ZOOM_STEPS
+
+
+func _step_to_percent(step: float) -> float:
+	var span := log(max_zoom_percent() / min_zoom_percent())
+	return min_zoom_percent() * exp(span * step / ZOOM_STEPS)
 
 
 ## Sets the zoom percent against the initial distance.

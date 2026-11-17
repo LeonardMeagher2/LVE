@@ -155,7 +155,7 @@ The stamp source and pattern are not stored. They follow the document tab in mem
 `camera` supports `yaw`, `pitch`, `distance`, `initial_distance`, and `target`.
 The angle values are in radians.
 `initial_distance` keeps the zoom percent stable.
-A restored distance clamps to one world unit at the closest and to four framed distances at the farthest.
+A restored distance clamps to two world units at the closest and to four framed distances at the farthest.
 
 ### Frame and playback
 

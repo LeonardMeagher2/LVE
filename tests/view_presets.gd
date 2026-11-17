@@ -4,6 +4,7 @@ var rig: EditorCameraRig
 var viewport: SubViewport
 var _measured: Array = []
 var _wheel_slider: Range
+var _wheel_before := 0.0
 
 const VIEW_KEYS := [
 	[KEY_1, "top", 0.0, 89.0],
@@ -44,7 +45,8 @@ func _wheel() -> void:
 		viewport.size = Vector2i(800, 500)
 		_wheel_slider = main.find_child("ZoomSlider", true, false)
 		expect(_wheel_slider != null, "the zoom slider exists")
-		_wheel_slider.value = 100.0
+		camera_rig().set_zoom_percent(100.0)
+		_wheel_before = _wheel_slider.value
 	)
 	var released := InputEventMouseButton.new()
 	released.button_index = MOUSE_BUTTON_WHEEL_UP
@@ -54,7 +56,7 @@ func _wheel() -> void:
 		viewport.push_input(released)
 	)
 	step("Then the zoom does not change", func():
-		expect(is_equal_approx(_wheel_slider.value, 100.0), "a release event does not zoom")
+		expect(is_equal_approx(_wheel_slider.value, _wheel_before), "a release event does not zoom")
 	)
 	var pressed := InputEventMouseButton.new()
 	pressed.button_index = MOUSE_BUTTON_WHEEL_UP
@@ -64,7 +66,8 @@ func _wheel() -> void:
 		viewport.push_input(pressed)
 	)
 	step("Then the zoom changes once", func():
-		expect(_wheel_slider.value > 100.0, "a press event zooms in")
+		expect(_wheel_slider.value > _wheel_before, "a press event zooms in")
+		expect(camera_rig().zoom_percent() > 100.0, "a press event moves the camera closer")
 	)
 
 
@@ -76,8 +79,9 @@ func _zoom_limits() -> void:
 		rig.set_zoom_percent(100000.0)
 	)
 	step("Then the camera stops at the close limit", func():
-		expect(is_equal_approx(rig._dist, EditorCameraRig.MIN_DISTANCE), "the close distance is one unit")
+		expect(is_equal_approx(rig._dist, EditorCameraRig.MIN_DISTANCE), "the close distance is two units")
 		expect(is_equal_approx(rig.zoom_percent(), rig.max_zoom_percent()), "the zoom stops at the highest percent")
+		expect(is_equal_approx(rig.zoom_step(), EditorCameraRig.ZOOM_STEPS), "the slider reaches its top")
 	)
 	step("When the user zooms far past the far limit", func():
 		rig.set_zoom_percent(0.0)
@@ -88,12 +92,17 @@ func _zoom_limits() -> void:
 			"the far distance is four framed distances"
 		)
 		expect(is_equal_approx(rig.zoom_percent(), rig.min_zoom_percent()), "the zoom stops at the lowest percent")
+		expect(is_equal_approx(rig.zoom_step(), 0.0), "the slider reaches its bottom")
 	)
-	step("Then the slider shows the same range", func():
+	step("Then one hundred percent sits on the logarithmic track", func():
+		rig.set_zoom_percent(100.0)
+		var step := rig.zoom_step()
+		expect(step > EditorCameraRig.ZOOM_STEPS * 0.25, "one hundred percent sits above a quarter of the track")
+		expect(step < EditorCameraRig.ZOOM_STEPS * 0.5, "one hundred percent sits below half of the track")
 		var slider := main.find_child("ZoomSlider", true, false) as Range
 		expect(slider != null, "the zoom slider exists")
-		expect(is_equal_approx(slider.min_value, rig.min_zoom_percent()), "the slider starts at the far limit")
-		expect(is_equal_approx(slider.max_value, rig.max_zoom_percent()), "the slider ends at the close limit")
+		expect(is_equal_approx(slider.max_value, EditorCameraRig.ZOOM_STEPS), "the slider spans one fixed travel")
+		expect(absf(slider.value - step) <= 1.0, "the slider follows the camera")
 	)
 	step("Then a wheel zoom stays inside the range", func():
 		for notch in 64:

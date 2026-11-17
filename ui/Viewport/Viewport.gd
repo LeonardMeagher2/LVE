@@ -48,12 +48,14 @@ var _lighting_document: VoxelDocument
 var _view_document: VoxelDocument
 var _camera_shadow_projection := Camera3D.PROJECTION_PERSPECTIVE
 const LIGHT_HANDLE_RADIUS := 12.0
+## The distance ratio of one wheel notch.
+const WHEEL_ZOOM_FACTOR := 0.85
 
 func _ready() -> void:
 	%CameraMenu.get_popup().index_pressed.connect(_on_camera_index_pressed)
-	%CameraRig.zoom_changed.connect(%ZoomSlider.set_value_no_signal)
-	%CameraRig.zoom_limits_changed.connect(_on_zoom_limits_changed)
-	_on_zoom_limits_changed(%CameraRig.min_zoom_percent(), %CameraRig.max_zoom_percent())
+	%CameraRig.zoom_changed.connect(_on_zoom_percent_changed)
+	%CameraRig.zoom_limits_changed.connect(_sync_zoom_slider)
+	_sync_zoom_slider()
 	%CameraRig.view_changed.connect(_on_camera_view_changed)
 	$WorldEnvironment.environment = $WorldEnvironment.environment.duplicate()
 	var material: StandardMaterial3D = %LightHandle.material_override.duplicate()
@@ -526,13 +528,15 @@ func _on_zoom_one_pressed() -> void:
 
 
 func _on_zoom_slider_value_changed(value: float) -> void:
-	%CameraRig.set_zoom_percent(value)
+	%CameraRig.set_zoom_step(value)
 
 
-func _on_zoom_limits_changed(min_percent: float, max_percent: float) -> void:
-	%ZoomSlider.min_value = min_percent
-	%ZoomSlider.max_value = max_percent
-	%ZoomSlider.set_value_no_signal(%CameraRig.zoom_percent())
+func _on_zoom_percent_changed(_percent: float) -> void:
+	_sync_zoom_slider()
+
+
+func _sync_zoom_slider(_min_percent := 0.0, _max_percent := 0.0) -> void:
+	%ZoomSlider.set_value_no_signal(%CameraRig.zoom_step())
 
 
 func _show_view_mode(mode: ViewMode) -> void:
@@ -600,11 +604,11 @@ func _input(event: InputEvent) -> void:
 				# An X11 wheel can arrive as a press and a release, so only the
 				# press zooms. Both events are consumed.
 				if mb.pressed:
-					%ZoomSlider.value *= 1.0 / 0.85
+					%ZoomSlider.value += %CameraRig.zoom_step_for_factor(1.0 / WHEEL_ZOOM_FACTOR)
 				get_viewport().set_input_as_handled()
 			MOUSE_BUTTON_WHEEL_DOWN:
 				if mb.pressed:
-					%ZoomSlider.value *= 0.85
+					%ZoomSlider.value -= %CameraRig.zoom_step_for_factor(1.0 / WHEEL_ZOOM_FACTOR)
 				get_viewport().set_input_as_handled()
 	elif event is InputEventMouseMotion:
 		var mm := event as InputEventMouseMotion
