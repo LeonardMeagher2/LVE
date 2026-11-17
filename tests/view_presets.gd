@@ -79,35 +79,37 @@ func _zoom_limits() -> void:
 		rig.set_zoom_percent(100000.0)
 	)
 	step("Then the camera stops at the close limit", func():
-		expect(is_equal_approx(rig._dist, EditorCameraRig.MIN_DISTANCE), "the close distance is two units")
+		expect(is_equal_approx(rig._dist, EditorCameraRig.MIN_DISTANCE), "the close distance is three units")
 		expect(is_equal_approx(rig.zoom_percent(), rig.max_zoom_percent()), "the zoom stops at the highest percent")
 		expect(is_equal_approx(rig.zoom_step(), EditorCameraRig.ZOOM_STEPS), "the slider reaches its top")
 	)
 	step("When the user zooms far past the far limit", func():
 		rig.set_zoom_percent(0.0)
 	)
-	step("Then the farthest distance follows the framed bounds", func():
-		expect(
-			is_equal_approx(rig._dist, rig._init_dist * EditorCameraRig.MAX_DISTANCE_FACTOR),
-			"the far distance is four framed distances"
-		)
+	step("Then the farthest distance frames the current bounds", func():
+		expect(is_equal_approx(rig._dist, rig.max_distance()), "the far distance is the framed bounds")
+		expect(rig._dist >= rig._init_dist, "the far distance is no closer than the initial view")
 		expect(is_equal_approx(rig.zoom_percent(), rig.min_zoom_percent()), "the zoom stops at the lowest percent")
 		expect(is_equal_approx(rig.zoom_step(), 0.0), "the slider reaches its bottom")
 	)
-	step("Then one hundred percent sits on the logarithmic track", func():
+	step("Then one hundred percent sits at the far end", func():
 		rig.set_zoom_percent(100.0)
-		var step := rig.zoom_step()
-		expect(step > EditorCameraRig.ZOOM_STEPS * 0.25, "one hundred percent sits above a quarter of the track")
-		expect(step < EditorCameraRig.ZOOM_STEPS * 0.5, "one hundred percent sits below half of the track")
+		expect(rig.zoom_step() <= 1.0, "one hundred percent sits at the bottom of the track")
 		var slider := main.find_child("ZoomSlider", true, false) as Range
 		expect(slider != null, "the zoom slider exists")
 		expect(is_equal_approx(slider.max_value, EditorCameraRig.ZOOM_STEPS), "the slider spans one fixed travel")
-		expect(absf(slider.value - step) <= 1.0, "the slider follows the camera")
+		expect(absf(slider.value - rig.zoom_step()) <= 1.0, "the slider follows the camera")
 	)
 	step("Then a wheel zoom stays inside the range", func():
 		for notch in 64:
 			rig.zoom(1.0 / 0.85)
 		expect(rig._dist >= EditorCameraRig.MIN_DISTANCE - 0.0001, "a wheel zoom cannot pass the close limit")
+	)
+	step("Then the far limit follows the model bounds", func():
+		var framed := rig.max_distance()
+		State.document.set_cell(State.current_frame, Vector3i.ZERO, VoxelFrame.material(Color.WHITE))
+		State.document.set_cell(State.current_frame, Vector3i(40, 0, 0), VoxelFrame.material(Color.WHITE))
+		expect(rig.max_distance() > framed, "a wider model moves the far limit out")
 	)
 	rig.set_zoom_percent(100.0)
 

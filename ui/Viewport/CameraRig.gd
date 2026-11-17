@@ -52,15 +52,20 @@ const NEAR_MARGIN := 1.0
 ## The distance kept past the farthest clipped geometry. The grid extends one
 ## cell past the content. The symmetry planes extend four cells past the origin.
 const FAR_MARGIN := 2.0
-## The closest camera distance in world units. About three voxels fill the view
-## height at this distance.
-const MIN_DISTANCE := 2.0
-## The farthest camera distance as a multiple of the framed distance. A farther
-## view only shows empty space around the bounds.
-const MAX_DISTANCE_FACTOR := 4.0
+## The closest camera distance in world units. About four and a half voxels fill
+## the view height at this distance.
+const MIN_DISTANCE := 3.0
+## The space around the framed bounds. The initial view and the farthest zoom
+## use the same margin.
+const FRAME_MARGIN := 1.25
 ## The travel of the zoom slider. The value is a position on a logarithmic
 ## scale, so a small model and a large one both use the whole track.
 const ZOOM_STEPS := 1000.0
+
+## The farthest distance of the current view. A restored pose or a centered
+## selection can sit beyond the model fit. The latch keeps the first zoom from
+## jumping, and it drops back to the model fit once the view is inside it.
+var _far_distance := 0.0
 
 ## Extra world boxes that the orthographic clip range must contain, keyed by
 ## their owner.
@@ -83,7 +88,7 @@ func _ready() -> void:
 ## restores it, so a tab switch keeps the view.
 func configure() -> void:
 	var bounds: AABB = bounds_provider.call() if bounds_provider.is_valid() else State.document.bounds()
-	_init_dist = maxf(bounds.size.length(), 16.0) * 1.25
+	_init_dist = maxf(bounds.size.length(), 16.0) * FRAME_MARGIN
 	var pose: Dictionary = State.document.edit_camera if stores_document_pose else {}
 	_restoring_pose = true
 	if pose.is_empty():
@@ -96,7 +101,7 @@ func configure() -> void:
 		_init_dist = float(pose.get("initial_distance", _init_dist))
 		_target = pose.get("target", bounds.get_center())
 	_init_dist = maxf(_init_dist, MIN_DISTANCE)
-	_dist = clampf(_dist, MIN_DISTANCE, max_distance())
+	_far_distance = maxf(max_distance(), _dist)
 	_update()
 	_restoring_pose = false
 	zoom_changed.emit(zoom_percent())
@@ -119,7 +124,8 @@ func _save_pose() -> void:
 ## Frames one box at the default distance.
 func center_on(box: AABB) -> void:
 	_target = box.get_center()
-	_dist = clampf(maxf(box.size.length(), 16.0) * 1.25, MIN_DISTANCE, max_distance())
+	_dist = maxf(box.size.length(), 16.0) * FRAME_MARGIN
+	_far_distance = maxf(max_distance(), _dist)
 	_update()
 	zoom_changed.emit(zoom_percent())
 	zoom_limits_changed.emit(min_zoom_percent(), max_zoom_percent())
@@ -173,9 +179,9 @@ func zoom_percent() -> float:
 	return _init_dist / _dist * 100.0
 
 
-## Returns the lowest zoom percent. It shows the bounds with room around them.
+## Returns the lowest zoom percent. It frames the current bounds.
 func min_zoom_percent() -> float:
-	return 100.0 / MAX_DISTANCE_FACTOR
+	return _init_dist / far_distance() * 100.0
 
 
 ## Returns the highest zoom percent. It stops at [constant MIN_DISTANCE].
@@ -183,9 +189,19 @@ func max_zoom_percent() -> float:
 	return _init_dist / MIN_DISTANCE * 100.0
 
 
-## Returns the farthest camera distance for the framed bounds.
+## Returns the farthest camera distance. It frames the current bounds with the
+## same margin as the initial view.
 func max_distance() -> float:
-	return _init_dist * MAX_DISTANCE_FACTOR
+	var bounds := _framed_bounds()
+	if not bounds.has_surface():
+		return _init_dist
+	return maxf(_init_dist, bounds.size.length() * FRAME_MARGIN)
+
+
+## Returns the farthest distance that a zoom may reach. It is the model fit,
+## unless the current view already sits farther out.
+func far_distance() -> float:
+	return maxf(max_distance(), _far_distance)
 
 
 ## Returns the zoom slider position. The position is logarithmic, so each equal
@@ -201,30 +217,37 @@ func set_zoom_step(step: float) -> void:
 
 ## Returns the slider travel of one distance factor. A factor above one zooms in.
 func zoom_step_for_factor(factor: float) -> float:
-	var span := log(max_zoom_percent() / min_zoom_percent())
-	return log(factor) / span * ZOOM_STEPS
+	return log(factor) / _zoom_span() * ZOOM_STEPS
 
 
 func _percent_to_step(percent: float) -> float:
-	var span := log(max_zoom_percent() / min_zoom_percent())
-	return log(percent / min_zoom_percent()) / span * ZOOM_STEPS
+	return log(percent / min_zoom_percent()) / _zoom_span() * ZOOM_STEPS
 
 
 func _step_to_percent(step: float) -> float:
-	var span := log(max_zoom_percent() / min_zoom_percent())
-	return min_zoom_percent() * exp(span * step / ZOOM_STEPS)
+	return min_zoom_percent() * exp(_zoom_span() * step / ZOOM_STEPS)
+
+
+## Returns the logarithmic distance between the far and close limits. A
+## degenerate range keeps a small span, so no slider mapping divides by zero.
+func _zoom_span() -> float:
+	return maxf(log(max_zoom_percent() / min_zoom_percent()), 0.0001)
 
 
 ## Sets the zoom percent against the initial distance.
 func set_zoom_percent(percent: float) -> void:
 	var p := clampf(percent, min_zoom_percent(), max_zoom_percent())
-	_dist = _init_dist / (p / 100.0)
+	_dist = clampf(_init_dist / (p / 100.0), MIN_DISTANCE, far_distance())
+	if _dist <= max_distance():
+		_far_distance = max_distance()
 	_update()
 	zoom_changed.emit(zoom_percent())
 
 ## Multiplies the distance by one factor. A factor above one zooms out.
 func zoom(factor: float) -> void:
-	_dist = clampf(_dist * factor, MIN_DISTANCE, max_distance())
+	_dist = clampf(_dist * factor, MIN_DISTANCE, far_distance())
+	if _dist <= max_distance():
+		_far_distance = max_distance()
 	_update()
 	zoom_changed.emit(_init_dist / _dist * 100.0)
 
