@@ -2958,6 +2958,29 @@ func _build_shape(args: Dictionary) -> Dictionary:
 	})
 
 
+func _parse_shape_primitive_rotation(data: Dictionary, index: int) -> Dictionary:
+	var value: Variant = data.get("rotation", null)
+	if value == null:
+		return {"rotation": Quaternion.IDENTITY}
+	var entries_value: Variant = value
+	if not (entries_value is Array):
+		return {"error": "primitives[%d] rotation must be three degree numbers." % index}
+	var entries: Array = entries_value
+	if entries.size() != 3:
+		return {"error": "primitives[%d] rotation must be three degree numbers." % index}
+	var angles := Vector3.ZERO
+	for axis in 3:
+		var entry: Variant = entries[axis]
+		if not (entry is int or entry is float):
+			return {"error": "primitives[%d] rotation must be three degree numbers." % index}
+		var angle := float(entry)
+		if not is_finite(angle):
+			return {"error": "primitives[%d] rotation must be three degree numbers." % index}
+		angles[axis] = angle
+	var basis := Basis.from_euler(angles * (PI / 180.0), EULER_ORDER_XYZ)
+	return {"rotation": basis.get_rotation_quaternion()}
+
+
 func _parse_shape_primitive(value: Variant, index: int) -> Dictionary:
 	if not (value is Dictionary):
 		return {"error": "primitives[%d] must be an object." % index}
@@ -2965,6 +2988,10 @@ func _parse_shape_primitive(value: Variant, index: int) -> Dictionary:
 	var kind_value: Variant = data.get("kind", "")
 	if not (kind_value is String):
 		return {"error": "primitives[%d] kind must be box, ellipsoid, or cone." % index}
+	var rotation_value := _parse_shape_primitive_rotation(data, index)
+	if rotation_value.has("error"):
+		return rotation_value
+	var rotation: Quaternion = rotation_value["rotation"]
 	match str(kind_value):
 		"box":
 			var center_value: Variant = MCPJson.parse_vector(data.get("center", null))
@@ -2983,7 +3010,7 @@ func _parse_shape_primitive(value: Variant, index: int) -> Dictionary:
 				box_roundness = float(box_roundness_value)
 				if not is_finite(box_roundness) or box_roundness < 0.0 or box_roundness > 1.0:
 					return {"error": "primitives[%d] roundness must be a number from 0 to 1." % index}
-			return {"primitive": {"kind": PrimitiveField.KIND_BOX, "center": center, "half_size": half_size, "roundness": box_roundness}}
+			return {"primitive": {"kind": PrimitiveField.KIND_BOX, "center": center, "half_size": half_size, "roundness": box_roundness, "rotation": rotation}}
 		"ellipsoid":
 			var center_value: Variant = MCPJson.parse_vector(data.get("center", null))
 			var radii_value: Variant = MCPJson.parse_vector(data.get("radii", null))
@@ -2993,7 +3020,7 @@ func _parse_shape_primitive(value: Variant, index: int) -> Dictionary:
 			var radii: Vector3 = radii_value
 			if radii.x <= 0.0 or radii.y <= 0.0 or radii.z <= 0.0:
 				return {"error": "primitives[%d] radii must be above zero." % index}
-			return {"primitive": {"kind": PrimitiveField.KIND_ELLIPSOID, "center": center, "radii": radii}}
+			return {"primitive": {"kind": PrimitiveField.KIND_ELLIPSOID, "center": center, "radii": radii, "rotation": rotation}}
 		"cone":
 			var a_value: Variant = MCPJson.parse_vector(data.get("a", null))
 			var b_value: Variant = MCPJson.parse_vector(data.get("b", null))
@@ -3021,7 +3048,7 @@ func _parse_shape_primitive(value: Variant, index: int) -> Dictionary:
 					roundness = 1.0 if bool(round_value) else 0.0
 			var a: Vector3 = a_value
 			var b: Vector3 = b_value
-			return {"primitive": {"kind": PrimitiveField.KIND_CONE, "a": a, "b": b, "r1": r1, "r2": r2, "roundness": roundness}}
+			return {"primitive": {"kind": PrimitiveField.KIND_CONE, "a": a, "b": b, "r1": r1, "r2": r2, "roundness": roundness, "rotation": rotation}}
 		_:
 			return {"error": "primitives[%d] kind must be box, ellipsoid, or cone." % index}
 

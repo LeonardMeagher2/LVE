@@ -126,17 +126,29 @@ static func smin(first: float, second: float, blur: float) -> float:
 	return minf(first, second) - h * h * blur * 0.25
 
 
+## Returns the rotation of one primitive around its center. It is identity when
+## the primitive has no rotation.
+static func primitive_rotation(primitive: Dictionary) -> Quaternion:
+	var value: Variant = primitive.get("rotation", null)
+	return value if value is Quaternion else Quaternion.IDENTITY
+
+
 ## Returns the field of one primitive at one point.
 static func primitive_distance(primitive: Dictionary, point: Vector3) -> float:
 	var kind := int(primitive.get("kind", KIND_BOX))
+	var rotation := primitive_rotation(primitive)
 	match kind:
 		KIND_ELLIPSOID:
 			var center: Vector3 = primitive.get("center", Vector3.ZERO)
 			var radii: Vector3 = primitive.get("radii", Vector3.ONE)
-			return sdf_ellipsoid(point, center, radii)
+			var local := rotation.inverse() * (point - center)
+			return sdf_ellipsoid(local, Vector3.ZERO, radii)
 		KIND_CONE:
 			var a: Vector3 = primitive.get("a", Vector3.ZERO)
 			var b: Vector3 = primitive.get("b", Vector3.ZERO)
+			var mid := (a + b) * 0.5
+			a = mid + rotation * (a - mid)
+			b = mid + rotation * (b - mid)
 			var r1 := float(primitive.get("r1", 0.0))
 			var r2 := float(primitive.get("r2", 0.0))
 			var roundness := float(primitive.get("roundness", 1.0 if bool(primitive.get("round", false)) else 0.0))
@@ -152,7 +164,8 @@ static func primitive_distance(primitive: Dictionary, point: Vector3) -> float:
 			var center: Vector3 = primitive.get("center", Vector3.ZERO)
 			var half_size: Vector3 = primitive.get("half_size", Vector3.ONE)
 			var roundness := float(primitive.get("roundness", 0.0))
-			return sdf_round_box(point, center, half_size, roundness)
+			var local := rotation.inverse() * (point - center)
+			return sdf_round_box(local, Vector3.ZERO, half_size, roundness)
 
 
 ## Returns the combined field of a request at one point.
@@ -218,14 +231,19 @@ static func smallest_extent(request: Dictionary) -> float:
 ## spheres, which is tight for the round cone and safe for the flat cone.
 static func primitive_bounds(primitive: Dictionary) -> AABB:
 	var kind := int(primitive.get("kind", KIND_BOX))
+	var rotation := primitive_rotation(primitive)
 	match kind:
 		KIND_ELLIPSOID:
 			var center: Vector3 = primitive.get("center", Vector3.ZERO)
 			var radii: Vector3 = primitive.get("radii", Vector3.ONE)
-			return AABB(center - radii, radii * 2.0)
+			var extent := _rotated_extent(rotation, radii)
+			return AABB(center - extent, extent * 2.0)
 		KIND_CONE:
 			var a: Vector3 = primitive.get("a", Vector3.ZERO)
 			var b: Vector3 = primitive.get("b", Vector3.ZERO)
+			var mid := (a + b) * 0.5
+			a = mid + rotation * (a - mid)
+			b = mid + rotation * (b - mid)
 			var r1 := maxf(float(primitive.get("r1", 0.0)), 0.0)
 			var r2 := maxf(float(primitive.get("r2", 0.0)), 0.0)
 			var low := Vector3(minf(a.x - r1, b.x - r2), minf(a.y - r1, b.y - r2), minf(a.z - r1, b.z - r2))
@@ -234,7 +252,18 @@ static func primitive_bounds(primitive: Dictionary) -> AABB:
 		_:
 			var center: Vector3 = primitive.get("center", Vector3.ZERO)
 			var half_size: Vector3 = primitive.get("half_size", Vector3.ONE)
-			return AABB(center - half_size, half_size * 2.0)
+			var extent := _rotated_extent(rotation, half_size)
+			return AABB(center - extent, extent * 2.0)
+
+
+## Returns the world extent of a local box or radius vector after a rotation.
+static func _rotated_extent(rotation: Quaternion, extent: Vector3) -> Vector3:
+	var basis := Basis(rotation)
+	return Vector3(
+		absf(basis.x.x) * extent.x + absf(basis.y.x) * extent.y + absf(basis.z.x) * extent.z,
+		absf(basis.x.y) * extent.x + absf(basis.y.y) * extent.y + absf(basis.z.y) * extent.z,
+		absf(basis.x.z) * extent.x + absf(basis.y.z) * extent.y + absf(basis.z.z) * extent.z,
+	)
 
 
 ## Returns the continuous shape bounds of a request after smooth and shell.

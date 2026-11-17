@@ -64,6 +64,7 @@ func reset_environment() -> void:
 	_primitive_settings_resource.shell = 0
 	_primitive_settings_resource.second_radius = 0.0
 	_primitive_settings_resource.roundness = 0.0
+	_primitive_settings_resource.rotation_degrees = Vector3.ZERO
 	_paint_settings_resource.tool = PaintToolSettings.Tools.PAINTBRUSH
 	_paint_settings_resource.connected = true
 	_paint_settings_resource.spot_diameter = 1

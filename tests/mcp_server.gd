@@ -28,6 +28,7 @@ func _ready() -> void:
 	test("build_shape smooths into existing voxels", _build_shape_existing, "build_shape_existing")
 	test("build_shape applies roundness", _build_shape_roundness, "build_shape_roundness")
 	test("build_shape and the shared plugin path produce the same cells", _build_shape_parity, "build_shape_parity")
+	test("build_shape rotates a primitive around its center", _build_shape_rotation, "build_shape_rotation")
 	test("write_cells writes boxes and runs", _write, "write_cells")
 	test("write_cells accepts per-cell materials", _write_materials, "write_materials")
 	test("write_cells writes several frames as one undo", _write_frames, "write_frames")
@@ -522,6 +523,37 @@ func _build_shape_roundness() -> void:
 		expect(frame.has(Vector3i(1, 1, 1)), "the sphere body exists")
 		expect(not frame.has(Vector3i(2, 2, 2)), "the sharp box corner is gone")
 	)
+
+
+func _build_shape_rotation() -> void:
+	step("Given an empty frame and a bar rotated a quarter turn around Y", func():
+		State.undo_redo.clear_history()
+	)
+	var response := await _call("build_shape", {
+		"primitives": [{
+			"kind": "box",
+			"center": [0, 0, 0],
+			"half_size": [2.5, 0.5, 0.5],
+			"rotation": [0, 90, 0],
+		}],
+	})
+	var data := _result_data(response)
+	step("Then the bar lies along Z", func():
+		expect(not _is_error(response), "build_shape succeeds: %s" % _result_text(response))
+		expect(int(data.get("applied", 0)) == 5, "the rotated bar writes 5 cells")
+		var frame := State.get_current_voxel_frame()
+		expect(frame.has(Vector3i(0, 0, 2)), "the far z cell exists")
+		expect(not frame.has(Vector3i(2, 0, 0)), "the far x cell is gone")
+		var bounds: Dictionary = data.get("bounds", {})
+		expect(int(bounds.get("max", [0, 0, 0])[2]) == 2, "the z bound covers the bar")
+	)
+	step("Then a bad rotation is refused", func():
+		var bad := await _call("build_shape", {
+			"primitives": [{"kind": "box", "center": [0, 0, 0], "half_size": [1, 1, 1], "rotation": [0, 90]}],
+		})
+		expect(_is_error(bad), "a short rotation reports an error")
+	)
+	State.undo_redo.undo()
 
 
 func _build_shape_parity() -> void:

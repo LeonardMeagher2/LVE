@@ -14,6 +14,8 @@ const HANDLE_PIXELS := 10.0
 
 var _box := AABB()
 var _has_box := false
+var _pivot := Vector3.ZERO
+var _rotation := Quaternion.IDENTITY
 var _handle_half := HANDLE_HALF
 var _show_handles := false
 var _highlight_axis := -1
@@ -49,11 +51,14 @@ func _ready() -> void:
 	set_process(false)
 
 
-## Shows the pending box. [param axis] and [param side] select the highlighted
-## face. A negative axis hides the highlight. [param show_handles] draws the
-## face crosses. A live drag uses the box alone.
-func show_box(box: AABB, axis := -1, side := 0, show_handles := true) -> void:
+## Shows the pending box. [param rotation] turns the box around its center.
+## [param axis] and [param side] select the highlighted face. A negative axis
+## hides the highlight. [param show_handles] draws the face crosses. A live drag
+## uses the box alone.
+func show_box(box: AABB, rotation := Quaternion.IDENTITY, axis := -1, side := 0, show_handles := true) -> void:
 	_box = box
+	_pivot = box.get_center()
+	_rotation = rotation
 	_has_box = true
 	_show_handles = show_handles
 	_highlight_axis = axis
@@ -114,19 +119,26 @@ func _refresh_highlight() -> void:
 
 ## Returns the world position of one face handle.
 func handle_position(axis: int, side: int) -> Vector3:
-	var center := _box.get_center()
-	center[axis] = _box.position[axis] if side < 0 else _box.end[axis]
-	return center
+	return _to_world(_face_center(axis, side))
 
 
-## Returns the six face handles and the eight corner handles.
+## Returns the six face handles and the eight corner handles. A face handle
+## carries its world-facing axis direction, so a drag follows the rotated box.
 func handles() -> Array:
 	var result: Array = []
 	if not _has_box:
 		return result
 	for axis in 3:
 		for side in [-1, 1]:
-			result.append({"kind": 0, "axis": axis, "side": side, "position": handle_position(axis, side)})
+			var direction := Vector3.ZERO
+			direction[axis] = 1.0
+			result.append({
+				"kind": 0,
+				"axis": axis,
+				"side": side,
+				"position": handle_position(axis, side),
+				"axis_direction": _rotation * direction,
+			})
 	for x in [-1, 1]:
 		for y in [-1, 1]:
 			for z in [-1, 1]:
@@ -135,8 +147,23 @@ func handles() -> Array:
 				point.x = _box.position.x if x < 0 else _box.end.x
 				point.y = _box.position.y if y < 0 else _box.end.y
 				point.z = _box.position.z if z < 0 else _box.end.z
-				result.append({"kind": 1, "axis": -1, "side": 0, "signs": signs, "position": point})
+				result.append({"kind": 1, "axis": -1, "side": 0, "signs": signs, "position": _to_world(point)})
 	return result
+
+
+func _face_center(axis: int, side: int) -> Vector3:
+	var center := _box.get_center()
+	center[axis] = _box.position[axis] if side < 0 else _box.end[axis]
+	return center
+
+
+func _to_world(point: Vector3) -> Vector3:
+	return _pivot + _rotation * (point - _pivot)
+
+
+func _append_line(vertices: PackedVector3Array, a: Vector3, b: Vector3) -> void:
+	vertices.append(_to_world(a))
+	vertices.append(_to_world(b))
 
 
 func _rebuild(show_handles: bool) -> void:
@@ -144,14 +171,14 @@ func _rebuild(show_handles: bool) -> void:
 	var low := _box.position
 	var high := _box.end
 	var corners: Array[Vector3] = [
-		Vector3(low.x, low.y, low.z),
-		Vector3(high.x, low.y, low.z),
-		Vector3(high.x, high.y, low.z),
-		Vector3(low.x, high.y, low.z),
-		Vector3(low.x, low.y, high.z),
-		Vector3(high.x, low.y, high.z),
-		Vector3(high.x, high.y, high.z),
-		Vector3(low.x, high.y, high.z),
+		_to_world(Vector3(low.x, low.y, low.z)),
+		_to_world(Vector3(high.x, low.y, low.z)),
+		_to_world(Vector3(high.x, high.y, low.z)),
+		_to_world(Vector3(low.x, high.y, low.z)),
+		_to_world(Vector3(low.x, low.y, high.z)),
+		_to_world(Vector3(high.x, low.y, high.z)),
+		_to_world(Vector3(high.x, high.y, high.z)),
+		_to_world(Vector3(low.x, high.y, high.z)),
 	]
 	for edge in [
 		[0, 1], [1, 2], [2, 3], [3, 0],
@@ -163,7 +190,7 @@ func _rebuild(show_handles: bool) -> void:
 	if show_handles:
 		for axis in 3:
 			for side in [-1, 1]:
-				_append_handle(vertices, axis, side, handle_position(axis, side))
+				_append_handle(vertices, axis, side, _face_center(axis, side))
 		for x in [-1, 1]:
 			for y in [-1, 1]:
 				for z in [-1, 1]:
@@ -177,7 +204,7 @@ func _rebuild(show_handles: bool) -> void:
 
 func _handle_mesh(axis: int, side: int) -> ArrayMesh:
 	var vertices := PackedVector3Array()
-	_append_handle(vertices, axis, side, handle_position(axis, side))
+	_append_handle(vertices, axis, side, _face_center(axis, side))
 	return VoxelLineMesh.build(vertices)
 
 
@@ -187,8 +214,7 @@ func _append_corner(vertices: PackedVector3Array, center: Vector3) -> void:
 		var end := center
 		start[axis] -= _handle_half
 		end[axis] += _handle_half
-		vertices.append(start)
-		vertices.append(end)
+		_append_line(vertices, start, end)
 
 
 func _append_handle(vertices: PackedVector3Array, axis: int, side: int, center: Vector3) -> void:
@@ -198,11 +224,9 @@ func _append_handle(vertices: PackedVector3Array, axis: int, side: int, center: 
 	var b := center
 	a[first] -= _handle_half
 	b[first] += _handle_half
-	vertices.append(a)
-	vertices.append(b)
+	_append_line(vertices, a, b)
 	a = center
 	b = center
 	a[second] -= _handle_half
 	b[second] += _handle_half
-	vertices.append(a)
-	vertices.append(b)
+	_append_line(vertices, a, b)

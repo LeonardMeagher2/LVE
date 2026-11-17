@@ -32,6 +32,8 @@ func _ready() -> void:
 	test("intersect keeps only the cells inside the shape", _intersect, "intersect")
 	test("a no-op subtract creates no history action", _noop, "noop")
 	test("the option values scale with the shape", _option_units, "option_units")
+	test("the tool rotation turns the box and the cone", _rotation, "rotation")
+	test("the gizmo follows the shape rotation", _gizmo_rotation, "gizmo_rotation")
 	test("the current material is used", _material, "material")
 	test("the shape options build a cone and an ellipsoid", _shape_options, "shape_options")
 
@@ -692,6 +694,51 @@ func _option_units() -> void:
 		expect(is_equal_approx(float(cone["r2"]), 1.0), "half the base radius is one cell")
 		tool.shape = PrimitiveField.KIND_BOX
 	)
+
+
+func _rotation() -> void:
+	var settings: PrimitiveToolSettings = plugin("PrimitivePlugin")._settings
+	step("When the tool rotates a long box a quarter turn around Y", func():
+		settings.rotation_degrees = Vector3(0, 90, 0)
+		var box := AABB(Vector3(-2.5, -0.5, -0.5), Vector3(5, 1, 1))
+		var primitive: Dictionary = tool._build_primitive(box, 2)
+		expect(primitive.has("rotation"), "the box carries a rotation")
+		expect(PrimitiveField.primitive_distance(primitive, Vector3(0, 0, 2)) <= 0.0, "a z cell is inside the rotated box")
+		expect(PrimitiveField.primitive_distance(primitive, Vector3(2, 0, 0)) > 0.0, "an x cell is outside the rotated box")
+	)
+	step("When the tool rotates a cone a quarter turn around Z", func():
+		settings.rotation_degrees = Vector3(0, 0, 90)
+		settings.second_radius = 1.0
+		tool.shape = PrimitiveField.KIND_CONE
+		var box := AABB(Vector3(-0.5, -2.5, -0.5), Vector3(1, 5, 1))
+		var cone: Dictionary = tool._build_primitive(box, 1)
+		var a: Vector3 = cone["a"]
+		var b: Vector3 = cone["b"]
+		expect(is_equal_approx(absf(b.x - a.x), 5.0), "the cone axis turns toward x")
+		expect(is_equal_approx(absf(b.y - a.y), 0.0), "the cone no longer lies along y")
+		tool.shape = PrimitiveField.KIND_BOX
+		settings.rotation_degrees = Vector3.ZERO
+		settings.second_radius = 0.0
+	)
+
+
+func _gizmo_rotation() -> void:
+	var gizmo := tool.get_node("Gizmo")
+	var rotation := Quaternion(Vector3.UP, deg_to_rad(90.0))
+	step("Given a box rotated a quarter turn around Y", func():
+		gizmo.show_box(AABB(Vector3(-2, -1, -0.5), Vector3(4, 2, 1)), rotation)
+	)
+	step("Then the x face handle sits on the rotated side", func():
+		var hit: Dictionary = gizmo.handles()[0]
+		expect((hit["position"] as Vector3).is_equal_approx(Vector3(0, 0, 2)), "the handle follows the rotation")
+		expect((hit["axis_direction"] as Vector3).is_equal_approx(Vector3(0, 0, -1)), "the face drags along its rotated axis")
+	)
+	step("Then a world drag point maps back to the box frame", func():
+		tool._handle_center = Vector3.ZERO
+		tool._handle_rotation = rotation
+		expect(tool._handle_local(Vector3(0, 0, 2)).is_equal_approx(Vector3(-2, 0, 0)), "the drag uses the local axis")
+	)
+	gizmo.hide_box()
 
 
 func _material() -> void:

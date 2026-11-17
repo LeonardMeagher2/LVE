@@ -18,6 +18,7 @@ func _ready() -> void:
 	test("the scan bounds grow with smooth and shell", _bounds, "bounds")
 	test("a small radius warns at a coarse step", _warnings, "warnings")
 	test("invalid cones are refused", _validation, "validation")
+	test("a rotated box keeps its local field and bounds", _rotation, "rotation")
 	test("a rasterized box writes the expected cells", _rasterize, "rasterize")
 	test("the same request produces the same cells", _determinism, "determinism")
 
@@ -185,6 +186,45 @@ func _validation() -> void:
 	step("Then a valid box is accepted", func():
 		var request := _request([_box_primitive(Vector3.ZERO, Vector3(2.0, 2.0, 2.0))], 0, 0.0, 0.0)
 		expect(PrimitiveField.validate_request(request).is_empty(), "the box is valid")
+	)
+
+
+func _rotation() -> void:
+	step("Given a box rotated forty-five degrees around Y", func():
+		var rotation := Quaternion(Vector3.UP, deg_to_rad(45.0))
+		var primitive := {
+			"kind": PrimitiveField.KIND_BOX,
+			"center": Vector3.ZERO,
+			"half_size": Vector3(2.0, 1.0, 0.5),
+			"roundness": 0.0,
+			"rotation": rotation,
+		}
+		var world := rotation * Vector3(1.0, 0.0, 0.0)
+		var distance := PrimitiveField.primitive_distance(primitive, world)
+		expect(is_equal_approx(distance, -0.5), "the rotated point keeps its local distance")
+		var outside := rotation * Vector3(2.5, 0.0, 0.0)
+		expect(is_equal_approx(PrimitiveField.primitive_distance(primitive, outside), 0.5), "the rotated face is on the local surface")
+		var bounds := PrimitiveField.primitive_bounds(primitive)
+		expect(is_equal_approx(bounds.size.x, sqrt(2.0) * 2.5), "the rotated x extent covers the diagonal")
+		expect(is_equal_approx(bounds.size.y, 2.0), "the rotated y extent stays")
+		expect(is_equal_approx(bounds.size.z, sqrt(2.0) * 2.5), "the rotated z extent covers the diagonal")
+	)
+	step("Given a cone rotated a quarter turn around Z", func():
+		var rotation := Quaternion(Vector3(0, 0, 1), deg_to_rad(-90.0))
+		var primitive := {
+			"kind": PrimitiveField.KIND_CONE,
+			"a": Vector3.ZERO,
+			"b": Vector3(0.0, 4.0, 0.0),
+			"r1": 1.0,
+			"r2": 1.0,
+			"roundness": 0.0,
+			"rotation": rotation,
+		}
+		var bounds := PrimitiveField.primitive_bounds(primitive)
+		expect(is_equal_approx(bounds.size.x, 6.0), "the rotated cone lies along x")
+		expect(is_equal_approx(bounds.size.y, 2.0), "the rotated cone keeps its radius")
+		expect(is_equal_approx(bounds.size.z, 2.0), "the rotated cone keeps its depth")
+		expect(PrimitiveField.primitive_distance(primitive, Vector3(0.0, 2.0, 0.0)) <= 0.0, "the rotated cone center is inside")
 	)
 
 

@@ -40,6 +40,8 @@ var _handle_axis := -1
 var _handle_side := 0
 var _handle_signs := Vector3i.ZERO
 var _handle_start_box := AABB()
+var _handle_center := Vector3.ZERO
+var _handle_rotation := Quaternion.IDENTITY
 var _handle_plane := Vector3.ZERO
 var _handle_point := Vector3.ZERO
 var _active_axis := 1
@@ -242,7 +244,7 @@ func update_visual(pick: PickResult) -> void:
 		$Gizmo.hide_box()
 		visible = false
 		return
-	$Gizmo.show_box(AABB(Vector3(pick.target) - Vector3.ONE * 0.5, Vector3.ONE), -1, 0, false)
+	$Gizmo.show_box(AABB(Vector3(pick.target) - Vector3.ONE * 0.5, Vector3.ONE), Quaternion.IDENTITY, -1, 0, false)
 	visible = true
 
 
@@ -429,7 +431,7 @@ func _refresh_gizmo() -> void:
 	if _primitives.is_empty() or _dragging_new:
 		$Gizmo.hide_box()
 		return
-	$Gizmo.show_box(_pending_box, _handle_axis, _handle_side, true)
+	$Gizmo.show_box(_pending_box, _rotation(), _handle_axis, _handle_side, true)
 
 
 func _build_request(include_draft: bool) -> Dictionary:
@@ -456,7 +458,7 @@ func _build_primitive(box: AABB, axis := -1) -> Dictionary:
 	var half := Vector3(absf(box.size.x), absf(box.size.y), absf(box.size.z)) * 0.5
 	match shape:
 		PrimitiveField.KIND_ELLIPSOID:
-			return {"kind": PrimitiveField.KIND_ELLIPSOID, "center": center, "radii": half}
+			return {"kind": PrimitiveField.KIND_ELLIPSOID, "center": center, "radii": half, "rotation": _rotation()}
 		PrimitiveField.KIND_CONE:
 			return _cone_primitive(box, axis if axis >= 0 else _active_axis)
 		_:
@@ -465,6 +467,7 @@ func _build_primitive(box: AABB, axis := -1) -> Dictionary:
 				"center": center,
 				"half_size": half,
 				"roundness": _settings.roundness,
+				"rotation": _rotation(),
 			}
 
 
@@ -533,6 +536,11 @@ func _cone_primitive(box: AABB, axis: int) -> Dictionary:
 			b[axis] = floorf(box.end[axis])
 		else:
 			b[axis] = ceilf(box.end[axis])
+	# A cone has no local frame of its own, so the rotation turns its two ends
+	# around the shape center. The field then keeps the plain cone math.
+	var turn := _rotation()
+	a = center + turn * (a - center)
+	b = center + turn * (b - center)
 	return {
 		"kind": PrimitiveField.KIND_CONE,
 		"a": a,
@@ -541,6 +549,13 @@ func _cone_primitive(box: AABB, axis: int) -> Dictionary:
 		"r2": narrow,
 		"roundness": _settings.roundness,
 	}
+
+
+## Returns the tool rotation as a quaternion. The settings hold Euler degrees in
+## XYZ order.
+func _rotation() -> Quaternion:
+	var euler := _settings.rotation_degrees * (PI / 180.0)
+	return Basis.from_euler(euler, EULER_ORDER_XYZ).get_rotation_quaternion()
 
 
 func _handle_at(pos: Vector2) -> Dictionary:
@@ -554,11 +569,12 @@ func _handle_at(pos: Vector2) -> Dictionary:
 	var best_distance := HANDLE_RADIUS_PX
 	for value in $Gizmo.handles():
 		var hit: Dictionary = value
-		var axis: int = hit["axis"]
 		# A face handle that points at the camera cannot change its own axis.
 		# Skip it, so a click at the shape center can still move the shape.
-		if int(hit.get("kind", 0)) == 0 and absf(forward[axis]) > 0.9:
-			continue
+		if int(hit.get("kind", 0)) == 0:
+			var direction: Vector3 = hit.get("axis_direction", Vector3.ZERO)
+			if absf(forward.dot(direction)) > 0.9:
+				continue
 		var world: Vector3 = hit["position"]
 		if camera.is_position_behind(world):
 			continue
@@ -620,6 +636,8 @@ func _begin_handle_drag(hit: Dictionary) -> void:
 	_handle_side = int(hit.get("side", 0))
 	_handle_signs = hit.get("signs", Vector3i.ZERO)
 	_handle_start_box = _pending_box
+	_handle_center = _pending_box.get_center()
+	_handle_rotation = _rotation()
 	var camera := get_viewport().get_camera_3d() if get_viewport() != null else null
 	_handle_plane = -camera.global_transform.basis.z if camera != null else Vector3.BACK
 	_handle_point = hit["position"]
@@ -641,7 +659,7 @@ func _update_handle(origin: Vector3, dir: Vector3) -> void:
 		return
 	if _handle_axis < 0:
 		return
-	var value := snappedf(point[_handle_axis], 0.5)
+	var value := snappedf(_handle_local(point)[_handle_axis], 0.5)
 	var low := _pending_box.position
 	var high := _pending_box.end
 	# Let a handle cross the opposite bound. The box size can become negative,
@@ -657,7 +675,7 @@ func _update_handle(origin: Vector3, dir: Vector3) -> void:
 
 
 func _update_corner(point: Vector3) -> void:
-	var delta := point - _handle_point
+	var delta := _handle_local(point) - _handle_local(_handle_point)
 	var low := _handle_start_box.position
 	var high := _handle_start_box.end
 	for axis in 3:
@@ -669,6 +687,13 @@ func _update_corner(point: Vector3) -> void:
 	_pending_box = AABB(low, high - low)
 	_primitives[_active_index] = _build_primitive(_pending_box)
 	_refresh_preview()
+
+
+## Returns a world point in the box frame of the current handle drag. The
+## frame turns around the shape center, so a rotated face still moves along
+## its own axis.
+func _handle_local(point: Vector3) -> Vector3:
+	return _handle_center + _handle_rotation.inverse() * (point - _handle_center)
 
 
 func _clear_pending() -> void:
@@ -707,7 +732,8 @@ func _on_history_changed() -> void:
 
 
 func _on_settings_changed() -> void:
-	if _active_index >= 0 and _active_index < _primitives.size() and shape != PrimitiveField.KIND_ELLIPSOID:
+	# Every setting can change the shape, including the rotation of an ellipsoid.
+	if _active_index >= 0 and _active_index < _primitives.size():
 		_primitives[_active_index] = _build_primitive(_pending_box, _active_axis)
 	if not _primitives.is_empty() or _dragging_new:
 		_refresh_preview(true)

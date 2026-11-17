@@ -199,6 +199,8 @@ The call uses the current frame, the shared selection, the slice, the document s
 
 A box uses `center` and `half_size`. An ellipsoid uses `center` and `radii`. A cone uses `a`, `b`, `r1`, and `r2`. The radii can be fractional. `roundness` runs from 0 to 1. It rounds box edges and blends cone ends from flat at 0 to round at 1. The old `round` boolean is also accepted for cone ends.
 
+`rotation` is an optional `[x, y, z]` of Euler angles in degrees, applied in XYZ order around the primitive center. A box or an ellipsoid turns in its local frame. A cone turns both ends around the center. Omit it for an axis-aligned shape.
+
 `op` is `add`, `subtract`, or `intersect`. `add` writes the field cells. `subtract` removes the field cells. `intersect` keeps only the occupied cells inside the field in the current frame. The selection, slice, and document size still limit the write.
 
 `smooth` blends the primitives in the call and the committed cells near them. It applies to `add` only. It keeps the committed cells and their materials. It only adds the new fillet and the empty part of the primitive. The field is clamped to half the smallest primitive extent. `shell` keeps a surface band of that thickness. Zero is solid. `step` builds blocks of that edge for a coarse form. The default is 1.
@@ -207,7 +209,7 @@ A box uses `center` and `half_size`. An ellipsoid uses `center` and `radii`. A c
 
 The result carries `applied`, `bounds`, `changed_bounds`, `chunks`, `revision`, `warnings`, and `action`. `bounds` is the cell box of the shape. `changed_bounds` is the exact changed cell box. Warnings name a small radius, a clamped smooth blend, a coarse step, or a skipped existing blend.
 
-The call accepts at most 64 primitives and 1048576 evaluated cells. The shapes have no rotation. A smooth blend with existing cells uses a local distance field. A very large local region skips the existing blend and returns a warning.
+The call accepts at most 64 primitives and 1048576 evaluated cells. A smooth blend with existing cells uses a local distance field. A very large local region skips the existing blend and returns a warning.
 
 `set_material` accepts `color`, `emission`, `metallic`, and `roughness`. Emission gives the voxel a glow. A color change clears the glow unless you also pass `emission`. Set `emission` to `#000000` to clear it explicitly.
 
