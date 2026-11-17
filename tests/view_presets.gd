@@ -19,6 +19,7 @@ const VIEW_KEYS := [
 func _ready() -> void:
 	test("can snap the camera to every axis view and switch projection", _run)
 	test("the mouse wheel zooms once per notch", _wheel, "wheel_zoom")
+	test("the zoom range follows the framed bounds", _zoom_limits, "zoom_limits")
 
 
 func _angles_match(yaw_deg: float, pitch_deg: float) -> bool:
@@ -65,6 +66,41 @@ func _wheel() -> void:
 	step("Then the zoom changes once", func():
 		expect(_wheel_slider.value > 100.0, "a press event zooms in")
 	)
+
+
+func _zoom_limits() -> void:
+	step("Given an editor camera framed on the document", func():
+		rig = camera_rig()
+	)
+	step("When the user zooms far past the close limit", func():
+		rig.set_zoom_percent(100000.0)
+	)
+	step("Then the camera stops at the close limit", func():
+		expect(is_equal_approx(rig._dist, EditorCameraRig.MIN_DISTANCE), "the close distance is one unit")
+		expect(is_equal_approx(rig.zoom_percent(), rig.max_zoom_percent()), "the zoom stops at the highest percent")
+	)
+	step("When the user zooms far past the far limit", func():
+		rig.set_zoom_percent(0.0)
+	)
+	step("Then the farthest distance follows the framed bounds", func():
+		expect(
+			is_equal_approx(rig._dist, rig._init_dist * EditorCameraRig.MAX_DISTANCE_FACTOR),
+			"the far distance is four framed distances"
+		)
+		expect(is_equal_approx(rig.zoom_percent(), rig.min_zoom_percent()), "the zoom stops at the lowest percent")
+	)
+	step("Then the slider shows the same range", func():
+		var slider := main.find_child("ZoomSlider", true, false) as Range
+		expect(slider != null, "the zoom slider exists")
+		expect(is_equal_approx(slider.min_value, rig.min_zoom_percent()), "the slider starts at the far limit")
+		expect(is_equal_approx(slider.max_value, rig.max_zoom_percent()), "the slider ends at the close limit")
+	)
+	step("Then a wheel zoom stays inside the range", func():
+		for notch in 64:
+			rig.zoom(1.0 / 0.85)
+		expect(rig._dist >= EditorCameraRig.MIN_DISTANCE - 0.0001, "a wheel zoom cannot pass the close limit")
+	)
+	rig.set_zoom_percent(100.0)
 
 
 func _run() -> void:

@@ -52,6 +52,8 @@ const LIGHT_HANDLE_RADIUS := 12.0
 func _ready() -> void:
 	%CameraMenu.get_popup().index_pressed.connect(_on_camera_index_pressed)
 	%CameraRig.zoom_changed.connect(%ZoomSlider.set_value_no_signal)
+	%CameraRig.zoom_limits_changed.connect(_on_zoom_limits_changed)
+	_on_zoom_limits_changed(%CameraRig.min_zoom_percent(), %CameraRig.max_zoom_percent())
 	%CameraRig.view_changed.connect(_on_camera_view_changed)
 	$WorldEnvironment.environment = $WorldEnvironment.environment.duplicate()
 	var material: StandardMaterial3D = %LightHandle.material_override.duplicate()
@@ -525,6 +527,12 @@ func _on_zoom_one_pressed() -> void:
 
 func _on_zoom_slider_value_changed(value: float) -> void:
 	%CameraRig.set_zoom_percent(value)
+
+
+func _on_zoom_limits_changed(min_percent: float, max_percent: float) -> void:
+	%ZoomSlider.min_value = min_percent
+	%ZoomSlider.max_value = max_percent
+	%ZoomSlider.set_value_no_signal(%CameraRig.zoom_percent())
 
 
 func _show_view_mode(mode: ViewMode) -> void:

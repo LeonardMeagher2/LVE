@@ -18,6 +18,8 @@ enum ViewMode {
 
 ## Emitted when the zoom percent changes.
 signal zoom_changed(percent: float)
+## Emitted when the framed bounds change the zoom range.
+signal zoom_limits_changed(min_percent: float, max_percent: float)
 ## Emitted after the camera transform changes.
 signal view_changed
 
@@ -50,6 +52,12 @@ const NEAR_MARGIN := 1.0
 ## The distance kept past the farthest clipped geometry. The grid extends one
 ## cell past the content. The symmetry planes extend four cells past the origin.
 const FAR_MARGIN := 2.0
+## The closest camera distance in world units. About two voxels fill the view
+## height at this distance.
+const MIN_DISTANCE := 1.0
+## The farthest camera distance as a multiple of the framed distance. A farther
+## view only shows empty space around the bounds.
+const MAX_DISTANCE_FACTOR := 4.0
 
 ## Extra world boxes that the orthographic clip range must contain, keyed by
 ## their owner.
@@ -84,9 +92,12 @@ func configure() -> void:
 		_dist = float(pose.get("distance", pose.get("dist", _init_dist)))
 		_init_dist = float(pose.get("initial_distance", _init_dist))
 		_target = pose.get("target", bounds.get_center())
+	_init_dist = maxf(_init_dist, MIN_DISTANCE)
+	_dist = clampf(_dist, MIN_DISTANCE, max_distance())
 	_update()
 	_restoring_pose = false
 	zoom_changed.emit(zoom_percent())
+	zoom_limits_changed.emit(min_zoom_percent(), max_zoom_percent())
 
 
 # Stores the view on the document that is about to be inactive.
@@ -105,9 +116,10 @@ func _save_pose() -> void:
 ## Frames one box at the default distance.
 func center_on(box: AABB) -> void:
 	_target = box.get_center()
-	_dist = maxf(box.size.length(), 16.0) * 1.25
+	_dist = clampf(maxf(box.size.length(), 16.0) * 1.25, MIN_DISTANCE, max_distance())
 	_update()
 	zoom_changed.emit(zoom_percent())
+	zoom_limits_changed.emit(min_zoom_percent(), max_zoom_percent())
 
 ## Frames the selection when it is not empty. Otherwise it frames the document
 ## or the provided bounds.
@@ -158,16 +170,31 @@ func zoom_percent() -> float:
 	return _init_dist / _dist * 100.0
 
 
+## Returns the lowest zoom percent. It shows the bounds with room around them.
+func min_zoom_percent() -> float:
+	return 100.0 / MAX_DISTANCE_FACTOR
+
+
+## Returns the highest zoom percent. It stops at [constant MIN_DISTANCE].
+func max_zoom_percent() -> float:
+	return _init_dist / MIN_DISTANCE * 100.0
+
+
+## Returns the farthest camera distance for the framed bounds.
+func max_distance() -> float:
+	return _init_dist * MAX_DISTANCE_FACTOR
+
+
 ## Sets the zoom percent against the initial distance.
 func set_zoom_percent(percent: float) -> void:
-	var p := percent
+	var p := clampf(percent, min_zoom_percent(), max_zoom_percent())
 	_dist = _init_dist / (p / 100.0)
 	_update()
 	zoom_changed.emit(zoom_percent())
 
 ## Multiplies the distance by one factor. A factor above one zooms out.
 func zoom(factor: float) -> void:
-	_dist = _dist * factor
+	_dist = clampf(_dist * factor, MIN_DISTANCE, max_distance())
 	_update()
 	zoom_changed.emit(_init_dist / _dist * 100.0)
 
