@@ -54,7 +54,7 @@ const NEAR_MARGIN := 1.0
 const FAR_MARGIN := 2.0
 ## The voxels that fill the closest view height. Voxels are one world unit, so
 ## this sets the closest camera distance from the field of view.
-const MIN_VIEW_VOXELS := 16.0
+const MIN_VIEW_VOXELS := 8.0
 ## The space around the framed bounds. The initial view and the farthest zoom
 ## use the same margin.
 const FRAME_MARGIN := 1.25

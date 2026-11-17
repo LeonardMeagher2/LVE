@@ -80,10 +80,10 @@ func _zoom_limits() -> void:
 	)
 	step("Then the camera stops at the close limit", func():
 		var close := rig.min_distance()
-		expect(is_equal_approx(rig._dist, close), "the close distance shows sixteen voxels")
+		expect(is_equal_approx(rig._dist, close), "the close distance shows eight voxels")
 		expect(
 			is_equal_approx(close * 2.0 * tan(deg_to_rad(rig.fov) * 0.5), EditorCameraRig.MIN_VIEW_VOXELS),
-			"the close view height is sixteen voxels"
+			"the close view height is eight voxels"
 		)
 		expect(is_equal_approx(rig.zoom_percent(), rig.max_zoom_percent()), "the zoom stops at the highest percent")
 		expect(is_equal_approx(rig.zoom_step(), EditorCameraRig.ZOOM_STEPS), "the slider reaches its top")
