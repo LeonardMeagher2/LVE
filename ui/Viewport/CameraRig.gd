@@ -55,6 +55,9 @@ const FAR_MARGIN := 2.0
 ## The voxels that fill the closest view height. Voxels are one world unit, so
 ## this sets the closest camera distance from the field of view.
 const MIN_VIEW_VOXELS := 8.0
+## The farthest zoom as a multiple of the framed distance. The model fit is the
+## base, so the farthest view keeps the model on screen with room around it.
+const FAR_ZOOM_FACTOR := 2.0
 ## The space around the framed bounds. The initial view and the farthest zoom
 ## use the same margin.
 const FRAME_MARGIN := 1.25
@@ -197,12 +200,13 @@ func min_distance() -> float:
 
 
 ## Returns the farthest camera distance. It frames the current bounds with the
-## same margin as the initial view.
+## same margin as the initial view, then adds [constant FAR_ZOOM_FACTOR].
 func max_distance() -> float:
 	var bounds := _framed_bounds()
-	if not bounds.has_surface():
-		return _init_dist
-	return maxf(_init_dist, bounds.size.length() * FRAME_MARGIN)
+	var fit := _init_dist
+	if bounds.has_surface():
+		fit = maxf(_init_dist, bounds.size.length() * FRAME_MARGIN)
+	return fit * FAR_ZOOM_FACTOR
 
 
 ## Returns the farthest distance that a zoom may reach. It is the model fit,
@@ -305,6 +309,12 @@ func refresh_clip() -> void:
 
 func _on_content_bounds_changed(_frame: int, _affected: Array[Vector3i]) -> void:
 	refresh_clip()
+	var far := maxf(max_distance(), _dist)
+	if is_equal_approx(far, _far_distance):
+		return
+	# The bounds moved the far limit. Resync the slider before the next input.
+	_far_distance = far
+	zoom_limits_changed.emit(min_zoom_percent(), max_zoom_percent())
 
 
 func _view_direction() -> Vector3:

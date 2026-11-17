@@ -97,13 +97,15 @@ func _zoom_limits() -> void:
 		expect(is_equal_approx(rig.zoom_percent(), rig.min_zoom_percent()), "the zoom stops at the lowest percent")
 		expect(is_equal_approx(rig.zoom_step(), 0.0), "the slider reaches its bottom")
 	)
-	step("Then one hundred percent sits at the far end", func():
+	step("Then one hundred percent sits inside the track", func():
 		rig.set_zoom_percent(100.0)
-		expect(rig.zoom_step() <= 1.0, "one hundred percent sits at the bottom of the track")
+		var step := rig.zoom_step()
+		expect(step > 0.0, "one hundred percent sits above the far end")
+		expect(step < EditorCameraRig.ZOOM_STEPS * 0.5, "one hundred percent sits below the middle")
 		var slider := main.find_child("ZoomSlider", true, false) as Range
 		expect(slider != null, "the zoom slider exists")
 		expect(is_equal_approx(slider.max_value, EditorCameraRig.ZOOM_STEPS), "the slider spans one fixed travel")
-		expect(absf(slider.value - rig.zoom_step()) <= 1.0, "the slider follows the camera")
+		expect(absf(slider.value - step) <= 1.0, "the slider follows the camera")
 	)
 	step("Then a wheel zoom stays inside the range", func():
 		for notch in 64:
@@ -114,7 +116,13 @@ func _zoom_limits() -> void:
 		var framed := rig.max_distance()
 		State.document.set_cell(State.current_frame, Vector3i.ZERO, VoxelFrame.material(Color.WHITE))
 		State.document.set_cell(State.current_frame, Vector3i(40, 0, 0), VoxelFrame.material(Color.WHITE))
+		var cells: Array[Vector3i] = [Vector3i(40, 0, 0)]
+		State.cells_changed.emit(State.current_frame, cells)
 		expect(rig.max_distance() > framed, "a wider model moves the far limit out")
+		rig.set_zoom_percent(0.0)
+		expect(is_equal_approx(rig._dist, rig.max_distance()), "a zoom reaches the new far limit")
+		var slider := main.find_child("ZoomSlider", true, false) as Range
+		expect(absf(slider.value - rig.zoom_step()) <= 1.0, "the slider follows the new range")
 	)
 	rig.set_zoom_percent(100.0)
 
