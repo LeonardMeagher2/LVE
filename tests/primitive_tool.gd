@@ -24,6 +24,8 @@ func _ready() -> void:
 	test("subtract and intersect previews respect the selection", _selection_ops, "selection_ops")
 	test("a smooth change cancels and replaces the preview job", _blend_preview_cancel, "blend_preview_cancel")
 	test("two preview requests in one frame show the newest", _frame_preview, "frame_preview")
+	test("the gizmo handles keep one screen size", _handle_scale, "handle_scale")
+	test("a preview keeps the untouched chunk meshes", _chunk_stability, "chunk_stability")
 	test("smooth blends a primitive into existing voxels", _blend_existing, "blend_existing")
 	test("subtract removes cells and restores them with one undo", _subtract, "subtract")
 	test("subtract clears a full voxel chunk", _subtract_full_chunk, "subtract_full_chunk")
@@ -460,6 +462,78 @@ func _frame_preview() -> void:
 		expect(preview.has(Vector3i(3, 0, 0)), "the newest box is shown")
 		expect(not preview.has(Vector3i(0, 0, 0)), "the older box is replaced")
 		expect(State.get_current_voxel_frame().count() == 0, "the live document stays empty")
+	)
+	tool.cancel_pending()
+
+
+func _handle_scale() -> void:
+	var gizmo := tool.get_node("Gizmo")
+	step("Given a pending box in an orthographic view", func():
+		gizmo.show_box(AABB(Vector3(-2, -2, -2), Vector3(4, 4, 4)))
+	)
+	await get_tree().process_frame
+	var rig := camera_rig()
+	var viewport_height := gizmo.get_viewport().get_visible_rect().size.y
+	step("Then the cross keeps one screen size", func():
+		expect(viewport_height > 0.0, "the viewport has a height")
+		var per_pixel := rig.size / viewport_height
+		expect(is_equal_approx(gizmo._handle_half / per_pixel, 10.0), "the cross half spans ten pixels")
+	)
+	var before: float = gizmo._handle_half
+	step("When the user zooms in four times", func():
+		rig.set_zoom_percent(400.0)
+	)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	step("Then the cross keeps its screen size in a smaller world size", func():
+		expect(gizmo._handle_half < before, "the cross shrinks in world units")
+		var per_pixel := rig.size / viewport_height
+		expect(is_equal_approx(gizmo._handle_half / per_pixel, 10.0), "the zoomed cross still spans ten pixels")
+	)
+	gizmo.hide_box()
+
+
+func _chunk_stability() -> void:
+	step("Given two occupied chunks", func():
+		pass
+	)
+	await plugin("PrimitivePlugin").build_shape(_box_request(Vector3.ZERO, Vector3(0.5, 0.5, 0.5)))
+	await plugin("PrimitivePlugin").build_shape(_box_request(Vector3(40, 0, 0), Vector3(0.5, 0.5, 0.5)))
+	var renderer := _preview_renderer()
+	var changed_chunk := VoxelFrame.chunk_position(Vector3i.ZERO)
+	var other_chunk := VoxelFrame.chunk_position(Vector3i(40, 0, 0))
+	var deadline := Time.get_ticks_msec() + 10000
+	while Time.get_ticks_msec() < deadline:
+		if renderer._displayed_surface_keys.size() == 2:
+			break
+		await get_tree().process_frame
+	await get_tree().process_frame
+	var other_mesh: Mesh = renderer._chunk_instances[other_chunk].mesh
+	var changed_mesh: Mesh = renderer._chunk_instances[changed_chunk].mesh
+	step("When a preview grows the first chunk", func():
+		pass
+	)
+	await _tool_preview(
+		{"kind": PrimitiveField.KIND_BOX, "center": Vector3.ZERO, "half_size": Vector3(1.5, 1.5, 1.5)},
+		PrimitiveField.OP_ADD
+	)
+	step("Then the changed chunk keeps its old mesh visible while it rebuilds", func():
+		expect(renderer._chunk_instances[changed_chunk].visible, "the changed chunk is not hidden")
+		expect(renderer._chunk_instances[changed_chunk].mesh == changed_mesh, "the changed chunk keeps its old mesh")
+		expect(renderer._chunk_instances[other_chunk].visible, "the untouched chunk is not hidden")
+		expect(renderer._chunk_instances[other_chunk].mesh == other_mesh, "the untouched chunk keeps its mesh")
+	)
+	deadline = Time.get_ticks_msec() + 10000
+	while Time.get_ticks_msec() < deadline:
+		if renderer._chunk_instances[changed_chunk].mesh != changed_mesh:
+			break
+		await get_tree().process_frame
+	step("Then the changed chunk installs its new mesh", func():
+		expect(renderer._chunk_instances[changed_chunk].visible, "the changed chunk stays visible")
+		expect(renderer._chunk_instances[changed_chunk].mesh != changed_mesh, "the changed chunk rebuilds")
+		expect(renderer._chunk_instances[other_chunk].mesh == other_mesh, "the untouched chunk keeps its mesh")
+		expect(renderer._chunk_instances[other_chunk].visible, "the untouched chunk stays visible")
+		expect(State.get_current_voxel_frame().count() == 2, "the live document is unchanged")
 	)
 	tool.cancel_pending()
 

@@ -380,6 +380,8 @@ Policy boundaries:
 - The preview shows the result frame in the main viewport renderer. The live document stays unchanged until commit.
 - A settings or context change cancels the running preview job and starts the newest request. The previous result stays visible until the newest result installs.
 - A preview starts at most once per frame. Pointer events that arrive in one frame collapse into the newest request. `_process` starts that request on the next frame, so a fast mouse costs no frame copy per event.
+- A preview frame shares its untouched chunks with the document. A swap rebuilds only the chunks the shape wrote, and each changed chunk keeps its old mesh until the replacement is ready. No chunk mesh blinks.
+- The face and corner crosses keep a constant screen size. The gizmo scales them from the camera size, so a zoom does not change the grab target.
 
 ## Spray
 

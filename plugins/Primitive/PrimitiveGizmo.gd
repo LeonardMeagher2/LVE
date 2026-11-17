@@ -6,10 +6,18 @@ extends MeshInstance3D
 ## hit-tests the crosses in screen space and drags one face of the box.
 
 const VoxelLineMesh := preload("res://Globals/Rendering/VoxelLineMesh.gd")
+## The fallback cross half extent in world units. The gizmo overrides it with
+## the current camera scale, so a cross keeps one screen size at any zoom.
 const HANDLE_HALF := 0.35
+## The cross half extent in screen pixels.
+const HANDLE_PIXELS := 10.0
 
 var _box := AABB()
 var _has_box := false
+var _handle_half := HANDLE_HALF
+var _show_handles := false
+var _highlight_axis := -1
+var _highlight_side := 0
 var _material: StandardMaterial3D
 var _highlight_material: StandardMaterial3D
 var _highlight: MeshInstance3D
@@ -38,6 +46,7 @@ func _ready() -> void:
 	add_child(_highlight)
 	visible = false
 	_highlight.visible = false
+	set_process(false)
 
 
 ## Shows the pending box. [param axis] and [param side] select the highlighted
@@ -46,21 +55,61 @@ func _ready() -> void:
 func show_box(box: AABB, axis := -1, side := 0, show_handles := true) -> void:
 	_box = box
 	_has_box = true
+	_show_handles = show_handles
+	_highlight_axis = axis
+	_highlight_side = side
+	_update_handle_scale()
 	_rebuild(show_handles)
-	if not show_handles or axis < 0 or side == 0:
-		_highlight.visible = false
-	else:
-		_highlight.mesh = _handle_mesh(axis, side)
-		_highlight.visible = true
+	_refresh_highlight()
 	visible = true
+	set_process(true)
 
 
 ## Hides the box and its handles.
 func hide_box() -> void:
 	_has_box = false
 	visible = false
+	set_process(false)
 	if _highlight != null:
 		_highlight.visible = false
+
+
+func _process(_delta: float) -> void:
+	if not _has_box or not _update_handle_scale():
+		return
+	_rebuild(_show_handles)
+	_refresh_highlight()
+
+
+## Updates the cross extent from the current camera scale. Returns true when the
+## extent changed, so a zoom rebuilds the crosses at their new world size.
+func _update_handle_scale() -> bool:
+	var camera := get_viewport().get_camera_3d() if is_inside_tree() else null
+	if camera == null:
+		return false
+	var height := get_viewport().get_visible_rect().size.y
+	if height <= 0.0:
+		return false
+	var world_per_pixel := 1.0
+	if camera.projection == Camera3D.PROJECTION_ORTHOGONAL:
+		world_per_pixel = camera.size / height
+	else:
+		var forward := -camera.global_transform.basis.z
+		var distance := maxf((_box.get_center() - camera.global_position).dot(forward), 0.01)
+		world_per_pixel = 2.0 * distance * tan(deg_to_rad(camera.fov) * 0.5) / height
+	var half := world_per_pixel * HANDLE_PIXELS
+	if is_equal_approx(half, _handle_half):
+		return false
+	_handle_half = half
+	return true
+
+
+func _refresh_highlight() -> void:
+	if not _show_handles or _highlight_axis < 0 or _highlight_side == 0:
+		_highlight.visible = false
+		return
+	_highlight.mesh = _handle_mesh(_highlight_axis, _highlight_side)
+	_highlight.visible = true
 
 
 ## Returns the world position of one face handle.
@@ -136,8 +185,8 @@ func _append_corner(vertices: PackedVector3Array, center: Vector3) -> void:
 	for axis in 3:
 		var start := center
 		var end := center
-		start[axis] -= HANDLE_HALF
-		end[axis] += HANDLE_HALF
+		start[axis] -= _handle_half
+		end[axis] += _handle_half
 		vertices.append(start)
 		vertices.append(end)
 
@@ -147,13 +196,13 @@ func _append_handle(vertices: PackedVector3Array, axis: int, side: int, center: 
 	var second := (axis + 2) % 3
 	var a := center
 	var b := center
-	a[first] -= HANDLE_HALF
-	b[first] += HANDLE_HALF
+	a[first] -= _handle_half
+	b[first] += _handle_half
 	vertices.append(a)
 	vertices.append(b)
 	a = center
 	b = center
-	a[second] -= HANDLE_HALF
-	b[second] += HANDLE_HALF
+	a[second] -= _handle_half
+	b[second] += _handle_half
 	vertices.append(a)
 	vertices.append(b)

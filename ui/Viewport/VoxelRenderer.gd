@@ -63,7 +63,10 @@ var source_frame: VoxelFrame:
 			return
 		source_frame = value
 		if is_inside_tree():
-			_rebuild()
+			# A preview frame shares its untouched chunks with the document, so a
+			# swap keeps every unchanged mesh on screen. Hide the old meshes only
+			# for a document or frame switch.
+			_rebuild(false)
 ## The world axis of the slice, or -1 to draw every layer.
 var slice_axis := -1:
 	set(value):
@@ -202,13 +205,14 @@ func _on_frame_changed() -> void:
 		_rebuild()
 
 
-func _rebuild() -> void:
+func _rebuild(hide_all := true) -> void:
 	if not is_inside_tree():
 		return
 	var active_frame := _get_frame()
 	if active_frame != _displayed_frame:
-		for chunk_instance in _chunk_instances.values():
-			chunk_instance.visible = false
+		if hide_all:
+			for chunk_instance in _chunk_instances.values():
+				chunk_instance.visible = false
 		_displayed_frame = active_frame
 	_pending_surface_keys.clear()
 	# A rebuild follows a context change: a document, a frame, a history restore,
