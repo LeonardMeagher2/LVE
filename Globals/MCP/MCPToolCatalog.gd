@@ -603,6 +603,46 @@ const TOOLS := [
 		},
 	},
 	{
+		"name": "build_shape",
+		"description": "Build a box, ellipsoid, or cone from signed-distance primitives. Smooth blends the primitives in the call and nearby committed cells. Set op to add, subtract, or intersect. A shell keeps a surface band. The call uses the current frame, the current selection, the slice, and the document size. One call is one undo action. Guide: `lve://guide/write`.",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"primitives": {
+					"type": "array",
+					"items": {
+						"type": "object",
+						"properties": {
+							"kind": {"type": "string", "enum": ["box", "ellipsoid", "cone"]},
+							"center": {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3},
+							"half_size": {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3},
+							"radii": {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3},
+							"a": {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3},
+							"b": {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3},
+							"r1": {"type": "number", "minimum": 0},
+							"r2": {"type": "number", "minimum": 0},
+							"roundness": {"type": "number", "minimum": 0, "maximum": 1, "description": "Roundness from 0 to 1. Rounds box edges and blends cone ends. Defaults to 0."},
+							"round": {"type": "boolean", "description": "Use round cone ends. A shortcut for roundness 1 or 0. Defaults to false."},
+						},
+						"required": ["kind"],
+						"additionalProperties": false,
+					},
+					"minItems": 1,
+					"maxItems": 64,
+					"description": "Box needs center and half_size. Ellipsoid needs center and radii. Cone needs a, b, r1, and r2.",
+				},
+				"op": {"type": "string", "enum": ["add", "subtract", "intersect"], "description": "Defaults to add."},
+				"smooth": {"type": "number", "minimum": 0, "maximum": 64, "description": "Smooth union width in cells. Blends the primitives in the call and nearby committed cells. Applies to add only. Defaults to 0."},
+				"shell": {"type": "number", "minimum": 0, "maximum": 64, "description": "Shell thickness in cells. Zero is solid. Defaults to 0."},
+				"material": {"type": "integer", "minimum": 0, "description": "Palette index. Defaults to the current material."},
+				"step": {"type": "integer", "minimum": 1, "maximum": 4, "description": "Cell block edge for a coarse build. Defaults to 1."},
+				"label": {"type": "string", "description": "History action name. Defaults to Build Shape."},
+			},
+			"required": ["primitives"],
+			"additionalProperties": false,
+		},
+	},
+	{
 		"name": "write_cells",
 		"description": "Write or erase cells with per-cell materials and optional frames. Provide exactly one of cells, boxes, or runs. Call the tool again to layer shapes. Each call is one undo action, even across frames. Guide: `lve://guide/write`.",
 		"inputSchema": {
@@ -1228,6 +1268,18 @@ const OUTPUT_SCHEMAS := {
 			"changed_cells": {"type": "integer"},
 			"changed_chunks": {"type": "integer"},
 			"changed_bounds": SCHEMA_BOUNDS,
+		},
+	},
+	"build_shape": {
+		"type": "object",
+		"properties": {
+			"applied": {"type": "integer"},
+			"bounds": SCHEMA_BOUNDS,
+			"changed_bounds": SCHEMA_BOUNDS,
+			"chunks": {"type": "integer"},
+			"revision": {"type": "integer"},
+			"warnings": {"type": "array", "items": {"type": "string"}},
+			"action": {"type": "string"},
 		},
 	},
 	"write_cells": {

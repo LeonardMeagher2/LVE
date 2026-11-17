@@ -26,7 +26,7 @@ Use a Markdown viewer with Mermaid support to display the graphs.
 | [Cross-tool comparison](comparison.md) | Shared-step candidates, required differences, and review questions |
 | [Composition guide](composition.md) | Current A to H mechanisms, signatures, ownership, and reuse limits |
 | [Shared paths and utilities](shared-and-utilities.md) | Input routing, edit jobs, previews, model rendering, Plane, Symmetry, Eyedropper |
-| [Drawing](drawing.md) | Brush, Eraser, Line, Stamp, Paint Brush, Dither Brush, Fill, Spray |
+| [Drawing](drawing.md) | Brush, Eraser, Line, Stamp, Paint Brush, Dither Brush, Fill, Spray, Primitive |
 | [Terrain](terrain.md) | Build, Flatten, Smooth |
 | [Deform](deform.md) | Grab, Pose |
 | [Transform, clipboard, and selection](transform-selection.md) | Move, Rotate, Scale, Paste, Copy, Cut, Box, Lasso, Wand |

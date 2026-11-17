@@ -6,6 +6,7 @@ extends "res://tests/test.gd"
 
 const MCPServerScript := preload("res://Globals/MCP/MCPServer.gd")
 const MCPGuideScript := preload("res://Globals/MCP/MCPGuide.gd")
+const PrimitiveField := preload("res://Globals/State/Tools/PrimitiveField.gd")
 const GifReader := preload("res://tests/gif_reader.gd")
 
 var server: Node
@@ -19,6 +20,14 @@ func _ready() -> void:
 	test("a driven brush stroke writes cells and one undo action", _stroke, "stroke")
 	test("a driven fill uses the current material", _fill, "fill")
 	test("a matching fill remaps every cell of a color", _fill_matching, "fill_matching")
+	test("build_shape builds a box and reports its bounds", _build_shape, "build_shape")
+	test("build_shape batches primitives into one action", _build_shape_batch, "build_shape_batch")
+	test("build_shape subtracts and intersects", _build_shape_ops, "build_shape_ops")
+	test("build_shape validates radii and warns on small features", _build_shape_validation, "build_shape_validation")
+	test("build_shape applies a palette material", _build_shape_material, "build_shape_material")
+	test("build_shape smooths into existing voxels", _build_shape_existing, "build_shape_existing")
+	test("build_shape applies roundness", _build_shape_roundness, "build_shape_roundness")
+	test("build_shape and the shared plugin path produce the same cells", _build_shape_parity, "build_shape_parity")
 	test("write_cells writes boxes and runs", _write, "write_cells")
 	test("write_cells accepts per-cell materials", _write_materials, "write_materials")
 	test("write_cells writes several frames as one undo", _write_frames, "write_frames")
@@ -337,6 +346,210 @@ func _fill_matching() -> void:
 		expect(State.undo_redo.get_history_count() == 1, "the remap is one history action")
 	)
 	await _call("set_tool", {"tool": "fill", "connected": true})
+
+
+func _build_shape() -> void:
+	step("Given an empty frame", func():
+		State.undo_redo.clear_history()
+	)
+	var before: int = int(server.get("_revision"))
+	var response := await _call("build_shape", {
+		"primitives": [{"kind": "box", "center": [0, 0, 0], "half_size": [1.5, 1.5, 1.5]}],
+	})
+	var data := _result_data(response)
+	step("Then the box is written and reported", func():
+		expect(not _is_error(response), "build_shape succeeds: %s" % _result_text(response))
+		expect(int(data.get("applied", 0)) == 27, "the box writes 27 cells")
+		var frame := State.get_current_voxel_frame()
+		expect(frame.has(Vector3i.ZERO), "the center cell exists")
+		expect(frame.has(Vector3i(1, 1, 1)), "the corner cell exists")
+		var bounds: Dictionary = data.get("bounds", {})
+		expect(bounds.has("min") and bounds.has("max"), "the result carries bounds")
+		expect(int(data.get("revision", -1)) > before, "the revision advances")
+		expect(State.undo_redo.get_history_count() == 1, "the build is one history action")
+	)
+	step("Then one undo restores the empty frame", func():
+		State.undo_redo.undo()
+		expect(State.get_current_voxel_frame().count() == 0, "one undo removes the box")
+	)
+
+
+func _build_shape_batch() -> void:
+	var response := await _call("build_shape", {
+		"primitives": [
+			{"kind": "ellipsoid", "center": [-3, 0, 0], "radii": [1, 1, 1]},
+			{"kind": "ellipsoid", "center": [3, 0, 0], "radii": [1, 1, 1]},
+		],
+		"smooth": 1,
+	})
+	var data := _result_data(response)
+	step("Then both primitives are one history action", func():
+		expect(not _is_error(response), "the batch succeeds: %s" % _result_text(response))
+		expect(int(data.get("applied", 0)) == 14, "the batch writes both shapes")
+		expect(State.undo_redo.get_history_count() == 1, "the batch is one history action")
+		State.undo_redo.undo()
+		expect(State.get_current_voxel_frame().count() == 0, "one undo removes the batch")
+	)
+
+
+func _build_shape_ops() -> void:
+	step("Given a seven-cell block", func():
+		pass
+	)
+	await _call("build_shape", {
+		"primitives": [{"kind": "box", "center": [0, 0, 0], "half_size": [3.5, 3.5, 3.5]}],
+	})
+	State.undo_redo.clear_history()
+	var subtract_response := await _call("build_shape", {
+		"primitives": [{"kind": "box", "center": [0, 0, 0], "half_size": [0.5, 0.5, 0.5]}],
+		"op": "subtract",
+	})
+	var subtract_data := _result_data(subtract_response)
+	step("Then subtract removes the center cell", func():
+		expect(not _is_error(subtract_response), "the subtract succeeds: %s" % _result_text(subtract_response))
+		expect(int(subtract_data.get("applied", 0)) == 1, "the subtract reports one cell")
+		expect(not State.get_current_voxel_frame().has(Vector3i.ZERO), "the center is empty")
+		expect(State.get_current_voxel_frame().has(Vector3i(3, 0, 0)), "the outer cell stays")
+		expect(State.undo_redo.get_history_count() == 1, "the subtract is one history action")
+		State.undo_redo.undo()
+	)
+	State.undo_redo.clear_history()
+	var intersect_response := await _call("build_shape", {
+		"primitives": [{"kind": "box", "center": [0, 0, 0], "half_size": [0.5, 0.5, 0.5]}],
+		"op": "intersect",
+	})
+	var intersect_data := _result_data(intersect_response)
+	step("Then intersect keeps only the inside cell", func():
+		expect(not _is_error(intersect_response), "the intersect succeeds: %s" % _result_text(intersect_response))
+		expect(int(intersect_data.get("applied", 0)) == 342, "the intersect erases the other cells")
+		expect(State.get_current_voxel_frame().count() == 1, "one cell remains")
+		expect(State.get_current_voxel_frame().has(Vector3i.ZERO), "the remaining cell is the center")
+		State.undo_redo.undo()
+		expect(State.get_current_voxel_frame().count() == 343, "one undo restores the block")
+	)
+	State.document = VoxelDocument.new()
+	State.undo_redo.clear_history()
+	var noop_response := await _call("build_shape", {
+		"primitives": [{"kind": "box", "center": [0, 0, 0], "half_size": [1, 1, 1]}],
+		"op": "subtract",
+	})
+	var noop_data := _result_data(noop_response)
+	step("Then a no-op subtract creates no history action", func():
+		expect(not _is_error(noop_response), "the no-op subtract succeeds")
+		expect(int(noop_data.get("applied", -1)) == 0, "the no-op reports zero cells")
+		expect(not State.undo_redo.has_undo(), "the no-op creates no history")
+	)
+
+
+func _build_shape_validation() -> void:
+	var negative := await _call("build_shape", {
+		"primitives": [{"kind": "cone", "a": [0, 0, 0], "b": [0, 4, 0], "r1": -1, "r2": 1}],
+	})
+	step("Then a negative radius is refused", func():
+		expect(_is_error(negative), "the negative radius reports an error")
+	)
+	var zero := await _call("build_shape", {
+		"primitives": [{"kind": "cone", "a": [0, 0, 0], "b": [0, 4, 0], "r1": 0, "r2": 0}],
+	})
+	step("Then two zero radii are refused", func():
+		expect(_is_error(zero), "the zero radii report an error")
+	)
+	var warning := await _call("build_shape", {
+		"primitives": [{"kind": "box", "center": [0, 0, 0], "half_size": [0.75, 0.75, 0.75]}],
+		"step": 2,
+	})
+	var warning_data := _result_data(warning)
+	step("Then a small feature returns a warning", func():
+		expect(not _is_error(warning), "the coarse build succeeds")
+		var warnings: Array = warning_data.get("warnings", [])
+		var found := false
+		for value in warnings:
+			if str(value).contains("below"):
+				found = true
+		expect(found, "the warning names the small radius")
+	)
+
+
+func _build_shape_material() -> void:
+	await _call("set_palette", {"materials": [{"color": "#ff0000"}]})
+	State.undo_redo.clear_history()
+	var response := await _call("build_shape", {
+		"primitives": [{"kind": "box", "center": [0, 0, 0], "half_size": [0.5, 0.5, 0.5]}],
+		"material": 0,
+		"label": "Red Box",
+	})
+	step("Then the palette material is used and the label is saved", func():
+		expect(not _is_error(response), "the material build succeeds: %s" % _result_text(response))
+		expect(State.get_current_voxel_frame().get_color(Vector3i.ZERO).is_equal_approx(Color.RED), "the cell is red")
+		expect(State.undo_redo.get_action_name(State.undo_redo.get_current_action()) == "Red Box", "the history action uses the label")
+	)
+
+
+func _build_shape_existing() -> void:
+	step("Given a blue wall", func():
+		State.set_material(VoxelFrame.material(Color.BLUE))
+	)
+	await _call("build_shape", {
+		"primitives": [{"kind": "box", "center": [0, 2, 0], "half_size": [0.5, 2.5, 2.5]}],
+	})
+	step("When a red smooth box is placed one cell away", func():
+		State.set_material(VoxelFrame.material(Color.RED))
+		State.undo_redo.clear_history()
+	)
+	var response := await _call("build_shape", {
+		"primitives": [{"kind": "box", "center": [4, 2, 0], "half_size": [2.5, 2.5, 2.5]}],
+		"smooth": 3,
+	})
+	step("Then the gap is filled and the wall keeps its material", func():
+		expect(not _is_error(response), "the existing blend succeeds: %s" % _result_text(response))
+		var frame := State.get_current_voxel_frame()
+		expect(frame.has(Vector3i(1, 2, 0)), "the gap cell is filled")
+		expect(frame.get_color(Vector3i(1, 2, 0)).is_equal_approx(Color.RED), "the gap uses the new material")
+		expect(frame.get_color(Vector3i(0, 2, 0)).is_equal_approx(Color.BLUE), "the wall keeps its material")
+		expect(State.undo_redo.get_history_count() == 1, "the blend is one history action")
+		State.undo_redo.undo()
+		expect(frame.count() == 25, "one undo restores the wall")
+	)
+
+
+func _build_shape_roundness() -> void:
+	var response := await _call("build_shape", {
+		"primitives": [{"kind": "box", "center": [0, 0, 0], "half_size": [2, 2, 2], "roundness": 1}],
+	})
+	step("Then the rounded box is a sphere", func():
+		expect(not _is_error(response), "the round box succeeds: %s" % _result_text(response))
+		var frame := State.get_current_voxel_frame()
+		expect(frame.has(Vector3i(1, 1, 1)), "the sphere body exists")
+		expect(not frame.has(Vector3i(2, 2, 2)), "the sharp box corner is gone")
+	)
+
+
+func _build_shape_parity() -> void:
+	var request := {
+		"primitives": [{"kind": "box", "center": [0, 0, 0], "half_size": [1.5, 1.5, 1.5]}],
+	}
+	await _call("build_shape", request)
+	var mcp_cells := State.get_current_voxel_frame().storage_data()
+	State.undo_redo.undo()
+	State.undo_redo.clear_history()
+	var direct := _shape_request({"kind": PrimitiveField.KIND_BOX, "center": Vector3.ZERO, "half_size": Vector3(1.5, 1.5, 1.5)})
+	var primitive_plugin: Node = get_node_or_null("/root/PrimitivePlugin")
+	await primitive_plugin.build_shape(direct)
+	step("Then the MCP path and the plugin path match exactly", func():
+		expect(State.get_current_voxel_frame().storage_data() == mcp_cells, "both paths write the same cells")
+		expect(State.undo_redo.get_history_count() == 1, "the direct path is one history action")
+	)
+
+
+func _shape_request(primitive: Dictionary, op := PrimitiveField.OP_ADD) -> Dictionary:
+	return {
+		"primitives": [primitive],
+		"op": op,
+		"smooth": 0.0,
+		"shell": 0.0,
+		"step": 1,
+		"material": State.current_material.duplicate(),
+	}
 
 
 func _write() -> void:

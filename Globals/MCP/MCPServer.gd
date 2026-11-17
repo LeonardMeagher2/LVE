@@ -43,6 +43,7 @@ const MODEL_SHEET_VIEWS := ["front", "back", "left", "right", "top", "bottom", "
 ## The guide resources and their topic slices.
 const MCPGuide := preload("res://Globals/MCP/MCPGuide.gd")
 const MCPJson := preload("res://Globals/MCP/MCPJson.gd")
+const PrimitiveField := preload("res://Globals/State/Tools/PrimitiveField.gd")
 const MCPWorkspace := preload("res://Globals/MCP/MCPWorkspace.gd")
 const MCPTransport := preload("res://Globals/MCP/MCPTransport.gd")
 
@@ -491,6 +492,8 @@ func _call_tool(id: Variant, params: Dictionary) -> Dictionary:
 			return _result_response(id, await _stroke(args))
 		"fill":
 			return _result_response(id, await _fill(args))
+		"build_shape":
+			return _result_response(id, await _build_shape(args))
 		"write_cells":
 			return _result_response(id, await _write_cells(args))
 		"set_selection":
@@ -2846,6 +2849,183 @@ func _fill(args: Dictionary) -> Dictionary:
 	})
 
 
+func _build_shape(args: Dictionary) -> Dictionary:
+	if State.active_edit() != null or State.edit_busy():
+		return _tool_error("The editor is busy with another edit. Retry.")
+	var primitives_value: Variant = args.get("primitives", null)
+	if not (primitives_value is Array):
+		return _tool_error("primitives must be an array.")
+	var entries: Array = primitives_value
+	if entries.is_empty() or entries.size() > PrimitiveField.MAX_PRIMITIVES:
+		return _tool_error("primitives must hold 1 to %d entries." % PrimitiveField.MAX_PRIMITIVES)
+	var primitives: Array = []
+	for index in range(entries.size()):
+		var parsed := _parse_shape_primitive(entries[index], index)
+		if parsed.has("error"):
+			return _tool_error(str(parsed["error"]))
+		primitives.append(parsed["primitive"])
+	var op := PrimitiveField.OP_ADD
+	var op_value: Variant = args.get("op", "add")
+	if not (op_value is String):
+		return _tool_error("op must be add, subtract, or intersect.")
+	match str(op_value):
+		"add":
+			op = PrimitiveField.OP_ADD
+		"subtract":
+			op = PrimitiveField.OP_SUBTRACT
+		"intersect":
+			op = PrimitiveField.OP_INTERSECT
+		_:
+			return _tool_error("op must be add, subtract, or intersect.")
+	var smooth := 0.0
+	var smooth_value: Variant = args.get("smooth", null)
+	if smooth_value != null:
+		if not (smooth_value is int or smooth_value is float):
+			return _tool_error("smooth must be a number.")
+		smooth = float(smooth_value)
+		if not is_finite(smooth) or smooth < 0.0:
+			return _tool_error("smooth must be zero or above.")
+	var shell := 0.0
+	var shell_value: Variant = args.get("shell", null)
+	if shell_value != null:
+		if not (shell_value is int or shell_value is float):
+			return _tool_error("shell must be a number.")
+		shell = float(shell_value)
+		if not is_finite(shell) or shell < 0.0:
+			return _tool_error("shell must be zero or above.")
+	var step := 1
+	var step_value: Variant = args.get("step", null)
+	if step_value != null:
+		if not (step_value is int or step_value is float):
+			return _tool_error("step must be an integer from 1 to 4.")
+		step = int(step_value)
+		if step < 1 or step > 4:
+			return _tool_error("step must be an integer from 1 to 4.")
+	var material: PackedFloat32Array = State.current_material.duplicate()
+	var material_value: Variant = args.get("material", null)
+	if material_value != null:
+		if not (material_value is int or material_value is float):
+			return _tool_error("material must be a palette index.")
+		var index := int(material_value)
+		var palette := State.get_palette()
+		if index < 0 or index >= palette.size():
+			return _tool_error("material must be a palette index from 0 to %d." % (palette.size() - 1))
+		material = palette[index].duplicate()
+	var label := "Build Shape"
+	var label_value: Variant = args.get("label", null)
+	if label_value != null:
+		if not (label_value is String):
+			return _tool_error("label must be a string.")
+		label = str(label_value)
+		if label.is_empty():
+			label = "Build Shape"
+	var request := {
+		"primitives": primitives,
+		"op": op,
+		"smooth": smooth,
+		"shell": shell,
+		"step": step,
+		"material": material,
+		"label": label,
+	}
+	var validation := PrimitiveField.validate_request(request)
+	if not validation.is_empty():
+		return _tool_error(validation)
+	var plugin := _plugin("PrimitivePlugin")
+	if plugin == null or not plugin.has_method("build_shape"):
+		return _tool_error("The primitive plugin is not ready.")
+	var result_value: Variant = await plugin.call("build_shape", request)
+	if not (result_value is Dictionary):
+		return _tool_error("The primitive build did not return a result.")
+	var result: Dictionary = result_value
+	if result.has("error"):
+		return _tool_error(str(result["error"]))
+	var bounds_min: Vector3i = result.get("bounds_min", Vector3i.ZERO)
+	var bounds_max: Vector3i = result.get("bounds_max", Vector3i.ZERO)
+	var changed_min: Vector3i = result.get("changed_min", Vector3i.MAX)
+	var changed_max: Vector3i = result.get("changed_max", Vector3i.MIN)
+	var changed_bounds: Variant = null
+	if changed_min != Vector3i.MAX and changed_max != Vector3i.MIN:
+		changed_bounds = MCPJson.cell_bounds_json_from_cells(changed_min, changed_max)
+	return _tool_ok({
+		"applied": int(result.get("applied", 0)),
+		"bounds": MCPJson.cell_bounds_json_from_cells(bounds_min, bounds_max),
+		"changed_bounds": changed_bounds,
+		"chunks": int(result.get("chunks", 0)),
+		"revision": _revision,
+		"warnings": result.get("warnings", []),
+		"action": str(result.get("action", label)),
+	})
+
+
+func _parse_shape_primitive(value: Variant, index: int) -> Dictionary:
+	if not (value is Dictionary):
+		return {"error": "primitives[%d] must be an object." % index}
+	var data: Dictionary = value
+	var kind_value: Variant = data.get("kind", "")
+	if not (kind_value is String):
+		return {"error": "primitives[%d] kind must be box, ellipsoid, or cone." % index}
+	match str(kind_value):
+		"box":
+			var center_value: Variant = MCPJson.parse_vector(data.get("center", null))
+			var half_value: Variant = MCPJson.parse_vector(data.get("half_size", null))
+			if center_value == null or half_value == null:
+				return {"error": "primitives[%d] needs center and half_size as three numbers." % index}
+			var center: Vector3 = center_value
+			var half_size: Vector3 = half_value
+			if half_size.x <= 0.0 or half_size.y <= 0.0 or half_size.z <= 0.0:
+				return {"error": "primitives[%d] half_size values must be above zero." % index}
+			var box_roundness := 0.0
+			var box_roundness_value: Variant = data.get("roundness", null)
+			if box_roundness_value != null:
+				if not (box_roundness_value is int or box_roundness_value is float):
+					return {"error": "primitives[%d] roundness must be a number from 0 to 1." % index}
+				box_roundness = float(box_roundness_value)
+				if not is_finite(box_roundness) or box_roundness < 0.0 or box_roundness > 1.0:
+					return {"error": "primitives[%d] roundness must be a number from 0 to 1." % index}
+			return {"primitive": {"kind": PrimitiveField.KIND_BOX, "center": center, "half_size": half_size, "roundness": box_roundness}}
+		"ellipsoid":
+			var center_value: Variant = MCPJson.parse_vector(data.get("center", null))
+			var radii_value: Variant = MCPJson.parse_vector(data.get("radii", null))
+			if center_value == null or radii_value == null:
+				return {"error": "primitives[%d] needs center and radii as three numbers." % index}
+			var center: Vector3 = center_value
+			var radii: Vector3 = radii_value
+			if radii.x <= 0.0 or radii.y <= 0.0 or radii.z <= 0.0:
+				return {"error": "primitives[%d] radii must be above zero." % index}
+			return {"primitive": {"kind": PrimitiveField.KIND_ELLIPSOID, "center": center, "radii": radii}}
+		"cone":
+			var a_value: Variant = MCPJson.parse_vector(data.get("a", null))
+			var b_value: Variant = MCPJson.parse_vector(data.get("b", null))
+			var r1_value: Variant = data.get("r1", null)
+			var r2_value: Variant = data.get("r2", null)
+			if a_value == null or b_value == null or not (r1_value is int or r1_value is float) or not (r2_value is int or r2_value is float):
+				return {"error": "primitives[%d] needs a, b, r1, and r2." % index}
+			var r1 := float(r1_value)
+			var r2 := float(r2_value)
+			if not is_finite(r1) or not is_finite(r2) or r1 < 0.0 or r2 < 0.0:
+				return {"error": "primitives[%d] radii must be zero or above." % index}
+			var roundness := 0.0
+			var roundness_value: Variant = data.get("roundness", null)
+			if roundness_value != null:
+				if not (roundness_value is int or roundness_value is float):
+					return {"error": "primitives[%d] roundness must be a number from 0 to 1." % index}
+				roundness = float(roundness_value)
+				if not is_finite(roundness) or roundness < 0.0 or roundness > 1.0:
+					return {"error": "primitives[%d] roundness must be a number from 0 to 1." % index}
+			else:
+				var round_value: Variant = data.get("round", null)
+				if round_value != null:
+					if not (round_value is bool):
+						return {"error": "primitives[%d] round must be a boolean." % index}
+					roundness = 1.0 if bool(round_value) else 0.0
+			var a: Vector3 = a_value
+			var b: Vector3 = b_value
+			return {"primitive": {"kind": PrimitiveField.KIND_CONE, "a": a, "b": b, "r1": r1, "r2": r2, "roundness": roundness}}
+		_:
+			return {"error": "primitives[%d] kind must be box, ellipsoid, or cone." % index}
+
+
 func _write_cells(args: Dictionary) -> Dictionary:
 	if State.active_edit() != null or State.edit_busy():
 		return _tool_error("The editor is busy with another edit. Retry.")
@@ -3237,6 +3417,33 @@ func _active_tool_info() -> Dictionary:
 					"spot_diameter": settings.spot_diameter,
 					"spray_size": settings.spray_size,
 					"speed": settings.speed,
+				},
+			}
+	var primitive: Node = _plugin("PrimitivePlugin")
+	if primitive != null and _toolbar_pressed(primitive):
+		var settings: PrimitiveToolSettings = primitive.get("_settings")
+		var tool_node: Node3D = primitive.get("_active_tool")
+		if settings != null and tool_node != null:
+			var shape_name := "box"
+			if settings.tool == PrimitiveToolSettings.Tools.ELLIPSOID:
+				shape_name = "ellipsoid"
+			elif settings.tool == PrimitiveToolSettings.Tools.CONE:
+				shape_name = "cone"
+			var op_name := "add"
+			if settings.op == PrimitiveToolSettings.Op.SUBTRACT:
+				op_name = "subtract"
+			elif settings.op == PrimitiveToolSettings.Op.INTERSECT:
+				op_name = "intersect"
+			return {
+				"id": "primitive",
+				"node": tool_node,
+				"params": {
+					"shape": shape_name,
+					"op": op_name,
+					"smooth": settings.smooth,
+					"shell": settings.shell,
+					"second_radius": settings.second_radius,
+					"roundness": settings.roundness,
 				},
 			}
 	var terrain: Node = _plugin("TerrainPlugin")

@@ -41,8 +41,8 @@ const GUIDE_GROUPS := [
 	{
 		"slug": "write",
 		"title": "Writing and editing",
-		"description": "write_cells, materials, palette, selection, screenshots, and saving.",
-		"headings": ["Compact forms"],
+		"description": "write_cells, primitive shapes, materials, palette, selection, screenshots, and saving.",
+		"headings": ["Compact forms", "Primitive shapes"],
 	},
 	{
 		"slug": "export",

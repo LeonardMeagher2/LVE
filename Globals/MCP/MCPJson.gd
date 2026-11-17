@@ -25,6 +25,22 @@ static func parse_color(value: Variant) -> Variant:
 	return null
 
 
+## Parses a three-number vector. Returns [code]null[/code] for a non-finite or
+## malformed value.
+static func parse_vector(value: Variant) -> Variant:
+	if not (value is Array):
+		return null
+	var components: Array = value
+	if components.size() != 3:
+		return null
+	for component in components:
+		if not (component is int or component is float):
+			return null
+		if not is_finite(float(component)):
+			return null
+	return Vector3(float(components[0]), float(components[1]), float(components[2]))
+
+
 static func parse_cell(value: Variant) -> Variant:
 	if not (value is Array):
 		return null

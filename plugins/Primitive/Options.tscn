@@ -1,0 +1,118 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://plugins/Primitive/Options.gd" id="1_script"]
+[ext_resource type="Texture2D" path="res://icons/mode_add.svg" id="2_add"]
+[ext_resource type="Texture2D" path="res://icons/mode_subtract.svg" id="3_subtract"]
+[ext_resource type="Texture2D" path="res://icons/mode_replace.svg" id="4_intersect"]
+[ext_resource type="Texture2D" path="res://icons/smooth.svg" id="5_smooth"]
+[ext_resource type="Texture2D" path="res://icons/size.svg" id="6_shell"]
+[ext_resource type="Texture2D" path="res://icons/brush_diameter.svg" id="7_radius"]
+[ext_resource type="Texture2D" path="res://icons/check.svg" id="8_commit"]
+[ext_resource type="Texture2D" path="res://icons/cross.svg" id="9_cancel"]
+[ext_resource type="PackedScene" path="res://ui/ValueButton/ValueButton.tscn" id="10_value"]
+[ext_resource type="Texture2D" path="res://icons/sphere.svg" id="11_roundness"]
+
+[sub_resource type="ButtonGroup" id="OpGroup"]
+
+[node name="Options" type="HBoxContainer"]
+script = ExtResource("1_script")
+
+[node name="Op" type="HBoxContainer" parent="."]
+layout_mode = 2
+
+[node name="Add" type="Button" parent="Op"]
+layout_mode = 2
+tooltip_text = "Add the primitive"
+toggle_mode = true
+button_group = SubResource("OpGroup")
+icon = ExtResource("2_add")
+icon_alignment = 1
+
+[node name="Subtract" type="Button" parent="Op"]
+layout_mode = 2
+tooltip_text = "Remove the primitive"
+toggle_mode = true
+button_group = SubResource("OpGroup")
+icon = ExtResource("3_subtract")
+icon_alignment = 1
+
+[node name="Intersect" type="Button" parent="Op"]
+layout_mode = 2
+tooltip_text = "Keep only the cells inside the primitive"
+toggle_mode = true
+button_group = SubResource("OpGroup")
+icon = ExtResource("4_intersect")
+icon_alignment = 1
+
+[node name="OpSeparator" type="VSeparator" parent="."]
+layout_mode = 2
+
+[node name="Smooth" parent="." instance=ExtResource("10_value")]
+layout_mode = 2
+tooltip_text = "Smooth blend width in voxels. Blends pending primitives and nearby committed cells."
+icon = ExtResource("5_smooth")
+min_value = 0.0
+max_value = 32.0
+step = 1.0
+decimals = 0
+value = 0.0
+
+[node name="Shell" parent="." instance=ExtResource("10_value")]
+layout_mode = 2
+tooltip_text = "Shell thickness in voxels. Zero is solid."
+icon = ExtResource("6_shell")
+min_value = 0.0
+max_value = 16.0
+step = 1.0
+decimals = 0
+value = 0.0
+
+[node name="Roundness" parent="." instance=ExtResource("10_value")]
+layout_mode = 2
+tooltip_text = "Roundness from 0 to 1. Rounds cube edges and cone ends."
+icon = ExtResource("11_roundness")
+min_value = 0.0
+max_value = 1.0
+step = 0.05
+decimals = 2
+value = 0.0
+
+[node name="Cone" type="HBoxContainer" parent="."]
+layout_mode = 2
+
+[node name="SecondRadius" parent="Cone" instance=ExtResource("10_value")]
+layout_mode = 2
+tooltip_text = "Narrow cone radius in voxels. Fractional values are allowed."
+icon = ExtResource("7_radius")
+min_value = 0.0
+max_value = 64.0
+step = 0.1
+decimals = 2
+value = 0.0
+
+[node name="ActionSeparator" type="VSeparator" parent="."]
+layout_mode = 2
+
+[node name="Commit" type="Button" parent="."]
+layout_mode = 2
+tooltip_text = "Commit the pending primitives. Enter."
+disabled = true
+icon = ExtResource("8_commit")
+icon_alignment = 1
+
+[node name="Cancel" type="Button" parent="."]
+layout_mode = 2
+tooltip_text = "Cancel the pending primitives. Escape."
+disabled = true
+icon = ExtResource("9_cancel")
+icon_alignment = 1
+
+[connection signal="pressed" from="Op/Add" to="." method="_on_add_pressed"]
+[connection signal="pressed" from="Op/Subtract" to="." method="_on_subtract_pressed"]
+[connection signal="pressed" from="Op/Intersect" to="." method="_on_intersect_pressed"]
+[connection signal="value_changed" from="Smooth" to="." method="_on_smooth_changed"]
+[connection signal="value_changed" from="Shell" to="." method="_on_shell_changed"]
+[connection signal="value_changed" from="Roundness" to="." method="_on_roundness_changed"]
+[connection signal="value_changed" from="Cone/SecondRadius" to="." method="_on_second_radius_changed"]
+[connection signal="pressed" from="Commit" to="." method="_on_commit_pressed"]
+[connection signal="pressed" from="Cancel" to="." method="_on_cancel_pressed"]

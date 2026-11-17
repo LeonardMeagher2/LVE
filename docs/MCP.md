@@ -103,6 +103,7 @@ A client reads a resource with `resources/list` and `resources/read`. The initia
 | `set_palette` | Replace the document palette in order. One undo action |
 | `stroke` | Draw a brush, paint, or eraser stroke through cell points |
 | `fill` | Fill a connected or matching region from a seed |
+| `build_shape` | Build a box, ellipsoid, or cone from SDF primitives. Add, subtract, or intersect. One call is one undo action |
 | `write_cells` | Write or erase cells, boxes, or runs, one form per call, with optional per-cell materials and frames. A later call overwrites what it covers. One call is one undo action |
 | `set_selection` | Set, add, subtract, or clear the shared selection from cells or boxes. One call is one undo action |
 
@@ -175,6 +176,39 @@ Provide exactly one of `cells`, `boxes`, or `runs`. Call the tool again to layer
 
 `set_selection` sets the shared selection that the user sees. It accepts the same `cells` and `boxes` forms as `write_cells`. Set `mode` to `replace`, `add`, or `subtract`. Set `mode` to `clear` to empty the selection. A selection can hold cells outside the current frame. One call is one undo action, and undo and redo restore the earlier selection.
 
+## Primitive shapes
+
+`build_shape` builds a box, an ellipsoid, or a cone from signed-distance primitives. One call is one undo action. A call that changes no cell creates no history action.
+
+The call uses the current frame, the shared selection, the slice, the document size, and the current material. It does not change the active tool.
+
+```json
+{
+  "primitives": [
+    {"kind": "box", "center": [0, 0, 0], "half_size": [2, 2, 2]},
+    {"kind": "ellipsoid", "center": [6, 0, 0], "radii": [2, 1, 1]},
+    {"kind": "cone", "a": [0, 0, 10], "b": [0, 0, 20], "r1": 2, "r2": 0, "roundness": 0}
+  ],
+  "op": "add",
+  "smooth": 3,
+  "shell": 1,
+  "material": 0,
+  "step": 1
+}
+```
+
+A box uses `center` and `half_size`. An ellipsoid uses `center` and `radii`. A cone uses `a`, `b`, `r1`, and `r2`. The radii can be fractional. `roundness` runs from 0 to 1. It rounds box edges and blends cone ends from flat at 0 to round at 1. The old `round` boolean is also accepted for cone ends.
+
+`op` is `add`, `subtract`, or `intersect`. `add` writes the field cells. `subtract` removes the field cells. `intersect` keeps only the occupied cells inside the field in the current frame. The selection, slice, and document size still limit the write.
+
+`smooth` blends the primitives in the call and the committed cells near them. It applies to `add` only. It keeps the committed cells and their materials. It only adds the new fillet and the empty part of the primitive. The field is clamped to half the smallest primitive extent. `shell` keeps a surface band of that thickness. Zero is solid. `step` builds blocks of that edge for a coarse form. The default is 1.
+
+`material` is a palette index. An omitted value uses the current material. `label` names the history action.
+
+The result carries `applied`, `bounds`, `changed_bounds`, `chunks`, `revision`, `warnings`, and `action`. `bounds` is the cell box of the shape. `changed_bounds` is the exact changed cell box. Warnings name a small radius, a clamped smooth blend, a coarse step, or a skipped existing blend.
+
+The call accepts at most 64 primitives and 1048576 evaluated cells. The shapes have no rotation. A smooth blend with existing cells uses a local distance field. A very large local region skips the existing blend and returns a warning.
+
 `set_material` accepts `color`, `emission`, `metallic`, and `roughness`. Emission gives the voxel a glow. A color change clears the glow unless you also pass `emission`. Set `emission` to `#000000` to clear it explicitly.
 
 `set_palette` replaces the document palette in order. Each entry is a material object with `color` and optional `emission`, `metallic`, and `roughness`. A missing field uses a plain value, not the active brush material. Duplicate entries are removed, as in the palette panel. Existing voxel materials do not change. One call is one undo action.
@@ -206,10 +240,12 @@ The sheet and the GIF need a visible editor window. A headless run returns an un
 ## Editing rules
 
 - Call `set_tool` before `stroke` or `fill`.
+- `build_shape` does not need `set_tool`. It works from any active tool.
 - Each call is one undo action.
 - A user edit blocks an agent action. The tool returns a busy error.
 - The selection, slice, and document size limit every write.
 - `write_cells` and `fill` use the current material. A shape without an index uses the current material, not `materials[0]`.
+- `build_shape` uses the current material when `material` is omitted.
 
 ## Animate
 
@@ -226,7 +262,7 @@ The sheet and the GIF need a visible editor window. A headless run returns an un
 
 ## Limits
 
-The first version supports brush, paint, eraser, fill, exact writes, selection, screenshots, documents, frames, tags, and export. Terrain, transform, playback, and clipboard are not exposed yet.
+The first version supports brush, paint, eraser, fill, primitive shapes, exact writes, selection, screenshots, documents, frames, tags, and export. Terrain, transform, playback, and clipboard are not exposed yet.
 
 ## Bridge mode
 

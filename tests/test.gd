@@ -6,6 +6,7 @@ extends "res://addons/test_kit/test_case.gd"
 # these scripts on its root node.
 
 const BRUSH_SETTINGS_PATH := "res://plugins/brush/BrushSettings.tres"
+const PRIMITIVE_SETTINGS_PATH := "res://plugins/Primitive/PrimitiveSettings.tres"
 const PAINT_SETTINGS_PATH := "res://plugins/paint/PaintSettings.tres"
 const STAMP_SETTINGS_PATH := "res://plugins/Stamp/StampSettings.tres"
 const SELECTION_SETTINGS_PATH := "res://plugins/selection/SelectionSettings.tres"
@@ -13,6 +14,7 @@ const TRANSFORM_SETTINGS_PATH := "res://plugins/Transform/TransformSettings.tres
 
 var main: Node
 var _brush_settings_resource: BrushToolSettings
+var _primitive_settings_resource: PrimitiveToolSettings
 var _paint_settings_resource: PaintToolSettings
 var _stamp_settings_resource: StampToolSettings
 var _selection_settings_resource = null
@@ -30,6 +32,7 @@ func _enter_tree() -> void:
 		, "fixture")
 	settle_frames = 2
 	_brush_settings_resource = load(BRUSH_SETTINGS_PATH)
+	_primitive_settings_resource = load(PRIMITIVE_SETTINGS_PATH)
 	_paint_settings_resource = load(PAINT_SETTINGS_PATH)
 	_stamp_settings_resource = load(STAMP_SETTINGS_PATH)
 	_selection_settings_resource = load(SELECTION_SETTINGS_PATH)
@@ -55,6 +58,12 @@ func reset_environment() -> void:
 	_brush_settings_resource.shape = StampToolSettings.BrushShape.CUBE
 	_brush_settings_resource.diameter = 1
 	_brush_settings_resource.pixel_perfect = false
+	_primitive_settings_resource.tool = PrimitiveToolSettings.Tools.BOX
+	_primitive_settings_resource.op = PrimitiveToolSettings.Op.ADD
+	_primitive_settings_resource.smooth = 0
+	_primitive_settings_resource.shell = 0
+	_primitive_settings_resource.second_radius = 0.0
+	_primitive_settings_resource.roundness = 0.0
 	_paint_settings_resource.tool = PaintToolSettings.Tools.PAINTBRUSH
 	_paint_settings_resource.connected = true
 	_paint_settings_resource.spot_diameter = 1
@@ -179,4 +188,7 @@ func active_tool_node(plugin_name: String) -> Node3D:
 	var p := plugin(plugin_name)
 	if p == null:
 		return null
+	var current: Variant = p.get("_active_tool")
+	if current is Node3D:
+		return current
 	return p._tool

@@ -1,7 +1,7 @@
 # Drawing tool flows
 
 This map covers the shipped drawing tools in LVE.
-The tools are Brush, Line, Stamp, Paint Brush, Dither Brush, Fill, and Spray.
+The tools are Brush, Line, Stamp, Paint Brush, Dither Brush, Fill, Spray, and Primitive.
 The map shows control flow, not class structure.
 The source links point to the current code.
 See [Shared paths and utilities](shared-and-utilities.md) for the input spine, worker helpers, and preview mesh details.
@@ -70,6 +70,7 @@ Two engines serve the six tools.
 | --- | --- | --- |
 | Stamp engine | Brush, Line, Stamp, Paint Brush, Dither Brush, Spray | `StrokeTool`, `BrushJob`, `StampPatternJob`, `StampCopyJob`, `DitherMask` |
 | Fill engine | Fill | `FillTool`, `FillJob`, `VoxelRegionSearch` |
+| Primitive engine | Primitive | `PrimitiveTool`, `PrimitiveField`, `PrimitiveJob`, `PrimitivePlugin` |
 
 The brush tools and the paint tools use separate settings resources.
 A brush size change does not alter a paint size.
@@ -322,6 +323,63 @@ flowchart TB
 - Commit: [`FillTool._finish_fill_stroke`](../../../plugins/paint/FillTool.gd) calls `_end`, which calls `close_stroke`.
 - Cancel: [`FillTool._interrupt_fill`](../../../plugins/paint/FillTool.gd) cancels jobs and calls `abort_stroke`.
 - Switch: [`FillTool.finish_on_switch`](../../../plugins/paint/FillTool.gd) sets `_release_pending` and commits after the fill is idle.
+
+## Primitive
+
+`PrimitiveTool` keeps a replaceable result preview.
+The press opens no edit.
+The drag maps to the pick plane and builds a box, an ellipsoid, or a cone.
+`PrimitiveField` evaluates the pure signed-distance field.
+A preview runs `PrimitiveJob` on a full copy and shows the result through the main viewport `VoxelRenderer.source_frame`. The live document is not changed.
+The preview uses `State.drawing_context`, so selection, slice, size, and symmetry limit the result.
+Release keeps the primitive pending and shows six face handles.
+A handle drag changes one bound of the pending box. A handle can cross the opposite bound, so bounds can become negative and flip a cone.
+A press outside the handles moves the whole pending shape by whole cells.
+The pending primitive must be committed or cancelled before a new shape starts.
+Enter or the option bar commits the pending primitive.
+The plugin opens one edit, runs `PrimitiveJob` inline or on the worker pool, publishes the changed chunks and cells, and finishes one history action.
+A no-op creates no history action.
+Escape, a frame change, a document change, or a cancel discards the pending primitive.
+A tool or shape switch commits the pending primitive.
+
+The MCP `build_shape` tool calls the same `PrimitivePlugin.build_shape` method.
+It does not change the active tool.
+
+```mermaid
+flowchart LR
+  IN["Press"] --> CAP["Capture plane and start cell"]
+  CAP --> RESULT["PrimitiveJob result frame"]
+  RESULT -.-> VIEW["Main VoxelRenderer.source_frame"]
+  REL["Release"] --> PEND["Pending primitive and handles"]
+  PEND --> HANDLE["Drag a face handle changes one bound"]
+  HANDLE --> PEND
+  OUTSIDE["Drag the shape body"] --> MOVE["Move the pending shape"]
+  MOVE --> PEND
+  PEND --> COMMIT["Enter or Commit"]
+  COMMIT --> BUILD["PrimitivePlugin.build_shape"]
+  BUILD --> JOB["PrimitiveJob"]
+  JOB -.-> WORK["Worker above 4096 cells"]
+  WORK -.-> PUB["Publish chunks and cells"]
+  JOB --> PUB
+  PUB --> UNDO["One undo action"]
+  PEND -.-> CANCEL["Escape, cancel, or context change"]
+  CANCEL -.-> DROP["No edit and no history"]
+```
+
+Policy boundaries:
+
+- The shape box is axis aligned.
+- A cone points along the pick plane normal. Its narrow radius accepts fractional cells.
+- Roundness from 0 to 1 rounds box edges and blends cone ends from flat to round.
+- Intersect removes occupied cells outside the field across the current frame. The edit context still filters selection, slice, and document size.
+- Smooth blends the primitives in one request and the committed cells near them.
+- A smooth add keeps committed cells and their materials. It adds only the new fillet and the empty part of the primitive.
+- The shell is applied after the union.
+- The mouse commits at step 1. MCP can request step 2 through 4.
+- The preview is the actual result: add adds, subtract removes, and intersect removes cells outside the shape.
+- The preview shows the result frame in the main viewport renderer. The live document stays unchanged until commit.
+- A settings or context change cancels the running preview job and starts the newest request. The previous result stays visible until the newest result installs.
+- A preview starts at most once per frame. Pointer events that arrive in one frame collapse into the newest request. `_process` starts that request on the next frame, so a fast mouse costs no frame copy per event.
 
 ## Spray
 
