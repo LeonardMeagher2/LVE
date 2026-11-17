@@ -50,11 +50,12 @@ enum Op {
 		op = value
 		emit_changed()
 
-## The smooth blend width in cells.
-@export_range(0, 32, 1) var smooth := 0:
+## The smooth blend from 0 to 1. One is the largest blend that the shape
+## allows, which is half of its smallest extent.
+@export_range(0.0, 1.0, 0.05) var smooth := 0.0:
 	set(value):
-		value = clampi(value, 0, 32)
-		if value == smooth:
+		value = clampf(value, 0.0, 1.0)
+		if is_equal_approx(value, smooth):
 			return
 		smooth = value
 		emit_changed()
@@ -68,10 +69,11 @@ enum Op {
 		shell = value
 		emit_changed()
 
-## The narrow cone radius in cells.
-@export_range(0.0, 64.0, 0.1) var second_radius := 0.0:
+## The narrow cone radius from 0 to 1. One equals the base radius, which makes
+## a cylinder. Zero makes a point.
+@export_range(0.0, 1.0, 0.01) var second_radius := 0.0:
 	set(value):
-		value = clampf(value, 0.0, 64.0)
+		value = clampf(value, 0.0, 1.0)
 		if is_equal_approx(value, second_radius):
 			return
 		second_radius = value

@@ -31,6 +31,7 @@ func _ready() -> void:
 	test("subtract clears a full voxel chunk", _subtract_full_chunk, "subtract_full_chunk")
 	test("intersect keeps only the cells inside the shape", _intersect, "intersect")
 	test("a no-op subtract creates no history action", _noop, "noop")
+	test("the option values scale with the shape", _option_units, "option_units")
 	test("the current material is used", _material, "material")
 	test("the shape options build a cone and an ellipsoid", _shape_options, "shape_options")
 
@@ -406,7 +407,7 @@ func _blend_preview_cancel() -> void:
 		tool._pending_box = AABB(Vector3(-6.5, -2.5, -2.5), Vector3(13, 5, 5))
 		tool._settings.editing = true
 		tool._refresh_preview()
-		plugin("PrimitivePlugin")._settings.smooth = 3
+		plugin("PrimitivePlugin")._settings.smooth = 1.0
 	)
 	var deadline := Time.get_ticks_msec() + 5000
 	var preview: VoxelFrame = null
@@ -590,7 +591,7 @@ func _blend_existing() -> void:
 	await plugin("PrimitivePlugin").build_shape(_box_request(Vector3(0, 2, 0), Vector3(0.5, 2.5, 2.5)))
 	step("When a red smooth box is placed one cell away", func():
 		State.set_material(VoxelFrame.material(Color.RED))
-		plugin("PrimitivePlugin")._settings.smooth = 3
+		plugin("PrimitivePlugin")._settings.smooth = 1.0
 		State.undo_redo.clear_history()
 	)
 	var blend_request := _box_request(Vector3(4, 2, 0), Vector3(2.5, 2.5, 2.5))
@@ -660,6 +661,36 @@ func _noop() -> void:
 	step("Then the no-op reports zero cells and no history action exists", func():
 		expect(int(result.get("applied", -1)) == 0, "the no-op reports zero cells")
 		expect(not State.undo_redo.has_undo(), "the no-op creates no history")
+	)
+
+
+func _option_units() -> void:
+	var settings: PrimitiveToolSettings = plugin("PrimitivePlugin")._settings
+	step("Given a four-cell box and a half smooth blend", func():
+		settings.smooth = 0.5
+		var primitive := {
+			"kind": PrimitiveField.KIND_BOX,
+			"center": Vector3.ZERO,
+			"half_size": Vector3(2, 2, 2),
+			"roundness": 0.0,
+		}
+		var primitives: Array[Dictionary] = [primitive]
+		tool._primitives = primitives
+		tool._active_index = 0
+		tool._pending_box = AABB(Vector3(-2, -2, -2), Vector3(4, 4, 4))
+	)
+	step("Then the blend becomes half of the largest blend", func():
+		var request: Dictionary = tool._build_request(false)
+		expect(is_equal_approx(float(request["smooth"]), 1.0), "half of a four-cell extent blends one cell")
+	)
+	step("Given a cone with a half narrow radius", func():
+		settings.second_radius = 0.5
+		tool.shape = PrimitiveField.KIND_CONE
+		var cone_box := AABB(Vector3(-2, -2, -4), Vector3(4, 4, 8))
+		var cone: Dictionary = tool._build_primitive(cone_box, 2)
+		expect(is_equal_approx(float(cone["r1"]), 2.0), "the base radius is two cells")
+		expect(is_equal_approx(float(cone["r2"]), 1.0), "half the base radius is one cell")
+		tool.shape = PrimitiveField.KIND_BOX
 	)
 
 

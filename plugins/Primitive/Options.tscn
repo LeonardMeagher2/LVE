@@ -49,12 +49,12 @@ layout_mode = 2
 
 [node name="Smooth" parent="." instance=ExtResource("10_value")]
 layout_mode = 2
-tooltip_text = "Smooth blend width in voxels. Blends pending primitives and nearby committed cells."
+tooltip_text = "Smooth blend from 0 to 1. One is the largest blend the shape allows. It blends pending primitives and nearby committed cells."
 icon = ExtResource("5_smooth")
 min_value = 0.0
-max_value = 32.0
-step = 1.0
-decimals = 0
+max_value = 1.0
+step = 0.05
+decimals = 2
 value = 0.0
 
 [node name="Shell" parent="." instance=ExtResource("10_value")]
@@ -82,11 +82,11 @@ layout_mode = 2
 
 [node name="SecondRadius" parent="Cone" instance=ExtResource("10_value")]
 layout_mode = 2
-tooltip_text = "Narrow cone radius in voxels. Fractional values are allowed."
+tooltip_text = "Narrow cone radius from 0 to 1. One equals the base radius. Zero makes a point."
 icon = ExtResource("7_radius")
 min_value = 0.0
-max_value = 64.0
-step = 0.1
+max_value = 1.0
+step = 0.01
 decimals = 2
 value = 0.0
 

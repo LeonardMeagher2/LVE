@@ -44,7 +44,7 @@ func _on_intersect_pressed() -> void:
 
 
 func _on_smooth_changed(value: float) -> void:
-	_settings.smooth = int(value)
+	_settings.smooth = value
 
 
 func _on_shell_changed(value: float) -> void:

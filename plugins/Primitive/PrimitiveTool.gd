@@ -436,15 +436,19 @@ func _build_request(include_draft: bool) -> Dictionary:
 	var primitives: Array = _primitives.duplicate()
 	if include_draft and _dragging_new:
 		primitives.append(_build_primitive(_draft_box(), _draft_axis))
-	return {
+	var request := {
 		"primitives": primitives,
 		"op": int(_settings.op),
-		"smooth": float(_settings.smooth),
+		"smooth": 0.0,
 		"shell": float(_settings.shell),
 		"step": 1,
 		"material": State.current_material.duplicate(),
 		"label": "Build Shape",
 	}
+	# The setting is a fraction of the largest blend that the shape allows. The
+	# job takes cells, so an MCP request and a tool request share one unit.
+	request["smooth"] = float(_settings.smooth) * PrimitiveField.smallest_extent(request) * 0.5
+	return request
 
 
 func _build_primitive(box: AABB, axis := -1) -> Dictionary:
@@ -513,7 +517,7 @@ func _cone_primitive(box: AABB, axis: int) -> Dictionary:
 	var second_axis := (axis + 2) % 3
 	var radius := minf(absf(extent[first_axis]), absf(extent[second_axis])) * 0.5
 	radius = maxf(radius, 0.5)
-	var narrow := clampf(_settings.second_radius, 0.0, radius)
+	var narrow := clampf(_settings.second_radius, 0.0, 1.0) * radius
 	var center := (box.position + box.end) * 0.5
 	var direction := signf(box.end[axis] - box.position[axis])
 	if direction == 0.0:

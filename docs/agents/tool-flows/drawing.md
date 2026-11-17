@@ -369,8 +369,9 @@ flowchart LR
 Policy boundaries:
 
 - The shape box is axis aligned.
-- A cone points along the pick plane normal. Its narrow radius accepts fractional cells.
+- A cone points along the pick plane normal. Its narrow radius is a fraction of the base radius. Zero makes a point and one makes a cylinder.
 - Roundness from 0 to 1 rounds box edges and blends cone ends from flat to round.
+- The blend and the narrow cone radius also use 0 to 1. The blend is a fraction of the largest blend, which is half the smallest extent. The narrow radius is a fraction of the base radius. The tool converts both to cells before it sends the request.
 - Intersect removes occupied cells outside the field across the current frame. The edit context still filters selection, slice, and document size.
 - Smooth blends the primitives in one request and the committed cells near them.
 - A smooth add keeps committed cells and their materials. It adds only the new fillet and the empty part of the primitive.
