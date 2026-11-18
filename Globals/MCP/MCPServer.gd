@@ -2291,7 +2291,7 @@ func _export_sprite_sheet(args: Dictionary) -> Dictionary:
 		return _tool_error("first_frame and last_frame must name frames in order.")
 	settings["first_frame"] = first
 	settings["last_frame"] = last
-	for key in ["orthographic", "center", "metadata"]:
+	for key in ["orthographic", "center", "metadata", "normal"]:
 		if args.has(key):
 			settings[key] = _bool_arg(args, key, false)
 	if args.has("tile_size"):
@@ -2313,6 +2313,7 @@ func _export_sprite_sheet(args: Dictionary) -> Dictionary:
 	var views := int(settings.get("views", 1))
 	var view := str(settings.get("view", "isometric"))
 	var metadata := bool(settings.get("metadata", true))
+	var normal := bool(settings.get("normal", false))
 	_ensure_output_folder(path)
 	var was_playing := State.is_playing
 	var was_frame := State.current_frame
@@ -2327,6 +2328,8 @@ func _export_sprite_sheet(args: Dictionary) -> Dictionary:
 	return _tool_ok({
 		"path": ProjectSettings.globalize_path(path),
 		"metadata_path": ProjectSettings.globalize_path(path.get_basename() + ".json") if metadata else "",
+		"normal": normal,
+		"normal_path": ProjectSettings.globalize_path(EXPORT_PLUGIN_SCRIPT.normal_path(path)) if normal else "",
 		"width": size.x,
 		"height": size.y,
 		"tile_size": tile_size,
@@ -2354,6 +2357,8 @@ func _export_gif(args: Dictionary) -> Dictionary:
 	# Start from the export tab values, so the result reports what the call used.
 	var current_value: Variant = plugin.call("current_export_settings")
 	var settings: Dictionary = current_value.get("sprite", {}).duplicate() if current_value is Dictionary else {}
+	# A GIF holds color frames only.
+	settings.erase("normal")
 	if tag >= 0:
 		var tag_data := State.document.tags[tag]
 		first = tag_data.from

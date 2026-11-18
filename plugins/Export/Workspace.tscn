@@ -12,6 +12,20 @@
 [ext_resource type="Texture2D" uid="uid://denrh23gr1h20" path="res://icons/turntable.svg" id="23_turntable"]
 [ext_resource type="Texture2D" uid="uid://denrh23gr1h21" path="res://icons/json.svg" id="24_json"]
 [ext_resource type="Texture2D" uid="uid://bblm00nto7867" path="res://icons/gif.svg" id="27_gif"]
+[ext_resource type="Texture2D" uid="uid://cmfirdobdfgqh" path="res://ui/Checker.png" id="29_checker"]
+[ext_resource type="Texture2D" uid="uid://denrh23gr1h18" path="res://icons/light.svg" id="30_light"]
+
+[sub_resource type="Gradient" id="Gradient_light"]
+offsets = PackedFloat32Array(0, 1)
+colors = PackedColorArray(1, 1, 1, 1, 1, 1, 1, 0)
+
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_light"]
+gradient = SubResource("Gradient_light")
+width = 128
+height = 128
+fill = 1
+fill_from = Vector2(0.5, 0.5)
+fill_to = Vector2(1, 0.5)
 
 [node name="Export" type="VBoxContainer" unique_id=1189644852]
 anchors_preset = 15
@@ -90,10 +104,34 @@ layout_mode = 2
 [node name="Preview" type="Control" parent="Panels/SheetPanel/Margin/Sheet" unique_id=1458207165]
 texture_filter = 1
 clip_contents = true
+light_mask = 2
 layout_mode = 2
 size_flags_vertical = 3
 tooltip_text = "Scroll to zoom. Drag with the middle or right button to pan."
 script = ExtResource("2_sheet")
+
+[node name="Checker" type="TextureRect" parent="Panels/SheetPanel/Margin/Sheet/Preview" unique_id=1458207166]
+show_behind_parent = true
+light_mask = 0
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = ExtResource("29_checker")
+stretch_mode = 1
+
+[node name="Light" type="PointLight2D" parent="Panels/SheetPanel/Margin/Sheet/Preview" unique_id=1458207167]
+texture = SubResource("GradientTexture2D_light")
+texture_scale = 2.0
+height = 64.0
+color = Color(1, 0.95, 0.85, 1)
+energy = 1.5
+shadow_enabled = false
+range_item_cull_mask = 2
+enabled = false
 
 [node name="ControlBar" type="HBoxContainer" parent="Panels/SheetPanel/Margin/Sheet" unique_id=3503057]
 layout_mode = 2
@@ -103,6 +141,13 @@ layout_mode = 2
 tooltip_text = "Pan mode: left-drag pans the sheet"
 toggle_mode = true
 icon = ExtResource("3_hand")
+icon_alignment = 1
+
+[node name="LightToggle" type="Button" parent="Panels/SheetPanel/Margin/Sheet/ControlBar" unique_id=1642673135]
+layout_mode = 2
+tooltip_text = "Enable normal maps. Move the pointer over the sheet to light it. The export writes a normal map sheet."
+toggle_mode = true
+icon = ExtResource("30_light")
 icon_alignment = 1
 
 [node name="ZoomIcon" type="TextureRect" parent="Panels/SheetPanel/Margin/Sheet/ControlBar" unique_id=627019222]

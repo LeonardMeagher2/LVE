@@ -8,6 +8,7 @@ extends VoxelPlugin
 
 const GLTF_EXPORT := preload("./GLTFExport.gd")
 const GIF_ENCODER := preload("./GifEncoder.gd")
+const NORMAL_SHADER := preload("./normal_export.gdshader")
 ## The camera view names of the sprite sheet.
 const VIEWS := ["3D preview", "Isometric", "Front", "Back", "Left", "Right", "Top", "Bottom"]
 ## The stable API names of the sprite sheet views. They match the screenshot tool.
@@ -26,6 +27,7 @@ const SPRITE_GAP := 1
 @onready var _sheet_settings: GridContainer = _controls.get_node("Settings")
 @onready var _export_button: Button = _controls.get_node("ExportRow/Export")
 @onready var _gif_button: Button = _controls.get_node("ExportRow/Gif")
+@onready var _light_button: Button = _controls.get_node("ControlBar/LightToggle")
 @onready var _dialog: FileDialog = _menu_item.get_node("ExportDialog")
 @onready var _sheet_dialog: FileDialog = _menu_item.get_node("SpriteSheetDialog")
 @onready var _gif_dialog: FileDialog = _menu_item.get_node("GifDialog")
@@ -40,6 +42,8 @@ var _preview_revision := 0
 var _preview_due_ms := -1
 var _preview_running := false
 var _preview_image: Image
+var _preview_normal_image: Image
+var _preview_normal_texture: ImageTexture
 var _preview_operation_id := 0
 var _model_dirty := true
 var _model_camera_needs_center := true
@@ -115,6 +119,7 @@ func _ready() -> void:
 	sheet_preview.zoom_changed.connect(sheet_bar.get_node("ZoomSlider").set_value_no_signal)
 	sheet_bar.get_node("ZoomOne").pressed.connect(sheet_preview.set_zoom_percent.bind(100.0))
 	sheet_bar.get_node("CenterBtn").pressed.connect(sheet_preview.fit)
+	_light_button.toggled.connect(_on_light_toggled)
 	_sheet_settings.get_node("FrameRow/Frames").item_selected.connect(_on_sheet_tag_selected)
 	_sheet_settings.get_node("ViewRow/View").item_selected.connect(_sheet_settings_changed.unbind(1))
 	_sheet_settings.get_node("ViewRow/Center").toggled.connect(_sheet_settings_changed.unbind(1))
@@ -156,6 +161,7 @@ func _save_export_settings() -> void:
 		"turntable": _sheet_settings.get_node("TurntableRow/Turntable").button_pressed,
 		"views": _sheet_settings.get_node("TurntableRow/Views").value,
 		"metadata": _controls.get_node("ExportRow/Metadata").button_pressed,
+		"normal": _light_button.button_pressed,
 		"center": _model.get_node("AnimationRow/Center").button_pressed,
 		"model_tag": State.document.tags.find(_selected_tag),
 		"sheet_tag": State.document.tags.find(_sheet_tag),
@@ -178,6 +184,7 @@ func _restore_export_settings() -> void:
 	_sheet_settings.get_node("TurntableRow/Turntable").set_pressed_no_signal(saved.get("turntable", true))
 	_sheet_settings.get_node("TurntableRow/Views").set_value_no_signal(saved.get("views", 8))
 	_controls.get_node("ExportRow/Metadata").set_pressed_no_signal(saved.get("metadata", false))
+	_light_button.set_pressed_no_signal(saved.get("normal", false))
 	_model.get_node("AnimationRow/Center").set_pressed_no_signal(saved.get("center", false))
 	var lighting: Dictionary = saved.get("lighting", _default_lighting)
 	_model_scene.set_lighting_settings(lighting)
@@ -189,6 +196,10 @@ func _restore_export_settings() -> void:
 	_model_scene.set_orthographic(_pending_export_camera.get("orthographic", _default_camera.orthographic))
 	_gif_button.set_pressed_no_signal(false)
 	_controls.get_node("Preview").clear_animation()
+	_controls.get_node("Preview").set_light_enabled(false)
+	_controls.get_node("Preview").set_normal_map(null)
+	_preview_normal_image = null
+	_preview_normal_texture = null
 	_restoring_export_settings = false
 
 
@@ -219,6 +230,7 @@ func current_export_settings() -> Dictionary:
 			"tile_size": int(_sheet_settings.get_node("SizeRow/Size").value),
 			"views": _view_count(),
 			"metadata": _controls.get_node("ExportRow/Metadata").button_pressed,
+			"normal": _light_button.button_pressed,
 			"tag": sheet_tag_index,
 			"tag_name": _sheet_tag.name if _sheet_tag else "",
 			"first_frame": sheet_range.x,
@@ -372,8 +384,12 @@ func _sheet_settings_changed() -> void:
 	_preview_revision += 1
 	_preview_due_ms = Time.get_ticks_msec() + PREVIEW_DELAY_MS
 	_preview_image = null
+	_preview_normal_image = null
+	_preview_normal_texture = null
 	var preview: Control = _controls.get_node("Preview")
 	preview.clear_animation()
+	preview.set_light_enabled(false)
+	preview.set_normal_map(null)
 	preview.texture = null
 	_save_export_settings()
 	_sync()
@@ -524,11 +540,19 @@ func _sync() -> void:
 	_sheet_settings.get_node("SizeRow/Size").tooltip_text = "Frame size: %d × %d px. Use Reset for the camera framing." % [tile_size, tile_size]
 	var layout := sheet_layout(count * views, tile_size)
 	var gif := _gif_enabled()
+	var normal_on := _light_button.button_pressed and not gif
 	_menu_item.get_node("ExportBtn").disabled = busy
 	_model.get_node("Export").disabled = busy
 	_export_button.disabled = busy or (not gif and (layout.size.x > Image.MAX_WIDTH or layout.size.y > Image.MAX_HEIGHT))
-	_export_button.tooltip_text = "Export the animation as a GIF" if gif else "Export the sprite sheet as a PNG image"
+	if gif:
+		_export_button.tooltip_text = "Export the animation as a GIF"
+	elif normal_on:
+		_export_button.tooltip_text = "Export the sprite sheet and the normal map as PNG images"
+	else:
+		_export_button.tooltip_text = "Export the sprite sheet as a PNG image"
 	_gif_button.disabled = busy
+	_light_button.disabled = busy or gif
+	_light_button.tooltip_text = "Turn off GIF mode to enable normal maps." if gif else "Enable normal maps. Move the pointer over the sheet to light it. The export writes a normal map sheet."
 	for path in ["FrameRow/Frames", "ViewRow/View", "ViewRow/Center"]:
 		_sheet_settings.get_node(path).disabled = busy
 	_sheet_settings.get_node("SizeRow/Size").editable = not busy
@@ -554,6 +578,8 @@ func _export_status() -> Dictionary:
 		else:
 			var layout := sheet_layout(count * views, tile_size)
 			message = "%d × %d pixels · %d frames × %d views" % [layout.size.x, layout.size.y, count, views]
+			if _light_button.button_pressed:
+				message += " · normal"
 	return {
 		"left": "%s   #%d/%d   %d%%" % [
 			message,
@@ -610,6 +636,7 @@ func _choose_export_file() -> void:
 
 
 func _choose_sheet_file() -> void:
+	_sheet_dialog.title = "Export Sprite Sheet and Normal Map" if _light_button.button_pressed else "Export Sprite Sheet"
 	_sheet_dialog.current_file = State.document.get_file_name().get_basename() + "_sheet.png"
 	_sheet_dialog.popup_centered()
 
@@ -620,8 +647,18 @@ func _choose_gif_file() -> void:
 
 
 func _on_gif_toggled(_pressed: bool) -> void:
+	var preview: Control = _controls.get_node("Preview")
+	if _gif_enabled():
+		preview.set_light_enabled(false)
+	else:
+		preview.set_normal_map(_preview_normal_texture)
+		preview.set_light_enabled(_light_button.button_pressed)
 	_apply_preview_animation()
 	_sync()
+
+
+func _on_light_toggled(_pressed: bool) -> void:
+	_sheet_settings_changed()
 
 
 func _on_gltf_file_selected(path: String) -> void:
@@ -664,18 +701,21 @@ func export_gltf_settings(path: String, settings: Dictionary) -> Error:
 
 
 func _on_sheet_file_selected(path: String) -> void:
-	var frame_range := _selected_frames()
-	var resolution := int(_sheet_settings.get_node("SizeRow/Size").value)
-	var tag_name: String = _sheet_tag.name if _sheet_tag else ""
-	_report_result(await export_sprite_sheet(path, frame_range.x, frame_range.y, resolution, _sheet_settings.get_node("ViewRow/View").selected, _controls.get_node("ExportRow/Metadata").button_pressed, _view_count(), tag_name), path)
+	var settings: Dictionary = current_export_settings().sprite
+	_report_result(await export_sprite_sheet_settings(path, settings), path, bool(settings.get("normal", false)))
 
 
 func _on_gif_file_selected(path: String) -> void:
 	_report_result(await export_gif(path), path)
 
 
-func _report_result(error: Error, path: String) -> void:
-	_result_message = "Saved %s" % path.get_file() if error == OK else ("Export cancelled" if error == ERR_BUSY or error == ERR_UNAVAILABLE else "Export failed: %s" % error_string(error))
+func _report_result(error: Error, path: String, normal := false) -> void:
+	if error == OK:
+		_result_message = "Saved %s" % path.get_file()
+		if normal:
+			_result_message += " + normal"
+	else:
+		_result_message = "Export cancelled" if error == ERR_BUSY or error == ERR_UNAVAILABLE else "Export failed: %s" % error_string(error)
 	_refresh_export_status()
 
 
@@ -692,6 +732,11 @@ static func sheet_layout(frame_count: int, tile_size: int) -> Dictionary:
 		var position := Vector2i(index % actual_columns, floori(index / float(actual_columns))) * stride
 		rects.append(Rect2i(position, dimensions))
 	return {"size": size, "tile_size": dimensions, "rects": rects}
+
+
+## Returns the aligned normal sheet path for one color sheet path.
+static func normal_path(path: String) -> String:
+	return path.get_basename() + "_normal.png"
 
 
 func _sheet_camera(view: int, views := 1, orthographic_value: Variant = null) -> Dictionary:
@@ -757,7 +802,8 @@ func _render_current(document: VoxelDocument, revision: int) -> bool:
 	return not _cancel_requested and State.has_operation(_operation_id)
 
 
-func _render_sheet(frames: Array[VoxelFrame], settings: Dictionary, document: VoxelDocument, revision := -1) -> Image:
+func _render_sheet(frames: Array[VoxelFrame], settings: Dictionary, document: VoxelDocument, revision := -1) -> Variant:
+	var outputs: Array = settings.get("outputs", ["color"])
 	var lighting_settings: Dictionary = settings.lighting
 	var transforms: Array[Transform3D] = settings.transforms
 	var layout: Dictionary = settings.layout
@@ -770,45 +816,71 @@ func _render_sheet(frames: Array[VoxelFrame], settings: Dictionary, document: Vo
 	var camera: Camera3D = viewport.get_node("Node3D/Camera3D")
 	var light: DirectionalLight3D = viewport.get_node("Node3D/Light")
 	camera.transform = transforms[0]
-	var count: int = layout.rects.size()
-	var sheet := Image.create(layout.size.x, layout.size.y, false, Image.FORMAT_RGBA8)
-	sheet.fill(Color.TRANSPARENT)
+	var tile_count: int = layout.rects.size()
+	var capture_count := tile_count * outputs.size()
+	var sheets := {}
+	for output in outputs:
+		var sheet := Image.create(layout.size.x, layout.size.y, false, Image.FORMAT_RGBA8)
+		sheet.fill(Color.TRANSPARENT)
+		sheets[output] = sheet
+	var normal_material: ShaderMaterial
+	if outputs.has("normal"):
+		normal_material = ShaderMaterial.new()
+		normal_material.shader = NORMAL_SHADER
 	var index := 0
+	var capture_index := 0
+	var complete := true
 	for pose in transforms:
 		if not _render_current(document, revision):
+			complete = false
 			break
 		camera.transform = pose
 		if lighting_settings.view_locked:
 			light.basis = camera.basis * lighting_settings.view_basis
 		for frame in frames:
-			State.update_operation(_preview_operation_id if revision >= 0 else _operation_id, index, count, "Rendering sheet preview" if revision >= 0 else "Rendering sprite %d" % (index + 1))
 			renderer.source_frame = frame
 			while _render_current(document, revision) and not renderer.is_settled():
 				await get_tree().process_frame
 			if not _render_current(document, revision):
+				complete = false
 				break
-			# Render the changed geometry and camera before capturing the shadowed image.
-			viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
-			await RenderingServer.frame_post_draw
-			if not _render_current(document, revision):
-				break
-			viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
-			await RenderingServer.frame_post_draw
-			if not _render_current(document, revision):
-				break
-			var image := viewport.get_texture().get_image()
-			image.convert(Image.FORMAT_RGBA8)
 			var rect: Rect2i = layout.rects[index]
-			image.resize(rect.size.x, rect.size.y, Image.INTERPOLATE_NEAREST)
-			sheet.blit_rect(image, Rect2i(Vector2i.ZERO, rect.size), rect.position)
+			for output in outputs:
+				var label := "Rendering sheet preview" if revision >= 0 else ("Rendering sprite %d" % (index + 1) if output == "color" else "Rendering normal %d" % (index + 1))
+				State.update_operation(_preview_operation_id if revision >= 0 else _operation_id, capture_index, capture_count, label)
+				renderer.override_material = normal_material if output == "normal" else null
+				# The color pass renders the changed geometry and camera before the
+				# shadowed image. The unshaded normal pass needs one draw.
+				viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
+				await RenderingServer.frame_post_draw
+				if not _render_current(document, revision):
+					complete = false
+					break
+				if output == "color":
+					viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
+					await RenderingServer.frame_post_draw
+					if not _render_current(document, revision):
+						complete = false
+						break
+				var image := viewport.get_texture().get_image()
+				image.convert(Image.FORMAT_RGBA8)
+				image.resize(rect.size.x, rect.size.y, Image.INTERPOLATE_NEAREST)
+				var sheet: Image = sheets[output]
+				sheet.blit_rect(image, Rect2i(Vector2i.ZERO, rect.size), rect.position)
+				capture_index += 1
+			renderer.override_material = null
+			if not complete:
+				break
 			index += 1
+		if not complete:
+			break
 	if is_instance_valid(viewport):
 		viewport.free()
 	if revision >= 0:
 		_preview_viewport = null
 	else:
 		_export_viewport = null
-	return sheet if index == count else null
+	return sheets if complete and capture_index == capture_count else null
 
 
 ## Builds one temporary render viewport for the sprite sheet or the GIF export.
@@ -816,9 +888,14 @@ func _open_image_viewport(settings: Dictionary, viewport_size: Vector2i) -> SubV
 	var lighting_settings: Dictionary = settings.lighting
 	var viewport: SubViewport = VoxelImageRenderer.VIEWPORT_SCENE.instantiate()
 	viewport.size = viewport_size
+	# The normal pass writes data bytes. Debanding and tonemapping would change
+	# those bytes, so the sheet viewport keeps a linear data path.
+	viewport.use_debanding = false
 	add_child(viewport)
 	var environment_node: WorldEnvironment = viewport.get_node("Node3D/WorldEnvironment")
 	environment_node.environment = environment_node.environment.duplicate()
+	environment_node.environment.tonemap_mode = Environment.TONE_MAPPER_LINEAR
+	environment_node.environment.tonemap_exposure = 1.0
 	var light: DirectionalLight3D = viewport.get_node("Node3D/Light")
 	VoxelImageRenderer.apply_lighting(light, environment_node.environment, lighting_settings)
 	var renderer: VoxelRenderer = viewport.get_node("%VoxelRenderer")
@@ -920,15 +997,25 @@ func _update_sheet_preview() -> void:
 		_sheet_lighting()
 	)
 	settings.layout = layout
-	_preview_operation_id = State.begin_operation("Rendering preview", frames.size() * views, false, self)
-	var image := await _render_sheet(frames, settings, State.document, revision)
+	var normal_on: bool = _light_button.button_pressed
+	var outputs: Array = ["color"]
+	if normal_on:
+		outputs.append("normal")
+	settings.outputs = outputs
+	_preview_operation_id = State.begin_operation("Rendering preview", frames.size() * views * outputs.size(), false, self)
+	var images: Variant = await _render_sheet(frames, settings, State.document, revision)
 	_preview_running = false
 	State.finish_operation(_preview_operation_id)
 	_preview_operation_id = 0
 	_preview_viewport = null
-	if image and revision == _preview_revision:
-		_preview_image = image
-		_controls.get_node("Preview").texture = ImageTexture.create_from_image(image)
+	if images and revision == _preview_revision:
+		_preview_image = images.get("color")
+		_preview_normal_image = images.get("normal")
+		_preview_normal_texture = ImageTexture.create_from_image(_preview_normal_image) if _preview_normal_image else null
+		var preview: Control = _controls.get_node("Preview")
+		preview.texture = ImageTexture.create_from_image(_preview_image)
+		preview.set_normal_map(_preview_normal_texture)
+		preview.set_light_enabled(normal_on and not _gif_enabled())
 		_apply_preview_animation()
 
 
@@ -955,8 +1042,9 @@ func _apply_preview_animation() -> void:
 ## Exports a PNG sprite sheet and returns the error code. [param first_frame]
 ## and [param last_frame] select the range. [param tile_size] sets one tile in
 ## pixels. [param view] selects the camera view. [param include_json] also
-## writes the Aseprite JSON sidecar. The sidecar is off by default. [param views] adds turntable views.
-func export_sprite_sheet(path: String, first_frame := 0, last_frame := -1, tile_size := -1, view := 1, include_json := false, views := 1, tag_name := "") -> Error:
+## writes the Aseprite JSON sidecar. The sidecar is off by default. [param views]
+## adds turntable views. [param normal] also writes the aligned normal sheet.
+func export_sprite_sheet(path: String, first_frame := 0, last_frame := -1, tile_size := -1, view := 1, include_json := false, views := 1, tag_name := "", normal := false) -> Error:
 	if view < 0 or view >= VIEW_KEYS.size():
 		return ERR_INVALID_PARAMETER
 	return await export_sprite_sheet_settings(path, {
@@ -967,17 +1055,19 @@ func export_sprite_sheet(path: String, first_frame := 0, last_frame := -1, tile_
 		"metadata": include_json,
 		"views": views,
 		"tag_name": tag_name,
+		"normal": normal,
 	})
 
 
 ## Exports a PNG sprite sheet with explicit settings. Keys: [code]first_frame[/code],
 ## [code]last_frame[/code], [code]tile_size[/code], [code]view[/code] (an API
 ## name from [constant VIEW_KEYS]), [code]views[/code], [code]orthographic[/code],
-## [code]center[/code], [code]metadata[/code], [code]tag_name[/code], and
-## [code]lighting[/code]. An absent view, camera, size, or metadata key keeps the
-## value of the export tab. The frame range defaults to every frame, and a
-## negative [code]last_frame[/code] or [code]tile_size[/code] also selects the
-## default. The call does not change the document or the saved export settings.
+## [code]center[/code], [code]metadata[/code], [code]tag_name[/code],
+## [code]lighting[/code], and [code]normal[/code]. An absent view, camera, size,
+## metadata, or normal key keeps the value of the export tab. The frame range
+## defaults to every frame, and a negative [code]last_frame[/code] or
+## [code]tile_size[/code] also selects the default. The call does not change the
+## document or the saved export settings.
 func export_sprite_sheet_settings(path: String, settings: Dictionary) -> Error:
 	if _exporting or State.edit_busy():
 		return ERR_BUSY
@@ -998,6 +1088,10 @@ func export_sprite_sheet_settings(path: String, settings: Dictionary) -> Error:
 	var orthographic := bool(settings.get("orthographic", tab.orthographic))
 	var center := bool(settings.get("center", tab.center))
 	var include_json := bool(settings.get("metadata", tab.metadata))
+	var normal_value: Variant = settings.get("normal", tab.get("normal", false))
+	if not normal_value is bool:
+		return ERR_INVALID_PARAMETER
+	var normal: bool = normal_value
 	var tag_name := str(settings.get("tag_name", ""))
 	var lighting: Dictionary = settings.get("lighting", {})
 	if lighting.is_empty():
@@ -1011,21 +1105,36 @@ func export_sprite_sheet_settings(path: String, settings: Dictionary) -> Error:
 	var layout := sheet_layout(frames.size() * views, tile_size)
 	if layout.size.x > Image.MAX_WIDTH or layout.size.y > Image.MAX_HEIGHT:
 		return ERR_INVALID_PARAMETER
+	var outputs: Array = ["color"]
+	if normal:
+		outputs.append("normal")
 	render_settings.layout = layout
+	render_settings.outputs = outputs
 	if path.get_extension().to_lower() != "png":
 		path += ".png"
-	var metadata := sheet_metadata(path, first_frame, last_frame, layout, views, tag_name)
+	var metadata := sheet_metadata(path, first_frame, last_frame, layout, views, tag_name, normal)
 	var source_document := State.document
 	State.stop()
 	_exporting = true
 	_cancel_requested = false
 	_preview_revision += 1
-	_operation_id = State.begin_operation("Exporting", frames.size() * views, true, self, _cancel_export)
-	var image := await _render_sheet(frames, render_settings, source_document)
-	if image == null:
+	_operation_id = State.begin_operation("Exporting", frames.size() * views * outputs.size(), true, self, _cancel_export)
+	var images: Variant = await _render_sheet(frames, render_settings, source_document)
+	if not images is Dictionary:
 		_finish_export()
 		return ERR_BUSY
-	var error := image.save_png(path)
+	var sheets: Dictionary = images
+	var color_image: Image = sheets.get("color")
+	if color_image == null:
+		_finish_export()
+		return ERR_INVALID_DATA
+	var error := color_image.save_png(path)
+	if error == OK and normal:
+		var normal_image: Image = sheets.get("normal")
+		if normal_image == null:
+			error = ERR_INVALID_DATA
+		else:
+			error = normal_image.save_png(normal_path(path))
 	if error == OK and include_json:
 		var file := FileAccess.open(path.get_basename() + ".json", FileAccess.WRITE)
 		if file:
@@ -1116,8 +1225,9 @@ func export_gif_settings(path: String, settings: Dictionary) -> Error:
 
 
 ## Returns the Aseprite JSON sidecar for one sprite sheet. It lists every frame
-## rectangle and every tag.
-func sheet_metadata(path: String, first: int, last: int, layout: Dictionary, views := 1, tag_name := "") -> Dictionary:
+## rectangle and every tag. When [param normal] is true it also names the normal
+## sheet and its convention.
+func sheet_metadata(path: String, first: int, last: int, layout: Dictionary, views := 1, tag_name := "", normal := false) -> Dictionary:
 	var count := last - first + 1
 	var dimensions: Vector2i = layout.tile_size
 	var label: String = tag_name if not tag_name.is_empty() else path.get_file().get_basename()
@@ -1136,7 +1246,10 @@ func sheet_metadata(path: String, first: int, last: int, layout: Dictionary, vie
 				continue
 			var tag_label := tag.name if views == 1 else "%s_%d" % [tag.name, view_index]
 			tags.append({"name": tag_label, "from": maxi(tag.from, first) - first + view_index * count, "to": mini(tag.to, last) - first + view_index * count, "direction": ["forward", "reverse", "pingpong", "pingpong_reverse"][tag.loop_mode], "repeat": str(tag.repeats)})
-	return {"frames": frames, "meta": {"app": VoxelDocument.APP_NAME, "image": path.get_file(), "format": "RGBA8888", "size": {"w": layout.size.x, "h": layout.size.y}, "scale": "1", "frameTags": tags}}
+	var meta := {"app": VoxelDocument.APP_NAME, "image": path.get_file(), "format": "RGBA8888", "size": {"w": layout.size.x, "h": layout.size.y}, "scale": "1", "frameTags": tags}
+	if normal:
+		meta["lve"] = {"normal": {"image": normal_path(path).get_file(), "space": "view", "convention": "+x, +y, +z"}}
+	return {"frames": frames, "meta": meta}
 
 
 func _cancel_export() -> void:

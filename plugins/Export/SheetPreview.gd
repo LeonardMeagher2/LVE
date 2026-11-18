@@ -6,7 +6,7 @@ extends Control
 ## middle or right drag pans. The left drag pans in pan mode. An animation list
 ## shows one tile at a time with the source frame delays.
 
-const CHECKER := preload("res://ui/Checker.png")
+const LIGHT_SHADER := preload("res://plugins/Export/preview_light.gdshader")
 
 ## Emitted when the zoom changes.
 signal zoom_changed(percent: float)
@@ -27,10 +27,22 @@ var _animation_elapsed := 0.0
 var _zoom := 100.0
 var _pan := Vector2.ZERO
 var _fitted := true
+var _light_enabled := false
+var _pointer_inside := false
+var _pointer := Vector2.ZERO
+var _normal_texture: Texture2D
+var _light_material: ShaderMaterial
+@onready var _light: PointLight2D = $Light
 
 
 func _ready() -> void:
 	resized.connect(_on_resized)
+	mouse_entered.connect(_on_mouse_entered)
+	mouse_exited.connect(_on_mouse_exited)
+	_light_material = ShaderMaterial.new()
+	_light_material.shader = LIGHT_SHADER
+	_light_material.set_shader_parameter("ambient", 0.65)
+	_light.enabled = false
 
 
 func _on_resized() -> void:
@@ -110,6 +122,45 @@ func set_pan_mode(enabled: bool) -> void:
 	pan_mode = enabled
 
 
+## Enables the pointer light. The preview stays unshaded until the pointer is
+## inside it and a normal sheet is available.
+func set_light_enabled(enabled: bool) -> void:
+	_light_enabled = enabled
+	_update_light()
+
+
+## Sets the normal sheet used by the pointer light.
+func set_normal_map(texture: Texture2D) -> void:
+	_normal_texture = texture
+	_light_material.set_shader_parameter("has_normal", texture != null)
+	_light_material.set_shader_parameter("normal_map", texture)
+	_update_light()
+	queue_redraw()
+
+
+func _on_mouse_entered() -> void:
+	_pointer_inside = true
+	_pointer = get_local_mouse_position()
+	_update_light()
+
+
+func _on_mouse_exited() -> void:
+	_pointer_inside = false
+	_update_light()
+
+
+# Shading is only active over the pointer. Every other state uses the plain
+# color sheet and the default canvas shader. Moving the pointer only moves the
+# light, so the sheet is not redrawn.
+func _update_light() -> void:
+	var shaded := _light_enabled and _pointer_inside and _normal_texture != null
+	if shaded != (material != null):
+		material = _light_material if shaded else null
+		queue_redraw()
+	_light.enabled = shaded
+	_light.position = _pointer
+
+
 ## Sets the zoom percent and leaves the fitted view.
 func set_zoom_percent(percent: float) -> void:
 	_fitted = false
@@ -124,7 +175,6 @@ func zoom(factor: float) -> void:
 
 
 func _draw() -> void:
-	draw_texture_rect(CHECKER, Rect2(Vector2.ZERO, size), true)
 	if texture:
 		var source_rect := Rect2(Vector2.ZERO, texture.get_size())
 		if not _animation_rects.is_empty():
@@ -135,6 +185,9 @@ func _draw() -> void:
 
 
 func _gui_input(event: InputEvent) -> void:
+	if event is InputEventMouseMotion:
+		_pointer = event.position
+		_update_light()
 	if event is InputEventMouseButton and event.pressed:
 		if event.button_index == MOUSE_BUTTON_WHEEL_UP or event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
 			zoom(1.2 if event.button_index == MOUSE_BUTTON_WHEEL_UP else 1.0 / 1.2)

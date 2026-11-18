@@ -168,7 +168,7 @@ Workspace changes do not mark the document as edited.
 Export settings support these keys.
 
 - `view`, `automatic_size`, and `frame_size`
-- `turntable`, `views`, `metadata`, and `center`
+- `turntable`, `views`, `metadata`, `normal`, and `center`
 - `model_tag` and `sheet_tag`, with `-1` for all tags
 - `lighting` and `camera`
 
@@ -176,6 +176,7 @@ Older files can also hold `sprite_ortho`, `unlit`, and `ao`.
 The editor accepts these keys and ignores them.
 The sprite projection follows the export camera.
 Ambient occlusion strength is a document setting.
+`normal` writes an aligned normal sheet with the sprite sheet.
 
 Export lighting requires `basis`, `color`, `energy`, `ambient_color`, `ambient_energy`, `shadows`, and `shaded`.
 It also supports `view_locked` and `view_basis`.

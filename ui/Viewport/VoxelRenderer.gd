@@ -97,6 +97,14 @@ var unshaded := false:
 			return
 		unshaded = value
 		_apply_materials()
+## The material every chunk uses instead of its own material, or null. An export
+## data pass sets it to draw normals. Null restores the cached chunk materials.
+var override_material: Material:
+	set(value):
+		if value == override_material:
+			return
+		override_material = value
+		_apply_materials()
 # Whether one slice request is assigning its three values. A batch request
 # rebuilds once, so a layer-count drag pays one rebuild per step.
 var _slice_setting := false
@@ -621,6 +629,8 @@ func _install(chunk_location: Vector3i, surface_key: PackedInt64Array, entry: Di
 # shared cached material. An unshaded view uses a per-renderer copy, because a
 # shading mode on the shared material would change every other viewport.
 func _instance_material(chunk_location: Vector3i, source: Material) -> Material:
+	if override_material:
+		return override_material
 	if source == null:
 		_chunk_materials.erase(chunk_location)
 		_unshaded_materials.erase(chunk_location)
