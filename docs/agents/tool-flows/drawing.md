@@ -382,7 +382,7 @@ Policy boundaries:
 - The mouse commits at step 1. MCP can request step 2 through 4.
 - The preview is the actual result: add adds, subtract removes, and intersect removes cells outside the shape.
 - The preview shows the result frame in the main viewport renderer. The live document stays unchanged until commit.
-- A settings, context, or shape change cancels the running preview job and starts the newest request. A handle drag, a body move, and a rotation count as shape changes. The previous result stays visible until the newest result installs.
+- A settings, context, or discrete shape change cancels the running preview job and starts the newest request. Starting or finishing a shape and a Shift or Alternate toggle count as discrete. A continuous handle, body, or rotation drag does not cancel, so a moving pointer keeps a steady preview. The previous result stays visible until the newest result installs.
 - A preview starts at most once per frame. Pointer events that arrive in one frame collapse into the newest request. `_process` starts that request on the next frame, so a fast mouse costs no frame copy per event.
 - A preview frame shares its untouched chunks with the document. A swap rebuilds only the chunks the shape wrote, and each changed chunk keeps its old mesh until the replacement is ready. No chunk mesh blinks.
 - The face and corner crosses keep a constant screen size. The gizmo scales them from the camera size, so a zoom does not change the grab target.

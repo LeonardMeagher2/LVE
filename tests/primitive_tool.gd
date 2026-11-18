@@ -517,6 +517,8 @@ func _chunk_stability() -> void:
 	step("When a preview grows the first chunk", func():
 		pass
 	)
+	# Freeze the surface work so the swap is checked before any mesh arrives.
+	renderer.set_process(false)
 	await _tool_preview(
 		{"kind": PrimitiveField.KIND_BOX, "center": Vector3.ZERO, "half_size": Vector3(1.5, 1.5, 1.5)},
 		PrimitiveField.OP_ADD
@@ -527,6 +529,7 @@ func _chunk_stability() -> void:
 		expect(renderer._chunk_instances[other_chunk].visible, "the untouched chunk is not hidden")
 		expect(renderer._chunk_instances[other_chunk].mesh == other_mesh, "the untouched chunk keeps its mesh")
 	)
+	renderer.set_process(true)
 	deadline = Time.get_ticks_msec() + 10000
 	while Time.get_ticks_msec() < deadline:
 		if renderer._chunk_instances[changed_chunk].mesh != changed_mesh:

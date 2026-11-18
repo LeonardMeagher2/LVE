@@ -237,7 +237,7 @@ func handle_input(event: InputEvent, pos: Vector2) -> bool:
 				_end_cell = pick.target
 			_shift = mm.shift_pressed
 			_alt = mm.alt_pressed
-			_refresh_preview(true)
+			_refresh_preview()
 			return true
 		if (_dragging_handle or _dragging_new or _moving or _rotating) and mm.button_mask == 0:
 			if _dragging_handle:
@@ -730,7 +730,7 @@ func _update_ring(origin: Vector3, direction: Vector3) -> void:
 	_pending_rotation = _rotate_start * Quaternion(local_axis, snapped)
 	if _active_index >= 0 and _active_index < _primitives.size():
 		_primitives[_active_index] = _build_primitive(_pending_box, _active_axis)
-	_refresh_preview(true)
+	_refresh_preview()
 
 
 func _begin_move(origin: Vector3, dir: Vector3) -> void:
@@ -761,7 +761,7 @@ func _update_move(origin: Vector3, dir: Vector3) -> void:
 	_move_offset = offset
 	_pending_box = AABB(_move_start_box.position + Vector3(offset), _move_start_box.size)
 	_primitives[_active_index] = _build_primitive(_pending_box, _active_axis)
-	_refresh_preview(true)
+	_refresh_preview()
 
 
 func _plane_point(origin: Vector3, dir: Vector3, plane: StrokePlane) -> Vector3:
@@ -818,7 +818,7 @@ func _update_handle(origin: Vector3, dir: Vector3) -> void:
 		high[_handle_axis] = value
 	_pending_box = AABB(low, high - low)
 	_primitives[_active_index] = _build_primitive(_pending_box)
-	_refresh_preview(true)
+	_refresh_preview()
 
 
 func _update_corner(point: Vector3) -> void:
@@ -833,7 +833,7 @@ func _update_corner(point: Vector3) -> void:
 			high[axis] += shift
 	_pending_box = AABB(low, high - low)
 	_primitives[_active_index] = _build_primitive(_pending_box)
-	_refresh_preview(true)
+	_refresh_preview()
 
 
 ## Returns a world point in the box frame of the current handle drag. The
