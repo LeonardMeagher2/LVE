@@ -9,7 +9,7 @@ Create voxel art and animation.
 
 LVE is a voxel editor for 3D pixel art and animation.
 Paint and sculpt voxels, set per-voxel materials, and animate frames with tags.
-Export a low-poly glTF mesh, a sprite sheet with an optional normal map, or an animated GIF.
+Export a low-poly glTF mesh, a sprite sheet with optional normal and specular maps, or an animated GIF.
 
 ## Features
 
@@ -22,8 +22,8 @@ Export a low-poly glTF mesh, a sprite sheet with an optional normal map, or an a
 - Mirror and slice the model while you work.
 - Animate frames with tags, loops, and playback.
 - Set albedo, metallic, roughness, and emission per voxel.
-- Export glTF, GLB, sprite sheets with optional normal maps, and animated GIFs.
-- Preview normal-mapped 2D lighting at the pointer and inspect the normal sheet.
+- Export glTF, GLB, sprite sheets with optional normal and specular maps, and animated GIFs.
+- Preview normal-mapped 2D lighting at the pointer and inspect the normal and specular sheets.
 - Save compact `.lve` documents or `.lve.png` files with a preview.
 
 ## Document files

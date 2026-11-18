@@ -84,7 +84,7 @@ A client reads a resource with `resources/list` and `resources/read`. The initia
 | `set_document_settings` | Set smooth normals, ambient occlusion strength, and the centered document size. One undo action |
 | `get_export_settings` | Read the export settings the editor uses now. It also returns the document path and the default model and sprite paths |
 | `export_model` | Export a `.glb` or `.gltf` file with per-call model settings. Omit `path` to export beside the document |
-| `export_sprite_sheet` | Export a PNG sprite sheet, an optional aligned normal sheet, and optional Aseprite JSON metadata. Omit `path` to export beside the document |
+| `export_sprite_sheet` | Export a PNG sprite sheet, optional aligned normal and specular sheets, and optional Aseprite JSON metadata. Omit `path` to export beside the document |
 | `export_gif` | Export an animated GIF with per-call settings. Omit `path` to export beside the document |
 | `add_frame` | Add blank frames at the end or at an index, in one undo action. A new frame holds no cells |
 | `remove_frame` | Remove one frame, or a list in one undo action. The last frame stays |
@@ -121,7 +121,7 @@ Each tool description ends with the guide topic for its workflow. The topic hold
 - `camera`: `yaw`, `pitch`, `distance`, `initial_distance`, and `target` as `[x, y, z]`. Angles are radians. An export camera also accepts `orthographic` and `fov`.
 - `lighting`: `basis`, `color`, `energy`, `ambient_color`, `ambient_energy`, `shadows`, `shaded`, `view_locked`, and `view_basis`. A basis is three vectors: x, y, then z.
 - `view`: `grid`, `wireframe`, `orthographic`, `view_mode`, and `environment_open`.
-- `export`: the export tab settings. It holds `view`, `frame_size`, `views`, `turntable`, `metadata`, `normal`, `center`, `sprite_center`, `model_tag`, `sheet_tag`, `lighting`, and `camera`.
+- `export`: the export tab settings. It holds `view`, `frame_size`, `views`, `turntable`, `metadata`, `normal`, `specular`, `center`, `sprite_center`, `model_tag`, `sheet_tag`, `lighting`, and `camera`.
 - `playing`: a boolean. A saved document with `playing` true runs its active tag when it opens.
 
 An export `lighting` entry must be complete. It needs `basis`, `color`, `energy`, `ambient_color`, `ambient_energy`, `shadows`, and `shaded`. The document stores each editor strength in the color alpha. Write `energy` and `ambient_energy` instead of an alpha value.
@@ -195,11 +195,13 @@ The server logs one line per tool call with its response bytes in `user://mcp_se
 
 ## Export
 
-`get_export_settings` reads the values the export tab uses now: the sheet view, the tile size, the tag, the normal sheet choice, and the model options.
+`get_export_settings` reads the values the export tab uses now: the sheet view, the tile size, the tag, the normal and specular sheet choices, and the model options.
 
-`export_model` writes a `.glb` or `.gltf` file. It accepts `center`, `tag`, `smooth_normals`, `ao`, and `unlit`. It exports lit materials by default. `export_sprite_sheet` writes a PNG and optional Aseprite JSON metadata. It accepts `first_frame`, `last_frame`, `tag`, `tile_size`, `view`, `views`, `orthographic`, `center`, `metadata`, and `normal`. `export_gif` writes an animated GIF that loops forever and uses each frame delay. It accepts `first_frame`, `last_frame`, `tag`, `tile_size`, `view`, `views`, `orthographic`, and `center`. `tag` is a tag index, and -1 uses `first_frame` and `last_frame`. `views` is the number of turntable views per frame, so 8 views over 4 frames gives 32 tiles. The sprite projection defaults to the export camera. Omit `path` on any export tool to write beside the document. An unsaved document exports to the user directory. `get_export_settings` returns the default document, model, and sprite paths.
+`export_model` writes a `.glb` or `.gltf` file. It accepts `center`, `tag`, `smooth_normals`, `ao`, and `unlit`. It exports lit materials by default. `export_sprite_sheet` writes a PNG and optional Aseprite JSON metadata. It accepts `first_frame`, `last_frame`, `tag`, `tile_size`, `view`, `views`, `orthographic`, `center`, `metadata`, `normal`, and `specular`. `export_gif` writes an animated GIF that loops forever and uses each frame delay. It accepts `first_frame`, `last_frame`, `tag`, `tile_size`, `view`, `views`, `orthographic`, and `center`. `tag` is a tag index, and -1 uses `first_frame` and `last_frame`. `views` is the number of turntable views per frame, so 8 views over 4 frames gives 32 tiles. The sprite projection defaults to the export camera. Omit `path` on any export tool to write beside the document. An unsaved document exports to the user directory. `get_export_settings` returns the default document, model, and sprite paths.
 
-Set `normal` true to write a normal sheet beside the color sheet. The file is `<name>_normal.png`. It uses the same tile grid as the color sheet. The RGB channels hold the view-space normal in the +x, +y, +z convention. Alpha is 1 on a drawn pixel and 0 on an empty pixel. The sidecar names the file under `meta.lve.normal`. A GIF holds color frames only.
+Set `normal` true to write a normal sheet beside the color sheet. The file is `<name>_normal.png`. It uses the same tile grid as the color sheet. The RGB channels hold the view-space normal in the +x, +y, +z convention. Alpha is 1 on a drawn pixel and 0 on an empty pixel. The sidecar names the file under `meta.lve.normal`.
+
+Set `specular` true to write a specular sheet. The file is `<name>_specular.png`. The RGB channels hold the metallic mask. The alpha channel holds shininess, which is `1 - roughness`. Set the `CanvasTexture.specular_shininess` value below 1 to enable the map. The sidecar names the file under `meta.lve.specular`. A GIF holds color frames only.
 
 Pass a key only when the call needs a value that differs from the export tab. The call does not change the document or the saved export settings. Every export tool returns the resolved path and the resolved values.
 

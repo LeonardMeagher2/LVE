@@ -47,7 +47,7 @@ func _run() -> void:
 		source.view_settings = {"grid": false, "wireframe": true, "orthographic": true, "view_mode": 2, "environment_open": true}
 		source.edit_camera = {"yaw": 0.25, "pitch": 0.5, "distance": 18.0, "initial_distance": 24.0, "target": Vector3(1, 2, 3)}
 		source.lighting_settings = {"basis": Basis(Vector3.UP, 0.5), "color": Color(1, 0.5, 0.25, 0.75), "ambient_color": Color(0.2, 0.3, 0.4, 0.5)}
-		source.export_settings = {"view": 7, "sprite_ortho": false, "sprite_center": false, "automatic_size": true, "frame_size": 64.0, "turntable": false, "views": 12.0, "metadata": true, "normal": true, "center": false, "model_tag": 1, "sheet_tag": 2,
+		source.export_settings = {"view": 7, "sprite_ortho": false, "sprite_center": false, "automatic_size": true, "frame_size": 64.0, "turntable": false, "views": 12.0, "metadata": true, "normal": true, "specular": true, "center": false, "model_tag": 1, "sheet_tag": 2,
 			"lighting": {"basis": Basis.IDENTITY, "color": Color.WHITE, "ambient_color": Color.BLUE, "energy": 0.5, "ambient_energy": 0.25, "shadows": false, "shaded": true, "view_locked": true, "view_basis": Basis.IDENTITY},
 			"camera": {"yaw": 0.5, "pitch": 0.25, "distance": 10.0, "initial_distance": 12.0, "target": Vector3(1, 2, 3), "orthographic": true, "fov": 45.0}}
 		preview = Image.create(2, 2, false, Image.FORMAT_RGBA8)
@@ -83,6 +83,7 @@ func _run() -> void:
 				expect(not loaded.export_settings.sprite_center, "the file preserves the sprite Center choice")
 				expect(loaded.export_settings.automatic_size, "the file retains compatible legacy export settings")
 				expect(loaded.export_settings.normal, "the file preserves the normal sheet choice")
+				expect(loaded.export_settings.specular, "the file preserves the specular sheet choice")
 				expect(loaded.frames[1].count() == 0, "the empty frame retains its position")
 				expect(loaded.frames[0].count() == 4097, "the document restores every occupied voxel")
 				loaded.frames[2].set_cell(Vector3i.ZERO, VoxelFrame.material(Color.BLUE))
@@ -219,6 +220,9 @@ func _check_invalid_documents() -> void:
 	fields = source.document_data().duplicate(true)
 	fields.export.normal = "yes"
 	_reject(_wrap(var_to_bytes(fields)), "a non-boolean normal choice is rejected")
+	fields = source.document_data().duplicate(true)
+	fields.export.specular = "yes"
+	_reject(_wrap(var_to_bytes(fields)), "a non-boolean specular choice is rejected")
 	fields = source.document_data().duplicate(true)
 	fields.tools = []
 	_reject(_wrap(var_to_bytes(fields)), "a non-dictionary tool state is rejected")

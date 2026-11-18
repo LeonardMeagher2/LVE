@@ -105,6 +105,15 @@ var override_material: Material:
 			return
 		override_material = value
 		_apply_materials()
+## Returns the material a chunk uses instead of its own material. It receives the
+## chunk material, so a data pass can read its textures. An invalid callable
+## keeps the cached chunk materials.
+var material_builder: Callable:
+	set(value):
+		if value == material_builder:
+			return
+		material_builder = value
+		_apply_materials()
 # Whether one slice request is assigning its three values. A batch request
 # rebuilds once, so a layer-count drag pays one rebuild per step.
 var _slice_setting := false
@@ -631,6 +640,8 @@ func _install(chunk_location: Vector3i, surface_key: PackedInt64Array, entry: Di
 func _instance_material(chunk_location: Vector3i, source: Material) -> Material:
 	if override_material:
 		return override_material
+	if material_builder.is_valid():
+		return material_builder.call(source)
 	if source == null:
 		_chunk_materials.erase(chunk_location)
 		_unshaded_materials.erase(chunk_location)

@@ -47,7 +47,7 @@ const GUIDE_GROUPS := [
 	{
 		"slug": "export",
 		"title": "Export",
-		"description": "Model, sprite sheet with an optional normal sheet, and GIF export.",
+		"description": "Model, sprite sheet with optional normal and specular sheets, and GIF export.",
 		"headings": ["Export"],
 	},
 	{

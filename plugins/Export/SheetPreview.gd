@@ -31,6 +31,7 @@ var _light_enabled := false
 var _pointer_inside := false
 var _pointer := Vector2.ZERO
 var _normal_texture: Texture2D
+var _specular_texture: Texture2D
 var _light_material: ShaderMaterial
 @onready var _light: PointLight2D = $Light
 
@@ -134,6 +135,15 @@ func set_normal_map(texture: Texture2D) -> void:
 	_normal_texture = texture
 	_light_material.set_shader_parameter("has_normal", texture != null)
 	_light_material.set_shader_parameter("normal_map", texture)
+	_update_light()
+	queue_redraw()
+
+
+## Sets the specular sheet used by the pointer light.
+func set_specular_map(texture: Texture2D) -> void:
+	_specular_texture = texture
+	_light_material.set_shader_parameter("has_specular", texture != null)
+	_light_material.set_shader_parameter("specular_map", texture)
 	_update_light()
 	queue_redraw()
 

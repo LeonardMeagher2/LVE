@@ -2291,7 +2291,7 @@ func _export_sprite_sheet(args: Dictionary) -> Dictionary:
 		return _tool_error("first_frame and last_frame must name frames in order.")
 	settings["first_frame"] = first
 	settings["last_frame"] = last
-	for key in ["orthographic", "center", "metadata", "normal"]:
+	for key in ["orthographic", "center", "metadata", "normal", "specular"]:
 		if args.has(key):
 			settings[key] = _bool_arg(args, key, false)
 	if args.has("tile_size"):
@@ -2314,6 +2314,7 @@ func _export_sprite_sheet(args: Dictionary) -> Dictionary:
 	var view := str(settings.get("view", "isometric"))
 	var metadata := bool(settings.get("metadata", true))
 	var normal := bool(settings.get("normal", false))
+	var specular := bool(settings.get("specular", false))
 	_ensure_output_folder(path)
 	var was_playing := State.is_playing
 	var was_frame := State.current_frame
@@ -2330,6 +2331,8 @@ func _export_sprite_sheet(args: Dictionary) -> Dictionary:
 		"metadata_path": ProjectSettings.globalize_path(path.get_basename() + ".json") if metadata else "",
 		"normal": normal,
 		"normal_path": ProjectSettings.globalize_path(EXPORT_PLUGIN_SCRIPT.normal_path(path)) if normal else "",
+		"specular": specular,
+		"specular_path": ProjectSettings.globalize_path(EXPORT_PLUGIN_SCRIPT.specular_path(path)) if specular else "",
 		"width": size.x,
 		"height": size.y,
 		"tile_size": tile_size,
@@ -2359,6 +2362,7 @@ func _export_gif(args: Dictionary) -> Dictionary:
 	var settings: Dictionary = current_value.get("sprite", {}).duplicate() if current_value is Dictionary else {}
 	# A GIF holds color frames only.
 	settings.erase("normal")
+	settings.erase("specular")
 	if tag >= 0:
 		var tag_data := State.document.tags[tag]
 		first = tag_data.from

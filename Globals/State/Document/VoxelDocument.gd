@@ -632,7 +632,7 @@ static func _valid_export(data: Variant, tag_count: int) -> bool:
 				if not _valid_lighting(data[key], true): return false
 			"camera":
 				if not _valid_camera(data[key]): return false
-			"sprite_ortho", "sprite_center", "automatic_size", "turntable", "metadata", "center", "unlit", "normal":
+			"sprite_ortho", "sprite_center", "automatic_size", "turntable", "metadata", "center", "unlit", "normal", "specular":
 				if not data[key] is bool: return false
 			"ao":
 				if not _number_in(data[key], 0.0, 1.0): return false

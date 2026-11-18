@@ -9,6 +9,7 @@ extends VoxelPlugin
 const GLTF_EXPORT := preload("./GLTFExport.gd")
 const GIF_ENCODER := preload("./GifEncoder.gd")
 const NORMAL_SHADER := preload("./normal_export.gdshader")
+const SPECULAR_SHADER := preload("./specular_export.gdshader")
 ## The camera view names of the sprite sheet.
 const VIEWS := ["3D preview", "Isometric", "Front", "Back", "Left", "Right", "Top", "Bottom"]
 ## The stable API names of the sprite sheet views. They match the screenshot tool.
@@ -29,6 +30,8 @@ const SPRITE_GAP := 1
 @onready var _gif_button: Button = _controls.get_node("ExportRow/Gif")
 @onready var _light_button: Button = _controls.get_node("ControlBar/LightToggle")
 @onready var _normal_button: Button = _controls.get_node("ControlBar/NormalToggle")
+@onready var _specular_view: Button = _controls.get_node("ControlBar/SpecularToggle")
+@onready var _specular_toggle: Button = _controls.get_node("ExportRow/Specular")
 @onready var _dialog: FileDialog = _menu_item.get_node("ExportDialog")
 @onready var _sheet_dialog: FileDialog = _menu_item.get_node("SpriteSheetDialog")
 @onready var _gif_dialog: FileDialog = _menu_item.get_node("GifDialog")
@@ -44,8 +47,12 @@ var _preview_due_ms := -1
 var _preview_running := false
 var _preview_image: Image
 var _preview_texture: ImageTexture
+var _preview_canvas_texture: CanvasTexture
 var _preview_normal_image: Image
 var _preview_normal_texture: ImageTexture
+var _preview_specular_image: Image
+var _preview_specular_texture: ImageTexture
+var _preview_specular_display_texture: ImageTexture
 var _preview_operation_id := 0
 var _model_dirty := true
 var _model_camera_needs_center := true
@@ -67,11 +74,16 @@ var _sheet_tag: AnimationTag
 var _model_frames: Array[VoxelFrame] = []
 var _model_step := 0
 var _result_message := ""
+var _specular_default: ShaderMaterial
+var _specular_materials: Dictionary = {}
 
 
 func _ready() -> void:
 	name = "ExportPlugin"
 	_gltf = GLTF_EXPORT.new(self)
+	_specular_default = ShaderMaterial.new()
+	_specular_default.shader = SPECULAR_SHADER
+	_specular_default.set_shader_parameter("has_orm", false)
 	_model_viewport = _model.get_node("Viewport/PanelContainer/SubViewportContainer/Viewport")
 	_model_viewport.own_world_3d = true
 	_model_viewport.get_node("ViewportScene").document_lighting = false
@@ -123,6 +135,8 @@ func _ready() -> void:
 	sheet_bar.get_node("CenterBtn").pressed.connect(sheet_preview.fit)
 	_light_button.toggled.connect(_on_light_toggled)
 	_normal_button.toggled.connect(_on_normal_preview_toggled)
+	_specular_view.toggled.connect(_on_specular_preview_toggled)
+	_specular_toggle.toggled.connect(_on_specular_toggled)
 	_sheet_settings.get_node("FrameRow/Frames").item_selected.connect(_on_sheet_tag_selected)
 	_sheet_settings.get_node("ViewRow/View").item_selected.connect(_sheet_settings_changed.unbind(1))
 	_sheet_settings.get_node("ViewRow/Center").toggled.connect(_sheet_settings_changed.unbind(1))
@@ -165,6 +179,7 @@ func _save_export_settings() -> void:
 		"views": _sheet_settings.get_node("TurntableRow/Views").value,
 		"metadata": _controls.get_node("ExportRow/Metadata").button_pressed,
 		"normal": _light_button.button_pressed,
+		"specular": _specular_toggle.button_pressed,
 		"center": _model.get_node("AnimationRow/Center").button_pressed,
 		"model_tag": State.document.tags.find(_selected_tag),
 		"sheet_tag": State.document.tags.find(_sheet_tag),
@@ -189,6 +204,8 @@ func _restore_export_settings() -> void:
 	_controls.get_node("ExportRow/Metadata").set_pressed_no_signal(saved.get("metadata", false))
 	_light_button.set_pressed_no_signal(saved.get("normal", false))
 	_normal_button.set_pressed_no_signal(false)
+	_specular_view.set_pressed_no_signal(false)
+	_specular_toggle.set_pressed_no_signal(saved.get("specular", false))
 	_model.get_node("AnimationRow/Center").set_pressed_no_signal(saved.get("center", false))
 	var lighting: Dictionary = saved.get("lighting", _default_lighting)
 	_model_scene.set_lighting_settings(lighting)
@@ -202,9 +219,14 @@ func _restore_export_settings() -> void:
 	_controls.get_node("Preview").clear_animation()
 	_controls.get_node("Preview").set_light_enabled(false)
 	_controls.get_node("Preview").set_normal_map(null)
+	_controls.get_node("Preview").set_specular_map(null)
 	_preview_texture = null
+	_preview_canvas_texture = null
 	_preview_normal_image = null
 	_preview_normal_texture = null
+	_preview_specular_image = null
+	_preview_specular_texture = null
+	_preview_specular_display_texture = null
 	_restoring_export_settings = false
 
 
@@ -236,6 +258,7 @@ func current_export_settings() -> Dictionary:
 			"views": _view_count(),
 			"metadata": _controls.get_node("ExportRow/Metadata").button_pressed,
 			"normal": _light_button.button_pressed,
+			"specular": _specular_toggle.button_pressed,
 			"tag": sheet_tag_index,
 			"tag_name": _sheet_tag.name if _sheet_tag else "",
 			"first_frame": sheet_range.x,
@@ -390,12 +413,17 @@ func _sheet_settings_changed() -> void:
 	_preview_due_ms = Time.get_ticks_msec() + PREVIEW_DELAY_MS
 	_preview_image = null
 	_preview_texture = null
+	_preview_canvas_texture = null
 	_preview_normal_image = null
 	_preview_normal_texture = null
+	_preview_specular_image = null
+	_preview_specular_texture = null
+	_preview_specular_display_texture = null
 	var preview: Control = _controls.get_node("Preview")
 	preview.clear_animation()
 	preview.set_light_enabled(false)
 	preview.set_normal_map(null)
+	preview.set_specular_map(null)
 	preview.texture = null
 	_save_export_settings()
 	_sync()
@@ -547,21 +575,32 @@ func _sync() -> void:
 	var layout := sheet_layout(count * views, tile_size)
 	var gif := _gif_enabled()
 	var normal_on := _light_button.button_pressed and not gif
+	var specular_on := _specular_toggle.button_pressed and not gif
 	_menu_item.get_node("ExportBtn").disabled = busy
 	_model.get_node("Export").disabled = busy
 	_export_button.disabled = busy or (not gif and (layout.size.x > Image.MAX_WIDTH or layout.size.y > Image.MAX_HEIGHT))
 	if gif:
 		_export_button.tooltip_text = "Export the animation as a GIF"
+	elif normal_on and specular_on:
+		_export_button.tooltip_text = "Export the sprite sheet, normal map, and specular map as PNG images"
 	elif normal_on:
 		_export_button.tooltip_text = "Export the sprite sheet and the normal map as PNG images"
+	elif specular_on:
+		_export_button.tooltip_text = "Export the sprite sheet and the specular map as PNG images"
 	else:
 		_export_button.tooltip_text = "Export the sprite sheet as a PNG image"
 	_gif_button.disabled = busy
 	_light_button.disabled = busy or gif
 	_light_button.tooltip_text = "Turn off GIF mode to enable normal maps." if gif else "Enable normal maps. Move the pointer over the sheet to light it. The export writes a normal map sheet."
+	_specular_toggle.disabled = busy or gif
+	_specular_toggle.tooltip_text = "Turn off GIF mode to write specular maps." if gif else "Write a specular map sheet from the voxel metallic and roughness values."
 	_normal_button.disabled = busy or gif or not _light_button.button_pressed
+	_specular_view.disabled = busy or gif or not _specular_toggle.button_pressed
 	if _normal_button.disabled and _normal_button.button_pressed:
 		_normal_button.set_pressed_no_signal(false)
+		_show_sheet_preview()
+	if _specular_view.disabled and _specular_view.button_pressed:
+		_specular_view.set_pressed_no_signal(false)
 		_show_sheet_preview()
 	if not _light_button.button_pressed:
 		_normal_button.tooltip_text = "Turn on Light to enable normal maps."
@@ -569,6 +608,12 @@ func _sync() -> void:
 		_normal_button.tooltip_text = "Turn off GIF mode to view the normal map."
 	else:
 		_normal_button.tooltip_text = "Show the normal map sheet. Press again to return to the lit sheet."
+	if not _specular_toggle.button_pressed:
+		_specular_view.tooltip_text = "Turn on Specular to write specular maps."
+	elif gif:
+		_specular_view.tooltip_text = "Turn off GIF mode to view the specular map."
+	else:
+		_specular_view.tooltip_text = "Show the specular map sheet. Press again to return to the lit sheet."
 	for path in ["FrameRow/Frames", "ViewRow/View", "ViewRow/Center"]:
 		_sheet_settings.get_node(path).disabled = busy
 	_sheet_settings.get_node("SizeRow/Size").editable = not busy
@@ -596,6 +641,8 @@ func _export_status() -> Dictionary:
 			message = "%d × %d pixels · %d frames × %d views" % [layout.size.x, layout.size.y, count, views]
 			if _light_button.button_pressed:
 				message += " · normal"
+			if _specular_toggle.button_pressed:
+				message += " · specular"
 	return {
 		"left": "%s   #%d/%d   %d%%" % [
 			message,
@@ -652,7 +699,8 @@ func _choose_export_file() -> void:
 
 
 func _choose_sheet_file() -> void:
-	_sheet_dialog.title = "Export Sprite Sheet and Normal Map" if _light_button.button_pressed else "Export Sprite Sheet"
+	var map_count := int(_light_button.button_pressed) + int(_specular_toggle.button_pressed)
+	_sheet_dialog.title = "Export Sprite Sheet and Maps" if map_count > 0 else "Export Sprite Sheet"
 	_sheet_dialog.current_file = State.document.get_file_name().get_basename() + "_sheet.png"
 	_sheet_dialog.popup_centered()
 
@@ -675,8 +723,23 @@ func _on_light_toggled(pressed: bool) -> void:
 
 
 func _on_normal_preview_toggled(pressed: bool) -> void:
-	if pressed and not _light_button.button_pressed:
+	if pressed and (not _light_button.button_pressed or _preview_normal_texture == null):
 		_normal_button.set_pressed_no_signal(false)
+		return
+	_show_sheet_preview()
+	_apply_preview_animation()
+	_sync()
+
+
+func _on_specular_toggled(pressed: bool) -> void:
+	if not pressed:
+		_specular_view.set_pressed_no_signal(false)
+	_sheet_settings_changed()
+
+
+func _on_specular_preview_toggled(pressed: bool) -> void:
+	if pressed and (not _specular_toggle.button_pressed or _preview_specular_display_texture == null):
+		_specular_view.set_pressed_no_signal(false)
 		return
 	_show_sheet_preview()
 	_apply_preview_animation()
@@ -724,18 +787,20 @@ func export_gltf_settings(path: String, settings: Dictionary) -> Error:
 
 func _on_sheet_file_selected(path: String) -> void:
 	var settings: Dictionary = current_export_settings().sprite
-	_report_result(await export_sprite_sheet_settings(path, settings), path, bool(settings.get("normal", false)))
+	_report_result(await export_sprite_sheet_settings(path, settings), path, bool(settings.get("normal", false)), bool(settings.get("specular", false)))
 
 
 func _on_gif_file_selected(path: String) -> void:
 	_report_result(await export_gif(path), path)
 
 
-func _report_result(error: Error, path: String, normal := false) -> void:
+func _report_result(error: Error, path: String, normal := false, specular := false) -> void:
 	if error == OK:
 		_result_message = "Saved %s" % path.get_file()
 		if normal:
 			_result_message += " + normal"
+		if specular:
+			_result_message += " + specular"
 	else:
 		_result_message = "Export cancelled" if error == ERR_BUSY or error == ERR_UNAVAILABLE else "Export failed: %s" % error_string(error)
 	_refresh_export_status()
@@ -759,6 +824,11 @@ static func sheet_layout(frame_count: int, tile_size: int) -> Dictionary:
 ## Returns the aligned normal sheet path for one color sheet path.
 static func normal_path(path: String) -> String:
 	return path.get_basename() + "_normal.png"
+
+
+## Returns the aligned specular sheet path for one color sheet path.
+static func specular_path(path: String) -> String:
+	return path.get_basename() + "_specular.png"
 
 
 func _sheet_camera(view: int, views := 1, orthographic_value: Variant = null) -> Dictionary:
@@ -849,6 +919,8 @@ func _render_sheet(frames: Array[VoxelFrame], settings: Dictionary, document: Vo
 	if outputs.has("normal"):
 		normal_material = ShaderMaterial.new()
 		normal_material.shader = NORMAL_SHADER
+	if outputs.has("specular"):
+		_specular_materials.clear()
 	var index := 0
 	var capture_index := 0
 	var complete := true
@@ -868,9 +940,10 @@ func _render_sheet(frames: Array[VoxelFrame], settings: Dictionary, document: Vo
 				break
 			var rect: Rect2i = layout.rects[index]
 			for output in outputs:
-				var label := "Rendering sheet preview" if revision >= 0 else ("Rendering sprite %d" % (index + 1) if output == "color" else "Rendering normal %d" % (index + 1))
+				var label := "Rendering sheet preview" if revision >= 0 else ("Rendering sprite %d" % (index + 1) if output == "color" else "Rendering %s %d" % [output, index + 1])
 				State.update_operation(_preview_operation_id if revision >= 0 else _operation_id, capture_index, capture_count, label)
 				renderer.override_material = normal_material if output == "normal" else null
+				renderer.material_builder = Callable(self, "_specular_material") if output == "specular" else Callable()
 				# The color pass renders the changed geometry and camera before the
 				# shadowed image. The unshaded normal pass needs one draw.
 				viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
@@ -887,10 +960,13 @@ func _render_sheet(frames: Array[VoxelFrame], settings: Dictionary, document: Vo
 				var image := viewport.get_texture().get_image()
 				image.convert(Image.FORMAT_RGBA8)
 				image.resize(rect.size.x, rect.size.y, Image.INTERPOLATE_NEAREST)
+				if output == "specular":
+					image = _specular_sheet_image(image)
 				var sheet: Image = sheets[output]
 				sheet.blit_rect(image, Rect2i(Vector2i.ZERO, rect.size), rect.position)
 				capture_index += 1
 			renderer.override_material = null
+			renderer.material_builder = Callable()
 			if not complete:
 				break
 			index += 1
@@ -902,7 +978,43 @@ func _render_sheet(frames: Array[VoxelFrame], settings: Dictionary, document: Vo
 		_preview_viewport = null
 	else:
 		_export_viewport = null
+	_specular_materials.clear()
 	return sheets if complete and capture_index == capture_count else null
+
+
+## Returns the specular material for one chunk. The chunk material holds the
+## finish atlas, so the data pass reads its roughness and metallic textures.
+func _specular_material(source: Material) -> Material:
+	if not source is StandardMaterial3D:
+		return _specular_default
+	var material_3d := source as StandardMaterial3D
+	if material_3d.roughness_texture == null:
+		return _specular_default
+	var key := source.get_instance_id()
+	var material: ShaderMaterial = _specular_materials.get(key)
+	if material == null:
+		material = ShaderMaterial.new()
+		material.shader = SPECULAR_SHADER
+		material.set_shader_parameter("orm_texture", material_3d.roughness_texture)
+		material.set_shader_parameter("has_orm", true)
+		_specular_materials[key] = material
+	return material
+
+
+## Converts one rendered specular tile into the sheet format. Red holds the
+## metallic mask in RGB and green holds shininess in alpha.
+func _specular_sheet_image(image: Image) -> Image:
+	var specular := Image.create(image.get_width(), image.get_height(), false, Image.FORMAT_RGBA8)
+	specular.fill(Color.TRANSPARENT)
+	for y in image.get_height():
+		for x in image.get_width():
+			var source := image.get_pixel(x, y)
+			if source.a == 0.0:
+				continue
+			var metallic := source.r8
+			var shininess := source.g8
+			specular.set_pixel(x, y, Color8(metallic, metallic, metallic, shininess))
+	return specular
 
 
 ## Builds one temporary render viewport for the sprite sheet or the GIF export.
@@ -1020,9 +1132,12 @@ func _update_sheet_preview() -> void:
 	)
 	settings.layout = layout
 	var normal_on: bool = _light_button.button_pressed
+	var specular_on: bool = _specular_toggle.button_pressed
 	var outputs: Array = ["color"]
 	if normal_on:
 		outputs.append("normal")
+	if specular_on:
+		outputs.append("specular")
 	settings.outputs = outputs
 	_preview_operation_id = State.begin_operation("Rendering preview", frames.size() * views * outputs.size(), false, self)
 	var images: Variant = await _render_sheet(frames, settings, State.document, revision)
@@ -1035,8 +1150,36 @@ func _update_sheet_preview() -> void:
 		_preview_texture = ImageTexture.create_from_image(_preview_image)
 		_preview_normal_image = images.get("normal")
 		_preview_normal_texture = ImageTexture.create_from_image(_preview_normal_image) if _preview_normal_image else null
+		_preview_specular_image = images.get("specular")
+		_preview_specular_texture = ImageTexture.create_from_image(_preview_specular_image) if _preview_specular_image else null
+		_preview_specular_display_texture = _specular_display(_preview_specular_image, _preview_image)
+		_preview_canvas_texture = null
+		if _preview_normal_texture or _preview_specular_texture:
+			_preview_canvas_texture = CanvasTexture.new()
+			_preview_canvas_texture.diffuse_texture = _preview_texture
+			_preview_canvas_texture.normal_texture = _preview_normal_texture
+			if _preview_specular_texture:
+				_preview_canvas_texture.specular_texture = _preview_specular_texture
+				# A value below 0.999 enables the default specular map.
+				_preview_canvas_texture.specular_shininess = 0.99
 		_show_sheet_preview()
 		_apply_preview_animation()
+
+
+## Returns a display texture for the specular sheet. The RGB holds metallic. The
+## color sheet supplies the silhouette, so the shininess alpha stays hidden.
+func _specular_display(specular: Image, color: Image) -> ImageTexture:
+	if specular == null or color == null:
+		return null
+	var display := Image.create(specular.get_width(), specular.get_height(), false, Image.FORMAT_RGBA8)
+	display.fill(Color.TRANSPARENT)
+	for y in specular.get_height():
+		for x in specular.get_width():
+			if color.get_pixel(x, y).a == 0.0:
+				continue
+			var value := specular.get_pixel(x, y)
+			display.set_pixel(x, y, Color(value.r, value.g, value.b, 1.0))
+	return ImageTexture.create_from_image(display)
 
 
 ## Shows the color sheet, the raw normal sheet, or the GIF color sheet. The raw
@@ -1048,11 +1191,15 @@ func _show_sheet_preview() -> void:
 		preview.set_light_enabled(false)
 		return
 	preview.set_normal_map(_preview_normal_texture)
+	preview.set_specular_map(_preview_specular_texture)
 	if _normal_button.button_pressed and _preview_normal_texture:
 		preview.texture = _preview_normal_texture
 		preview.set_light_enabled(false)
+	elif _specular_view.button_pressed and _preview_specular_display_texture:
+		preview.texture = _preview_specular_display_texture
+		preview.set_light_enabled(false)
 	else:
-		preview.texture = _preview_texture
+		preview.texture = _preview_canvas_texture if _preview_canvas_texture else _preview_texture
 		preview.set_light_enabled(_light_button.button_pressed)
 
 
@@ -1081,7 +1228,8 @@ func _apply_preview_animation() -> void:
 ## pixels. [param view] selects the camera view. [param include_json] also
 ## writes the Aseprite JSON sidecar. The sidecar is off by default. [param views]
 ## adds turntable views. [param normal] also writes the aligned normal sheet.
-func export_sprite_sheet(path: String, first_frame := 0, last_frame := -1, tile_size := -1, view := 1, include_json := false, views := 1, tag_name := "", normal := false) -> Error:
+## [param specular] also writes the aligned specular sheet.
+func export_sprite_sheet(path: String, first_frame := 0, last_frame := -1, tile_size := -1, view := 1, include_json := false, views := 1, tag_name := "", normal := false, specular := false) -> Error:
 	if view < 0 or view >= VIEW_KEYS.size():
 		return ERR_INVALID_PARAMETER
 	return await export_sprite_sheet_settings(path, {
@@ -1093,6 +1241,7 @@ func export_sprite_sheet(path: String, first_frame := 0, last_frame := -1, tile_
 		"views": views,
 		"tag_name": tag_name,
 		"normal": normal,
+		"specular": specular,
 	})
 
 
@@ -1100,11 +1249,11 @@ func export_sprite_sheet(path: String, first_frame := 0, last_frame := -1, tile_
 ## [code]last_frame[/code], [code]tile_size[/code], [code]view[/code] (an API
 ## name from [constant VIEW_KEYS]), [code]views[/code], [code]orthographic[/code],
 ## [code]center[/code], [code]metadata[/code], [code]tag_name[/code],
-## [code]lighting[/code], and [code]normal[/code]. An absent view, camera, size,
-## metadata, or normal key keeps the value of the export tab. The frame range
-## defaults to every frame, and a negative [code]last_frame[/code] or
-## [code]tile_size[/code] also selects the default. The call does not change the
-## document or the saved export settings.
+## [code]lighting[/code], [code]normal[/code], and [code]specular[/code]. An
+## absent view, camera, size, metadata, normal, or specular key keeps the value
+## of the export tab. The frame range defaults to every frame, and a negative
+## [code]last_frame[/code] or [code]tile_size[/code] also selects the default.
+## The call does not change the document or the saved export settings.
 func export_sprite_sheet_settings(path: String, settings: Dictionary) -> Error:
 	if _exporting or State.edit_busy():
 		return ERR_BUSY
@@ -1129,6 +1278,10 @@ func export_sprite_sheet_settings(path: String, settings: Dictionary) -> Error:
 	if not normal_value is bool:
 		return ERR_INVALID_PARAMETER
 	var normal: bool = normal_value
+	var specular_value: Variant = settings.get("specular", tab.get("specular", false))
+	if not specular_value is bool:
+		return ERR_INVALID_PARAMETER
+	var specular: bool = specular_value
 	var tag_name := str(settings.get("tag_name", ""))
 	var lighting: Dictionary = settings.get("lighting", {})
 	if lighting.is_empty():
@@ -1145,11 +1298,13 @@ func export_sprite_sheet_settings(path: String, settings: Dictionary) -> Error:
 	var outputs: Array = ["color"]
 	if normal:
 		outputs.append("normal")
+	if specular:
+		outputs.append("specular")
 	render_settings.layout = layout
 	render_settings.outputs = outputs
 	if path.get_extension().to_lower() != "png":
 		path += ".png"
-	var metadata := sheet_metadata(path, first_frame, last_frame, layout, views, tag_name, normal)
+	var metadata := sheet_metadata(path, first_frame, last_frame, layout, views, tag_name, normal, specular)
 	var source_document := State.document
 	State.stop()
 	_exporting = true
@@ -1172,6 +1327,12 @@ func export_sprite_sheet_settings(path: String, settings: Dictionary) -> Error:
 			error = ERR_INVALID_DATA
 		else:
 			error = normal_image.save_png(normal_path(path))
+	if error == OK and specular:
+		var specular_image: Image = sheets.get("specular")
+		if specular_image == null:
+			error = ERR_INVALID_DATA
+		else:
+			error = specular_image.save_png(specular_path(path))
 	if error == OK and include_json:
 		var file := FileAccess.open(path.get_basename() + ".json", FileAccess.WRITE)
 		if file:
@@ -1262,9 +1423,9 @@ func export_gif_settings(path: String, settings: Dictionary) -> Error:
 
 
 ## Returns the Aseprite JSON sidecar for one sprite sheet. It lists every frame
-## rectangle and every tag. When [param normal] is true it also names the normal
-## sheet and its convention.
-func sheet_metadata(path: String, first: int, last: int, layout: Dictionary, views := 1, tag_name := "", normal := false) -> Dictionary:
+## rectangle and every tag. When [param normal] or [param specular] is true it
+## also names that sheet and its convention.
+func sheet_metadata(path: String, first: int, last: int, layout: Dictionary, views := 1, tag_name := "", normal := false, specular := false) -> Dictionary:
 	var count := last - first + 1
 	var dimensions: Vector2i = layout.tile_size
 	var label: String = tag_name if not tag_name.is_empty() else path.get_file().get_basename()
@@ -1284,8 +1445,13 @@ func sheet_metadata(path: String, first: int, last: int, layout: Dictionary, vie
 			var tag_label := tag.name if views == 1 else "%s_%d" % [tag.name, view_index]
 			tags.append({"name": tag_label, "from": maxi(tag.from, first) - first + view_index * count, "to": mini(tag.to, last) - first + view_index * count, "direction": ["forward", "reverse", "pingpong", "pingpong_reverse"][tag.loop_mode], "repeat": str(tag.repeats)})
 	var meta := {"app": VoxelDocument.APP_NAME, "image": path.get_file(), "format": "RGBA8888", "size": {"w": layout.size.x, "h": layout.size.y}, "scale": "1", "frameTags": tags}
+	var lve := {}
 	if normal:
-		meta["lve"] = {"normal": {"image": normal_path(path).get_file(), "space": "view", "convention": "+x, +y, +z"}}
+		lve["normal"] = {"image": normal_path(path).get_file(), "space": "view", "convention": "+x, +y, +z"}
+	if specular:
+		lve["specular"] = {"image": specular_path(path).get_file(), "color": "metallic", "alpha": "shininess", "shininess": "1 - roughness"}
+	if not lve.is_empty():
+		meta["lve"] = lve
 	return {"frames": frames, "meta": meta}
 
 

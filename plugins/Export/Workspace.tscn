@@ -15,6 +15,10 @@
 [ext_resource type="Texture2D" uid="uid://cmfirdobdfgqh" path="res://ui/Checker.png" id="29_checker"]
 [ext_resource type="Texture2D" uid="uid://denrh23gr1h18" path="res://icons/light.svg" id="30_light"]
 [ext_resource type="Texture2D" uid="uid://broaps7lc7g1u" path="res://icons/sphere.svg" id="31_normal"]
+[ext_resource type="Texture2D" uid="uid://daustgyl361sn" path="res://icons/metallic.svg" id="32_specular"]
+
+[sub_resource type="ButtonGroup" id="ButtonGroup_maps"]
+allow_unpress = true
 
 [sub_resource type="Gradient" id="Gradient_light"]
 offsets = PackedFloat32Array(0, 1)
@@ -155,7 +159,16 @@ icon_alignment = 1
 layout_mode = 2
 tooltip_text = "Show the normal map sheet. Turn on Light to enable normal maps."
 toggle_mode = true
+button_group = SubResource("ButtonGroup_maps")
 icon = ExtResource("31_normal")
+icon_alignment = 1
+
+[node name="SpecularToggle" type="Button" parent="Panels/SheetPanel/Margin/Sheet/ControlBar" unique_id=1642673137]
+layout_mode = 2
+tooltip_text = "Show the specular map sheet. Turn on Specular to write specular maps."
+toggle_mode = true
+button_group = SubResource("ButtonGroup_maps")
+icon = ExtResource("32_specular")
 icon_alignment = 1
 
 [node name="ZoomIcon" type="TextureRect" parent="Panels/SheetPanel/Margin/Sheet/ControlBar" unique_id=627019222]
@@ -294,4 +307,11 @@ tooltip_text = "Include Aseprite-style frame rectangles, delays, and tags."
 toggle_mode = true
 button_pressed = false
 icon = ExtResource("24_json")
+icon_alignment = 1
+
+[node name="Specular" type="Button" parent="Panels/SheetPanel/Margin/Sheet/ExportRow" unique_id=530597980]
+layout_mode = 2
+tooltip_text = "Write a specular map sheet from the voxel metallic and roughness values."
+toggle_mode = true
+icon = ExtResource("32_specular")
 icon_alignment = 1
