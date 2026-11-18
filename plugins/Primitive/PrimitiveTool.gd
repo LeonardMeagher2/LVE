@@ -19,6 +19,9 @@ const ROTATE_SNAP_DEGREES := 2.0
 ## The preview work below which the result runs inline. A larger preview uses a
 ## worker job.
 const INLINE_PREVIEW_CELLS := 512
+## The quiet frames before a drag preview starts. A drag cancels the running
+## job at once, and the newest request waits this long after the last motion.
+const PREVIEW_SETTLE_FRAMES := 2
 
 ## The primitive kind that this tool builds. The three tool scenes set it.
 @export var shape := PrimitiveField.KIND_BOX
@@ -59,6 +62,7 @@ var _preview_frame: VoxelFrame = null
 var _preview_operation_id := 0
 var _preview_generation := 0
 var _preview_start_frame := -1
+var _preview_settle_frame := -1
 var _preview_renderer: VoxelRenderer = null
 var _installed_preview_frame: VoxelFrame = null
 ## The world position of the pending box center. A face edit on a rotated shape
@@ -208,6 +212,7 @@ func handle_input(event: InputEvent, pos: Vector2) -> bool:
 			_rotating = false
 			_rotate_axis = -1
 			$Gizmo.set_ring_highlight(-1)
+			_refresh_preview()
 			return true
 		if _moving:
 			_moving = false
@@ -238,7 +243,7 @@ func handle_input(event: InputEvent, pos: Vector2) -> bool:
 				_end_cell = pick.target
 			_shift = mm.shift_pressed
 			_alt = mm.alt_pressed
-			_refresh_preview(true)
+			_refresh_preview(true, true)
 			return true
 		if (_dragging_handle or _dragging_new or _moving or _rotating) and mm.button_mask == 0:
 			if _dragging_handle:
@@ -252,6 +257,7 @@ func handle_input(event: InputEvent, pos: Vector2) -> bool:
 				_rotating = false
 				_rotate_axis = -1
 				$Gizmo.set_ring_highlight(-1)
+				_refresh_preview()
 			elif _moving:
 				_moving = false
 				_refresh_preview()
@@ -374,12 +380,16 @@ func _finish_new_drag() -> void:
 	_refresh_preview(true)
 
 
-func _refresh_preview(cancel_running := false) -> void:
+func _refresh_preview(cancel_running := false, settle := false) -> void:
 	# The handles follow the shape immediately. The result frame follows when the
 	# worker finishes.
 	_refresh_gizmo()
 	visible = _dragging_new or not _primitives.is_empty()
 	var request := _build_request(true)
+	var work := PrimitiveField.estimated_cells(request)
+	# A drag waits for the pointer to settle before it starts a worker job. An
+	# inline preview and a discrete change start at once.
+	_preview_settle_frame = Engine.get_process_frames() + PREVIEW_SETTLE_FRAMES if settle and work > INLINE_PREVIEW_CELLS else -1
 	_preview_request = request
 	_preview_frame = State.get_current_voxel_frame()
 	if _preview_job != null:
@@ -389,24 +399,32 @@ func _refresh_preview(cancel_running := false) -> void:
 		if cancel_running:
 			_preview_job.cancel()
 		return
+	if _preview_settle_frame >= 0 and Engine.get_process_frames() < _preview_settle_frame:
+		return
 	# A fast mouse sends several events in one frame. One preview per frame
 	# keeps the newest request without copying the frame for every event.
 	var frame_id := Engine.get_process_frames()
 	if frame_id == _preview_start_frame:
 		return
 	_preview_start_frame = frame_id
+	_preview_settle_frame = -1
 	_run_preview()
 
 
 func _process(_delta: float) -> void:
 	if _preview_job != null or _preview_request.is_empty():
 		return
+	if _preview_settle_frame >= 0 and Engine.get_process_frames() < _preview_settle_frame:
+		return
 	_preview_start_frame = Engine.get_process_frames()
+	_preview_settle_frame = -1
 	_run_preview()
 
 
 func _run_preview() -> void:
 	while not _preview_request.is_empty():
+		if _preview_settle_frame >= 0 and Engine.get_process_frames() < _preview_settle_frame:
+			return
 		var request: Dictionary = _preview_request
 		_preview_request = {}
 		var frame := _preview_frame
@@ -462,6 +480,7 @@ func _clear_preview_frame() -> void:
 
 func _cancel_preview_job() -> void:
 	_preview_request = {}
+	_preview_settle_frame = -1
 	_preview_generation += 1
 	if _preview_job != null:
 		_preview_job.cancel()
@@ -772,7 +791,7 @@ func _update_ring(origin: Vector3, direction: Vector3) -> void:
 	_pending_rotation = _rotate_start * Quaternion(local_axis, snappedf(_rotate_total, deg_to_rad(ROTATE_SNAP_DEGREES)))
 	if _active_index >= 0 and _active_index < _primitives.size():
 		_primitives[_active_index] = _build_primitive(_pending_box, _active_axis)
-	_refresh_preview(true)
+	_refresh_preview(true, true)
 
 
 func _begin_move(origin: Vector3, dir: Vector3) -> void:
@@ -804,7 +823,7 @@ func _update_move(origin: Vector3, dir: Vector3) -> void:
 	_move_offset = offset
 	_pending_center = _move_start_center + Vector3(offset)
 	_primitives[_active_index] = _build_primitive(_pending_box, _active_axis)
-	_refresh_preview(true)
+	_refresh_preview(true, true)
 
 
 func _plane_point(origin: Vector3, dir: Vector3, plane: StrokePlane) -> Vector3:
@@ -863,7 +882,7 @@ func _update_handle(origin: Vector3, dir: Vector3) -> void:
 	_pending_box = AABB(low, high - low)
 	_sync_center_from_handle()
 	_primitives[_active_index] = _build_primitive(_pending_box)
-	_refresh_preview(true)
+	_refresh_preview(true, true)
 
 
 func _update_corner(point: Vector3) -> void:
@@ -879,7 +898,7 @@ func _update_corner(point: Vector3) -> void:
 	_pending_box = AABB(low, high - low)
 	_sync_center_from_handle()
 	_primitives[_active_index] = _build_primitive(_pending_box)
-	_refresh_preview(true)
+	_refresh_preview(true, true)
 
 
 ## Keeps the world pivot where it was at the grab. A local box center that moves

@@ -28,7 +28,7 @@ func _ready() -> void:
 	test("subtract and intersect previews respect the selection", _selection_ops, "selection_ops")
 	test("a smooth change cancels and replaces the preview job", _blend_preview_cancel, "blend_preview_cancel")
 	test("two preview requests in one frame show the newest", _frame_preview, "frame_preview")
-	test("a drag cancels the running preview", _drag_cancels_preview, "drag_cancels_preview")
+	test("a drag cancels and settles the running preview", _drag_cancels_preview, "drag_cancels_preview")
 	test("the gizmo handles keep one screen size", _handle_scale, "handle_scale")
 	test("a preview keeps the untouched chunk meshes", _chunk_stability, "chunk_stability")
 	test("smooth blends a primitive into existing voxels", _blend_existing, "blend_existing")
@@ -489,14 +489,29 @@ func _frame_preview() -> void:
 
 func _drag_cancels_preview() -> void:
 	var job := PrimitiveJob.new()
-	step("Given a running preview job", func():
+	step("Given a large pending box and a running preview", func():
+		var primitive := {
+			"kind": PrimitiveField.KIND_BOX,
+			"center": Vector3.ZERO,
+			"half_size": Vector3(48, 48, 48),
+			"roundness": 0.0,
+		}
+		var primitives: Array[Dictionary] = [primitive]
+		tool._primitives = primitives
+		tool._active_index = 0
+		tool._pending_box = AABB(Vector3.ONE * -48, Vector3.ONE * 96)
 		tool._preview_job = job
 	)
 	step("When the user moves the gizmo", func():
-		tool._refresh_preview(true)
+		tool._refresh_preview(true, true)
 	)
-	step("Then the running job is cancelled", func():
+	step("Then the job is cancelled and the newest request waits", func():
 		expect(job._cancel_requested, "the drag cancels the running job")
+		expect(tool._preview_settle_frame > Engine.get_process_frames(), "the request waits for the settle")
+	)
+	step("Then a discrete change clears the wait", func():
+		tool._refresh_preview(true)
+		expect(tool._preview_settle_frame == -1, "a discrete change starts at once")
 	)
 	tool._preview_job = null
 	tool._preview_request = {}
