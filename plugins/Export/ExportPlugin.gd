@@ -76,6 +76,7 @@ var _model_step := 0
 var _result_message := ""
 var _specular_default: ShaderMaterial
 var _specular_materials: Dictionary = {}
+var _diffuse_materials: Dictionary = {}
 
 
 func _ready() -> void:
@@ -921,6 +922,7 @@ func _render_sheet(frames: Array[VoxelFrame], settings: Dictionary, document: Vo
 		normal_material.shader = NORMAL_SHADER
 	if outputs.has("specular"):
 		_specular_materials.clear()
+		_diffuse_materials.clear()
 	var index := 0
 	var capture_index := 0
 	var complete := true
@@ -943,7 +945,12 @@ func _render_sheet(frames: Array[VoxelFrame], settings: Dictionary, document: Vo
 				var label := "Rendering sheet preview" if revision >= 0 else ("Rendering sprite %d" % (index + 1) if output == "color" else "Rendering %s %d" % [output, index + 1])
 				State.update_operation(_preview_operation_id if revision >= 0 else _operation_id, capture_index, capture_count, label)
 				renderer.override_material = normal_material if output == "normal" else null
-				renderer.material_builder = Callable(self, "_specular_material") if output == "specular" else Callable()
+				if output == "specular":
+					renderer.material_builder = Callable(self, "_specular_material")
+				elif output == "color" and outputs.has("specular"):
+					renderer.material_builder = Callable(self, "_diffuse_material")
+				else:
+					renderer.material_builder = Callable()
 				# The color pass renders the changed geometry and camera before the
 				# shadowed image. The unshaded normal pass needs one draw.
 				viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
@@ -979,7 +986,24 @@ func _render_sheet(frames: Array[VoxelFrame], settings: Dictionary, document: Vo
 	else:
 		_export_viewport = null
 	_specular_materials.clear()
+	_diffuse_materials.clear()
 	return sheets if complete and capture_index == capture_count else null
+
+
+## Returns a copy of a chunk material with specular reflection disabled. The
+## color sheet stays diffuse-only when a specular sheet is written.
+func _diffuse_material(source: Material) -> Material:
+	if not source is StandardMaterial3D:
+		return source
+	var key := source.get_instance_id()
+	var material: Material = _diffuse_materials.get(key)
+	if material == null:
+		material = source.duplicate()
+		var base := material as BaseMaterial3D
+		if base:
+			base.specular_mode = BaseMaterial3D.SPECULAR_DISABLED
+		_diffuse_materials[key] = material
+	return material
 
 
 ## Returns the specular material for one chunk. The chunk material holds the

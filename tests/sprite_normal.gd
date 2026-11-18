@@ -173,7 +173,24 @@ func _specular_run() -> void:
 	step("Then a non-boolean specular option is refused", func():
 		expect(invalid_error == ERR_INVALID_PARAMETER, "the export rejects a non-boolean specular option")
 	)
-	for file in [path, exporter.specular_path(path), path.get_basename() + ".json"]:
+	var off_path := prefix + "_specular_off.png"
+	var off_error: Error = await exporter.export_sprite_sheet_settings(off_path, {
+		"first_frame": 0,
+		"last_frame": 1,
+		"tile_size": 16,
+		"view": "front",
+		"views": 1,
+		"orthographic": true,
+		"center": true,
+		"specular": false,
+	})
+	step("Then the specular-enabled color sheet drops baked specular", func():
+		var on_color := Image.new()
+		var off_color := Image.new()
+		expect(off_error == OK and on_color.load(path) == OK and off_color.load(off_path) == OK, "both color sheets load")
+		expect(on_color.get_data() != off_color.get_data(), "enabling specular changes the color pass")
+	)
+	for file in [path, exporter.specular_path(path), path.get_basename() + ".json", off_path]:
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(file))
 
 

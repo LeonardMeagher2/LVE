@@ -177,7 +177,7 @@ The editor accepts these keys and ignores them.
 The sprite projection follows the export camera.
 Ambient occlusion strength is a document setting.
 `normal` writes an aligned normal sheet with the sprite sheet.
-`specular` writes an aligned specular sheet. Its red, green, and blue channels hold metallic. Its alpha holds `1 - roughness`.
+`specular` writes an aligned specular sheet. Its red, green, and blue channels hold metallic. Its alpha holds `1 - roughness`. The color sheet omits specular highlights when `specular` is on.
 
 Export lighting requires `basis`, `color`, `energy`, `ambient_color`, `ambient_energy`, `shadows`, and `shaded`.
 It also supports `view_locked` and `view_basis`.

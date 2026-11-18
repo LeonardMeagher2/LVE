@@ -640,27 +640,28 @@ func _install(chunk_location: Vector3i, surface_key: PackedInt64Array, entry: Di
 func _instance_material(chunk_location: Vector3i, source: Material) -> Material:
 	if override_material:
 		return override_material
-	if material_builder.is_valid():
-		return material_builder.call(source)
 	if source == null:
 		_chunk_materials.erase(chunk_location)
 		_unshaded_materials.erase(chunk_location)
-		return null
+		return material_builder.call(null) if material_builder.is_valid() else null
 	if _chunk_materials.get(chunk_location) != source:
 		# The chunk holds a new surface, so a copy of the old material is stale.
 		_chunk_materials[chunk_location] = source
 		_unshaded_materials.erase(chunk_location)
-	if not unshaded:
+	var material: Material = source
+	if unshaded:
+		material = _unshaded_materials.get(chunk_location)
+		if material == null:
+			material = source.duplicate()
+			var base := material as BaseMaterial3D
+			if base:
+				base.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			_unshaded_materials[chunk_location] = material
+	else:
 		_unshaded_materials.erase(chunk_location)
-		return source
-	var copy: Material = _unshaded_materials.get(chunk_location)
-	if copy == null:
-		copy = source.duplicate()
-		var base := copy as BaseMaterial3D
-		if base:
-			base.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		_unshaded_materials[chunk_location] = copy
-	return copy
+	if material_builder.is_valid():
+		return material_builder.call(material)
+	return material
 
 
 func _apply_materials() -> void:
