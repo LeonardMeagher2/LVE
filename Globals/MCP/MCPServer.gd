@@ -2309,12 +2309,18 @@ func _export_sprite_sheet(args: Dictionary) -> Dictionary:
 		if not (views_arg is int or views_arg is float):
 			return _tool_error("views must be a whole number.")
 		settings["views"] = clampi(int(views_arg), 1, 16)
+	if args.has("specular_intensity"):
+		var intensity_arg: Variant = args["specular_intensity"]
+		if not (intensity_arg is int or intensity_arg is float):
+			return _tool_error("specular_intensity must be a number from 0 to 1.")
+		settings["specular_intensity"] = clampf(float(intensity_arg), 0.0, 1.0)
 	var tile_size := int(settings.get("tile_size", 64))
 	var views := int(settings.get("views", 1))
 	var view := str(settings.get("view", "isometric"))
 	var metadata := bool(settings.get("metadata", true))
 	var normal := bool(settings.get("normal", false))
 	var specular := bool(settings.get("specular", false))
+	var specular_intensity := float(settings.get("specular_intensity", 1.0))
 	_ensure_output_folder(path)
 	var was_playing := State.is_playing
 	var was_frame := State.current_frame
@@ -2333,6 +2339,7 @@ func _export_sprite_sheet(args: Dictionary) -> Dictionary:
 		"normal_path": ProjectSettings.globalize_path(EXPORT_PLUGIN_SCRIPT.normal_path(path)) if normal else "",
 		"specular": specular,
 		"specular_path": ProjectSettings.globalize_path(EXPORT_PLUGIN_SCRIPT.specular_path(path)) if specular else "",
+		"specular_intensity": specular_intensity,
 		"width": size.x,
 		"height": size.y,
 		"tile_size": tile_size,
@@ -2363,6 +2370,7 @@ func _export_gif(args: Dictionary) -> Dictionary:
 	# A GIF holds color frames only.
 	settings.erase("normal")
 	settings.erase("specular")
+	settings.erase("specular_intensity")
 	if tag >= 0:
 		var tag_data := State.document.tags[tag]
 		first = tag_data.from

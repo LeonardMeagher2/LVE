@@ -8,6 +8,7 @@ render_mode unshaded, depth_draw_opaque, fog_disabled;
 
 uniform sampler2D orm_texture : hint_default_black, filter_nearest, repeat_disable;
 uniform bool has_orm = false;
+uniform float intensity = 1.0;
 
 vec3 srgb_to_linear(vec3 color) {
 	vec3 low = color * (1.0 / 12.92);
@@ -23,7 +24,7 @@ void fragment() {
 	vec3 data = vec3(0.0);
 	if (has_orm) {
 		vec4 finish = texture(orm_texture, UV);
-		data = vec3(finish.b, 1.0 - finish.g, 0.0);
+		data = vec3(finish.b * intensity, 1.0 - finish.g, 0.0);
 	}
 	ALBEDO = OUTPUT_IS_SRGB ? data : srgb_to_linear(data);
 	ALPHA = 1.0;

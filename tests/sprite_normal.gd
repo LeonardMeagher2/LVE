@@ -25,8 +25,8 @@ func before_test() -> void:
 	exporter = plugin("ExportPlugin")
 	exporter._restore_export_settings()
 	exporter._light_button.set_pressed_no_signal(false)
-	exporter._normal_button.set_pressed_no_signal(false)
-	exporter._specular_view.set_pressed_no_signal(false)
+	exporter._maps_button.set_pressed_no_signal(false)
+	exporter._specular_intensity.set_value_no_signal(1.0)
 	prefix = "user://sprite_normal_%s" % Time.get_ticks_usec()
 
 
@@ -172,6 +172,28 @@ func _specular_run() -> void:
 	step("Then a non-boolean specular option is refused", func():
 		expect(invalid_error == ERR_INVALID_PARAMETER, "the export rejects a non-boolean specular option")
 	)
+	var half_path := prefix + "_specular_half.png"
+	var half_error: Error = await exporter.export_sprite_sheet_settings(half_path, {
+		"first_frame": 0,
+		"last_frame": 1,
+		"tile_size": 16,
+		"view": "front",
+		"views": 1,
+		"orthographic": true,
+		"center": true,
+		"metadata": true,
+		"specular": true,
+		"specular_intensity": 0.5,
+	})
+	step("Then the specular intensity scales the metallic mask", func():
+		var half := Image.new()
+		expect(half_error == OK and half.load(exporter.specular_path(half_path)) == OK, "the half-intensity sheet loads")
+		var pixel := half.get_pixel(8, 8)
+		expect(abs(pixel.r8 - 128) <= 2 and abs(pixel.g8 - 128) <= 2 and abs(pixel.b8 - 128) <= 2, "the metallic mask is halved")
+		expect(abs(pixel.a8 - 204) <= 2, "the shininess stays unchanged")
+		var data: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(half_path.get_basename() + ".json"))
+		expect(is_equal_approx(float(data.meta.lve.specular.intensity), 0.5), "the sidecar records the intensity")
+	)
 	var off_path := prefix + "_specular_off.png"
 	var off_error: Error = await exporter.export_sprite_sheet_settings(off_path, {
 		"first_frame": 0,
@@ -189,7 +211,7 @@ func _specular_run() -> void:
 		expect(off_error == OK and on_color.load(path) == OK and off_color.load(off_path) == OK, "both color sheets load")
 		expect(on_color.get_data() != off_color.get_data(), "enabling specular changes the color pass")
 	)
-	for file in [path, exporter.specular_path(path), path.get_basename() + ".json", off_path]:
+	for file in [path, exporter.specular_path(path), path.get_basename() + ".json", off_path, half_path, exporter.specular_path(half_path), half_path.get_basename() + ".json"]:
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(file))
 
 
@@ -210,14 +232,23 @@ func _option_run() -> void:
 		expect(bool(sprite.get("normal", false)), "the current settings report normal maps")
 		expect(bool(sprite.get("specular", false)), "the current settings report specular maps")
 	)
+	step("When the specular intensity changes", func():
+		exporter._specular_intensity.value = 0.5
+	)
+	step("Then the document stores the intensity", func():
+		expect(is_equal_approx(float(State.document.export_settings.get("specular_intensity", 0.0)), 0.5), "the document stores the specular intensity")
+		expect(is_equal_approx(float(exporter.current_export_settings().sprite.get("specular_intensity", 0.0)), 0.5), "the current settings report the specular intensity")
+	)
 	step("When a document stores only specular maps and the settings restore", func():
 		exporter._light_button.set_pressed_no_signal(false)
 		State.document.export_settings["normal"] = false
 		State.document.export_settings["specular"] = true
+		State.document.export_settings["specular_intensity"] = 0.25
 		exporter._restore_export_settings()
 	)
-	step("Then the light toggle follows the document", func():
+	step("Then the light toggle and intensity follow the document", func():
 		expect(exporter._light_button.button_pressed, "the restored document turns maps on")
+		expect(is_equal_approx(float(exporter._specular_intensity.value), 0.25), "the restored intensity applies")
 	)
 	step("When the light toggle turns maps off", func():
 		exporter._light_button.button_pressed = false
@@ -286,17 +317,18 @@ func _light_run() -> void:
 		expect(not preview._light.enabled, "the pointer outside turns the light off")
 		expect(preview.texture != null, "the sheet texture stays")
 	)
-	step("When the user shows the normal sheet", func():
-		exporter._normal_button.button_pressed = true
+	step("When the user shows the maps", func():
+		exporter._maps_button.button_pressed = true
 	)
-	step("Then the preview shows the raw normal sheet", func():
-		expect(not exporter._normal_button.disabled, "the normal view is available")
-		expect(preview.texture == exporter._preview_normal_texture, "the preview shows the normal sheet")
-		expect(preview.material == null and not preview._light.enabled, "the normal view stays unshaded")
-		expect(preview.texture.get_image().get_pixel(16, 16).b8 > 200, "the normal view holds normal data")
+	step("Then the preview shows both map sheets", func():
+		expect(not exporter._maps_button.disabled, "the maps view is available")
+		expect(preview.texture == exporter._preview_maps_texture, "the preview shows both maps")
+		expect(preview.texture.get_width() == exporter._preview_normal_texture.get_width() * 2 + 1, "the maps sit side by side")
+		expect(preview.material == null and not preview._light.enabled, "the maps view stays unshaded")
+		expect(preview.texture.get_image().get_pixel(16, 16).b8 > 200, "the maps view holds the normal sheet")
 	)
 	step("When the user returns to the color sheet", func():
-		exporter._normal_button.button_pressed = false
+		exporter._maps_button.button_pressed = false
 	)
 	step("Then the preview shows the color sheet", func():
 		expect(preview.texture == exporter._preview_canvas_texture, "the preview returns to the color sheet")
@@ -305,10 +337,10 @@ func _light_run() -> void:
 		exporter._gif_button.button_pressed = true
 	)
 	await get_tree().process_frame
-	step("Then normal maps are disabled for the color animation", func():
-		expect(exporter._light_button.disabled, "GIF mode disables the normal toggle")
-		expect(exporter._normal_button.disabled, "GIF mode disables the normal view")
-		expect(not exporter._normal_button.button_pressed, "GIF mode leaves the normal view")
+	step("Then the map views are disabled for the color animation", func():
+		expect(exporter._light_button.disabled, "GIF mode disables the map toggle")
+		expect(exporter._maps_button.disabled, "GIF mode disables the maps view")
+		expect(not exporter._maps_button.button_pressed, "GIF mode leaves the maps view")
 		expect(not preview._light.enabled, "GIF mode turns the light off")
 		expect(preview.is_animating(), "GIF mode animates the color frames")
 	)
@@ -316,18 +348,18 @@ func _light_run() -> void:
 		exporter._gif_button.button_pressed = false
 	)
 	await get_tree().process_frame
-	step("Then the normal choice survives", func():
-		expect(not exporter._light_button.disabled, "the normal toggle returns")
-		expect(exporter._light_button.button_pressed, "the normal choice survives GIF mode")
-		expect(not exporter._normal_button.disabled, "the normal view returns")
+	step("Then the map choice survives", func():
+		expect(not exporter._light_button.disabled, "the map toggle returns")
+		expect(exporter._light_button.button_pressed, "the map choice survives GIF mode")
+		expect(not exporter._maps_button.disabled, "the maps view returns")
 		expect(not preview.is_animating(), "the preview returns to the sheet")
 	)
-	step("When normal maps turn off", func():
+	step("When the light toggle turns off", func():
 		exporter._light_button.button_pressed = false
 	)
-	step("Then the normal view disables", func():
-		expect(exporter._normal_button.disabled, "normal maps off disables the normal view")
-		expect(not exporter._normal_button.button_pressed, "normal maps off leaves the normal view")
+	step("Then the maps view disables", func():
+		expect(exporter._maps_button.disabled, "maps off disables the maps view")
+		expect(not exporter._maps_button.button_pressed, "maps off leaves the maps view")
 	)
 
 
@@ -349,10 +381,10 @@ func _specular_light_run() -> void:
 	step("Then the preview holds normal and specular sheets", func():
 		expect(exporter._preview_normal_image != null, "the preview renders the normal sheet")
 		expect(exporter._preview_specular_image != null, "the preview renders the specular sheet")
-		expect(exporter._preview_specular_display_texture != null, "the specular view texture exists")
 		expect(exporter._preview_canvas_texture != null, "the lit preview uses a canvas texture")
 		expect(exporter._preview_canvas_texture.specular_texture == exporter._preview_specular_texture, "the canvas texture holds the specular sheet")
 		expect(is_equal_approx(exporter._preview_canvas_texture.specular_shininess, 0.99), "the canvas texture enables specular")
+		expect(is_equal_approx(float(exporter._specular_intensity.value), 1.0), "the intensity starts at full")
 	)
 	step("When the pointer rests on the sheet center", func():
 		preview._pointer_inside = true
@@ -380,21 +412,39 @@ func _specular_light_run() -> void:
 	step("When the light restores the specular map", func():
 		preview.set_specular_map(exporter._preview_specular_texture)
 	)
-	step("Then the preview shows the raw specular sheet", func():
-		exporter._specular_view.button_pressed = true
-		expect(exporter._specular_view.button_pressed, "the specular view opens")
-		expect(preview.texture == exporter._preview_specular_display_texture, "the preview shows the specular sheet")
-		expect(preview.material == null and not preview._light.enabled, "the specular view stays unshaded")
-		expect(preview.texture.get_image().get_pixel(16, 16).a8 == 255, "the specular view keeps the color silhouette")
+	step("When the specular intensity drops", func():
+		exporter._specular_intensity.value = 0.5
+	)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	await _wait_preview()
+	step("Then the specular sheet scales", func():
+		var pixel: Color = exporter._preview_specular_texture.get_image().get_pixel(16, 16)
+		expect(abs(pixel.r8 - 128) <= 2, "the metallic mask is halved in the preview")
+		expect(is_equal_approx(float(State.document.export_settings.get("specular_intensity", 0.0)), 0.5), "the document stores the intensity")
+	)
+	step("When the user shows the maps", func():
+		exporter._maps_button.button_pressed = true
+	)
+	step("Then the map view shows both scaled sheets", func():
+		var normal_width: int = exporter._preview_normal_texture.get_width()
+		var image: Image = preview.texture.get_image()
+		expect(preview.texture == exporter._preview_maps_texture, "the preview shows both maps")
+		expect(preview.material == null and not preview._light.enabled, "the maps view stays unshaded")
+		expect(image.get_pixel(16, 16).b8 > 200, "the maps view holds the normal sheet")
+		expect(abs(image.get_pixel(normal_width + 1 + 16, 16).r8 - 128) <= 2, "the maps view holds the scaled specular sheet")
+	)
+	step("When the user returns to the color sheet", func():
+		exporter._maps_button.button_pressed = false
 	)
 	step("When GIF mode turns on", func():
 		exporter._gif_button.button_pressed = true
 	)
 	await get_tree().process_frame
-	step("Then the map views are disabled for the color animation", func():
+	step("Then the map controls are disabled for the color animation", func():
 		expect(exporter._light_button.disabled, "GIF mode disables the map toggle")
-		expect(exporter._specular_view.disabled, "GIF mode disables the specular view")
-		expect(not exporter._specular_view.button_pressed, "GIF mode leaves the specular view")
+		expect(exporter._maps_button.disabled, "GIF mode disables the maps view")
+		expect(not exporter._specular_intensity.editable, "GIF mode disables the specular intensity")
 		expect(preview.is_animating(), "GIF mode animates the color frames")
 	)
 	step("When GIF mode turns off", func():
@@ -404,15 +454,9 @@ func _specular_light_run() -> void:
 	step("Then the map choice survives", func():
 		expect(not exporter._light_button.disabled, "the map toggle returns")
 		expect(exporter._light_button.button_pressed, "the map choice survives GIF mode")
-		expect(not exporter._specular_view.disabled, "the specular view returns")
+		expect(not exporter._maps_button.disabled, "the maps view returns")
+		expect(exporter._specular_intensity.editable, "the specular intensity returns")
 		expect(not preview.is_animating(), "the preview returns to the sheet")
-	)
-	step("When the light toggle turns off", func():
-		exporter._light_button.button_pressed = false
-	)
-	step("Then the specular view disables", func():
-		expect(exporter._specular_view.disabled, "maps off disables the specular view")
-		expect(not exporter._specular_view.button_pressed, "maps off leaves the specular view")
 	)
 
 

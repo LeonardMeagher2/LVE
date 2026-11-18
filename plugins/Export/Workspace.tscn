@@ -16,9 +16,7 @@
 [ext_resource type="Texture2D" uid="uid://denrh23gr1h18" path="res://icons/light.svg" id="30_light"]
 [ext_resource type="Texture2D" uid="uid://broaps7lc7g1u" path="res://icons/sphere.svg" id="31_normal"]
 [ext_resource type="Texture2D" uid="uid://daustgyl361sn" path="res://icons/metallic.svg" id="32_specular"]
-
-[sub_resource type="ButtonGroup" id="ButtonGroup_maps"]
-allow_unpress = true
+[ext_resource type="PackedScene" uid="uid://kxi223occ3vl" path="res://ui/ValueButton/ValueButton.tscn" id="33_value"]
 
 [sub_resource type="Gradient" id="Gradient_light"]
 offsets = PackedFloat32Array(0, 1)
@@ -155,21 +153,22 @@ toggle_mode = true
 icon = ExtResource("30_light")
 icon_alignment = 1
 
-[node name="NormalToggle" type="Button" parent="Panels/SheetPanel/Margin/Sheet/ControlBar" unique_id=1642673136]
+[node name="MapsToggle" type="Button" parent="Panels/SheetPanel/Margin/Sheet/ControlBar" unique_id=1642673136]
 layout_mode = 2
-tooltip_text = "Show the normal map sheet. Turn on Light to enable normal maps."
+tooltip_text = "Show both map sheets side by side. Turn on Light to enable maps."
 toggle_mode = true
-button_group = SubResource("ButtonGroup_maps")
 icon = ExtResource("31_normal")
 icon_alignment = 1
 
-[node name="SpecularToggle" type="Button" parent="Panels/SheetPanel/Margin/Sheet/ControlBar" unique_id=1642673137]
+[node name="SpecularIntensity" parent="Panels/SheetPanel/Margin/Sheet/ControlBar" instance=ExtResource("33_value") unique_id=1642673137]
 layout_mode = 2
-tooltip_text = "Show the specular map sheet. Turn on Light to enable maps."
-toggle_mode = true
-button_group = SubResource("ButtonGroup_maps")
+tooltip_text = "Specular intensity. Drag to change."
 icon = ExtResource("32_specular")
-icon_alignment = 1
+min_value = 0.0
+max_value = 1.0
+step = 0.05
+decimals = 2
+value = 1.0
 
 [node name="ZoomIcon" type="TextureRect" parent="Panels/SheetPanel/Margin/Sheet/ControlBar" unique_id=627019222]
 layout_mode = 2

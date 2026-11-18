@@ -1672,6 +1672,7 @@ func _export_settings() -> void:
 		expect(sprite.has("view") and sprite.has("tile_size") and sprite.has("views"), "the sprite section carries the sheet settings")
 		expect(sprite.has("normal"), "the sprite section carries the normal sheet choice")
 		expect(sprite.has("specular"), "the sprite section carries the specular sheet choice")
+		expect(sprite.has("specular_intensity"), "the sprite section carries the specular intensity")
 		expect(model.has("center") and model.has("smooth_normals") and model.has("unlit"), "the model section carries the model settings")
 	)
 
@@ -1689,7 +1690,7 @@ func _export_sheet() -> void:
 		DirAccess.remove_absolute(path)
 		DirAccess.remove_absolute(json_path)
 	)
-	var response := await _call("export_sprite_sheet", {"path": path, "first_frame": 0, "last_frame": 1, "tile_size": 32, "view": "front", "views": 2, "orthographic": true, "center": true, "metadata": true, "normal": true, "specular": true})
+	var response := await _call("export_sprite_sheet", {"path": path, "first_frame": 0, "last_frame": 1, "tile_size": 32, "view": "front", "views": 2, "orthographic": true, "center": true, "metadata": true, "normal": true, "specular": true, "specular_intensity": 0.5})
 	var data := _result_data(response)
 	step("Then the sheet uses the requested settings", func():
 		expect(not _is_error(response), "export_sprite_sheet succeeds: %s" % _result_text(response))
@@ -1709,12 +1710,14 @@ func _export_sheet() -> void:
 		expect(FileAccess.file_exists(normal_path), "the normal sheet exists")
 		expect(Image.load_from_file(normal_path) != null, "the normal sheet is a readable PNG")
 		expect(bool(data.get("specular", false)), "the response reports the specular sheet")
+		expect(is_equal_approx(float(data.get("specular_intensity", 0.0)), 0.5), "the response reports the specular intensity")
 		var specular_path := str(data.get("specular_path", ""))
 		expect(FileAccess.file_exists(specular_path), "the specular sheet exists")
 		expect(Image.load_from_file(specular_path) != null, "the specular sheet is a readable PNG")
 		var metadata: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(json_path))
 		expect(metadata.meta.lve.normal.image == normal_path.get_file(), "the sidecar names the normal sheet")
 		expect(metadata.meta.lve.specular.image == specular_path.get_file(), "the sidecar names the specular sheet")
+		expect(is_equal_approx(float(metadata.meta.lve.specular.intensity), 0.5), "the sidecar records the specular intensity")
 	)
 
 
@@ -1781,7 +1784,7 @@ func _workspace() -> void:
 		"camera": {"yaw": -0.6, "pitch": 0.3, "distance": 30.0, "initial_distance": 20.0, "target": [1.0, 2.0, 3.0]},
 		"lighting": {"basis": basis, "color": "#ffcc00", "energy": 2.0, "ambient_color": "#203040", "ambient_energy": 0.5, "shadows": true, "shaded": false, "view_locked": false, "view_basis": basis},
 		"view": {"grid": false, "wireframe": false, "orthographic": true, "view_mode": 0.0, "environment_open": false},
-		"export": {"view": 2.0, "frame_size": 128.0, "views": 1.0, "turntable": false, "metadata": false, "normal": true, "specular": true, "center": true, "sprite_center": true, "model_tag": -1.0, "sheet_tag": -1.0},
+		"export": {"view": 2.0, "frame_size": 128.0, "views": 1.0, "turntable": false, "metadata": false, "normal": true, "specular": true, "specular_intensity": 0.5, "center": true, "sprite_center": true, "model_tag": -1.0, "sheet_tag": -1.0},
 		"playing": true,
 	})
 	step("Then the document, the viewport, and the export tab hold the workspace", func():
@@ -1801,6 +1804,7 @@ func _workspace() -> void:
 		expect(is_equal_approx(float(State.document.export_settings.get("views", 0.0)), 1.0), "the export views stay 1")
 		expect(bool(State.document.export_settings.get("normal", false)), "the normal sheet choice is stored")
 		expect(bool(State.document.export_settings.get("specular", false)), "the specular sheet choice is stored")
+		expect(is_equal_approx(float(State.document.export_settings.get("specular_intensity", 0.0)), 0.5), "the specular intensity is stored")
 		expect(State.document.edit_playing, "the document plays on open")
 	)
 	var plugin := get_node_or_null("/root/ExportPlugin")
@@ -1812,6 +1816,7 @@ func _workspace() -> void:
 			expect(int(sprite.get("tile_size", 0)) == 128, "the export tab uses the saved tile size")
 			expect(bool(sprite.get("normal", false)), "the export tab uses the saved normal choice")
 			expect(bool(sprite.get("specular", false)), "the export tab uses the saved specular choice")
+			expect(is_equal_approx(float(sprite.get("specular_intensity", 0.0)), 0.5), "the export tab uses the saved specular intensity")
 	)
 	var read_response := await _call("get_workspace", {})
 	var read_data := _result_data(read_response)
@@ -1845,6 +1850,7 @@ func _workspace() -> void:
 			expect(int(loaded.export_settings.get("view", -1)) == 2, "the loaded export keeps the view")
 			expect(bool(loaded.export_settings.get("normal", false)), "the loaded export keeps the normal choice")
 			expect(bool(loaded.export_settings.get("specular", false)), "the loaded export keeps the specular choice")
+			expect(is_equal_approx(float(loaded.export_settings.get("specular_intensity", 0.0)), 0.5), "the loaded export keeps the specular intensity")
 			expect(loaded.edit_playing, "the loaded document plays on open")
 		DirAccess.remove_absolute(path)
 	)

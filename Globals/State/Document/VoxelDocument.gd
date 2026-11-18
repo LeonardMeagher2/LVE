@@ -636,6 +636,8 @@ static func _valid_export(data: Variant, tag_count: int) -> bool:
 				if not data[key] is bool: return false
 			"ao":
 				if not _number_in(data[key], 0.0, 1.0): return false
+			"specular_intensity":
+				if not _number_in(data[key], 0.0, 1.0): return false
 	return true
 
 
