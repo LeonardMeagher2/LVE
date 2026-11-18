@@ -387,6 +387,7 @@ Policy boundaries:
 - The preview is the actual result: add adds, subtract removes, and intersect removes cells outside the shape.
 - The preview shows the result frame in the main viewport renderer. The live document stays unchanged until commit.
 - A settings, context, shape, or drag change cancels the running preview job. A drag cancels at once and starts the newest worker request after two quiet frames. An inline preview and a discrete change start at once. The previous result stays visible until the newest result installs. The wire follows at once.
+- A commit is asynchronous. Its cell change must not cancel a new pending shape that the user started while the commit ran. The tool ignores cell changes during its own commit.
 - A preview starts at most once per frame. Pointer events that arrive in one frame collapse into the newest request. `_process` starts that request on the next frame, so a fast mouse costs no frame copy per event.
 - A preview frame shares its untouched chunks with the document. A swap rebuilds only the chunks the shape wrote, and each changed chunk keeps its old mesh until the replacement is ready. No chunk mesh blinks.
 - The face and corner crosses keep a constant screen size. The hot face cross is white and 24 pixels wide. The hot corner cross is white and 20 pixels wide. The gizmo scales them from the camera size, so a zoom does not change the grab target. The rings hide during a body, face, or corner drag.

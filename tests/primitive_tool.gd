@@ -47,6 +47,8 @@ func _ready() -> void:
 	test("an idle ring is dashed", _ring_dashes, "ring_dashes")
 	test("the wire draws the selected shape", _shape_wire, "shape_wire")
 	test("the draft wire appears before the preview", _draft_gizmo, "draft_gizmo")
+	test("the accept button applies a pending shape", _accept_button, "accept_button")
+	test("a commit signal keeps a new pending shape", _commit_keeps_new_pending, "commit_keeps_new_pending")
 	test("a round cone draws its caps", _cone_roundness, "cone_roundness")
 	test("a blend draws a dashed outer wire", _blend_halo, "blend_halo")
 	test("the gizmo shows the blend setting", _blend_gizmo, "blend_gizmo")
@@ -1161,6 +1163,48 @@ func _draft_gizmo() -> void:
 		expect(vertices.size() == 24, "the draft wire is the box edges")
 	)
 	_button(Vector3(2, 0, 2), false)
+	tool.cancel_pending()
+
+
+func _accept_button() -> void:
+	var options: Node = plugin("PrimitivePlugin")._options
+	step("Given the cylinder tool", func():
+		select_toolbar_item("primitive", "Cylinder")
+		tool = plugin("PrimitivePlugin")._active_tool
+		plugin("PrimitivePlugin")._settings.second_radius = 1.0
+	)
+	step("Given a pending cylinder with a running worker preview", func():
+		_button(Vector3(0, 0, 0), true)
+		_motion(Vector3(16, 0, 16), true)
+		_button(Vector3(16, 0, 16), false)
+	)
+	step("When the user presses the accept button", func():
+		expect(not options.get_node("Commit").disabled, "the accept button is enabled")
+		options.get_node("Commit").pressed.emit()
+	)
+	var deadline := Time.get_ticks_msec() + 10000
+	while (State.edit_busy() or State.active_edit() != null) and Time.get_ticks_msec() < deadline:
+		await get_tree().process_frame
+	step("Then the shape is applied", func():
+		expect(State.get_current_voxel_frame().count() > 0, "the commit writes cells")
+		expect(not plugin("PrimitivePlugin")._settings.editing, "the pending shape is cleared")
+	)
+
+
+func _commit_keeps_new_pending() -> void:
+	step("Given a pending shape and a running commit", func():
+		_button(Vector3(0, 0, 0), true)
+		_motion(Vector3(3, 0, 3), true)
+		_button(Vector3(3, 0, 3), false)
+		tool._committing = true
+		var cells: Array[Vector3i] = [Vector3i.ZERO]
+		State.cells_changed.emit(State.current_frame, cells)
+	)
+	step("Then the commit signal keeps the pending shape", func():
+		expect(not tool._primitives.is_empty(), "the new shape survives the commit signal")
+		expect(plugin("PrimitivePlugin")._settings.editing, "the accept button stays enabled")
+	)
+	tool._committing = false
 	tool.cancel_pending()
 
 

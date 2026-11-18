@@ -63,6 +63,9 @@ var _preview_operation_id := 0
 var _preview_generation := 0
 var _preview_start_frame := -1
 var _preview_settle_frame := -1
+## True while a commit runs. The commit emits a cell change, and that change
+## must not cancel a new pending shape that the user started meanwhile.
+var _committing := false
 var _preview_renderer: VoxelRenderer = null
 var _installed_preview_frame: VoxelFrame = null
 ## The world position of the pending box center. A face edit on a rotated shape
@@ -307,7 +310,11 @@ func commit_pending() -> void:
 	var plugin := get_node_or_null("/root/PrimitivePlugin")
 	if plugin == null or not plugin.has_method("build_shape"):
 		return
-	await plugin.build_shape(request)
+	_committing = true
+	var result: Dictionary = await plugin.build_shape(request)
+	_committing = false
+	if result.has("error"):
+		push_error("Primitive commit failed: %s" % str(result.get("error", "")))
 
 
 
@@ -953,6 +960,8 @@ func _clear_pending() -> void:
 
 
 func _on_cells_changed(_frame: int, _cells: Array[Vector3i]) -> void:
+	if _committing:
+		return
 	if not _primitives.is_empty() or _dragging_new:
 		cancel_pending()
 
