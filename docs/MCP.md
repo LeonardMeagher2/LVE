@@ -201,7 +201,7 @@ The server logs one line per tool call with its response bytes in `user://mcp_se
 
 Set `normal` true to write a normal sheet beside the color sheet. The file is `<name>_normal.png`. It uses the same tile grid as the color sheet. The RGB channels hold the view-space normal in the +x, +y, +z convention. Alpha is 1 on a drawn pixel and 0 on an empty pixel. The sidecar names the file under `meta.lve.normal`.
 
-Set `specular` true to write a specular sheet. The file is `<name>_specular.png`. The RGB channels hold the metallic mask. The alpha channel holds shininess, which is `1 - roughness`. Set the `CanvasTexture.specular_shininess` value below 1 to enable the map. The sidecar names the file under `meta.lve.specular`. When `specular` is true, the color sheet is rendered without specular highlights. A GIF holds color frames only.
+Set `specular` true to write a specular sheet. The file is `<name>_specular.png`. The RGB channels hold the metallic mask. The alpha channel holds shininess, which is `1 - roughness`. Set the `CanvasTexture.specular_shininess` value below 1 to enable the map. The sidecar names the file under `meta.lve.specular`. When `specular` is true, the color sheet is rendered without specular highlights. In the editor, the Light toggle enables both the normal and specular sheets. A GIF holds color frames only.
 
 Pass a key only when the call needs a value that differs from the export tab. The call does not change the document or the saved export settings. Every export tool returns the resolved path and the resolved values.
 

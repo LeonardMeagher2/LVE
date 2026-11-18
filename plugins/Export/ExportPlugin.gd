@@ -31,7 +31,6 @@ const SPRITE_GAP := 1
 @onready var _light_button: Button = _controls.get_node("ControlBar/LightToggle")
 @onready var _normal_button: Button = _controls.get_node("ControlBar/NormalToggle")
 @onready var _specular_view: Button = _controls.get_node("ControlBar/SpecularToggle")
-@onready var _specular_toggle: Button = _controls.get_node("ExportRow/Specular")
 @onready var _dialog: FileDialog = _menu_item.get_node("ExportDialog")
 @onready var _sheet_dialog: FileDialog = _menu_item.get_node("SpriteSheetDialog")
 @onready var _gif_dialog: FileDialog = _menu_item.get_node("GifDialog")
@@ -137,7 +136,6 @@ func _ready() -> void:
 	_light_button.toggled.connect(_on_light_toggled)
 	_normal_button.toggled.connect(_on_normal_preview_toggled)
 	_specular_view.toggled.connect(_on_specular_preview_toggled)
-	_specular_toggle.toggled.connect(_on_specular_toggled)
 	_sheet_settings.get_node("FrameRow/Frames").item_selected.connect(_on_sheet_tag_selected)
 	_sheet_settings.get_node("ViewRow/View").item_selected.connect(_sheet_settings_changed.unbind(1))
 	_sheet_settings.get_node("ViewRow/Center").toggled.connect(_sheet_settings_changed.unbind(1))
@@ -180,7 +178,7 @@ func _save_export_settings() -> void:
 		"views": _sheet_settings.get_node("TurntableRow/Views").value,
 		"metadata": _controls.get_node("ExportRow/Metadata").button_pressed,
 		"normal": _light_button.button_pressed,
-		"specular": _specular_toggle.button_pressed,
+		"specular": _light_button.button_pressed,
 		"center": _model.get_node("AnimationRow/Center").button_pressed,
 		"model_tag": State.document.tags.find(_selected_tag),
 		"sheet_tag": State.document.tags.find(_sheet_tag),
@@ -203,10 +201,9 @@ func _restore_export_settings() -> void:
 	_sheet_settings.get_node("TurntableRow/Turntable").set_pressed_no_signal(saved.get("turntable", true))
 	_sheet_settings.get_node("TurntableRow/Views").set_value_no_signal(saved.get("views", 8))
 	_controls.get_node("ExportRow/Metadata").set_pressed_no_signal(saved.get("metadata", false))
-	_light_button.set_pressed_no_signal(saved.get("normal", false))
+	_light_button.set_pressed_no_signal(bool(saved.get("normal", false)) or bool(saved.get("specular", false)))
 	_normal_button.set_pressed_no_signal(false)
 	_specular_view.set_pressed_no_signal(false)
-	_specular_toggle.set_pressed_no_signal(saved.get("specular", false))
 	_model.get_node("AnimationRow/Center").set_pressed_no_signal(saved.get("center", false))
 	var lighting: Dictionary = saved.get("lighting", _default_lighting)
 	_model_scene.set_lighting_settings(lighting)
@@ -259,7 +256,7 @@ func current_export_settings() -> Dictionary:
 			"views": _view_count(),
 			"metadata": _controls.get_node("ExportRow/Metadata").button_pressed,
 			"normal": _light_button.button_pressed,
-			"specular": _specular_toggle.button_pressed,
+			"specular": _light_button.button_pressed,
 			"tag": sheet_tag_index,
 			"tag_name": _sheet_tag.name if _sheet_tag else "",
 			"first_frame": sheet_range.x,
@@ -576,27 +573,20 @@ func _sync() -> void:
 	var layout := sheet_layout(count * views, tile_size)
 	var gif := _gif_enabled()
 	var normal_on := _light_button.button_pressed and not gif
-	var specular_on := _specular_toggle.button_pressed and not gif
 	_menu_item.get_node("ExportBtn").disabled = busy
 	_model.get_node("Export").disabled = busy
 	_export_button.disabled = busy or (not gif and (layout.size.x > Image.MAX_WIDTH or layout.size.y > Image.MAX_HEIGHT))
 	if gif:
 		_export_button.tooltip_text = "Export the animation as a GIF"
-	elif normal_on and specular_on:
-		_export_button.tooltip_text = "Export the sprite sheet, normal map, and specular map as PNG images"
 	elif normal_on:
-		_export_button.tooltip_text = "Export the sprite sheet and the normal map as PNG images"
-	elif specular_on:
-		_export_button.tooltip_text = "Export the sprite sheet and the specular map as PNG images"
+		_export_button.tooltip_text = "Export the sprite sheet, normal map, and specular map as PNG images"
 	else:
 		_export_button.tooltip_text = "Export the sprite sheet as a PNG image"
 	_gif_button.disabled = busy
 	_light_button.disabled = busy or gif
-	_light_button.tooltip_text = "Turn off GIF mode to enable normal maps." if gif else "Enable normal maps. Move the pointer over the sheet to light it. The export writes a normal map sheet."
-	_specular_toggle.disabled = busy or gif
-	_specular_toggle.tooltip_text = "Turn off GIF mode to write specular maps." if gif else "Write a specular map sheet from the voxel metallic and roughness values."
+	_light_button.tooltip_text = "Turn off GIF mode to enable normal and specular maps." if gif else "Enable normal and specular maps. Move the pointer over the sheet to light it. The export writes both map sheets."
 	_normal_button.disabled = busy or gif or not _light_button.button_pressed
-	_specular_view.disabled = busy or gif or not _specular_toggle.button_pressed
+	_specular_view.disabled = busy or gif or not _light_button.button_pressed
 	if _normal_button.disabled and _normal_button.button_pressed:
 		_normal_button.set_pressed_no_signal(false)
 		_show_sheet_preview()
@@ -605,15 +595,12 @@ func _sync() -> void:
 		_show_sheet_preview()
 	if not _light_button.button_pressed:
 		_normal_button.tooltip_text = "Turn on Light to enable normal maps."
+		_specular_view.tooltip_text = "Turn on Light to enable specular maps."
 	elif gif:
 		_normal_button.tooltip_text = "Turn off GIF mode to view the normal map."
-	else:
-		_normal_button.tooltip_text = "Show the normal map sheet. Press again to return to the lit sheet."
-	if not _specular_toggle.button_pressed:
-		_specular_view.tooltip_text = "Turn on Specular to write specular maps."
-	elif gif:
 		_specular_view.tooltip_text = "Turn off GIF mode to view the specular map."
 	else:
+		_normal_button.tooltip_text = "Show the normal map sheet. Press again to return to the lit sheet."
 		_specular_view.tooltip_text = "Show the specular map sheet. Press again to return to the lit sheet."
 	for path in ["FrameRow/Frames", "ViewRow/View", "ViewRow/Center"]:
 		_sheet_settings.get_node(path).disabled = busy
@@ -641,9 +628,7 @@ func _export_status() -> Dictionary:
 			var layout := sheet_layout(count * views, tile_size)
 			message = "%d × %d pixels · %d frames × %d views" % [layout.size.x, layout.size.y, count, views]
 			if _light_button.button_pressed:
-				message += " · normal"
-			if _specular_toggle.button_pressed:
-				message += " · specular"
+				message += " · normal + specular"
 	return {
 		"left": "%s   #%d/%d   %d%%" % [
 			message,
@@ -700,8 +685,7 @@ func _choose_export_file() -> void:
 
 
 func _choose_sheet_file() -> void:
-	var map_count := int(_light_button.button_pressed) + int(_specular_toggle.button_pressed)
-	_sheet_dialog.title = "Export Sprite Sheet and Maps" if map_count > 0 else "Export Sprite Sheet"
+	_sheet_dialog.title = "Export Sprite Sheet and Maps" if _light_button.button_pressed else "Export Sprite Sheet"
 	_sheet_dialog.current_file = State.document.get_file_name().get_basename() + "_sheet.png"
 	_sheet_dialog.popup_centered()
 
@@ -720,6 +704,7 @@ func _on_gif_toggled(_pressed: bool) -> void:
 func _on_light_toggled(pressed: bool) -> void:
 	if not pressed:
 		_normal_button.set_pressed_no_signal(false)
+		_specular_view.set_pressed_no_signal(false)
 	_sheet_settings_changed()
 
 
@@ -732,14 +717,8 @@ func _on_normal_preview_toggled(pressed: bool) -> void:
 	_sync()
 
 
-func _on_specular_toggled(pressed: bool) -> void:
-	if not pressed:
-		_specular_view.set_pressed_no_signal(false)
-	_sheet_settings_changed()
-
-
 func _on_specular_preview_toggled(pressed: bool) -> void:
-	if pressed and (not _specular_toggle.button_pressed or _preview_specular_display_texture == null):
+	if pressed and (not _light_button.button_pressed or _preview_specular_display_texture == null):
 		_specular_view.set_pressed_no_signal(false)
 		return
 	_show_sheet_preview()
@@ -1156,11 +1135,9 @@ func _update_sheet_preview() -> void:
 	)
 	settings.layout = layout
 	var normal_on: bool = _light_button.button_pressed
-	var specular_on: bool = _specular_toggle.button_pressed
 	var outputs: Array = ["color"]
 	if normal_on:
 		outputs.append("normal")
-	if specular_on:
 		outputs.append("specular")
 	settings.outputs = outputs
 	_preview_operation_id = State.begin_operation("Rendering preview", frames.size() * views * outputs.size(), false, self)

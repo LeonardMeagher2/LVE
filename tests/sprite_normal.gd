@@ -26,7 +26,6 @@ func before_test() -> void:
 	exporter._restore_export_settings()
 	exporter._light_button.set_pressed_no_signal(false)
 	exporter._normal_button.set_pressed_no_signal(false)
-	exporter._specular_toggle.set_pressed_no_signal(false)
 	exporter._specular_view.set_pressed_no_signal(false)
 	prefix = "user://sprite_normal_%s" % Time.get_ticks_usec()
 
@@ -196,49 +195,35 @@ func _specular_run() -> void:
 
 func _option_run() -> void:
 	step("Given a new document", func():
-		expect(not exporter._light_button.button_pressed, "normal maps start off")
-		expect(not bool(exporter.current_export_settings().sprite.get("normal", false)), "the export settings start with normal off")
+		expect(not exporter._light_button.button_pressed, "maps start off")
+		var sprite: Dictionary = exporter.current_export_settings().sprite
+		expect(not bool(sprite.get("normal", false)), "the export settings start with normal off")
+		expect(not bool(sprite.get("specular", false)), "the export settings start with specular off")
 	)
-	step("When the light toggle turns normal maps on", func():
+	step("When the light toggle turns maps on", func():
 		exporter._light_button.button_pressed = true
 	)
-	step("Then the export settings store normal maps", func():
+	step("Then the export settings store both maps", func():
 		expect(bool(State.document.export_settings.get("normal", false)), "the document stores the normal choice")
-		expect(bool(exporter.current_export_settings().sprite.get("normal", false)), "the current settings report normal maps")
-	)
-	step("When a document stores normal maps and the settings restore", func():
-		exporter._light_button.set_pressed_no_signal(false)
-		State.document.export_settings["normal"] = true
-		exporter._restore_export_settings()
-	)
-	step("Then the toggle follows the document", func():
-		expect(exporter._light_button.button_pressed, "the restored document turns normal maps on")
-	)
-	step("When normal maps turn off", func():
-		exporter._light_button.button_pressed = false
-	)
-	step("Then the document follows the toggle", func():
-		expect(not bool(State.document.export_settings.get("normal", true)), "the document turns normal maps off")
-	)
-	step("When the specular toggle turns specular maps on", func():
-		exporter._specular_toggle.button_pressed = true
-	)
-	step("Then the export settings store specular maps", func():
 		expect(bool(State.document.export_settings.get("specular", false)), "the document stores the specular choice")
-		expect(bool(exporter.current_export_settings().sprite.get("specular", false)), "the current settings report specular maps")
+		var sprite: Dictionary = exporter.current_export_settings().sprite
+		expect(bool(sprite.get("normal", false)), "the current settings report normal maps")
+		expect(bool(sprite.get("specular", false)), "the current settings report specular maps")
 	)
-	step("When a document stores specular maps and the settings restore", func():
-		exporter._specular_toggle.set_pressed_no_signal(false)
+	step("When a document stores only specular maps and the settings restore", func():
+		exporter._light_button.set_pressed_no_signal(false)
+		State.document.export_settings["normal"] = false
 		State.document.export_settings["specular"] = true
 		exporter._restore_export_settings()
 	)
-	step("Then the specular toggle follows the document", func():
-		expect(exporter._specular_toggle.button_pressed, "the restored document turns specular maps on")
+	step("Then the light toggle follows the document", func():
+		expect(exporter._light_button.button_pressed, "the restored document turns maps on")
 	)
-	step("When specular maps turn off", func():
-		exporter._specular_toggle.button_pressed = false
+	step("When the light toggle turns maps off", func():
+		exporter._light_button.button_pressed = false
 	)
-	step("Then the document follows the specular toggle", func():
+	step("Then the document turns both maps off", func():
+		expect(not bool(State.document.export_settings.get("normal", true)), "the document turns normal maps off")
 		expect(not bool(State.document.export_settings.get("specular", true)), "the document turns specular maps off")
 	)
 
@@ -356,7 +341,6 @@ func _specular_light_run() -> void:
 		exporter._sheet_settings.get_node("SizeRow/Size").set_value_no_signal(32)
 		exporter._menu_item.get_node("ExportBtn").button_pressed = true
 		exporter._light_button.button_pressed = true
-		exporter._specular_toggle.button_pressed = true
 	)
 	await get_tree().process_frame
 	await get_tree().process_frame
@@ -379,19 +363,9 @@ func _specular_light_run() -> void:
 	await get_tree().process_frame
 	await RenderingServer.frame_post_draw
 	var specular_lit := get_tree().root.get_texture().get_image()
-	step("When specular maps turn off", func():
-		exporter._specular_toggle.button_pressed = false
-	)
-	await get_tree().process_frame
-	await get_tree().process_frame
-	await _wait_preview()
-	step("Then the preview keeps the normal map without specular", func():
-		expect(exporter._preview_specular_image == null, "the preview drops the specular sheet")
-		expect(exporter._preview_canvas_texture != null, "the lit preview keeps a canvas texture")
-		expect(exporter._preview_canvas_texture.specular_texture == null, "the canvas texture drops specular")
-		preview._pointer_inside = true
-		preview._pointer = preview.size * 0.5
-		preview._update_light()
+	step("When the light drops the specular map", func():
+		preview.set_specular_map(null)
+		expect(preview._specular_texture == null, "the light drops the specular map")
 	)
 	await get_tree().process_frame
 	await get_tree().process_frame
@@ -403,12 +377,9 @@ func _specular_light_run() -> void:
 		var normal_luminance := normal_lit.get_pixelv(Vector2i(center)).get_luminance()
 		expect(specular_luminance > normal_luminance + 0.02, "specular adds brightness at the sheet center")
 	)
-	step("When specular maps turn on again", func():
-		exporter._specular_toggle.button_pressed = true
+	step("When the light restores the specular map", func():
+		preview.set_specular_map(exporter._preview_specular_texture)
 	)
-	await get_tree().process_frame
-	await get_tree().process_frame
-	await _wait_preview()
 	step("Then the preview shows the raw specular sheet", func():
 		exporter._specular_view.button_pressed = true
 		expect(exporter._specular_view.button_pressed, "the specular view opens")
@@ -420,8 +391,8 @@ func _specular_light_run() -> void:
 		exporter._gif_button.button_pressed = true
 	)
 	await get_tree().process_frame
-	step("Then both map views are disabled for the color animation", func():
-		expect(exporter._specular_toggle.disabled, "GIF mode disables the specular toggle")
+	step("Then the map views are disabled for the color animation", func():
+		expect(exporter._light_button.disabled, "GIF mode disables the map toggle")
 		expect(exporter._specular_view.disabled, "GIF mode disables the specular view")
 		expect(not exporter._specular_view.button_pressed, "GIF mode leaves the specular view")
 		expect(preview.is_animating(), "GIF mode animates the color frames")
@@ -430,11 +401,18 @@ func _specular_light_run() -> void:
 		exporter._gif_button.button_pressed = false
 	)
 	await get_tree().process_frame
-	step("Then the specular choice survives", func():
-		expect(not exporter._specular_toggle.disabled, "the specular toggle returns")
-		expect(exporter._specular_toggle.button_pressed, "the specular choice survives GIF mode")
+	step("Then the map choice survives", func():
+		expect(not exporter._light_button.disabled, "the map toggle returns")
+		expect(exporter._light_button.button_pressed, "the map choice survives GIF mode")
 		expect(not exporter._specular_view.disabled, "the specular view returns")
 		expect(not preview.is_animating(), "the preview returns to the sheet")
+	)
+	step("When the light toggle turns off", func():
+		exporter._light_button.button_pressed = false
+	)
+	step("Then the specular view disables", func():
+		expect(exporter._specular_view.disabled, "maps off disables the specular view")
+		expect(not exporter._specular_view.button_pressed, "maps off leaves the specular view")
 	)
 
 
