@@ -372,7 +372,7 @@ Policy boundaries:
 - A cone points along the pick plane normal. Its narrow radius is a fraction of the base radius. Zero makes a point and one makes a cylinder.
 - Roundness from 0 to 1 rounds box edges and blends cone ends from flat to round.
 - The blend and the narrow cone radius also use 0 to 1. The blend is a fraction of the largest blend, which is half the smallest extent. The narrow radius is a fraction of the base radius. The tool converts both to cells before it sends the request.
-- The pending shape keeps its own rotation. Three rings around the box center turn it around the shape's local X, Y, and Z axes. A ring drag snaps to 15 degrees, or to 5 with Shift. The box center stays fixed.
+- The pending shape keeps its own rotation. Three rings around the shape turn it around its local X, Y, and Z axes. A ring drag turns freely. The box center stays fixed.
 - A ring sits just outside the shape, with 84 pixels as the minimum radius and an 18 pixel gap. A press inside the shape moves it, so the body drag keeps its area.
 - The wire box, the face crosses, the corner crosses, and the rings follow the rotation. A face drag projects the pointer onto the shape's local axis, so a rotated face still moves along its own axis.
 - A face or corner edit on a rotated shape keeps the opposite geometry still. The local box center and the world pivot can differ, so the tool moves the world center by the rotated change of the local center.

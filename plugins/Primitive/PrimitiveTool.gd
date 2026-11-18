@@ -14,10 +14,6 @@ const PrimitiveJob := preload("res://Globals/State/Tools/PrimitiveJob.gd")
 const HANDLE_RADIUS_PX := 11.0
 ## The rotate ring grab distance in screen pixels.
 const RING_GRAB_PX := 9.0
-## The rotate snap in degrees.
-const ROTATE_SNAP_DEGREES := 15.0
-## The rotate snap in degrees while Shift is held.
-const ROTATE_SNAP_FINE_DEGREES := 5.0
 ## The preview work below which the result runs inline. A larger preview uses a
 ## worker job.
 const INLINE_PREVIEW_CELLS := 512
@@ -229,7 +225,6 @@ func handle_input(event: InputEvent, pos: Vector2) -> bool:
 			_update_handle(ray[0], ray[1])
 			return true
 		if _rotating and mm.button_mask & MOUSE_BUTTON_MASK_LEFT:
-			_shift = mm.shift_pressed
 			_update_ring(ray[0], ray[1])
 			return true
 		if _moving and mm.button_mask & MOUSE_BUTTON_MASK_LEFT:
@@ -733,11 +728,9 @@ func _update_ring(origin: Vector3, direction: Vector3) -> void:
 	var angle := atan2(offset.dot(_rotate_v), offset.dot(_rotate_u))
 	_rotate_total += wrapf(angle - _rotate_last_angle, -PI, PI)
 	_rotate_last_angle = angle
-	var step := deg_to_rad(ROTATE_SNAP_FINE_DEGREES if _shift else ROTATE_SNAP_DEGREES)
-	var snapped := roundf(_rotate_total / step) * step
 	var local_axis := Vector3.ZERO
 	local_axis[_rotate_axis] = 1.0
-	_pending_rotation = _rotate_start * Quaternion(local_axis, snapped)
+	_pending_rotation = _rotate_start * Quaternion(local_axis, _rotate_total)
 	if _active_index >= 0 and _active_index < _primitives.size():
 		_primitives[_active_index] = _build_primitive(_pending_box, _active_axis)
 	_refresh_preview()
