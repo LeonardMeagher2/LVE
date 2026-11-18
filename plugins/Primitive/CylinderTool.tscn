@@ -3,7 +3,7 @@
 [ext_resource type="Script" path="res://plugins/Primitive/PrimitiveTool.gd" id="1_tool"]
 [ext_resource type="Script" path="res://plugins/Primitive/PrimitiveGizmo.gd" id="2_gizmo"]
 
-[node name="ConeTool" type="Node3D"]
+[node name="CylinderTool" type="Node3D"]
 script = ExtResource("1_tool")
 shape = 2
 

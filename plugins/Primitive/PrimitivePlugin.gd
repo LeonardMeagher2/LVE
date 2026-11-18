@@ -2,9 +2,9 @@ extends VoxelPlugin
 
 ## The primitive plugin.
 ##
-## It owns three tools: Box, Ellipsoid, and Cone. It also exposes the one commit
-## path that the mouse tools and the MCP server call, so both paths share the
-## SDF evaluator, the undo scope, and the publication rules.
+## It owns three tools: Box, Ellipsoid, and Cylinder. It also exposes the one
+## commit path that the mouse tools and the MCP server call, so both paths share
+## the SDF evaluator, the undo scope, and the publication rules.
 
 ## The stable id of the primitive toolbar. The persisted active tool uses it.
 const TOOL_ID := "primitive"
@@ -18,7 +18,7 @@ const PrimitiveJob := preload("res://Globals/State/Tools/PrimitiveJob.gd")
 @onready var _options := preload("./Options.tscn").instantiate()
 @onready var _box_tool := preload("./BoxTool.tscn").instantiate()
 @onready var _ellipsoid_tool := preload("./EllipsoidTool.tscn").instantiate()
-@onready var _cone_tool := preload("./ConeTool.tscn").instantiate()
+@onready var _cylinder_tool := preload("./CylinderTool.tscn").instantiate()
 var _settings := preload("./PrimitiveSettings.tres")
 var _active_tool: Node3D = null
 var _active := false
@@ -51,7 +51,7 @@ func _notification(what: int) -> void:
 	if what != NOTIFICATION_PREDELETE:
 		return
 	_cancel_pending()
-	for node in [_toolbar, _options, _box_tool, _ellipsoid_tool, _cone_tool]:
+	for node in [_toolbar, _options, _box_tool, _ellipsoid_tool, _cylinder_tool]:
 		if is_instance_valid(node):
 			node.free()
 
@@ -85,8 +85,8 @@ func _on_tool_changed(tool: PrimitiveToolSettings.Tools) -> void:
 	match tool:
 		PrimitiveToolSettings.Tools.ELLIPSOID:
 			next = _ellipsoid_tool
-		PrimitiveToolSettings.Tools.CONE:
-			next = _cone_tool
+		PrimitiveToolSettings.Tools.CYLINDER:
+			next = _cylinder_tool
 		_:
 			next = _box_tool
 	if next == _active_tool:

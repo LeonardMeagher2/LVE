@@ -328,12 +328,12 @@ flowchart TB
 
 `PrimitiveTool` keeps a replaceable result preview.
 The press opens no edit.
-The drag maps to the pick plane and builds a box, an ellipsoid, or a cone.
+The drag maps to the pick plane and builds a box, an ellipsoid, or a cylinder.
 `PrimitiveField` evaluates the pure signed-distance field.
 A preview runs `PrimitiveJob` on a full copy and shows the result through the main viewport `VoxelRenderer.source_frame`. The live document is not changed.
 The preview uses `State.drawing_context`, so selection, slice, size, and symmetry limit the result.
-Release keeps the primitive pending and shows six face handles.
-A handle drag changes one bound of the pending box. A handle can cross the opposite bound, so bounds can become negative and flip a cone.
+Release keeps the primitive pending and shows the face handles near the pointer.
+A handle drag changes one bound of the pending box. A handle can cross the opposite bound, so bounds can become negative and flip a tapered end.
 A press outside the handles moves the whole pending shape by whole cells.
 The pending primitive must be committed or cancelled before a new shape starts.
 Enter or the option bar commits the pending primitive.
@@ -369,13 +369,13 @@ flowchart LR
 Policy boundaries:
 
 - The shape box is axis aligned.
-- A cone points along the pick plane normal. Its narrow radius is a fraction of the base radius. Zero makes a point and one makes a cylinder.
-- Roundness from 0 to 1 rounds box edges and blends cone ends from flat to round.
-- The blend and the narrow cone radius also use 0 to 1. The blend is a fraction of the largest blend, which is half the smallest extent. The narrow radius is a fraction of the base radius. The tool converts both to cells before it sends the request.
+- The cylinder tool builds a cone along the pick plane normal. Its top radius is a fraction of the base radius. Zero makes a point and one makes a cylinder.
+- Roundness from 0 to 1 rounds box edges and blends the cylinder ends from flat to round.
+- The blend and the top radius also use 0 to 1. The blend is a fraction of the largest blend, which is half the smallest extent. The top radius is a fraction of the base radius. The tool converts both to cells before it sends the request.
 - The pending shape keeps its own rotation. Three rings around the shape turn it around its local X, Y, and Z axes. A ring drag snaps to 2 degrees. The box center stays fixed.
 - A ring sits just outside the shape, with 84 pixels as the minimum radius and an 18 pixel gap. An idle ring is dashed. The hovered ring is solid white. A press inside the shape moves it, so the body drag keeps its area.
 - A ring is drawn only when the view is within 63 degrees of its axis. A ring that is nearly edge-on cannot be dragged, so it is not drawn and not hit-tested.
-- The wire follows the selected shape. A box draws its twelve edges. An ellipsoid draws three great circles. A cone draws its end circles and eight sides. The cone wire follows the roundness: a round cone draws tangent sides and end caps, and a sharp cone draws flat end circles. The face and corner handles appear only near the pointer. A face drag projects the pointer onto the shape's local axis, so a rotated face still moves along its own axis.
+- The wire follows the selected shape. A box draws its twelve edges. An ellipsoid draws three great circles. A cylinder draws its end circles and eight sides. The wire follows the roundness: a round cylinder draws tangent sides and end caps, and a sharp taper draws flat end circles. The face and corner handles appear only near the pointer. A face drag projects the pointer onto the shape's local axis, so a rotated face still moves along its own axis.
 - A nonzero blend draws a dashed outer wire at the blend reach. The smooth union can reach this far into the existing cells.
 - A face or corner edit on a rotated shape keeps the opposite geometry still. The local box center and the world pivot can differ, so the tool moves the world center by the rotated change of the local center.
 - Intersect removes occupied cells outside the field across the current frame. The edit context still filters selection, slice, and document size.

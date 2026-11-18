@@ -2,7 +2,7 @@ extends ToolMenuButton
 
 ## The primitive tool menu button.
 ##
-## It selects the Box, Ellipsoid, or Cone tool and shows that tool's icon.
+## It selects the Box, Ellipsoid, or Cylinder tool and shows that tool's icon.
 
 var _settings := preload("./PrimitiveSettings.tres")
 

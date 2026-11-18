@@ -3454,8 +3454,8 @@ func _active_tool_info() -> Dictionary:
 			var shape_name := "box"
 			if settings.tool == PrimitiveToolSettings.Tools.ELLIPSOID:
 				shape_name = "ellipsoid"
-			elif settings.tool == PrimitiveToolSettings.Tools.CONE:
-				shape_name = "cone"
+			elif settings.tool == PrimitiveToolSettings.Tools.CYLINDER:
+				shape_name = "cylinder"
 			var op_name := "add"
 			if settings.op == PrimitiveToolSettings.Op.SUBTRACT:
 				op_name = "subtract"

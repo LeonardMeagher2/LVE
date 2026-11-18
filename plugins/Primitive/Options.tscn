@@ -77,18 +77,18 @@ step = 0.05
 decimals = 2
 value = 0.0
 
-[node name="Cone" type="HBoxContainer" parent="."]
+[node name="Cylinder" type="HBoxContainer" parent="."]
 layout_mode = 2
 
-[node name="SecondRadius" parent="Cone" instance=ExtResource("10_value")]
+[node name="SecondRadius" parent="Cylinder" instance=ExtResource("10_value")]
 layout_mode = 2
-tooltip_text = "Narrow cone radius from 0 to 1. One equals the base radius. Zero makes a point."
+tooltip_text = "Top radius from 0 to 1. One equals the base radius and makes a cylinder. Zero makes a point."
 icon = ExtResource("7_radius")
 min_value = 0.0
 max_value = 1.0
 step = 0.01
 decimals = 2
-value = 0.0
+value = 1.0
 
 [node name="ActionSeparator" type="VSeparator" parent="."]
 layout_mode = 2
@@ -113,6 +113,6 @@ icon_alignment = 1
 [connection signal="value_changed" from="Smooth" to="." method="_on_smooth_changed"]
 [connection signal="value_changed" from="Shell" to="." method="_on_shell_changed"]
 [connection signal="value_changed" from="Roundness" to="." method="_on_roundness_changed"]
-[connection signal="value_changed" from="Cone/SecondRadius" to="." method="_on_second_radius_changed"]
+[connection signal="value_changed" from="Cylinder/SecondRadius" to="." method="_on_second_radius_changed"]
 [connection signal="pressed" from="Commit" to="." method="_on_commit_pressed"]
 [connection signal="pressed" from="Cancel" to="." method="_on_cancel_pressed"]

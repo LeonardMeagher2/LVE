@@ -3,7 +3,7 @@ extends HBoxContainer
 ## The primitive option bar.
 ##
 ## It selects the operation, edits the smooth blend and the shell, edits the
-## cone options, and commits or cancels the pending primitives. The shape is
+## cylinder options, and commits or cancels the pending primitives. The shape is
 ## selected from the primitive toolbar.
 
 var _settings := preload("./PrimitiveSettings.tres")
@@ -25,8 +25,8 @@ func _sync() -> void:
 	$Shell.set_value_no_signal(_settings.shell)
 	$Roundness.visible = _settings.tool != PrimitiveToolSettings.Tools.ELLIPSOID
 	$Roundness.set_value_no_signal(_settings.roundness)
-	$Cone.visible = _settings.tool == PrimitiveToolSettings.Tools.CONE
-	$Cone/SecondRadius.set_value_no_signal(_settings.second_radius)
+	$Cylinder.visible = _settings.tool == PrimitiveToolSettings.Tools.CYLINDER
+	$Cylinder/SecondRadius.set_value_no_signal(_settings.second_radius)
 	$Commit.disabled = not _settings.editing
 	$Cancel.disabled = not _settings.editing
 

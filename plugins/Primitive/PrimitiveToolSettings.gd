@@ -19,8 +19,8 @@ enum Tools {
 	BOX,
 	## An axis-aligned ellipsoid.
 	ELLIPSOID,
-	## A cone with two radii.
-	CONE
+	## A cone with two radii. A top radius of 1 makes a cylinder.
+	CYLINDER
 }
 
 ## The operation that the primitive applies.
@@ -69,9 +69,9 @@ enum Op {
 		shell = value
 		emit_changed()
 
-## The narrow cone radius from 0 to 1. One equals the base radius, which makes
-## a cylinder. Zero makes a point.
-@export_range(0.0, 1.0, 0.01) var second_radius := 0.0:
+## The top radius from 0 to 1. One equals the base radius, which makes a
+## cylinder. Zero makes a point.
+@export_range(0.0, 1.0, 0.01) var second_radius := 1.0:
 	set(value):
 		value = clampf(value, 0.0, 1.0)
 		if is_equal_approx(value, second_radius):
@@ -79,8 +79,8 @@ enum Op {
 		second_radius = value
 		emit_changed()
 
-## The roundness from 0 to 1. It rounds cube edges and blends the cone between
-## flat and round ends.
+## The roundness from 0 to 1. It rounds cube edges and blends the cylinder ends
+## between flat and round.
 @export_range(0.0, 1.0, 0.05) var roundness := 0.0:
 	set(value):
 		value = clampf(value, 0.0, 1.0)

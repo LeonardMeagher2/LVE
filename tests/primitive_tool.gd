@@ -161,13 +161,13 @@ func _tool_selection() -> void:
 		expect(primitive_plugin._settings.tool == PrimitiveToolSettings.Tools.ELLIPSOID, "the setting selects the ellipsoid")
 		expect(primitive_plugin._active_tool == primitive_plugin._ellipsoid_tool, "the ellipsoid tool is mounted")
 	)
-	step("When the toolbar selects the cone", func():
-		select_toolbar_item("primitive", "Cone")
+	step("When the toolbar selects the cylinder", func():
+		select_toolbar_item("primitive", "Cylinder")
 	)
-	step("Then the cone tool is active and the cone options are visible", func():
-		expect(primitive_plugin._settings.tool == PrimitiveToolSettings.Tools.CONE, "the setting selects the cone")
-		expect(primitive_plugin._active_tool == primitive_plugin._cone_tool, "the cone tool is mounted")
-		expect(primitive_plugin._options.get_node("Cone").visible, "the cone options are visible")
+	step("Then the cylinder tool is active and the cylinder options are visible", func():
+		expect(primitive_plugin._settings.tool == PrimitiveToolSettings.Tools.CYLINDER, "the setting selects the cylinder")
+		expect(primitive_plugin._active_tool == primitive_plugin._cylinder_tool, "the cylinder tool is mounted")
+		expect(primitive_plugin._options.get_node("Cylinder").visible, "the cylinder options are visible")
 	)
 	step("When the toolbar selects the box", func():
 		select_toolbar_item("primitive", "Box")
@@ -179,7 +179,7 @@ func _tool_selection() -> void:
 
 func _cone_normal() -> void:
 	step("Given the cone tool with a point tip", func():
-		select_toolbar_item("primitive", "Cone")
+		select_toolbar_item("primitive", "Cylinder")
 		plugin("PrimitivePlugin")._settings.second_radius = 0.0
 		plugin("PrimitivePlugin")._settings.roundness = 0.0
 	)
@@ -210,7 +210,7 @@ func _cone_normal() -> void:
 
 func _flip_cone() -> void:
 	step("Given a pending cone", func():
-		select_toolbar_item("primitive", "Cone")
+		select_toolbar_item("primitive", "Cylinder")
 		tool = plugin("PrimitivePlugin")._active_tool
 		plugin("PrimitivePlugin")._settings.second_radius = 0.0
 		plugin("PrimitivePlugin")._settings.roundness = 0.0
@@ -1127,7 +1127,7 @@ func _material() -> void:
 func _shape_options() -> void:
 	var settings: PrimitiveToolSettings = plugin("PrimitivePlugin")._settings
 	step("When the options select a cone with a narrow radius", func():
-		settings.tool = PrimitiveToolSettings.Tools.CONE
+		settings.tool = PrimitiveToolSettings.Tools.CYLINDER
 		settings.second_radius = 0.0
 		settings.roundness = 0.0
 	)
