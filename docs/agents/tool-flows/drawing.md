@@ -329,6 +329,7 @@ flowchart TB
 `PrimitiveTool` keeps a replaceable result preview.
 The press opens no edit.
 The drag maps to the pick plane and builds a box, an ellipsoid, or a cylinder.
+The wire follows the draft at once. The preview result frame follows when the worker finishes.
 `PrimitiveField` evaluates the pure signed-distance field.
 A preview runs `PrimitiveJob` on a full copy and shows the result through the main viewport `VoxelRenderer.source_frame`. The live document is not changed.
 The preview uses `State.drawing_context`, so selection, slice, size, and symmetry limit the result.

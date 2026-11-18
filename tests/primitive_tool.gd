@@ -44,6 +44,7 @@ func _ready() -> void:
 	test("a ring shows only near its axis", _ring_parallel_only, "ring_parallel_only")
 	test("an idle ring is dashed", _ring_dashes, "ring_dashes")
 	test("the wire draws the selected shape", _shape_wire, "shape_wire")
+	test("the draft wire appears before the preview", _draft_gizmo, "draft_gizmo")
 	test("a round cone draws its caps", _cone_roundness, "cone_roundness")
 	test("a blend draws a dashed outer wire", _blend_halo, "blend_halo")
 	test("the gizmo shows the blend setting", _blend_gizmo, "blend_gizmo")
@@ -1106,6 +1107,27 @@ func _rings_hidden_on_drag() -> void:
 	step("Then the rings return after the drag", func():
 		expect(gizmo._rings.visible, "the rings return")
 	)
+	tool.cancel_pending()
+
+
+func _draft_gizmo() -> void:
+	step("Given the box tool", func():
+		select_toolbar_item("primitive", "Box")
+		tool = plugin("PrimitivePlugin")._active_tool
+	)
+	step("When the user presses and drags out a shape", func():
+		_button(Vector3(0, 0, 0), true)
+		_motion(Vector3(2, 0, 2), true)
+	)
+	step("Then the wire shows the draft before the preview job", func():
+		var gizmo := tool.get_node("Gizmo")
+		expect(tool._dragging_new, "the drag is still open")
+		expect(tool.visible, "the tool is visible")
+		expect(gizmo.visible, "the draft wire is visible")
+		var vertices: PackedVector3Array = gizmo.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+		expect(vertices.size() == 24, "the draft wire is the box edges")
+	)
+	_button(Vector3(2, 0, 2), false)
 	tool.cancel_pending()
 
 

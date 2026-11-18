@@ -378,7 +378,7 @@ func _refresh_preview(cancel_running := false) -> void:
 	# The handles follow the shape immediately. The result frame follows when the
 	# worker finishes.
 	_refresh_gizmo()
-	visible = not _primitives.is_empty()
+	visible = _dragging_new or not _primitives.is_empty()
 	var request := _build_request(true)
 	_preview_request = request
 	_preview_frame = State.get_current_voxel_frame()
@@ -472,7 +472,20 @@ func _cancel_preview_job() -> void:
 func _refresh_gizmo() -> void:
 	if not has_node("Gizmo"):
 		return
-	if _primitives.is_empty() or _dragging_new:
+	if _dragging_new:
+		if _plane == null:
+			$Gizmo.hide_box()
+			return
+		# The wire follows the draft at once. The result frame follows when the
+		# worker finishes, so a slow preview does not hide the shape bounds.
+		var draft := _draft_box()
+		var draft_primitive := _primitive_at(draft, _draft_axis, draft.get_center(), Quaternion.IDENTITY)
+		var draft_blend := 0.0
+		if _settings.smooth > 0.0:
+			draft_blend = float(_settings.smooth) * PrimitiveField.smallest_extent({"primitives": [draft_primitive]}) * 0.5
+		$Gizmo.show_box(draft, Quaternion.IDENTITY, draft.get_center(), draft_primitive, false, draft_blend)
+		return
+	if _primitives.is_empty():
 		$Gizmo.hide_box()
 		return
 	var primitive: Dictionary = {}
