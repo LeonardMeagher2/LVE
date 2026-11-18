@@ -695,6 +695,9 @@ func _choose_gif_file() -> void:
 func _on_gif_toggled(_pressed: bool) -> void:
 	_show_sheet_preview()
 	_apply_preview_animation()
+	if _light_button.button_pressed:
+		# GIF mode renders the basic color sheet, so the map passes stop.
+		_preview_due_ms = Time.get_ticks_msec() + PREVIEW_DELAY_MS
 	_sync()
 
 
@@ -1128,7 +1131,7 @@ func _update_sheet_preview() -> void:
 		_sheet_lighting()
 	)
 	settings.layout = layout
-	var normal_on: bool = _light_button.button_pressed
+	var normal_on: bool = _light_button.button_pressed and not _gif_enabled()
 	var outputs: Array = ["color"]
 	if normal_on:
 		outputs.append("normal")

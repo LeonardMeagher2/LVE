@@ -275,6 +275,15 @@ func _preview_run() -> void:
 		var preview = exporter._controls.get_node("Preview")
 		expect(exporter._preview_image != null and not preview.is_animating(), "the preview shows the whole sheet")
 	)
+	step("When the user enables normal and specular maps", func():
+		exporter._light_button.button_pressed = true
+	)
+	await get_tree().process_frame
+	await _wait_preview()
+	step("Then the sheet preview renders the map passes", func():
+		expect(exporter._preview_normal_texture != null, "the lit sheet has a normal map")
+		expect(exporter._preview_specular_texture != null, "the lit sheet has a specular map")
+	)
 	step("When the user enables GIF mode", func():
 		exporter._gif_button.button_pressed = true
 	)
@@ -291,12 +300,24 @@ func _preview_run() -> void:
 		expect(preview._animation_index == 1, "the preview advances after the first frame delay")
 		preview.set_process(true)
 	)
+	await _wait_preview()
+	step("Then GIF mode renders the basic color sheet", func():
+		var preview = exporter._controls.get_node("Preview")
+		expect(exporter._preview_normal_texture == null, "GIF mode renders no normal map")
+		expect(exporter._preview_specular_texture == null, "GIF mode renders no specular map")
+		expect(preview.texture == exporter._preview_texture, "the GIF preview shows the color sheet")
+		expect(preview.material == null and not preview._light.enabled, "the GIF preview stays unshaded")
+	)
 	step("When the user disables GIF mode", func():
 		exporter._gif_button.button_pressed = false
 	)
-	step("Then the preview shows the whole sheet again", func():
+	await _wait_preview()
+	step("Then the preview shows the whole lit sheet again", func():
 		var preview = exporter._controls.get_node("Preview")
 		expect(not preview.is_animating(), "the preview returns to the sprite sheet")
+		expect(exporter._preview_normal_texture != null, "the map passes return")
+		expect(exporter._preview_specular_texture != null, "the specular pass returns")
+		exporter._light_button.button_pressed = false
 		exporter.show_editor_tab()
 	)
 
