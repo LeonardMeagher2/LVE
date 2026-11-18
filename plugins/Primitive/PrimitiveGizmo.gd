@@ -11,31 +11,28 @@ const VoxelLineMesh := preload("res://Globals/Rendering/VoxelLineMesh.gd")
 const HANDLE_HALF := 0.35
 ## The cross half extent in screen pixels.
 const HANDLE_PIXELS := 10.0
-## The half size of the rotate joint square in screen pixels. It matches the
-## transform tool rotate gizmo.
-const ROTATE_JOINT_PX := 7.0
-## The gap between the shape top and the rotate mark, in screen pixels.
-const ROTATE_MARK_OFFSET_PX := 26.0
-## The rotate mark corner offset in screen pixels.
-const ROTATE_OFFSET_PX := 8.0
-## The straight run of a rotate mark arm in screen pixels.
-const ROTATE_RUN_PX := 13.0
-## The rotate mark arrowhead length in screen pixels.
-const ROTATE_HEAD_PX := 3.5
+## The radius of a rotate ring in screen pixels. A larger shape pushes the ring
+## out, so the ring never sits inside the shape.
+const RING_RADIUS_PX := 84.0
+## The gap between the shape and a rotate ring in screen pixels.
+const RING_MARGIN_PX := 18.0
+## The segments in one rotate ring.
+const RING_SEGMENTS := 64
 
 var _box := AABB()
 var _has_box := false
 var _pivot := Vector3.ZERO
 var _rotation := Quaternion.IDENTITY
 var _handle_half := HANDLE_HALF
-var _world_per_pixel := 0.0
-var _rotate_mark := Vector3.ZERO
+var _ring_radius := 0.0
 var _show_handles := false
 var _highlight_axis := -1
 var _highlight_side := 0
+var _highlight_ring_axis := -1
 var _material: StandardMaterial3D
 var _highlight_material: StandardMaterial3D
 var _highlight: MeshInstance3D
+var _ring_highlight: MeshInstance3D
 
 
 func _ready() -> void:
@@ -59,8 +56,14 @@ func _ready() -> void:
 	_highlight_material.render_priority = 3
 	_highlight.material_override = _highlight_material
 	add_child(_highlight)
+	_ring_highlight = MeshInstance3D.new()
+	_ring_highlight.name = "RingHighlight"
+	_ring_highlight.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_ring_highlight.material_override = _highlight_material
+	add_child(_ring_highlight)
 	visible = false
 	_highlight.visible = false
+	_ring_highlight.visible = false
 	set_process(false)
 
 
@@ -79,6 +82,7 @@ func show_box(box: AABB, rotation := Quaternion.IDENTITY, axis := -1, side := 0,
 	_update_handle_scale()
 	_rebuild(show_handles)
 	_refresh_highlight()
+	_refresh_ring_highlight()
 	visible = true
 	set_process(true)
 
@@ -90,6 +94,16 @@ func hide_box() -> void:
 	set_process(false)
 	if _highlight != null:
 		_highlight.visible = false
+	if _ring_highlight != null:
+		_ring_highlight.visible = false
+
+
+## Highlights one rotate ring, or hides the highlight with -1.
+func set_ring_highlight(axis: int) -> void:
+	if axis == _highlight_ring_axis:
+		return
+	_highlight_ring_axis = axis
+	_refresh_ring_highlight()
 
 
 func _process(_delta: float) -> void:
@@ -99,6 +113,7 @@ func _process(_delta: float) -> void:
 		return
 	_rebuild(_show_handles)
 	_refresh_highlight()
+	_refresh_ring_highlight()
 
 
 ## Updates the cross extent from the current camera scale. Returns true when the
@@ -118,33 +133,14 @@ func _update_handle_scale() -> bool:
 		var distance := maxf((_box.get_center() - camera.global_position).dot(forward), 0.01)
 		world_per_pixel = 2.0 * distance * tan(deg_to_rad(camera.fov) * 0.5) / height
 	var half := world_per_pixel * HANDLE_PIXELS
-	var mark := _rotate_mark_position(camera)
-	if is_equal_approx(half, _handle_half) and mark.is_equal_approx(_rotate_mark):
+	var shape_radius := _box.size.length() * 0.5
+	var ring_px := maxf(RING_RADIUS_PX, shape_radius / maxf(world_per_pixel, 0.0001) + RING_MARGIN_PX)
+	var ring := world_per_pixel * ring_px
+	if is_equal_approx(half, _handle_half) and is_equal_approx(ring, _ring_radius):
 		return false
 	_handle_half = half
-	_world_per_pixel = world_per_pixel
-	_rotate_mark = mark
+	_ring_radius = ring
 	return true
-
-
-## Returns the world point of the rotate mark. It sits above the projected shape
-## top, so it never covers the body drag area.
-func _rotate_mark_position(camera: Camera3D) -> Vector3:
-	var forward := -camera.global_transform.basis.z
-	var depth := (_pivot - camera.global_position).dot(forward)
-	if depth <= camera.near:
-		return _pivot
-	var screen := camera.unproject_position(_pivot)
-	var top := screen.y
-	for x in [-1, 1]:
-		for y in [-1, 1]:
-			for z in [-1, 1]:
-				var point := _box.get_center()
-				point.x = _box.position.x if x < 0 else _box.end.x
-				point.y = _box.position.y if y < 0 else _box.end.y
-				point.z = _box.position.z if z < 0 else _box.end.z
-				top = minf(top, camera.unproject_position(_to_world(point)).y)
-	return camera.project_position(Vector2(screen.x, top - ROTATE_MARK_OFFSET_PX), depth)
 
 
 func _refresh_highlight() -> void:
@@ -155,52 +151,57 @@ func _refresh_highlight() -> void:
 	_highlight.visible = true
 
 
-## Returns the world center of the rotate mark.
-func rotate_mark_center() -> Vector3:
-	return _rotate_mark
-
-
-## Appends the screen-facing rotate mark. It matches the transform tool: a joint
-## square and two quarter-turn arrows in the camera plane.
-func _append_rotate_mark(vertices: PackedVector3Array) -> void:
-	if _world_per_pixel <= 0.0 or not is_inside_tree():
+func _refresh_ring_highlight() -> void:
+	if _ring_highlight == null:
 		return
-	var camera := get_viewport().get_camera_3d()
-	if camera == null:
+	if not _show_handles or _highlight_ring_axis < 0 or _ring_radius <= 0.0:
+		_ring_highlight.visible = false
 		return
-	var right := camera.global_transform.basis.x
-	var up := camera.global_transform.basis.y
-	var world_px := _world_per_pixel
-	var joint := world_px * ROTATE_JOINT_PX
-	var square: Array[Vector3] = [
-		_rotate_mark - right * joint - up * joint,
-		_rotate_mark + right * joint - up * joint,
-		_rotate_mark + right * joint + up * joint,
-		_rotate_mark - right * joint + up * joint,
-	]
-	for index in 4:
-		vertices.append(square[index])
-		vertices.append(square[(index + 1) % 4])
-	var offset := world_px * ROTATE_OFFSET_PX
-	_append_turn_arrow(vertices, _rotate_mark + right * (joint + offset) + up * (joint + offset), right, -up, world_px)
-	_append_turn_arrow(vertices, _rotate_mark - right * (joint + offset) - up * (joint + offset), -right, up, world_px)
+	var vertices := PackedVector3Array()
+	_append_ring(vertices, _highlight_ring_axis)
+	_ring_highlight.mesh = VoxelLineMesh.build(vertices)
+	_ring_highlight.visible = true
 
 
-## Draws one quarter-turn arrow. [param across] runs to the corner, then
-## [param along] runs to a right-angle head, like the transform rotate mark.
-func _append_turn_arrow(vertices: PackedVector3Array, corner: Vector3, across: Vector3, along: Vector3, world_px: float) -> void:
-	var run := world_px * ROTATE_RUN_PX
-	var head := world_px * ROTATE_HEAD_PX
-	var tip := corner + along * run
-	vertices.append(corner - across * run)
-	vertices.append(corner)
-	vertices.append(corner)
-	vertices.append(tip)
-	var back := tip - along * head
-	vertices.append(tip)
-	vertices.append(back + across * head)
-	vertices.append(tip)
-	vertices.append(back - across * head)
+## Returns the three rotate rings in world space. Each ring carries its plane
+## normal and the two in-plane axes, so a drag can measure an angle around it.
+func rotation_rings() -> Array:
+	var result: Array = []
+	if not _has_box or _ring_radius <= 0.0:
+		return result
+	for axis in 3:
+		var normal := Vector3.ZERO
+		normal[axis] = 1.0
+		var first := (axis + 1) % 3
+		var second := (axis + 2) % 3
+		var u := Vector3.ZERO
+		u[first] = 1.0
+		var v := Vector3.ZERO
+		v[second] = 1.0
+		result.append({
+			"axis": axis,
+			"center": _pivot,
+			"normal": _rotation * normal,
+			"u": _rotation * u,
+			"v": _rotation * v,
+			"radius": _ring_radius,
+		})
+	return result
+
+
+func _append_ring(vertices: PackedVector3Array, axis: int) -> void:
+	var first := (axis + 1) % 3
+	var second := (axis + 2) % 3
+	for index in RING_SEGMENTS:
+		var first_angle := TAU * index / RING_SEGMENTS
+		var second_angle := TAU * (index + 1) / RING_SEGMENTS
+		var a := _pivot
+		a[first] += cos(first_angle) * _ring_radius
+		a[second] += sin(first_angle) * _ring_radius
+		var b := _pivot
+		b[first] += cos(second_angle) * _ring_radius
+		b[second] += sin(second_angle) * _ring_radius
+		_append_line(vertices, a, b)
 
 
 ## Returns the world position of one face handle.
@@ -285,7 +286,8 @@ func _rebuild(show_handles: bool) -> void:
 					point.y = _box.position.y if y < 0 else _box.end.y
 					point.z = _box.position.z if z < 0 else _box.end.z
 					_append_corner(vertices, point)
-		_append_rotate_mark(vertices)
+		for axis in 3:
+			_append_ring(vertices, axis)
 	mesh = VoxelLineMesh.build(vertices)
 
 
