@@ -478,7 +478,10 @@ func _refresh_gizmo() -> void:
 	var primitive: Dictionary = {}
 	if _active_index >= 0 and _active_index < _primitives.size():
 		primitive = _primitives[_active_index]
-	$Gizmo.show_box(_pending_box, _pending_rotation, _pending_center, primitive, true)
+	var blend := 0.0
+	if _settings.smooth > 0.0 and not primitive.is_empty():
+		blend = float(_settings.smooth) * PrimitiveField.smallest_extent({"primitives": [primitive]}) * 0.5
+	$Gizmo.show_box(_pending_box, _pending_rotation, _pending_center, primitive, true, blend)
 	$Gizmo.set_hot_handle(_dragged_handle())
 	$Gizmo.set_ring_highlight(_rotate_axis)
 	$Gizmo.set_rings_visible(not (_dragging_handle or _moving))

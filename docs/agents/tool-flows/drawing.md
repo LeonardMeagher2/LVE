@@ -375,7 +375,8 @@ Policy boundaries:
 - The pending shape keeps its own rotation. Three rings around the shape turn it around its local X, Y, and Z axes. A ring drag snaps to 2 degrees. The box center stays fixed.
 - A ring sits just outside the shape, with 84 pixels as the minimum radius and an 18 pixel gap. An idle ring is dashed. The hovered ring is solid white. A press inside the shape moves it, so the body drag keeps its area.
 - A ring is drawn only when the view is within 63 degrees of its axis. A ring that is nearly edge-on cannot be dragged, so it is not drawn and not hit-tested.
-- The wire follows the selected shape. A box draws its twelve edges. An ellipsoid draws three great circles. A cone draws its end circles and eight sides. The face and corner handles appear only near the pointer. A face drag projects the pointer onto the shape's local axis, so a rotated face still moves along its own axis.
+- The wire follows the selected shape. A box draws its twelve edges. An ellipsoid draws three great circles. A cone draws its end circles and eight sides. The cone wire follows the roundness: a round cone draws tangent sides and end caps, and a sharp cone draws flat end circles. The face and corner handles appear only near the pointer. A face drag projects the pointer onto the shape's local axis, so a rotated face still moves along its own axis.
+- A nonzero blend draws a dashed outer wire at the blend reach. The smooth union can reach this far into the existing cells.
 - A face or corner edit on a rotated shape keeps the opposite geometry still. The local box center and the world pivot can differ, so the tool moves the world center by the rotated change of the local center.
 - Intersect removes occupied cells outside the field across the current frame. The edit context still filters selection, slice, and document size.
 - Smooth blends the primitives in one request and the committed cells near them.

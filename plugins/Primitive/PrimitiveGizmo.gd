@@ -37,6 +37,10 @@ const RING_SEGMENTS := 64
 const SHAPE_SEGMENTS := 32
 ## The side lines on a cone wire.
 const CONE_SIDES := 8
+## The segments in one rounded cone cap arc.
+const CONE_CAP_SEGMENTS := 4
+## The dash and gap span in screen pixels for the blend halo.
+const BLEND_DASH_SPAN_PX := 14.0
 
 var _box := AABB()
 var _has_box := false
@@ -44,6 +48,7 @@ var _pivot := Vector3.ZERO
 var _local_center := Vector3.ZERO
 var _rotation := Quaternion.IDENTITY
 var _primitive := {}
+var _blend := 0.0
 var _handle_half := HANDLE_HALF
 var _corner_half := HANDLE_HALF
 var _ring_radius := 0.0
@@ -95,14 +100,16 @@ func _ready() -> void:
 ## Shows the pending shape. [param rotation] turns the shape around [param
 ## pivot], which defaults to the box center. [param primitive] is the request
 ## dictionary that the wire draws; an empty dictionary draws the box bounds.
-## [param show_handles] draws the rings and answers the handles. A live drag
+## [param show_handles] draws the rings and answers the handles. [param blend] is
+## the smooth blend reach in cells, drawn as a dashed outer wire. A live drag
 ## uses the shape alone.
-func show_box(box: AABB, rotation := Quaternion.IDENTITY, pivot := Vector3.INF, primitive := {}, show_handles := true) -> void:
+func show_box(box: AABB, rotation := Quaternion.IDENTITY, pivot := Vector3.INF, primitive := {}, show_handles := true, blend := 0.0) -> void:
 	_box = box
 	_local_center = box.get_center()
 	_pivot = _local_center if pivot == Vector3.INF else pivot
 	_rotation = rotation
 	_primitive = primitive
+	_blend = maxf(blend, 0.0)
 	_has_box = true
 	_show_handles = show_handles
 	_update_scale()
@@ -299,7 +306,8 @@ func _append_line(vertices: PackedVector3Array, a: Vector3, b: Vector3) -> void:
 
 ## Builds the wire of the pending shape. A box or an empty primitive draws the
 ## box bounds. An ellipsoid draws its three great circles. A cone draws its end
-## circles and side lines.
+## circles and side lines. A nonzero blend adds a dashed outer wire at the blend
+## reach.
 func _rebuild_shape() -> void:
 	var vertices := PackedVector3Array()
 	match int(_primitive.get("kind", -1)):
@@ -309,12 +317,18 @@ func _rebuild_shape() -> void:
 			_append_cone(vertices)
 		_:
 			_append_box(vertices)
+	if _blend > 0.0001:
+		_append_blend(vertices)
 	mesh = VoxelLineMesh.build(vertices)
 
 
 func _append_box(vertices: PackedVector3Array) -> void:
-	var low := _box.position
-	var high := _box.end
+	_append_box_at(vertices, _box, false)
+
+
+func _append_box_at(vertices: PackedVector3Array, box: AABB, dashed: bool) -> void:
+	var low := box.position
+	var high := box.end
 	var corners: Array[Vector3] = [
 		_to_world(Vector3(low.x, low.y, low.z)),
 		_to_world(Vector3(high.x, low.y, low.z)),
@@ -330,8 +344,11 @@ func _append_box(vertices: PackedVector3Array) -> void:
 		[4, 5], [5, 6], [6, 7], [7, 4],
 		[0, 4], [1, 5], [2, 6], [3, 7],
 	]:
-		vertices.append(corners[edge[0]])
-		vertices.append(corners[edge[1]])
+		if dashed:
+			_append_dashed_segment(vertices, corners[edge[0]], corners[edge[1]])
+		else:
+			vertices.append(corners[edge[0]])
+			vertices.append(corners[edge[1]])
 
 
 func _append_ellipsoid(vertices: PackedVector3Array) -> void:
@@ -340,52 +357,159 @@ func _append_ellipsoid(vertices: PackedVector3Array) -> void:
 	var rotation := _rotation
 	if _primitive.get("rotation", null) != null:
 		rotation = PrimitiveField.primitive_rotation(_primitive)
+	_append_ellipsoid_at(vertices, center, radii, rotation, false)
+
+
+func _append_ellipsoid_at(vertices: PackedVector3Array, center: Vector3, radii: Vector3, rotation: Quaternion, dashed: bool) -> void:
 	for plane in 3:
 		var first := (plane + 1) % 3
 		var second := (plane + 2) % 3
-		for index in SHAPE_SEGMENTS:
-			var start := Vector3.ZERO
-			var end := Vector3.ZERO
-			var start_angle := TAU * index / SHAPE_SEGMENTS
-			var end_angle := TAU * (index + 1) / SHAPE_SEGMENTS
-			start[first] = cos(start_angle) * radii[first]
-			start[second] = sin(start_angle) * radii[second]
-			end[first] = cos(end_angle) * radii[first]
-			end[second] = sin(end_angle) * radii[second]
-			vertices.append(center + rotation * start)
-			vertices.append(center + rotation * end)
+		var u := Vector3.ZERO
+		u[first] = 1.0
+		var v := Vector3.ZERO
+		v[second] = 1.0
+		_append_ellipse_at(vertices, center, rotation * u, rotation * v, radii[first], radii[second], dashed)
 
 
 func _append_cone(vertices: PackedVector3Array) -> void:
 	var a: Vector3 = _primitive.get("a", _pivot)
 	var b: Vector3 = _primitive.get("b", _pivot)
-	var axis := b - a
-	if axis.length_squared() <= 0.000001:
+	var r1 := float(_primitive.get("r1", 0.0))
+	var r2 := float(_primitive.get("r2", 0.0))
+	var roundness := clampf(float(_primitive.get("roundness", 0.0)), 0.0, 1.0)
+	_append_cone_at(vertices, a, b, r1, r2, roundness, false)
+
+
+## Draws a cone from its two end spheres. [param roundness] moves the side lines
+## from the flat cone to the tangent of the two spheres and adds the rounded end
+## caps. A zero roundness is the flat cone.
+func _append_cone_at(vertices: PackedVector3Array, a: Vector3, b: Vector3, r1: float, r2: float, roundness: float, dashed: bool) -> void:
+	var axis_vector := b - a
+	if axis_vector.length_squared() <= 0.000001:
 		return
-	axis = axis.normalized()
+	var distance := axis_vector.length()
+	var axis := axis_vector / distance
 	var u := axis.cross(Vector3.UP)
 	if u.length_squared() < 0.0001:
 		u = axis.cross(Vector3.RIGHT)
 	u = u.normalized()
 	var v := axis.cross(u).normalized()
-	var r1 := float(_primitive.get("r1", 0.0))
-	var r2 := float(_primitive.get("r2", 0.0))
-	_append_circle(vertices, a, u, v, r1)
+	var rr := r1 - r2
+	var a2 := distance * distance - rr * rr
+	if roundness > 0.0 and a2 <= 0.0:
+		_append_sphere_at(vertices, a if r1 >= r2 else b, maxf(r1, r2), dashed)
+		return
+	var flat_angle := PI * 0.5
+	var round_angle := flat_angle
+	if a2 > 0.0:
+		round_angle = acos(clampf(rr / distance, -1.0, 1.0))
+	var angle := lerpf(flat_angle, round_angle, roundness)
+	var normal_axis := cos(angle)
+	var normal_radial := sin(angle)
+	_append_ellipse_at(vertices, a + axis * (r1 * normal_axis), u, v, r1 * normal_radial, r1 * normal_radial, dashed)
 	if r2 > 0.0:
-		_append_circle(vertices, b, u, v, r2)
+		_append_ellipse_at(vertices, b + axis * (r2 * normal_axis), u, v, r2 * normal_radial, r2 * normal_radial, dashed)
 	for index in CONE_SIDES:
-		var angle := TAU * index / CONE_SIDES
-		var offset := u * cos(angle) + v * sin(angle)
-		vertices.append(a + offset * r1)
-		vertices.append(b + offset * r2)
+		var radial := u * cos(TAU * index / CONE_SIDES) + v * sin(TAU * index / CONE_SIDES)
+		var normal := axis * normal_axis + radial * normal_radial
+		var start := a + normal * r1
+		var end := b + normal * r2
+		if dashed:
+			_append_dashed_segment(vertices, start, end)
+		else:
+			vertices.append(start)
+			vertices.append(end)
+	if roundness > 0.0 and not dashed:
+		for index in CONE_SIDES:
+			var radial := u * cos(TAU * index / CONE_SIDES) + v * sin(TAU * index / CONE_SIDES)
+			_append_cone_cap(vertices, a, axis, radial, r1, angle, PI, roundness)
+			if r2 > 0.0:
+				_append_cone_cap(vertices, b, axis, radial, r2, angle, 0.0, roundness)
 
 
-func _append_circle(vertices: PackedVector3Array, center: Vector3, u: Vector3, v: Vector3, radius: float) -> void:
+## Draws one meridian of a rounded cone cap from the contact normal to the pole.
+func _append_cone_cap(vertices: PackedVector3Array, center: Vector3, axis: Vector3, radial: Vector3, radius: float, start_angle: float, end_angle: float, roundness: float) -> void:
+	var span := lerpf(start_angle, end_angle, roundness)
+	if absf(span - start_angle) < 0.0001:
+		return
+	var previous := center + (axis * cos(start_angle) + radial * sin(start_angle)) * radius
+	for index in range(1, CONE_CAP_SEGMENTS + 1):
+		var angle := lerpf(start_angle, span, float(index) / CONE_CAP_SEGMENTS)
+		var point := center + (axis * cos(angle) + radial * sin(angle)) * radius
+		vertices.append(previous)
+		vertices.append(point)
+		previous = point
+
+
+func _append_sphere_at(vertices: PackedVector3Array, center: Vector3, radius: float, dashed: bool) -> void:
+	for plane in 3:
+		var first := (plane + 1) % 3
+		var second := (plane + 2) % 3
+		var u := Vector3.ZERO
+		u[first] = 1.0
+		var v := Vector3.ZERO
+		v[second] = 1.0
+		_append_ellipse_at(vertices, center, u, v, radius, radius, dashed)
+
+
+## Appends one circle or ellipse. A dashed ellipse is split into short dashes so
+## the blend wire stays lighter than the shape wire.
+func _append_ellipse_at(vertices: PackedVector3Array, center: Vector3, u: Vector3, v: Vector3, radius_u: float, radius_v: float, dashed: bool) -> void:
+	if dashed:
+		var radius := maxf(radius_u, radius_v)
+		var count := maxi(roundi(TAU * radius / maxf(_world_per_pixel * BLEND_DASH_SPAN_PX, 0.001)), 12)
+		for index in count:
+			var start_angle := TAU * index / count
+			var end_angle := start_angle + TAU * 0.5 / count
+			vertices.append(center + u * (cos(start_angle) * radius_u) + v * (sin(start_angle) * radius_v))
+			vertices.append(center + u * (cos(end_angle) * radius_u) + v * (sin(end_angle) * radius_v))
+		return
 	for index in SHAPE_SEGMENTS:
 		var start_angle := TAU * index / SHAPE_SEGMENTS
 		var end_angle := TAU * (index + 1) / SHAPE_SEGMENTS
-		vertices.append(center + (u * cos(start_angle) + v * sin(start_angle)) * radius)
-		vertices.append(center + (u * cos(end_angle) + v * sin(end_angle)) * radius)
+		vertices.append(center + u * (cos(start_angle) * radius_u) + v * (sin(start_angle) * radius_v))
+		vertices.append(center + u * (cos(end_angle) * radius_u) + v * (sin(end_angle) * radius_v))
+
+
+## Appends one dashed straight segment with a fixed screen dash length.
+func _append_dashed_segment(vertices: PackedVector3Array, a: Vector3, b: Vector3) -> void:
+	var length := a.distance_to(b)
+	if length <= 0.0:
+		return
+	var dash := maxf(_world_per_pixel, 0.01) * BLEND_DASH_SPAN_PX * 0.5
+	var count := maxi(roundi(length / (dash * 2.0)), 1)
+	var direction := (b - a) / length
+	for index in count:
+		var start := a + direction * (index * 2.0 * dash)
+		var end := a + direction * minf((index * 2.0 + 1.0) * dash, length)
+		vertices.append(start)
+		vertices.append(end)
+
+
+## Draws the reach of the smooth blend as a dashed outer wire. The smooth union
+## can reach this far into the existing cells.
+func _append_blend(vertices: PackedVector3Array) -> void:
+	match int(_primitive.get("kind", -1)):
+		PrimitiveField.KIND_ELLIPSOID:
+			var center: Vector3 = _primitive.get("center", _pivot)
+			var radii: Vector3 = _primitive.get("radii", _box.size * 0.5)
+			var rotation := _rotation
+			if _primitive.get("rotation", null) != null:
+				rotation = PrimitiveField.primitive_rotation(_primitive)
+			_append_ellipsoid_at(vertices, center, radii + Vector3.ONE * _blend, rotation, true)
+		PrimitiveField.KIND_CONE:
+			var a: Vector3 = _primitive.get("a", _pivot)
+			var b: Vector3 = _primitive.get("b", _pivot)
+			var axis := b - a
+			if axis.length_squared() <= 0.000001:
+				return
+			axis = axis.normalized()
+			var r1 := float(_primitive.get("r1", 0.0)) + _blend
+			var r2 := float(_primitive.get("r2", 0.0)) + _blend
+			_append_cone_at(vertices, a - axis * _blend, b + axis * _blend, r1, r2, 0.0, true)
+		_:
+			var expanded := AABB(_box.position - Vector3.ONE * _blend, _box.size + Vector3.ONE * _blend * 2.0)
+			_append_box_at(vertices, expanded, true)
 
 
 func _rebuild_rings() -> void:

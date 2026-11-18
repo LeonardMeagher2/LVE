@@ -44,6 +44,9 @@ func _ready() -> void:
 	test("a ring shows only near its axis", _ring_parallel_only, "ring_parallel_only")
 	test("an idle ring is dashed", _ring_dashes, "ring_dashes")
 	test("the wire draws the selected shape", _shape_wire, "shape_wire")
+	test("a round cone draws its caps", _cone_roundness, "cone_roundness")
+	test("a blend draws a dashed outer wire", _blend_halo, "blend_halo")
+	test("the gizmo shows the blend setting", _blend_gizmo, "blend_gizmo")
 	test("the ring drag snaps to two degrees", _rotate_snap, "rotate_snap")
 	test("a body drag hides the rings", _rings_hidden_on_drag, "rings_hidden_on_drag")
 	test("the current material is used", _material, "material")
@@ -966,6 +969,91 @@ func _shape_wire() -> void:
 		expect(found, "a base circle point sits at the base radius")
 	)
 	gizmo.hide_box()
+
+
+func _cone_roundness() -> void:
+	var gizmo := tool.get_node("Gizmo")
+	var box := AABB(Vector3(-2, -1, -0.5), Vector3(4, 2, 1))
+	step("Given a sharp cone", func():
+		gizmo.show_box(box, Quaternion.IDENTITY, Vector3.ZERO, {
+			"kind": PrimitiveField.KIND_CONE,
+			"a": Vector3(0, -1, 0),
+			"b": Vector3(0, 1, 0),
+			"r1": 2.0,
+			"r2": 0.5,
+			"roundness": 0.0,
+		})
+	)
+	var sharp := 0
+	step("Then the wire is the flat cone", func():
+		var vertices: PackedVector3Array = gizmo.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+		sharp = vertices.size()
+		expect(sharp == (32 + 32 + 8) * 2, "the flat cone is two circles and eight sides")
+	)
+	step("Given the same cone with full roundness", func():
+		gizmo.show_box(box, Quaternion.IDENTITY, Vector3.ZERO, {
+			"kind": PrimitiveField.KIND_CONE,
+			"a": Vector3(0, -1, 0),
+			"b": Vector3(0, 1, 0),
+			"r1": 2.0,
+			"r2": 0.5,
+			"roundness": 1.0,
+		})
+	)
+	step("Then the wire shows the round caps", func():
+		var vertices: PackedVector3Array = gizmo.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+		expect(vertices.size() > sharp, "the round cone draws the cap arcs")
+		expect(_has_vertex(vertices, Vector3(0, -3, 0)), "the base cap reaches its far pole")
+		expect(_has_vertex(vertices, Vector3(0, 1.5, 0)), "the top cap reaches its far pole")
+	)
+	gizmo.hide_box()
+
+
+func _blend_halo() -> void:
+	var gizmo := tool.get_node("Gizmo")
+	var box := AABB(Vector3(-2, -1, -0.5), Vector3(4, 2, 1))
+	var primitive := {
+		"kind": PrimitiveField.KIND_BOX,
+		"center": Vector3.ZERO,
+		"half_size": Vector3(2, 1, 0.5),
+	}
+	step("Given a box with no blend", func():
+		gizmo.show_box(box, Quaternion.IDENTITY, Vector3.ZERO, primitive, true, 0.0)
+	)
+	var plain := 0
+	step("Then the wire is only the box edges", func():
+		var vertices: PackedVector3Array = gizmo.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+		plain = vertices.size()
+		expect(plain == 24, "the box wire has twelve lines")
+	)
+	step("When the blend reaches one cell", func():
+		gizmo.show_box(box, Quaternion.IDENTITY, Vector3.ZERO, primitive, true, 1.0)
+	)
+	step("Then a dashed halo shows the blend reach", func():
+		var vertices: PackedVector3Array = gizmo.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+		expect(vertices.size() > plain, "the blend halo adds lines")
+		expect(_has_vertex(vertices, Vector3(3, 2, 1.5)), "the halo reaches the expanded corner")
+	)
+	gizmo.hide_box()
+
+
+func _blend_gizmo() -> void:
+	step("Given a pending box and a smooth setting", func():
+		_button(Vector3(0, 0, 0), true)
+		_motion(Vector3(3, 0, 3), true)
+		_button(Vector3(3, 0, 3), false)
+		tool._settings.smooth = 0.5
+		tool._on_settings_changed()
+	)
+	step("Then the gizmo shows the blend reach", func():
+		expect(tool.get_node("Gizmo")._blend > 0.0, "the gizmo carries the blend distance")
+	)
+	step("Then the setting resets", func():
+		tool._settings.smooth = 0.0
+		tool._on_settings_changed()
+		expect(tool.get_node("Gizmo")._blend == 0.0, "the blend clears")
+	)
+	tool.cancel_pending()
 
 
 func _rotate_snap() -> void:
