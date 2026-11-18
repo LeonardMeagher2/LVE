@@ -3,6 +3,7 @@ extends "res://tests/test.gd"
 ## Primitive tool and shared commit path checks.
 
 const PrimitiveField := preload("res://Globals/State/Tools/PrimitiveField.gd")
+const PrimitiveJob := preload("res://Globals/State/Tools/PrimitiveJob.gd")
 
 var viewport: SubViewport
 var tool: Node3D
@@ -27,6 +28,7 @@ func _ready() -> void:
 	test("subtract and intersect previews respect the selection", _selection_ops, "selection_ops")
 	test("a smooth change cancels and replaces the preview job", _blend_preview_cancel, "blend_preview_cancel")
 	test("two preview requests in one frame show the newest", _frame_preview, "frame_preview")
+	test("a drag cancels the running preview", _drag_cancels_preview, "drag_cancels_preview")
 	test("the gizmo handles keep one screen size", _handle_scale, "handle_scale")
 	test("a preview keeps the untouched chunk meshes", _chunk_stability, "chunk_stability")
 	test("smooth blends a primitive into existing voxels", _blend_existing, "blend_existing")
@@ -483,6 +485,22 @@ func _frame_preview() -> void:
 		expect(State.get_current_voxel_frame().count() == 0, "the live document stays empty")
 	)
 	tool.cancel_pending()
+
+
+func _drag_cancels_preview() -> void:
+	var job := PrimitiveJob.new()
+	step("Given a running preview job", func():
+		tool._preview_job = job
+	)
+	step("When the user moves the gizmo", func():
+		tool._refresh_preview(true)
+	)
+	step("Then the running job is cancelled", func():
+		expect(job._cancel_requested, "the drag cancels the running job")
+	)
+	tool._preview_job = null
+	tool._preview_request = {}
+	tool._preview_frame = null
 
 
 func _handle_scale() -> void:

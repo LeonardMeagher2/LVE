@@ -238,7 +238,7 @@ func handle_input(event: InputEvent, pos: Vector2) -> bool:
 				_end_cell = pick.target
 			_shift = mm.shift_pressed
 			_alt = mm.alt_pressed
-			_refresh_preview()
+			_refresh_preview(true)
 			return true
 		if (_dragging_handle or _dragging_new or _moving or _rotating) and mm.button_mask == 0:
 			if _dragging_handle:
@@ -383,8 +383,9 @@ func _refresh_preview(cancel_running := false) -> void:
 	_preview_request = request
 	_preview_frame = State.get_current_voxel_frame()
 	if _preview_job != null:
-		# A settings or context change must not wait behind a stale result. The
-		# runner starts the newest request after the cancelled job joins.
+		# A settings, context, or drag change must not wait behind a stale
+		# result. The runner starts the newest request after the cancelled job
+		# joins.
 		if cancel_running:
 			_preview_job.cancel()
 		return
@@ -771,7 +772,7 @@ func _update_ring(origin: Vector3, direction: Vector3) -> void:
 	_pending_rotation = _rotate_start * Quaternion(local_axis, snappedf(_rotate_total, deg_to_rad(ROTATE_SNAP_DEGREES)))
 	if _active_index >= 0 and _active_index < _primitives.size():
 		_primitives[_active_index] = _build_primitive(_pending_box, _active_axis)
-	_refresh_preview()
+	_refresh_preview(true)
 
 
 func _begin_move(origin: Vector3, dir: Vector3) -> void:
@@ -803,7 +804,7 @@ func _update_move(origin: Vector3, dir: Vector3) -> void:
 	_move_offset = offset
 	_pending_center = _move_start_center + Vector3(offset)
 	_primitives[_active_index] = _build_primitive(_pending_box, _active_axis)
-	_refresh_preview()
+	_refresh_preview(true)
 
 
 func _plane_point(origin: Vector3, dir: Vector3, plane: StrokePlane) -> Vector3:
@@ -862,7 +863,7 @@ func _update_handle(origin: Vector3, dir: Vector3) -> void:
 	_pending_box = AABB(low, high - low)
 	_sync_center_from_handle()
 	_primitives[_active_index] = _build_primitive(_pending_box)
-	_refresh_preview()
+	_refresh_preview(true)
 
 
 func _update_corner(point: Vector3) -> void:
@@ -878,7 +879,7 @@ func _update_corner(point: Vector3) -> void:
 	_pending_box = AABB(low, high - low)
 	_sync_center_from_handle()
 	_primitives[_active_index] = _build_primitive(_pending_box)
-	_refresh_preview()
+	_refresh_preview(true)
 
 
 ## Keeps the world pivot where it was at the grab. A local box center that moves
