@@ -22,6 +22,7 @@ const RING_SEGMENTS := 64
 var _box := AABB()
 var _has_box := false
 var _pivot := Vector3.ZERO
+var _local_center := Vector3.ZERO
 var _rotation := Quaternion.IDENTITY
 var _handle_half := HANDLE_HALF
 var _ring_radius := 0.0
@@ -67,13 +68,14 @@ func _ready() -> void:
 	set_process(false)
 
 
-## Shows the pending box. [param rotation] turns the box around its center.
-## [param axis] and [param side] select the highlighted face. A negative axis
-## hides the highlight. [param show_handles] draws the face crosses. A live drag
-## uses the box alone.
-func show_box(box: AABB, rotation := Quaternion.IDENTITY, axis := -1, side := 0, show_handles := true) -> void:
+## Shows the pending box. [param rotation] turns the box around [param pivot],
+## which defaults to the box center. [param axis] and [param side] select the
+## highlighted face. A negative axis hides the highlight. [param show_handles]
+## draws the crosses and rings. A live drag uses the box alone.
+func show_box(box: AABB, rotation := Quaternion.IDENTITY, pivot := Vector3.INF, axis := -1, side := 0, show_handles := true) -> void:
 	_box = box
-	_pivot = box.get_center()
+	_local_center = box.get_center()
+	_pivot = _local_center if pivot == Vector3.INF else pivot
 	_rotation = rotation
 	_has_box = true
 	_show_handles = show_handles
@@ -245,7 +247,7 @@ func _face_center(axis: int, side: int) -> Vector3:
 
 
 func _to_world(point: Vector3) -> Vector3:
-	return _pivot + _rotation * (point - _pivot)
+	return _pivot + _rotation * (point - _local_center)
 
 
 func _append_line(vertices: PackedVector3Array, a: Vector3, b: Vector3) -> void:

@@ -35,6 +35,7 @@ var _moving := false
 var _move_plane: StrokePlane
 var _move_grab := Vector3.ZERO
 var _move_start_box := AABB()
+var _move_start_center := Vector3.ZERO
 var _move_offset := Vector3i.ZERO
 var _start_cell := VoxelPicking.NONE
 var _end_cell := VoxelPicking.NONE
@@ -46,6 +47,7 @@ var _handle_axis := -1
 var _handle_side := 0
 var _handle_signs := Vector3i.ZERO
 var _handle_start_box := AABB()
+var _handle_start_center := Vector3.ZERO
 var _handle_center := Vector3.ZERO
 var _handle_rotation := Quaternion.IDENTITY
 var _handle_plane := Vector3.ZERO
@@ -61,7 +63,9 @@ var _preview_generation := 0
 var _preview_start_frame := -1
 var _preview_renderer: VoxelRenderer = null
 var _installed_preview_frame: VoxelFrame = null
-## The rotation of the pending shape around its box center.
+## The world position of the pending box center. A face edit on a rotated shape
+## keeps the shape pivot here, so the opposite face does not move.
+var _pending_center := Vector3.ZERO
 var _pending_rotation := Quaternion.IDENTITY
 var _rotating := false
 var _rotate_axis := -1
@@ -282,7 +286,7 @@ func update_visual(pick: PickResult) -> void:
 		$Gizmo.hide_box()
 		visible = false
 		return
-	$Gizmo.show_box(AABB(Vector3(pick.target) - Vector3.ONE * 0.5, Vector3.ONE), Quaternion.IDENTITY, -1, 0, false)
+	$Gizmo.show_box(AABB(Vector3(pick.target) - Vector3.ONE * 0.5, Vector3.ONE), Quaternion.IDENTITY, Vector3(pick.target), -1, 0, false)
 	visible = true
 
 
@@ -361,6 +365,7 @@ func _finish_new_drag() -> void:
 	_pending_box = box
 	_active_axis = _draft_axis
 	_pending_rotation = Quaternion.IDENTITY
+	_pending_center = box.get_center()
 	_primitives.append(_build_primitive(box, _active_axis))
 	_active_index = _primitives.size() - 1
 	_dragging_new = false
@@ -471,13 +476,14 @@ func _refresh_gizmo() -> void:
 	if _primitives.is_empty() or _dragging_new:
 		$Gizmo.hide_box()
 		return
-	$Gizmo.show_box(_pending_box, _pending_rotation, _handle_axis, _handle_side, true)
+	$Gizmo.show_box(_pending_box, _pending_rotation, _pending_center, _handle_axis, _handle_side, true)
 
 
 func _build_request(include_draft: bool) -> Dictionary:
 	var primitives: Array = _primitives.duplicate()
 	if include_draft and _dragging_new:
-		primitives.append(_build_primitive(_draft_box(), _draft_axis))
+		var draft := _draft_box()
+		primitives.append(_primitive_at(draft, _draft_axis, draft.get_center(), Quaternion.IDENTITY))
 	var request := {
 		"primitives": primitives,
 		"op": int(_settings.op),
@@ -494,20 +500,25 @@ func _build_request(include_draft: bool) -> Dictionary:
 
 
 func _build_primitive(box: AABB, axis := -1) -> Dictionary:
-	var center := (box.position + box.end) * 0.5
+	return _primitive_at(box, axis if axis >= 0 else _active_axis, _pending_center, _pending_rotation)
+
+
+## Builds a primitive at an explicit world center and rotation. The draft uses it
+## with the box center and no rotation, before a pending shape exists.
+func _primitive_at(box: AABB, axis: int, center: Vector3, rotation: Quaternion) -> Dictionary:
 	var half := Vector3(absf(box.size.x), absf(box.size.y), absf(box.size.z)) * 0.5
 	match shape:
 		PrimitiveField.KIND_ELLIPSOID:
-			return {"kind": PrimitiveField.KIND_ELLIPSOID, "center": center, "radii": half, "rotation": _pending_rotation}
+			return {"kind": PrimitiveField.KIND_ELLIPSOID, "center": center, "radii": half, "rotation": rotation}
 		PrimitiveField.KIND_CONE:
-			return _cone_primitive(box, axis if axis >= 0 else _active_axis)
+			return _cone_primitive(box, axis, center, rotation)
 		_:
 			return {
 				"kind": PrimitiveField.KIND_BOX,
 				"center": center,
 				"half_size": half,
 				"roundness": _settings.roundness,
-				"rotation": _pending_rotation,
+				"rotation": rotation,
 			}
 
 
@@ -554,19 +565,19 @@ func _draft_box() -> AABB:
 	return AABB(low, high - low)
 
 
-func _cone_primitive(box: AABB, axis: int) -> Dictionary:
+func _cone_primitive(box: AABB, axis: int, center: Vector3, rotation: Quaternion) -> Dictionary:
 	var extent := box.size
 	var first_axis := (axis + 1) % 3
 	var second_axis := (axis + 2) % 3
 	var radius := minf(absf(extent[first_axis]), absf(extent[second_axis])) * 0.5
 	radius = maxf(radius, 0.5)
 	var narrow := clampf(_settings.second_radius, 0.0, 1.0) * radius
-	var center := (box.position + box.end) * 0.5
+	var local_center := box.get_center()
 	var direction := signf(box.end[axis] - box.position[axis])
 	if direction == 0.0:
 		direction = 1.0
-	var a := center
-	var b := center
+	var a := local_center
+	var b := local_center
 	a[axis] = box.position[axis] + radius * _settings.roundness * direction
 	b[axis] = box.end[axis] - narrow * _settings.roundness * direction
 	# A zero top radius is a point. Put that point on the center of the last
@@ -578,9 +589,8 @@ func _cone_primitive(box: AABB, axis: int) -> Dictionary:
 			b[axis] = ceilf(box.end[axis])
 	# A cone has no local frame of its own, so the rotation turns its two ends
 	# around the shape center. The field then keeps the plain cone math.
-	var turn := _pending_rotation
-	a = center + turn * (a - center)
-	b = center + turn * (b - center)
+	a = center + rotation * (a - local_center)
+	b = center + rotation * (b - local_center)
 	return {
 		"kind": PrimitiveField.KIND_CONE,
 		"a": a,
@@ -656,19 +666,19 @@ func _ring_at(pos: Vector2) -> Dictionary:
 ## Returns true when the pointer is inside the screen extent of the pending
 ## shape. That area belongs to the body drag.
 func _inside_shape(pos: Vector2, camera: Camera3D) -> bool:
-	var center := _pending_box.get_center()
-	if camera.is_position_behind(center):
+	var local_center := _pending_box.get_center()
+	if camera.is_position_behind(_pending_center):
 		return false
-	var screen_center := camera.unproject_position(center)
+	var screen_center := camera.unproject_position(_pending_center)
 	var farthest := 0.0
 	for x in [-1, 1]:
 		for y in [-1, 1]:
 			for z in [-1, 1]:
-				var point := center
+				var point := local_center
 				point.x = _pending_box.position.x if x < 0 else _pending_box.end.x
 				point.y = _pending_box.position.y if y < 0 else _pending_box.end.y
 				point.z = _pending_box.position.z if z < 0 else _pending_box.end.z
-				var world := center + _pending_rotation * (point - center)
+				var world := _pending_center + _pending_rotation * (point - local_center)
 				farthest = maxf(farthest, screen_center.distance_to(camera.unproject_position(world)))
 	return pos.distance_to(screen_center) < farthest * 0.85
 
@@ -736,11 +746,12 @@ func _update_ring(origin: Vector3, direction: Vector3) -> void:
 func _begin_move(origin: Vector3, dir: Vector3) -> void:
 	if _primitives.is_empty() or _active_index < 0:
 		return
-	_move_plane = VoxelPicking.view_plane_through(_pending_box.get_center(), _forward())
+	_move_plane = VoxelPicking.view_plane_through(_pending_center, _forward())
 	_move_grab = _plane_point(origin, dir, _move_plane)
 	if _move_grab == Vector3.INF:
 		return
 	_move_start_box = _pending_box
+	_move_start_center = _pending_center
 	_move_offset = Vector3i.ZERO
 	_moving = true
 
@@ -759,7 +770,7 @@ func _update_move(origin: Vector3, dir: Vector3) -> void:
 	if offset == _move_offset:
 		return
 	_move_offset = offset
-	_pending_box = AABB(_move_start_box.position + Vector3(offset), _move_start_box.size)
+	_pending_center = _move_start_center + Vector3(offset)
 	_primitives[_active_index] = _build_primitive(_pending_box, _active_axis)
 	_refresh_preview()
 
@@ -783,6 +794,7 @@ func _begin_handle_drag(hit: Dictionary) -> void:
 	_handle_side = int(hit.get("side", 0))
 	_handle_signs = hit.get("signs", Vector3i.ZERO)
 	_handle_start_box = _pending_box
+	_handle_start_center = _pending_center
 	_handle_center = _pending_box.get_center()
 	_handle_rotation = _pending_rotation
 	var camera := get_viewport().get_camera_3d() if get_viewport() != null else null
@@ -817,6 +829,7 @@ func _update_handle(origin: Vector3, dir: Vector3) -> void:
 	else:
 		high[_handle_axis] = value
 	_pending_box = AABB(low, high - low)
+	_sync_center_from_handle()
 	_primitives[_active_index] = _build_primitive(_pending_box)
 	_refresh_preview()
 
@@ -832,19 +845,29 @@ func _update_corner(point: Vector3) -> void:
 		else:
 			high[axis] += shift
 	_pending_box = AABB(low, high - low)
+	_sync_center_from_handle()
 	_primitives[_active_index] = _build_primitive(_pending_box)
 	_refresh_preview()
 
 
-## Returns a world point in the box frame of the current handle drag. The
-## frame turns around the shape center, so a rotated face still moves along
-## its own axis.
+## Keeps the world pivot where it was at the grab. A local box center that moves
+## then shifts the world center by the rotated amount, so the opposite face
+## stays still.
+func _sync_center_from_handle() -> void:
+	var shift := _pending_box.get_center() - _handle_start_box.get_center()
+	_pending_center = _handle_start_center + _handle_rotation * shift
+
+
+## Returns a world point in the box frame of the current handle drag. The frame
+## turns around the world pivot, so a rotated face still moves along its own
+## axis.
 func _handle_local(point: Vector3) -> Vector3:
-	return _handle_center + _handle_rotation.inverse() * (point - _handle_center)
+	return _handle_start_box.get_center() + _handle_rotation.inverse() * (point - _handle_start_center)
 
 
 func _reset_rotation_state() -> void:
 	_pending_rotation = Quaternion.IDENTITY
+	_pending_center = Vector3.ZERO
 	_rotating = false
 	_rotate_axis = -1
 	_rotate_total = 0.0

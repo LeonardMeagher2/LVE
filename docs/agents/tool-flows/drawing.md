@@ -375,6 +375,7 @@ Policy boundaries:
 - The pending shape keeps its own rotation. Three rings around the box center turn it around the shape's local X, Y, and Z axes. A ring drag snaps to 15 degrees, or to 5 with Shift. The box center stays fixed.
 - A ring sits just outside the shape, with 84 pixels as the minimum radius and an 18 pixel gap. A press inside the shape moves it, so the body drag keeps its area.
 - The wire box, the face crosses, the corner crosses, and the rings follow the rotation. A face drag projects the pointer onto the shape's local axis, so a rotated face still moves along its own axis.
+- A face or corner edit on a rotated shape keeps the opposite geometry still. The local box center and the world pivot can differ, so the tool moves the world center by the rotated change of the local center.
 - Intersect removes occupied cells outside the field across the current frame. The edit context still filters selection, slice, and document size.
 - Smooth blends the primitives in one request and the committed cells near them.
 - A smooth add keeps committed cells and their materials. It adds only the new fillet and the empty part of the primitive.

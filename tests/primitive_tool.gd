@@ -7,6 +7,8 @@ const PrimitiveField := preload("res://Globals/State/Tools/PrimitiveField.gd")
 var viewport: SubViewport
 var tool: Node3D
 var _move_before := Vector3.ZERO
+var _rotated_start_size := 0.0
+var _rotated_opposite := Vector3.ZERO
 
 
 func _ready() -> void:
@@ -34,6 +36,7 @@ func _ready() -> void:
 	test("the option values scale with the shape", _option_units, "option_units")
 	test("the tool rotation turns the box and the cone", _rotation, "rotation")
 	test("a rotate ring drag turns the pending shape", _rotate_ring, "rotate_ring")
+	test("a rotated face drag keeps the opposite face still", _rotated_face, "rotated_face")
 	test("the gizmo follows the shape rotation", _gizmo_rotation, "gizmo_rotation")
 	test("the current material is used", _material, "material")
 	test("the shape options build a cone and an ellipsoid", _shape_options, "shape_options")
@@ -565,7 +568,7 @@ func _one_pending() -> void:
 		_button(Vector3(0, 0, 0), true)
 		_motion(Vector3(4, 0, 4), true)
 		_button(Vector3(4, 0, 4), false)
-		_move_before = tool._pending_box.position
+		_move_before = tool._pending_center
 	)
 	step("When the user drags the shape body", func():
 		_button(Vector3(2, 0, 2), true)
@@ -574,7 +577,7 @@ func _one_pending() -> void:
 	)
 	step("Then the shape moves and no second primitive starts", func():
 		expect(tool._primitives.size() == 1, "the pending request still holds one primitive")
-		expect(not tool._pending_box.position.is_equal_approx(_move_before), "the shape moved")
+		expect(not tool._pending_center.is_equal_approx(_move_before), "the shape moved")
 		expect(plugin("PrimitivePlugin")._settings.editing, "the pending shape stays editable")
 	)
 	step("When the user commits and starts another shape", func():
@@ -704,6 +707,7 @@ func _rotation() -> void:
 	step("When the pending shape turns a quarter turn around Y", func():
 		tool._pending_rotation = Quaternion(Vector3.UP, deg_to_rad(90.0))
 		var box := AABB(Vector3(-2.5, -0.5, -0.5), Vector3(5, 1, 1))
+		tool._pending_center = box.get_center()
 		var primitive: Dictionary = tool._build_primitive(box, 2)
 		expect(primitive.has("rotation"), "the box carries a rotation")
 		expect(PrimitiveField.primitive_distance(primitive, Vector3(0, 0, 2)) <= 0.0, "a z cell is inside the rotated box")
@@ -714,6 +718,7 @@ func _rotation() -> void:
 		tool._pending_rotation = Quaternion(Vector3(0, 0, 1), deg_to_rad(90.0))
 		tool.shape = PrimitiveField.KIND_CONE
 		var box := AABB(Vector3(-0.5, -2.5, -0.5), Vector3(1, 5, 1))
+		tool._pending_center = box.get_center()
 		var cone: Dictionary = tool._build_primitive(box, 1)
 		var a: Vector3 = cone["a"]
 		var b: Vector3 = cone["b"]
@@ -764,11 +769,42 @@ func _gizmo_rotation() -> void:
 		expect((hit["axis_direction"] as Vector3).is_equal_approx(Vector3(0, 0, -1)), "the face drags along its rotated axis")
 	)
 	step("Then a world drag point maps back to the box frame", func():
-		tool._handle_center = Vector3.ZERO
+		tool._handle_start_box = AABB(Vector3(-2, -1, -0.5), Vector3(4, 2, 1))
+		tool._handle_start_center = Vector3.ZERO
 		tool._handle_rotation = rotation
 		expect(tool._handle_local(Vector3(0, 0, 2)).is_equal_approx(Vector3(-2, 0, 0)), "the drag uses the local axis")
 	)
 	gizmo.hide_box()
+
+
+func _rotated_face() -> void:
+	step("Given a pending box turned a quarter around Y", func():
+		_button(Vector3(0, 0, 0), true)
+		_motion(Vector3(3, 0, 3), true)
+		_button(Vector3(3, 0, 3), false)
+		tool._pending_rotation = Quaternion(Vector3.UP, deg_to_rad(90.0))
+		tool._primitives[0] = tool._build_primitive(tool._pending_box)
+		tool._refresh_gizmo()
+	)
+	await get_tree().process_frame
+	step("Then the opposite face starts at its world point", func():
+		_rotated_opposite = tool.get_node("Gizmo").handle_position(0, -1)
+		_rotated_start_size = tool._pending_box.size.x
+	)
+	step("When the user drags the x face along its rotated axis", func():
+		var gizmo := tool.get_node("Gizmo")
+		var handle: Vector3 = gizmo.handle_position(0, 1)
+		var axis: Vector3 = tool._pending_rotation * Vector3.RIGHT
+		_button(handle, true)
+		_motion(handle + axis * 2.0, true)
+		_button(handle + axis * 2.0, false)
+	)
+	step("Then the box grows on one side and the opposite face stays", func():
+		var gizmo := tool.get_node("Gizmo")
+		expect(is_equal_approx(tool._pending_box.size.x, _rotated_start_size + 2.0), "the x size grows by two")
+		expect(gizmo.handle_position(0, -1).is_equal_approx(_rotated_opposite), "the opposite face stays in place")
+	)
+	tool.cancel_pending()
 
 
 func _material() -> void:
