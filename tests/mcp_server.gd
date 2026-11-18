@@ -1690,7 +1690,7 @@ func _export_sheet() -> void:
 		DirAccess.remove_absolute(path)
 		DirAccess.remove_absolute(json_path)
 	)
-	var response := await _call("export_sprite_sheet", {"path": path, "first_frame": 0, "last_frame": 1, "tile_size": 32, "view": "front", "views": 2, "orthographic": true, "center": true, "metadata": true, "normal": true, "specular": true, "specular_intensity": 0.5})
+	var response := await _call("export_sprite_sheet", {"path": path, "first_frame": 0, "last_frame": 1, "tile_size": 32, "view": "front", "views": 2, "orthographic": true, "center": true, "metadata": true, "normal": true, "specular": true})
 	var data := _result_data(response)
 	step("Then the sheet uses the requested settings", func():
 		expect(not _is_error(response), "export_sprite_sheet succeeds: %s" % _result_text(response))
@@ -1710,14 +1710,13 @@ func _export_sheet() -> void:
 		expect(FileAccess.file_exists(normal_path), "the normal sheet exists")
 		expect(Image.load_from_file(normal_path) != null, "the normal sheet is a readable PNG")
 		expect(bool(data.get("specular", false)), "the response reports the specular sheet")
-		expect(is_equal_approx(float(data.get("specular_intensity", 0.0)), 0.5), "the response reports the specular intensity")
 		var specular_path := str(data.get("specular_path", ""))
 		expect(FileAccess.file_exists(specular_path), "the specular sheet exists")
 		expect(Image.load_from_file(specular_path) != null, "the specular sheet is a readable PNG")
 		var metadata: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(json_path))
 		expect(metadata.meta.lve.normal.image == normal_path.get_file(), "the sidecar names the normal sheet")
 		expect(metadata.meta.lve.specular.image == specular_path.get_file(), "the sidecar names the specular sheet")
-		expect(is_equal_approx(float(metadata.meta.lve.specular.intensity), 0.5), "the sidecar records the specular intensity")
+		expect(not metadata.meta.lve.specular.has("intensity"), "the sidecar keeps the sheet neutral")
 	)
 
 

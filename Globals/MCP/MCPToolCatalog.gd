@@ -303,7 +303,7 @@ const TOOLS := [
 	},
 	{
 		"name": "get_export_settings",
-		"description": "Read the export settings the editor uses now. Use it to start from the current view, tile size, tag, normal and specular sheets, specular intensity, and model options. It also returns the open document path and the default model and sprite paths. Guide: `lve://guide/export`.",
+		"description": "Read the export settings the editor uses now. Use it to start from the current view, tile size, tag, normal and specular sheets, the specular preview intensity, and model options. It also returns the open document path and the default model and sprite paths. Guide: `lve://guide/export`.",
 		"inputSchema": {"type": "object", "additionalProperties": false},
 	},
 	{
@@ -340,7 +340,6 @@ const TOOLS := [
 				"metadata": {"type": "boolean", "description": "Write the JSON sidecar. Defaults to the export tab value."},
 				"normal": {"type": "boolean", "description": "Also write the aligned normal sheet. Defaults to the export tab value."},
 				"specular": {"type": "boolean", "description": "Also write the aligned specular sheet. Defaults to the export tab value."},
-				"specular_intensity": {"type": "number", "minimum": 0, "maximum": 1, "description": "Specular sheet intensity. Defaults to the export tab value."},
 			},
 			"additionalProperties": false,
 		},

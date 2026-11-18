@@ -9,6 +9,7 @@ uniform sampler2D normal_map : hint_default_black, filter_nearest, repeat_disabl
 uniform sampler2D specular_map : hint_default_black, filter_nearest, repeat_disable;
 uniform bool has_normal = false;
 uniform bool has_specular = false;
+uniform float specular_intensity = 1.0;
 uniform float ambient = 0.65;
 
 void fragment() {
@@ -30,6 +31,6 @@ void light() {
 	float cNdotV = max(0.0, dot(NORMAL, view));
 	float reflection = blinn / max(4.0 * cNdotV * cNdotL, 0.75);
 	vec3 diffuse = LIGHT_COLOR.rgb * COLOR.rgb * cNdotL;
-	vec3 shine = specular.rgb * LIGHT_COLOR.rgb * reflection;
+	vec3 shine = specular.rgb * LIGHT_COLOR.rgb * reflection * specular_intensity;
 	LIGHT = vec4((diffuse + shine) * LIGHT_ENERGY, LIGHT_COLOR.a);
 }

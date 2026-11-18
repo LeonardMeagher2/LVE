@@ -32,6 +32,7 @@ var _pointer_inside := false
 var _pointer := Vector2.ZERO
 var _normal_texture: Texture2D
 var _specular_texture: Texture2D
+var _specular_intensity := 1.0
 var _light_material: ShaderMaterial
 @onready var _light: PointLight2D = $Light
 
@@ -145,6 +146,13 @@ func set_specular_map(texture: Texture2D) -> void:
 	_light_material.set_shader_parameter("has_specular", texture != null)
 	_light_material.set_shader_parameter("specular_map", texture)
 	_update_light()
+	queue_redraw()
+
+
+## Sets the specular strength of the pointer light. The sheet bytes stay neutral.
+func set_specular_intensity(value: float) -> void:
+	_specular_intensity = clampf(value, 0.0, 1.0)
+	_light_material.set_shader_parameter("specular_intensity", _specular_intensity)
 	queue_redraw()
 
 

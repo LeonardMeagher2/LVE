@@ -185,14 +185,14 @@ func _specular_run() -> void:
 		"specular": true,
 		"specular_intensity": 0.5,
 	})
-	step("Then the specular intensity scales the metallic mask", func():
+	step("Then the specular intensity does not bake into the sheet", func():
 		var half := Image.new()
-		expect(half_error == OK and half.load(exporter.specular_path(half_path)) == OK, "the half-intensity sheet loads")
+		expect(half_error == OK and half.load(exporter.specular_path(half_path)) == OK, "the same-intensity sheet loads")
 		var pixel := half.get_pixel(8, 8)
-		expect(abs(pixel.r8 - 128) <= 2 and abs(pixel.g8 - 128) <= 2 and abs(pixel.b8 - 128) <= 2, "the metallic mask is halved")
+		expect(pixel.r8 >= 250 and pixel.g8 >= 250 and pixel.b8 >= 250, "the metallic mask stays full")
 		expect(abs(pixel.a8 - 204) <= 2, "the shininess stays unchanged")
 		var data: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(half_path.get_basename() + ".json"))
-		expect(is_equal_approx(float(data.meta.lve.specular.intensity), 0.5), "the sidecar records the intensity")
+		expect(not data.meta.lve.specular.has("intensity"), "the sidecar has no baked intensity")
 	)
 	var off_path := prefix + "_specular_off.png"
 	var off_error: Error = await exporter.export_sprite_sheet_settings(off_path, {
@@ -417,22 +417,29 @@ func _specular_light_run() -> void:
 	)
 	await get_tree().process_frame
 	await get_tree().process_frame
-	await _wait_preview()
-	step("Then the specular sheet scales", func():
+	await RenderingServer.frame_post_draw
+	var dim_lit := get_tree().root.get_texture().get_image()
+	step("Then the preview light dims and the sheet stays neutral", func():
+		var center := preview.get_global_rect().get_center()
+		var full_luminance := specular_lit.get_pixelv(Vector2i(center)).get_luminance()
+		var dim_luminance := dim_lit.get_pixelv(Vector2i(center)).get_luminance()
 		var pixel: Color = exporter._preview_specular_texture.get_image().get_pixel(16, 16)
-		expect(abs(pixel.r8 - 128) <= 2, "the metallic mask is halved in the preview")
-		expect(is_equal_approx(float(State.document.export_settings.get("specular_intensity", 0.0)), 0.5), "the document stores the intensity")
+		var intensity: Variant = preview._light_material.get_shader_parameter("specular_intensity") if preview._light_material is ShaderMaterial else null
+		expect(is_equal_approx(float(intensity), 0.5), "the light shader receives the intensity")
+		expect(pixel.r8 >= 250, "the specular sheet stays neutral")
+		expect(full_luminance > dim_luminance + 0.02, "the preview highlight dims")
+		expect(is_equal_approx(float(State.document.export_settings.get("specular_intensity", 0.0)), 0.5), "the document stores the preview intensity")
 	)
 	step("When the user shows the maps", func():
 		exporter._maps_button.button_pressed = true
 	)
-	step("Then the map view shows both scaled sheets", func():
+	step("Then the map view shows both neutral sheets", func():
 		var normal_width: int = exporter._preview_normal_texture.get_width()
 		var image: Image = preview.texture.get_image()
 		expect(preview.texture == exporter._preview_maps_texture, "the preview shows both maps")
 		expect(preview.material == null and not preview._light.enabled, "the maps view stays unshaded")
 		expect(image.get_pixel(16, 16).b8 > 200, "the maps view holds the normal sheet")
-		expect(abs(image.get_pixel(normal_width + 1 + 16, 16).r8 - 128) <= 2, "the maps view holds the scaled specular sheet")
+		expect(image.get_pixel(normal_width + 1 + 16, 16).r8 >= 250, "the maps view holds the neutral specular sheet")
 	)
 	step("When the user returns to the color sheet", func():
 		exporter._maps_button.button_pressed = false

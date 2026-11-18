@@ -76,7 +76,6 @@ var _result_message := ""
 var _specular_default: ShaderMaterial
 var _specular_materials: Dictionary = {}
 var _diffuse_materials: Dictionary = {}
-var _specular_intensity_value := 1.0
 
 
 func _ready() -> void:
@@ -714,8 +713,11 @@ func _on_maps_preview_toggled(pressed: bool) -> void:
 	_sync()
 
 
-func _on_specular_intensity_changed(_value: float) -> void:
-	_sheet_settings_changed()
+func _on_specular_intensity_changed(value: float) -> void:
+	var preview: Control = _controls.get_node("Preview")
+	preview.set_specular_intensity(value)
+	_save_export_settings()
+	_sync()
 
 
 func _on_gltf_file_selected(path: String) -> void:
@@ -871,7 +873,6 @@ func _render_sheet(frames: Array[VoxelFrame], settings: Dictionary, document: Vo
 	var lighting_settings: Dictionary = settings.lighting
 	var transforms: Array[Transform3D] = settings.transforms
 	var layout: Dictionary = settings.layout
-	_specular_intensity_value = float(settings.get("specular_intensity", _specular_intensity.value))
 	var viewport := _open_image_viewport(settings, layout.tile_size * 2)
 	if revision >= 0:
 		_preview_viewport = viewport
@@ -993,7 +994,6 @@ func _specular_material(source: Material) -> Material:
 		material.shader = SPECULAR_SHADER
 		material.set_shader_parameter("orm_texture", material_3d.roughness_texture)
 		material.set_shader_parameter("has_orm", true)
-		material.set_shader_parameter("intensity", _specular_intensity_value)
 		_specular_materials[key] = material
 	return material
 
@@ -1128,7 +1128,6 @@ func _update_sheet_preview() -> void:
 		_sheet_lighting()
 	)
 	settings.layout = layout
-	settings.specular_intensity = float(_specular_intensity.value)
 	var normal_on: bool = _light_button.button_pressed
 	var outputs: Array = ["color"]
 	if normal_on:
@@ -1194,6 +1193,7 @@ func _show_sheet_preview() -> void:
 		return
 	preview.set_normal_map(_preview_normal_texture)
 	preview.set_specular_map(_preview_specular_texture)
+	preview.set_specular_intensity(float(_specular_intensity.value))
 	if _maps_button.button_pressed and _preview_maps_texture:
 		preview.texture = _preview_maps_texture
 		preview.set_light_enabled(false)
@@ -1228,8 +1228,7 @@ func _apply_preview_animation() -> void:
 ## writes the Aseprite JSON sidecar. The sidecar is off by default. [param views]
 ## adds turntable views. [param normal] also writes the aligned normal sheet.
 ## [param specular] also writes the aligned specular sheet.
-## [param specular_intensity] scales the specular sheet.
-func export_sprite_sheet(path: String, first_frame := 0, last_frame := -1, tile_size := -1, view := 1, include_json := false, views := 1, tag_name := "", normal := false, specular := false, specular_intensity := 1.0) -> Error:
+func export_sprite_sheet(path: String, first_frame := 0, last_frame := -1, tile_size := -1, view := 1, include_json := false, views := 1, tag_name := "", normal := false, specular := false) -> Error:
 	if view < 0 or view >= VIEW_KEYS.size():
 		return ERR_INVALID_PARAMETER
 	return await export_sprite_sheet_settings(path, {
@@ -1242,7 +1241,6 @@ func export_sprite_sheet(path: String, first_frame := 0, last_frame := -1, tile_
 		"tag_name": tag_name,
 		"normal": normal,
 		"specular": specular,
-		"specular_intensity": specular_intensity,
 	})
 
 
@@ -1283,10 +1281,6 @@ func export_sprite_sheet_settings(path: String, settings: Dictionary) -> Error:
 	if not specular_value is bool:
 		return ERR_INVALID_PARAMETER
 	var specular: bool = specular_value
-	var intensity_value: Variant = settings.get("specular_intensity", tab.get("specular_intensity", 1.0))
-	if not (intensity_value is int or intensity_value is float) or not is_finite(float(intensity_value)):
-		return ERR_INVALID_PARAMETER
-	var specular_intensity := clampf(float(intensity_value), 0.0, 1.0)
 	var tag_name := str(settings.get("tag_name", ""))
 	var lighting: Dictionary = settings.get("lighting", {})
 	if lighting.is_empty():
@@ -1307,10 +1301,9 @@ func export_sprite_sheet_settings(path: String, settings: Dictionary) -> Error:
 		outputs.append("specular")
 	render_settings.layout = layout
 	render_settings.outputs = outputs
-	render_settings.specular_intensity = specular_intensity
 	if path.get_extension().to_lower() != "png":
 		path += ".png"
-	var metadata := sheet_metadata(path, first_frame, last_frame, layout, views, tag_name, normal, specular, specular_intensity)
+	var metadata := sheet_metadata(path, first_frame, last_frame, layout, views, tag_name, normal, specular)
 	var source_document := State.document
 	State.stop()
 	_exporting = true
@@ -1431,7 +1424,7 @@ func export_gif_settings(path: String, settings: Dictionary) -> Error:
 ## Returns the Aseprite JSON sidecar for one sprite sheet. It lists every frame
 ## rectangle and every tag. When [param normal] or [param specular] is true it
 ## also names that sheet and its convention.
-func sheet_metadata(path: String, first: int, last: int, layout: Dictionary, views := 1, tag_name := "", normal := false, specular := false, specular_intensity := 1.0) -> Dictionary:
+func sheet_metadata(path: String, first: int, last: int, layout: Dictionary, views := 1, tag_name := "", normal := false, specular := false) -> Dictionary:
 	var count := last - first + 1
 	var dimensions: Vector2i = layout.tile_size
 	var label: String = tag_name if not tag_name.is_empty() else path.get_file().get_basename()
@@ -1455,7 +1448,7 @@ func sheet_metadata(path: String, first: int, last: int, layout: Dictionary, vie
 	if normal:
 		lve["normal"] = {"image": normal_path(path).get_file(), "space": "view", "convention": "+x, +y, +z"}
 	if specular:
-		lve["specular"] = {"image": specular_path(path).get_file(), "color": "metallic", "alpha": "shininess", "shininess": "1 - roughness", "intensity": specular_intensity}
+		lve["specular"] = {"image": specular_path(path).get_file(), "color": "metallic", "alpha": "shininess", "shininess": "1 - roughness"}
 	if not lve.is_empty():
 		meta["lve"] = lve
 	return {"frames": frames, "meta": meta}
