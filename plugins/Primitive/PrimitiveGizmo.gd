@@ -11,8 +11,6 @@ extends MeshInstance3D
 
 const VoxelLineMesh := preload("res://Globals/Rendering/VoxelLineMesh.gd")
 const PrimitiveField := preload("res://Globals/State/Tools/PrimitiveField.gd")
-## The theme accent: ui/Theme.tres, Button focus border and pressed background.
-const ACCENT := Color(0.192, 0.318, 0.478)
 ## The fallback face cross half extent in world units. The gizmo overrides it
 ## with the current camera scale, so a cross keeps one screen size at any zoom.
 const HANDLE_HALF := 0.35
@@ -74,7 +72,7 @@ func _ready() -> void:
 	material_override = _material
 	_hot_material = StandardMaterial3D.new()
 	_hot_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	_hot_material.albedo_color = ACCENT
+	_hot_material.albedo_color = Color.WHITE
 	_hot_material.no_depth_test = true
 	_hot_material.cull_mode = BaseMaterial3D.CULL_DISABLED
 	_hot_material.render_priority = 3

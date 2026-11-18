@@ -46,7 +46,6 @@ func _ready() -> void:
 	test("the wire draws the selected shape", _shape_wire, "shape_wire")
 	test("the ring drag snaps to two degrees", _rotate_snap, "rotate_snap")
 	test("a body drag hides the rings", _rings_hidden_on_drag, "rings_hidden_on_drag")
-	test("the gizmo accent is the theme accent", _accent, "accent")
 	test("the current material is used", _material, "material")
 	test("the shape options build a cone and an ellipsoid", _shape_options, "shape_options")
 
@@ -1020,17 +1019,6 @@ func _rings_hidden_on_drag() -> void:
 		expect(gizmo._rings.visible, "the rings return")
 	)
 	tool.cancel_pending()
-
-
-func _accent() -> void:
-	var script := load("res://plugins/Primitive/PrimitiveGizmo.gd")
-	step("Then the gizmo accent is the theme accent", func():
-		var theme := load("res://ui/Theme.tres") as Theme
-		expect(theme != null, "the project theme loads")
-		var focus := theme.get_stylebox("focus", "Button") as StyleBoxFlat
-		expect(focus != null, "the button focus style exists")
-		expect(script.ACCENT.is_equal_approx(focus.border_color), "the gizmo uses the theme accent")
-	)
 
 
 func _material() -> void:

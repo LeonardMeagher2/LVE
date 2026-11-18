@@ -373,7 +373,7 @@ Policy boundaries:
 - Roundness from 0 to 1 rounds box edges and blends cone ends from flat to round.
 - The blend and the narrow cone radius also use 0 to 1. The blend is a fraction of the largest blend, which is half the smallest extent. The narrow radius is a fraction of the base radius. The tool converts both to cells before it sends the request.
 - The pending shape keeps its own rotation. Three rings around the shape turn it around its local X, Y, and Z axes. A ring drag snaps to 2 degrees. The box center stays fixed.
-- A ring sits just outside the shape, with 84 pixels as the minimum radius and an 18 pixel gap. An idle ring is dashed. The hovered ring is solid in the theme accent. A press inside the shape moves it, so the body drag keeps its area.
+- A ring sits just outside the shape, with 84 pixels as the minimum radius and an 18 pixel gap. An idle ring is dashed. The hovered ring is solid white. A press inside the shape moves it, so the body drag keeps its area.
 - A ring is drawn only when the view is within 63 degrees of its axis. A ring that is nearly edge-on cannot be dragged, so it is not drawn and not hit-tested.
 - The wire follows the selected shape. A box draws its twelve edges. An ellipsoid draws three great circles. A cone draws its end circles and eight sides. The face and corner handles appear only near the pointer. A face drag projects the pointer onto the shape's local axis, so a rotated face still moves along its own axis.
 - A face or corner edit on a rotated shape keeps the opposite geometry still. The local box center and the world pivot can differ, so the tool moves the world center by the rotated change of the local center.
@@ -387,7 +387,7 @@ Policy boundaries:
 - A settings, context, or discrete shape change cancels the running preview job and starts the newest request. Starting or finishing a shape and a Shift or Alternate toggle count as discrete. A continuous handle, body, or rotation drag does not cancel, so a moving pointer keeps a steady preview. The previous result stays visible until the newest result installs.
 - A preview starts at most once per frame. Pointer events that arrive in one frame collapse into the newest request. `_process` starts that request on the next frame, so a fast mouse costs no frame copy per event.
 - A preview frame shares its untouched chunks with the document. A swap rebuilds only the chunks the shape wrote, and each changed chunk keeps its old mesh until the replacement is ready. No chunk mesh blinks.
-- The face and corner crosses keep a constant screen size. The hot face cross is 24 pixels wide. The hot corner cross is 20 pixels wide. The gizmo scales them from the camera size, so a zoom does not change the grab target. The rings hide during a body, face, or corner drag.
+- The face and corner crosses keep a constant screen size. The hot face cross is white and 24 pixels wide. The hot corner cross is white and 20 pixels wide. The gizmo scales them from the camera size, so a zoom does not change the grab target. The rings hide during a body, face, or corner drag.
 
 ## Spray
 
