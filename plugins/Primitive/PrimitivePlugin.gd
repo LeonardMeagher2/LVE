@@ -99,11 +99,12 @@ func _on_tool_changed(tool: PrimitiveToolSettings.Tools) -> void:
 
 
 ## Builds one primitive request. This is the shared commit path for the mouse
-## tools and the MCP server. Returns the applied count, the scan bounds, the
-## changed bounds, the chunk count, and the warnings. A failure returns an
-## [code]error[/code] key.
-func build_shape(request: Dictionary) -> Dictionary:
-	var validation := PrimitiveField.validate_request(request)
+## tools and the MCP server. [param allow_large] skips the cell limit for a
+## mouse commit, which already showed the shape in the preview. Returns the
+## applied count, the scan bounds, the changed bounds, the chunk count, and the
+## warnings. A failure returns an [code]error[/code] key.
+func build_shape(request: Dictionary, allow_large := false) -> Dictionary:
+	var validation := PrimitiveField.validate_request(request, allow_large)
 	if not validation.is_empty():
 		return {"error": validation}
 	if State.active_edit() != null or State.edit_busy():

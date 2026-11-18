@@ -383,7 +383,7 @@ Policy boundaries:
 - Smooth blends the primitives in one request and the committed cells near them.
 - A smooth add keeps committed cells and their materials. It adds only the new fillet and the empty part of the primitive.
 - The shell is applied after the union.
-- The mouse commits at step 1. MCP can request step 2 through 4.
+- The mouse commits at step 1. MCP can request step 2 through 4. The mouse commit is not limited by the MCP cell cap, because the preview already showed the shape. A commit waits for a running edit or foreground operation and uses the settings from the click.
 - The preview is the actual result: add adds, subtract removes, and intersect removes cells outside the shape.
 - The preview shows the result frame in the main viewport renderer. The live document stays unchanged until commit.
 - A settings, context, shape, or drag change cancels the running preview job. A drag cancels at once and starts the newest worker request after two quiet frames. An inline preview and a discrete change start at once. The previous result stays visible until the newest result installs. The wire follows at once.

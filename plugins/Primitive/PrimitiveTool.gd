@@ -310,11 +310,21 @@ func commit_pending() -> void:
 	var plugin := get_node_or_null("/root/PrimitivePlugin")
 	if plugin == null or not plugin.has_method("build_shape"):
 		return
-	_committing = true
-	var result: Dictionary = await plugin.build_shape(request)
-	_committing = false
-	if result.has("error"):
-		push_error("Primitive commit failed: %s" % str(result.get("error", "")))
+	# The request keeps the settings from the click. A running edit or job does
+	# not drop the commit: wait for it, then build.
+	while true:
+		while State.active_edit() != null or State.edit_busy():
+			await get_tree().process_frame
+		_committing = true
+		var result: Dictionary = await plugin.build_shape(request, true)
+		_committing = false
+		if not result.has("error"):
+			return
+		var message := str(result.get("error", ""))
+		if not message.contains("busy"):
+			push_error("Primitive commit failed: %s" % message)
+			return
+		await get_tree().process_frame
 
 
 

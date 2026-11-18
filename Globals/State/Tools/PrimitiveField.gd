@@ -353,7 +353,9 @@ static func estimated_cells(request: Dictionary) -> int:
 
 
 ## Returns an error string for an invalid request. An empty string means valid.
-static func validate_request(request: Dictionary) -> String:
+## [param allow_large] lets the mouse tool commit a shape that the preview
+## already showed. The MCP path keeps the cell limit.
+static func validate_request(request: Dictionary, allow_large := false) -> String:
 	var primitives_value: Variant = request.get("primitives", null)
 	if not (primitives_value is Array):
 		return "primitives must be an array."
@@ -447,7 +449,7 @@ static func validate_request(request: Dictionary) -> String:
 	var volume := estimated_cells(request)
 	if volume <= 0:
 		return "The shape has no volume."
-	if volume > MAX_PRIMITIVE_CELLS:
+	if not allow_large and volume > MAX_PRIMITIVE_CELLS:
 		return "The shape exceeds %d cells. Use step 2 or larger." % MAX_PRIMITIVE_CELLS
 	return ""
 

@@ -49,6 +49,8 @@ func _ready() -> void:
 	test("the draft wire appears before the preview", _draft_gizmo, "draft_gizmo")
 	test("the accept button applies a pending shape", _accept_button, "accept_button")
 	test("a commit signal keeps a new pending shape", _commit_keeps_new_pending, "commit_keeps_new_pending")
+	test("a mouse commit allows a large shape", _large_commit, "large_commit")
+	test("a commit waits for a busy edit", _commit_waits_for_busy, "commit_waits_for_busy")
 	test("a round cone draws its caps", _cone_roundness, "cone_roundness")
 	test("a blend draws a dashed outer wire", _blend_halo, "blend_halo")
 	test("the gizmo shows the blend setting", _blend_gizmo, "blend_gizmo")
@@ -1206,6 +1208,52 @@ func _commit_keeps_new_pending() -> void:
 	)
 	tool._committing = false
 	tool.cancel_pending()
+
+
+func _large_commit() -> void:
+	var request := {
+		"primitives": [{
+			"kind": PrimitiveField.KIND_BOX,
+			"center": Vector3.ZERO,
+			"half_size": Vector3(52, 52, 52),
+		}],
+		"op": PrimitiveField.OP_ADD,
+		"smooth": 0.0,
+		"shell": 0.0,
+		"step": 1,
+		"material": VoxelFrame.material(Color.WHITE),
+	}
+	step("Then the MCP limit rejects the large shape", func():
+		expect(PrimitiveField.validate_request(request) != "", "the MCP path keeps the cell limit")
+	)
+	step("Then the mouse commit allows it", func():
+		expect(PrimitiveField.validate_request(request, true) == "", "the mouse commit allows the shape")
+	)
+
+
+func _commit_waits_for_busy() -> void:
+	step("Given a pending box", func():
+		_button(Vector3(0, 0, 0), true)
+		_motion(Vector3(3, 0, 3), true)
+		_button(Vector3(3, 0, 3), false)
+	)
+	await get_tree().process_frame
+	var operation := State.begin_operation("Test busy", -1, true, self)
+	step("When the editor is busy and the user presses Accept", func():
+		plugin("PrimitivePlugin")._settings.commit()
+	)
+	step("Then the commit waits for the busy edit", func():
+		expect(State.get_current_voxel_frame().count() == 0, "the shape waits")
+	)
+	step("When the busy edit finishes", func():
+		State.finish_operation(operation)
+	)
+	var deadline := Time.get_ticks_msec() + 5000
+	while State.get_current_voxel_frame().count() == 0 and Time.get_ticks_msec() < deadline:
+		await get_tree().process_frame
+	step("Then the shape applies", func():
+		expect(State.get_current_voxel_frame().count() > 0, "the shape applies after the edit")
+	)
 
 
 func _material() -> void:
