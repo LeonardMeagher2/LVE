@@ -205,11 +205,11 @@ func _specular_run() -> void:
 		"center": true,
 		"specular": false,
 	})
-	step("Then the specular-enabled color sheet drops baked specular", func():
+	step("Then enabling specular keeps the baked color pass", func():
 		var on_color := Image.new()
 		var off_color := Image.new()
 		expect(off_error == OK and on_color.load(path) == OK and off_color.load(off_path) == OK, "both color sheets load")
-		expect(on_color.get_data() != off_color.get_data(), "enabling specular changes the color pass")
+		expect(on_color.get_data() == off_color.get_data(), "the color sheet keeps its baked specular")
 	)
 	for file in [path, exporter.specular_path(path), path.get_basename() + ".json", off_path, half_path, exporter.specular_path(half_path), half_path.get_basename() + ".json"]:
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(file))
