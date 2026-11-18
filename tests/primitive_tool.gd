@@ -33,7 +33,7 @@ func _ready() -> void:
 	test("a no-op subtract creates no history action", _noop, "noop")
 	test("the option values scale with the shape", _option_units, "option_units")
 	test("the tool rotation turns the box and the cone", _rotation, "rotation")
-	test("a rotate ring drag turns the pending shape", _rotate_ring, "rotate_ring")
+	test("a rotate drag turns the pending shape", _rotate_mark, "rotate_mark")
 	test("the gizmo follows the shape rotation", _gizmo_rotation, "gizmo_rotation")
 	test("the current material is used", _material, "material")
 	test("the shape options build a cone and an ellipsoid", _shape_options, "shape_options")
@@ -721,29 +721,32 @@ func _rotation() -> void:
 	)
 
 
-func _rotate_ring() -> void:
+func _rotate_mark() -> void:
 	var gizmo := tool.get_node("Gizmo")
 	var camera := camera_rig()
 	var center: Vector3 = camera._target
-	step("Given a pending box and its rotate rings", func():
+	step("Given a pending box and its rotate mark", func():
 		gizmo.show_box(AABB(center - Vector3.ONE * 2, Vector3.ONE * 4), Quaternion.IDENTITY)
+		var primitive := {"kind": PrimitiveField.KIND_BOX, "center": center, "half_size": Vector3(2, 2, 2), "roundness": 0.0}
+		var primitives: Array[Dictionary] = [primitive]
+		tool._primitives = primitives
+		tool._active_index = 0
+		tool._pending_box = AABB(center - Vector3.ONE * 2, Vector3.ONE * 4)
+		expect(tool._rotate_at(camera.unproject_position(gizmo.rotate_mark_center())), "the pointer is on the rotate mark")
 	)
-	var ring := {}
-	for value in gizmo.rotation_rings():
-		if int(value["axis"]) == 1:
-			ring = value
-	step("When the pointer turns a quarter around the Y ring", func():
-		expect(not ring.is_empty(), "the y ring exists")
-		var radius: float = ring["radius"]
-		var start := camera.unproject_position(center + Vector3.RIGHT * radius)
-		var finish := camera.unproject_position(center + Vector3.BACK * radius)
-		tool._begin_ring_drag(ring, camera.project_ray_origin(start), camera.project_ray_normal(start))
-		tool._update_ring(camera.project_ray_origin(finish), camera.project_ray_normal(finish))
+	step("When the pointer drags a quarter around the center", func():
+		var center_screen := camera.unproject_position(center)
+		var mark_screen := camera.unproject_position(gizmo.rotate_mark_center())
+		var radius := mark_screen.distance_to(center_screen)
+		var finish_screen := center_screen + Vector2(radius, 0.0)
+		tool._begin_rotate(camera.project_ray_origin(mark_screen), camera.project_ray_normal(mark_screen))
+		tool._update_rotate(camera.project_ray_origin(finish_screen), camera.project_ray_normal(finish_screen))
 	)
 	step("Then the pending shape turns a quarter turn", func():
 		var turned: Quaternion = tool._pending_rotation
 		expect(is_equal_approx(absf(turned.get_angle()), deg_to_rad(90.0)), "the drag turns a quarter turn")
-		expect(absf(turned.get_axis().dot(Vector3.UP)) > 0.999, "the turn uses the ring axis")
+		var forward := -camera.global_transform.basis.z
+		expect(absf(turned.get_axis().dot(forward)) > 0.999, "the turn uses the view axis")
 	)
 	tool._pending_rotation = Quaternion.IDENTITY
 	gizmo.hide_box()
