@@ -11,9 +11,11 @@
 
 const PrimitiveField := preload("res://Globals/State/Tools/PrimitiveField.gd")
 const PrimitiveJob := preload("res://Globals/State/Tools/PrimitiveJob.gd")
-const HANDLE_RADIUS_PX := 11.0
+const HANDLE_RADIUS_PX := 13.0
 ## The rotate ring grab distance in screen pixels.
 const RING_GRAB_PX := 9.0
+## The rotate snap in degrees.
+const ROTATE_SNAP_DEGREES := 2.0
 ## The preview work below which the result runs inline. A larger preview uses a
 ## worker job.
 const INLINE_PREVIEW_CELLS := 512
@@ -260,8 +262,10 @@ func handle_input(event: InputEvent, pos: Vector2) -> bool:
 				_finish_new_drag()
 			return true
 		if mm.button_mask == 0 and not _primitives.is_empty() and not _dragging_handle and not _moving and not _rotating:
-			var hover := _ring_at(pos)
-			$Gizmo.set_ring_highlight(int(hover.get("axis", -1)))
+			var hit := _handle_at(pos)
+			$Gizmo.set_hot_handle(hit)
+			var ring := {} if not hit.is_empty() else _ring_at(pos)
+			$Gizmo.set_ring_highlight(int(ring.get("axis", -1)))
 			return false
 		if mm.button_mask == 0 and _primitives.is_empty() and not _dragging_new:
 			update_visual(_pick_start(ray[0], ray[1]))
@@ -281,7 +285,7 @@ func update_visual(pick: PickResult) -> void:
 		$Gizmo.hide_box()
 		visible = false
 		return
-	$Gizmo.show_box(AABB(Vector3(pick.target) - Vector3.ONE * 0.5, Vector3.ONE), Quaternion.IDENTITY, Vector3(pick.target), -1, 0, false)
+	$Gizmo.show_box(AABB(Vector3(pick.target) - Vector3.ONE * 0.5, Vector3.ONE), Quaternion.IDENTITY, Vector3(pick.target), {}, false)
 	visible = true
 
 
@@ -471,7 +475,25 @@ func _refresh_gizmo() -> void:
 	if _primitives.is_empty() or _dragging_new:
 		$Gizmo.hide_box()
 		return
-	$Gizmo.show_box(_pending_box, _pending_rotation, _pending_center, _handle_axis, _handle_side, true)
+	var primitive: Dictionary = {}
+	if _active_index >= 0 and _active_index < _primitives.size():
+		primitive = _primitives[_active_index]
+	$Gizmo.show_box(_pending_box, _pending_rotation, _pending_center, primitive, true)
+	$Gizmo.set_hot_handle(_dragged_handle())
+	$Gizmo.set_ring_highlight(_rotate_axis)
+	$Gizmo.set_rings_visible(not (_dragging_handle or _moving))
+
+
+## Returns the handle that the current drag holds, or an empty dictionary.
+func _dragged_handle() -> Dictionary:
+	if not _dragging_handle:
+		return {}
+	return {
+		"kind": _handle_kind,
+		"axis": _handle_axis,
+		"side": _handle_side,
+		"signs": _handle_signs,
+	}
 
 
 func _build_request(include_draft: bool) -> Dictionary:
@@ -730,7 +752,7 @@ func _update_ring(origin: Vector3, direction: Vector3) -> void:
 	_rotate_last_angle = angle
 	var local_axis := Vector3.ZERO
 	local_axis[_rotate_axis] = 1.0
-	_pending_rotation = _rotate_start * Quaternion(local_axis, _rotate_total)
+	_pending_rotation = _rotate_start * Quaternion(local_axis, snappedf(_rotate_total, deg_to_rad(ROTATE_SNAP_DEGREES)))
 	if _active_index >= 0 and _active_index < _primitives.size():
 		_primitives[_active_index] = _build_primitive(_pending_box, _active_axis)
 	_refresh_preview()

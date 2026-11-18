@@ -9,6 +9,7 @@ var tool: Node3D
 var _move_before := Vector3.ZERO
 var _rotated_start_size := 0.0
 var _rotated_opposite := Vector3.ZERO
+var _corner_point := Vector3.ZERO
 
 
 func _ready() -> void:
@@ -38,6 +39,14 @@ func _ready() -> void:
 	test("a rotate ring drag turns the pending shape", _rotate_ring, "rotate_ring")
 	test("a rotated face drag keeps the opposite face still", _rotated_face, "rotated_face")
 	test("the gizmo follows the shape rotation", _gizmo_rotation, "gizmo_rotation")
+	test("the hot handle follows the pointer", _hover_handle, "hover_handle")
+	test("a corner handle appears and drags", _corner_hover, "corner_hover")
+	test("a ring shows only near its axis", _ring_parallel_only, "ring_parallel_only")
+	test("an idle ring is dashed", _ring_dashes, "ring_dashes")
+	test("the wire draws the selected shape", _shape_wire, "shape_wire")
+	test("the ring drag snaps to two degrees", _rotate_snap, "rotate_snap")
+	test("a body drag hides the rings", _rings_hidden_on_drag, "rings_hidden_on_drag")
+	test("the gizmo accent is the theme accent", _accent, "accent")
 	test("the current material is used", _material, "material")
 	test("the shape options build a cone and an ellipsoid", _shape_options, "shape_options")
 
@@ -481,12 +490,14 @@ func _handle_scale() -> void:
 	await get_tree().process_frame
 	var rig := camera_rig()
 	var viewport_height := gizmo.get_viewport().get_visible_rect().size.y
-	step("Then the cross keeps one screen size", func():
+	var before: float = gizmo._handle_half
+	step("Then the face and corner crosses keep one screen size", func():
 		expect(viewport_height > 0.0, "the viewport has a height")
 		var per_pixel := rig.size / viewport_height
-		expect(is_equal_approx(gizmo._handle_half / per_pixel, 10.0), "the cross half spans ten pixels")
+		expect(is_equal_approx(gizmo._handle_half / per_pixel, 12.0), "the face cross half spans twelve pixels")
+		expect(is_equal_approx(gizmo._corner_half / per_pixel, 10.0), "the corner cross half spans ten pixels")
+		expect(not gizmo._hot.visible, "no handle is drawn without a hover")
 	)
-	var before: float = gizmo._handle_half
 	step("When the user zooms in four times", func():
 		rig.set_zoom_percent(400.0)
 	)
@@ -495,7 +506,7 @@ func _handle_scale() -> void:
 	step("Then the cross keeps its screen size in a smaller world size", func():
 		expect(gizmo._handle_half < before, "the cross shrinks in world units")
 		var per_pixel := rig.size / viewport_height
-		expect(is_equal_approx(gizmo._handle_half / per_pixel, 10.0), "the zoomed cross still spans ten pixels")
+		expect(is_equal_approx(gizmo._handle_half / per_pixel, 12.0), "the zoomed cross still spans twelve pixels")
 	)
 	gizmo.hide_box()
 
@@ -808,7 +819,7 @@ func _rotated_face() -> void:
 		var gizmo := tool.get_node("Gizmo")
 		var ring: Dictionary = gizmo.rotation_rings()[0]
 		var expected: Vector3 = ring["center"] + (ring["u"] as Vector3) * float(ring["radius"])
-		var vertices: PackedVector3Array = gizmo.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+		var vertices: PackedVector3Array = gizmo._rings.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
 		var found := false
 		for value in vertices:
 			if value.is_equal_approx(expected):
@@ -817,6 +828,209 @@ func _rotated_face() -> void:
 		expect(found, "a drawn ring point sits on the world ring")
 	)
 	tool.cancel_pending()
+
+
+func _hover_handle() -> void:
+	step("Given a pending four-cell box", func():
+		_button(Vector3(0, 0, 0), true)
+		_motion(Vector3(3, 0, 3), true)
+		_button(Vector3(3, 0, 3), false)
+	)
+	await get_tree().process_frame
+	var gizmo := tool.get_node("Gizmo")
+	step("When the pointer approaches the x face", func():
+		_motion(gizmo.handle_position(0, 1))
+	)
+	step("Then that face handle appears", func():
+		expect(int(gizmo._hot_handle.get("kind", -1)) == 0, "a face handle is hot")
+		expect(int(gizmo._hot_handle.get("axis", -1)) == 0, "the x face is hot")
+		expect(int(gizmo._hot_handle.get("side", 0)) == 1, "the positive side is hot")
+		expect(gizmo._hot.visible, "the hot handle is drawn")
+	)
+	step("When the pointer leaves the shape", func():
+		_motion(Vector3(10, 0, 10))
+	)
+	step("Then no handle is drawn", func():
+		expect(gizmo._hot_handle.is_empty(), "no handle is hot")
+		expect(not gizmo._hot.visible, "the hot mesh is hidden")
+	)
+	tool.cancel_pending()
+
+
+func _corner_hover() -> void:
+	step("Given a pending four-cell box seen from an angle", func():
+		_button(Vector3(0, 0, 0), true)
+		_motion(Vector3(4, 0, 4), true)
+		_button(Vector3(4, 0, 4), false)
+		camera_rig().set_view("default")
+	)
+	await get_tree().process_frame
+	var gizmo := tool.get_node("Gizmo")
+	step("When the pointer approaches a top corner", func():
+		for value in gizmo.handles():
+			var hit: Dictionary = value
+			if int(hit.get("kind", 0)) == 1 and hit.get("signs", Vector3i.ZERO) == Vector3i(1, 1, 1):
+				_corner_point = hit["position"]
+		_motion(_corner_point)
+	)
+	step("Then that corner handle appears", func():
+		expect(int(gizmo._hot_handle.get("kind", -1)) == 1, "a corner handle is hot")
+		expect(gizmo._hot_handle.get("signs", Vector3i.ZERO) == Vector3i(1, 1, 1), "the top corner is hot")
+		expect(gizmo._hot.visible, "the hot corner is drawn")
+	)
+	step("When the user drags the corner", func():
+		_button(_corner_point, true)
+		_motion(_corner_point + Vector3(1, 1, 1), true)
+		expect(gizmo._hot.visible, "the dragged corner stays drawn")
+		_button(_corner_point + Vector3(1, 1, 1), false)
+	)
+	tool.cancel_pending()
+
+
+func _ring_parallel_only() -> void:
+	var gizmo := tool.get_node("Gizmo")
+	step("Given a pending box and its rotate rings", func():
+		gizmo.show_box(AABB(Vector3(-2, -2, -2), Vector3(4, 4, 4)))
+	)
+	step("Then a top view shows only the y ring", func():
+		camera_rig().set_view("top")
+		expect(_ring_axes(gizmo) == [1], "only the ring around y is drawn")
+	)
+	step("Then a front view shows only the z ring", func():
+		camera_rig().set_view("front")
+		expect(_ring_axes(gizmo) == [2], "only the ring around z is drawn")
+	)
+	step("Then an isometric view shows all three rings", func():
+		camera_rig().set_view("isometric")
+		expect(_ring_axes(gizmo).size() == 3, "all three rings are drawn")
+	)
+	gizmo.hide_box()
+
+
+func _ring_dashes() -> void:
+	var gizmo := tool.get_node("Gizmo")
+	step("Given a pending box and its rings", func():
+		gizmo.show_box(AABB(Vector3(-2, -2, -2), Vector3(4, 4, 4)))
+	)
+	step("Then an idle ring is dashed", func():
+		expect(gizmo._ring_dashes >= 16 and gizmo._ring_dashes <= 48, "the dash count stays small")
+		var visible: int = gizmo.rotation_rings().size()
+		expect(visible > 0, "at least one ring is visible")
+		var vertices: PackedVector3Array = gizmo._rings.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+		expect(vertices.size() == visible * gizmo._ring_dashes * 2, "each visible ring draws one line per dash")
+	)
+	gizmo.hide_box()
+
+
+func _shape_wire() -> void:
+	var gizmo := tool.get_node("Gizmo")
+	var box := AABB(Vector3(-2, -1, -0.5), Vector3(4, 2, 1))
+	step("Given a box primitive", func():
+		gizmo.show_box(box, Quaternion.IDENTITY, Vector3.ZERO, {
+			"kind": PrimitiveField.KIND_BOX,
+			"center": Vector3.ZERO,
+			"half_size": Vector3(2, 1, 0.5),
+		})
+	)
+	step("Then the wire is the twelve box edges", func():
+		var vertices: PackedVector3Array = gizmo.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+		expect(vertices.size() == 24, "the box wire has twelve lines")
+	)
+	step("Given an ellipsoid primitive", func():
+		gizmo.show_box(box, Quaternion.IDENTITY, Vector3.ZERO, {
+			"kind": PrimitiveField.KIND_ELLIPSOID,
+			"center": Vector3.ZERO,
+			"radii": Vector3(2, 1, 0.5),
+		})
+	)
+	step("Then the wire is three great circles", func():
+		var vertices: PackedVector3Array = gizmo.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+		expect(vertices.size() == 3 * 32 * 2, "the ellipsoid wire is three circles")
+		expect(_has_vertex(vertices, Vector3(2, 0, 0)), "the wire reaches the x pole")
+	)
+	step("Given a cone primitive", func():
+		gizmo.show_box(box, Quaternion.IDENTITY, Vector3.ZERO, {
+			"kind": PrimitiveField.KIND_CONE,
+			"a": Vector3(0, -1, 0),
+			"b": Vector3(0, 1, 0),
+			"r1": 2.0,
+			"r2": 0.0,
+		})
+	)
+	step("Then the wire is the base circle and the sides", func():
+		var vertices: PackedVector3Array = gizmo.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+		expect(vertices.size() == (32 + 8) * 2, "the cone wire is one circle and eight sides")
+		var found := false
+		for value in vertices:
+			if absf(value.distance_to(Vector3(0, -1, 0)) - 2.0) < 0.001:
+				found = true
+		expect(found, "a base circle point sits at the base radius")
+	)
+	gizmo.hide_box()
+
+
+func _rotate_snap() -> void:
+	var gizmo := tool.get_node("Gizmo")
+	var camera := camera_rig()
+	var center: Vector3 = camera._target
+	step("Given a pending box and its rotate rings", func():
+		gizmo.show_box(AABB(center - Vector3.ONE * 2, Vector3.ONE * 4), Quaternion.IDENTITY)
+	)
+	var ring := {}
+	for value in gizmo.rotation_rings():
+		if int(value["axis"]) == 1:
+			ring = value
+	step("When the pointer turns 45.7 degrees around the y ring", func():
+		expect(not ring.is_empty(), "the y ring exists")
+		var radius: float = ring["radius"]
+		var u: Vector3 = ring["u"]
+		var v: Vector3 = ring["v"]
+		var start := camera.unproject_position(center + u * radius)
+		var angle := deg_to_rad(45.7)
+		var finish := camera.unproject_position(center + (u * cos(angle) + v * sin(angle)) * radius)
+		tool._begin_ring_drag(ring, camera.project_ray_origin(start), camera.project_ray_normal(start))
+		tool._update_ring(camera.project_ray_origin(finish), camera.project_ray_normal(finish))
+	)
+	step("Then the shape turns in two degree steps", func():
+		var turned: Quaternion = tool._pending_rotation
+		expect(is_equal_approx(absf(turned.get_angle()), deg_to_rad(46.0)), "the drag snaps to 46 degrees")
+	)
+	tool._pending_rotation = Quaternion.IDENTITY
+	gizmo.hide_box()
+
+
+func _rings_hidden_on_drag() -> void:
+	step("Given a pending four-cell box", func():
+		_button(Vector3(0, 0, 0), true)
+		_motion(Vector3(3, 0, 3), true)
+		_button(Vector3(3, 0, 3), false)
+	)
+	await get_tree().process_frame
+	var gizmo := tool.get_node("Gizmo")
+	step("When the user drags the body", func():
+		expect(gizmo._rings.visible, "the rings start visible")
+		_button(tool._pending_center, true)
+		_motion(tool._pending_center + Vector3(1, 0, 1), true)
+	)
+	step("Then the rings hide during the drag", func():
+		expect(not gizmo._rings.visible, "the rings are hidden")
+		_button(tool._pending_center + Vector3(1, 0, 1), false)
+	)
+	step("Then the rings return after the drag", func():
+		expect(gizmo._rings.visible, "the rings return")
+	)
+	tool.cancel_pending()
+
+
+func _accent() -> void:
+	var script := load("res://plugins/Primitive/PrimitiveGizmo.gd")
+	step("Then the gizmo accent is the theme accent", func():
+		var theme := load("res://ui/Theme.tres") as Theme
+		expect(theme != null, "the project theme loads")
+		var focus := theme.get_stylebox("focus", "Button") as StyleBoxFlat
+		expect(focus != null, "the button focus style exists")
+		expect(script.ACCENT.is_equal_approx(focus.border_color), "the gizmo uses the theme accent")
+	)
 
 
 func _material() -> void:
@@ -883,6 +1097,20 @@ func _await_edit_idle() -> void:
 
 func _preview_renderer() -> VoxelRenderer:
 	return State.context.viewport_scene.get_node_or_null("VoxelRenderer") as VoxelRenderer
+
+
+func _ring_axes(gizmo: Node) -> Array:
+	var axes: Array = []
+	for value in gizmo.rotation_rings():
+		axes.append(int(value["axis"]))
+	return axes
+
+
+func _has_vertex(vertices: PackedVector3Array, point: Vector3) -> bool:
+	for value in vertices:
+		if value.is_equal_approx(point):
+			return true
+	return false
 
 
 func _box_request(center: Vector3, half_size: Vector3, op := PrimitiveField.OP_ADD) -> Dictionary:
