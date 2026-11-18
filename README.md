@@ -23,7 +23,7 @@ Export a low-poly glTF mesh, a sprite sheet with an optional normal map, or an a
 - Animate frames with tags, loops, and playback.
 - Set albedo, metallic, roughness, and emission per voxel.
 - Export glTF, GLB, sprite sheets with optional normal maps, and animated GIFs.
-- Preview normal-mapped 2D lighting at the pointer.
+- Preview normal-mapped 2D lighting at the pointer and inspect the normal sheet.
 - Save compact `.lve` documents or `.lve.png` files with a preview.
 
 ## Document files

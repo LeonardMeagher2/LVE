@@ -216,12 +216,29 @@ func _light_run() -> void:
 		expect(not preview._light.enabled, "the pointer outside turns the light off")
 		expect(preview.texture != null, "the sheet texture stays")
 	)
+	step("When the user shows the normal sheet", func():
+		exporter._normal_button.button_pressed = true
+	)
+	step("Then the preview shows the raw normal sheet", func():
+		expect(not exporter._normal_button.disabled, "the normal view is available")
+		expect(preview.texture == exporter._preview_normal_texture, "the preview shows the normal sheet")
+		expect(preview.material == null and not preview._light.enabled, "the normal view stays unshaded")
+		expect(preview.texture.get_image().get_pixel(16, 16).b8 > 200, "the normal view holds normal data")
+	)
+	step("When the user returns to the color sheet", func():
+		exporter._normal_button.button_pressed = false
+	)
+	step("Then the preview shows the color sheet", func():
+		expect(preview.texture == exporter._preview_texture, "the preview returns to the color sheet")
+	)
 	step("When GIF mode turns on", func():
 		exporter._gif_button.button_pressed = true
 	)
 	await get_tree().process_frame
 	step("Then normal maps are disabled for the color animation", func():
 		expect(exporter._light_button.disabled, "GIF mode disables the normal toggle")
+		expect(exporter._normal_button.disabled, "GIF mode disables the normal view")
+		expect(not exporter._normal_button.button_pressed, "GIF mode leaves the normal view")
 		expect(not preview._light.enabled, "GIF mode turns the light off")
 		expect(preview.is_animating(), "GIF mode animates the color frames")
 	)
@@ -232,7 +249,15 @@ func _light_run() -> void:
 	step("Then the normal choice survives", func():
 		expect(not exporter._light_button.disabled, "the normal toggle returns")
 		expect(exporter._light_button.button_pressed, "the normal choice survives GIF mode")
+		expect(not exporter._normal_button.disabled, "the normal view returns")
 		expect(not preview.is_animating(), "the preview returns to the sheet")
+	)
+	step("When normal maps turn off", func():
+		exporter._light_button.button_pressed = false
+	)
+	step("Then the normal view disables", func():
+		expect(exporter._normal_button.disabled, "normal maps off disables the normal view")
+		expect(not exporter._normal_button.button_pressed, "normal maps off leaves the normal view")
 	)
 
 

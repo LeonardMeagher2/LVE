@@ -28,6 +28,7 @@ const SPRITE_GAP := 1
 @onready var _export_button: Button = _controls.get_node("ExportRow/Export")
 @onready var _gif_button: Button = _controls.get_node("ExportRow/Gif")
 @onready var _light_button: Button = _controls.get_node("ControlBar/LightToggle")
+@onready var _normal_button: Button = _controls.get_node("ControlBar/NormalToggle")
 @onready var _dialog: FileDialog = _menu_item.get_node("ExportDialog")
 @onready var _sheet_dialog: FileDialog = _menu_item.get_node("SpriteSheetDialog")
 @onready var _gif_dialog: FileDialog = _menu_item.get_node("GifDialog")
@@ -42,6 +43,7 @@ var _preview_revision := 0
 var _preview_due_ms := -1
 var _preview_running := false
 var _preview_image: Image
+var _preview_texture: ImageTexture
 var _preview_normal_image: Image
 var _preview_normal_texture: ImageTexture
 var _preview_operation_id := 0
@@ -120,6 +122,7 @@ func _ready() -> void:
 	sheet_bar.get_node("ZoomOne").pressed.connect(sheet_preview.set_zoom_percent.bind(100.0))
 	sheet_bar.get_node("CenterBtn").pressed.connect(sheet_preview.fit)
 	_light_button.toggled.connect(_on_light_toggled)
+	_normal_button.toggled.connect(_on_normal_preview_toggled)
 	_sheet_settings.get_node("FrameRow/Frames").item_selected.connect(_on_sheet_tag_selected)
 	_sheet_settings.get_node("ViewRow/View").item_selected.connect(_sheet_settings_changed.unbind(1))
 	_sheet_settings.get_node("ViewRow/Center").toggled.connect(_sheet_settings_changed.unbind(1))
@@ -185,6 +188,7 @@ func _restore_export_settings() -> void:
 	_sheet_settings.get_node("TurntableRow/Views").set_value_no_signal(saved.get("views", 8))
 	_controls.get_node("ExportRow/Metadata").set_pressed_no_signal(saved.get("metadata", false))
 	_light_button.set_pressed_no_signal(saved.get("normal", false))
+	_normal_button.set_pressed_no_signal(false)
 	_model.get_node("AnimationRow/Center").set_pressed_no_signal(saved.get("center", false))
 	var lighting: Dictionary = saved.get("lighting", _default_lighting)
 	_model_scene.set_lighting_settings(lighting)
@@ -198,6 +202,7 @@ func _restore_export_settings() -> void:
 	_controls.get_node("Preview").clear_animation()
 	_controls.get_node("Preview").set_light_enabled(false)
 	_controls.get_node("Preview").set_normal_map(null)
+	_preview_texture = null
 	_preview_normal_image = null
 	_preview_normal_texture = null
 	_restoring_export_settings = false
@@ -384,6 +389,7 @@ func _sheet_settings_changed() -> void:
 	_preview_revision += 1
 	_preview_due_ms = Time.get_ticks_msec() + PREVIEW_DELAY_MS
 	_preview_image = null
+	_preview_texture = null
 	_preview_normal_image = null
 	_preview_normal_texture = null
 	var preview: Control = _controls.get_node("Preview")
@@ -553,6 +559,16 @@ func _sync() -> void:
 	_gif_button.disabled = busy
 	_light_button.disabled = busy or gif
 	_light_button.tooltip_text = "Turn off GIF mode to enable normal maps." if gif else "Enable normal maps. Move the pointer over the sheet to light it. The export writes a normal map sheet."
+	_normal_button.disabled = busy or gif or not _light_button.button_pressed
+	if _normal_button.disabled and _normal_button.button_pressed:
+		_normal_button.set_pressed_no_signal(false)
+		_show_sheet_preview()
+	if not _light_button.button_pressed:
+		_normal_button.tooltip_text = "Turn on Light to enable normal maps."
+	elif gif:
+		_normal_button.tooltip_text = "Turn off GIF mode to view the normal map."
+	else:
+		_normal_button.tooltip_text = "Show the normal map sheet. Press again to return to the lit sheet."
 	for path in ["FrameRow/Frames", "ViewRow/View", "ViewRow/Center"]:
 		_sheet_settings.get_node(path).disabled = busy
 	_sheet_settings.get_node("SizeRow/Size").editable = not busy
@@ -647,18 +663,24 @@ func _choose_gif_file() -> void:
 
 
 func _on_gif_toggled(_pressed: bool) -> void:
-	var preview: Control = _controls.get_node("Preview")
-	if _gif_enabled():
-		preview.set_light_enabled(false)
-	else:
-		preview.set_normal_map(_preview_normal_texture)
-		preview.set_light_enabled(_light_button.button_pressed)
+	_show_sheet_preview()
 	_apply_preview_animation()
 	_sync()
 
 
-func _on_light_toggled(_pressed: bool) -> void:
+func _on_light_toggled(pressed: bool) -> void:
+	if not pressed:
+		_normal_button.set_pressed_no_signal(false)
 	_sheet_settings_changed()
+
+
+func _on_normal_preview_toggled(pressed: bool) -> void:
+	if pressed and not _light_button.button_pressed:
+		_normal_button.set_pressed_no_signal(false)
+		return
+	_show_sheet_preview()
+	_apply_preview_animation()
+	_sync()
 
 
 func _on_gltf_file_selected(path: String) -> void:
@@ -1010,13 +1032,28 @@ func _update_sheet_preview() -> void:
 	_preview_viewport = null
 	if images and revision == _preview_revision:
 		_preview_image = images.get("color")
+		_preview_texture = ImageTexture.create_from_image(_preview_image)
 		_preview_normal_image = images.get("normal")
 		_preview_normal_texture = ImageTexture.create_from_image(_preview_normal_image) if _preview_normal_image else null
-		var preview: Control = _controls.get_node("Preview")
-		preview.texture = ImageTexture.create_from_image(_preview_image)
-		preview.set_normal_map(_preview_normal_texture)
-		preview.set_light_enabled(normal_on and not _gif_enabled())
+		_show_sheet_preview()
 		_apply_preview_animation()
+
+
+## Shows the color sheet, the raw normal sheet, or the GIF color sheet. The raw
+## normal view and the pointer light are display-only states.
+func _show_sheet_preview() -> void:
+	var preview: Control = _controls.get_node("Preview")
+	if _gif_enabled():
+		preview.texture = _preview_texture
+		preview.set_light_enabled(false)
+		return
+	preview.set_normal_map(_preview_normal_texture)
+	if _normal_button.button_pressed and _preview_normal_texture:
+		preview.texture = _preview_normal_texture
+		preview.set_light_enabled(false)
+	else:
+		preview.texture = _preview_texture
+		preview.set_light_enabled(_light_button.button_pressed)
 
 
 ## Applies the GIF preview mode to the current sheet image. The preview shows
