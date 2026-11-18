@@ -197,10 +197,11 @@ func _append_ring(vertices: PackedVector3Array, axis: int) -> void:
 	for index in RING_SEGMENTS:
 		var first_angle := TAU * index / RING_SEGMENTS
 		var second_angle := TAU * (index + 1) / RING_SEGMENTS
-		var a := _pivot
+		# The ring is local geometry. `_to_world` maps it to the world pivot.
+		var a := _local_center
 		a[first] += cos(first_angle) * _ring_radius
 		a[second] += sin(first_angle) * _ring_radius
-		var b := _pivot
+		var b := _local_center
 		b[first] += cos(second_angle) * _ring_radius
 		b[second] += sin(second_angle) * _ring_radius
 		_append_line(vertices, a, b)

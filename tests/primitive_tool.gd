@@ -804,6 +804,18 @@ func _rotated_face() -> void:
 		expect(is_equal_approx(tool._pending_box.size.x, _rotated_start_size + 2.0), "the x size grows by two")
 		expect(gizmo.handle_position(0, -1).is_equal_approx(_rotated_opposite), "the opposite face stays in place")
 	)
+	step("Then the rotate rings sit on the shape center", func():
+		var gizmo := tool.get_node("Gizmo")
+		var ring: Dictionary = gizmo.rotation_rings()[0]
+		var expected: Vector3 = ring["center"] + (ring["u"] as Vector3) * float(ring["radius"])
+		var vertices: PackedVector3Array = gizmo.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+		var found := false
+		for value in vertices:
+			if value.is_equal_approx(expected):
+				found = true
+				break
+		expect(found, "a drawn ring point sits on the world ring")
+	)
 	tool.cancel_pending()
 
 
