@@ -7,22 +7,15 @@ extends RefCounted
 ## footprint. The lowest Bayer thresholds win. The pattern starts at the origin
 ## cell of the stroke, so a new stroke starts a fresh tile.
 ##
-## The mask reads world cell coordinates relative to the origin. This script
-## names no project script and holds no state.
+## The mask reads world cell coordinates relative to the origin. The exposure
+## rule comes from [SurfaceMask]. This script holds no state.
 
+# The pure six-neighbor exposure rule. The helper names no project script.
+const SurfaceMask := preload("res://Globals/State/Tools/SurfaceMask.gd")
 # The 2 by 2 by 2 Bayer order. Index = x + 2 * y + 4 * z.
 const BAYER_2 := [
 	0, 4, 6, 2,
 	5, 1, 3, 7,
-]
-# The six face neighbors of one cell.
-const NEIGHBORS := [
-	Vector3i.LEFT,
-	Vector3i.RIGHT,
-	Vector3i.UP,
-	Vector3i.DOWN,
-	Vector3i.FORWARD,
-	Vector3i.BACK,
 ]
 
 
@@ -45,9 +38,7 @@ static func select_offsets(offsets: Array, center: Vector3i, density: float, fra
 	var candidates := []
 	for cell_offset: Vector3i in offsets:
 		var cell := center + cell_offset
-		if not frame.has(cell):
-			continue
-		if not _is_exposed(frame, cell):
+		if not SurfaceMask.is_exposed(frame, cell):
 			continue
 		candidates.append([threshold(cell, origin), cell_offset])
 	if candidates.is_empty():
@@ -85,11 +76,3 @@ static func filter_pattern(pattern: Dictionary, center: Vector3i, density: float
 	for cell_offset: Vector3i in selected:
 		kept[cell_offset] = pattern[cell_offset]
 	return kept
-
-
-## Returns [code]true[/code] when one cell has an empty face neighbor.
-static func _is_exposed(frame, cell: Vector3i) -> bool:
-	for neighbor: Vector3i in NEIGHBORS:
-		if not frame.has(cell + neighbor):
-			return true
-	return false

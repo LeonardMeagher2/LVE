@@ -12,6 +12,9 @@ extends VoxelTool
 
 ## The stamp work above which the job runs on the worker pool.
 const INLINE_EDIT_LIMIT := 4096
+## The extra work a surface test adds above the plain stamp work. A surface
+## stamp tests up to six face neighbors for each source and destination cell.
+const SURFACE_ONLY_WORK_FACTOR := 4
 const StampSettings := preload("./StampToolSettings.gd")
 const StampPattern := preload("./StampPatternJob.gd")
 const DitherMask := preload("res://Globals/State/Tools/DitherMask.gd")
@@ -90,6 +93,8 @@ class BrushJob extends VoxelFrame.EditJob:
 	var material := VoxelFrame.material(Color.WHITE)
 	## Whether the stamp writes only cells that the frame holds.
 	var paint_existing := false
+	## Whether the write keeps only exposed source and destination cells.
+	var surface_only := false
 	## Whether the stamp erases the footprint.
 	var erase_existing := false
 	## The frame snapshot to write.
@@ -168,12 +173,15 @@ class BrushJob extends VoxelFrame.EditJob:
 		if centers_are_final:
 			# The batch already holds every mirrored and selected destination. A
 			# second expansion would rebuild the same set. The stamp filtered every
-			# cell above, so the write set stays exact.
+			# cell above, so the write set stays exact. A surface write must still
+			# filter the final cells, because the batch did not apply that rule.
 			applied_cells = cell_materials
+			if surface_only and edit_context != null:
+				applied_cells = edit_context.expand(applied_cells, edited_frame, paint_existing, null, self, true)
 			if checkpoint(0):
 				changed_chunks = edited_frame.set_cells(applied_cells, self, applied_uniform)
 			return
-		changed_chunks = apply_cells(edited_frame, cell_materials, paint_existing)
+		changed_chunks = apply_cells(edited_frame, cell_materials, paint_existing, null, surface_only)
 
 
 	# The offsets of a pattern that the same pattern shifted by `delta` does not
@@ -393,6 +401,8 @@ func _run_stroke() -> void:
 		var job := _build_job()
 		_job = job
 		var work := job.estimate_work(job.centers.size() * _stroke_pattern_size)
+		if job.surface_only:
+			work *= SURFACE_ONLY_WORK_FACTOR
 		if work <= INLINE_EDIT_LIMIT:
 			job.run()
 		else:
@@ -569,7 +579,7 @@ func update_visual(pick: PickResult) -> void:
 	var axis := _plane.axis if _stroke_active else pick.plane.axis
 	if axis != _cursor_axis:
 		_show_brush_shape(axis)
-	position = Vector3(pick.target)
+	position = Vector3.ZERO if _cursor_uses_world_cells() else Vector3(pick.target)
 	visible = true
 
 
@@ -585,6 +595,18 @@ func _cursor_cube_diameter() -> int:
 	return _settings.diameter if _settings.shape == StampSettings.BrushShape.CUBE else 0
 
 
+## Returns [code]true[/code] when the cursor shows world cells from
+## [method _cursor_world_cells] instead of the pattern around its position.
+func _cursor_uses_world_cells() -> bool:
+	return false
+
+
+## Returns the world cells of the cursor preview, or an empty dictionary when
+## the cursor does not use a world-cell preview.
+func _cursor_world_cells(_center: Vector3i, _pattern: Dictionary) -> Dictionary:
+	return {}
+
+
 func _show_brush_shape(axis: int) -> void:
 	var pattern := _settings.pattern()
 	if pattern.is_empty() and _settings.shape != _settings.BrushShape.STAMP:
@@ -596,6 +618,17 @@ func _show_brush_shape(axis: int) -> void:
 			_hover_job.worker_task_id = WorkerThreadPool.add_task(_hover_job.run, false, "Brush shape")
 		return
 	pattern = _cursor_pattern(pattern)
+	if _cursor_uses_world_cells():
+		var center := _last_pick.target if _last_pick != null else VoxelPicking.NONE
+		var world := _cursor_world_cells(center, pattern)
+		$Cursor.set_brush_material(State.current_material)
+		# A world-cell preview already holds every allowed symmetry mirror.
+		$Cursor.mirrors_enabled = false
+		position = Vector3.ZERO
+		$Cursor.show_voxels(world, State.current_color, _erases(), 0, false)
+		_cursor_axis = axis
+		return
+	$Cursor.mirrors_enabled = true
 	var use_voxel_colors: bool = _settings.shape == _settings.BrushShape.STAMP
 	# A cube's preview is the same six faces as its voxels, so the box is exact and
 	# costs nothing. A sphere's voxels are a stepped shape that no primitive

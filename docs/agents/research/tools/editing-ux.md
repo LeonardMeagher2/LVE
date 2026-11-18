@@ -106,7 +106,7 @@ Brush type and size are visible context-bar settings.
 LVE matches the main split.
 Brush PENCIL adds in front of the clicked face.
 Brush ERASER writes only cells that the frame already holds.
-Paint Brush requires a hit and recolors existing cells.
+Paint Brush requires a hit and recolors exposed existing cells.
 Each stroke records one undo action.
 
 Difference: the LVE policy table says Brush does not require a hit [Drawing, Brush and Paint Brush](../../tool-flows/drawing.md#brush-and-paint-brush).

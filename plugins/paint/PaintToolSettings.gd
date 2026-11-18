@@ -18,7 +18,7 @@ signal tool_changed(tool: Tools)
 
 ## The paint tool.
 enum Tools {
-	## Recolor existing voxels with the brush footprint.
+	## Recolor exposed existing voxels with the brush footprint.
 	PAINTBRUSH,
 	## Recolor a connected or a matching region.
 	FILL,

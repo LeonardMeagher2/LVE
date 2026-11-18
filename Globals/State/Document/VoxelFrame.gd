@@ -101,6 +101,10 @@ static func material_color(cell_material: PackedFloat32Array) -> Color:
 ## writable slice. It expands a set of changes through the symmetry and filters
 ## them through the selection and the slice.
 class EditContext extends RefCounted:
+	# The pure six-neighbor exposure rule. The helper names no project script,
+	# so this reference cannot close a script cycle.
+	const SurfaceMaskRule := preload("res://Globals/State/Tools/SurfaceMask.gd")
+
 	## The symmetry axes as a bit mask. Bit 0 is X, bit 1 is Y, and bit 2 is Z.
 	var axes := 0
 	## Twice the symmetry origin in cell units.
@@ -165,9 +169,11 @@ class EditContext extends RefCounted:
 	## Expands a set of changes through the symmetry and the selection filter.
 	## [param existing_only] keeps only cells that the frame holds.
 	## [param matching_material] keeps only cells with that full material. The
-	## optional [param job] supplies the cancel checkpoints.
-	func expand(changes: Dictionary, frame: VoxelFrame, existing_only: bool, matching_material: Variant, job: EditJob = null) -> Dictionary:
-		if axes == 0 and selection.is_empty() and slice_axis < 0 and bounded_axes == 0 and not existing_only and matching_material == null:
+	## optional [param job] supplies the cancel checkpoints. An optional
+	## [param surface_only] also drops a buried source before the masks and
+	## keeps only exposed destinations.
+	func expand(changes: Dictionary, frame: VoxelFrame, existing_only: bool, matching_material: Variant, job: EditJob = null, surface_only := false) -> Dictionary:
+		if axes == 0 and selection.is_empty() and slice_axis < 0 and bounded_axes == 0 and not existing_only and matching_material == null and not surface_only:
 			return changes
 		var expanded := {}
 		var masks: Array[int] = []
@@ -176,9 +182,12 @@ class EditContext extends RefCounted:
 				masks.append(mask)
 		var completed := 0
 		for cell: Vector3i in changes:
+			# A buried source must not create an exposed mirror.
+			if surface_only and not SurfaceMaskRule.is_exposed(frame, cell):
+				continue
 			for mask in masks:
 				var destination := reflect(cell, mask)
-				if _allows(destination, frame, existing_only, matching_material):
+				if _allows(destination, frame, existing_only, matching_material, surface_only):
 					expanded[destination] = changes[cell]
 				completed += 1
 				if job and completed % 4096 == 0 and not job.checkpoint(completed):
@@ -187,7 +196,7 @@ class EditContext extends RefCounted:
 			return expanded
 		# Preserve original colors where the original and reflected patterns overlap.
 		for cell: Vector3i in changes:
-			if _allows(cell, frame, existing_only, matching_material):
+			if _allows(cell, frame, existing_only, matching_material, surface_only):
 				expanded[cell] = changes[cell]
 			completed += 1
 			if job and completed % 4096 == 0 and not job.checkpoint(completed):
@@ -203,8 +212,8 @@ class EditContext extends RefCounted:
 		return destination
 
 	# The reflected destination must hold the same full material as the source cell.
-	func _allows(cell: Vector3i, frame: VoxelFrame, existing_only: bool, matching_material: Variant) -> bool:
-		return allows(cell) and (not existing_only or frame.has(cell)) and (matching_material == null or frame.matches(cell, matching_material))
+	func _allows(cell: Vector3i, frame: VoxelFrame, existing_only: bool, matching_material: Variant, surface_only := false) -> bool:
+		return allows(cell) and (not existing_only or frame.has(cell)) and (matching_material == null or frame.matches(cell, matching_material)) and (not surface_only or SurfaceMaskRule.is_exposed(frame, cell))
 
 ## One cancellable edit job that runs on the worker pool.
 ##
@@ -271,9 +280,10 @@ class EditJob extends RefCounted:
 		worker_task_id = -1
 
 	## Expands the changes through the context and writes them to the frame.
-	## Returns the chunk locations that need a new surface.
-	func apply_cells(frame: VoxelFrame, changes: Dictionary, existing_only := false, matching_material: Variant = null) -> Array[Vector3i]:
-		applied_cells = edit_context.expand(changes, frame, existing_only, matching_material, self) if edit_context else changes
+	## Returns the chunk locations that need a new surface. An optional
+	## [param surface_only] also drops buried sources and destinations.
+	func apply_cells(frame: VoxelFrame, changes: Dictionary, existing_only := false, matching_material: Variant = null, surface_only := false) -> Array[Vector3i]:
+		applied_cells = edit_context.expand(changes, frame, existing_only, matching_material, self, surface_only) if edit_context else changes
 		if not checkpoint(0):
 			return []
 		return frame.set_cells(applied_cells, self, applied_uniform)

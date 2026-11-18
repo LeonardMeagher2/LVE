@@ -45,6 +45,9 @@ const OUTLINE_CELL_BITS := 0xFFFF
 ## always uses the worker pool. A small live cursor can opt in, so each pointer
 ## move installs its surface in the same frame.
 @export var inline_solid_limit := 0
+## Whether a brush preview draws its symmetry mirrors. A world-space preview
+## already holds the mirrored cells.
+var mirrors_enabled := true
 
 static var _mesh_cache := {}
 static var _cache_order: Array[String] = []

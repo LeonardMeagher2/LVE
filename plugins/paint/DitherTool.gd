@@ -74,9 +74,18 @@ func _cursor_cube_diameter() -> int:
 
 func _build_job() -> BrushJob:
 	var job := super._build_job()
+	# The density mask already keeps only exposed source cells. This tool keeps
+	# its masked pattern and its mirror preview.
+	job.surface_only = false
 	job.dither_density = _stroke_density if _stroke_origin_ready else -1.0
 	job.dither_origin = _stroke_origin if _stroke_origin_ready else Vector3i.ZERO
 	return job
+
+
+## Returns [code]false[/code] because the density mask shows its own mirrored
+## pattern through the cursor nodes.
+func _cursor_uses_world_cells() -> bool:
+	return false
 
 
 func _exit_tree() -> void:
@@ -90,10 +99,6 @@ func _reset_preview_state() -> void:
 	_preview_density = -1.0
 	_preview_center = VoxelPicking.NONE
 	_preview_frame = null
-
-
-func _current_preview_frame() -> VoxelFrame:
-	return _source_frame if _edit != null and _source_frame != null else State.get_current_voxel_frame()
 
 
 func _current_origin() -> Vector3i:

@@ -12,4 +12,6 @@ sorting_offset = 0.1
 material_override = ExtResource("2_material")
 cast_shadow = 0
 script = ExtResource("3_preview")
+coalesce_requests = true
+inline_solid_limit = 4096
 apply_edit_symmetry = true
