@@ -16,6 +16,9 @@ const OUTLINE_CELL_BITS := 0xFFFF
 @export var coalesce_requests := false
 @export var inline_solid_limit := 0
 
+
+var mirrors_enabled := true
+
 static var _mesh_cache := {}
 static var _cache_order: Array[String] = []
 static var _cache_bytes := 0
