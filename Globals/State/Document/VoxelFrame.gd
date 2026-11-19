@@ -4,6 +4,7 @@ extends Resource
 
 @export_range(1, 1000, 1) var delay_ms := 100
 
+
 @export_storage var voxel_data: PackedByteArray:
 	get:
 		return _encode()
@@ -11,23 +12,42 @@ extends Resource
 		if not value.is_empty():
 			_decode(value)
 
+
 const CHUNK_SIZE := 16
+
+
 const CHUNK_SHIFT := 4
+
 const STORAGE_VERSION := 3
+
 const STORAGE_RECORD_SIZE := 3
+
 const VERSION_2_RECORD_SIZE := 5
+
 const VERSION_1_RECORD_SIZE := 3
+
+
 const MATERIAL_STRIDE := 9
+
 const MATERIAL_COLOR := 0
+
 const MATERIAL_EMISSION := 4
+
 const MATERIAL_METALLIC := 7
+
 const MATERIAL_ROUGHNESS := 8
+
 const DEFAULT_EMISSION := Color.BLACK
+
 const DEFAULT_METALLIC := 0.0
+
 const DEFAULT_ROUGHNESS := 1.0
+
 const DIRECTIONS := [Vector3i.RIGHT, Vector3i.LEFT, Vector3i.UP, Vector3i.DOWN, Vector3i.BACK, Vector3i.FORWARD]
 
+
 static var _occupancy_lock := Mutex.new()
+
 
 static var _profile_capture_calls := 0
 static var _profile_capture_us := 0
@@ -57,15 +77,32 @@ static func material_color(cell_material: PackedFloat32Array) -> Color:
 
 
 class EditContext extends RefCounted:
+
+
+	const SurfaceMaskRule := preload("res://Globals/State/Tools/SurfaceMask.gd")
+
+
 	var axes := 0
+
 	var origin_twice := Vector3i.ZERO
+
+
 	var selection := {}
+
 	var slice_axis := -1
+
 	var slice_index := 0
+
+
 	var slice_count := 1
+
+
 	var bounded_axes := 0
+
 	var bounds_min := Vector3i.ZERO
+
 	var bounds_max := Vector3i.ZERO
+
 
 	func allows(cell: Vector3i) -> bool:
 		if slice_axis >= 0 and (cell[slice_axis] < slice_index or cell[slice_axis] >= slice_index + slice_count):
@@ -75,6 +112,7 @@ class EditContext extends RefCounted:
 				if bounded_axes & (1 << axis) and (cell[axis] < bounds_min[axis] or cell[axis] >= bounds_max[axis]):
 					return false
 		return selection.is_empty() or selection.has(cell)
+
 
 	func duplicate() -> EditContext:
 		var copy := EditContext.new()
@@ -89,6 +127,7 @@ class EditContext extends RefCounted:
 		copy.bounds_max = bounds_max
 		return copy
 
+
 	func filter(cells: Dictionary) -> Dictionary:
 		if slice_axis < 0 and selection.is_empty() and bounded_axes == 0:
 			return cells
@@ -98,8 +137,9 @@ class EditContext extends RefCounted:
 				kept[cell] = cells[cell]
 		return kept
 
-	func expand(changes: Dictionary, frame: VoxelFrame, existing_only: bool, matching_material: Variant, job: EditJob = null) -> Dictionary:
-		if axes == 0 and selection.is_empty() and slice_axis < 0 and bounded_axes == 0 and not existing_only and matching_material == null:
+
+	func expand(changes: Dictionary, frame: VoxelFrame, existing_only: bool, matching_material: Variant, job: EditJob = null, surface_only := false) -> Dictionary:
+		if axes == 0 and selection.is_empty() and slice_axis < 0 and bounded_axes == 0 and not existing_only and matching_material == null and not surface_only:
 			return changes
 		var expanded := {}
 		var masks: Array[int] = []
@@ -108,22 +148,27 @@ class EditContext extends RefCounted:
 				masks.append(mask)
 		var completed := 0
 		for cell: Vector3i in changes:
+
+			if surface_only and not SurfaceMaskRule.is_exposed(frame, cell):
+				continue
 			for mask in masks:
 				var destination := reflect(cell, mask)
-				if _allows(destination, frame, existing_only, matching_material):
+				if _allows(destination, frame, existing_only, matching_material, surface_only):
 					expanded[destination] = changes[cell]
 				completed += 1
 				if job and completed % 4096 == 0 and not job.checkpoint(completed):
 					return {}
 		if axes == 0:
 			return expanded
+
 		for cell: Vector3i in changes:
-			if _allows(cell, frame, existing_only, matching_material):
+			if _allows(cell, frame, existing_only, matching_material, surface_only):
 				expanded[cell] = changes[cell]
 			completed += 1
 			if job and completed % 4096 == 0 and not job.checkpoint(completed):
 				return {}
 		return expanded
+
 
 	func reflect(cell: Vector3i, mask: int) -> Vector3i:
 		var destination := cell
@@ -132,19 +177,27 @@ class EditContext extends RefCounted:
 				destination[axis] = origin_twice[axis] - cell[axis]
 		return destination
 
-	func _allows(cell: Vector3i, frame: VoxelFrame, existing_only: bool, matching_material: Variant) -> bool:
-		return allows(cell) and (not existing_only or frame.has(cell)) and (matching_material == null or frame.matches(cell, matching_material))
+
+	func _allows(cell: Vector3i, frame: VoxelFrame, existing_only: bool, matching_material: Variant, surface_only := false) -> bool:
+		return allows(cell) and (not existing_only or frame.has(cell)) and (matching_material == null or frame.matches(cell, matching_material)) and (not surface_only or SurfaceMaskRule.is_exposed(frame, cell))
+
 
 class EditJob extends RefCounted:
+
 	var worker_task_id := -1
+
 	var edit_context: EditContext
+
 	var applied_cells := {}
+
+
 	var applied_uniform: Variant = null
 	var _label := "Preparing edit"
 	var _completed := 0
 	var _total := -1
 	var _cancel_requested := false
 	var _progress_lock := Mutex.new()
+
 
 	func stage(label: String, total: int) -> void:
 		_progress_lock.lock()
@@ -153,6 +206,7 @@ class EditJob extends RefCounted:
 		_total = total
 		_progress_lock.unlock()
 
+
 	func checkpoint(completed: int) -> bool:
 		_progress_lock.lock()
 		_completed = completed
@@ -160,16 +214,19 @@ class EditJob extends RefCounted:
 		_progress_lock.unlock()
 		return keep_running
 
+
 	func progress() -> Array:
 		_progress_lock.lock()
 		var result := [_label, _completed, _total]
 		_progress_lock.unlock()
 		return result
 
+
 	func cancel() -> void:
 		_progress_lock.lock()
 		_cancel_requested = true
 		_progress_lock.unlock()
+
 
 	func wait_for_worker() -> void:
 		if worker_task_id < 0:
@@ -177,11 +234,13 @@ class EditJob extends RefCounted:
 		WorkerThreadPool.wait_for_task_completion(worker_task_id)
 		worker_task_id = -1
 
-	func apply_cells(frame: VoxelFrame, changes: Dictionary, existing_only := false, matching_material: Variant = null) -> Array[Vector3i]:
-		applied_cells = edit_context.expand(changes, frame, existing_only, matching_material, self) if edit_context else changes
+
+	func apply_cells(frame: VoxelFrame, changes: Dictionary, existing_only := false, matching_material: Variant = null, surface_only := false) -> Array[Vector3i]:
+		applied_cells = edit_context.expand(changes, frame, existing_only, matching_material, self, surface_only) if edit_context else changes
 		if not checkpoint(0):
 			return []
 		return frame.set_cells(applied_cells, self, applied_uniform)
+
 
 	func estimate_work(original_work: int) -> int:
 		var work := original_work
@@ -191,37 +250,66 @@ class EditJob extends RefCounted:
 					work *= 2
 		return work
 
+
 class OccupancyRows extends RefCounted:
+
 	var masks := PackedInt32Array()
+
 	var counts := PackedByteArray()
+
 	var revision := 0
+
 	var grid_reads := 0
+
 	var build_slots := 0
 
 
 class Chunk extends RefCounted:
+
+
 	var location := Vector3i.ZERO
+
 	var grid := PackedInt32Array()
+
 	var materials := PackedFloat32Array()
+
 	var occupied_count := 0
+
 	var voxel_revision := 0
+
 	var occupied_bounds := AABB()
+
 	var bounds_dirty := false
+
+
 	var shared_materials := false
+
 	var serialized_record: Array = []
+
 	var positions_by_color: Dictionary = {}
+
+
 	var occupancy_revision := 0
+
+
 	var _occupancy_rows: OccupancyRows = null
+
+
 	const SPARSE_CELL_LIMIT := 512
+
 	var _sparse_slots := PackedInt32Array()
+
 	var _sparse_values := PackedInt32Array()
+
 	const LOWEST_COLUMN := [0, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0]
 
 	func _init() -> void:
 		grid.resize(VoxelFrame.CHUNK_SIZE * VoxelFrame.CHUNK_SIZE * VoxelFrame.CHUNK_SIZE)
 
+
 	func is_sparse() -> bool:
 		return grid.is_empty()
+
 
 	static func first_column(mask: int) -> int:
 		if mask & 15:
@@ -231,6 +319,7 @@ class Chunk extends RefCounted:
 		if mask & 3840:
 			return 8 + LOWEST_COLUMN[(mask >> 8) & 15]
 		return 12 + LOWEST_COLUMN[(mask >> 12) & 15]
+
 
 	func _sparse_index(slot: int) -> int:
 		var low := 0
@@ -246,11 +335,13 @@ class Chunk extends RefCounted:
 				high = middle - 1
 		return -1
 
+
 	func cell_id_at_slot(slot: int) -> int:
 		if not grid.is_empty():
 			return grid[slot]
 		var index := _sparse_index(slot)
 		return _sparse_values[index] if index >= 0 else 0
+
 
 	func ensure_dense() -> void:
 		if not grid.is_empty():
@@ -260,6 +351,7 @@ class Chunk extends RefCounted:
 			grid[_sparse_slots[index]] = _sparse_values[index]
 		_sparse_slots = PackedInt32Array()
 		_sparse_values = PackedInt32Array()
+
 
 	func compress_if_sparse() -> void:
 		if grid.is_empty() or occupied_count > SPARSE_CELL_LIMIT:
@@ -272,6 +364,7 @@ class Chunk extends RefCounted:
 				_sparse_slots.append(slot)
 				_sparse_values.append(id)
 		grid = PackedInt32Array()
+
 
 	func occupancy_rows() -> OccupancyRows:
 		for _attempt in 2:
@@ -291,11 +384,13 @@ class Chunk extends RefCounted:
 			VoxelFrame._occupancy_lock.unlock()
 		return _build_occupancy_rows(occupancy_revision)
 
+
 	func occupancy_index_current() -> bool:
 		VoxelFrame._occupancy_lock.lock()
 		var current := _occupancy_rows != null and _occupancy_rows.revision == occupancy_revision
 		VoxelFrame._occupancy_lock.unlock()
 		return current
+
 
 	func _build_occupancy_rows(revision: int) -> OccupancyRows:
 		var built := OccupancyRows.new()
@@ -325,11 +420,14 @@ class Chunk extends RefCounted:
 		built.revision = revision
 		return built
 
+
 	static func cell_slot(local_cell: Vector3i) -> int:
 		return local_cell.x + VoxelFrame.CHUNK_SIZE * (local_cell.y + VoxelFrame.CHUNK_SIZE * local_cell.z)
 
+
 	func origin() -> Vector3i:
 		return location * VoxelFrame.CHUNK_SIZE
+
 
 	func copy() -> Chunk:
 		var chunk_copy := Chunk.new()
@@ -346,11 +444,14 @@ class Chunk extends RefCounted:
 		chunk_copy.occupied_bounds = occupied_bounds
 		chunk_copy.bounds_dirty = bounds_dirty
 		chunk_copy.shared_materials = shared_materials
+
+
 		VoxelFrame._occupancy_lock.lock()
 		chunk_copy.occupancy_revision = occupancy_revision
 		chunk_copy._occupancy_rows = _occupancy_rows
 		VoxelFrame._occupancy_lock.unlock()
 		return chunk_copy
+
 
 	func material_id(cell_position: Vector3i) -> int:
 		var local_cell := cell_position - origin()
@@ -358,8 +459,10 @@ class Chunk extends RefCounted:
 			return 0
 		return cell_id_at_slot(cell_slot(local_cell))
 
+
 	func has(cell_position: Vector3i) -> bool:
 		return material_id(cell_position) > 0
+
 
 	func _id_matches_material(id: int, cell_material: PackedFloat32Array) -> bool:
 		if id == 0:
@@ -370,12 +473,16 @@ class Chunk extends RefCounted:
 				return false
 		return true
 
+
 	func matches(cell_position: Vector3i, cell_material: PackedFloat32Array) -> bool:
 		return _id_matches_material(material_id(cell_position), cell_material)
+
 
 	func equals(other: Chunk) -> bool:
 		if occupied_count != other.occupied_count:
 			return false
+
+
 		if grid.is_empty() and other.grid.is_empty():
 			if _sparse_slots == other._sparse_slots and _sparse_values == other._sparse_values and materials == other.materials:
 				return true
@@ -398,6 +505,7 @@ class Chunk extends RefCounted:
 					return false
 		return true
 
+
 	func store(cell_position: Vector3i, cell_material: PackedFloat32Array) -> void:
 		ensure_dense()
 		var local_cell := cell_position - origin()
@@ -412,6 +520,8 @@ class Chunk extends RefCounted:
 					break
 			if same:
 				return
+
+
 			if shared_materials:
 				materials.append_array(cell_material)
 				grid[slot] = materials.size() / MATERIAL_STRIDE
@@ -425,6 +535,7 @@ class Chunk extends RefCounted:
 		grid[slot] = materials.size() / MATERIAL_STRIDE
 		occupied_count += 1
 		occupancy_revision += 1
+
 
 	func erase(cell_position: Vector3i) -> void:
 		ensure_dense()
@@ -440,10 +551,15 @@ class Chunk extends RefCounted:
 		if materials.size() > occupied_count * MATERIAL_STRIDE * 2:
 			_compact()
 
+
 	func apply_changes(changes: Dictionary, chunk_origin: Vector3i, copy_for_write: Callable, declared_uniform: Variant = null) -> Array:
+
+
 		var bulk := _uniform_batch(changes, declared_uniform)
 		if bulk.size() > 0:
 			return _fill_chunk(bulk, chunk_origin, copy_for_write)
+
+
 		if shared_materials and declared_uniform != null:
 			var declared: PackedFloat32Array = declared_uniform
 			if not VoxelFrame.is_empty(declared):
@@ -486,6 +602,8 @@ class Chunk extends RefCounted:
 						copied = true
 						target.ensure_dense()
 					if target.shared_materials:
+
+
 						target.materials.append_array(cell_material)
 						target.grid[slot] = target.materials.size() / MATERIAL_STRIDE
 						if target.materials.size() > target.occupied_count * MATERIAL_STRIDE * 2:
@@ -507,8 +625,11 @@ class Chunk extends RefCounted:
 					max_cell = Vector3i(maxi(max_cell.x, local.x), maxi(max_cell.y, local.y), maxi(max_cell.z, local.z))
 			face_bits |= VoxelFrame._face_bits(local)
 			changed_count += 1
+
+
 		if changed_count > 0 and target.occupied_count > 0 and target.materials.size() > target.occupied_count * MATERIAL_STRIDE * 2:
 			target._compact()
+
 		if changed_count > 0 and not target.bounds_dirty and max_cell.x >= min_cell.x:
 			var batch_bounds := AABB(Vector3(chunk_origin + min_cell) - Vector3.ONE * 0.5, Vector3(max_cell - min_cell + Vector3i.ONE))
 			target.occupied_bounds = target.occupied_bounds.merge(batch_bounds) if target.occupied_bounds.has_volume() else batch_bounds
@@ -523,6 +644,8 @@ class Chunk extends RefCounted:
 		var min_cell := Vector3i.MAX
 		var max_cell := Vector3i.MIN
 		var new_id := 0
+
+
 		var last_id := 0
 		var last_same := false
 		for cell_position: Vector3i in changes:
@@ -548,6 +671,8 @@ class Chunk extends RefCounted:
 				target = copy_for_write.call()
 				copied = true
 				target.ensure_dense()
+
+
 				target.materials.append_array(cell_material)
 				new_id = target.materials.size() / MATERIAL_STRIDE
 				target.shared_materials = true
@@ -560,8 +685,12 @@ class Chunk extends RefCounted:
 			if not target.bounds_dirty:
 				min_cell = Vector3i(mini(min_cell.x, local.x), mini(min_cell.y, local.y), mini(min_cell.z, local.z))
 				max_cell = Vector3i(maxi(max_cell.x, local.x), maxi(max_cell.y, local.y), maxi(max_cell.z, local.z))
+
+
 		if changed_count > 0 and target.occupied_count > 0 and target.materials.size() > target.occupied_count * MATERIAL_STRIDE * 2:
 			target._compact()
+
+
 		if changed_count > 0 and not target.bounds_dirty and max_cell.x >= min_cell.x:
 			var batch_bounds := AABB(Vector3(chunk_origin + min_cell) - Vector3.ONE * 0.5, Vector3(max_cell - min_cell + Vector3i.ONE))
 			target.occupied_bounds = target.occupied_bounds.merge(batch_bounds) if target.occupied_bounds.has_volume() else batch_bounds
@@ -589,10 +718,14 @@ class Chunk extends RefCounted:
 		if VoxelFrame.is_empty(cell_material):
 			if occupied_count == 0:
 				return [self, 0, 0]
+
+
 			var bounds := get_bounds()
 			var min_cell := Vector3i(bounds.position + Vector3.ONE * 0.5) - chunk_origin
 			var max_cell := Vector3i(bounds.end - Vector3.ONE * 0.5) - chunk_origin
 			return [null, _extent_face_bits(min_cell, max_cell), occupied_count]
+
+
 		var count := 0
 		var bits := 0
 		if occupied_count == cells and materials.size() == MATERIAL_STRIDE:
@@ -626,6 +759,8 @@ class Chunk extends RefCounted:
 		if occupied_count == 0:
 			return [cells, Vector3i.ZERO, Vector3i.ONE * (size - 1)]
 		if grid.is_empty():
+
+
 			var matching := 0
 			var sparse_matches := {}
 			for index in _sparse_slots.size():
@@ -679,6 +814,7 @@ class Chunk extends RefCounted:
 				bits |= 1 << (axis * 2 + 1)
 		return bits
 
+
 	func _compact() -> void:
 		ensure_dense()
 		var used_ids: Array = []
@@ -717,8 +853,11 @@ class Chunk extends RefCounted:
 			if usage[id] > 1:
 				shared = true
 				break
+
+
 		materials = compacted
 		shared_materials = shared
+
 
 	func get_color(cell_position: Vector3i) -> Color:
 		var id := material_id(cell_position)
@@ -727,6 +866,7 @@ class Chunk extends RefCounted:
 		var base := (id - 1) * MATERIAL_STRIDE
 		return Color(materials[base], materials[base + 1], materials[base + 2], materials[base + 3])
 
+
 	func get_emission(cell_position: Vector3i) -> Color:
 		var id := material_id(cell_position)
 		if id == 0:
@@ -734,19 +874,23 @@ class Chunk extends RefCounted:
 		var base := (id - 1) * MATERIAL_STRIDE + MATERIAL_EMISSION
 		return Color(materials[base], materials[base + 1], materials[base + 2])
 
+
 	func get_metallic(cell_position: Vector3i) -> float:
 		var id := material_id(cell_position)
 		return materials[(id - 1) * MATERIAL_STRIDE + MATERIAL_METALLIC] if id > 0 else DEFAULT_METALLIC
 
+
 	func get_roughness(cell_position: Vector3i) -> float:
 		var id := material_id(cell_position)
 		return materials[(id - 1) * MATERIAL_STRIDE + MATERIAL_ROUGHNESS] if id > 0 else DEFAULT_ROUGHNESS
+
 
 	func get_material(cell_position: Vector3i) -> PackedFloat32Array:
 		var id := material_id(cell_position)
 		if id == 0:
 			return VoxelFrame.material(Color.TRANSPARENT)
 		return materials.slice((id - 1) * MATERIAL_STRIDE, id * MATERIAL_STRIDE)
+
 
 	func world_cells() -> Array[Vector3i]:
 		var cell_positions: Array[Vector3i] = []
@@ -764,6 +908,7 @@ class Chunk extends RefCounted:
 				cell_positions[written] = origin() + Vector3i(slot % size, (slot / size) % size, slot / (size * size))
 				written += 1
 		return cell_positions
+
 
 	func get_bounds() -> AABB:
 		if bounds_dirty:
@@ -790,10 +935,12 @@ class Chunk extends RefCounted:
 			bounds_dirty = false
 		return occupied_bounds
 
+
 	func on_bounds(cell_position: Vector3i) -> bool:
 		var min_cell := Vector3i(occupied_bounds.position + Vector3.ONE * 0.5)
 		var max_cell := Vector3i(occupied_bounds.end - Vector3.ONE * 0.5)
 		return cell_position.x == min_cell.x or cell_position.y == min_cell.y or cell_position.z == min_cell.z or cell_position.x == max_cell.x or cell_position.y == max_cell.y or cell_position.z == max_cell.z
+
 
 	func grow_bounds(cell_position: Vector3i) -> void:
 		if bounds_dirty:
@@ -801,8 +948,11 @@ class Chunk extends RefCounted:
 		var cell_bounds := AABB(Vector3(cell_position) - Vector3.ONE * 0.5, Vector3.ONE)
 		occupied_bounds = occupied_bounds.merge(cell_bounds) if occupied_bounds.has_volume() else cell_bounds
 
+
 var chunks: Dictionary = {}
 var _shared_chunks: Dictionary = {}
+
+
 var _bounds := AABB()
 var _bounds_dirty := true
 var _bounds_chunk_count := -1
@@ -905,13 +1055,18 @@ func set_cell(cell_position: Vector3i, cell_material: PackedFloat32Array) -> voi
 
 
 func set_cells(cell_materials: Dictionary, edit_job: EditJob = null, uniform_material: Variant = null) -> Array[Vector3i]:
+
+
 	if edit_job != null and edit_job.edit_context != null:
 		cell_materials = edit_job.edit_context.filter(cell_materials)
 		edit_job.applied_cells = cell_materials
 	var started := Time.get_ticks_usec()
+
 	_bounds_dirty = true
 	var changes_by_chunk := {}
 	var completed := 0
+
+
 	var last_location := Vector3i.MAX
 	var last_batch: Dictionary = {}
 	for cell_position: Vector3i in cell_materials:
@@ -932,6 +1087,8 @@ func set_cells(cell_materials: Dictionary, edit_job: EditJob = null, uniform_mat
 		var chunk: Chunk = chunks.get(chunk_location)
 		var chunk_changes: Dictionary = changes_by_chunk[chunk_location]
 		var chunk_origin := chunk_location * CHUNK_SIZE
+
+
 		var copy_for_write := func() -> Chunk:
 			var target: Chunk = null
 			if chunk == null:
@@ -952,6 +1109,8 @@ func set_cells(cell_materials: Dictionary, edit_job: EditJob = null, uniform_mat
 			continue
 		chunk = outcome[0]
 		if chunk == null:
+
+
 			chunks.erase(chunk_location)
 			_shared_chunks.erase(chunk_location)
 		else:
@@ -961,6 +1120,7 @@ func set_cells(cell_materials: Dictionary, edit_job: EditJob = null, uniform_mat
 			if chunk.occupied_count == 0:
 				chunks.erase(chunk_location)
 			else:
+
 				chunk.get_bounds()
 		changed_chunks.append(chunk_location)
 		for offset in _touched_neighbors(face_bits):
@@ -1124,6 +1284,8 @@ func get_bounds() -> AABB:
 	var frame_bounds := AABB()
 	for chunk in chunks.values():
 		var chunk_bounds: AABB = chunk.get_bounds()
+
+
 		if not chunk_bounds.has_volume():
 			continue
 		frame_bounds = frame_bounds.merge(chunk_bounds) if frame_bounds.has_volume() else chunk_bounds
@@ -1160,9 +1322,13 @@ static func _encode_chunk(chunk: Chunk, chunk_location: Vector3i) -> Array:
 	var material_table := material(Color.TRANSPARENT)
 	var material_ids := {}
 	material_ids[material_table.slice(0, MATERIAL_STRIDE)] = 0
+
+
 	var material_values := {}
 	var cell_ids := PackedInt32Array()
 	cell_ids.resize(CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE)
+
+
 	var sparse := chunk.grid.is_empty()
 	var sparse_slots := chunk._sparse_slots
 	var sparse_values := chunk._sparse_values
@@ -1234,8 +1400,12 @@ func restore_storage(serialized_frame: Array) -> void:
 		var octree_nodes: PackedInt32Array = serialized_chunk[serialized_chunk.size() - 1]
 		if version == STORAGE_VERSION:
 			var material_table: PackedFloat32Array = serialized_chunk[1]
+
+
 			if _has_empty_stored_entry(material_table):
 				continue
+
+
 			chunk.materials = material_table.slice(MATERIAL_STRIDE)
 			var usage := PackedInt32Array()
 			usage.resize(chunk.materials.size() / MATERIAL_STRIDE + 1)
@@ -1251,8 +1421,11 @@ func restore_storage(serialized_frame: Array) -> void:
 				emission_table = serialized_chunk[2]
 				finish_table = serialized_chunk[3]
 			_decode_region(octree_nodes, [0], serialized_chunk[1], emission_table, finish_table, chunk_origin, CHUNK_SIZE, chunk)
+
+
 			chunk._compact()
 		chunk.compress_if_sparse()
+
 		if chunk.occupied_count == 0:
 			continue
 		chunk.bounds_dirty = true
@@ -1263,7 +1436,9 @@ func restore_storage(serialized_frame: Array) -> void:
 
 
 const MAX_STORED_VOXELS := 4 * 1024 * 1024
+
 const MAX_STORED_CHUNKS := 65536
+
 const MAX_CHUNK_COORDINATE := 65535
 
 

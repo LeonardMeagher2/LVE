@@ -2,10 +2,16 @@ extends VoxelTool
 
 
 const INLINE_EDIT_LIMIT := 4096
+
+
+const SURFACE_ONLY_WORK_FACTOR := 4
 const StampSettings := preload("./StampToolSettings.gd")
 const StampPattern := preload("./StampPatternJob.gd")
 const DitherMask := preload("res://Globals/State/Tools/DitherMask.gd")
+
+
 const Profile := preload("res://Globals/State/Tools/StrokeProfile.gd")
+
 
 var _settings: StampSettings
 var _filter := PixelPerfectStroke.new()
@@ -15,6 +21,8 @@ var _end_requested := false
 var _pending_centers: Array[Vector3i] = []
 var _stroke_pattern := {}
 var _stroke_offsets: Array = []
+
+
 var _stroke_last_center := Vector3i.MAX
 var _stroke_material_pattern := {}
 var _stroke_diameter := 1
@@ -22,7 +30,9 @@ var _stroke_shape := 0
 var _stroke_pattern_size := 1
 var _stroke_color := Color.WHITE
 var _stroke_material := VoxelFrame.material(Color.WHITE)
+
 var _stroke_existing_only := false
+
 var _stroke_erases := false
 var _edit_context: VoxelFrame.EditContext
 var _job: BrushJob
@@ -32,39 +42,73 @@ var _last_pick: PickResult
 var _hover_job
 var _hover_operation_id := 0
 
+
 class BrushJob extends VoxelFrame.EditJob:
+
 	var centers: Array[Vector3i] = []
+
+
 	var centers_are_final := false
+
 	var pattern := {}
+
+
 	var offsets: Array = []
+
+
 	var dither_density := -1.0
+
 	var dither_origin := Vector3i.ZERO
+
+
 	var previous_center := Vector3i.MAX
+
 	var material_pattern := {}
+
 	var replace_materials := false
+
 	var diameter := 1
+
 	var shape := 0
+
 	var material := VoxelFrame.material(Color.WHITE)
+
 	var paint_existing := false
+
+	var surface_only := false
+
 	var erase_existing := false
+
 	var edited_frame: VoxelFrame
+
 	var cell_materials := {}
+
 	var changed_chunks: Array[Vector3i] = []
+
 	var revision := 0
+
 
 	func run() -> void:
 		if pattern.is_empty() and shape != StampSettings.BrushShape.STAMP:
 			pattern = StampPattern.build_pattern(diameter, shape, self)
 		if offsets.size() != pattern.size():
+
 			offsets = pattern.keys()
 		if not checkpoint(0):
 			return
 		stage("Preparing brush", centers.size() * offsets.size())
+
 		var uniform := not replace_materials and shape != StampSettings.BrushShape.STAMP
 		var uniform_material := VoxelFrame.material(Color.TRANSPARENT) if erase_existing else material
+
+
 		var existing_only := paint_existing
+
+
 		var constant_material := erase_existing or uniform
 		if constant_material:
+
+
 			applied_uniform = uniform_material
 		var dither_enabled := dither_density >= 0.0
 		var covered := {}
@@ -74,10 +118,13 @@ class BrushJob extends VoxelFrame.EditJob:
 		for center in centers:
 			var use: Array = offsets
 			if dither_enabled:
+
+
 				use = DitherMask.select_offsets(offsets, center, dither_density, edited_frame, dither_origin)
 			elif constant_material and previous != Vector3i.MAX:
 				var delta: Vector3i = center - previous
 				if delta == Vector3i.ZERO:
+
 					use = []
 				else:
 					if not covered.has(delta):
@@ -101,11 +148,15 @@ class BrushJob extends VoxelFrame.EditJob:
 						return
 		stage("Applying brush", cell_materials.size())
 		if centers_are_final:
+
+
 			applied_cells = cell_materials
+			if surface_only and edit_context != null:
+				applied_cells = edit_context.expand(applied_cells, edited_frame, paint_existing, null, self, true)
 			if checkpoint(0):
 				changed_chunks = edited_frame.set_cells(applied_cells, self, applied_uniform)
 			return
-		changed_chunks = apply_cells(edited_frame, cell_materials, paint_existing)
+		changed_chunks = apply_cells(edited_frame, cell_materials, paint_existing, null, surface_only)
 
 
 	static func _uncovered_offsets(offsets: Array, pattern: Dictionary, delta: Vector3i) -> Array:
@@ -133,6 +184,8 @@ func _paints_existing() -> bool:
 
 
 func _enter_tree() -> void:
+
+
 	if not tree_exited.is_connected(_release_context_subscriptions):
 		tree_exited.connect(_release_context_subscriptions)
 	if not State.edit_context_changing.is_connected(_cancel_edit):
@@ -152,6 +205,8 @@ func _ready() -> void:
 func _notification(what: int) -> void:
 	if what != NOTIFICATION_PREDELETE:
 		return
+
+
 	if _job:
 		_job.cancel()
 		_job.wait_for_worker()
@@ -222,6 +277,7 @@ func handle_input(event: InputEvent, pos: Vector2) -> bool:
 
 
 func open_stroke() -> VoxelEditTransaction:
+
 	if _edit != null and not _edit.is_closed():
 		return _edit
 	var tx := super.open_stroke()
@@ -240,8 +296,12 @@ func open_stroke() -> VoxelEditTransaction:
 	_stroke_pattern_size = _settings.estimated_size()
 	_stroke_color = State.current_color
 	_stroke_material = State.current_material.duplicate()
+
+
 	_stroke_erases = _erases()
 	_stroke_existing_only = _paints_existing() or _stroke_erases
+
+
 	_edit_context = tx.edit_context
 	return tx
 
@@ -253,6 +313,8 @@ func _apply_pick(target: Vector3i, hit: Vector3i) -> void:
 	var center := hit if _paints_existing() else target
 	if center == VoxelPicking.NONE:
 		return
+
+
 	if _settings.pixel_perfect and target != VoxelPicking.NONE:
 		_filter.feed(target)
 	_queue_centers([center])
@@ -280,15 +342,20 @@ func _run_stroke() -> void:
 		var job := _build_job()
 		_job = job
 		var work := job.estimate_work(job.centers.size() * _stroke_pattern_size)
+		if job.surface_only:
+			work *= SURFACE_ONLY_WORK_FACTOR
 		if work <= INLINE_EDIT_LIMIT:
 			job.run()
 		else:
 			_operation_id = State.begin_operation("Erasing brush" if job.erase_existing else "Painting brush", work, true, self, _cancel_edit)
 			await State.run_edit_job(job, _operation_id, "Brush stroke")
+
+
 		if _job != job:
 			_release_context_subscriptions()
 			return
 		_finish_edit(job)
+
 	if _edit == tx and _end_requested and _job == null:
 		_finish_stroke()
 	_release_context_subscriptions()
@@ -308,6 +375,8 @@ func _build_job() -> BrushJob:
 	job.paint_existing = _stroke_existing_only
 	job.erase_existing = _stroke_erases
 	job.edit_context = _edit_context
+
+
 	job.edited_frame = VoxelFrame.job_frame(_source_frame)
 	return job
 
@@ -318,9 +387,13 @@ func _process(_delta: float) -> void:
 
 func _finish_edit(job: BrushJob) -> void:
 	var profile_started_us := Profile.mark_us()
+
+
 	var operation_id := _operation_id
 	_operation_id = 0
 	_job = null
+
+
 	var applied := job.checkpoint(0)
 	if not applied:
 		_stroke_last_center = Vector3i.MAX
@@ -330,10 +403,14 @@ func _finish_edit(job: BrushJob) -> void:
 		if not job.centers.is_empty():
 			_stroke_last_center = job.centers[job.centers.size() - 1]
 		_settings.cache_pattern(job.diameter, job.shape, job.pattern, job.offsets)
+
+
 		_source_frame.apply_published(job.changed_chunks, job.edited_frame)
 		State.document._bounds_dirty = true
 		if not job.changed_chunks.is_empty():
 			State.chunks_changed.emit(State.current_frame, job.changed_chunks)
+
+
 		var affected_cells: Array[Vector3i] = []
 		affected_cells.assign(job.applied_cells.keys())
 		if not affected_cells.is_empty():
@@ -364,6 +441,8 @@ func finish_on_switch() -> void:
 
 
 func _finish_stroke() -> void:
+
+
 	_end_requested = false
 	_source_document = null
 	_source_frame = null
@@ -388,6 +467,8 @@ func _cancel_edit() -> void:
 	_cursor_axis = -1
 	if has_node("Cursor"):
 		$Cursor.show_selection(null)
+
+
 	_pending_centers = []
 	_end_requested = false
 	_stroke_active = false
@@ -422,7 +503,7 @@ func update_visual(pick: PickResult) -> void:
 	var axis := _plane.axis if _stroke_active else pick.plane.axis
 	if axis != _cursor_axis:
 		_show_brush_shape(axis)
-	position = Vector3(pick.target)
+	position = Vector3.ZERO if _cursor_uses_world_cells() else Vector3(pick.target)
 	visible = true
 
 
@@ -432,6 +513,14 @@ func _cursor_pattern(pattern: Dictionary) -> Dictionary:
 
 func _cursor_cube_diameter() -> int:
 	return _settings.diameter if _settings.shape == StampSettings.BrushShape.CUBE else 0
+
+
+func _cursor_uses_world_cells() -> bool:
+	return false
+
+
+func _cursor_world_cells(_center: Vector3i, _pattern: Dictionary) -> Dictionary:
+	return {}
 
 
 func _show_brush_shape(axis: int) -> void:
@@ -445,7 +534,20 @@ func _show_brush_shape(axis: int) -> void:
 			_hover_job.worker_task_id = WorkerThreadPool.add_task(_hover_job.run, false, "Brush shape")
 		return
 	pattern = _cursor_pattern(pattern)
+	if _cursor_uses_world_cells():
+		var center := _last_pick.target if _last_pick != null else VoxelPicking.NONE
+		var world := _cursor_world_cells(center, pattern)
+		$Cursor.set_brush_material(State.current_material)
+
+		$Cursor.mirrors_enabled = false
+		position = Vector3.ZERO
+		$Cursor.show_voxels(world, State.current_color, _erases(), 0, false)
+		_cursor_axis = axis
+		return
+	$Cursor.mirrors_enabled = true
 	var use_voxel_colors: bool = _settings.shape == _settings.BrushShape.STAMP
+
+
 	var cube_diameter: int = _cursor_cube_diameter()
 	$Cursor.set_brush_material(State.current_material)
 	if use_voxel_colors and _settings.stamp_material_pattern.size() == pattern.size():
