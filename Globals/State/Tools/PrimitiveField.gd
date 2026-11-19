@@ -14,21 +14,8 @@ const MAX_PRIMITIVE_CELLS := 1_048_576
 const MAX_BLEND_CELLS := 2_000_000
 const EPSILON := 1e-6
 const FAR_DISTANCE := 1.0e9
-const CHAMFER_FORWARD := [
-	[Vector3i(-1, 0, 0), 1.0],
-	[Vector3i(0, -1, 0), 1.0],
-	[Vector3i(0, 0, -1), 1.0],
-	[Vector3i(-1, -1, 0), 1.41421356],
-	[Vector3i(-1, 1, 0), 1.41421356],
-	[Vector3i(-1, 0, -1), 1.41421356],
-	[Vector3i(-1, 0, 1), 1.41421356],
-	[Vector3i(0, -1, -1), 1.41421356],
-	[Vector3i(0, -1, 1), 1.41421356],
-	[Vector3i(-1, -1, -1), 1.73205081],
-	[Vector3i(-1, -1, 1), 1.73205081],
-	[Vector3i(-1, 1, -1), 1.73205081],
-	[Vector3i(-1, 1, 1), 1.73205081],
-]
+const SQRT_2 := 1.41421356
+const SQRT_3 := 1.73205081
 
 
 static func sdf_box(point: Vector3, center: Vector3, half_size: Vector3) -> float:
@@ -156,6 +143,120 @@ static func field_distance(request: Dictionary, point: Vector3) -> float:
 	if shell > 0.0:
 		distance = maxf(absf(distance) - shell, distance)
 	return distance
+
+
+static func _prepare_distance(request: Dictionary) -> Dictionary:
+	var primitives_value: Variant = request.get("primitives", [])
+	var prepared: Array = []
+	if primitives_value is Array:
+		var primitives: Array = primitives_value
+		for index in range(primitives.size()):
+			var value: Variant = primitives[index]
+			if value is Dictionary:
+				prepared.append(_prepare_primitive(value))
+	var smooth := effective_smooth(request)
+	var shell := maxf(float(request.get("shell", 0.0)), 0.0)
+	return {"primitives": prepared, "smooth": smooth, "shell": shell}
+
+
+static func _prepare_primitive(primitive: Dictionary) -> Dictionary:
+	var kind := int(primitive.get("kind", KIND_BOX))
+	var rotation := primitive_rotation(primitive)
+	match kind:
+		KIND_ELLIPSOID:
+			var center: Vector3 = primitive.get("center", Vector3.ZERO)
+			var radii: Vector3 = primitive.get("radii", Vector3.ONE)
+			var safe := Vector3(maxf(radii.x, EPSILON), maxf(radii.y, EPSILON), maxf(radii.z, EPSILON))
+			return {
+				"kind": KIND_ELLIPSOID,
+				"inverse": rotation.inverse(),
+				"center": center,
+				"safe": safe,
+				"smallest": minf(safe.x, minf(safe.y, safe.z)),
+			}
+		KIND_CONE:
+			var a: Vector3 = primitive.get("a", Vector3.ZERO)
+			var b: Vector3 = primitive.get("b", Vector3.ZERO)
+			var mid := (a + b) * 0.5
+			a = mid + rotation * (a - mid)
+			b = mid + rotation * (b - mid)
+			var r1 := float(primitive.get("r1", 0.0))
+			var r2 := float(primitive.get("r2", 0.0))
+			var roundness := float(primitive.get("roundness", 1.0 if bool(primitive.get("round", false)) else 0.0))
+			roundness = clampf(roundness, 0.0, 1.0)
+			return {
+				"kind": KIND_CONE,
+				"a": a,
+				"b": b,
+				"r1": r1,
+				"r2": r2,
+				"roundness": roundness,
+			}
+		_:
+			var center: Vector3 = primitive.get("center", Vector3.ZERO)
+			var half_size: Vector3 = primitive.get("half_size", Vector3.ONE)
+			var roundness := float(primitive.get("roundness", 0.0))
+			var radius := clampf(roundness, 0.0, 1.0) * minf(half_size.x, minf(half_size.y, half_size.z))
+			var inner := Vector3(
+				maxf(half_size.x - radius, 0.0),
+				maxf(half_size.y - radius, 0.0),
+				maxf(half_size.z - radius, 0.0)
+			)
+			return {
+				"kind": KIND_BOX,
+				"inverse": rotation.inverse(),
+				"center": center,
+				"inner": inner,
+				"radius": radius,
+			}
+
+
+static func _prepared_field_distance(prepared: Dictionary, point: Vector3) -> float:
+	var primitives: Array = prepared["primitives"]
+	if primitives.is_empty():
+		return 1.0
+	var smooth: float = prepared["smooth"]
+	var first: Dictionary = primitives[0]
+	var distance := _prepared_primitive_distance(first, point)
+	for index in range(1, primitives.size()):
+		var next: Dictionary = primitives[index]
+		var next_distance := _prepared_primitive_distance(next, point)
+		distance = smin(distance, next_distance, smooth) if smooth > 0.0 else minf(distance, next_distance)
+	var shell: float = prepared["shell"]
+	if shell > 0.0:
+		distance = maxf(absf(distance) - shell, distance)
+	return distance
+
+
+static func _prepared_primitive_distance(primitive: Dictionary, point: Vector3) -> float:
+	var kind: int = primitive["kind"]
+	match kind:
+		KIND_ELLIPSOID:
+			var safe: Vector3 = primitive["safe"]
+			var smallest: float = primitive["smallest"]
+			var local: Vector3 = primitive["inverse"] * (point - primitive["center"])
+			var scaled := local / safe
+			return (scaled.length() - 1.0) * smallest
+		KIND_CONE:
+			var a: Vector3 = primitive["a"]
+			var b: Vector3 = primitive["b"]
+			var r1: float = primitive["r1"]
+			var r2: float = primitive["r2"]
+			var roundness: float = primitive["roundness"]
+			var flat := sdf_cone_flat(point, a, b, r1, r2)
+			if roundness <= 0.0:
+				return flat
+			var round := sdf_cone_round(point, a, b, r1, r2)
+			if roundness >= 1.0:
+				return round
+			return lerpf(flat, round, roundness)
+		_:
+			var inner: Vector3 = primitive["inner"]
+			var radius: float = primitive["radius"]
+			var local: Vector3 = primitive["inverse"] * (point - primitive["center"])
+			var q := Vector3(absf(local.x) - inner.x, absf(local.y) - inner.y, absf(local.z) - inner.z)
+			var outside := Vector3(maxf(q.x, 0.0), maxf(q.y, 0.0), maxf(q.z, 0.0))
+			return outside.length() + minf(maxf(q.x, maxf(q.y, q.z)), 0.0) - radius
 
 
 static func effective_smooth(request: Dictionary) -> float:
@@ -508,12 +609,13 @@ static func _rasterize_add(request: Dictionary, frame: VoxelFrame, min_cell: Vec
 	var first_offset := -((step - 1) >> 1)
 	var last_offset := step >> 1
 	var blend_active := not existing.is_empty()
+	var prepared := _prepare_distance(request)
 	var completed := 0
 	for x in range(min_cell.x, max_cell.x + 1, step):
 		for y in range(min_cell.y, max_cell.y + 1, step):
 			for z in range(min_cell.z, max_cell.z + 1, step):
 				var sample := Vector3i(x, y, z)
-				var distance := field_distance(request, Vector3(x, y, z))
+				var distance := _prepared_field_distance(prepared, Vector3(x, y, z))
 				if blend_active and not frame.has(sample):
 					var existing_distance := _existing_at(existing, sample)
 					if existing_distance < FAR_DISTANCE * 0.5:
@@ -568,6 +670,10 @@ static func _existing_field(frame: VoxelFrame, min_cell: Vector3i, max_cell: Vec
 	var volume := size.x * size.y * size.z
 	if volume > MAX_BLEND_CELLS:
 		return {"too_large": true}
+	var occupied := PackedByteArray()
+	occupied.resize(volume)
+	if not _fill_occupied(frame, blend_min, size, occupied, job):
+		return {}
 	var to_empty := PackedFloat32Array()
 	to_empty.resize(volume)
 	to_empty.fill(FAR_DISTANCE)
@@ -576,18 +682,15 @@ static func _existing_field(frame: VoxelFrame, min_cell: Vector3i, max_cell: Vec
 	to_solid.fill(FAR_DISTANCE)
 	var has_solid := false
 	var index := 0
-	for z in range(blend_min.z, blend_max.z + 1):
-		for y in range(blend_min.y, blend_max.y + 1):
-			for x in range(blend_min.x, blend_max.x + 1):
-				var cell := Vector3i(x, y, z)
-				if frame.has(cell):
-					to_solid[index] = 0.0
-					has_solid = true
-				else:
-					to_empty[index] = 0.0
-				index += 1
-				if job and index % 4096 == 0 and not job.checkpoint(index):
-					return {}
+	for value: int in occupied:
+		if value:
+			to_solid[index] = 0.0
+			has_solid = true
+		else:
+			to_empty[index] = 0.0
+		index += 1
+		if job and index % 4096 == 0 and not job.checkpoint(index):
+			return {}
 	if not has_solid:
 		return {}
 	if not _chamfer(to_empty, size, true, job):
@@ -602,62 +705,220 @@ static func _existing_field(frame: VoxelFrame, min_cell: Vector3i, max_cell: Vec
 	values.resize(volume)
 	var cap := smooth + 2.0
 	index = 0
-	for z in range(blend_min.z, blend_max.z + 1):
-		for y in range(blend_min.y, blend_max.y + 1):
-			for x in range(blend_min.x, blend_max.x + 1):
-				var cell := Vector3i(x, y, z)
-				if frame.has(cell):
-					values[index] = -minf(maxf(to_empty[index] - 0.5, 0.0), cap)
-				else:
-					values[index] = minf(maxf(to_solid[index] - 0.5, 0.0), cap)
-				index += 1
-				if job and index % 4096 == 0 and not job.checkpoint(index):
-					return {}
+	for value: int in occupied:
+		if value:
+			values[index] = -minf(maxf(to_empty[index] - 0.5, 0.0), cap)
+		else:
+			values[index] = minf(maxf(to_solid[index] - 0.5, 0.0), cap)
+		index += 1
+		if job and index % 4096 == 0 and not job.checkpoint(index):
+			return {}
 	return {"min": blend_min, "size": size, "values": values}
 
 
+static func _fill_occupied(frame: VoxelFrame, blend_min: Vector3i, size: Vector3i, occupied: PackedByteArray, job: VoxelFrame.EditJob) -> bool:
+	var chunk_size := VoxelFrame.CHUNK_SIZE
+	var shift := VoxelFrame.CHUNK_SHIFT
+	var first_chunk_x := blend_min.x >> shift
+	var first_chunk_y := blend_min.y >> shift
+	var first_chunk_z := blend_min.z >> shift
+	var last_cell_x := blend_min.x + size.x - 1
+	var last_cell_y := blend_min.y + size.y - 1
+	var last_cell_z := blend_min.z + size.z - 1
+	var last_chunk_x := last_cell_x >> shift
+	var last_chunk_y := last_cell_y >> shift
+	var last_chunk_z := last_cell_z >> shift
+	var end_x := blend_min.x + size.x
+	var end_y := blend_min.y + size.y
+	var end_z := blend_min.z + size.z
+	var checked := 0
+	for chunk_z in range(first_chunk_z, last_chunk_z + 1):
+		for chunk_y in range(first_chunk_y, last_chunk_y + 1):
+			for chunk_x in range(first_chunk_x, last_chunk_x + 1):
+				var origin := Vector3i(chunk_x, chunk_y, chunk_z) * chunk_size
+				var chunk: VoxelFrame.Chunk = frame.chunks.get(Vector3i(chunk_x, chunk_y, chunk_z))
+				if chunk == null:
+					continue
+				var local_min_x := maxi(blend_min.x - origin.x, 0)
+				var local_max_x := mini(end_x - origin.x, chunk_size)
+				var local_min_y := maxi(blend_min.y - origin.y, 0)
+				var local_max_y := mini(end_y - origin.y, chunk_size)
+				var local_min_z := maxi(blend_min.z - origin.z, 0)
+				var local_max_z := mini(end_z - origin.z, chunk_size)
+				var flat_base := (origin.x - blend_min.x) + size.x * (origin.y - blend_min.y) + size.x * size.y * (origin.z - blend_min.z)
+				if chunk.grid.is_empty():
+					for slot: int in chunk._sparse_slots:
+						var local_x := slot % chunk_size
+						var local_y := (slot / chunk_size) % chunk_size
+						var local_z := slot / (chunk_size * chunk_size)
+						if local_x < local_min_x or local_x >= local_max_x or local_y < local_min_y or local_y >= local_max_y or local_z < local_min_z or local_z >= local_max_z:
+							continue
+						occupied[flat_base + local_x + size.x * local_y + size.x * size.y * local_z] = 1
+					continue
+				var grid := chunk.grid
+				for local_z in range(local_min_z, local_max_z):
+					var z_slot_base := local_z * chunk_size * chunk_size
+					var flat_z_base := flat_base + size.x * size.y * local_z
+					for local_y in range(local_min_y, local_max_y):
+						var slot_base := z_slot_base + local_y * chunk_size
+						var flat_row_base := flat_z_base + size.x * local_y
+						for local_x in range(local_min_x, local_max_x):
+							if grid[slot_base + local_x] > 0:
+								occupied[flat_row_base + local_x] = 1
+							checked += 1
+							if job and checked % 4096 == 0 and not job.checkpoint(checked):
+								return false
+	return true
+
+
 static func _chamfer(values: PackedFloat32Array, size: Vector3i, forward: bool, job: VoxelFrame.EditJob) -> bool:
-	var z_start := 0
-	var z_end := size.z
-	var z_step := 1
-	var y_start := 0
-	var y_end := size.y
-	var y_step := 1
-	var x_start := 0
-	var x_end := size.x
-	var x_step := 1
-	if not forward:
-		z_start = size.z - 1
-		z_end = -1
-		z_step = -1
-		y_start = size.y - 1
-		y_end = -1
-		y_step = -1
-		x_start = size.x - 1
-		x_end = -1
-		x_step = -1
+	if forward:
+		return _chamfer_forward(values, size, job)
+	return _chamfer_backward(values, size, job)
+
+
+static func _chamfer_forward(values: PackedFloat32Array, size: Vector3i, job: VoxelFrame.EditJob) -> bool:
+	var sx := size.x
+	var sy := size.y
+	var sz := size.z
+	var layer_size := sx * sy
 	var layer := 0
-	for z in range(z_start, z_end, z_step):
-		for y in range(y_start, y_end, y_step):
-			for x in range(x_start, x_end, x_step):
-				var index := x + size.x * (y + size.y * z)
+	for z in range(sz):
+		var z_base := layer_size * z
+		for y in range(sy):
+			var row_base := z_base + sx * y
+			for x in range(sx):
+				var index := row_base + x
 				var best := values[index]
-				for entry in CHAMFER_FORWARD:
-					var delta: Vector3i = entry[0]
-					if not forward:
-						delta = -delta
-					var nx := x + delta.x
-					var ny := y + delta.y
-					var nz := z + delta.z
-					if nx < 0 or nx >= size.x or ny < 0 or ny >= size.y or nz < 0 or nz >= size.z:
-						continue
-					var neighbor := nx + size.x * (ny + size.y * nz)
-					var candidate := values[neighbor] + float(entry[1])
+				var candidate := 0.0
+				if x > 0:
+					candidate = values[index - 1] + 1.0
+					if candidate < best:
+						best = candidate
+					if y > 0:
+						candidate = values[index - 1 - sx] + SQRT_2
+						if candidate < best:
+							best = candidate
+						if z > 0:
+							candidate = values[index - 1 - sx - layer_size] + SQRT_3
+							if candidate < best:
+								best = candidate
+						if z < sz - 1:
+							candidate = values[index - 1 - sx + layer_size] + SQRT_3
+							if candidate < best:
+								best = candidate
+					if y < sy - 1:
+						candidate = values[index - 1 + sx] + SQRT_2
+						if candidate < best:
+							best = candidate
+						if z > 0:
+							candidate = values[index - 1 + sx - layer_size] + SQRT_3
+							if candidate < best:
+								best = candidate
+						if z < sz - 1:
+							candidate = values[index - 1 + sx + layer_size] + SQRT_3
+							if candidate < best:
+								best = candidate
+					if z > 0:
+						candidate = values[index - 1 - layer_size] + SQRT_2
+						if candidate < best:
+							best = candidate
+					if z < sz - 1:
+						candidate = values[index - 1 + layer_size] + SQRT_2
+						if candidate < best:
+							best = candidate
+				if y > 0:
+					candidate = values[index - sx] + 1.0
+					if candidate < best:
+						best = candidate
+					if z > 0:
+						candidate = values[index - sx - layer_size] + SQRT_2
+						if candidate < best:
+							best = candidate
+					if z < sz - 1:
+						candidate = values[index - sx + layer_size] + SQRT_2
+						if candidate < best:
+							best = candidate
+				if z > 0:
+					candidate = values[index - layer_size] + 1.0
 					if candidate < best:
 						best = candidate
 				values[index] = best
 		layer += 1
-		if job and layer % 8 == 0 and not job.checkpoint(layer * size.x * size.y):
+		if job and layer % 8 == 0 and not job.checkpoint(layer * sx * sy):
+			return false
+	return true
+
+
+static func _chamfer_backward(values: PackedFloat32Array, size: Vector3i, job: VoxelFrame.EditJob) -> bool:
+	var sx := size.x
+	var sy := size.y
+	var sz := size.z
+	var layer_size := sx * sy
+	var layer := 0
+	for z in range(sz - 1, -1, -1):
+		var z_base := layer_size * z
+		for y in range(sy - 1, -1, -1):
+			var row_base := z_base + sx * y
+			for x in range(sx - 1, -1, -1):
+				var index := row_base + x
+				var best := values[index]
+				var candidate := 0.0
+				if x < sx - 1:
+					candidate = values[index + 1] + 1.0
+					if candidate < best:
+						best = candidate
+					if y < sy - 1:
+						candidate = values[index + 1 + sx] + SQRT_2
+						if candidate < best:
+							best = candidate
+						if z < sz - 1:
+							candidate = values[index + 1 + sx + layer_size] + SQRT_3
+							if candidate < best:
+								best = candidate
+						if z > 0:
+							candidate = values[index + 1 + sx - layer_size] + SQRT_3
+							if candidate < best:
+								best = candidate
+					if y > 0:
+						candidate = values[index + 1 - sx] + SQRT_2
+						if candidate < best:
+							best = candidate
+						if z < sz - 1:
+							candidate = values[index + 1 - sx + layer_size] + SQRT_3
+							if candidate < best:
+								best = candidate
+						if z > 0:
+							candidate = values[index + 1 - sx - layer_size] + SQRT_3
+							if candidate < best:
+								best = candidate
+					if z > 0:
+						candidate = values[index + 1 - layer_size] + SQRT_2
+						if candidate < best:
+							best = candidate
+					if z < sz - 1:
+						candidate = values[index + 1 + layer_size] + SQRT_2
+						if candidate < best:
+							best = candidate
+				if y < sy - 1:
+					candidate = values[index + sx] + 1.0
+					if candidate < best:
+						best = candidate
+					if z < sz - 1:
+						candidate = values[index + sx + layer_size] + SQRT_2
+						if candidate < best:
+							best = candidate
+					if z > 0:
+						candidate = values[index + sx - layer_size] + SQRT_2
+						if candidate < best:
+							best = candidate
+				if z < sz - 1:
+					candidate = values[index + layer_size] + 1.0
+					if candidate < best:
+						best = candidate
+				values[index] = best
+		layer += 1
+		if job and layer % 8 == 0 and not job.checkpoint(layer * sx * sy):
 			return false
 	return true
 
