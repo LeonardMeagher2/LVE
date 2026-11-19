@@ -192,7 +192,10 @@ func _run() -> void:
 
 
 func _empty(view: String) -> void:
-	State.document = VoxelDocument.new()
+	var previous := State.document
+	var next := VoxelDocument.new()
+	next.tool_settings = previous.tool_settings.duplicate(true)
+	State.document = next
 	State.floor_axis = {"right": 0, "top": 1, "front": 2}[view]
 	camera_rig().set_view(view)
 	camera_rig().is_orthogonal = true

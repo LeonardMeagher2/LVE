@@ -312,6 +312,15 @@ func _preview_behavior() -> void:
 		expect(exporter._sheet_settings.get_node("SizeRow/Size").value == 32, "the projection change keeps the manual frame size")
 		exporter._model_camera.is_orthogonal = not exporter._model_camera.is_orthogonal
 	)
+	step("When the user changes the export field of view", func():
+		saved_revision = exporter._preview_revision
+		exporter._model_camera.set_field_of_view(60.0)
+	)
+	step("Then the sheet preview schedules a render for the new lens", func():
+		expect(exporter._preview_revision > saved_revision, "the field of view change schedules a new preview")
+		exporter._model_camera.set_field_of_view(45.0)
+		exporter._model_camera.is_orthogonal = true
+	)
 	await _wait_preview()
 	step("When the user sets the sheet zoom to one-to-one and pans", func():
 		exporter._controls.get_node("ControlBar/ZoomOne").pressed.emit()
@@ -326,6 +335,14 @@ func _preview_behavior() -> void:
 		expect(exporter._controls.get_node("Preview")._zoom == 150, "the zoom slider changes the sheet magnification")
 		exporter._controls.get_node("ControlBar/CenterBtn").pressed.emit()
 		expect(exporter._controls.get_node("Preview")._pan == Vector2.ZERO, "the center button restores the sheet position")
+		exporter._controls.get_node("ControlBar/ZoomSlider").value = 150
+		expect(exporter._controls.get_node("Preview")._zoom == 150, "the zoom slider changes the sheet magnification")
+		exporter._controls.get_node("Preview")._gui_input(motion)
+		var view: OptionButton = exporter._sheet_settings.get_node("ViewRow/View")
+		view.select(2)
+		view.item_selected.emit(2)
+		expect(exporter._controls.get_node("Preview")._zoom == 150, "a property change keeps the sheet zoom")
+		expect(exporter._controls.get_node("Preview")._pan == Vector2(12, 8), "a property change keeps the sheet pan")
 	)
 	error = await exporter.export_sprite_sheet(SHEET_PATH, 0, 1, 32, 2, false)
 	step("Then the saved PNG matches the sheet preview", func():

@@ -48,6 +48,7 @@ var edit_save_path := ""
 var edit_dirty := false
 var edit_camera := {}
 var edit_stamp := {}
+var reset_workspace := false
 
 
 func _init() -> void:
@@ -434,7 +435,7 @@ static func _valid_view_settings(data: Variant) -> bool:
 		if not (key is String or key is StringName):
 			return false
 		match String(key):
-			"grid", "wireframe", "orthographic", "environment_open":
+			"grid", "wireframe", "orthographic":
 				if not data[key] is bool:
 					return false
 			"view_mode":

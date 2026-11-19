@@ -10,6 +10,7 @@ const VIEW_KEYS := ["current", "isometric", "front", "back", "left", "right", "t
 const ANGLES := [Vector2.ZERO, Vector2(-45, 45), Vector2.ZERO, Vector2(180, 0), Vector2(90, 0), Vector2(-90, 0), Vector2(0, 90), Vector2(0, -90)]
 const PREVIEW_DELAY_MS := 200
 const SPRITE_GAP := 1
+const SHEET_FIT_MARGIN := 1.02
 
 @onready var _menu_item := preload("./MenuBarItem.tscn").instantiate()
 @onready var _workspace := preload("./Workspace.tscn").instantiate()
@@ -56,6 +57,7 @@ var _default_lighting := {}
 var _default_camera := {}
 var _settings_document: VoxelDocument
 var _sheet_projection := Camera3D.PROJECTION_PERSPECTIVE
+var _sheet_fov := 45.0
 var _restoring_export_settings := false
 var _pending_export_camera := {}
 var _selected_tag: AnimationTag
@@ -196,7 +198,7 @@ func _restore_export_settings() -> void:
 	_pending_export_camera = saved.get("camera", {}).duplicate()
 	_model_camera._yaw = _pending_export_camera.get("yaw", _default_camera.yaw)
 	_model_camera._pitch = _pending_export_camera.get("pitch", _default_camera.pitch)
-	_model_camera.fov = _pending_export_camera.get("fov", _default_camera.fov)
+	_model_camera.fov = clampf(float(_pending_export_camera.get("fov", _default_camera.fov)), EditorCameraRig.MIN_FOV, EditorCameraRig.MAX_FOV)
 	_model_scene.set_orthographic(_pending_export_camera.get("orthographic", _default_camera.orthographic))
 	_gif_button.set_pressed_no_signal(false)
 	_controls.get_node("Preview").clear_animation()
@@ -336,11 +338,7 @@ func _view_count() -> int:
 
 
 static func _sprite_span(bounds: AABB, settings: Dictionary) -> int:
-	var span: float = settings.size
-	if settings.projection == Camera3D.PROJECTION_PERSPECTIVE:
-		var transform: Transform3D = settings.transforms[0]
-		var distance := (transform.origin - bounds.get_center()).dot(transform.basis.z)
-		span = 2.0 * distance * tan(deg_to_rad(settings.fov) * 0.5)
+	var span: float = settings.get("content_span", settings.size)
 	return maxi(1, ceili(span - 0.00001))
 
 
@@ -428,7 +426,9 @@ func _on_preview_camera_changed() -> void:
 	_refresh_export_status()
 	var projection_changed := _model_camera.projection != _sheet_projection
 	_sheet_projection = _model_camera.projection
-	if projection_changed or _sheet_settings.get_node("ViewRow/View").selected == 0:
+	var fov_changed := not is_equal_approx(_model_camera.fov, _sheet_fov)
+	_sheet_fov = _model_camera.fov
+	if projection_changed or fov_changed or _sheet_settings.get_node("ViewRow/View").selected == 0:
 		_sheet_settings_changed()
 
 
@@ -759,38 +759,64 @@ static func specular_path(path: String) -> String:
 	return path.get_basename() + "_specular.png"
 
 
+func _pose_fit_distance(camera: Camera3D, bounds: AABB, fov_value: float) -> float:
+	var center := bounds.get_center()
+	if not bounds.has_surface():
+		return (camera.position - center).length()
+	var tan_half := maxf(tan(deg_to_rad(fov_value) * 0.5), 0.0001)
+	var required := 0.0
+	for index in 8:
+		var corner := bounds.get_endpoint(index) - center
+		var extent := maxf(absf(corner.dot(camera.basis.x)), absf(corner.dot(camera.basis.y)))
+		required = maxf(required, extent / tan_half + corner.dot(camera.basis.z))
+	return maxf(required, 0.001) * SHEET_FIT_MARGIN
+
+
 func _sheet_camera(view: int, views := 1, orthographic_value: Variant = null) -> Dictionary:
 	var orthographic: bool = bool(orthographic_value) if orthographic_value is bool else _model_camera.is_orthogonal
 	var bounds := State.document.bounds()
 	var transform: Transform3D
 	var size: float = _model_camera.size
 	var near_plane: float = _model_camera.near
+	var content_span := 0.0
 	if view == 0:
 		var inverse := _model_transform().affine_inverse()
 		transform = _model_camera.transform
 		transform.origin = inverse * transform.origin
-		if orthographic and _model_camera.projection != Camera3D.PROJECTION_ORTHOGONAL:
+		if orthographic:
+			content_span = size
+		else:
 			var distance := (transform.origin - bounds.get_center()).dot(transform.basis.z)
-			size = maxf(0.001, 2.0 * distance * tan(deg_to_rad(_model_camera.fov) * 0.5))
+			content_span = maxf(0.001, 2.0 * distance * tan(deg_to_rad(_model_camera.fov) * 0.5))
+		if orthographic and _model_camera.projection != Camera3D.PROJECTION_ORTHOGONAL:
+			size = content_span
 	else:
 		var camera := Camera3D.new()
 		add_child(camera)
 		var angles: Vector2 = ANGLES[view]
 		VoxelImageRenderer.frame_camera(camera, bounds, angles.x, angles.y, orthographic)
+		if orthographic:
+			near_plane = camera.near
+		else:
+			var center := bounds.get_center()
+			var offset := camera.position - center
+			var distance := _pose_fit_distance(camera, bounds, _model_camera.fov)
+			camera.position = center + offset.normalized() * distance
+			near_plane = maxf(0.001, minf(camera.near, distance * 0.1))
 		transform = camera.transform
-		near_plane = camera.near
 		camera.free()
 	var transforms: Array[Transform3D] = []
 	for view_index in views:
 		var turn := Basis(Vector3.UP, TAU * view_index / views)
 		transforms.append(Transform3D(turn * transform.basis, bounds.get_center() + turn * (transform.origin - bounds.get_center())))
-	if view > 0 and orthographic:
-		size = 1.0
+	if view > 0:
+		content_span = 1.0
 		for pose in transforms:
-			size = maxf(size, pose.basis.x.abs().dot(bounds.size))
-			size = maxf(size, pose.basis.y.abs().dot(bounds.size))
-		size = ceili(size - 0.00001)
-	return {"transforms": transforms, "projection": Camera3D.PROJECTION_ORTHOGONAL if orthographic else Camera3D.PROJECTION_PERSPECTIVE, "size": size, "fov": _model_camera.fov, "near": near_plane}
+			content_span = maxf(content_span, pose.basis.x.abs().dot(bounds.size))
+			content_span = maxf(content_span, pose.basis.y.abs().dot(bounds.size))
+		if orthographic:
+			size = ceili(content_span - 0.00001)
+	return {"transforms": transforms, "projection": Camera3D.PROJECTION_ORTHOGONAL if orthographic else Camera3D.PROJECTION_PERSPECTIVE, "size": size, "content_span": content_span, "fov": _model_camera.fov, "near": near_plane}
 
 
 func _sheet_render_settings(view: int, views: int, orthographic: bool, center: bool, lighting: Dictionary) -> Dictionary:
@@ -821,6 +847,30 @@ func _render_current(document: VoxelDocument, revision: int) -> bool:
 	return not _cancel_requested and State.has_operation(_operation_id)
 
 
+func _blit_sheet_entries(sheets: Dictionary, entries: Array[Dictionary], union: Rect2i, tile_size: Vector2i) -> void:
+	if union.size.x <= 0 or union.size.y <= 0:
+		return
+	var scale := minf(float(tile_size.x) / union.size.x, float(tile_size.y) / union.size.y)
+	if scale <= 0.0:
+		return
+	var fitted := Vector2i(maxi(1, int(union.size.x * scale)), maxi(1, int(union.size.y * scale)))
+	var origin := (tile_size - fitted) / 2
+	for entry in entries:
+		var used: Rect2i = entry.used
+		var image: Image = entry.image
+		if image == null or image.get_width() <= 0 or image.get_height() <= 0:
+			continue
+		var tile_rect: Rect2i = entry.rect
+		var target_size := Vector2i(maxi(1, int(used.size.x * scale)), maxi(1, int(used.size.y * scale)))
+		var offset := Vector2i((Vector2(used.position - union.position) * scale).round())
+		var target := tile_rect.position + origin + offset
+		target.x = clampi(target.x, tile_rect.position.x, tile_rect.position.x + tile_size.x - target_size.x)
+		target.y = clampi(target.y, tile_rect.position.y, tile_rect.position.y + tile_size.y - target_size.y)
+		image.resize(target_size.x, target_size.y, Image.INTERPOLATE_NEAREST)
+		var sheet: Image = sheets[entry.output]
+		sheet.blit_rect(image, Rect2i(Vector2i.ZERO, target_size), target)
+
+
 func _render_sheet(frames: Array[VoxelFrame], settings: Dictionary, document: VoxelDocument, revision := -1) -> Variant:
 	var outputs: Array = settings.get("outputs", ["color"])
 	var lighting_settings: Dictionary = settings.lighting
@@ -848,6 +898,8 @@ func _render_sheet(frames: Array[VoxelFrame], settings: Dictionary, document: Vo
 		normal_material.shader = NORMAL_SHADER
 	if outputs.has("specular"):
 		_specular_materials.clear()
+	var entries: Array[Dictionary] = []
+	var union := Rect2i()
 	var index := 0
 	var capture_index := 0
 	var complete := true
@@ -866,6 +918,7 @@ func _render_sheet(frames: Array[VoxelFrame], settings: Dictionary, document: Vo
 				complete = false
 				break
 			var rect: Rect2i = layout.rects[index]
+			var tile_used := Rect2i()
 			for output in outputs:
 				var label := "Rendering sheet preview" if revision >= 0 else ("Rendering sprite %d" % (index + 1) if output == "color" else "Rendering %s %d" % [output, index + 1])
 				State.update_operation(_preview_operation_id if revision >= 0 else _operation_id, capture_index, capture_count, label)
@@ -887,11 +940,15 @@ func _render_sheet(frames: Array[VoxelFrame], settings: Dictionary, document: Vo
 						break
 				var image := viewport.get_texture().get_image()
 				image.convert(Image.FORMAT_RGBA8)
-				image.resize(rect.size.x, rect.size.y, Image.INTERPOLATE_NEAREST)
 				if output == "specular":
 					image = _specular_sheet_image(image)
-				var sheet: Image = sheets[output]
-				sheet.blit_rect(image, Rect2i(Vector2i.ZERO, rect.size), rect.position)
+				if output == "color" or tile_used.size.x <= 0:
+					tile_used = image.get_used_rect()
+					if tile_used.size.x <= 0 or tile_used.size.y <= 0:
+						tile_used = Rect2i(Vector2i.ZERO, image.get_size())
+				if output == "color":
+					union = tile_used if union.size.x <= 0 else union.merge(tile_used)
+				entries.append({"output": output, "rect": rect, "used": tile_used, "image": image.get_region(tile_used)})
 				capture_index += 1
 			renderer.override_material = null
 			renderer.material_builder = Callable()
@@ -900,6 +957,8 @@ func _render_sheet(frames: Array[VoxelFrame], settings: Dictionary, document: Vo
 			index += 1
 		if not complete:
 			break
+	if complete and union.size.x > 0 and union.size.y > 0:
+		_blit_sheet_entries(sheets, entries, union, layout.tile_size)
 	if is_instance_valid(viewport):
 		viewport.free()
 	if revision >= 0:
@@ -978,6 +1037,8 @@ func _render_gif_frames(frames: Array[VoxelFrame], settings: Dictionary, documen
 	var count := frames.size() * transforms.size()
 	var error := OK
 	var index := 0
+	var entries: Array[Dictionary] = []
+	var union := Rect2i()
 	for pose in transforms:
 		if not _render_current(document, -1):
 			error = ERR_BUSY
@@ -1008,10 +1069,11 @@ func _render_gif_frames(frames: Array[VoxelFrame], settings: Dictionary, documen
 				break
 			var image := viewport.get_texture().get_image()
 			image.convert(Image.FORMAT_RGBA8)
-			image.resize(tile_size.x, tile_size.y, Image.INTERPOLATE_NEAREST)
-			error = encoder.add_frame(image, frame.delay_ms)
-			if error != OK:
-				break
+			var used := image.get_used_rect()
+			if used.size.x <= 0 or used.size.y <= 0:
+				used = Rect2i(Vector2i.ZERO, image.get_size())
+			union = used if union.size.x <= 0 else union.merge(used)
+			entries.append({"used": used, "image": image.get_region(used), "delay": frame.delay_ms})
 			index += 1
 			await get_tree().process_frame
 		if error != OK:
@@ -1019,9 +1081,35 @@ func _render_gif_frames(frames: Array[VoxelFrame], settings: Dictionary, documen
 	if is_instance_valid(viewport):
 		viewport.free()
 	_export_viewport = null
+	if error == OK and not entries.is_empty() and union.size.x > 0 and union.size.y > 0:
+		error = _add_gif_frames(encoder, entries, union, tile_size)
 	if error == OK and not _render_current(document, -1):
 		error = ERR_BUSY
 	return error
+
+
+func _add_gif_frames(encoder, entries: Array[Dictionary], union: Rect2i, tile_size: Vector2i) -> Error:
+	var scale := minf(float(tile_size.x) / union.size.x, float(tile_size.y) / union.size.y)
+	if scale <= 0.0:
+		return ERR_INVALID_PARAMETER
+	var fitted := Vector2i(maxi(1, int(union.size.x * scale)), maxi(1, int(union.size.y * scale)))
+	var origin := (tile_size - fitted) / 2
+	for entry in entries:
+		var used: Rect2i = entry.used
+		var image: Image = entry.image
+		var target_size := Vector2i(maxi(1, int(used.size.x * scale)), maxi(1, int(used.size.y * scale)))
+		var offset := Vector2i((Vector2(used.position - union.position) * scale).round())
+		var target := origin + offset
+		target.x = clampi(target.x, 0, tile_size.x - target_size.x)
+		target.y = clampi(target.y, 0, tile_size.y - target_size.y)
+		image.resize(target_size.x, target_size.y, Image.INTERPOLATE_NEAREST)
+		var tile := Image.create(tile_size.x, tile_size.y, false, Image.FORMAT_RGBA8)
+		tile.fill(Color.TRANSPARENT)
+		tile.blit_rect(image, Rect2i(Vector2i.ZERO, target_size), target)
+		var error: Error = encoder.add_frame(tile, int(entry.delay))
+		if error != OK:
+			return error
+	return OK
 
 
 func _update_sheet_preview() -> void:

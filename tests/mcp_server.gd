@@ -2020,7 +2020,7 @@ func _workspace() -> void:
 		expect(not State.document.edit_dirty, "the workspace change does not mark the document edited")
 	)
 	var response := await _call("set_workspace", {
-		"camera": {"yaw": -0.6, "pitch": 0.3, "distance": 30.0, "initial_distance": 20.0, "target": [1.0, 2.0, 3.0]},
+		"camera": {"yaw": -0.6, "pitch": 0.3, "distance": 30.0, "initial_distance": 20.0, "target": [1.0, 2.0, 3.0], "fov": 60.0},
 		"lighting": {"basis": basis, "color": "#ffcc00", "energy": 2.0, "ambient_color": "#203040", "ambient_energy": 0.5, "shadows": true, "shaded": false, "view_locked": false, "view_basis": basis},
 		"view": {"grid": false, "wireframe": false, "orthographic": true, "view_mode": 0.0, "environment_open": false},
 		"export": {"view": 2.0, "frame_size": 128.0, "views": 1.0, "turntable": false, "metadata": false, "normal": true, "specular": true, "specular_intensity": 0.5, "center": true, "sprite_center": true, "model_tag": -1.0, "sheet_tag": -1.0},
@@ -2033,6 +2033,7 @@ func _workspace() -> void:
 		expect(is_equal_approx(float(State.document.edit_camera.get("yaw", 0.0)), -0.6), "the camera yaw is set")
 		expect(is_equal_approx(rig._yaw, -0.6), "the viewport camera uses the yaw")
 		expect(is_equal_approx(rig._dist, 30.0), "the viewport camera uses the distance")
+		expect(is_equal_approx(rig.fov, 60.0), "the viewport camera uses the field of view")
 		var light: Color = State.document.lighting_settings.get("color", Color.WHITE)
 		expect(Color(light.r, light.g, light.b, 1.0).is_equal_approx(Color("#ffcc00")), "the light color is stored")
 		expect(is_equal_approx(light.a, 2.0), "the light energy is stored in the alpha")
@@ -2064,6 +2065,7 @@ func _workspace() -> void:
 		var camera: Dictionary = read_data.get("camera", {})
 		var target: Array = camera.get("target", [])
 		expect(target.size() == 3 and int(target[0]) == 1 and int(target[1]) == 2 and int(target[2]) == 3, "the camera target is a vector")
+		expect(is_equal_approx(float(camera.get("fov", 0.0)), 60.0), "the camera fov is reported")
 		var lighting: Dictionary = read_data.get("lighting", {})
 		expect(is_equal_approx(float(lighting.get("energy", 0.0)), 2.0), "the light energy is a separate field")
 		expect(str(lighting.get("color", "")) == "#ffcc00", "the light color has no alpha")
@@ -2083,6 +2085,7 @@ func _workspace() -> void:
 		if loaded != null:
 			var target: Vector3 = loaded.edit_camera.get("target", Vector3.ZERO)
 			expect(target.is_equal_approx(Vector3(1.0, 2.0, 3.0)), "the loaded camera keeps the target")
+			expect(is_equal_approx(float(loaded.edit_camera.get("fov", 0.0)), 60.0), "the loaded camera keeps the field of view")
 			var light: Color = loaded.lighting_settings.get("color", Color.WHITE)
 			expect(is_equal_approx(light.a, 2.0), "the loaded lighting keeps the energy")
 			expect(bool(loaded.view_settings.get("orthographic", false)), "the loaded view keeps the projection")

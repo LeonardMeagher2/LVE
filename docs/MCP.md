@@ -119,9 +119,9 @@ Each tool description ends with the guide topic for its workflow. The topic hold
 
 `set_workspace` replaces one or more sections. An omitted section keeps its value. Read the workspace first, change the fields you need, and pass the sections back. The tool accepts these shapes:
 
-- `camera`: `yaw`, `pitch`, `distance`, `initial_distance`, and `target` as `[x, y, z]`. Angles are radians. An export camera also accepts `orthographic` and `fov`.
+- `camera`: `yaw`, `pitch`, `distance`, `initial_distance`, `target` as `[x, y, z]`, and `fov` in degrees. Angles are radians. The editor uses 10 to 135 degrees. An export camera also accepts `orthographic`.
 - `lighting`: `basis`, `color`, `energy`, `ambient_color`, `ambient_energy`, `shadows`, `shaded`, `view_locked`, and `view_basis`. A basis is three vectors: x, y, then z.
-- `view`: `grid`, `wireframe`, `orthographic`, `view_mode`, and `environment_open`.
+- `view`: `grid`, `wireframe`, `orthographic`, and `view_mode`.
 - `export`: the export tab settings. It holds `view`, `frame_size`, `views`, `turntable`, `metadata`, `normal`, `specular`, `center`, `sprite_center`, `model_tag`, `sheet_tag`, `lighting`, and `camera`.
 - `playing`: a boolean. A saved document with `playing` true runs its active tag when it opens.
 

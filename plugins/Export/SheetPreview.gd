@@ -51,7 +51,8 @@ func set_animation(rects: Array[Rect2i], delays: PackedInt32Array) -> void:
 	_animation_index = 0
 	_animation_elapsed = 0.0
 	set_process(not _animation_rects.is_empty())
-	fit()
+	if _fitted:
+		fit()
 	queue_redraw()
 
 
@@ -63,7 +64,8 @@ func clear_animation() -> void:
 	_animation_index = 0
 	_animation_elapsed = 0.0
 	set_process(false)
-	fit()
+	if _fitted:
+		fit()
 	queue_redraw()
 
 

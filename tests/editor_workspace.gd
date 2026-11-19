@@ -226,6 +226,7 @@ func _view_run() -> void:
 		State.set_tabs(documents, 0)
 		viewport._set_grid_visible(false)
 		viewport._set_wireframe(true)
+		viewport.set_field_of_view(60.0)
 		viewport._set_orthographic(true)
 		pan.button_pressed = true
 		viewport.get_node("%EnvironmentMenu").button_pressed = true
@@ -238,6 +239,7 @@ func _view_run() -> void:
 		pose.append({"yaw": rig._yaw, "pitch": rig._pitch, "dist": rig._dist, "init": rig._init_dist, "target": rig._target})
 		var lighting: Dictionary = viewport.get_lighting_settings()
 		lighting.basis = light_basis
+		lighting.view_basis = camera_rig().basis.inverse() * light_basis
 		viewport.set_lighting_settings(lighting)
 		viewport.get_node("%LightColor").color_changed.emit(light_color)
 		viewport.get_node("%AmbientColor").color_changed.emit(ambient_color)
@@ -250,9 +252,10 @@ func _view_run() -> void:
 		expect(not viewport.get_node("%Grid").visible, "the grid stays off")
 		expect(editor_viewport().debug_draw == Viewport.DEBUG_DRAW_WIREFRAME, "the wireframe stays on")
 		expect(rig.is_orthogonal, "the orthographic projection returns")
+		expect(is_equal_approx(rig.fov, 60.0), "the field of view returns")
 		expect(int(viewport.view_mode) == 3, "the light drag mode returns")
 		expect(viewport.get_node("%LightToggle").button_pressed, "the light toggle returns")
-		expect(viewport.get_node("%EnvironmentBar").visible, "the environment row stays open")
+		expect(viewport.get_node("%EnvironmentBar").visible == false, "the environment row resets closed")
 		expect(not viewport.get_node("%Shadows").button_pressed, "the shadow choice returns")
 		expect(viewport.get_node("%LockView").button_pressed, "the view lock returns")
 		var restored: Dictionary = viewport.get_lighting_settings()
@@ -297,6 +300,7 @@ func _file_run() -> void:
 		select_toolbar_item("paint", "Spray Can")
 		viewport_scene()._set_grid_visible(false)
 		viewport_scene()._set_wireframe(true)
+		viewport_scene().set_field_of_view(60.0)
 		viewport_scene()._set_orthographic(true)
 		var pan: Button = main.get_node("%Viewport").get_node("ControlBar/PanToggle")
 		pan.button_pressed = true
@@ -333,6 +337,7 @@ func _file_run() -> void:
 		expect(not viewport_scene().get_node("%Grid").visible, "the grid stays off")
 		expect(editor_viewport().debug_draw == Viewport.DEBUG_DRAW_WIREFRAME, "the wireframe stays on")
 		expect(camera_rig().is_orthogonal, "the orthographic projection returns")
+		expect(is_equal_approx(camera_rig().fov, 60.0), "the field of view returns")
 		expect(not viewport_scene().get_node("%Shadows").button_pressed, "the shadow choice returns")
 		expect(State.current_frame == 1, "the frame returns")
 		expect(State.active_tag == 0, "the active tag returns")
@@ -346,30 +351,40 @@ func _file_run() -> void:
 
 func _save_capture_run() -> void:
 	var path := "user://editor_workspace_save_%s.lve" % Time.get_ticks_usec()
-	var inherited := VoxelFrame.material(Color(0.3, 0.7, 0.4))
+	var saved_material := VoxelFrame.material(Color(0.3, 0.7, 0.4))
 	var pose := []
-	step("Given a document that inherits the active workspace", func():
+	step("Given a document with a workspace, a new document resets it", func():
 		var first := State.new_document()
 		var second := State.new_document()
 		State.set_tabs([first], 0)
 		_brush.diameter = 6
 		_brush.shape = StampToolSettings.BrushShape.SPHERE
-		State.edit_material(inherited)
+		State.edit_material(saved_material)
 		viewport_scene()._set_grid_visible(false)
 		viewport_scene()._set_wireframe(true)
 		State.open_tab(second)
 		expect(second.tool_settings.is_empty(), "the new document starts without tool state")
 		expect(second.view_settings.is_empty(), "the new document starts without view state")
-		pose.append({"yaw": camera_rig()._yaw, "pitch": camera_rig()._pitch, "dist": camera_rig()._dist, "target": camera_rig()._target})
-		expect(_menu.save_doc(path) == OK, "the inherited workspace saves")
-		expect(second.tool_settings.get("BrushPlugin", {}).get("diameter", 0) == 6, "the save captures the tools")
-		expect(second.tool_settings.has("material"), "the save captures the material")
-		expect(second.view_settings.get("grid", true) == false, "the save captures the view")
-		expect(second.lighting_settings.has("shadows"), "the save captures the lighting")
-		expect(not second.edit_camera.is_empty(), "the save captures the camera")
+		expect(_brush.diameter == 1, "the new document resets the brush diameter")
+		expect(viewport_scene().get_node("%Grid").visible, "the new document resets the grid")
+		expect(editor_viewport().debug_draw == Viewport.DEBUG_DRAW_DISABLED, "the new document resets the wireframe")
 	)
-	step("When the first workspace changes and the file opens", func():
-		State.activate_tab(0)
+	step("When the user sets a workspace on the new document and saves", func():
+		_brush.diameter = 5
+		_brush.shape = StampToolSettings.BrushShape.SPHERE
+		State.edit_material(saved_material)
+		viewport_scene()._set_grid_visible(false)
+		viewport_scene()._set_wireframe(true)
+		camera_rig().orbit(Vector2(20, 5))
+		pose.append({"yaw": camera_rig()._yaw, "pitch": camera_rig()._pitch, "dist": camera_rig()._dist, "target": camera_rig()._target})
+		expect(_menu.save_doc(path) == OK, "the new workspace saves")
+		expect(State.document.tool_settings.get("BrushPlugin", {}).get("diameter", 0) == 5, "the save captures the tools")
+		expect(State.document.tool_settings.has("material"), "the save captures the material")
+		expect(State.document.view_settings.get("grid", true) == false, "the save captures the view")
+		expect(State.document.lighting_settings.has("shadows"), "the save captures the lighting")
+		expect(not State.document.edit_camera.is_empty(), "the save captures the camera")
+	)
+	step("When the workspace changes and the file opens", func():
 		_brush.diameter = 2
 		_brush.shape = StampToolSettings.BrushShape.CUBE
 		State.edit_material(VoxelFrame.material(Color.BLACK))
@@ -379,9 +394,9 @@ func _save_capture_run() -> void:
 		_menu._on_file_opened(path)
 	)
 	step("Then the saved workspace returns", func():
-		expect(_brush.diameter == 6, "the saved brush diameter returns")
+		expect(_brush.diameter == 5, "the saved brush diameter returns")
 		expect(_brush.shape == StampToolSettings.BrushShape.SPHERE, "the saved brush shape returns")
-		expect(State.current_material == inherited, "the saved material returns")
+		expect(State.current_material == saved_material, "the saved material returns")
 		expect(not viewport_scene().get_node("%Grid").visible, "the saved grid choice returns")
 		expect(editor_viewport().debug_draw == Viewport.DEBUG_DRAW_WIREFRAME, "the saved wireframe returns")
 		expect(not State.document.edit_camera.is_empty(), "the opened document keeps its camera")

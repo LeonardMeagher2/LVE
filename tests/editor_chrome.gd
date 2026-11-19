@@ -636,6 +636,10 @@ func _camera_popup() -> PopupMenu:
 	return camera_menu_btn.get_popup()
 
 
+func _field_of_view():
+	return main.get_node("%Viewport").get_node("ControlBar/FieldOfView")
+
+
 func _camera_index(text: String) -> int:
 	var popup := _camera_popup()
 	for i in popup.item_count:
@@ -672,22 +676,23 @@ func _camera_menu_run() -> void:
 		expect(is_equal_approx(camera_rig()._pitch, deg_to_rad(-89.0)), "bottom view sets pitch -89 degrees")
 	)
 
-	step("When the user picks Orthographic in the camera menu", func():
-		_pick_view("orthographic")
+	step("When the user sets the field of view to 0", func():
+		_field_of_view().value = 0.0
 	)
 	step("Then the camera turns orthographic and the light uses orthogonal shadow mapping", func():
 		expect(camera_rig().is_orthogonal, "the camera uses orthogonal projection")
-		expect(_camera_popup().is_item_checked(_camera_index("orthographic")), "the Orthographic item shows checked")
+		expect(_camera_index("orthographic") < 0, "the camera menu no longer holds an Orthographic item")
+		expect(is_equal_approx(_field_of_view().value, 0.0), "the field of view shows 0")
 		var light := viewport_scene().get_node("Light")
 		expect(light.directional_shadow_mode == DirectionalLight3D.SHADOW_ORTHOGONAL, "the light uses orthogonal shadow mapping")
 	)
 
-	step("When the user picks Orthographic again", func():
-		_pick_view("orthographic")
+	step("When the user sets the field of view to 45", func():
+		_field_of_view().value = 45.0
 	)
 	step("Then the camera returns to perspective and the light returns to split shadow mapping", func():
 		expect(not camera_rig().is_orthogonal, "the camera uses perspective projection")
-		expect(not _camera_popup().is_item_checked(_camera_index("orthographic")), "the Orthographic item shows unchecked")
+		expect(is_equal_approx(camera_rig().fov, 45.0), "the camera uses a 45 degree field of view")
 		var light := viewport_scene().get_node("Light")
 		expect(light.directional_shadow_mode == DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS, "the light uses split shadow mapping")
 	)

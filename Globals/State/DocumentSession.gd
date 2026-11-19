@@ -46,6 +46,7 @@ func _init() -> void:
 
 func new_document() -> VoxelDocument:
 	var created := VoxelDocument.new()
+	created.reset_workspace = true
 	if palette_provider.is_valid():
 		created.palette = palette_provider.call()
 	return created
