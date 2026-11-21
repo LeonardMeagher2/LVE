@@ -77,36 +77,74 @@ static func compute_sample_map(frame: VoxelFrame, terrain_frame: TerrainFrame, c
 	return TerrainGeometry.resolve_samples(candidates)
 
 
+static var _weighted_sphere_cache := {}
+static var _weighted_sphere_lock := Mutex.new()
+
 static func compute_smooth_fields(center_point: Vector3, radius: int, falloff: float, context: VoxelFrame.EditContext, job: VoxelFrame.EditJob = null) -> Array:
 	var fields := []
 	var completed := 0
 	var selection: Dictionary = context.selection if context != null else {}
-	var offsets := TerrainGeometry.sphere_offsets(radius)
+	var sphere := _weighted_sphere(radius, falloff)
+	var offset_cells: Array = sphere[0]
+	var sphere_weights: PackedFloat64Array = sphere[1]
+	var offset_count := offset_cells.size()
 	for mask in masks_for(context):
 		var center := center_point if mask == 0 else TerrainFrame.mirror_point(center_point, context, mask)
 		var base := TerrainGeometry.cell_at(center)
-		var region := {}
-		for entry in offsets:
-			var cell: Vector3i = base + entry["offset"]
-			var weight := VoxelFalloff.weight_at(float(entry["distance"]), float(radius), falloff, 0.0)
+		var cells := []
+		var weights := {}
+		for i in offset_count:
+			var weight := sphere_weights[i]
 			if weight <= 0.0:
 				continue
-			region[cell] = maxf(float(region.get(cell, 0.0)), weight)
+			var cell: Vector3i = base + offset_cells[i]
 			completed += 1
 			if job != null and completed % CANCEL_CHECKPOINT == 0 and not job.checkpoint(completed):
 				return []
-		var cells := []
-		var weights := {}
-		for cell: Vector3i in region:
 			if TerrainGeometry.allows(selection, cell) and (context == null or context.allows(cell)):
 				cells.append(cell)
-				weights[cell] = float(region[cell])
-		cells.sort_custom(func(a: Vector3i, b: Vector3i) -> bool: return a.y < b.y if a.y != b.y else (a.z < b.z if a.z != b.z else a.x < b.x))
+				weights[cell] = weight
 		fields.append({
 			"cells": cells,
 			"weights": weights,
 		})
 	return fields
+
+
+static func _weighted_sphere(radius: int, falloff: float) -> Array:
+	var key := "%d:%s" % [radius, falloff]
+	_weighted_sphere_lock.lock()
+	var cached: Array = _weighted_sphere_cache.get(key, [])
+	_weighted_sphere_lock.unlock()
+	if not cached.is_empty():
+		return cached
+	var offsets := TerrainGeometry.sphere_offsets(radius)
+	var count := offsets.size()
+	var offset_cells := []
+	var weights := PackedFloat64Array()
+	weights.resize(count)
+	var packed := []
+	for i in count:
+		var entry: Dictionary = offsets[i]
+		var off: Vector3i = entry["offset"]
+		offset_cells.append(off)
+		weights[i] = VoxelFalloff.weight_at(float(entry["distance"]), float(radius), falloff, 0.0)
+		packed.append((((off.y + 64) * 128 + (off.z + 64)) * 128 + (off.x + 64)) * (1 << 18) + i)
+	packed.sort()
+	var sorted_cells := []
+	sorted_cells.resize(count)
+	var sorted_weights := PackedFloat64Array()
+	sorted_weights.resize(count)
+	for i in count:
+		var index: int = packed[i] % (1 << 18)
+		sorted_cells[i] = offset_cells[index]
+		sorted_weights[i] = weights[index]
+	var result := [sorted_cells, sorted_weights]
+	result.make_read_only()
+	_weighted_sphere_lock.lock()
+	_weighted_sphere_cache[key] = result
+	_weighted_sphere_lock.unlock()
+	return result
 
 
 static func center_surface(samples: Dictionary, center_point: Vector3) -> Vector3i:
