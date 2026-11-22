@@ -17,24 +17,31 @@ class Cells:
 static func _compact(cells: Dictionary) -> Cells:
 	if cells.is_empty():
 		return null
-	var origin := Vector2i.MAX
-	var extent := Vector2i.MIN
+	var origin_x: int = 1073741824
+	var origin_y: int = 1073741824
+	var extent_x: int = -1073741824
+	var extent_y: int = -1073741824
 	for cell: Vector2i in cells:
-		origin = Vector2i(mini(origin.x, cell.x), mini(origin.y, cell.y))
-		extent = Vector2i(maxi(extent.x, cell.x), maxi(extent.y, cell.y))
-	if extent.x - origin.x >= BOX_LIMIT:
+		if cell.x < origin_x:
+			origin_x = cell.x
+		if cell.y < origin_y:
+			origin_y = cell.y
+		if cell.x > extent_x:
+			extent_x = cell.x
+		if cell.y > extent_y:
+			extent_y = cell.y
+	if extent_x - origin_x >= BOX_LIMIT:
 		return null
-	var area := (extent.x - origin.x + 1) * (extent.y - origin.y + 1)
+	var area := (extent_x - origin_x + 1) * (extent_y - origin_y + 1)
 	if area > maxi(cells.size() * 4, 16):
 		return null
 	var box := Cells.new()
-	box.origin = origin
-	box.width = extent.x - origin.x + 1
-	box.height = extent.y - origin.y + 1
+	box.origin = Vector2i(origin_x, origin_y)
+	box.width = extent_x - origin_x + 1
+	box.height = extent_y - origin_y + 1
 	box.rows.resize(box.height)
 	for cell: Vector2i in cells:
-		var local := cell - origin
-		box.rows[local.y] |= 1 << local.x
+		box.rows[cell.y - origin_y] |= 1 << (cell.x - origin_x)
 		box.count += 1
 	return box
 
@@ -195,8 +202,8 @@ static func _split_box(box: Cells, cut: int, upper := false) -> Cells:
 	return out
 
 
-static func _box_edge_starts(box: Cells) -> Array[Vector3i]:
-	var starts: Array[Vector3i] = []
+static func _box_edge_starts(box: Cells) -> PackedInt32Array:
+	var starts := PackedInt32Array()
 	for y in box.height:
 		var row := box.rows[y]
 		var above := 0
@@ -212,17 +219,66 @@ static func _box_edge_starts(box: Cells) -> Array[Vector3i]:
 			var cell_x := box.origin.x + x
 			var cell_y := box.origin.y + y
 			if above & bit == 0:
-				starts.append(Vector3i(cell_x, cell_y, 0))
+				starts.append(cell_x)
+				starts.append(cell_y)
+				starts.append(0)
 			if row & (bit << 1) == 0:
-				starts.append(Vector3i(cell_x + 1, cell_y, 1))
+				starts.append(cell_x + 1)
+				starts.append(cell_y)
+				starts.append(1)
 			if below & bit == 0:
-				starts.append(Vector3i(cell_x + 1, cell_y + 1, 2))
+				starts.append(cell_x + 1)
+				starts.append(cell_y + 1)
+				starts.append(2)
 			if row & (bit >> 1) == 0:
-				starts.append(Vector3i(cell_x, cell_y + 1, 3))
+				starts.append(cell_x)
+				starts.append(cell_y + 1)
+				starts.append(3)
 	return starts
 
 
+static func _all_cells_isolated(box: Cells) -> bool:
+	for y in box.height:
+		var row := box.rows[y]
+		var above := 0
+		if y > 0:
+			above = box.rows[y - 1]
+		var below := 0
+		if y + 1 < box.height:
+			below = box.rows[y + 1]
+		for x in box.width:
+			var bit := 1 << x
+			if row & bit == 0:
+				continue
+			if above & bit != 0 or below & bit != 0 or (row & (bit << 1)) != 0 or (row & (bit >> 1)) != 0:
+				return false
+	return true
+
+
+static func _box_isolated_loops(box: Cells, check: Callable) -> Array[PackedVector2Array]:
+	var ox := box.origin.x
+	var oy := box.origin.y
+	var result: Array[PackedVector2Array] = []
+	for y in box.height:
+		var row := box.rows[y]
+		for x in box.width:
+			var bit := 1 << x
+			if row & bit == 0:
+				continue
+			if not _check(check, result.size()):
+				return []
+			var loop := PackedVector2Array()
+			loop.append(Vector2(ox + x, oy + y))
+			loop.append(Vector2(ox + x + 1, oy + y))
+			loop.append(Vector2(ox + x + 1, oy + y + 1))
+			loop.append(Vector2(ox + x, oy + y + 1))
+			result.append(loop)
+	return result
+
+
 static func _box_loops(box: Cells, check: Callable) -> Array[PackedVector2Array]:
+	if _all_cells_isolated(box):
+		return _box_isolated_loops(box, check)
 	var starts := _box_edge_starts(box)
 	if starts.is_empty():
 		return []
@@ -232,35 +288,42 @@ static func _box_loops(box: Cells, check: Callable) -> Array[PackedVector2Array]
 	var oy := box.origin.y
 	var state := PackedInt32Array()
 	state.resize(grid_w * grid_h)
-	for start in starts:
-		state[start.x - ox + grid_w * (start.y - oy)] |= 1 << start.z
+	for i in range(0, starts.size(), 3):
+		state[starts[i] - ox + grid_w * (starts[i + 1] - oy)] |= 1 << starts[i + 2]
 	var result: Array[PackedVector2Array] = []
-	for start in starts:
-		if state[start.x - ox + grid_w * (start.y - oy)] & (1 << start.z) == 0:
+	for i in range(0, starts.size(), 3):
+		var start_x: int = starts[i]
+		var start_y: int = starts[i + 1]
+		var start_z: int = starts[i + 2]
+		if state[start_x - ox + grid_w * (start_y - oy)] & (1 << start_z) == 0:
 			continue
-		var edge := start
+		var edge_x: int = start_x
+		var edge_y: int = start_y
+		var edge_z: int = start_z
 		var loop := PackedVector2Array()
 		while true:
 			if not _check(check, result.size()):
 				return []
-			var corner := edge.x - ox + grid_w * (edge.y - oy)
-			state[corner] &= ~(1 << edge.z)
-			loop.append(Vector2(edge.x, edge.y))
-			var end_x: int = edge.x + DIRECTIONS[edge.z].x
-			var end_y: int = edge.y + DIRECTIONS[edge.z].y
+			var corner := edge_x - ox + grid_w * (edge_y - oy)
+			state[corner] &= ~(1 << edge_z)
+			loop.append(Vector2(edge_x, edge_y))
+			var end_x: int = edge_x + DIRECTIONS[edge_z].x
+			var end_y: int = edge_y + DIRECTIONS[edge_z].y
 			var found := false
 			if end_x >= ox and end_x < ox + grid_w and end_y >= oy and end_y < oy + grid_h:
 				var end_corner := end_x - ox + grid_w * (end_y - oy)
 				for turn in TURNS:
-					var next_z := (edge.z + turn) % 4
-					var is_first := end_x == start.x and end_y == start.y and next_z == start.z
+					var next_z := (edge_z + turn) % 4
+					var is_first := end_x == start_x and end_y == start_y and next_z == start_z
 					if is_first or state[end_corner] & (1 << next_z) != 0:
-						edge = Vector3i(end_x, end_y, next_z)
+						edge_x = end_x
+						edge_y = end_y
+						edge_z = next_z
 						found = true
 						break
 			if not found:
 				return []
-			if edge == start:
+			if edge_x == start_x and edge_y == start_y and edge_z == start_z:
 				break
 		result.append(loop)
 	return result
@@ -346,11 +409,16 @@ static func _contours(cells: Dictionary, protected: Dictionary, checkpoint: Call
 
 static func _simplify(loop: PackedVector2Array, protected: Dictionary) -> PackedVector2Array:
 	var result := PackedVector2Array()
-	for index in loop.size():
+	var size := loop.size()
+	var has_protected := not protected.is_empty()
+	for index in size:
 		var point := loop[index]
-		var previous := loop[(index + loop.size() - 1) % loop.size()]
-		var next := loop[(index + 1) % loop.size()]
-		if protected.has(Vector2i(point)) or (point - previous).cross(next - point) != 0.0:
+		var previous := loop[(index + size - 1) % size]
+		var next := loop[(index + 1) % size]
+		if has_protected and protected.has(Vector2i(point)):
+			result.append(point)
+			continue
+		if (point - previous).cross(next - point) != 0.0:
 			result.append(point)
 	return result
 

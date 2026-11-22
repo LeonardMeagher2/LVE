@@ -153,23 +153,40 @@ static func _finish(groups: Dictionary, frame: VoxelFrame, world_origin: Vector3
 		var fallback_normal := Vector3.ZERO
 		fallback_normal[plane.x] = plane.y
 		var corners: Dictionary = group.get("corners", {})
+		var flat: bool = not use_corner_normals and group.normals.is_empty()
+		var axis0: int = plane.x
+		var axis1: int = (plane.x + 1) % 3
+		var axis2: int = (plane.x + 2) % 3
 		for polygon: Dictionary in group.polygons:
 			var vertex_map := PackedInt32Array()
 			for point: Vector2 in polygon.points:
-				var position := _position(plane, point)
-				var normal: Vector3 = _vertex_normal(group, frame, use_corner_normals, point, position + world_origin, position, fallback_normal, corner_occupancy, corner_cache)
+				var position := Vector3.ZERO
+				position[axis0] = plane.z * 0.5
+				position[axis1] = point.x - 0.5
+				position[axis2] = point.y - 0.5
+				var normal: Vector3
+				if flat:
+					normal = fallback_normal
+				else:
+					normal = _vertex_normal(group, frame, use_corner_normals, point, position + world_origin, position, fallback_normal, corner_occupancy, corner_cache)
 				var ao := 1.0
 				if use_ao:
 					var level: int = corners.get(Vector2i(roundi(point.x), roundi(point.y)), 3)
 					ao = 1.0 - (1.0 - AO_LEVELS[level]) * ao_strength
-				var key := [Vector3i((position * 2).round()), normal, patch, roundi(ao * 255.0)]
-				if not vertices.has(key):
-					vertices[key] = positions.size()
+				var dbl := Vector3i.ZERO
+				dbl[axis0] = plane.z
+				dbl[axis1] = roundi(2.0 * point.x - 1.0)
+				dbl[axis2] = roundi(2.0 * point.y - 1.0)
+				var key := [dbl, normal, patch, roundi(ao * 255.0)]
+				var existing: int = vertices.get(key, -1)
+				if existing < 0:
+					existing = positions.size()
+					vertices[key] = existing
 					positions.append(position)
 					normals.append(normal)
 					colors.append(Color(ao, ao, ao, 1.0))
 					patch_ids.append(patch)
-				vertex_map.append(vertices[key])
+				vertex_map.append(existing)
 			for offset in range(0, polygon.indices.size(), 3):
 				indices.append(vertex_map[polygon.indices[offset]])
 				indices.append(vertex_map[polygon.indices[offset + (2 if plane.y > 0 else 1)]])
@@ -191,10 +208,17 @@ static func _protect_groups(groups: Dictionary, checkpoint: Callable) -> Diction
 			return {}
 		var plane: Vector3i = group.plane
 		protected_planes[plane] = {}
+		var axis0: int = plane.x
+		var axis1: int = (plane.x + 1) % 3
+		var axis2: int = (plane.x + 2) % 3
 		group.raw_loops = REGION.raw_loops(group.cells, checkpoint)
 		for loop: PackedVector2Array in group.raw_loops:
 			for point: Vector2 in REGION._simplify(loop, {}):
-				protected_positions[Vector3i((_position(plane, point) * 2).round())] = true
+				var dbl := Vector3i.ZERO
+				dbl[axis0] = plane.z
+				dbl[axis1] = roundi(2.0 * point.x - 1.0)
+				dbl[axis2] = roundi(2.0 * point.y - 1.0)
+				protected_positions[dbl] = true
 	_protect(protected_positions, protected_planes)
 	return {"positions": protected_positions, "planes": protected_planes}
 
@@ -210,9 +234,16 @@ static func _triangulate_groups(groups: Dictionary, protected: Dictionary, check
 			group.polygons = REGION.triangulate(group.cells, protected_planes[group.plane], checkpoint, group.raw_loops)
 			if group.polygons.is_empty():
 				return false
+			var grp_axis0: int = group.plane.x
+			var grp_axis1: int = (group.plane.x + 1) % 3
+			var grp_axis2: int = (group.plane.x + 2) % 3
+			var grp_plane_z: int = group.plane.z
 			for polygon: Dictionary in group.polygons:
 				for point: Vector2 in polygon.points:
-					var corner := Vector3i((_position(group.plane, point) * 2).round())
+					var corner := Vector3i.ZERO
+					corner[grp_axis0] = grp_plane_z
+					corner[grp_axis1] = roundi(2.0 * point.x - 1.0)
+					corner[grp_axis2] = roundi(2.0 * point.y - 1.0)
 					if not protected_positions.has(corner):
 						protected_positions[corner] = true
 						added[corner] = true
