@@ -408,18 +408,25 @@ static func _contours(cells: Dictionary, protected: Dictionary, checkpoint: Call
 
 
 static func _simplify(loop: PackedVector2Array, protected: Dictionary) -> PackedVector2Array:
-	var result := PackedVector2Array()
 	var size := loop.size()
+	var result := PackedVector2Array()
+	if size == 0:
+		return result
 	var has_protected := not protected.is_empty()
+	var previous := loop[size - 1]
+	var point := loop[0]
 	for index in size:
-		var point := loop[index]
-		var previous := loop[(index + size - 1) % size]
-		var next := loop[(index + 1) % size]
+		var next: Vector2
+		if index + 1 < size:
+			next = loop[index + 1]
+		else:
+			next = loop[0]
 		if has_protected and protected.has(Vector2i(point)):
 			result.append(point)
-			continue
-		if (point - previous).cross(next - point) != 0.0:
+		elif (point - previous).cross(next - point) != 0.0:
 			result.append(point)
+		previous = point
+		point = next
 	return result
 
 
@@ -529,12 +536,15 @@ static func _all_unit_squares(loops: Array) -> bool:
 	return true
 
 
+static var _UNIT_SQUARE_INDICES := PackedInt32Array([3, 0, 1, 1, 2, 3])
+
+
 static func _unit_square_faces(cells: Dictionary, loops: Array, check: Callable) -> Array:
 	var result := []
 	for loop: PackedVector2Array in loops:
 		if not check.call(result.size()):
 			return []
-		result.append({"points": loop, "indices": PackedInt32Array([3, 0, 1, 1, 2, 3])})
+		result.append({"points": loop, "indices": _UNIT_SQUARE_INDICES})
 	if result.size() != cells.size():
 		return _unit_faces(cells, check)
 	return result

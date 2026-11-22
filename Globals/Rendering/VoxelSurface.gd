@@ -155,28 +155,41 @@ static func _finish(groups: Dictionary, frame: VoxelFrame, world_origin: Vector3
 		var corners: Dictionary = group.get("corners", {})
 		var flat: bool = not use_corner_normals and group.normals.is_empty()
 		var axis0: int = plane.x
-		var axis1: int = (plane.x + 1) % 3
-		var axis2: int = (plane.x + 2) % 3
 		for polygon: Dictionary in group.polygons:
 			var vertex_map := PackedInt32Array()
 			for point: Vector2 in polygon.points:
 				var position := Vector3.ZERO
-				position[axis0] = plane.z * 0.5
-				position[axis1] = point.x - 0.5
-				position[axis2] = point.y - 0.5
+				var dbl := Vector3i.ZERO
+				if axis0 == 0:
+					position.x = plane.z * 0.5
+					position.y = point.x - 0.5
+					position.z = point.y - 0.5
+					dbl.x = plane.z
+					dbl.y = roundi(2.0 * point.x - 1.0)
+					dbl.z = roundi(2.0 * point.y - 1.0)
+				elif axis0 == 1:
+					position.y = plane.z * 0.5
+					position.x = point.y - 0.5
+					position.z = point.x - 0.5
+					dbl.y = plane.z
+					dbl.x = roundi(2.0 * point.y - 1.0)
+					dbl.z = roundi(2.0 * point.x - 1.0)
+				else:
+					position.z = plane.z * 0.5
+					position.x = point.x - 0.5
+					position.y = point.y - 0.5
+					dbl.z = plane.z
+					dbl.x = roundi(2.0 * point.x - 1.0)
+					dbl.y = roundi(2.0 * point.y - 1.0)
 				var normal: Vector3
 				if flat:
 					normal = fallback_normal
 				else:
-					normal = _vertex_normal(group, frame, use_corner_normals, point, position + world_origin, position, fallback_normal, corner_occupancy, corner_cache)
+					normal = _vertex_normal(group, frame, use_corner_normals, point, position, world_origin, fallback_normal, corner_occupancy, corner_cache)
 				var ao := 1.0
 				if use_ao:
 					var level: int = corners.get(Vector2i(roundi(point.x), roundi(point.y)), 3)
 					ao = 1.0 - (1.0 - AO_LEVELS[level]) * ao_strength
-				var dbl := Vector3i.ZERO
-				dbl[axis0] = plane.z
-				dbl[axis1] = roundi(2.0 * point.x - 1.0)
-				dbl[axis2] = roundi(2.0 * point.y - 1.0)
 				var key := [dbl, normal, patch, roundi(ao * 255.0)]
 				var existing: int = vertices.get(key, -1)
 				if existing < 0:
@@ -200,6 +213,9 @@ static func _finish(groups: Dictionary, frame: VoxelFrame, world_origin: Vector3
 	return result
 
 
+static var EMPTY_DICT := {}
+
+
 static func _protect_groups(groups: Dictionary, checkpoint: Callable) -> Dictionary:
 	var protected_positions := {}
 	var protected_planes := {}
@@ -209,15 +225,22 @@ static func _protect_groups(groups: Dictionary, checkpoint: Callable) -> Diction
 		var plane: Vector3i = group.plane
 		protected_planes[plane] = {}
 		var axis0: int = plane.x
-		var axis1: int = (plane.x + 1) % 3
-		var axis2: int = (plane.x + 2) % 3
 		group.raw_loops = REGION.raw_loops(group.cells, checkpoint)
 		for loop: PackedVector2Array in group.raw_loops:
-			for point: Vector2 in REGION._simplify(loop, {}):
+			for point: Vector2 in REGION._simplify(loop, EMPTY_DICT):
 				var dbl := Vector3i.ZERO
-				dbl[axis0] = plane.z
-				dbl[axis1] = roundi(2.0 * point.x - 1.0)
-				dbl[axis2] = roundi(2.0 * point.y - 1.0)
+				if axis0 == 0:
+					dbl.x = plane.z
+					dbl.y = roundi(2.0 * point.x - 1.0)
+					dbl.z = roundi(2.0 * point.y - 1.0)
+				elif axis0 == 1:
+					dbl.y = plane.z
+					dbl.x = roundi(2.0 * point.y - 1.0)
+					dbl.z = roundi(2.0 * point.x - 1.0)
+				else:
+					dbl.z = plane.z
+					dbl.x = roundi(2.0 * point.x - 1.0)
+					dbl.y = roundi(2.0 * point.y - 1.0)
 				protected_positions[dbl] = true
 	_protect(protected_positions, protected_planes)
 	return {"positions": protected_positions, "planes": protected_planes}
@@ -253,26 +276,26 @@ static func _triangulate_groups(groups: Dictionary, protected: Dictionary, check
 	return true
 
 
-static func _vertex_normal(group: Dictionary, frame: VoxelFrame, use_corner_normals: bool, point: Vector2, world_position: Vector3, local_position: Vector3, fallback_normal: Vector3, corner_occupancy: Variant, corner_cache: Dictionary) -> Vector3:
+static func _vertex_normal(group: Dictionary, frame: VoxelFrame, use_corner_normals: bool, point: Vector2, local_position: Vector3, world_origin: Vector3, fallback_normal: Vector3, corner_occupancy: Variant, corner_cache: Dictionary) -> Vector3:
 	if not use_corner_normals:
 		var flat: Vector3 = group.normals.get(Vector2i(point), fallback_normal)
 		return fallback_normal if flat.is_zero_approx() else flat
 	var corner: Vector3i
-	var normal: Vector3
+	var cached: Variant
 	if corner_occupancy != null:
-		corner = Vector3i(local_position.floor()) + Vector3i.ONE
-		if corner_cache.has(corner):
-			normal = corner_cache[corner]
-		else:
-			normal = _corner_normal_occupied(corner, corner_occupancy)
-			corner_cache[corner] = normal
+		corner = Vector3i(floori(local_position.x), floori(local_position.y), floori(local_position.z)) + Vector3i.ONE
+		cached = corner_cache.get(corner, null)
+		if cached == null:
+			cached = _corner_normal_occupied(corner, corner_occupancy)
+			corner_cache[corner] = cached
 	else:
-		corner = Vector3i(world_position.floor())
-		if corner_cache.has(corner):
-			normal = corner_cache[corner]
-		else:
-			normal = _corner_normal(frame, world_position)
-			corner_cache[corner] = normal
+		var world_position := local_position + world_origin
+		corner = Vector3i(floori(world_position.x), floori(world_position.y), floori(world_position.z))
+		cached = corner_cache.get(corner, null)
+		if cached == null:
+			cached = _corner_normal(frame, world_position)
+			corner_cache[corner] = cached
+	var normal: Vector3 = cached
 	return fallback_normal if normal.is_zero_approx() else normal
 
 
@@ -311,35 +334,55 @@ static func _store_ao_corners(corners: Dictionary, point: Vector2i, code: int) -
 
 
 static func _corner_normal(frame: VoxelFrame, world_position: Vector3) -> Vector3:
-	var base := Vector3i(world_position.floor())
-	var normal := Vector3.ZERO
+	var base := Vector3i(floori(world_position.x), floori(world_position.y), floori(world_position.z))
+	var nx := 0.0
+	var ny := 0.0
+	var nz := 0.0
 	for z in 2:
 		for y in 2:
 			for x in 2:
 				if frame.has(base + Vector3i(x, y, z)):
-					normal += Vector3(0.5 - x, 0.5 - y, 0.5 - z)
-	return normal.normalized()
+					nx += 0.5 - x
+					ny += 0.5 - y
+					nz += 0.5 - z
+	return Vector3(nx, ny, nz).normalized()
 
 
 static func _corner_normal_occupied(padded_corner: Vector3i, padded_occupancy: PackedInt32Array) -> Vector3:
-	var normal := Vector3.ZERO
+	var nx := 0.0
+	var ny := 0.0
+	var nz := 0.0
+	var base := padded_corner.x + PADDED_CHUNK_SIZE * (padded_corner.y + PADDED_CHUNK_SIZE * padded_corner.z)
+	var s2 := PADDED_CHUNK_SIZE * PADDED_CHUNK_SIZE
 	for z in 2:
+		var idx_z := s2 * z
 		for y in 2:
+			var idx_y := PADDED_CHUNK_SIZE * y
 			for x in 2:
-				var sample := padded_corner + Vector3i(x, y, z)
-				if padded_occupancy[sample.x + PADDED_CHUNK_SIZE * (sample.y + PADDED_CHUNK_SIZE * sample.z)] != 0:
-					normal += Vector3(0.5 - x, 0.5 - y, 0.5 - z)
-	return normal.normalized()
+				if padded_occupancy[base + x + idx_y + idx_z] != 0:
+					nx += 0.5 - x
+					ny += 0.5 - y
+					nz += 0.5 - z
+	return Vector3(nx, ny, nz).normalized()
 
 
 static func _protect(positions: Dictionary, planes: Dictionary) -> void:
 	for point: Vector3i in positions:
-		for axis in 3:
-			for sign_value in [-1, 1]:
-				var plane := Vector3i(axis, sign_value, point[axis])
-				if planes.has(plane):
-					var projected := Vector2i((point[(axis + 1) % 3] + 1) / 2, (point[(axis + 2) % 3] + 1) / 2)
-					planes[plane][projected] = true
+		var px := point.x
+		var py := point.y
+		var pz := point.z
+		for sign_value in [-1, 1]:
+			var plane := Vector3i(0, sign_value, px)
+			if planes.has(plane):
+				planes[plane][Vector2i((py + 1) / 2, (pz + 1) / 2)] = true
+		for sign_value in [-1, 1]:
+			var plane := Vector3i(1, sign_value, py)
+			if planes.has(plane):
+				planes[plane][Vector2i((pz + 1) / 2, (px + 1) / 2)] = true
+		for sign_value in [-1, 1]:
+			var plane := Vector3i(2, sign_value, pz)
+			if planes.has(plane):
+				planes[plane][Vector2i((px + 1) / 2, (py + 1) / 2)] = true
 
 
 static func _position(plane: Vector3i, point: Vector2) -> Vector3:
