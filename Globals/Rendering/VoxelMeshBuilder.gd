@@ -27,6 +27,15 @@ var atlas: RefCounted
 var enclosed_shortcut := true
 var enclosed_culled := false
 var profile := false
+var protect_us := 0
+var triangulate_us := 0
+var vertices_surf_us := 0
+var atlas_ph_us := 0
+var uvs_us := 0
+var loops_us := 0
+var simplify_us := 0
+var protect_inner_us := 0
+var normal_us := 0
 var snapshot_us := 0
 var scan_us := 0
 var finish_us := 0
@@ -73,7 +82,17 @@ func run() -> void:
 			group_count += groups.size()
 		var surface_started_us := Time.get_ticks_usec() if profile else 0
 		var surface := SURFACE.new()
+		surface.profile = true
 		surface.run_groups(groups, frame, Vector3(chunk_location * CHUNK_SIZE), Callable(), smooth_normals, padded_cell_materials, ao_strength)
+		protect_us += surface.protect_us
+		triangulate_us += surface.triangulate_us
+		vertices_surf_us += surface.vertices_us
+		atlas_ph_us += surface.atlas_us
+		uvs_us += surface.uvs_us
+		loops_us += surface.loops_us
+		simplify_us += surface.simplify_us
+		protect_inner_us += surface.protect_inner_us
+		normal_us += surface.normal_us
 		if profile:
 			finish_us += Time.get_ticks_usec() - surface_started_us
 		surface_arrays = surface.arrays
