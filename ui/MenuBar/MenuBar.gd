@@ -44,6 +44,9 @@ func _ready() -> void:
 	%DocumentTabs.close_requested.connect(_on_tab_close_requested)
 	if single_document:
 		%DocumentTabs.hide()
+		var tab_separator := get_node_or_null("Sep2")
+		if tab_separator is CanvasItem:
+			tab_separator.hide()
 	%CloseTabDialog.add_button("Discard", true, "discard")
 	%CloseTabDialog.confirmed.connect(_on_close_tab_save)
 	%CloseTabDialog.custom_action.connect(_on_close_tab_action)
