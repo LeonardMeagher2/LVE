@@ -116,7 +116,11 @@ func _on_mcp_pressed() -> void:
 	_sync_mcp()
 	if error == OK:
 		return
-	%MCPError.dialog_text = "Cannot start the MCP server on 127.0.0.1:%d. Another program may use this port." % int(_main.get("mcp_port"))
+	%MCPError.dialog_text = "Cannot start the MCP server on %s:%d. %s. Another program may use this port." % [
+		str(_main.call("mcp_bind_address")),
+		int(_main.get("mcp_port")),
+		error_string(error),
+	]
 	%MCPError.popup_centered()
 
 

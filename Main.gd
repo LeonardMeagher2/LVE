@@ -325,6 +325,10 @@ func mcp_local_port() -> int:
 	return int(_mcp.call("local_port")) if _mcp != null else 0
 
 
+func mcp_bind_address() -> String:
+	return str(_mcp.call("bind_address")) if _mcp != null else ""
+
+
 func mcp_url() -> String:
 	if not _mcp_http_mode:
 		return ""

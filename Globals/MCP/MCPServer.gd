@@ -203,6 +203,10 @@ func local_port() -> int:
 	return _transport.local_port()
 
 
+func bind_address() -> String:
+	return _transport.bind_address()
+
+
 func _process(_delta: float) -> void:
 	_transport.poll()
 
