@@ -36,9 +36,6 @@ func _place_playback_bottom() -> void:
 			(child as Control).size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var tag_row: Control = bar.get_node("TagRow")
 	tag_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	for child in tag_row.get_children():
-		if child is Control:
-			(child as Control).size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
 
 func _rebuild_strip() -> void:
