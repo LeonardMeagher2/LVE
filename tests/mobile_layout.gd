@@ -8,7 +8,7 @@ var main: Control
 func _ready() -> void:
 	settle_frames = 2
 	test("the mobile scene builds the editor panels", _panels, "mobile_panels")
-	test("a horizontal swipe switches the dock page", _dock_swipe, "dock_swipe")
+	test("the dock toggles show one panel and hide the dock", _dock_toggles, "dock_toggles")
 	test("the menu hides tabs and keeps one document", _single_document, "single_document")
 
 
@@ -36,32 +36,33 @@ func _panels() -> void:
 	)
 
 
-func _dock_swipe() -> void:
+func _dock_toggles() -> void:
 	var palette: Control = main.get_node("%PalettePanel")
 	var frames: Control = main.get_node("%BottomDock")
+	var frames_toggle: Button = main.get_node("%FramesToggle")
+	var palette_toggle: Button = main.get_node("%PaletteToggle")
 	step("Given the dock shows the palette", func():
 		expect(palette.visible, "the palette shows")
 		expect(not frames.visible, "the frame dock is hidden")
 	)
-	step("When the dock is swiped left", func():
-		main.call("_apply_dock_swipe", Vector2(-120, 8))
+	step("Then both toggles share the row", func():
+		expect(palette_toggle.size_flags_horizontal == Control.SIZE_EXPAND_FILL, "the palette toggle expands")
+		expect(frames_toggle.size_flags_horizontal == Control.SIZE_EXPAND_FILL, "the frames toggle expands")
+		expect(is_equal_approx(palette_toggle.size.x, frames_toggle.size.x), "the toggles are the same width")
 	)
-	step("Then the frame dock shows", func():
+	step("When the frames toggle is pressed", func():
+		frames_toggle.button_pressed = true
+	)
+	step("Then the frame dock replaces the palette", func():
 		expect(frames.visible, "the frame dock shows")
 		expect(not palette.visible, "the palette hides")
 	)
-	step("When the dock is swiped right again", func():
-		main.call("_apply_dock_swipe", Vector2(120, -6))
+	step("When the active toggle is pressed again", func():
+		frames_toggle.button_pressed = false
 	)
-	step("Then the palette returns", func():
-		expect(palette.visible, "the palette shows again")
-		expect(not frames.visible, "the frame dock hides")
+	step("Then the whole dock body hides", func():
+		expect(not main.get_node("%DockBody").visible, "the dock body hides")
 	)
-	step("Then a short or vertical drag switches nothing", func():
-		main.call("_apply_dock_swipe", Vector2(-20, 40))
-		expect(palette.visible, "a vertical drag keeps the page")
-	)
-
 
 func _single_document() -> void:
 	var menu := main.get_node("%MenuBar")

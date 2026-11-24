@@ -1,4 +1,4 @@
-[gd_scene load_steps=8 format=3]
+[gd_scene load_steps=10 format=3]
 
 [ext_resource type="PackedScene" path="res://ui/MenuBar/MenuBar.tscn" id="1_menu"]
 [ext_resource type="PackedScene" path="res://ui/PalettePanel/PalettePanel.tscn" id="2_palette"]
@@ -7,7 +7,12 @@
 [ext_resource type="PackedScene" path="res://ui/StatusBar/StatusBar.tscn" id="5_status"]
 [ext_resource type="Script" path="res://Globals/State/EditorWorkspace.gd" id="6_workspace"]
 [ext_resource type="Script" path="res://ui/Mobile/MainMobile.gd" id="7_mobile"]
+[ext_resource type="Texture2D" path="res://icons/paint.svg" id="8_paint"]
+[ext_resource type="Texture2D" path="res://icons/play.svg" id="9_play"]
 
+
+[sub_resource type="ButtonGroup" id="DockButtonGroup"]
+allow_unpress = true
 
 [node name="Main" type="Control"]
 layout_mode = 3
@@ -17,6 +22,7 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("7_mobile")
+
 
 [node name="EditorWorkspace" type="Node" parent="."]
 unique_name_in_owner = true
@@ -89,6 +95,30 @@ unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 0
 
+
+[node name="DockBar" type="HBoxContainer" parent="Content/VBox/TabContainer/Editor/DockPanel"]
+layout_mode = 2
+
+[node name="PaletteToggle" type="Button" parent="Content/VBox/TabContainer/Editor/DockPanel/DockBar"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+toggle_mode = true
+button_pressed = true
+button_group = SubResource("DockButtonGroup")
+tooltip_text = "Palette"
+icon = ExtResource("8_paint")
+icon_alignment = 1
+
+[node name="FramesToggle" type="Button" parent="Content/VBox/TabContainer/Editor/DockPanel/DockBar"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+toggle_mode = true
+button_group = SubResource("DockButtonGroup")
+tooltip_text = "Frames"
+icon = ExtResource("9_play")
+icon_alignment = 1
 
 [node name="DockBody" type="VBoxContainer" parent="Content/VBox/TabContainer/Editor/DockPanel"]
 unique_name_in_owner = true
