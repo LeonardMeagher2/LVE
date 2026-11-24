@@ -218,6 +218,9 @@ static func _finish(groups: Dictionary, frame: VoxelFrame, world_origin: Vector3
 		var flat: bool = not use_corner_normals and group.normals.is_empty()
 		var axis0: int = plane.x
 		var code := patch * 8 + axis0 * 2 + (1 if plane.y > 0 else 0)
+		var group_vertices = {} if flat and not use_ao else null
+		var second := 2 if plane.y > 0 else 1
+		var third := 1 if plane.y > 0 else 2
 		for polygon: Dictionary in group.polygons:
 			vertex_map.clear()
 			for point: Vector2 in polygon.points:
@@ -273,21 +276,34 @@ static func _finish(groups: Dictionary, frame: VoxelFrame, world_origin: Vector3
 				if use_ao:
 					var level: int = corners.get(Vector2i(roundi(point.x), roundi(point.y)), 3)
 					ao = 1.0 - (1.0 - AO_LEVELS[level]) * ao_strength
-				var key := [dbl, code] if flat and not use_ao else [dbl, normal, patch, roundi(ao * 255.0)]
-				var existing: int = vertices.get(key, -1)
-				if existing < 0:
-					existing = positions.size()
-					vertices[key] = existing
-					positions.append(position)
-					normals.append(normal)
-					if use_ao:
-						colors.append(Color(ao, ao, ao, 1.0))
-					patch_ids.append(patch)
-				vertex_map.append(existing)
-			for offset in range(0, polygon.indices.size(), 3):
+				if flat and not use_ao:
+					var existing: int = group_vertices.get(dbl, -1)
+					if existing < 0:
+						existing = positions.size()
+						group_vertices[dbl] = existing
+						positions.append(position)
+						normals.append(fallback_normal)
+						patch_ids.append(patch)
+					vertex_map.append(existing)
+				else:
+					var key := [dbl, code] if flat and not use_ao else [dbl, normal, patch, roundi(ao * 255.0)]
+					var existing: int = vertices.get(key, -1)
+					if existing < 0:
+						existing = positions.size()
+						vertices[key] = existing
+						positions.append(position)
+						normals.append(normal)
+						if use_ao:
+							colors.append(Color(ao, ao, ao, 1.0))
+						patch_ids.append(patch)
+					vertex_map.append(existing)
+			var offset := 0
+			var index_count: int = polygon.indices.size()
+			while offset < index_count:
 				indices.append(vertex_map[polygon.indices[offset]])
-				indices.append(vertex_map[polygon.indices[offset + (2 if plane.y > 0 else 1)]])
-				indices.append(vertex_map[polygon.indices[offset + (1 if plane.y > 0 else 2)]])
+				indices.append(vertex_map[polygon.indices[offset + second]])
+				indices.append(vertex_map[polygon.indices[offset + third]])
+				offset += 3
 	if not timers.is_empty():
 		timers["vertices"] = Time.get_ticks_usec() - vertices_started
 		timers["normal"] = normal_time
