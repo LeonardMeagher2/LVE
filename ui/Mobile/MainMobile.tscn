@@ -137,6 +137,7 @@ unique_name_in_owner = true
 visible = false
 layout_mode = 2
 size_flags_horizontal = 3
+playback_bottom = true
 
 [node name="StatusBar" parent="Content/VBox" instance=ExtResource("5_status")]
 unique_name_in_owner = true

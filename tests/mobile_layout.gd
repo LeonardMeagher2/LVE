@@ -9,6 +9,7 @@ func _ready() -> void:
 	settle_frames = 2
 	test("the mobile scene builds the editor panels", _panels, "mobile_panels")
 	test("the dock toggles show one panel and hide the dock", _dock_toggles, "dock_toggles")
+	test("the frame playback sits at the bottom on a phone", _playback_row, "playback_row")
 	test("the menu hides tabs and keeps one document", _single_document, "single_document")
 
 
@@ -63,6 +64,20 @@ func _dock_toggles() -> void:
 	step("Then the whole dock body hides", func():
 		expect(not main.get_node("%DockBody").visible, "the dock body hides")
 	)
+
+func _playback_row() -> void:
+	var dock: Control = main.get_node("%BottomDock")
+	step("Then the playback controls sit in their own bottom row", func():
+		var row := dock.get_node_or_null("PlaybackRow")
+		expect(row is HBoxContainer, "the playback row exists")
+		expect(row.get_node_or_null("Playback") != null, "the playback controls moved there")
+		expect(row.alignment == BoxContainer.ALIGNMENT_CENTER, "the playback row is centred")
+		expect(dock.get_node("HBoxContainer").alignment == BoxContainer.ALIGNMENT_CENTER, "the frame row is centred")
+	)
+	step("Then the frame bar no longer sets a wide minimum", func():
+		expect(dock.get_combined_minimum_size().x < 320.0, "the dock minimum stays narrow")
+	)
+
 
 func _single_document() -> void:
 	var menu := main.get_node("%MenuBar")
