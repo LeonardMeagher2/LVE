@@ -1,5 +1,5 @@
 class_name PalettePanel
-extends VBoxContainer
+extends BoxContainer
 
 
 const Swatch := preload("./Swatch.tscn")

@@ -7,7 +7,9 @@
 [ext_resource type="PackedScene" path="res://ui/StatusBar/StatusBar.tscn" id="5_status"]
 [ext_resource type="Script" path="res://Globals/State/EditorWorkspace.gd" id="6_workspace"]
 [ext_resource type="Script" path="res://ui/Mobile/MainMobile.gd" id="7_mobile"]
-[ext_resource type="Texture2D" path="res://icons/view.svg" id="8_view"]
+
+[sub_resource type="ButtonGroup" id="DockButtonGroup"]
+allow_unpress = true
 
 [node name="Main" type="Control"]
 layout_mode = 3
@@ -83,25 +85,47 @@ unique_name_in_owner = true
 layout_mode = 2
 
 [node name="DockPanel" type="VBoxContainer" parent="Content/VBox/TabContainer/Editor"]
+unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 3
 size_flags_stretch_ratio = 2.0
 
-[node name="DockTabs" type="TabContainer" parent="Content/VBox/TabContainer/Editor/DockPanel"]
+[node name="DockBar" type="HBoxContainer" parent="Content/VBox/TabContainer/Editor/DockPanel"]
+layout_mode = 2
+
+[node name="PaletteToggle" type="Button" parent="Content/VBox/TabContainer/Editor/DockPanel/DockBar"]
+unique_name_in_owner = true
+layout_mode = 2
+toggle_mode = true
+button_pressed = true
+button_group = SubResource("DockButtonGroup")
+text = "Palette"
+
+[node name="FramesToggle" type="Button" parent="Content/VBox/TabContainer/Editor/DockPanel/DockBar"]
+unique_name_in_owner = true
+layout_mode = 2
+toggle_mode = true
+button_group = SubResource("DockButtonGroup")
+text = "Frames"
+
+[node name="DockBody" type="VBoxContainer" parent="Content/VBox/TabContainer/Editor/DockPanel"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 3
 
-[node name="PalettePanel" parent="Content/VBox/TabContainer/Editor/DockPanel/DockTabs" instance=ExtResource("2_palette")]
-layout_mode = 2
-
-[node name="BottomDock" parent="Content/VBox/TabContainer/Editor/DockPanel/DockTabs" instance=ExtResource("4_dock")]
-layout_mode = 2
-
-[node name="StatusScroll" type="ScrollContainer" parent="Content/VBox"]
-layout_mode = 2
-vertical_scroll_mode = 0
-
-[node name="StatusBar" parent="Content/VBox/StatusScroll" instance=ExtResource("5_status")]
+[node name="PalettePanel" parent="Content/VBox/TabContainer/Editor/DockPanel/DockBody" instance=ExtResource("2_palette")]
 unique_name_in_owner = true
 layout_mode = 2
+size_flags_horizontal = 3
+vertical = false
+
+[node name="BottomDock" parent="Content/VBox/TabContainer/Editor/DockPanel/DockBody" instance=ExtResource("4_dock")]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="StatusBar" parent="Content/VBox" instance=ExtResource("5_status")]
+unique_name_in_owner = true
+layout_mode = 2
+grow_horizontal = 1
