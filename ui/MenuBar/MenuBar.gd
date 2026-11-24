@@ -6,9 +6,6 @@ signal recovery_accepted(entries: Array)
 signal recovery_discarded(entries: Array)
 signal document_discarded(document: VoxelDocument)
 
-const DOCUMENT_TAB_MENU := preload("res://ui/Mobile/DocumentTabMenu.tscn")
-
-@export var compact_tabs := false
 var settings_path := ""
 
 var current_save_path: String:
@@ -44,8 +41,6 @@ func _ready() -> void:
 	_save_format.hide()
 	%FileDialog.get_vbox().add_child(_save_format)
 	%DocumentTabs.close_requested.connect(_on_tab_close_requested)
-	if compact_tabs:
-		_use_document_menu()
 	%CloseTabDialog.add_button("Discard", true, "discard")
 	%CloseTabDialog.confirmed.connect(_on_close_tab_save)
 	%CloseTabDialog.custom_action.connect(_on_close_tab_action)
@@ -65,14 +60,6 @@ func _ready() -> void:
 	State.active_tab_changed.connect(_sync_model_settings)
 	State.activity_changed.connect(_retry_quit)
 	_sync_history_buttons()
-
-
-func _use_document_menu() -> void:
-	%DocumentTabs.hide()
-	var menu := DOCUMENT_TAB_MENU.instantiate()
-	add_child(menu)
-	move_child(menu, 0)
-	menu.close_requested.connect(_on_tab_close_requested)
 
 
 func _sync_history_buttons() -> void:

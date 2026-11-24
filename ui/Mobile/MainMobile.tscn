@@ -39,7 +39,6 @@ vertical_scroll_mode = 0
 
 [node name="MenuBar" parent="Content/VBox/MenuScroll" instance=ExtResource("1_menu")]
 unique_name_in_owner = true
-compact_tabs = true
 layout_mode = 2
 
 [node name="TabContainer" type="TabContainer" parent="Content/VBox"]
