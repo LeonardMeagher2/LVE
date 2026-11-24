@@ -15,16 +15,6 @@ func _ready() -> void:
 	get_window().size_changed.connect(_apply_safe_margins)
 
 
-func _mobile_ui_scale() -> float:
-	var width := float(DisplayServer.screen_get_size(DisplayServer.SCREEN_OF_MAIN_WINDOW).x)
-	var palette: Control = %PalettePanel
-	var needed: float = palette.get_combined_minimum_size().x + CORNER_MARGIN * 2.0
-	if needed <= CORNER_MARGIN * 2.0:
-		needed = MOBILE_LOGICAL_WIDTH
-	if width <= 0.0:
-		return MOBILE_MIN_SCALE
-	return clampf(width / needed, MOBILE_MIN_SCALE, MOBILE_MAX_SCALE)
-
 
 func _apply_safe_margins() -> void:
 	var scale := maxf(get_window().content_scale_factor, 1.0)

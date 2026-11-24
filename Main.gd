@@ -10,9 +10,7 @@ const MCP_SERVER_SCRIPT := preload("res://Globals/MCP/MCPServer.gd")
 const MCP_BRIDGE_SCRIPT := preload("res://Globals/MCP/MCPBridge.gd")
 const AUTOSAVE_SCRIPT := preload("res://Globals/Autosave/Autosave.gd")
 const MCP_PORT := 17373
-const MOBILE_LOGICAL_WIDTH := 500.0
-const MOBILE_MIN_SCALE := 1.5
-const MOBILE_MAX_SCALE := 4.0
+const MOBILE_SCALE := 2.0
 var settings_path := ""
 var mcp_port := MCP_PORT
 @export var restore_saved_agent := true
@@ -250,18 +248,11 @@ func _automatic_ui_scale() -> float:
 	if DisplayServer.get_name() == "headless":
 		return 1.0
 	if OS.has_feature("mobile"):
-		return _mobile_ui_scale()
+		return MOBILE_SCALE
 	var screen_scale := DisplayServer.screen_get_scale(DisplayServer.SCREEN_OF_MAIN_WINDOW)
 	if OS.get_name() == "Windows" and screen_scale == 1.0:
 		screen_scale = DisplayServer.screen_get_dpi(DisplayServer.SCREEN_OF_MAIN_WINDOW) / 96.0
 	return clampf(screen_scale, 1.0, 3.0)
-
-
-func _mobile_ui_scale() -> float:
-	var width := DisplayServer.screen_get_size(DisplayServer.SCREEN_OF_MAIN_WINDOW).x
-	if width <= 0:
-		return MOBILE_MIN_SCALE
-	return clampf(float(width) / MOBILE_LOGICAL_WIDTH, MOBILE_MIN_SCALE, MOBILE_MAX_SCALE)
 
 
 func _apply_ui_scale() -> void:
