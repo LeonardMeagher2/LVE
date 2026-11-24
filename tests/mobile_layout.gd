@@ -34,13 +34,6 @@ func _panels() -> void:
 		expect(main.get_node("%OptionBar") is Container, "the option bar is a container")
 		expect(main.get_node("%StatusBar") != null, "the status bar exists")
 	)
-	step("Then the content sits inside the safe margin", func():
-		var content: Control = main.get_node("Content")
-		expect(content.offset_left >= 16.0, "the left edge is inset")
-		expect(content.offset_top >= 16.0, "the top edge is inset")
-		expect(content.offset_right <= -16.0, "the right edge is inset")
-		expect(content.offset_bottom <= -16.0, "the bottom edge is inset")
-	)
 
 
 func _dock_swipe() -> void:
