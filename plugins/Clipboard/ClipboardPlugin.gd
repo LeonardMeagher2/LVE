@@ -186,7 +186,7 @@ func _sync_options() -> void:
 	var pressed_button := _button_group.get_pressed_button()
 	for plugin_name in ["BrushPlugin", "PaintPlugin", "SelectionPlugin", "TransformPlugin"]:
 		var plugin := get_tree().root.get_node_or_null(plugin_name)
-		if plugin != null and plugin._toolbar == pressed_button:
+		if plugin != null and is_instance_valid(plugin._options) and plugin._toolbar == pressed_button:
 			target = plugin._options
 			break
 	if target:

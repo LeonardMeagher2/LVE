@@ -9,6 +9,7 @@ func _ready() -> void:
 	settle_frames = 2
 	test("the mobile scene builds the editor panels", _panels, "mobile_panels")
 	test("the dock toggles show one panel and hide the dock", _dock, "dock_toggles")
+	test("the menu hides tabs and keeps one document", _single_document, "single_document")
 
 
 func before_test() -> void:
@@ -55,4 +56,17 @@ func _dock() -> void:
 	)
 	step("Then the whole dock body hides", func():
 		expect(not main.get_node("%DockBody").visible, "the dock body hides")
+	)
+
+
+func _single_document() -> void:
+	var menu := main.get_node("%MenuBar")
+	step("Then the document tab bar is hidden", func():
+		expect(not menu.get_node("%DocumentTabs").visible, "the tab bar hides")
+	)
+	step("Then opening a document replaces the current tab", func():
+		var before := State.tabs.size()
+		expect(menu.open_document("res://splash.lve", false, false), "the document opens")
+		expect(State.tabs.size() == before, "the open document replaces the tab")
+		State.stop()
 	)
