@@ -718,3 +718,4 @@ estore. The no-op test compares masks, not the cell dictionary, so an edit with 
 - 2026-11-24T00:00Z [imp:5] [notes/ui-and-input] `Control.custom_maximum_size` exists in Godot 4.7 beside `custom_minimum_size`. A container clamps a child to it, so content can clip instead of scroll.
 - 2026-11-24T00:00Z [imp:7] [notes/ui-and-input] `BoxContainer.vertical` is read-only on `VBoxContainer`. A container that must switch axis uses the `BoxContainer` type with `vertical` set, and the script extends `BoxContainer`.
 - 2026-11-24T00:00Z [imp:6] [notes/ui-and-input] The palette lays out horizontally on a phone. It needs 458 px of width and 223 px of height, against 300 by 345 when vertical.
+- 2026-11-24T00:00Z [imp:7] [notes/ui-and-input] `ColorPicker` takes `sv_width` and `sv_height` theme constants. `sv_width` 256 gives a 286 px minimum width. 160 gives 161 px, which lets the colour field share a phone row with the swatches.
