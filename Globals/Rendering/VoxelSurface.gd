@@ -318,6 +318,7 @@ static func _protect_groups(groups: Dictionary, checkpoint: Callable, timers := 
 		group.raw_loops = REGION.raw_loops(group.cells, checkpoint)
 		var t1 := Time.get_ticks_usec() if not timers.is_empty() else 0
 		loops_us += t1 - t0
+		var turns := 0
 		for loop: PackedVector2Array in group.raw_loops:
 			var t2 := Time.get_ticks_usec() if not timers.is_empty() else 0
 			var size := loop.size()
@@ -331,6 +332,7 @@ static func _protect_groups(groups: Dictionary, checkpoint: Callable, timers := 
 					else:
 						next = loop[0]
 					if (point - previous).cross(next - point) != 0.0:
+						turns += 1
 						var dbl := Vector3i.ZERO
 						if axis0 == 0:
 							dbl.x = plane.z
@@ -348,6 +350,7 @@ static func _protect_groups(groups: Dictionary, checkpoint: Callable, timers := 
 					previous = point
 			if not timers.is_empty():
 				simplify_us += Time.get_ticks_usec() - t2
+		group.unit_loops = turns == group.cells.size() * 4
 	if not timers.is_empty():
 		timers["raw_loops"] = loops_us
 		timers["simplify"] = simplify_us
@@ -366,7 +369,7 @@ static func _triangulate_groups(groups: Dictionary, protected: Dictionary, check
 		for group: Dictionary in groups.values():
 			if not checkpoint.call(0):
 				return false
-			group.polygons = REGION.triangulate(group.cells, protected_planes[group.plane], checkpoint, group.raw_loops)
+			group.polygons = REGION.triangulate(group.cells, protected_planes[group.plane], checkpoint, group.raw_loops, group.unit_loops)
 			if group.polygons.is_empty():
 				return false
 			var grp_axis0: int = group.plane.x

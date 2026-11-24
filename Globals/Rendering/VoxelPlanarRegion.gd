@@ -85,12 +85,12 @@ static func contours(cells: Dictionary, checkpoint := Callable()) -> Array[Packe
 	return result
 
 
-static func triangulate(cells: Dictionary, protected: Dictionary = {}, checkpoint := Callable(), prepared: Array = []) -> Array:
+static func triangulate(cells: Dictionary, protected: Dictionary = {}, checkpoint := Callable(), prepared: Array = [], prepared_units := false) -> Array:
 	var state := {"cancelled": false}
 	var check := _latch(checkpoint, state)
 	if not check.call(0) or cells.is_empty():
 		return []
-	if not prepared.is_empty() and _all_unit_squares(prepared):
+	if not prepared.is_empty() and (prepared_units or _all_unit_squares(prepared)):
 		return _unit_square_faces(cells, prepared, check)
 	var box := _compact(cells)
 	var queue: Array[Dictionary] = [cells]
