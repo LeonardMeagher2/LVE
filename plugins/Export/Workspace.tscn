@@ -63,7 +63,6 @@ layout_mode = 2
 
 [node name="Viewport" parent="Panels/ModelPanel/Margin/Model" unique_id=499526288 instance=ExtResource("1_viewport")]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 200)
 layout_mode = 2
 size_flags_vertical = 3
 
@@ -111,7 +110,6 @@ unique_name_in_owner = true
 layout_mode = 2
 
 [node name="Preview" type="Control" parent="Panels/SheetPanel/Margin/Sheet" unique_id=1458207165]
-custom_minimum_size = Vector2(0, 200)
 texture_filter = 1
 clip_contents = true
 light_mask = 2
