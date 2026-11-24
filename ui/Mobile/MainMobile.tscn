@@ -87,8 +87,7 @@ layout_mode = 2
 [node name="DockPanel" type="VBoxContainer" parent="Content/VBox/TabContainer/Editor"]
 unique_name_in_owner = true
 layout_mode = 2
-size_flags_vertical = 3
-size_flags_stretch_ratio = 2.0
+size_flags_vertical = 0
 
 [node name="DockBar" type="HBoxContainer" parent="Content/VBox/TabContainer/Editor/DockPanel"]
 layout_mode = 2

@@ -17,6 +17,4 @@ func _sync_dock() -> void:
 	var frames_on: bool = %FramesToggle.button_pressed
 	%PalettePanel.visible = palette_on
 	%BottomDock.visible = frames_on
-	var shown: bool = palette_on or frames_on
-	%DockBody.visible = shown
-	%DockPanel.size_flags_vertical = Control.SIZE_EXPAND_FILL if shown else Control.SIZE_SHRINK_END
+	%DockBody.visible = palette_on or frames_on
