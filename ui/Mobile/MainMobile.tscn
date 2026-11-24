@@ -1,0 +1,108 @@
+[gd_scene load_steps=9 format=3]
+
+[ext_resource type="PackedScene" path="res://ui/MenuBar/MenuBar.tscn" id="1_menu"]
+[ext_resource type="PackedScene" path="res://ui/PalettePanel/PalettePanel.tscn" id="2_palette"]
+[ext_resource type="PackedScene" path="res://ui/Viewport/Viewport.tscn" id="3_viewport"]
+[ext_resource type="PackedScene" path="res://ui/AnimationTimeline/AnimationTimeline.tscn" id="4_dock"]
+[ext_resource type="PackedScene" path="res://ui/StatusBar/StatusBar.tscn" id="5_status"]
+[ext_resource type="Script" path="res://Globals/State/EditorWorkspace.gd" id="6_workspace"]
+[ext_resource type="Script" path="res://ui/Mobile/MainMobile.gd" id="7_mobile"]
+[ext_resource type="Texture2D" path="res://icons/view.svg" id="8_view"]
+
+[node name="Main" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("7_mobile")
+
+[node name="EditorWorkspace" type="Node" parent="."]
+unique_name_in_owner = true
+script = ExtResource("6_workspace")
+
+[node name="Content" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="VBox" type="VBoxContainer" parent="Content"]
+layout_mode = 2
+
+[node name="MenuScroll" type="ScrollContainer" parent="Content/VBox"]
+layout_mode = 2
+vertical_scroll_mode = 0
+
+[node name="MenuBar" parent="Content/VBox/MenuScroll" instance=ExtResource("1_menu")]
+unique_name_in_owner = true
+compact_tabs = true
+layout_mode = 2
+
+[node name="TabContainer" type="TabContainer" parent="Content/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+current_tab = 0
+tabs_visible = false
+
+[node name="Editor" type="VBoxContainer" parent="Content/VBox/TabContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="Body" type="VBoxContainer" parent="Content/VBox/TabContainer/Editor"]
+layout_mode = 2
+size_flags_vertical = 3
+size_flags_stretch_ratio = 3.0
+
+[node name="OptionScroll" type="ScrollContainer" parent="Content/VBox/TabContainer/Editor/Body"]
+layout_mode = 2
+vertical_scroll_mode = 0
+
+[node name="OptionBar" type="HBoxContainer" parent="Content/VBox/TabContainer/Editor/Body/OptionScroll"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="ViewRow" type="HBoxContainer" parent="Content/VBox/TabContainer/Editor/Body"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="Viewport" parent="Content/VBox/TabContainer/Editor/Body/ViewRow" instance=ExtResource("3_viewport")]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="ToolScroll" type="ScrollContainer" parent="Content/VBox/TabContainer/Editor/Body/ViewRow"]
+layout_mode = 2
+horizontal_scroll_mode = 0
+
+[node name="ToolBar" type="VBoxContainer" parent="Content/VBox/TabContainer/Editor/Body/ViewRow/ToolScroll"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="DockPanel" type="VBoxContainer" parent="Content/VBox/TabContainer/Editor"]
+layout_mode = 2
+size_flags_vertical = 3
+size_flags_stretch_ratio = 2.0
+
+[node name="DockTabs" type="TabContainer" parent="Content/VBox/TabContainer/Editor/DockPanel"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="PalettePanel" parent="Content/VBox/TabContainer/Editor/DockPanel/DockTabs" instance=ExtResource("2_palette")]
+layout_mode = 2
+
+[node name="BottomDock" parent="Content/VBox/TabContainer/Editor/DockPanel/DockTabs" instance=ExtResource("4_dock")]
+layout_mode = 2
+
+[node name="StatusScroll" type="ScrollContainer" parent="Content/VBox"]
+layout_mode = 2
+vertical_scroll_mode = 0
+
+[node name="StatusBar" parent="Content/VBox/StatusScroll" instance=ExtResource("5_status")]
+unique_name_in_owner = true
+layout_mode = 2
