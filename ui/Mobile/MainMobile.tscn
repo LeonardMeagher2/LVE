@@ -33,6 +33,7 @@ grow_vertical = 2
 [node name="VBox" type="VBoxContainer" parent="Content"]
 layout_mode = 2
 
+
 [node name="MenuScroll" type="ScrollContainer" parent="Content/VBox"]
 layout_mode = 2
 vertical_scroll_mode = 0
