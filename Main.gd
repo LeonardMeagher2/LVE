@@ -10,7 +10,7 @@ const MCP_SERVER_SCRIPT := preload("res://Globals/MCP/MCPServer.gd")
 const MCP_BRIDGE_SCRIPT := preload("res://Globals/MCP/MCPBridge.gd")
 const AUTOSAVE_SCRIPT := preload("res://Globals/Autosave/Autosave.gd")
 const MCP_PORT := 17373
-const MOBILE_MIN_SCALE := 2.0
+const ANDROID_BASE_DPI := 160.0
 var settings_path := ""
 var mcp_port := MCP_PORT
 @export var restore_saved_agent := true
@@ -248,7 +248,7 @@ func _automatic_ui_scale() -> float:
 	if DisplayServer.get_name() == "headless":
 		return 1.0
 	if OS.has_feature("mobile"):
-		return maxf(DisplayServer.screen_get_scale(DisplayServer.SCREEN_OF_MAIN_WINDOW), MOBILE_MIN_SCALE)
+		return clampf(DisplayServer.screen_get_dpi(DisplayServer.SCREEN_OF_MAIN_WINDOW) / ANDROID_BASE_DPI, 1.5, 4.0)
 	var screen_scale := DisplayServer.screen_get_scale(DisplayServer.SCREEN_OF_MAIN_WINDOW)
 	if OS.get_name() == "Windows" and screen_scale == 1.0:
 		screen_scale = DisplayServer.screen_get_dpi(DisplayServer.SCREEN_OF_MAIN_WINDOW) / 96.0
