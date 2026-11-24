@@ -102,6 +102,9 @@ func _ready() -> void:
 	_sheet_settings.get_node("ViewRow/View").select(1)
 	add_menu_bar_item(_menu_item)
 	add_tab(_workspace)
+	var panels: BoxContainer = _workspace.get_node("%Panels")
+	if OS.has_feature("mobile"):
+		panels.vertical = true
 	_model_scene = _model_viewport.get_node("ViewportScene")
 	_default_lighting = _model_scene.get_lighting_settings()
 	_default_camera = _capture_export_camera()
