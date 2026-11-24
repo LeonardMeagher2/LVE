@@ -308,6 +308,7 @@ static func _protect_groups(groups: Dictionary, checkpoint: Callable, timers := 
 	var protected_planes := {}
 	var loops_us := 0
 	var simplify_us := 0
+	var uses_planes := false
 	for group: Dictionary in groups.values():
 		if not checkpoint.call(0):
 			return {}
@@ -351,13 +352,16 @@ static func _protect_groups(groups: Dictionary, checkpoint: Callable, timers := 
 			if not timers.is_empty():
 				simplify_us += Time.get_ticks_usec() - t2
 		group.unit_loops = turns == group.cells.size() * 4
+		if not group.unit_loops:
+			uses_planes = true
 	if not timers.is_empty():
 		timers["raw_loops"] = loops_us
 		timers["simplify"] = simplify_us
-	var t3 := Time.get_ticks_usec() if not timers.is_empty() else 0
-	_protect(protected_positions, protected_planes)
-	if not timers.is_empty():
-		timers["protect_inner"] = Time.get_ticks_usec() - t3
+	if uses_planes:
+		var t3 := Time.get_ticks_usec() if not timers.is_empty() else 0
+		_protect(protected_positions, protected_planes)
+		if not timers.is_empty():
+			timers["protect_inner"] = Time.get_ticks_usec() - t3
 	return {"positions": protected_positions, "planes": protected_planes}
 
 
@@ -372,19 +376,20 @@ static func _triangulate_groups(groups: Dictionary, protected: Dictionary, check
 			group.polygons = REGION.triangulate(group.cells, protected_planes[group.plane], checkpoint, group.raw_loops, group.unit_loops)
 			if group.polygons.is_empty():
 				return false
-			var grp_axis0: int = group.plane.x
-			var grp_axis1: int = (group.plane.x + 1) % 3
-			var grp_axis2: int = (group.plane.x + 2) % 3
-			var grp_plane_z: int = group.plane.z
-			for polygon: Dictionary in group.polygons:
-				for point: Vector2 in polygon.points:
-					var corner := Vector3i.ZERO
-					corner[grp_axis0] = grp_plane_z
-					corner[grp_axis1] = roundi(2.0 * point.x - 1.0)
-					corner[grp_axis2] = roundi(2.0 * point.y - 1.0)
-					if not protected_positions.has(corner):
-						protected_positions[corner] = true
-						added[corner] = true
+			if not group.unit_loops:
+				var grp_axis0: int = group.plane.x
+				var grp_axis1: int = (group.plane.x + 1) % 3
+				var grp_axis2: int = (group.plane.x + 2) % 3
+				var grp_plane_z: int = group.plane.z
+				for polygon: Dictionary in group.polygons:
+					for point: Vector2 in polygon.points:
+						var corner := Vector3i.ZERO
+						corner[grp_axis0] = grp_plane_z
+						corner[grp_axis1] = roundi(2.0 * point.x - 1.0)
+						corner[grp_axis2] = roundi(2.0 * point.y - 1.0)
+						if not protected_positions.has(corner):
+							protected_positions[corner] = true
+							added[corner] = true
 		if added.is_empty():
 			break
 		_protect(added, protected_planes)
