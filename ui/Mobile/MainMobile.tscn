@@ -1,4 +1,4 @@
-[gd_scene load_steps=9 format=3]
+[gd_scene load_steps=8 format=3]
 
 [ext_resource type="PackedScene" path="res://ui/MenuBar/MenuBar.tscn" id="1_menu"]
 [ext_resource type="PackedScene" path="res://ui/PalettePanel/PalettePanel.tscn" id="2_palette"]
@@ -8,8 +8,6 @@
 [ext_resource type="Script" path="res://Globals/State/EditorWorkspace.gd" id="6_workspace"]
 [ext_resource type="Script" path="res://ui/Mobile/MainMobile.gd" id="7_mobile"]
 
-[sub_resource type="ButtonGroup" id="DockButtonGroup"]
-allow_unpress = true
 
 [node name="Main" type="Control"]
 layout_mode = 3
@@ -55,7 +53,6 @@ tabs_visible = false
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 3
-theme_override_constants/separation = 0
 
 [node name="Body" type="VBoxContainer" parent="Content/VBox/TabContainer/Editor"]
 layout_mode = 2
@@ -90,25 +87,7 @@ layout_mode = 2
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 0
-theme_override_constants/separation = 0
 
-[node name="DockBar" type="HBoxContainer" parent="Content/VBox/TabContainer/Editor/DockPanel"]
-layout_mode = 2
-
-[node name="PaletteToggle" type="Button" parent="Content/VBox/TabContainer/Editor/DockPanel/DockBar"]
-unique_name_in_owner = true
-layout_mode = 2
-toggle_mode = true
-button_pressed = true
-button_group = SubResource("DockButtonGroup")
-text = "Palette"
-
-[node name="FramesToggle" type="Button" parent="Content/VBox/TabContainer/Editor/DockPanel/DockBar"]
-unique_name_in_owner = true
-layout_mode = 2
-toggle_mode = true
-button_group = SubResource("DockButtonGroup")
-text = "Frames"
 
 [node name="DockBody" type="VBoxContainer" parent="Content/VBox/TabContainer/Editor/DockPanel"]
 unique_name_in_owner = true
