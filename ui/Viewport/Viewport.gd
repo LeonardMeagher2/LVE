@@ -610,3 +610,12 @@ func _input(event: InputEvent) -> void:
 		elif mask & MOUSE_BUTTON_MASK_RIGHT:
 			%CameraRig.orbit(mm.relative)
 			get_viewport().set_input_as_handled()
+	elif event is InputEventMagnifyGesture:
+		var magnify := event as InputEventMagnifyGesture
+		if magnify.factor > 0.0:
+			%CameraRig.zoom(1.0 / magnify.factor)
+		get_viewport().set_input_as_handled()
+	elif event is InputEventPanGesture:
+		var pan_gesture := event as InputEventPanGesture
+		%CameraRig.pan(pan_gesture.delta)
+		get_viewport().set_input_as_handled()

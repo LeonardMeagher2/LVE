@@ -10,6 +10,7 @@ func _ready() -> void:
 	test("the mobile scene builds the editor panels", _panels, "mobile_panels")
 	test("the dock toggles show one panel and hide the dock", _dock_toggles, "dock_toggles")
 	test("the frame playback sits at the bottom on a phone", _playback_row, "playback_row")
+	test("gestures zoom and pan the viewport", _gestures, "gestures")
 	test("the menu hides tabs and keeps one document", _single_document, "single_document")
 
 
@@ -76,6 +77,29 @@ func _playback_row() -> void:
 	)
 	step("Then the frame bar no longer sets a wide minimum", func():
 		expect(dock.get_combined_minimum_size().x < 320.0, "the dock minimum stays narrow")
+	)
+
+
+func _gestures() -> void:
+	var viewport: Node = main.get_node("%Viewport")
+	var scene: Node = viewport.get_node("%ViewportScene")
+	var rig: Node = viewport.get_node("%CameraRig")
+	step("Given the viewport at its normal zoom", func():
+		expect(rig.zoom_percent() > 0.0, "the camera reports a zoom")
+	)
+	step("When a magnify gesture spreads the fingers", func():
+		var before: float = rig.zoom_percent()
+		var magnify := InputEventMagnifyGesture.new()
+		magnify.factor = 1.5
+		scene.call("_input", magnify)
+		expect(rig.zoom_percent() > before, "spreading the fingers zooms in")
+	)
+	step("When a pan gesture moves two fingers", func():
+		var before: Vector3 = rig.global_position
+		var pan := InputEventPanGesture.new()
+		pan.delta = Vector2(40, 0)
+		scene.call("_input", pan)
+		expect(not rig.global_position.is_equal_approx(before), "the camera pans")
 	)
 
 
