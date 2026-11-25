@@ -215,7 +215,7 @@ func _projection_run() -> void:
 			expect(exporter._sheet_settings.get_node("SizeRow/Size").value == ortho_size, "the perspective projection keeps the manual frame size")
 			exporter._sheet_settings.get_node("SizeRow/Reset").pressed.emit()
 		)
-		var perspective_size := 74 if view == 2 else 20
+		var perspective_size := ortho_size if view == 2 else 20
 		expect(exporter._sheet_settings.get_node("SizeRow/Size").value == perspective_size, "Reset fits the perspective field of view")
 		error = await exporter.export_sprite_sheet(projection_path, 0, 0, -1, view, false)
 		var perspective := Image.new()
@@ -226,8 +226,8 @@ func _projection_run() -> void:
 			var ortho_rect := orthographic.get_used_rect()
 			var perspective_rect := perspective.get_used_rect()
 			expect(ortho_rect.size.x > 0 and ortho_rect.size.y > 0 and perspective_rect.size.x > 0 and perspective_rect.size.y > 0, "both projections contain the center voxel")
-			expect(absi(ortho_rect.size.x - perspective_rect.size.x) <= 1, "the center voxel widths match within one output pixel")
-			expect(absi(ortho_rect.size.y - perspective_rect.size.y) <= 1, "the center voxel heights match within one output pixel")
+			expect(ortho_rect.size == orthographic.get_size(), "the orthographic content fills the tile")
+			expect(perspective_rect.size == perspective.get_size(), "the perspective content fills the tile")
 		)
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(projection_path))
 
@@ -334,7 +334,7 @@ func _sheet_run() -> void:
 		expect(settings.get_node("SizeRow/Size").value == perspective_span, "the projection change keeps the manual frame size")
 		settings.get_node("SizeRow/Reset").pressed.emit()
 		expect(settings.get_node("SizeRow/Size").value == orthographic_span, "Reset fits the orthographic framing")
-		expect(perspective_span != orthographic_span, "the frame size follows the camera framing")
+		expect(perspective_span == orthographic_span, "the frame size follows the content")
 	)
 	step("Then a fixed view follows the camera projection without a size reset", func():
 		var original_size: float = settings.get_node("SizeRow/Size").value

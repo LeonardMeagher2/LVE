@@ -5,6 +5,8 @@ var viewport: SubViewport
 var _measured: Array = []
 var _wheel_slider: Range
 var _wheel_before := 0.0
+var _span_before := 0.0
+var _zoom_before := 0.0
 
 const VIEW_KEYS := [
 	[KEY_1, "top", 0.0, 89.0],
@@ -21,6 +23,7 @@ func _ready() -> void:
 	test("can snap the camera to every axis view and switch projection", _run)
 	test("the mouse wheel zooms once per notch", _wheel, "wheel_zoom")
 	test("the zoom range follows the framed bounds", _zoom_limits, "zoom_limits")
+	test("the field of view keeps the subject scale and matches orthographic", _lens_run, "field_of_view")
 
 
 func _angles_match(yaw_deg: float, pitch_deg: float) -> bool:
@@ -84,7 +87,9 @@ func _zoom_limits() -> void:
 			"the close view height is eight voxels"
 		)
 		expect(is_equal_approx(rig.zoom_percent(), rig.max_zoom_percent()), "the zoom stops at the highest percent")
-		expect(is_equal_approx(rig.zoom_step(), EditorCameraRig.ZOOM_STEPS), "the slider reaches its top")
+		var slider := main.find_child("ZoomSlider", true, false) as Range
+		expect(is_equal_approx(slider.max_value, rig.max_zoom_percent()), "the slider top is the close limit")
+		expect(is_equal_approx(slider.value, rig.max_zoom_percent()), "the slider reaches its top")
 	)
 	step("When the user zooms far past the far limit", func():
 		rig.set_zoom_percent(0.0)
@@ -93,17 +98,18 @@ func _zoom_limits() -> void:
 		expect(is_equal_approx(rig._dist, rig.max_distance()), "the far distance is the framed bounds")
 		expect(rig._dist >= rig._init_dist, "the far distance is no closer than the initial view")
 		expect(is_equal_approx(rig.zoom_percent(), rig.min_zoom_percent()), "the zoom stops at the lowest percent")
-		expect(is_equal_approx(rig.zoom_step(), 0.0), "the slider reaches its bottom")
+		var slider := main.find_child("ZoomSlider", true, false) as Range
+		expect(is_equal_approx(slider.min_value, rig.min_zoom_percent()), "the slider bottom is the far limit")
+		expect(is_equal_approx(slider.value, rig.min_zoom_percent()), "the slider reaches its bottom")
 	)
 	step("Then one hundred percent sits inside the track", func():
 		rig.set_zoom_percent(100.0)
-		var step := rig.zoom_step()
-		expect(step > 0.0, "one hundred percent sits above the far end")
-		expect(step < EditorCameraRig.ZOOM_STEPS * 0.5, "one hundred percent sits below the middle")
 		var slider := main.find_child("ZoomSlider", true, false) as Range
 		expect(slider != null, "the zoom slider exists")
-		expect(is_equal_approx(slider.max_value, EditorCameraRig.ZOOM_STEPS), "the slider spans one fixed travel")
-		expect(absf(slider.value - step) <= 1.0, "the slider follows the camera")
+		expect(100.0 >= slider.min_value and 100.0 <= slider.max_value, "one hundred percent sits inside the track")
+		expect(is_equal_approx(slider.max_value, rig.max_zoom_percent()), "the slider top follows the close limit")
+		expect(is_equal_approx(slider.min_value, rig.min_zoom_percent()), "the slider bottom follows the far limit")
+		expect(is_equal_approx(slider.value, rig.zoom_percent()), "the slider follows the camera")
 	)
 	step("Then a wheel zoom stays inside the range", func():
 		for notch in 64:
@@ -120,7 +126,8 @@ func _zoom_limits() -> void:
 		rig.set_zoom_percent(0.0)
 		expect(is_equal_approx(rig._dist, rig.max_distance()), "a zoom reaches the new far limit")
 		var slider := main.find_child("ZoomSlider", true, false) as Range
-		expect(absf(slider.value - rig.zoom_step()) <= 1.0, "the slider follows the new range")
+		expect(is_equal_approx(slider.min_value, rig.min_zoom_percent()), "the slider follows the new range")
+		expect(is_equal_approx(slider.value, rig.zoom_percent()), "the slider follows the new far limit")
 	)
 	rig.set_zoom_percent(100.0)
 
@@ -208,4 +215,45 @@ func _run() -> void:
 		var cam := rig
 		expect(cam.projection == Camera3D.PROJECTION_PERSPECTIVE, "the camera uses perspective projection")
 		expect(is_equal_approx(rig.zoom_percent(), rig.max_zoom_percent()), "zoom level survives the projection switch")
+	)
+
+
+func _lens_run() -> void:
+	step("Given a perspective camera at 45 degrees", func():
+		rig = camera_rig()
+		rig.set_field_of_view(45.0)
+		_span_before = 2.0 * rig._dist * tan(deg_to_rad(rig.fov) * 0.5)
+		_zoom_before = rig.zoom_percent()
+	)
+	step("When the user narrows the field of view to 20 degrees", func():
+		rig.set_field_of_view(20.0)
+	)
+	step("Then the subject keeps its scale and the zoom percent", func():
+		var span := 2.0 * rig._dist * tan(deg_to_rad(rig.fov) * 0.5)
+		expect(is_equal_approx(rig.fov, 20.0), "the camera uses a 20 degree field of view")
+		expect(is_equal_approx(span, _span_before), "the target plane keeps its height")
+		expect(is_equal_approx(rig.zoom_percent(), _zoom_before), "the zoom percent stays")
+	)
+	step("When the user sets the field of view to 0", func():
+		rig.set_field_of_view(0.0)
+	)
+	step("Then the orthographic size matches the perspective span", func():
+		expect(rig.projection == Camera3D.PROJECTION_ORTHOGONAL, "the camera uses orthogonal projection")
+		expect(is_equal_approx(rig.size, _span_before), "the orthographic height matches the perspective span")
+		expect(is_equal_approx(rig.field_of_view(), 0.0), "the field of view reports 0")
+	)
+	step("When the user returns to 60 degrees", func():
+		rig.set_field_of_view(60.0)
+	)
+	step("Then the perspective span stays the same", func():
+		var span := 2.0 * rig._dist * tan(deg_to_rad(rig.fov) * 0.5)
+		expect(not rig.is_orthogonal, "the camera uses perspective projection")
+		expect(is_equal_approx(span, _span_before), "the target plane keeps its height")
+	)
+	step("When the user sets the field of view to 5 degrees", func():
+		rig.set_field_of_view(5.0)
+	)
+	step("Then the camera uses orthographic projection", func():
+		expect(rig.is_orthogonal, "the camera uses orthogonal projection")
+		expect(is_equal_approx(rig.field_of_view(), 0.0), "the field of view reports 0")
 	)

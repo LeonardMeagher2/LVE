@@ -287,11 +287,11 @@ const TOOLS := [
 			"properties": {
 				"camera": {
 					"type": "object",
-					"description": "yaw, pitch, distance, initial_distance, and target [x, y, z]. Export cameras also accept orthographic and fov.",
+					"description": "yaw, pitch, distance, initial_distance, target [x, y, z], and fov in degrees. Export cameras also accept orthographic.",
 					"additionalProperties": true,
 				},
 				"lighting": {"type": "object", "description": "basis, color, energy, ambient_color, ambient_energy, shadows, shaded, view_locked, and view_basis.", "additionalProperties": true},
-				"view": {"type": "object", "description": "grid, wireframe, orthographic, view_mode, and environment_open.", "additionalProperties": true},
+				"view": {"type": "object", "description": "grid, wireframe, orthographic, and view_mode.", "additionalProperties": true},
 				"export": {"type": "object", "description": "The export tab settings: view, frame_size, views, turntable, metadata, normal, specular, specular_intensity, center, sprite_center, model_tag, sheet_tag, lighting, and camera.", "additionalProperties": true},
 				"playing": {"type": "boolean", "description": "Whether the document plays its tag when it opens."},
 			},

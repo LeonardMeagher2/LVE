@@ -45,7 +45,7 @@ func _run() -> void:
 			"editing": {"symmetry_axes": 5, "symmetry_origin": Vector3(0.5, -0.5, 0.5), "floor_axis": 2, "floor_index": -3, "slice_layers": 2},
 		}
 		source.view_settings = {"grid": false, "wireframe": true, "orthographic": true, "view_mode": 2, "environment_open": true}
-		source.edit_camera = {"yaw": 0.25, "pitch": 0.5, "distance": 18.0, "initial_distance": 24.0, "target": Vector3(1, 2, 3)}
+		source.edit_camera = {"yaw": 0.25, "pitch": 0.5, "distance": 18.0, "initial_distance": 24.0, "target": Vector3(1, 2, 3), "fov": 60.0}
 		source.lighting_settings = {"basis": Basis(Vector3.UP, 0.5), "color": Color(1, 0.5, 0.25, 0.75), "ambient_color": Color(0.2, 0.3, 0.4, 0.5)}
 		source.export_settings = {"view": 7, "sprite_ortho": false, "sprite_center": false, "automatic_size": true, "frame_size": 64.0, "turntable": false, "views": 12.0, "metadata": true, "normal": true, "specular": true, "specular_intensity": 0.5, "center": false, "model_tag": 1, "sheet_tag": 2,
 			"lighting": {"basis": Basis.IDENTITY, "color": Color.WHITE, "ambient_color": Color.BLUE, "energy": 0.5, "ambient_energy": 0.25, "shadows": false, "shaded": true, "view_locked": true, "view_basis": Basis.IDENTITY},

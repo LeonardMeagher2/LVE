@@ -16,8 +16,7 @@ func _run() -> void:
 		viewport.get_parent().stretch = false
 		viewport.size = Vector2i(800, 500)
 		brush = plugin("BrushPlugin")
-		State.document = VoxelDocument.new()
-		frame = State.get_current_voxel_frame()
+		_empty()
 		State.symmetry_axes = 7
 		State.symmetry_origin = Vector3.ZERO
 		State.floor_axis = Vector3.Axis.AXIS_Y
@@ -52,8 +51,7 @@ func _run() -> void:
 		expect(frame.count() == 32768, "redo restores all eight cubes without mirroring them again")
 	)
 	step("When the user changes frames during another mirrored worker stroke", func():
-		State.document = VoxelDocument.new()
-		frame = State.get_current_voxel_frame()
+		_empty()
 		State.symmetry_axes = 7
 		State.symmetry_origin = Vector3.ZERO
 		_click()
@@ -70,6 +68,14 @@ func _run() -> void:
 	State.symmetry_axes = 0
 	State.symmetry_origin = Vector3.ZERO
 	State.floor_index = 0
+
+
+func _empty() -> void:
+	var previous := State.document
+	var next := VoxelDocument.new()
+	next.tool_settings = previous.tool_settings.duplicate(true)
+	State.document = next
+	frame = State.get_current_voxel_frame()
 
 
 func _click() -> void:

@@ -12,8 +12,8 @@ func after_test() -> void:
 		camera_menu_btn = camera_menu()
 	if _checked("wireframe"):
 		_pick("wireframe")
-	if _checked("orthographic"):
-		_pick("orthographic")
+	if camera_rig().is_orthogonal:
+		_field_of_view().value = 45.0
 	_shaded().button_pressed = true
 
 
@@ -27,6 +27,10 @@ func _debug_draw() -> int:
 
 func _shaded() -> Button:
 	return viewport_scene().get_node("%Shaded")
+
+
+func _field_of_view():
+	return main.get_node("%Viewport").get_node("ControlBar/FieldOfView")
 
 
 func _pick(text: String) -> void:
@@ -120,11 +124,11 @@ func _run() -> void:
 	)
 
 	step("When the user enables orthographic projection and disables shading", func():
-		_pick("orthographic")
+		_field_of_view().value = 0.0
 		_shaded().button_pressed = false
 	)
 	step("Then the projection stays independent", func():
 		expect(camera_rig().is_orthogonal, "the camera stays orthographic")
-		expect(_checked("orthographic"), "the orthographic item stays checked")
+		expect(is_equal_approx(_field_of_view().value, 0.0), "the field of view shows 0")
 		expect(_all_materials(BaseMaterial3D.SHADING_MODE_UNSHADED), "the chunk materials draw unshaded")
 	)

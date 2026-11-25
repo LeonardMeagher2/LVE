@@ -35,7 +35,9 @@ const FAR_MARGIN := 2.0
 const MIN_VIEW_VOXELS := 8.0
 const FAR_ZOOM_FACTOR := 2.0
 const FRAME_MARGIN := 1.25
-const ZOOM_STEPS := 1000.0
+const MIN_FOV := 10.0
+const MAX_FOV := 135.0
+const DEFAULT_FOV := 45.0
 
 var _far_distance := 0.0
 
@@ -56,9 +58,16 @@ func _ready() -> void:
 
 func configure() -> void:
 	var bounds: AABB = bounds_provider.call() if bounds_provider.is_valid() else State.document.bounds()
-	_init_dist = maxf(bounds.size.length(), 16.0) * FRAME_MARGIN
+	var fit_span := maxf(bounds.size.length(), 16.0) * FRAME_MARGIN
 	var pose: Dictionary = State.document.edit_camera if stores_document_pose else {}
 	_restoring_pose = true
+	if pose.is_empty() and State.document.reset_workspace:
+		_yaw = 0.0
+		_pitch = deg_to_rad(45.0)
+		fov = DEFAULT_FOV
+	elif not pose.is_empty():
+		fov = clampf(float(pose.get("fov", DEFAULT_FOV)), MIN_FOV, MAX_FOV)
+	_init_dist = _fit_distance(fit_span)
 	if pose.is_empty():
 		_dist = _init_dist
 		_target = bounds.get_center()
@@ -85,12 +94,13 @@ func _save_pose() -> void:
 		"distance": _dist,
 		"initial_distance": _init_dist,
 		"target": _target,
+		"fov": fov,
 	}
 
 
 func center_on(box: AABB) -> void:
 	_target = box.get_center()
-	_dist = maxf(box.size.length(), 16.0) * FRAME_MARGIN
+	_dist = _fit_distance(maxf(box.size.length(), 16.0) * FRAME_MARGIN)
 	_far_distance = maxf(max_distance(), _dist)
 	_update()
 	zoom_changed.emit(zoom_percent())
@@ -156,36 +166,51 @@ func max_distance() -> float:
 	var bounds := _framed_bounds()
 	var fit := _init_dist
 	if bounds.has_surface():
-		fit = maxf(_init_dist, bounds.size.length() * FRAME_MARGIN)
+		fit = maxf(_init_dist, _fit_distance(maxf(bounds.size.length(), 16.0) * FRAME_MARGIN))
 	return fit * FAR_ZOOM_FACTOR
+
+
+func _fit_distance(span: float) -> float:
+	return span * tan(deg_to_rad(DEFAULT_FOV) * 0.5) / maxf(tan(deg_to_rad(fov) * 0.5), 0.0001)
+
+
+func field_of_view() -> float:
+	return 0.0 if is_orthogonal else fov
+
+
+func set_field_of_view(degrees: float) -> void:
+	var orthographic := degrees < MIN_FOV
+	if not orthographic:
+		var next_fov := clampf(degrees, MIN_FOV, MAX_FOV)
+		if not is_equal_approx(next_fov, fov):
+			_scale_lens(next_fov)
+			fov = next_fov
+	_dist = clampf(_dist, min_distance(), far_distance())
+	if is_orthogonal == orthographic:
+		_update()
+	else:
+		is_orthogonal = orthographic
+	zoom_changed.emit(zoom_percent())
+	zoom_limits_changed.emit(min_zoom_percent(), max_zoom_percent())
+
+
+func _scale_lens(next_fov: float) -> void:
+	var factor := tan(deg_to_rad(fov) * 0.5) / maxf(tan(deg_to_rad(next_fov) * 0.5), 0.0001)
+	_dist *= factor
+	_init_dist *= factor
+	_far_distance *= factor
+
+
+func reset_field_of_view() -> void:
+	fov = DEFAULT_FOV
+	if is_orthogonal:
+		is_orthogonal = false
+	else:
+		_update()
 
 
 func far_distance() -> float:
 	return maxf(max_distance(), _far_distance)
-
-
-func zoom_step() -> float:
-	return _percent_to_step(zoom_percent())
-
-
-func set_zoom_step(step: float) -> void:
-	set_zoom_percent(_step_to_percent(clampf(step, 0.0, ZOOM_STEPS)))
-
-
-func zoom_step_for_factor(factor: float) -> float:
-	return log(factor) / _zoom_span() * ZOOM_STEPS
-
-
-func _percent_to_step(percent: float) -> float:
-	return log(percent / min_zoom_percent()) / _zoom_span() * ZOOM_STEPS
-
-
-func _step_to_percent(step: float) -> float:
-	return min_zoom_percent() * exp(_zoom_span() * step / ZOOM_STEPS)
-
-
-func _zoom_span() -> float:
-	return maxf(log(max_zoom_percent() / min_zoom_percent()), 0.0001)
 
 
 func set_zoom_percent(percent: float) -> void:

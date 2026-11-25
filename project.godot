@@ -12,8 +12,8 @@ config_version=5
 
 config/name="Leonard's Voxel Editor"
 config/description="Made with LVE. Create voxel art and animation."
-config/version="0.9"
-run/main_scene="res://Main.tscn"
+config/version="0.9.1"
+run/main_scene="res://App.tscn"
 config/features=PackedStringArray("4.7")
 run/flush_stdout_on_print=true
 config/icon="res://icon.svg"
@@ -27,7 +27,7 @@ VoxelImageRenderer="*res://Globals/VoxelImageRenderer/VoxelImageRenderer.gd"
 
 window/size/viewport_width=1000
 window/size/viewport_height=800
-window/handheld/orientation=6
+window/handheld/orientation=1
 
 [editor]
 

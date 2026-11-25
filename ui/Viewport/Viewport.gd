@@ -43,6 +43,7 @@ func _ready() -> void:
 	%CameraRig.zoom_limits_changed.connect(_sync_zoom_slider)
 	_sync_zoom_slider()
 	%CameraRig.view_changed.connect(_on_camera_view_changed)
+	_sync_field_of_view()
 	$WorldEnvironment.environment = $WorldEnvironment.environment.duplicate()
 	var material: StandardMaterial3D = %LightHandle.material_override.duplicate()
 	material.albedo_color = $Light.light_color
@@ -124,6 +125,7 @@ func _restore_document_lighting() -> void:
 	_lighting_document = State.document
 
 func _on_camera_view_changed() -> void:
+	_sync_field_of_view()
 	if %LockView.button_pressed:
 		$Light.basis = %CameraRig.basis * _view_light_basis
 		_update_light_handle()
@@ -148,8 +150,6 @@ func _on_camera_index_pressed(index:int) -> void:
 		popup.set_item_checked(index, not popup.is_item_checked(index))
 
 	match text:
-		"orthographic":
-			_set_orthographic(popup.is_item_checked(index))
 		"wireframe":
 			_set_wireframe(popup.is_item_checked(index))
 		_:
@@ -176,13 +176,16 @@ func set_orthographic(value: bool) -> void:
 	_set_orthographic(value, false)
 
 
+func set_field_of_view(degrees: float) -> void:
+	_set_field_of_view(degrees)
+
+
 func get_view_settings() -> Dictionary:
 	return {
 		"grid": %Grid.visible,
 		"wireframe": %Viewport.debug_draw == Viewport.DEBUG_DRAW_WIREFRAME,
 		"orthographic": %CameraRig.is_orthogonal,
 		"view_mode": int(view_mode),
-		"environment_open": %EnvironmentMenu.button_pressed,
 	}
 
 
@@ -197,7 +200,14 @@ func _restore_document_view() -> void:
 		return
 	var saved: Dictionary = State.document.view_settings
 	_loading_document_view = true
-	if not saved.is_empty():
+	if saved.is_empty():
+		if State.document.reset_workspace:
+			_set_grid_visible(true, false)
+			_set_wireframe(false, false)
+			_set_orthographic(false, false)
+			_set_view_mode(ViewMode.NONE)
+			_set_environment_open(false)
+	else:
 		var grid: bool = saved.get("grid", %Grid.visible)
 		var wireframe: bool = saved.get("wireframe", %Viewport.debug_draw == Viewport.DEBUG_DRAW_WIREFRAME)
 		var orthographic: bool = saved.get("orthographic", %CameraRig.is_orthogonal)
@@ -205,8 +215,6 @@ func _restore_document_view() -> void:
 		_set_wireframe(wireframe, false)
 		_set_orthographic(orthographic, false)
 		_set_view_mode(int(saved.get("view_mode", int(view_mode))))
-		var open: bool = saved.get("environment_open", %EnvironmentMenu.button_pressed)
-		_set_environment_open(open)
 	_loading_document_view = false
 	_view_document = State.document
 
@@ -235,9 +243,20 @@ func _set_wireframe(value: bool, save := true) -> void:
 
 func _set_orthographic(value: bool, save := true) -> void:
 	%CameraRig.is_orthogonal = value
+	_sync_field_of_view()
 	_sync_camera_menu_checks()
 	if save:
 		_save_document_view()
+
+
+func _on_field_of_view_changed(value: float) -> void:
+	_set_field_of_view(value)
+
+
+func _set_field_of_view(degrees: float) -> void:
+	%CameraRig.set_field_of_view(degrees)
+	_sync_field_of_view()
+	_save_document_view()
 
 
 func _set_view_mode(mode: ViewMode) -> void:
@@ -262,6 +281,7 @@ func reset_view_state() -> void:
 	_loading_document_view = true
 	var stores_pose: bool = %CameraRig.stores_document_pose
 	%CameraRig.stores_document_pose = false
+	%CameraRig.reset_field_of_view()
 	%CameraRig.set_view("default")
 	if State.document != null:
 		%CameraRig.configure()
@@ -274,14 +294,15 @@ func reset_view_state() -> void:
 	_loading_document_view = false
 
 
+func _sync_field_of_view() -> void:
+	%FieldOfView.set_value_no_signal(%CameraRig.field_of_view())
+
+
 func _sync_camera_menu_checks() -> void:
 	var popup: PopupMenu = %CameraMenu.get_popup()
 	for index in popup.item_count:
-		match popup.get_item_text(index).to_lower():
-			"orthographic":
-				popup.set_item_checked(index, %CameraRig.is_orthogonal)
-			"wireframe":
-				popup.set_item_checked(index, %Viewport.debug_draw == Viewport.DEBUG_DRAW_WIREFRAME)
+		if popup.get_item_text(index).to_lower() == "wireframe":
+			popup.set_item_checked(index, %Viewport.debug_draw == Viewport.DEBUG_DRAW_WIREFRAME)
 
 
 func _sync_lighting_controls(settings: Dictionary) -> void:
@@ -315,8 +336,6 @@ func _on_environment_toggled(pressed: bool) -> void:
 	if not pressed:
 		%LightToggle.set_pressed_no_signal(false)
 		_set_light_widget(false)
-	if not _loading_document_view:
-		_save_document_view()
 
 
 func _on_light_color_changed(color: Color) -> void:
@@ -486,15 +505,19 @@ func _on_zoom_one_pressed() -> void:
 
 
 func _on_zoom_slider_value_changed(value: float) -> void:
-	%CameraRig.set_zoom_step(value)
+	%CameraRig.set_zoom_percent(value)
 
 
 func _on_zoom_percent_changed(_percent: float) -> void:
 	_sync_zoom_slider()
 
 
-func _sync_zoom_slider(_min_percent := 0.0, _max_percent := 0.0) -> void:
-	%ZoomSlider.set_value_no_signal(%CameraRig.zoom_step())
+func _sync_zoom_slider(min_percent := 0.0, max_percent := 0.0) -> void:
+	var low: float = min_percent if min_percent > 0.0 else %CameraRig.min_zoom_percent()
+	var high: float = max_percent if max_percent > low else %CameraRig.max_zoom_percent()
+	%ZoomSlider.min_value = low
+	%ZoomSlider.max_value = high
+	%ZoomSlider.set_value_no_signal(%CameraRig.zoom_percent())
 
 
 func _show_view_mode(mode: ViewMode) -> void:
@@ -560,11 +583,11 @@ func _input(event: InputEvent) -> void:
 				get_viewport().set_input_as_handled()
 			MOUSE_BUTTON_WHEEL_UP:
 				if mb.pressed:
-					%ZoomSlider.value += %CameraRig.zoom_step_for_factor(1.0 / WHEEL_ZOOM_FACTOR)
+					%CameraRig.zoom(WHEEL_ZOOM_FACTOR)
 				get_viewport().set_input_as_handled()
 			MOUSE_BUTTON_WHEEL_DOWN:
 				if mb.pressed:
-					%ZoomSlider.value -= %CameraRig.zoom_step_for_factor(1.0 / WHEEL_ZOOM_FACTOR)
+					%CameraRig.zoom(1.0 / WHEEL_ZOOM_FACTOR)
 				get_viewport().set_input_as_handled()
 	elif event is InputEventMouseMotion:
 		var mm := event as InputEventMouseMotion
@@ -587,3 +610,12 @@ func _input(event: InputEvent) -> void:
 		elif mask & MOUSE_BUTTON_MASK_RIGHT:
 			%CameraRig.orbit(mm.relative)
 			get_viewport().set_input_as_handled()
+	elif event is InputEventMagnifyGesture:
+		var magnify := event as InputEventMagnifyGesture
+		if magnify.factor > 0.0:
+			%CameraRig.zoom(1.0 / magnify.factor)
+		get_viewport().set_input_as_handled()
+	elif event is InputEventPanGesture:
+		var pan_gesture := event as InputEventPanGesture
+		%CameraRig.pan(pan_gesture.delta)
+		get_viewport().set_input_as_handled()

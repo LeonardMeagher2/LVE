@@ -10,6 +10,8 @@ const MCP_SERVER_SCRIPT := preload("res://Globals/MCP/MCPServer.gd")
 const MCP_BRIDGE_SCRIPT := preload("res://Globals/MCP/MCPBridge.gd")
 const AUTOSAVE_SCRIPT := preload("res://Globals/Autosave/Autosave.gd")
 const MCP_PORT := 17373
+const ANDROID_BASE_DPI := 160.0
+const MOBILE_SCALE_FACTOR := 0.85
 var settings_path := ""
 var mcp_port := MCP_PORT
 @export var restore_saved_agent := true
@@ -115,7 +117,7 @@ func _ready() -> void:
 	_ui_scale = 0.0 if saved_scale == 0.0 else clampf(saved_scale, 1.0, 3.0)
 	get_window().dpi_changed.connect(_apply_ui_scale)
 	_apply_ui_scale()
-	if DisplayServer.get_name() != "headless":
+	if DisplayServer.get_name() != "headless" and not OS.has_feature("mobile"):
 		var window := get_window()
 		var available := DisplayServer.screen_get_usable_rect(window.current_screen).size
 		window.size = Vector2i(Vector2(window.size) * window.content_scale_factor).min(Vector2i(Vector2(available) * 0.9))
@@ -246,6 +248,8 @@ func _write_setting(section: String, key: String, value: Variant) -> void:
 func _automatic_ui_scale() -> float:
 	if DisplayServer.get_name() == "headless":
 		return 1.0
+	if OS.has_feature("mobile"):
+		return clampf(DisplayServer.screen_get_dpi(DisplayServer.SCREEN_OF_MAIN_WINDOW) / ANDROID_BASE_DPI * MOBILE_SCALE_FACTOR, 1.5, 4.0)
 	var screen_scale := DisplayServer.screen_get_scale(DisplayServer.SCREEN_OF_MAIN_WINDOW)
 	if OS.get_name() == "Windows" and screen_scale == 1.0:
 		screen_scale = DisplayServer.screen_get_dpi(DisplayServer.SCREEN_OF_MAIN_WINDOW) / 96.0
@@ -323,6 +327,10 @@ func is_mcp_enabled() -> bool:
 
 func mcp_local_port() -> int:
 	return int(_mcp.call("local_port")) if _mcp != null else 0
+
+
+func mcp_bind_address() -> String:
+	return str(_mcp.call("bind_address")) if _mcp != null else ""
 
 
 func mcp_url() -> String:

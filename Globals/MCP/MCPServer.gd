@@ -203,6 +203,10 @@ func local_port() -> int:
 	return _transport.local_port()
 
 
+func bind_address() -> String:
+	return _transport.bind_address()
+
+
 func _process(_delta: float) -> void:
 	_transport.poll()
 
@@ -2035,11 +2039,12 @@ func _set_workspace(args: Dictionary) -> Dictionary:
 	if args.has("view"):
 		var view_value: Variant = args["view"]
 		if not (view_value is Dictionary):
-			return _tool_error("view must hold valid grid, wireframe, orthographic, view_mode, and environment_open values.")
+			return _tool_error("view must hold valid grid, wireframe, orthographic, and view_mode values.")
 		var view_data: Dictionary = view_value
 		MCPWorkspace.coerce_whole_ints(view_data, ["view_mode"])
 		if not VoxelDocument.valid_view_settings(view_data):
-			return _tool_error("view must hold valid grid, wireframe, orthographic, view_mode, and environment_open values.")
+			return _tool_error("view must hold valid grid, wireframe, orthographic, and view_mode values.")
+		view_data.erase("environment_open")
 		view = view_data
 	if args.has("export"):
 		var export_value: Variant = MCPWorkspace.export(args["export"], document.tags.size())

@@ -2,6 +2,11 @@ extends RefCounted
 
 
 const DEFAULT_PORT := 17373
+const LOOPBACK_ADDRESS := "127.0.0.1"
+const ALL_INTERFACES := "*"
+const TAILNET_FIRST_OCTET := 100
+const TAILNET_SECOND_OCTET_MIN := 64
+const TAILNET_SECOND_OCTET_MAX := 127
 const MAX_LINE_BYTES := 4 * 1024 * 1024
 const MAX_PEERS := 8
 const PEER_IDLE_MS := 30000
@@ -24,15 +29,37 @@ class PeerState extends RefCounted:
 var _peers: Array[PeerState] = []
 
 
+func bind_address() -> String:
+	if not OS.has_feature("mobile"):
+		return LOOPBACK_ADDRESS
+	for address in IP.get_local_addresses():
+		if _is_tailnet_address(address):
+			return address
+	return ALL_INTERFACES
+
+
+static func _is_tailnet_address(address: String) -> bool:
+	var parts := address.split(".")
+	if parts.size() != 4:
+		return false
+	for part in parts:
+		if not part.is_valid_int():
+			return false
+	var second := int(parts[1])
+	return int(parts[0]) == TAILNET_FIRST_OCTET and second >= TAILNET_SECOND_OCTET_MIN \
+			and second <= TAILNET_SECOND_OCTET_MAX
+
+
 func start(port: int = DEFAULT_PORT, http_mode := false) -> Error:
 	stop()
 	_http_mode = http_mode
-	var error := _server.listen(port, "127.0.0.1")
+	var address := bind_address()
+	var error := _server.listen(port, address)
 	if error != OK:
-		push_warning("LVE MCP: cannot listen on 127.0.0.1:%d: %s" % [port, error_string(error)])
+		push_warning("LVE MCP: cannot listen on %s:%d: %s" % [address, port, error_string(error)])
 		return error
-	print("LVE MCP: listening on 127.0.0.1:%d (%s)" % [_server.get_local_port(), "HTTP" if http_mode else "line"])
-	log_line.call("start %d %s" % [_server.get_local_port(), "http" if http_mode else "line"])
+	print("LVE MCP: listening on %s:%d (%s)" % [address, _server.get_local_port(), "HTTP" if http_mode else "line"])
+	log_line.call("start %d %s %s" % [_server.get_local_port(), "http" if http_mode else "line", address])
 	return OK
 
 

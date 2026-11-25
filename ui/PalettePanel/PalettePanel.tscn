@@ -13,7 +13,8 @@
 [ext_resource type="Texture2D" uid="uid://ci3taagaxm7e" path="res://icons/roughness.svg" id="13_roughness"]
 [ext_resource type="PackedScene" uid="uid://kxi223occ3vl" path="res://ui/ValueButton/ValueButton.tscn" id="14_value"]
 
-[node name="PalettePanel" type="VBoxContainer" unique_id=920144879]
+[node name="PalettePanel" type="BoxContainer" unique_id=920144879]
+vertical = true
 custom_maximum_size = Vector2(512, -1)
 anchors_preset = 9
 anchor_bottom = 1.0
@@ -27,6 +28,7 @@ unique_name_in_owner = true
 
 [node name="PanelContainer" type="PanelContainer" parent="." unique_id=1050465130]
 layout_mode = 2
+size_flags_horizontal = 3
 size_flags_vertical = 3
 
 [node name="MarginContainer" type="MarginContainer" parent="PanelContainer" unique_id=1799631802]
@@ -116,6 +118,7 @@ layout_mode = 2
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 3
+theme_override_constants/sv_width = 160
 theme_override_constants/sv_height = 144
 alignment = 1
 edit_alpha = false

@@ -24,6 +24,8 @@
 [ext_resource type="Texture2D" uid="uid://denrh23gr1h22" path="res://icons/shadow.svg" id="25_shadow"]
 [ext_resource type="Texture2D" uid="uid://by28nxj3x7ily" path="res://icons/undo.svg" id="26_reset"]
 [ext_resource type="Script" path="res://ui/Viewport/ViewportLayout.gd" id="27_layout"]
+[ext_resource type="PackedScene" uid="uid://kxi223occ3vl" path="res://ui/ValueButton/ValueButton.tscn" id="28_value"]
+[ext_resource type="Texture2D" uid="uid://denrh23gr1h30" path="res://icons/ortho.svg" id="29_ortho"]
 
 [sub_resource type="SphereMesh" id="SphereMesh_light"]
 radial_segments = 24
@@ -219,7 +221,7 @@ shortcut = SubResource("Shortcut_view_menu")
 icon = ExtResource("11_jtuva")
 flat = false
 icon_alignment = 1
-item_count = 10
+item_count = 9
 popup/item_0/text = "Top"
 popup/item_0/id = 0
 popup/item_1/text = "Bottom"
@@ -236,12 +238,21 @@ popup/item_6/text = "Isometric"
 popup/item_6/id = 6
 popup/item_7/id = 7
 popup/item_7/separator = true
-popup/item_8/text = "Orthographic"
+popup/item_8/text = "Wireframe"
 popup/item_8/checkable = 1
-popup/item_8/id = 8
-popup/item_9/text = "Wireframe"
-popup/item_9/checkable = 1
-popup/item_9/id = 10
+popup/item_8/id = 10
+
+[node name="FieldOfView" parent="ControlBar" unique_id=1955889401 instance=ExtResource("28_value")]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(64, 28)
+layout_mode = 2
+tooltip_text = "Field of view in degrees, up to 135. Below 10 uses an orthographic camera."
+icon = ExtResource("29_ortho")
+min_value = 0.0
+max_value = 135.0
+step = 1.0
+decimals = 0
+value = 45.0
 
 [node name="EnvironmentMenu" type="Button" parent="ControlBar" unique_id=9854677]
 unique_name_in_owner = true
@@ -281,8 +292,8 @@ size_flags_vertical = 4
 tooltip_text = "Zoom"
 min_value = 0.0
 max_value = 1000.0
-step = 1.0
-value = 500.0
+step = 0.0
+value = 100.0
 
 [node name="ZoomOne" type="Button" parent="ControlBar" unique_id=954156555]
 layout_mode = 2
@@ -399,6 +410,7 @@ tooltip_text = "Restore the default lighting"
 icon = ExtResource("26_reset")
 icon_alignment = 1
 
+[connection signal="value_changed" from="ControlBar/FieldOfView" to="PanelContainer/SubViewportContainer/Viewport/ViewportScene" method="_on_field_of_view_changed"]
 [connection signal="toggled" from="ControlBar/EnvironmentMenu" to="PanelContainer/SubViewportContainer/Viewport/ViewportScene" method="_on_environment_toggled"]
 [connection signal="toggled" from="EnvironmentLayer/EnvironmentBar/Margin/Bar/LightToggle" to="PanelContainer/SubViewportContainer/Viewport/ViewportScene" method="_on_light_toggle_toggled"]
 [connection signal="toggled" from="EnvironmentLayer/EnvironmentBar/Margin/Bar/LockView" to="PanelContainer/SubViewportContainer/Viewport/ViewportScene" method="_on_lock_view_toggled"]

@@ -162,9 +162,12 @@ func _restore_document() -> void:
 	if _state_document == null:
 		return
 	var data: Dictionary = _state_document.tool_settings
-	if data.is_empty():
-		return
 	_applying = true
+	if data.is_empty():
+		if _state_document.reset_workspace:
+			_reset_tool_settings()
+		_applying = false
+		return
 	if data.has("editing"):
 		_apply_editing(data["editing"])
 	for plugin in _settings_resources:
@@ -176,6 +179,25 @@ func _restore_document() -> void:
 	var active := String(data.get("active", ""))
 	_applying = false
 	_apply_active_tool(active)
+
+
+func _reset_tool_settings() -> void:
+	_apply_editing({
+		"symmetry_axes": 0,
+		"symmetry_origin": State.DEFAULT_SYMMETRY_ORIGIN,
+		"floor_axis": int(Vector3.Axis.AXIS_Y),
+		"floor_index": 0,
+		"slice_layers": 0,
+	})
+	for plugin in _settings_resources:
+		var settings: Resource = _settings_resources[plugin]
+		if settings == null or settings.resource_path.is_empty():
+			continue
+		var fresh: Resource = ResourceLoader.load(settings.resource_path, "", ResourceLoader.CACHE_MODE_IGNORE)
+		if fresh != null:
+			_apply_resource(plugin, _capture_resource(fresh))
+	if not State.get_palette().is_empty():
+		State.select_palette_entry(0)
 
 
 func _apply_pending_tool() -> void:

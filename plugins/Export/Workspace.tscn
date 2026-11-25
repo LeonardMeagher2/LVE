@@ -39,13 +39,16 @@ grow_vertical = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 
-[node name="Panels" type="HBoxContainer" parent="." unique_id=389884138]
+[node name="Panels" type="BoxContainer" parent="." unique_id=389884138]
+unique_name_in_owner = true
 layout_mode = 2
+vertical = false
 size_flags_vertical = 3
 
 [node name="ModelPanel" type="PanelContainer" parent="Panels" unique_id=1014231634]
 layout_mode = 2
 size_flags_horizontal = 3
+size_flags_vertical = 3
 
 [node name="Margin" type="MarginContainer" parent="Panels/ModelPanel" unique_id=176060447]
 layout_mode = 2
@@ -61,6 +64,7 @@ layout_mode = 2
 [node name="Viewport" parent="Panels/ModelPanel/Margin/Model" unique_id=499526288 instance=ExtResource("1_viewport")]
 unique_name_in_owner = true
 layout_mode = 2
+size_flags_vertical = 3
 
 [node name="AnimationRow" type="HBoxContainer" parent="Panels/ModelPanel/Margin/Model" unique_id=1943501192]
 layout_mode = 2
@@ -92,6 +96,7 @@ text = "glTF / GLB"
 [node name="SheetPanel" type="PanelContainer" parent="Panels" unique_id=1049554079]
 layout_mode = 2
 size_flags_horizontal = 3
+size_flags_vertical = 3
 
 [node name="Margin" type="MarginContainer" parent="Panels/SheetPanel" unique_id=880353707]
 layout_mode = 2

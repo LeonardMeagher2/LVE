@@ -92,13 +92,8 @@ func _run() -> void:
 		expect(exporter._model_scene.get_lighting_settings().view_locked, "the export view lock is restored")
 		exporter._refresh_model()
 		expect(exporter._model_camera.is_orthogonal, "the export orthographic projection is restored")
-		var export_popup: PopupMenu = exporter._model.get_node("Viewport/ControlBar/CameraMenu").get_popup()
-		var export_ortho := -1
-		for index in export_popup.item_count:
-			if export_popup.get_item_text(index).to_lower() == "orthographic":
-				export_ortho = index
-				break
-		expect(export_ortho >= 0 and export_popup.is_item_checked(export_ortho), "the export Orthographic item shows checked")
+		var export_fov = exporter._model.get_node("Viewport/ControlBar/FieldOfView")
+		expect(is_equal_approx(export_fov.value, 0.0), "the export field of view shows 0")
 		expect(is_equal_approx(exporter._model_camera._yaw, deg_to_rad(30.0)) and is_equal_approx(exporter._model_camera._pitch, deg_to_rad(20.0)), "the export camera angle is restored")
 		expect(exporter._model_camera._target.is_equal_approx(Vector3(2, 3, 4)), "the export camera offset is restored")
 		expect(is_equal_approx(exporter._model_camera._dist, 17.0), "the export camera zoom is restored")

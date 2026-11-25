@@ -1,17 +1,11 @@
 extends RefCounted
 
 
+const SurfaceMask := preload("res://Globals/State/Tools/SurfaceMask.gd")
+
 const BAYER_2 := [
 	0, 4, 6, 2,
 	5, 1, 3, 7,
-]
-const NEIGHBORS := [
-	Vector3i.LEFT,
-	Vector3i.RIGHT,
-	Vector3i.UP,
-	Vector3i.DOWN,
-	Vector3i.FORWARD,
-	Vector3i.BACK,
 ]
 
 
@@ -30,9 +24,7 @@ static func select_offsets(offsets: Array, center: Vector3i, density: float, fra
 	var candidates := []
 	for cell_offset: Vector3i in offsets:
 		var cell := center + cell_offset
-		if not frame.has(cell):
-			continue
-		if not _is_exposed(frame, cell):
+		if not SurfaceMask.is_exposed(frame, cell):
 			continue
 		candidates.append([threshold(cell, origin), cell_offset])
 	if candidates.is_empty():
@@ -68,10 +60,3 @@ static func filter_pattern(pattern: Dictionary, center: Vector3i, density: float
 	for cell_offset: Vector3i in selected:
 		kept[cell_offset] = pattern[cell_offset]
 	return kept
-
-
-static func _is_exposed(frame, cell: Vector3i) -> bool:
-	for neighbor: Vector3i in NEIGHBORS:
-		if not frame.has(cell + neighbor):
-			return true
-	return false

@@ -6,6 +6,7 @@ signal recovery_accepted(entries: Array)
 signal recovery_discarded(entries: Array)
 signal document_discarded(document: VoxelDocument)
 
+@export var single_document := false
 var settings_path := ""
 
 var current_save_path: String:
@@ -41,6 +42,11 @@ func _ready() -> void:
 	_save_format.hide()
 	%FileDialog.get_vbox().add_child(_save_format)
 	%DocumentTabs.close_requested.connect(_on_tab_close_requested)
+	if single_document:
+		%DocumentTabs.hide()
+		var tab_separator := get_node_or_null("Sep2")
+		if tab_separator is CanvasItem:
+			tab_separator.hide()
 	%CloseTabDialog.add_button("Discard", true, "discard")
 	%CloseTabDialog.confirmed.connect(_on_close_tab_save)
 	%CloseTabDialog.custom_action.connect(_on_close_tab_action)
@@ -424,7 +430,10 @@ func _show_file_dialog() -> void:
 func _on_new_btn_pressed() -> void:
 	if State.edit_busy():
 		return
-	State.open_tab(State.new_document())
+	if single_document:
+		State.document = State.new_document()
+	else:
+		State.open_tab(State.new_document())
 	State.select_palette_entry(0)
 	_remember_session()
 
@@ -442,7 +451,7 @@ func open_document(path: String, saved: bool = true, replace: bool = false) -> b
 	var document := VoxelDocument.load_file(path)
 	if document == null:
 		return false
-	if replace or _can_reuse_tab():
+	if replace or single_document or _can_reuse_tab():
 		State.document = document
 	else:
 		State.open_tab(document)
@@ -469,8 +478,11 @@ func _on_file_opened(path: String) -> void:
 	if path.get_extension().to_lower() in State.IMAGE_EXTENSIONS:
 		var placeholder: VoxelDocument = null
 		if not _can_reuse_tab():
-			placeholder = State.new_document()
-			State.open_tab(placeholder)
+			if single_document:
+				State.document = State.new_document()
+			else:
+				placeholder = State.new_document()
+				State.open_tab(placeholder)
 		var importer := get_node_or_null("/root/ImageImportPlugin")
 		if importer == null:
 			_close_placeholder(placeholder)

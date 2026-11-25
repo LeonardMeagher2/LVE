@@ -1,5 +1,7 @@
 class_name PalettePanel
-extends VBoxContainer
+extends BoxContainer
+
+@export var flat_panels := false
 
 
 const Swatch := preload("./Swatch.tscn")
@@ -94,6 +96,8 @@ var _value_edit_index := -1
 
 func _ready() -> void:
 	%ImportDialog.filters = PackedStringArray([State.get_image_file_filter()])
+	if flat_panels:
+		_flatten_panels()
 	State.document_changed.connect(_on_document_changed)
 	State.material_changed.connect(_on_material_changed)
 	State.palette_changed.connect(_rebuild_swatches)
@@ -139,6 +143,11 @@ func _on_document_changed() -> void:
 	_editing_drag = false
 	_control_edit_revision += 1
 	_on_material_changed()
+
+
+func _flatten_panels() -> void:
+	for panel in [$PanelContainer, $PanelContainer2, $PanelContainer/MarginContainer/VBoxContainer/PanelContainer]:
+		(panel as Control).theme_type_variation = &"FlatPanel"
 
 
 func _rebuild_swatches() -> void:

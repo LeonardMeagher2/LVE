@@ -148,11 +148,17 @@ The stamp source and pattern are not stored. They follow the document tab in mem
 | `wireframe` | Boolean | Whether the view uses the wireframe draw mode |
 | `orthographic` | Boolean | Whether the camera uses an orthographic projection |
 | `view_mode` | Integer | 0 for none, 1 for pan, 2 for rotate, or 3 for the light handle |
-| `environment_open` | Boolean | Whether the environment row shows |
+
+Older files can also hold `environment_open`.
+The editor ignores it.
 
 ### `camera`
 
-`camera` supports `yaw`, `pitch`, `distance`, `initial_distance`, and `target`.
+`camera` supports `yaw`, `pitch`, `distance`, `initial_distance`, `target`, and `fov`.
+`fov` is the perspective field of view in degrees.
+The editor uses 10 to 135 degrees.
+A value below 10 uses an orthographic view.
+An orthographic view uses `fov` to frame the model.
 The angle values are in radians.
 `initial_distance` keeps the zoom percent stable.
 A restored distance clamps to a view of eight voxels at the closest and to twice the model framing at the farthest.

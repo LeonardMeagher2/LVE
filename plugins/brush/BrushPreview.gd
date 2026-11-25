@@ -35,7 +35,7 @@ func _process(delta: float) -> void:
 	for index in _mirrors.size():
 		var mask := index + 1
 		var mirror := _mirrors[index]
-		mirror.visible = visible and mesh != null and (mask & ~State.symmetry_axes) == 0
+		mirror.visible = mirrors_enabled and visible and mesh != null and (mask & ~State.symmetry_axes) == 0
 		if mirror.visible:
 			mirror.mesh = mesh
 			mirror.material_override = _mirror_lit_material if material_override == _lit_material else material_override
