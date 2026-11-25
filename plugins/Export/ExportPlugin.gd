@@ -537,6 +537,8 @@ func _on_model_playing_changed(playing: bool) -> void:
 
 
 func _sync() -> void:
+	if not is_instance_valid(_sheet_settings):
+		return
 	var busy := State.edit_busy()
 	var frame_range := _selected_frames()
 	var count := frame_range.y - frame_range.x + 1
