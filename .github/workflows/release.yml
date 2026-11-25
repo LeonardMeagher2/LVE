@@ -98,6 +98,7 @@ jobs:
             'Linux/X11'       = @{ runner = 'ubuntu-latest';  package = 'linux';   arch = 'x86_64'; extension = 'tar.gz'; slug = 'linux' }
             'macOS'           = @{ runner = 'macos-latest';   package = 'macos';   arch = 'universal'; extension = 'zip'; slug = 'macos' }
             'Web'             = @{ runner = 'ubuntu-latest';  package = 'web';     arch = ''; extension = 'zip'; slug = 'web' }
+            'Android'         = @{ runner = 'ubuntu-latest';  package = 'android'; arch = 'arm64-v8a'; extension = 'apk'; slug = 'android' }
           }
 
           $entries = @()
@@ -219,6 +220,47 @@ jobs:
           New-Item -ItemType Directory -Force $templateDir | Out-Null
           Copy-Item -Path (Join-Path $templateRoot 'templates/*') -Destination $templateDir -Recurse -Force
 
+      - name: Prepare the Android toolchain
+        if: matrix.package == 'android'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $sdk = $env:ANDROID_SDK_ROOT
+          if (-not $sdk) { $sdk = $env:ANDROID_HOME }
+          if (-not $sdk) { $sdk = '/usr/local/lib/android/sdk' }
+          $java = $env:JAVA_HOME
+          if (-not $java -or -not (Test-Path (Join-Path $java 'bin/keytool'))) {
+            throw "No JDK with keytool at JAVA_HOME ($java)."
+          }
+
+          $licenses = Join-Path $sdk 'licenses'
+          New-Item -ItemType Directory -Force $licenses | Out-Null
+          Set-Content -Path (Join-Path $licenses 'android-sdk-license') -Value "24333f8a63b6825ea9c5514f83c2829b004d1fee"
+          & (Join-Path $sdk 'cmdline-tools/latest/bin/sdkmanager') "build-tools;36.0.0" "platforms;android-36" "platform-tools"
+          if ($LASTEXITCODE -ne 0) { throw 'sdkmanager failed.' }
+
+          $keystore = Join-Path $HOME 'debug.keystore'
+          & (Join-Path $java 'bin/keytool') -genkeypair -v -keystore $keystore -storetype PKCS12 `
+            -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 `
+            -storepass android -keypass android -dname "CN=Android Debug,O=Android,C=US"
+          if ($LASTEXITCODE -ne 0) { throw 'keytool failed.' }
+
+          $settingsDir = Join-Path $HOME '.config/godot'
+          New-Item -ItemType Directory -Force $settingsDir | Out-Null
+          $settings = @(
+            '[gd_resource type="EditorSettings" format=3]'
+            ''
+            '[resource]'
+            "export/android/android_sdk_path = `"$sdk`""
+            "export/android/java_sdk_path = `"$java`""
+            "export/android/debug_keystore = `"$keystore`""
+            'export/android/debug_keystore_user = "androiddebugkey"'
+            'export/android/debug_keystore_pass = "android"'
+          ) -join "`n"
+          Set-Content -Path (Join-Path $settingsDir 'editor_settings-4.7.tres') -Value $settings
+          Write-Output "Android SDK: $sdk"
+          Write-Output "Java: $java"
+
       - name: Export and package ${{ matrix.asset }}
         shell: pwsh
         working-directory: ${{ github.workspace }}
@@ -238,7 +280,8 @@ jobs:
 
           & $env:GODOT --headless --path . --import
           if ($null -ne $LASTEXITCODE -and $LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          & $env:GODOT --headless --path . --export-release $env:PRESET $exportPath
+          $exportMode = if ($env:PACKAGE -eq 'android') { '--export-debug' } else { '--export-release' }
+          & $env:GODOT --headless --path . $exportMode $env:PRESET $exportPath
           if ($null -ne $LASTEXITCODE -and $LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if (-not (Test-Path $exportPath)) {
             Get-ChildItem -Path $parent -Force | Out-String | Write-Output
@@ -259,6 +302,9 @@ jobs:
             Copy-Item -LiteralPath $exportPath -Destination $out -Force
           } else {
             switch ($env:PACKAGE) {
+              'android' {
+                Copy-Item -LiteralPath $exportPath -Destination $out -Force
+              }
               'windows' {
                 $files = @($exportPath)
                 $pck = Get-PckPath $exportPath
