@@ -2,7 +2,7 @@
 
 Create voxel art and animation.
 
-![Leonard's Voxel Editor editing a voxel dragon](docs/lve-editor.png)
+![Leonard's Voxel Editor editing a voxel dragon](docs/lve-editor.jpg)
 
 LVE is a voxel editor for 3D pixel art and animation. Paint and sculpt voxels, give each voxel its own material, and animate frames with tags. Export a low-poly glTF mesh, a sprite sheet with optional normal and specular maps, or an animated GIF.
 
