@@ -9,6 +9,10 @@ func _ready() -> void:
 	super()
 	_apply_safe_margins()
 	get_window().size_changed.connect(_apply_safe_margins)
+	for label_name in ["StatusLeft", "StatusRight"]:
+		var label := %StatusBar.get_node_or_null(label_name)
+		if label is CanvasItem:
+			label.hide()
 	%PaletteToggle.toggled.connect(_on_dock_toggled)
 	%FramesToggle.toggled.connect(_on_dock_toggled)
 	_sync_dock()

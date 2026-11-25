@@ -1,4 +1,4 @@
-[gd_scene load_steps=10 format=3]
+[gd_scene load_steps=11 format=3]
 
 [ext_resource type="PackedScene" path="res://ui/MenuBar/MenuBar.tscn" id="1_menu"]
 [ext_resource type="PackedScene" path="res://ui/PalettePanel/PalettePanel.tscn" id="2_palette"]
@@ -9,12 +9,14 @@
 [ext_resource type="Script" path="res://ui/Mobile/MainMobile.gd" id="7_mobile"]
 [ext_resource type="Texture2D" path="res://icons/paint.svg" id="8_paint"]
 [ext_resource type="Texture2D" path="res://icons/play.svg" id="9_play"]
+[ext_resource type="Theme" path="res://ui/Mobile/Scrollbars.tres" id="10_scrollbars"]
 
 
 [sub_resource type="ButtonGroup" id="DockButtonGroup"]
 allow_unpress = true
 
 [node name="Main" type="Control"]
+theme = ExtResource("10_scrollbars")
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
