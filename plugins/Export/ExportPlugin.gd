@@ -11,6 +11,7 @@ const ANGLES := [Vector2.ZERO, Vector2(-45, 45), Vector2.ZERO, Vector2(180, 0), 
 const PREVIEW_DELAY_MS := 200
 const SPRITE_GAP := 1
 const SHEET_FIT_MARGIN := 1.02
+const SUPERSAMPLE := 2
 
 @onready var _menu_item := preload("./MenuBarItem.tscn").instantiate()
 @onready var _workspace := preload("./Workspace.tscn").instantiate()
@@ -854,28 +855,45 @@ func _render_current(document: VoxelDocument, revision: int) -> bool:
 	return not _cancel_requested and State.has_operation(_operation_id)
 
 
+func _fit_frames(entries: Array[Dictionary], union: Rect2i, tile_size: Vector2i) -> Array[Image]:
+	var scale := minf(float(tile_size.x) / union.size.x, float(tile_size.y) / union.size.y)
+	var fitted := Vector2i(
+		clampi(roundi(union.size.x * scale), 1, tile_size.x),
+		clampi(roundi(union.size.y * scale), 1, tile_size.y)
+	)
+	var origin := (tile_size - fitted) / 2
+	var tiles: Array[Image] = []
+	for entry in entries:
+		var used: Rect2i = entry.used
+		var source: Image = entry.image
+		if source == null or used.size.x <= 0 or used.size.y <= 0:
+			tiles.append(_blank_tile(tile_size))
+			continue
+		var canvas := Image.create(union.size.x, union.size.y, false, Image.FORMAT_RGBA8)
+		canvas.fill(Color.TRANSPARENT)
+		canvas.blit_rect(source, Rect2i(Vector2i.ZERO, used.size), used.position - union.position)
+		canvas.resize(fitted.x, fitted.y, Image.INTERPOLATE_NEAREST)
+		var tile := _blank_tile(tile_size)
+		tile.blit_rect(canvas, Rect2i(Vector2i.ZERO, fitted), origin)
+		tiles.append(tile)
+	return tiles
+
+
+func _blank_tile(tile_size: Vector2i) -> Image:
+	var tile := Image.create(tile_size.x, tile_size.y, false, Image.FORMAT_RGBA8)
+	tile.fill(Color.TRANSPARENT)
+	return tile
+
+
 func _blit_sheet_entries(sheets: Dictionary, entries: Array[Dictionary], union: Rect2i, tile_size: Vector2i) -> void:
 	if union.size.x <= 0 or union.size.y <= 0:
 		return
-	var scale := minf(float(tile_size.x) / union.size.x, float(tile_size.y) / union.size.y)
-	if scale <= 0.0:
-		return
-	var fitted := Vector2i(maxi(1, int(union.size.x * scale)), maxi(1, int(union.size.y * scale)))
-	var origin := (tile_size - fitted) / 2
-	for entry in entries:
-		var used: Rect2i = entry.used
-		var image: Image = entry.image
-		if image == null or image.get_width() <= 0 or image.get_height() <= 0:
-			continue
+	var tiles := _fit_frames(entries, union, tile_size)
+	for index in entries.size():
+		var entry: Dictionary = entries[index]
 		var tile_rect: Rect2i = entry.rect
-		var target_size := Vector2i(maxi(1, int(used.size.x * scale)), maxi(1, int(used.size.y * scale)))
-		var offset := Vector2i((Vector2(used.position - union.position) * scale).round())
-		var target := tile_rect.position + origin + offset
-		target.x = clampi(target.x, tile_rect.position.x, tile_rect.position.x + tile_size.x - target_size.x)
-		target.y = clampi(target.y, tile_rect.position.y, tile_rect.position.y + tile_size.y - target_size.y)
-		image.resize(target_size.x, target_size.y, Image.INTERPOLATE_NEAREST)
 		var sheet: Image = sheets[entry.output]
-		sheet.blit_rect(image, Rect2i(Vector2i.ZERO, target_size), target)
+		sheet.blit_rect(tiles[index], Rect2i(Vector2i.ZERO, tile_size), tile_rect.position)
 
 
 func _render_sheet(frames: Array[VoxelFrame], settings: Dictionary, document: VoxelDocument, revision := -1) -> Variant:
@@ -883,7 +901,7 @@ func _render_sheet(frames: Array[VoxelFrame], settings: Dictionary, document: Vo
 	var lighting_settings: Dictionary = settings.lighting
 	var transforms: Array[Transform3D] = settings.transforms
 	var layout: Dictionary = settings.layout
-	var viewport := _open_image_viewport(settings, layout.tile_size * 2)
+	var viewport := _open_image_viewport(settings, layout.tile_size * SUPERSAMPLE)
 	if revision >= 0:
 		_preview_viewport = viewport
 	else:
@@ -949,13 +967,14 @@ func _render_sheet(frames: Array[VoxelFrame], settings: Dictionary, document: Vo
 				image.convert(Image.FORMAT_RGBA8)
 				if output == "specular":
 					image = _specular_sheet_image(image)
-				if output == "color" or tile_used.size.x <= 0:
-					tile_used = image.get_used_rect()
-					if tile_used.size.x <= 0 or tile_used.size.y <= 0:
-						tile_used = Rect2i(Vector2i.ZERO, image.get_size())
 				if output == "color":
-					union = tile_used if union.size.x <= 0 else union.merge(tile_used)
-				entries.append({"output": output, "rect": rect, "used": tile_used, "image": image.get_region(tile_used)})
+					tile_used = image.get_used_rect()
+					if tile_used.size.x > 0 and tile_used.size.y > 0:
+						union = tile_used if union.size.x <= 0 else union.merge(tile_used)
+				var region: Image = null
+				if tile_used.size.x > 0 and tile_used.size.y > 0:
+					region = image.get_region(tile_used)
+				entries.append({"output": output, "rect": rect, "used": tile_used, "image": region})
 				capture_index += 1
 			renderer.override_material = null
 			renderer.material_builder = Callable()
@@ -1034,7 +1053,7 @@ func _open_image_viewport(settings: Dictionary, viewport_size: Vector2i) -> SubV
 
 func _render_gif_frames(frames: Array[VoxelFrame], settings: Dictionary, document: VoxelDocument, encoder) -> Error:
 	var tile_size: Vector2i = settings.tile_size
-	var viewport := _open_image_viewport(settings, tile_size * 2)
+	var viewport := _open_image_viewport(settings, tile_size * SUPERSAMPLE)
 	_export_viewport = viewport
 	var lighting_settings: Dictionary = settings.lighting
 	var transforms: Array[Transform3D] = settings.transforms
@@ -1077,10 +1096,12 @@ func _render_gif_frames(frames: Array[VoxelFrame], settings: Dictionary, documen
 			var image := viewport.get_texture().get_image()
 			image.convert(Image.FORMAT_RGBA8)
 			var used := image.get_used_rect()
-			if used.size.x <= 0 or used.size.y <= 0:
-				used = Rect2i(Vector2i.ZERO, image.get_size())
-			union = used if union.size.x <= 0 else union.merge(used)
-			entries.append({"used": used, "image": image.get_region(used), "delay": frame.delay_ms})
+			if used.size.x > 0 and used.size.y > 0:
+				union = used if union.size.x <= 0 else union.merge(used)
+			var region: Image = null
+			if used.size.x > 0 and used.size.y > 0:
+				region = image.get_region(used)
+			entries.append({"used": used, "image": region, "delay": frame.delay_ms})
 			index += 1
 			await get_tree().process_frame
 		if error != OK:
@@ -1088,7 +1109,7 @@ func _render_gif_frames(frames: Array[VoxelFrame], settings: Dictionary, documen
 	if is_instance_valid(viewport):
 		viewport.free()
 	_export_viewport = null
-	if error == OK and not entries.is_empty() and union.size.x > 0 and union.size.y > 0:
+	if error == OK and not entries.is_empty():
 		error = _add_gif_frames(encoder, entries, union, tile_size)
 	if error == OK and not _render_current(document, -1):
 		error = ERR_BUSY
@@ -1096,24 +1117,11 @@ func _render_gif_frames(frames: Array[VoxelFrame], settings: Dictionary, documen
 
 
 func _add_gif_frames(encoder, entries: Array[Dictionary], union: Rect2i, tile_size: Vector2i) -> Error:
-	var scale := minf(float(tile_size.x) / union.size.x, float(tile_size.y) / union.size.y)
-	if scale <= 0.0:
-		return ERR_INVALID_PARAMETER
-	var fitted := Vector2i(maxi(1, int(union.size.x * scale)), maxi(1, int(union.size.y * scale)))
-	var origin := (tile_size - fitted) / 2
-	for entry in entries:
-		var used: Rect2i = entry.used
-		var image: Image = entry.image
-		var target_size := Vector2i(maxi(1, int(used.size.x * scale)), maxi(1, int(used.size.y * scale)))
-		var offset := Vector2i((Vector2(used.position - union.position) * scale).round())
-		var target := origin + offset
-		target.x = clampi(target.x, 0, tile_size.x - target_size.x)
-		target.y = clampi(target.y, 0, tile_size.y - target_size.y)
-		image.resize(target_size.x, target_size.y, Image.INTERPOLATE_NEAREST)
-		var tile := Image.create(tile_size.x, tile_size.y, false, Image.FORMAT_RGBA8)
-		tile.fill(Color.TRANSPARENT)
-		tile.blit_rect(image, Rect2i(Vector2i.ZERO, target_size), target)
-		var error: Error = encoder.add_frame(tile, int(entry.delay))
+	if union.size.x <= 0 or union.size.y <= 0:
+		union = Rect2i(Vector2i.ZERO, tile_size)
+	var tiles := _fit_frames(entries, union, tile_size)
+	for index in entries.size():
+		var error: Error = encoder.add_frame(tiles[index], int(entries[index].delay))
 		if error != OK:
 			return error
 	return OK
