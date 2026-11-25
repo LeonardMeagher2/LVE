@@ -4,7 +4,7 @@ extends RefCounted
 
 const FIELD_PAD := 3
 const OWNED_PAD := 1
-const SEARCH_RADIUS := 3
+const SEARCH_RADIUS := 1
 const REGULARIZATION := 0.01
 const ATLAS := preload("./VoxelAtlas.gd")
 const AO_LEVELS: Array[float] = [0.0, 1.0 / 3.0, 2.0 / 3.0, 1.0]
@@ -36,6 +36,7 @@ var ao_strength := 0.0
 var atlas: RefCounted
 var material_uvs := {}
 var triangle_count := 0
+var degenerate_triangles := 0
 var surface_cells := 0
 var build_us := 0
 
@@ -51,6 +52,7 @@ var _field := PackedFloat32Array()
 var _gradient := PackedFloat32Array()
 var _solid := PackedByteArray()
 var _bridge_materials := {}
+var _material_cache := {}
 var _cell_vertex := PackedInt32Array()
 var _cell_positions := PackedVector3Array()
 var _cell_solids: Array = []
@@ -72,6 +74,7 @@ func build_region(frame: VoxelFrame, owned_min: Vector3i, owned_size: Vector3i, 
 	_origin = Vector3(owned_min)
 	arrays = _empty_arrays()
 	triangle_count = 0
+	degenerate_triangles = 0
 	surface_cells = 0
 	_positions = PackedVector3Array()
 	_normals = PackedVector3Array()
@@ -162,6 +165,7 @@ func _fill_solid() -> void:
 				if _frame.has(Vector3i(_grid_min.x + x, world_y, world_z)):
 					_solid[row + x] = 1
 	_bridge_materials.clear()
+	_material_cache.clear()
 	_add_contact_bridges()
 
 
@@ -294,7 +298,11 @@ func _mark_bridge(cell: Vector3i, material: PackedFloat32Array) -> void:
 func _material_for_cell(cell: Vector3i) -> PackedFloat32Array:
 	if _bridge_materials.has(cell):
 		return _bridge_materials[cell]
-	return _frame.get_material(cell)
+	if _material_cache.has(cell):
+		return _material_cache[cell]
+	var material := _frame.get_material(cell)
+	_material_cache[cell] = material
+	return material
 
 
 func _near_surface(x: int, y: int, z: int, inside: bool) -> bool:
@@ -478,18 +486,9 @@ func _build_triangles() -> void:
 		axis_vector[axis] = 1.0
 		var cells: Array = EDGE_CELLS[axis]
 		var owner_offset: Vector3i = OWNER_OFFSETS[axis]
-		for owner_z in range(1, _owned_size.z + 1):
-			for owner_y in range(1, _owned_size.y + 1):
-				for owner_x in range(1, _owned_size.x + 1):
-					var gx := owner_x - owner_offset.x
-					var gy := owner_y - owner_offset.y
-					var gz := owner_z - owner_offset.z
-					var first := _cell_vertex[_cell_index(gx + cells[0].x, gy + cells[0].y, gz + cells[0].z)]
-					var second := _cell_vertex[_cell_index(gx + cells[1].x, gy + cells[1].y, gz + cells[1].z)]
-					var third := _cell_vertex[_cell_index(gx + cells[2].x, gy + cells[2].y, gz + cells[2].z)]
-					var fourth := _cell_vertex[_cell_index(gx + cells[3].x, gy + cells[3].y, gz + cells[3].z)]
-					if first < 0 or second < 0 or third < 0 or fourth < 0:
-						continue
+		for gz in _cell_size.z:
+			for gy in _cell_size.y:
+				for gx in _cell_size.x:
 					var fx := FIELD_PAD + gx
 					var fy := FIELD_PAD + gy
 					var fz := FIELD_PAD + gz
@@ -497,8 +496,61 @@ func _build_triangles() -> void:
 					var b := _field[_grid_index(fx + 1, fy, fz)] if axis == 0 else (_field[_grid_index(fx, fy + 1, fz)] if axis == 1 else _field[_grid_index(fx, fy, fz + 1)])
 					if (a < 0.0) == (b < 0.0):
 						continue
+					var first := _edge_vertex(gx, gy, gz, cells[0])
+					var second := _edge_vertex(gx, gy, gz, cells[1])
+					var third := _edge_vertex(gx, gy, gz, cells[2])
+					var fourth := _edge_vertex(gx, gy, gz, cells[3])
+					if first < 0 or second < 0 or third < 0 or fourth < 0:
+						continue
+					if not _owned_cell(_edge_owner(gx, gy, gz, cells, owner_offset, axis)):
+						continue
 					var outward := axis_vector if b > a else -axis_vector
 					_emit_quad([first, second, third, fourth], outward)
+
+
+func _edge_vertex(gx: int, gy: int, gz: int, offset: Vector3i) -> int:
+	var x := gx + offset.x
+	var y := gy + offset.y
+	var z := gz + offset.z
+	if x < 0 or y < 0 or z < 0 or x >= _cell_size.x or y >= _cell_size.y or z >= _cell_size.z:
+		return -1
+	return _cell_vertex[_cell_index(x, y, z)]
+
+
+func _owned_cell(cell: Vector3i) -> bool:
+	return cell.x >= 1 and cell.y >= 1 and cell.z >= 1 and cell.x <= _owned_size.x and cell.y <= _owned_size.y and cell.z <= _owned_size.z
+
+
+func _edge_owner(gx: int, gy: int, gz: int, cells: Array, owner_offset: Vector3i, axis: int) -> Vector3i:
+	var anchor := Vector3i(gx, gy, gz)
+	var octant := anchor + owner_offset
+	var fallback := NO_CELL
+	for offset: Vector3i in cells:
+		var cell := anchor + offset
+		if not _grid_cell(cell):
+			return NO_CELL
+		if not _has_chunk(cell):
+			continue
+		if _solid_at(_cell_min + cell):
+			return cell
+		if fallback == NO_CELL:
+			fallback = cell
+	if fallback != NO_CELL:
+		return fallback
+	for side in 2:
+		var cell := anchor
+		cell[axis] += side
+		if _grid_cell(cell) and _has_chunk(cell) and _solid_at(_cell_min + cell):
+			return cell
+	return octant
+
+
+func _grid_cell(cell: Vector3i) -> bool:
+	return cell.x >= 0 and cell.y >= 0 and cell.z >= 0 and cell.x < _cell_size.x and cell.y < _cell_size.y and cell.z < _cell_size.z
+
+
+func _has_chunk(cell: Vector3i) -> bool:
+	return _frame.chunks.has(VoxelFrame.chunk_position(_cell_min + cell))
 
 
 func _emit_quad(quad: Array, axis_vector: Vector3) -> void:
@@ -587,6 +639,7 @@ func _add_triangle(first: int, second: int, third: int) -> void:
 	var c := _cell_positions[third]
 	var normal := (b - a).cross(c - a)
 	if normal.length_squared() < 1.0e-12:
+		degenerate_triangles += 1
 		return
 	normal = normal.normalized()
 	var centroid := (a + b + c) / 3.0

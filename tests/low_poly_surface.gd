@@ -3,6 +3,7 @@ extends "res://tests/test.gd"
 
 const TEST_PATH := "user://low_poly_surface_test.lve"
 const MODEL_PATH := "user://low_poly_surface_test.glb"
+const BORDER_PATH := "user://low_poly_border_test.glb"
 
 var renderer: VoxelRenderer
 var loaded: VoxelDocument
@@ -17,6 +18,7 @@ var cached_surfaces := 0
 func _ready() -> void:
 	timeout = 30.0
 	test("the low poly surface replaces the chunk meshes", _run)
+	test("the low poly bridge joins a staircase across a chunk border", _run_border_bridge, "low_poly_border")
 
 
 func _run() -> void:
@@ -56,6 +58,10 @@ func _run() -> void:
 		expect(material != null and material.vertex_color_use_as_albedo, "the low poly chunk uses the vertex colour material")
 		expect(material != null and material.albedo_texture != null and material.roughness_texture != null and material.metallic_texture != null and material.emission_texture != null, "the low poly chunk keeps its material textures")
 		expect(_all_uvs_match_vertices(), "the low poly chunks keep one UV per vertex")
+		var bounds := State.get_current_voxel_frame().get_bounds()
+		var mesh_bounds := _mesh_bounds()
+		expect(mesh_bounds.get_center().distance_to(bounds.get_center()) < 0.1, "the low poly mesh is centred on the voxel bounds")
+		expect(absf(mesh_bounds.size.x - bounds.size.x) < 0.5 and absf(mesh_bounds.size.y - bounds.size.y) < 0.5 and absf(mesh_bounds.size.z - bounds.size.z) < 0.5, "the low poly mesh covers the voxel bounds")
 	)
 	step("When the document enables smooth normals", func():
 		State.document.smooth_normals = true
@@ -117,27 +123,7 @@ func _run() -> void:
 					distinct_uvs[uv] = true
 			expect(distinct_uvs.size() >= 2, "the exported low poly mesh keeps one UV per material")
 			var arrays := mesh.surface_get_arrays(0)
-			var welded := PackedInt32Array()
-			var lookup := {}
-			for position: Vector3 in arrays[Mesh.ARRAY_VERTEX]:
-				var key := Vector3i((position * 10000.0).round())
-				if not lookup.has(key):
-					lookup[key] = lookup.size()
-				welded.append(lookup[key])
-			var edges := {}
-			var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
-			for index in range(0, indices.size(), 3):
-				var a := welded[indices[index]]
-				var b := welded[indices[index + 1]]
-				var c := welded[indices[index + 2]]
-				for edge in [[a, b], [b, c], [c, a]]:
-					var key := mini(int(edge[0]), int(edge[1])) * 1000000 + maxi(int(edge[0]), int(edge[1]))
-					edges[key] = edges.get(key, 0) + 1
-			var boundary := 0
-			for key in edges:
-				if edges[key] == 1:
-					boundary += 1
-			expect(boundary == 0, "the low poly chunks share their borders")
+			expect(_mesh_boundary_edges(mesh) == 0, "the low poly chunks share their borders")
 			var chunk_triangles := 0
 			for chunk: MeshInstance3D in renderer._chunk_instances.values():
 				if chunk.mesh == null:
@@ -190,6 +176,78 @@ func _run() -> void:
 			DirAccess.remove_absolute(path)
 
 
+
+
+func _run_border_bridge() -> void:
+	step("Given a same material staircase that crosses a chunk border", func():
+		State.document = VoxelDocument.new()
+		State.document.low_poly = true
+		State.document.smooth_normals = false
+		State.document.ao_strength = 0.0
+		var cells := {}
+		var material := VoxelFrame.material(Color(0.4, 0.8, 0.3))
+		for step_index in 6:
+			cells[Vector3i(13 + step_index, 0, step_index)] = material
+		State.get_current_voxel_frame().set_cells(cells)
+		State.frames_changed.emit()
+		renderer = editor_viewport().get_node("ViewportScene/VoxelRenderer")
+	)
+	await get_tree().process_frame
+	await _settle()
+	step("Then the staircase builds in both chunks", func():
+		expect(renderer._chunk_instances.has(Vector3i.ZERO), "the staircase builds its first chunk")
+		expect(renderer._chunk_instances.has(Vector3i(1, 0, 0)), "the staircase crosses into the second chunk")
+	)
+	exporter = plugin("ExportPlugin")
+	export_error = await exporter.export_gltf(BORDER_PATH)
+	step("Then the exported staircase closes across the border", func():
+		expect(export_error == OK, "the staircase exports")
+		var mesh := _load_mesh(BORDER_PATH)
+		expect(mesh != null, "the exported staircase loads")
+		if mesh != null:
+			expect(_mesh_boundary_edges(mesh) == 0, "the bridged staircase shares its border edges")
+	)
+	for path in [BORDER_PATH]:
+		if FileAccess.file_exists(path):
+			DirAccess.remove_absolute(path)
+
+
+func _load_mesh(path: String) -> Mesh:
+	var gltf := GLTFDocument.new()
+	var state := GLTFState.new()
+	if gltf.append_from_file(path, state) != OK:
+		return null
+	var meshes := state.get_meshes()
+	if meshes.is_empty():
+		return null
+	return meshes[0].mesh.get_mesh()
+
+
+func _mesh_boundary_edges(mesh: Mesh) -> int:
+	var arrays := mesh.surface_get_arrays(0)
+	var welded := PackedInt32Array()
+	var lookup := {}
+	for position: Vector3 in arrays[Mesh.ARRAY_VERTEX]:
+		var key := Vector3i((position * 10000.0).round())
+		if not lookup.has(key):
+			lookup[key] = lookup.size()
+		welded.append(lookup[key])
+	var edges := {}
+	var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
+	for index in range(0, indices.size(), 3):
+		var a := welded[indices[index]]
+		var b := welded[indices[index + 1]]
+		var c := welded[indices[index + 2]]
+		for edge in [[a, b], [b, c], [c, a]]:
+			var key := mini(int(edge[0]), int(edge[1])) * 1000000 + maxi(int(edge[0]), int(edge[1]))
+			edges[key] = edges.get(key, 0) + 1
+	var boundary := 0
+	for key in edges:
+		if edges[key] == 1:
+			boundary += 1
+	return boundary
+
+
 func _settle() -> void:
 	while not renderer.is_settled():
 		await get_tree().process_frame
@@ -202,6 +260,21 @@ func _has_smooth_normals(mesh: Mesh) -> bool:
 			if largest_component < 0.99 and normal.length() > 0.99:
 				return true
 	return false
+
+
+func _mesh_bounds() -> AABB:
+	var bounds := AABB()
+	var first := true
+	for chunk: MeshInstance3D in renderer._chunk_instances.values():
+		if chunk.mesh == null:
+			continue
+		var box: AABB = chunk.transform * chunk.mesh.get_aabb()
+		if first:
+			bounds = box
+			first = false
+		else:
+			bounds = bounds.merge(box)
+	return bounds
 
 
 func _all_uvs_match_vertices() -> bool:
