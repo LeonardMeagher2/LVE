@@ -24,6 +24,7 @@ class ExportJob extends VoxelFrame.EditJob:
 	var smooth_normals := false
 	var ao_strength := 1.0
 	var unlit := false
+	var low_poly := false
 
 	func run() -> void:
 		var total := 0
@@ -45,6 +46,7 @@ class ExportJob extends VoxelFrame.EditJob:
 				var mesh_job := VoxelMeshBuilder.new()
 				mesh_job.source_frame = frame
 				mesh_job.chunk_location = chunk_location
+				mesh_job.low_poly = low_poly
 				mesh_job.smooth_normals = smooth_normals
 				mesh_job.ao_strength = ao_strength
 				mesh_job.texture_materials = false
@@ -70,19 +72,23 @@ class ExportJob extends VoxelFrame.EditJob:
 			arrays[Mesh.ARRAY_INDEX] = indices
 			frame_surfaces.append(arrays)
 		checkpoint(completed)
-		for frame_index in frame_surfaces.size():
-			var welded := _weld_frame(frame_surfaces[frame_index], frame_index)
-			if welded.is_empty():
-				return
-			stage("Preparing frame %d/%d surfaces" % [frame_index + 1, frames.size()], -1)
-			var surface := SURFACE.new()
-			surface.run(welded, frames[frame_index], Vector3.ZERO, checkpoint, smooth_normals, ao_strength)
-			error = surface.error
-			if error != OK:
-				return
-			frame_surfaces[frame_index] = surface.arrays
-			frame_atlases.append(surface.atlas)
-			vertex_count += surface.arrays[Mesh.ARRAY_VERTEX].size()
+		if low_poly:
+			for arrays in frame_surfaces:
+				vertex_count += arrays[Mesh.ARRAY_VERTEX].size()
+		else:
+			for frame_index in frame_surfaces.size():
+				var welded := _weld_frame(frame_surfaces[frame_index], frame_index)
+				if welded.is_empty():
+					return
+				stage("Preparing frame %d/%d surfaces" % [frame_index + 1, frames.size()], -1)
+				var surface := SURFACE.new()
+				surface.run(welded, frames[frame_index], Vector3.ZERO, checkpoint, smooth_normals, ao_strength)
+				error = surface.error
+				if error != OK:
+					return
+				frame_surfaces[frame_index] = surface.arrays
+				frame_atlases.append(surface.atlas)
+				vertex_count += surface.arrays[Mesh.ARRAY_VERTEX].size()
 		if vertex_count == 0:
 			return
 		var center := (min_position + max_position) * 0.5
@@ -187,6 +193,7 @@ func export_gltf(path: String, center_origin := true, tag_index := -1, overrides
 	job.smooth_normals = bool(overrides.get("smooth_normals", State.document.smooth_normals))
 	job.ao_strength = clampf(float(overrides.get("ao", State.document.ao_strength)), 0.0, 1.0)
 	job.unlit = bool(overrides.get("unlit", false))
+	job.low_poly = bool(overrides.get("low_poly", State.document.low_poly))
 	var selected_tag := State.document.get_tag(tag_index)
 	var first := selected_tag.from if selected_tag else 0
 	var last := selected_tag.to if selected_tag else State.get_frame_count() - 1
@@ -230,10 +237,18 @@ func export_gltf(path: String, center_origin := true, tag_index := -1, overrides
 		var frame_node: Node3D
 		var arrays := job.frame_surfaces[frame_index]
 		if not arrays[Mesh.ARRAY_VERTEX].is_empty():
-			var material: StandardMaterial3D = job.frame_atlases[frame_index].create_material()
+			var material: StandardMaterial3D
+			if job.low_poly:
+				material = StandardMaterial3D.new()
+				material.vertex_color_use_as_albedo = true
+				material.vertex_color_is_srgb = false
+				material.roughness = 0.9
+				material.metallic = 0.0
+			else:
+				material = job.frame_atlases[frame_index].create_material()
 			if job.unlit:
 				material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-			if job.ao_strength > 0.0:
+			if job.ao_strength > 0.0 and not job.low_poly:
 				material.vertex_color_use_as_albedo = true
 				material.vertex_color_is_srgb = false
 			var frame_mesh := ArrayMesh.new()

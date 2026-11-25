@@ -10,6 +10,7 @@ const SURFACE := preload("./VoxelSurface.gd")
 
 var source_frame: VoxelFrame
 var chunk_location := Vector3i.ZERO
+var low_poly := false
 var smooth_normals := false
 var ao_strength := 0.0
 var texture_materials := true
@@ -38,6 +39,19 @@ var group_count := 0
 
 
 func run() -> void:
+	if low_poly:
+		var low_poly_started_us := Time.get_ticks_usec() if profile else 0
+		var mesher := VoxelLowPolyMesh.new()
+		mesher.smooth_normals = smooth_normals
+		mesher.build_region(source_frame, chunk_location * CHUNK_SIZE, Vector3i.ONE * CHUNK_SIZE)
+		surface_arrays = mesher.arrays
+		atlas = null
+		atlas_size = Vector2i.ZERO
+		geometry_bytes = surface_arrays[Mesh.ARRAY_VERTEX].size() * 40 + surface_arrays[Mesh.ARRAY_INDEX].size() * 4
+		if profile:
+			scan_us += Time.get_ticks_usec() - low_poly_started_us
+		source_frame = null
+		return
 	var frame := source_frame
 	if enclosed_shortcut and slice_axis < 0 and frame != null and _enclosed(frame, chunk_location):
 		enclosed_culled = true

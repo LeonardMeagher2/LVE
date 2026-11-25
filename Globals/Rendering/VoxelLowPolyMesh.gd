@@ -21,14 +21,23 @@ const EDGE_CELLS := [
 	[Vector3i(-1, 0, -1), Vector3i(0, 0, -1), Vector3i(0, 0, 0), Vector3i(-1, 0, 0)],
 	[Vector3i(-1, -1, 0), Vector3i(0, -1, 0), Vector3i(0, 0, 0), Vector3i(-1, 0, 0)],
 ]
+const OWNER_OFFSETS := [
+	Vector3i(0, -1, -1),
+	Vector3i(-1, 0, -1),
+	Vector3i(-1, -1, 0),
+]
 
 var arrays: Array = []
 var merge_faces := false
+var smooth_normals := false
 var triangle_count := 0
 var surface_cells := 0
 var build_us := 0
 
 var _frame: VoxelFrame
+var _owned_min := Vector3i.ZERO
+var _owned_size := Vector3i.ZERO
+var _origin := Vector3.ZERO
 var _grid_min := Vector3i.ZERO
 var _grid_size := Vector3i.ZERO
 var _cell_min := Vector3i.ZERO
@@ -49,9 +58,12 @@ var _colors := PackedColorArray()
 var _indices := PackedInt32Array()
 
 
-func build(frame: VoxelFrame) -> void:
+func build_region(frame: VoxelFrame, owned_min: Vector3i, owned_size: Vector3i) -> void:
 	var started := Time.get_ticks_usec()
 	_frame = frame
+	_owned_min = owned_min
+	_owned_size = owned_size
+	_origin = Vector3(owned_min)
 	arrays = _empty_arrays()
 	triangle_count = 0
 	surface_cells = 0
@@ -64,14 +76,11 @@ func build(frame: VoxelFrame) -> void:
 	_mesh_triangles = PackedInt32Array()
 	_mesh_colors = []
 	_mesh_materials = []
-	var bounds := frame.get_bounds()
-	if not bounds.has_volume():
+	if owned_size.x <= 0 or owned_size.y <= 0 or owned_size.z <= 0:
 		build_us = Time.get_ticks_usec() - started
 		return
-	var min_cell := Vector3i((bounds.position + Vector3.ONE * 0.5).round())
-	var max_cell := Vector3i((bounds.end - Vector3.ONE * 0.5).round())
-	_cell_min = min_cell - Vector3i.ONE * OWNED_PAD
-	_cell_size = max_cell - min_cell + Vector3i.ONE * (2 * OWNED_PAD + 1)
+	_cell_min = owned_min - Vector3i.ONE * OWNED_PAD
+	_cell_size = owned_size + Vector3i.ONE * (2 * OWNED_PAD + 1)
 	_grid_min = _cell_min - Vector3i.ONE * FIELD_PAD
 	_grid_size = _cell_size + Vector3i.ONE * 2 + Vector3i.ONE * (2 * FIELD_PAD) - Vector3i.ONE
 	_fill_solid()
@@ -89,6 +98,25 @@ func build(frame: VoxelFrame) -> void:
 	arrays[Mesh.ARRAY_INDEX] = _indices
 	triangle_count = _indices.size() / 3
 	build_us = Time.get_ticks_usec() - started
+
+
+func build_frame(frame: VoxelFrame) -> void:
+	var bounds := frame.get_bounds()
+	if not bounds.has_volume():
+		arrays = _empty_arrays()
+		triangle_count = 0
+		surface_cells = 0
+		build_us = 0
+		return
+	var min_cell := Vector3i((bounds.position + Vector3.ONE * 0.5).round())
+	var max_cell := Vector3i((bounds.end - Vector3.ONE * 0.5).round())
+	var size := max_cell - min_cell + Vector3i.ONE
+	var region_min := min_cell - Vector3i.ONE
+	var region_size := size + Vector3i.ONE * 2
+	build_region(frame, region_min, region_size)
+	for index in _positions.size():
+		_positions[index] += Vector3(region_min)
+	arrays[Mesh.ARRAY_VERTEX] = _positions
 
 
 func _empty_arrays() -> Array:
@@ -134,6 +162,9 @@ func _build_field() -> void:
 			for x in _grid_size.x:
 				var index := _grid_index(x, y, z)
 				var inside := _solid[index] != 0
+				if not _near_surface(x, y, z, inside):
+					_field[index] = -1.0 if inside else 1.0
+					continue
 				var point := Vector3(_grid_min + Vector3i(x, y, z))
 				var nearest := float(SEARCH_RADIUS) + 0.5
 				for oz in range(-SEARCH_RADIUS, SEARCH_RADIUS + 1):
@@ -252,6 +283,26 @@ func _material_for_cell(cell: Vector3i) -> PackedFloat32Array:
 	if _bridge_materials.has(cell):
 		return _bridge_materials[cell]
 	return _frame.get_material(cell)
+
+
+func _near_surface(x: int, y: int, z: int, inside: bool) -> bool:
+	for oz in range(-1, 2):
+		var sample_z := z + oz
+		if sample_z < 0 or sample_z >= _grid_size.z:
+			continue
+		for oy in range(-1, 2):
+			var sample_y := y + oy
+			if sample_y < 0 or sample_y >= _grid_size.y:
+				continue
+			for ox in range(-1, 2):
+				if ox == 0 and oy == 0 and oz == 0:
+					continue
+				var sample_x := x + ox
+				if sample_x < 0 or sample_x >= _grid_size.x:
+					continue
+				if (_solid[_grid_index(sample_x, sample_y, sample_z)] != 0) != inside:
+					return true
+	return false
 
 
 func _build_gradient() -> void:
@@ -414,26 +465,24 @@ func _build_triangles() -> void:
 		var axis_vector := Vector3.ZERO
 		axis_vector[axis] = 1.0
 		var cells: Array = EDGE_CELLS[axis]
-		for z in _cell_size.z:
-			for y in _cell_size.y:
-				for x in _cell_size.x:
-					if axis == 0 and (y < 1 or z < 1):
-						continue
-					if axis == 1 and (x < 1 or z < 1):
-						continue
-					if axis == 2 and (x < 1 or y < 1):
-						continue
-					var first := _cell_vertex[_cell_index(x + cells[0].x, y + cells[0].y, z + cells[0].z)]
-					var second := _cell_vertex[_cell_index(x + cells[1].x, y + cells[1].y, z + cells[1].z)]
-					var third := _cell_vertex[_cell_index(x + cells[2].x, y + cells[2].y, z + cells[2].z)]
-					var fourth := _cell_vertex[_cell_index(x + cells[3].x, y + cells[3].y, z + cells[3].z)]
+		var owner_offset: Vector3i = OWNER_OFFSETS[axis]
+		for owner_z in range(1, _owned_size.z + 1):
+			for owner_y in range(1, _owned_size.y + 1):
+				for owner_x in range(1, _owned_size.x + 1):
+					var gx := owner_x - owner_offset.x
+					var gy := owner_y - owner_offset.y
+					var gz := owner_z - owner_offset.z
+					var first := _cell_vertex[_cell_index(gx + cells[0].x, gy + cells[0].y, gz + cells[0].z)]
+					var second := _cell_vertex[_cell_index(gx + cells[1].x, gy + cells[1].y, gz + cells[1].z)]
+					var third := _cell_vertex[_cell_index(gx + cells[2].x, gy + cells[2].y, gz + cells[2].z)]
+					var fourth := _cell_vertex[_cell_index(gx + cells[3].x, gy + cells[3].y, gz + cells[3].z)]
 					if first < 0 or second < 0 or third < 0 or fourth < 0:
 						continue
-					var gx := FIELD_PAD + x
-					var gy := FIELD_PAD + y
-					var gz := FIELD_PAD + z
-					var a := _field[_grid_index(gx, gy, gz)]
-					var b := _field[_grid_index(gx + 1, gy, gz)] if axis == 0 else (_field[_grid_index(gx, gy + 1, gz)] if axis == 1 else _field[_grid_index(gx, gy, gz + 1)])
+					var fx := FIELD_PAD + gx
+					var fy := FIELD_PAD + gy
+					var fz := FIELD_PAD + gz
+					var a := _field[_grid_index(fx, fy, fz)]
+					var b := _field[_grid_index(fx + 1, fy, fz)] if axis == 0 else (_field[_grid_index(fx, fy + 1, fz)] if axis == 1 else _field[_grid_index(fx, fy, fz + 1)])
 					if (a < 0.0) == (b < 0.0):
 						continue
 					var outward := axis_vector if b > a else -axis_vector
@@ -735,6 +784,19 @@ func _simplify_loop(points: PackedVector2Array) -> PackedInt32Array:
 
 
 func _expand() -> void:
+	var smooth := PackedVector3Array()
+	if smooth_normals:
+		smooth.resize(_cell_positions.size())
+		for triangle in range(0, _mesh_triangles.size(), 3):
+			var first := _mesh_triangles[triangle]
+			var second := _mesh_triangles[triangle + 1]
+			var third := _mesh_triangles[triangle + 2]
+			var normal := (_cell_positions[second] - _cell_positions[first]).cross(_cell_positions[third] - _cell_positions[first])
+			smooth[first] += normal
+			smooth[second] += normal
+			smooth[third] += normal
+		for index in smooth.size():
+			smooth[index] = smooth[index].normalized()
 	for triangle in range(0, _mesh_triangles.size(), 3):
 		var first := _mesh_triangles[triangle]
 		var second := _mesh_triangles[triangle + 1]
@@ -746,14 +808,23 @@ func _expand() -> void:
 		if normal.length_squared() < 1.0e-12:
 			continue
 		normal = normal.normalized()
+		var first_normal := smooth[first] if smooth_normals else normal
+		var second_normal := smooth[second] if smooth_normals else normal
+		var third_normal := smooth[third] if smooth_normals else normal
+		if first_normal.length_squared() < 0.5:
+			first_normal = normal
+		if second_normal.length_squared() < 0.5:
+			second_normal = normal
+		if third_normal.length_squared() < 0.5:
+			third_normal = normal
 		var color := _mesh_colors[triangle / 3]
 		var base := _positions.size()
-		_positions.append(a)
-		_positions.append(b)
-		_positions.append(c)
-		_normals.append(normal)
-		_normals.append(normal)
-		_normals.append(normal)
+		_positions.append(a - _origin)
+		_positions.append(b - _origin)
+		_positions.append(c - _origin)
+		_normals.append(first_normal)
+		_normals.append(second_normal)
+		_normals.append(third_normal)
 		_colors.append(color)
 		_colors.append(color)
 		_colors.append(color)
