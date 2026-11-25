@@ -25,6 +25,7 @@ var _quit_after_save := false
 var _recovery_entries: Array = []
 var _recovery_checkboxes: Array[CheckBox] = []
 var _last_dir := ""
+var _native_save := false
 
 
 func _ready() -> void:
@@ -427,6 +428,25 @@ func _show_file_dialog() -> void:
 		%FileDialog.current_dir = _last_dir
 	%FileDialog.popup_centered()
 
+
+func _show_native_dialog(save: bool) -> void:
+	_native_save = save
+	var title := "Save the document" if save else "Open a document"
+	var mode := DisplayServer.FILE_DIALOG_MODE_SAVE_FILE if save else DisplayServer.FILE_DIALOG_MODE_OPEN_FILE
+	var filters := PackedStringArray(["*.lve"]) if save else PackedStringArray(["*.lve", "*.png"])
+	DisplayServer.file_dialog_show(title, "", "", false, mode, filters, _on_native_dialog_closed)
+
+
+func _on_native_dialog_closed(status: bool, paths: PackedStringArray, _filter_index: int) -> void:
+	var save := _native_save
+	_native_save = false
+	if not status or paths.is_empty():
+		return
+	if save:
+		await save_doc(paths[0])
+		return
+	await _on_file_opened(paths[0])
+
 func _on_new_btn_pressed() -> void:
 	if State.edit_busy():
 		return
@@ -439,6 +459,9 @@ func _on_new_btn_pressed() -> void:
 
 func _on_open_btn_pressed() -> void:
 	if State.edit_busy():
+		return
+	if OS.has_feature("mobile"):
+		_show_native_dialog(false)
 		return
 	%FileDialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
 	_save_format.hide()
@@ -516,6 +539,9 @@ func _on_save_btn_pressed() -> void:
 func _on_save_as_btn_pressed() -> bool:
 	if State.edit_busy():
 		return false
+	if OS.has_feature("mobile"):
+		_show_native_dialog(true)
+		return true
 	%FileDialog.file_mode = FileDialog.FILE_MODE_SAVE_FILE
 	_save_format.show()
 	var format_index := 1 if current_save_path.get_extension().to_lower() == "png" else 0

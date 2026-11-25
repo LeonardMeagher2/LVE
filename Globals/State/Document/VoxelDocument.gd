@@ -105,29 +105,32 @@ func encode_document() -> PackedByteArray:
 
 
 func save_file(path: String, preview: Image = null, encoded := PackedByteArray()) -> Error:
-	if path.get_extension().to_lower() not in ["lve", "png"]:
+	var is_uri := path.contains("://")
+	var extension := path.get_extension().to_lower()
+	if extension not in ["lve", "png"] and not is_uri:
 		return ERR_FILE_UNRECOGNIZED
 	var data := encoded if not encoded.is_empty() else encode_document()
 	if data.is_empty():
 		return ERR_INVALID_DATA
-	if path.get_extension().to_lower() == "png":
+	if extension == "png":
 		if preview == null or preview.is_empty():
 			return ERR_INVALID_PARAMETER
 		data = document_png(preview, data)
 	if data.is_empty() or data.size() > MAX_FILE_BYTES:
 		return ERR_OUT_OF_MEMORY
-	var temporary_path := path + ".%s.tmp" % Time.get_ticks_usec()
-	var file := FileAccess.open(temporary_path, FileAccess.WRITE)
+	var temporary_path := "" if is_uri else path + ".%s.tmp" % Time.get_ticks_usec()
+	var file := FileAccess.open(path if is_uri else temporary_path, FileAccess.WRITE)
 	if file == null:
 		return FileAccess.get_open_error()
 	file.store_buffer(data)
 	file.flush()
 	var error := file.get_error()
 	file.close()
-	if error == OK:
-		error = DirAccess.rename_absolute(temporary_path, path)
-	if error != OK:
-		DirAccess.remove_absolute(temporary_path)
+	if not temporary_path.is_empty():
+		if error == OK:
+			error = DirAccess.rename_absolute(temporary_path, path)
+		if error != OK:
+			DirAccess.remove_absolute(temporary_path)
 	return error
 
 
