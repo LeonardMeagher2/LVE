@@ -37,6 +37,8 @@ var triangle_count := 0
 var degenerate_triangles := 0
 var surface_cells := 0
 var build_us := 0
+var profile := false
+var phase_us := {}
 
 var _frame: VoxelFrame
 var _owned_min := Vector3i.ZERO
@@ -49,6 +51,9 @@ var _cell_size := Vector3i.ZERO
 var _field := PackedFloat32Array()
 var _gradient := PackedFloat32Array()
 var _solid := PackedByteArray()
+var _near := PackedByteArray()
+var _near_cells: Array[Vector3i] = []
+var _distance := PackedFloat32Array()
 var _bridge_materials := {}
 var _material_cache := {}
 var _cell_vertex := PackedInt32Array()
@@ -84,6 +89,7 @@ func build_region(frame: VoxelFrame, owned_min: Vector3i, owned_size: Vector3i, 
 	_mesh_materials = []
 	atlas = null
 	material_uvs = {}
+	phase_us = {}
 	if owned_size.x <= 0 or owned_size.y <= 0 or owned_size.z <= 0:
 		build_us = Time.get_ticks_usec() - started
 		return
@@ -92,14 +98,28 @@ func build_region(frame: VoxelFrame, owned_min: Vector3i, owned_size: Vector3i, 
 	_grid_min = _cell_min - Vector3i.ONE * FIELD_PAD
 	_grid_size = _cell_size + Vector3i.ONE * 2 + Vector3i.ONE * (2 * FIELD_PAD) - Vector3i.ONE
 	_fill_solid()
+	var phase := Time.get_ticks_usec()
 	_build_field()
+	_phase("field", phase)
+	phase = Time.get_ticks_usec()
 	_build_gradient()
+	_phase("gradient", phase)
+	phase = Time.get_ticks_usec()
 	_build_vertices()
+	_phase("vertices", phase)
+	phase = Time.get_ticks_usec()
 	_build_triangles()
 	_orient_triangles()
+	_phase("triangles", phase)
+	phase = Time.get_ticks_usec()
 	_build_material_atlas(shared_atlas, shared_material_uvs)
+	_phase("atlas", phase)
+	phase = Time.get_ticks_usec()
 	_build_vertex_ao()
+	_phase("ao", phase)
+	phase = Time.get_ticks_usec()
 	_expand()
+	_phase("expand", phase)
 	arrays[Mesh.ARRAY_VERTEX] = _positions
 	arrays[Mesh.ARRAY_NORMAL] = _normals
 	arrays[Mesh.ARRAY_COLOR] = _colors
@@ -107,6 +127,37 @@ func build_region(frame: VoxelFrame, owned_min: Vector3i, owned_size: Vector3i, 
 	arrays[Mesh.ARRAY_INDEX] = _indices
 	triangle_count = _indices.size() / 3
 	build_us = Time.get_ticks_usec() - started
+
+
+func _phase(label: String, started: int) -> void:
+	if profile:
+		phase_us[label] = phase_us.get(label, 0) + Time.get_ticks_usec() - started
+
+
+func _build_distances() -> void:
+	var span := 2 * SEARCH_RADIUS + 1
+	_distance.resize(span * span * span)
+	for oz in span:
+		for oy in span:
+			for ox in span:
+				var q := Vector3(absf(ox - SEARCH_RADIUS), absf(oy - SEARCH_RADIUS), absf(oz - SEARCH_RADIUS)) - Vector3.ONE * 0.5
+				var outside := Vector3(maxf(q.x, 0.0), maxf(q.y, 0.0), maxf(q.z, 0.0))
+				_distance[ox + span * oy + span * span * oz] = outside.length() + minf(maxf(q.x, maxf(q.y, q.z)), 0.0)
+
+
+func release_scratch() -> void:
+	_field = PackedFloat32Array()
+	_gradient = PackedFloat32Array()
+	_solid = PackedByteArray()
+	_near = PackedByteArray()
+	_distance = PackedFloat32Array()
+	_near_cells.clear()
+	_cell_vertex = PackedInt32Array()
+	_cell_positions = PackedVector3Array()
+	_cell_solids = []
+	_mesh_triangles = PackedInt32Array()
+	_mesh_materials = []
+
 
 func _empty_arrays() -> Array:
 	var result := []
@@ -139,41 +190,104 @@ func _fill_solid() -> void:
 	_bridge_materials.clear()
 	_material_cache.clear()
 	_add_contact_bridges()
+	_build_near()
+
+
+func _build_near() -> void:
+	var gx := _grid_size.x
+	var gy := _grid_size.y
+	var gz := _grid_size.z
+	var plane := gx * gy
+	var count := gx * gy * gz
+	var rows := PackedInt32Array()
+	rows.resize(count)
+	for z in gz:
+		for y in gy:
+			var row := y * gx + z * plane
+			for x in gx:
+				rows[row + x] = _solid[row + maxi(0, x - 1)] + _solid[row + x] + _solid[row + mini(gx - 1, x + 1)]
+	var plates := PackedInt32Array()
+	plates.resize(count)
+	for z in gz:
+		for y in gy:
+			var row := y * gx + z * plane
+			var above := maxi(0, y - 1) * gx + z * plane
+			var below := mini(gy - 1, y + 1) * gx + z * plane
+			for x in gx:
+				plates[row + x] = rows[above + x] + rows[row + x] + rows[below + x]
+	_near.resize(count)
+	_near_cells.clear()
+	for z in gz:
+		var back := maxi(0, z - 1) * plane
+		var front := mini(gz - 1, z + 1) * plane
+		var row := z * plane
+		for y in gy:
+			for x in gx:
+				var total := plates[back + y * gx + x] + plates[row + y * gx + x] + plates[front + y * gx + x]
+				var index := row + y * gx + x
+				if total == 0 or total == 27:
+					_near[index] = 0
+				else:
+					_near[index] = 1
+					_near_cells.append(Vector3i(x, y, z))
 
 func _build_field() -> void:
 	var count := _grid_size.x * _grid_size.y * _grid_size.z
 	_field = PackedFloat32Array()
 	_field.resize(count)
-	for z in _grid_size.z:
-		for y in _grid_size.y:
-			for x in _grid_size.x:
-				var index := _grid_index(x, y, z)
+	_build_distances()
+	var size_x := _grid_size.x
+	var size_y := _grid_size.y
+	var size_z := _grid_size.z
+	var plane := size_x * size_y
+	for z in size_z:
+		var base_z := z * plane
+		for y in size_y:
+			var base_y := base_z + y * size_x
+			for x in size_x:
+				var index := base_y + x
 				var inside := _solid[index] != 0
-				if not _near_surface(x, y, z, inside):
+				if _near[index] == 0:
 					_field[index] = -1.0 if inside else 1.0
 					continue
-				var point := Vector3(_grid_min + Vector3i(x, y, z))
-				var nearest := float(SEARCH_RADIUS) + 0.5
-				for oz in range(-SEARCH_RADIUS, SEARCH_RADIUS + 1):
-					var sample_z := z + oz
-					if sample_z < 0 or sample_z >= _grid_size.z:
-						continue
-					for oy in range(-SEARCH_RADIUS, SEARCH_RADIUS + 1):
-						var sample_y := y + oy
-						if sample_y < 0 or sample_y >= _grid_size.y:
-							continue
-						for ox in range(-SEARCH_RADIUS, SEARCH_RADIUS + 1):
-							var sample_x := x + ox
-							if sample_x < 0 or sample_x >= _grid_size.x:
-								continue
-							if (_solid[_grid_index(sample_x, sample_y, sample_z)] != 0) == inside:
-								continue
-							var cell := point + Vector3(ox, oy, oz)
-							var q := (point - cell).abs() - Vector3.ONE * 0.5
-							var outside := Vector3(maxf(q.x, 0.0), maxf(q.y, 0.0), maxf(q.z, 0.0))
-							var distance := outside.length() + minf(maxf(q.x, maxf(q.y, q.z)), 0.0)
-							nearest = minf(nearest, distance)
+				var nearest := 0.5
+				var differs := (
+					(x > 0 and (_solid[index - 1] != 0) != inside)
+					or (x + 1 < size_x and (_solid[index + 1] != 0) != inside)
+					or (y > 0 and (_solid[index - size_x] != 0) != inside)
+					or (y + 1 < size_y and (_solid[index + size_x] != 0) != inside)
+					or (z > 0 and (_solid[index - plane] != 0) != inside)
+					or (z + 1 < size_z and (_solid[index + plane] != 0) != inside)
+				)
+				if not differs:
+					nearest = _nearest_distance(x, y, z, inside)
 				_field[index] = -nearest if inside else nearest
+
+
+func _nearest_distance(x: int, y: int, z: int, inside: bool) -> float:
+	var nearest := float(SEARCH_RADIUS) + 0.5
+	var span := 2 * SEARCH_RADIUS + 1
+	var base_z := z * _grid_size.x * _grid_size.y
+	for oz in range(-SEARCH_RADIUS, SEARCH_RADIUS + 1):
+		var sample_z := z + oz
+		if sample_z < 0 or sample_z >= _grid_size.z:
+			continue
+		for oy in range(-SEARCH_RADIUS, SEARCH_RADIUS + 1):
+			var sample_y := y + oy
+			if sample_y < 0 or sample_y >= _grid_size.y:
+				continue
+			var plane := span * span * (oz + SEARCH_RADIUS) + span * (oy + SEARCH_RADIUS)
+			var row := base_z + oz * _grid_size.x * _grid_size.y + sample_y * _grid_size.x
+			for ox in range(-SEARCH_RADIUS, SEARCH_RADIUS + 1):
+				var sample_x := x + ox
+				if sample_x < 0 or sample_x >= _grid_size.x:
+					continue
+				if (_solid[row + sample_x] != 0) == inside:
+					continue
+				var distance := _distance[plane + ox + SEARCH_RADIUS]
+				if distance < nearest:
+					nearest = distance
+	return nearest
 
 func _add_contact_bridges() -> void:
 	var original := _solid.duplicate()
@@ -269,75 +383,63 @@ func _material_for_cell(cell: Vector3i) -> PackedFloat32Array:
 	_material_cache[cell] = material
 	return material
 
-func _near_surface(x: int, y: int, z: int, inside: bool) -> bool:
-	for oz in range(-1, 2):
-		var sample_z := z + oz
-		if sample_z < 0 or sample_z >= _grid_size.z:
-			continue
-		for oy in range(-1, 2):
-			var sample_y := y + oy
-			if sample_y < 0 or sample_y >= _grid_size.y:
-				continue
-			for ox in range(-1, 2):
-				if ox == 0 and oy == 0 and oz == 0:
-					continue
-				var sample_x := x + ox
-				if sample_x < 0 or sample_x >= _grid_size.x:
-					continue
-				if (_solid[_grid_index(sample_x, sample_y, sample_z)] != 0) != inside:
-					return true
-	return false
-
 func _build_gradient() -> void:
 	var count := _grid_size.x * _grid_size.y * _grid_size.z
 	_gradient = PackedFloat32Array()
 	_gradient.resize(count * 3)
-	for z in _grid_size.z:
-		for y in _grid_size.y:
-			for x in _grid_size.x:
-				var index := _grid_index(x, y, z)
-				var x0 := _grid_index(maxi(0, x - 1), y, z)
-				var x1 := _grid_index(mini(_grid_size.x - 1, x + 1), y, z)
-				var y0 := _grid_index(x, maxi(0, y - 1), z)
-				var y1 := _grid_index(x, mini(_grid_size.y - 1, y + 1), z)
-				var z0 := _grid_index(x, y, maxi(0, z - 1))
-				var z1 := _grid_index(x, y, mini(_grid_size.z - 1, z + 1))
-				_gradient[index * 3] = (_field[x1] - _field[x0]) * 0.5
-				_gradient[index * 3 + 1] = (_field[y1] - _field[y0]) * 0.5
-				_gradient[index * 3 + 2] = (_field[z1] - _field[z0]) * 0.5
+	for grid_cell: Vector3i in _near_cells:
+		var x := grid_cell.x
+		var y := grid_cell.y
+		var z := grid_cell.z
+		var index := _grid_index(x, y, z)
+		var x0 := _grid_index(maxi(0, x - 1), y, z)
+		var x1 := _grid_index(mini(_grid_size.x - 1, x + 1), y, z)
+		var y0 := _grid_index(x, maxi(0, y - 1), z)
+		var y1 := _grid_index(x, mini(_grid_size.y - 1, y + 1), z)
+		var z0 := _grid_index(x, y, maxi(0, z - 1))
+		var z1 := _grid_index(x, y, mini(_grid_size.z - 1, z + 1))
+		_gradient[index * 3] = (_field[x1] - _field[x0]) * 0.5
+		_gradient[index * 3 + 1] = (_field[y1] - _field[y0]) * 0.5
+		_gradient[index * 3 + 2] = (_field[z1] - _field[z0]) * 0.5
 
 func _build_vertices() -> void:
 	var count := _cell_size.x * _cell_size.y * _cell_size.z
 	_cell_vertex = PackedInt32Array()
 	_cell_vertex.resize(count)
 	_cell_vertex.fill(-1)
-	for z in _cell_size.z:
-		for y in _cell_size.y:
-			for x in _cell_size.x:
-				var p := _cell_min + Vector3i(x, y, z)
-				var values := _corner_values(p)
-				var inside := 0
-				for value in values:
-					if value < 0.0:
-						inside += 1
-				if inside == 0 or inside == 8:
-					continue
-				var placed := _quadric_vertex(p, values)
-				_cell_vertex[_cell_index(x, y, z)] = _cell_positions.size()
-				_cell_positions.append(placed)
-				var solids: Array[Vector3i] = []
-				for corner in 8:
-					if values[corner] < 0.0:
-						solids.append(p + CORNERS[corner])
-				_cell_solids.append(solids)
-				surface_cells += 1
+	for grid_cell: Vector3i in _near_cells:
+		var x := grid_cell.x - FIELD_PAD
+		var y := grid_cell.y - FIELD_PAD
+		var z := grid_cell.z - FIELD_PAD
+		if x < 0 or y < 0 or z < 0 or x >= _cell_size.x or y >= _cell_size.y or z >= _cell_size.z:
+			continue
+		var p := _cell_min + Vector3i(x, y, z)
+		var values := _corner_values(p)
+		var inside := 0
+		for value in values:
+			if value < 0.0:
+				inside += 1
+		if inside == 0 or inside == 8:
+			continue
+		var placed := _quadric_vertex(p, values)
+		_cell_vertex[_cell_index(x, y, z)] = _cell_positions.size()
+		_cell_positions.append(placed)
+		var solids: Array[Vector3i] = []
+		for corner in 8:
+			if values[corner] < 0.0:
+				solids.append(p + CORNERS[corner])
+		_cell_solids.append(solids)
+		surface_cells += 1
 
 func _corner_values(p: Vector3i) -> PackedFloat32Array:
 	var values := PackedFloat32Array()
 	values.resize(8)
+	var size_x := _grid_size.x
+	var plane := size_x * _grid_size.y
+	var base := _grid_index(p.x - _grid_min.x, p.y - _grid_min.y, p.z - _grid_min.z)
 	for corner in 8:
 		var offset: Vector3i = CORNERS[corner]
-		values[corner] = _field[_grid_index(p.x - _grid_min.x + offset.x, p.y - _grid_min.y + offset.y, p.z - _grid_min.z + offset.z)]
+		values[corner] = _field[base + offset.x + size_x * offset.y + plane * offset.z]
 	return values
 
 func _face_source(centroid: Vector3, normal: Vector3, cells: Array) -> Vector3i:
@@ -438,31 +540,36 @@ func _edge_normal(p: Vector3i, offset_a: Vector3i, offset_b: Vector3i, t: float)
 	return normal.normalized()
 
 func _build_triangles() -> void:
+	var size_x := _grid_size.x
+	var plane := size_x * _grid_size.y
+	var strides := [1, size_x, plane]
 	for axis in 3:
 		var axis_vector := Vector3.ZERO
 		axis_vector[axis] = 1.0
 		var cells: Array = EDGE_CELLS[axis]
 		var owner_offset: Vector3i = OWNER_OFFSETS[axis]
-		for gz in _cell_size.z:
-			for gy in _cell_size.y:
-				for gx in _cell_size.x:
-					var fx := FIELD_PAD + gx
-					var fy := FIELD_PAD + gy
-					var fz := FIELD_PAD + gz
-					var a := _field[_grid_index(fx, fy, fz)]
-					var b := _field[_grid_index(fx + 1, fy, fz)] if axis == 0 else (_field[_grid_index(fx, fy + 1, fz)] if axis == 1 else _field[_grid_index(fx, fy, fz + 1)])
-					if (a < 0.0) == (b < 0.0):
-						continue
-					var first := _edge_vertex(gx, gy, gz, cells[0])
-					var second := _edge_vertex(gx, gy, gz, cells[1])
-					var third := _edge_vertex(gx, gy, gz, cells[2])
-					var fourth := _edge_vertex(gx, gy, gz, cells[3])
-					if first < 0 or second < 0 or third < 0 or fourth < 0:
-						continue
-					if not _owned_cell(_edge_owner(gx, gy, gz, cells, owner_offset, axis)):
-						continue
-					var outward := axis_vector if b > a else -axis_vector
-					_emit_quad([first, second, third, fourth], outward)
+		var stride: int = strides[axis]
+		for grid_cell: Vector3i in _near_cells:
+			var gx := grid_cell.x - FIELD_PAD
+			var gy := grid_cell.y - FIELD_PAD
+			var gz := grid_cell.z - FIELD_PAD
+			if gx < 0 or gy < 0 or gz < 0 or gx >= _cell_size.x or gy >= _cell_size.y or gz >= _cell_size.z:
+				continue
+			var index := _grid_index(grid_cell.x, grid_cell.y, grid_cell.z)
+			var a := _field[index]
+			var b := _field[index + stride]
+			if (a < 0.0) == (b < 0.0):
+				continue
+			var first := _edge_vertex(gx, gy, gz, cells[0])
+			var second := _edge_vertex(gx, gy, gz, cells[1])
+			var third := _edge_vertex(gx, gy, gz, cells[2])
+			var fourth := _edge_vertex(gx, gy, gz, cells[3])
+			if first < 0 or second < 0 or third < 0 or fourth < 0:
+				continue
+			if not _owned_cell(_edge_owner(gx, gy, gz, cells, owner_offset, axis)):
+				continue
+			var outward := axis_vector if b > a else -axis_vector
+			_emit_quad([first, second, third, fourth], outward)
 
 func _edge_vertex(gx: int, gy: int, gz: int, offset: Vector3i) -> int:
 	var x := gx + offset.x

@@ -18,18 +18,19 @@ const MODELS := [
 ]
 
 const WELD_VERTEX_LIMIT := 2000000
-const FRAME_BUDGET_US := 900000000
 const CHUNK_SIZE := VoxelFrame.CHUNK_SIZE
 
 var loaded := 0
 var measured := 0
 var filter: PackedStringArray = []
 var debug := false
+var profile := false
 
 
 func _ready() -> void:
 	timeout = 1800.0
 	debug = not OS.get_environment("LVE_DEBUG").is_empty()
+	profile = not OS.get_environment("LVE_PROFILE").is_empty()
 	var wanted := OS.get_environment("LVE_MODELS")
 	if not wanted.is_empty():
 		filter = wanted.split(",", false)
@@ -70,21 +71,35 @@ func _measure_frame(frame: VoxelFrame, name: String, index: int, frame_count: in
 	var voxels := 0
 	for chunk: VoxelFrame.Chunk in frame.chunks.values():
 		voxels += chunk.occupied_count
+	var locations: Array[Vector3i] = []
+	var meshers: Array[VoxelLowPolyMesh] = []
+	for location: Vector3i in frame.chunks:
+		locations.append(location)
+		var mesher := VoxelLowPolyMesh.new()
+		mesher.profile = profile
+		meshers.append(mesher)
 	var started_us := Time.get_ticks_usec()
+	var tasks: Array[int] = []
+	for mesher_index in meshers.size():
+		var task := Callable(self, "_build_chunk").bind(meshers[mesher_index], frame, locations[mesher_index])
+		tasks.append(WorkerThreadPool.add_task(task, false, "low poly chunk"))
+	for task in tasks:
+		WorkerThreadPool.wait_for_task_completion(task)
+	var build_us := Time.get_ticks_usec() - started_us
+	var phases := {}
+	for mesher in meshers:
+		for key in mesher.phase_us:
+			phases[key] = phases.get(key, 0) + mesher.phase_us[key]
+	if profile:
+		print("PHASE %s[%d] %s" % [name, index + 1, phases])
+	var verify_started_us := Time.get_ticks_usec()
 	var totals := {"triangles": 0, "degenerate": 0, "duplicate": 0}
 	var vertices := 0
 	var positions_all := PackedVector3Array()
 	var indices_all := PackedInt32Array()
-	var weld_skipped := false
-	var partial := false
-	var done := 0
-	for location: Vector3i in frame.chunks:
-		if Time.get_ticks_usec() - started_us > FRAME_BUDGET_US:
-			partial = true
-			break
-		var mesher := VoxelLowPolyMesh.new()
-		mesher.build_region(frame, location * CHUNK_SIZE, Vector3i.ONE * CHUNK_SIZE)
-		done += 1
+	var weld_skipped := not OS.get_environment("LVE_NOWELD").is_empty()
+	for mesher_index in meshers.size():
+		var mesher := meshers[mesher_index]
 		totals["triangles"] += mesher.triangle_count
 		totals["degenerate"] += mesher.degenerate_triangles
 		totals["duplicate"] += _unwelded_nonmanifold(mesher.arrays[Mesh.ARRAY_INDEX])
@@ -92,7 +107,7 @@ func _measure_frame(frame: VoxelFrame, name: String, index: int, frame_count: in
 		var positions: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
 		vertices += positions.size()
 		if not weld_skipped:
-			var origin := Vector3(location * CHUNK_SIZE)
+			var origin := Vector3(locations[mesher_index] * CHUNK_SIZE)
 			var base := positions_all.size()
 			for position: Vector3 in positions:
 				positions_all.append(position + origin)
@@ -107,16 +122,20 @@ func _measure_frame(frame: VoxelFrame, name: String, index: int, frame_count: in
 	if not weld_skipped:
 		fine = _open_edges(positions_all, indices_all, 10000.0, debug)
 		coarse = _open_edges(positions_all, indices_all, 100.0).x
-	var elapsed_us := Time.get_ticks_usec() - started_us
-	print("FRAME %s[%d/%d] voxels=%d chunks=%d/%d triangles=%d quads=%d degenerate=%d duplicate=%d open1e-4=%s open1e-2=%s nonmanifold=%s vertices=%d ms=%d%s" % [
-		name, index + 1, frame_count, voxels, done, frame.chunks.size(), totals["triangles"],
+	var verify_us := Time.get_ticks_usec() - verify_started_us
+	print("FRAME %s[%d/%d] voxels=%d chunks=%d/%d triangles=%d quads=%d degenerate=%d duplicate=%d open1e-4=%s open1e-2=%s nonmanifold=%s vertices=%d build_ms=%d verify_ms=%d" % [
+		name, index + 1, frame_count, voxels, meshers.size(), frame.chunks.size(), totals["triangles"],
 		totals["triangles"] / 2, totals["degenerate"], totals["duplicate"],
 		"skipped" if fine.x < 0 else str(fine.x), "skipped" if coarse < 0 else str(coarse),
-		"skipped" if fine.y < 0 else str(fine.y), vertices, elapsed_us / 1000,
-		" PARTIAL" if partial else "",
+		"skipped" if fine.y < 0 else str(fine.y), vertices, build_us / 1000, verify_us / 1000,
 	])
 	if totals["triangles"] > 0:
 		measured += 1
+
+
+func _build_chunk(mesher: VoxelLowPolyMesh, frame: VoxelFrame, location: Vector3i) -> void:
+	mesher.build_region(frame, location * CHUNK_SIZE, Vector3i.ONE * CHUNK_SIZE)
+	mesher.release_scratch()
 
 
 func _selected(name: String) -> bool:
