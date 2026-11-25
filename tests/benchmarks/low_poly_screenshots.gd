@@ -9,7 +9,7 @@ const VIEWS := [
 	{"name": "flamingo_low_3.png", "direction": Vector3(1.0, 0.4, -1.0)},
 	{"name": "flamingo_low_4.png", "direction": Vector3(-1.0, 0.5, -1.0)},
 ]
-const VOXEL_VIEW := {"name": "flamingo_voxel.png", "direction": Vector3(1.0, 0.7, 1.0)}
+const ISO := Vector3(1.0, 0.7, 1.0)
 const SIZE := Vector2i(1280, 960)
 
 var viewport: SubViewport
@@ -18,9 +18,13 @@ var model: Node3D
 
 
 func _ready() -> void:
-	var document := VoxelDocument.load_file(MODEL)
+	var custom := not OS.get_environment("LVE_SHOT_MODEL").is_empty()
+	var path := OS.get_environment("LVE_SHOT_MODEL") if custom else MODEL
+	var name := OS.get_environment("LVE_SHOT_NAME") if custom else "flamingo"
+	var directory := OS.get_environment("LVE_SHOT_DIR") if custom else OUTPUT
+	var document := VoxelDocument.load_file(path)
 	if document == null:
-		push_error("model does not load: %s" % MODEL)
+		push_error("model does not load: %s" % path)
 		get_tree().quit(1)
 		return
 	var frame: VoxelFrame = document.frames[0]
@@ -29,10 +33,14 @@ func _ready() -> void:
 	model = Node3D.new()
 	viewport.add_child(model)
 	_build_model(frame, document, true)
-	await _capture_all()
+	if custom:
+		await _capture(name + "_low.png", ISO, directory)
+	else:
+		for view in VIEWS:
+			await _capture(view.name, view.direction, directory)
 	_clear_model()
 	_build_model(frame, document, false)
-	await _capture(VOXEL_VIEW)
+	await _capture(name + "_voxel.png", ISO, directory)
 	get_tree().quit()
 
 
@@ -119,24 +127,19 @@ func _texture(size: Vector2i, bytes: PackedByteArray) -> ImageTexture:
 	return ImageTexture.create_from_image(Image.create_from_data(size.x, size.y, false, Image.FORMAT_RGB8, bytes))
 
 
-func _capture_all() -> void:
-	for view in VIEWS:
-		await _capture(view)
-
-
-func _capture(view: Dictionary) -> void:
+func _capture(name: String, direction: Vector3, directory: String) -> void:
 	var bounds := _bounds()
 	var centre := bounds.get_center()
 	var radius := maxf(bounds.size.length() * 0.5, 0.5)
-	var direction: Vector3 = (view.direction as Vector3).normalized()
+	var unit := direction.normalized()
 	var distance := radius / tan(deg_to_rad(camera.fov) * 0.5) * 1.05
-	camera.look_at_from_position(centre + direction * distance, centre, Vector3.UP)
+	camera.look_at_from_position(centre + unit * distance, centre, Vector3.UP)
 	for frame_index in 4:
 		await get_tree().process_frame
 	await RenderingServer.frame_post_draw
 	var image := viewport.get_texture().get_image()
-	var error := image.save_png(OUTPUT + view.name)
-	print("SHOT %s bounds=%s bytes=%d error=%d" % [view.name, bounds, image.get_data().size(), error])
+	var error := image.save_png(directory + name)
+	print("SHOT %s bounds=%s bytes=%d error=%d" % [name, bounds, image.get_data().size(), error])
 
 
 func _bounds() -> AABB:
@@ -156,4 +159,5 @@ func _bounds() -> AABB:
 
 func _clear_model() -> void:
 	for child in model.get_children():
-		child.queue_free()
+		model.remove_child(child)
+		child.free()
