@@ -1,7 +1,6 @@
 class_name VoxelLowPolyMesh
 extends RefCounted
 
-
 const FIELD_PAD := 3
 const OWNED_PAD := 1
 const SEARCH_RADIUS := 1
@@ -30,7 +29,6 @@ const OWNER_OFFSETS := [
 ]
 
 var arrays: Array = []
-var merge_faces := false
 var smooth_normals := false
 var ao_strength := 0.0
 var atlas: RefCounted
@@ -64,7 +62,6 @@ var _positions := PackedVector3Array()
 var _normals := PackedVector3Array()
 var _colors := PackedColorArray()
 var _indices := PackedInt32Array()
-
 
 func build_region(frame: VoxelFrame, owned_min: Vector3i, owned_size: Vector3i, shared_atlas: RefCounted = null, shared_material_uvs: Dictionary = {}) -> void:
 	var started := Time.get_ticks_usec()
@@ -100,8 +97,6 @@ func build_region(frame: VoxelFrame, owned_min: Vector3i, owned_size: Vector3i, 
 	_build_vertices()
 	_build_triangles()
 	_orient_triangles()
-	if merge_faces:
-		_merge_coplanar_faces()
 	_build_material_atlas(shared_atlas, shared_material_uvs)
 	_build_vertex_ao()
 	_expand()
@@ -113,26 +108,6 @@ func build_region(frame: VoxelFrame, owned_min: Vector3i, owned_size: Vector3i, 
 	triangle_count = _indices.size() / 3
 	build_us = Time.get_ticks_usec() - started
 
-
-func build_frame(frame: VoxelFrame) -> void:
-	var bounds := frame.get_bounds()
-	if not bounds.has_volume():
-		arrays = _empty_arrays()
-		triangle_count = 0
-		surface_cells = 0
-		build_us = 0
-		return
-	var min_cell := Vector3i((bounds.position + Vector3.ONE * 0.5).round())
-	var max_cell := Vector3i((bounds.end - Vector3.ONE * 0.5).round())
-	var size := max_cell - min_cell + Vector3i.ONE
-	var region_min := min_cell - Vector3i.ONE
-	var region_size := size + Vector3i.ONE * 2
-	build_region(frame, region_min, region_size)
-	for index in _positions.size():
-		_positions[index] += Vector3(region_min)
-	arrays[Mesh.ARRAY_VERTEX] = _positions
-
-
 func _empty_arrays() -> Array:
 	var result := []
 	result.resize(Mesh.ARRAY_MAX)
@@ -143,14 +118,11 @@ func _empty_arrays() -> Array:
 	result[Mesh.ARRAY_INDEX] = PackedInt32Array()
 	return result
 
-
 func _grid_index(x: int, y: int, z: int) -> int:
 	return x + _grid_size.x * (y + _grid_size.y * z)
 
-
 func _cell_index(x: int, y: int, z: int) -> int:
 	return x + _cell_size.x * (y + _cell_size.y * z)
-
 
 func _fill_solid() -> void:
 	var count := _grid_size.x * _grid_size.y * _grid_size.z
@@ -167,7 +139,6 @@ func _fill_solid() -> void:
 	_bridge_materials.clear()
 	_material_cache.clear()
 	_add_contact_bridges()
-
 
 func _build_field() -> void:
 	var count := _grid_size.x * _grid_size.y * _grid_size.z
@@ -203,7 +174,6 @@ func _build_field() -> void:
 							var distance := outside.length() + minf(maxf(q.x, maxf(q.y, q.z)), 0.0)
 							nearest = minf(nearest, distance)
 				_field[index] = -nearest if inside else nearest
-
 
 func _add_contact_bridges() -> void:
 	var original := _solid.duplicate()
@@ -259,13 +229,11 @@ func _add_contact_bridges() -> void:
 				_mark_bridge(cell + Vector3i(offset.x, offset.y, 0), material)
 			_union(parent, first, second)
 
-
 func _find(parent: Array[int], index: int) -> int:
 	while parent[index] != index:
 		parent[index] = parent[parent[index]]
 		index = parent[index]
 	return index
-
 
 func _union(parent: Array[int], first: int, second: int) -> void:
 	var first_root := _find(parent, first)
@@ -273,14 +241,12 @@ func _union(parent: Array[int], first: int, second: int) -> void:
 	if first_root != second_root:
 		parent[second_root] = first_root
 
-
 func _positive_offset(offset: Vector3i) -> bool:
 	if offset.z != 0:
 		return offset.z > 0
 	if offset.y != 0:
 		return offset.y > 0
 	return offset.x > 0
-
 
 func _mark_bridge(cell: Vector3i, material: PackedFloat32Array) -> void:
 	var x := cell.x - _grid_min.x
@@ -294,7 +260,6 @@ func _mark_bridge(cell: Vector3i, material: PackedFloat32Array) -> void:
 	_solid[index] = 1
 	_bridge_materials[cell] = material
 
-
 func _material_for_cell(cell: Vector3i) -> PackedFloat32Array:
 	if _bridge_materials.has(cell):
 		return _bridge_materials[cell]
@@ -303,7 +268,6 @@ func _material_for_cell(cell: Vector3i) -> PackedFloat32Array:
 	var material := _frame.get_material(cell)
 	_material_cache[cell] = material
 	return material
-
 
 func _near_surface(x: int, y: int, z: int, inside: bool) -> bool:
 	for oz in range(-1, 2):
@@ -324,7 +288,6 @@ func _near_surface(x: int, y: int, z: int, inside: bool) -> bool:
 					return true
 	return false
 
-
 func _build_gradient() -> void:
 	var count := _grid_size.x * _grid_size.y * _grid_size.z
 	_gradient = PackedFloat32Array()
@@ -342,7 +305,6 @@ func _build_gradient() -> void:
 				_gradient[index * 3] = (_field[x1] - _field[x0]) * 0.5
 				_gradient[index * 3 + 1] = (_field[y1] - _field[y0]) * 0.5
 				_gradient[index * 3 + 2] = (_field[z1] - _field[z0]) * 0.5
-
 
 func _build_vertices() -> void:
 	var count := _cell_size.x * _cell_size.y * _cell_size.z
@@ -370,7 +332,6 @@ func _build_vertices() -> void:
 				_cell_solids.append(solids)
 				surface_cells += 1
 
-
 func _corner_values(p: Vector3i) -> PackedFloat32Array:
 	var values := PackedFloat32Array()
 	values.resize(8)
@@ -378,7 +339,6 @@ func _corner_values(p: Vector3i) -> PackedFloat32Array:
 		var offset: Vector3i = CORNERS[corner]
 		values[corner] = _field[_grid_index(p.x - _grid_min.x + offset.x, p.y - _grid_min.y + offset.y, p.z - _grid_min.z + offset.z)]
 	return values
-
 
 func _face_source(centroid: Vector3, normal: Vector3, cells: Array) -> Vector3i:
 	var inward := -normal
@@ -401,7 +361,6 @@ func _face_source(centroid: Vector3, normal: Vector3, cells: Array) -> Vector3i:
 					best = distance
 					found = cell
 	return found
-
 
 func _quadric_vertex(p: Vector3i, values: PackedFloat32Array) -> Vector3:
 	var a00 := 0.0
@@ -466,7 +425,6 @@ func _quadric_vertex(p: Vector3i, values: PackedFloat32Array) -> Vector3:
 		clampf(solved.z, p.z + 0.001, p.z + 0.999)
 	)
 
-
 func _edge_normal(p: Vector3i, offset_a: Vector3i, offset_b: Vector3i, t: float) -> Vector3:
 	var first := _grid_index(p.x - _grid_min.x + offset_a.x, p.y - _grid_min.y + offset_a.y, p.z - _grid_min.z + offset_a.z)
 	var second := _grid_index(p.x - _grid_min.x + offset_b.x, p.y - _grid_min.y + offset_b.y, p.z - _grid_min.z + offset_b.z)
@@ -478,7 +436,6 @@ func _edge_normal(p: Vector3i, offset_a: Vector3i, offset_b: Vector3i, t: float)
 	if normal.length_squared() < 1.0e-12:
 		normal = Vector3(offset_b - offset_a)
 	return normal.normalized()
-
 
 func _build_triangles() -> void:
 	for axis in 3:
@@ -507,7 +464,6 @@ func _build_triangles() -> void:
 					var outward := axis_vector if b > a else -axis_vector
 					_emit_quad([first, second, third, fourth], outward)
 
-
 func _edge_vertex(gx: int, gy: int, gz: int, offset: Vector3i) -> int:
 	var x := gx + offset.x
 	var y := gy + offset.y
@@ -516,10 +472,8 @@ func _edge_vertex(gx: int, gy: int, gz: int, offset: Vector3i) -> int:
 		return -1
 	return _cell_vertex[_cell_index(x, y, z)]
 
-
 func _owned_cell(cell: Vector3i) -> bool:
 	return cell.x >= 1 and cell.y >= 1 and cell.z >= 1 and cell.x <= _owned_size.x and cell.y <= _owned_size.y and cell.z <= _owned_size.z
-
 
 func _edge_owner(gx: int, gy: int, gz: int, cells: Array, owner_offset: Vector3i, axis: int) -> Vector3i:
 	var anchor := Vector3i(gx, gy, gz)
@@ -544,14 +498,11 @@ func _edge_owner(gx: int, gy: int, gz: int, cells: Array, owner_offset: Vector3i
 			return cell
 	return octant
 
-
 func _grid_cell(cell: Vector3i) -> bool:
 	return cell.x >= 0 and cell.y >= 0 and cell.z >= 0 and cell.x < _cell_size.x and cell.y < _cell_size.y and cell.z < _cell_size.z
 
-
 func _has_chunk(cell: Vector3i) -> bool:
 	return _frame.chunks.has(VoxelFrame.chunk_position(_cell_min + cell))
-
 
 func _emit_quad(quad: Array, axis_vector: Vector3) -> void:
 	var p0 := _cell_positions[quad[0]]
@@ -572,7 +523,6 @@ func _emit_quad(quad: Array, axis_vector: Vector3) -> void:
 		_add_oriented_triangle(quad[0], quad[1], quad[3], axis_vector)
 		_add_oriented_triangle(quad[1], quad[2], quad[3], axis_vector)
 
-
 func _add_oriented_triangle(first: int, second: int, third: int, outward: Vector3) -> void:
 	var a := _cell_positions[first]
 	var b := _cell_positions[second]
@@ -581,7 +531,6 @@ func _add_oriented_triangle(first: int, second: int, third: int, outward: Vector
 		_add_triangle(first, third, second)
 	else:
 		_add_triangle(first, second, third)
-
 
 func _orient_triangles() -> void:
 	var total := _mesh_triangles.size() / 3
@@ -619,19 +568,16 @@ func _orient_triangles() -> void:
 					_swap_triangle(neighbor)
 				stack.append(neighbor)
 
-
 func _triangle_traverses(triangle: int, first: int, second: int) -> bool:
 	for side in 3:
 		if _mesh_triangles[triangle * 3 + side] == first and _mesh_triangles[triangle * 3 + (side + 1) % 3] == second:
 			return true
 	return false
 
-
 func _swap_triangle(triangle: int) -> void:
 	var second := _mesh_triangles[triangle * 3 + 1]
 	_mesh_triangles[triangle * 3 + 1] = _mesh_triangles[triangle * 3 + 2]
 	_mesh_triangles[triangle * 3 + 2] = second
-
 
 func _add_triangle(first: int, second: int, third: int) -> void:
 	var a := _cell_positions[first]
@@ -650,198 +596,8 @@ func _add_triangle(first: int, second: int, third: int) -> void:
 	_mesh_triangles.append(third)
 	_mesh_materials.append(material)
 
-
-func _merge_coplanar_faces() -> void:
-	var total := _mesh_triangles.size() / 3
-	if total == 0:
-		return
-	var adjacency := _edge_triangles()
-	var visited := PackedByteArray()
-	visited.resize(total)
-	var result := PackedInt32Array()
-	var materials: Array[PackedFloat32Array] = []
-	for seed in total:
-		if visited[seed] != 0:
-			continue
-		visited[seed] = 1
-		var a := _triangle_vertex(seed, 0)
-		var b := _triangle_vertex(seed, 1)
-		var c := _triangle_vertex(seed, 2)
-		var normal := (b - a).cross(c - a)
-		if normal.length_squared() < 1.0e-12:
-			_append_triangle(result, materials, seed)
-			continue
-		normal = normal.normalized()
-		var offset := normal.dot(a)
-		var group: Array[int] = []
-		var stack: Array[int] = [seed]
-		while not stack.is_empty():
-			var triangle: int = stack.pop_back()
-			group.append(triangle)
-			for side in 3:
-				var edge := _triangle_edge(triangle, side)
-				for neighbor: int in adjacency.get(edge, []):
-					if visited[neighbor] != 0:
-						continue
-					if _mesh_materials[neighbor] != _mesh_materials[seed]:
-						continue
-					if not _triangle_on_plane(neighbor, normal, offset):
-						continue
-					visited[neighbor] = 1
-					stack.append(neighbor)
-		if group.size() == 1:
-			_append_triangle(result, materials, seed)
-			continue
-		var merged := _triangulate_group(group, normal)
-		if merged.is_empty():
-			for triangle: int in group:
-				_append_triangle(result, materials, triangle)
-			continue
-		for index in range(0, merged.size(), 3):
-			result.append(merged[index])
-			result.append(merged[index + 1])
-			result.append(merged[index + 2])
-			materials.append(_mesh_materials[seed])
-	_mesh_triangles = result
-	_mesh_materials = materials
-
-
-func _append_triangle(result: PackedInt32Array, materials: Array[PackedFloat32Array], triangle: int) -> void:
-	result.append(_mesh_triangles[triangle * 3])
-	result.append(_mesh_triangles[triangle * 3 + 1])
-	result.append(_mesh_triangles[triangle * 3 + 2])
-	materials.append(_mesh_materials[triangle])
-
-
-func _triangle_vertex(triangle: int, side: int) -> Vector3:
-	return _cell_positions[_mesh_triangles[triangle * 3 + side]]
-
-
-func _triangle_edge(triangle: int, side: int) -> int:
-	var first := _mesh_triangles[triangle * 3 + side]
-	var second := _mesh_triangles[triangle * 3 + (side + 1) % 3]
-	return _edge_key(first, second)
-
-
 func _edge_key(first: int, second: int) -> int:
 	return mini(first, second) * _cell_positions.size() + maxi(first, second)
-
-
-func _edge_triangles() -> Dictionary:
-	var adjacency := {}
-	for triangle in _mesh_triangles.size() / 3:
-		for side in 3:
-			var key := _triangle_edge(triangle, side)
-			if not adjacency.has(key):
-				adjacency[key] = []
-			adjacency[key].append(triangle)
-	return adjacency
-
-
-func _triangle_on_plane(triangle: int, normal: Vector3, offset: float) -> bool:
-	var a := _triangle_vertex(triangle, 0)
-	var b := _triangle_vertex(triangle, 1)
-	var c := _triangle_vertex(triangle, 2)
-	var candidate := (b - a).cross(c - a)
-	if candidate.length_squared() < 1.0e-12:
-		return false
-	candidate = candidate.normalized()
-	if candidate.dot(normal) < 1.0 - 1.0e-5:
-		return false
-	return absf(normal.dot(a) - offset) < 1.0e-4
-
-
-func _triangulate_group(group: Array[int], normal: Vector3) -> PackedInt32Array:
-	var vertex_count := _cell_positions.size()
-	var directed := {}
-	for triangle: int in group:
-		for side in 3:
-			var first := _mesh_triangles[triangle * 3 + side]
-			var second := _mesh_triangles[triangle * 3 + (side + 1) % 3]
-			var reverse := second * vertex_count + first
-			if directed.has(reverse):
-				directed.erase(reverse)
-			else:
-				directed[first * vertex_count + second] = true
-	if directed.size() < 3:
-		return PackedInt32Array()
-	var next_of := {}
-	var start := -1
-	for key in directed:
-		var first: int = key / vertex_count
-		var second: int = key % vertex_count
-		if next_of.has(first):
-			return PackedInt32Array()
-		next_of[first] = second
-		if start < 0 or first < start:
-			start = first
-	if start < 0:
-		return PackedInt32Array()
-	var loop: Array[int] = []
-	var current := start
-	while true:
-		if not next_of.has(current):
-			return PackedInt32Array()
-		loop.append(current)
-		var next: int = next_of[current]
-		next_of.erase(current)
-		current = next
-		if current == start:
-			break
-		if loop.size() > vertex_count:
-			return PackedInt32Array()
-	if not next_of.is_empty() or loop.size() < 3:
-		return PackedInt32Array()
-	var points := _project_loop(loop, normal)
-	var kept := _simplify_loop(points)
-	if kept.size() < 3:
-		return PackedInt32Array()
-	var polygon := PackedVector2Array()
-	var loop_indices: Array[int] = []
-	for index: int in kept:
-		polygon.append(points[index])
-		loop_indices.append(loop[index])
-	var triangles := Geometry2D.triangulate_polygon(polygon)
-	if triangles.is_empty():
-		return PackedInt32Array()
-	var result := PackedInt32Array()
-	for index in triangles:
-		result.append(loop_indices[index])
-	if result.size() >= 3:
-		var first: Vector3 = _cell_positions[result[0]]
-		var second: Vector3 = _cell_positions[result[1]]
-		var third: Vector3 = _cell_positions[result[2]]
-		if (second - first).cross(third - first).dot(normal) < 0.0:
-			for triangle in range(0, result.size(), 3):
-				var swap := result[triangle + 1]
-				result[triangle + 1] = result[triangle + 2]
-				result[triangle + 2] = swap
-	return result
-
-
-func _project_loop(loop: Array[int], normal: Vector3) -> PackedVector2Array:
-	var origin := _cell_positions[loop[0]]
-	var reference := Vector3.UP if absf(normal.y) < 0.9 else Vector3.RIGHT
-	var u := normal.cross(reference).normalized()
-	var v := normal.cross(u)
-	var points := PackedVector2Array()
-	for vertex: int in loop:
-		var offset := _cell_positions[vertex] - origin
-		points.append(Vector2(offset.dot(u), offset.dot(v)))
-	return points
-
-
-func _simplify_loop(points: PackedVector2Array) -> PackedInt32Array:
-	var count := points.size()
-	var kept := PackedInt32Array()
-	for index in count:
-		var previous := points[(index + count - 1) % count]
-		var current := points[index]
-		var next := points[(index + 1) % count]
-		if absf((current - previous).cross(next - current)) > 1.0e-6:
-			kept.append(index)
-	return kept
-
 
 func _build_material_atlas(shared_atlas: RefCounted, shared_material_uvs: Dictionary) -> void:
 	if not shared_material_uvs.is_empty():
@@ -860,7 +616,6 @@ func _build_material_atlas(shared_atlas: RefCounted, shared_material_uvs: Dictio
 	for material in patches:
 		var corners: PackedVector2Array = atlas.patch_uvs(patches[material])
 		material_uvs[material] = (corners[0] + corners[2]) * 0.5
-
 
 func _build_vertex_ao() -> void:
 	_vertex_ao = PackedFloat32Array()
@@ -913,12 +668,10 @@ func _build_vertex_ao() -> void:
 		var level := _ao_level(_solid_at(side_first), _solid_at(side_second), _solid_at(diagonal))
 		_vertex_ao[index] = 1.0 - (1.0 - AO_LEVELS[level]) * ao_strength
 
-
 static func _ao_level(first: bool, second: bool, diagonal: bool) -> int:
 	if first and second:
 		return 0
 	return 3 - (1 if first else 0) - (1 if second else 0) - (1 if diagonal else 0)
-
 
 func _solid_at(cell: Vector3i) -> bool:
 	var x := cell.x - _grid_min.x
@@ -927,7 +680,6 @@ func _solid_at(cell: Vector3i) -> bool:
 	if x < 0 or x >= _grid_size.x or y < 0 or y >= _grid_size.y or z < 0 or z >= _grid_size.z:
 		return false
 	return _solid[_grid_index(x, y, z)] != 0
-
 
 func _expand() -> void:
 	var smooth := PackedVector3Array()
