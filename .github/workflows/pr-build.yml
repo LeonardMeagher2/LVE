@@ -41,6 +41,9 @@ jobs:
           notes="Build of PR #$PR_NUMBER. Commit $short. $PR_TITLE"
           ls -l release
           if gh release view "$tag" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            for asset in $(gh release view "$tag" --json assets --jq '.assets[].name' --repo "${{ github.repository }}"); do
+              gh release delete-asset "$tag" "$asset" --yes --repo "${{ github.repository }}"
+            done
             gh release upload "$tag" release/* --clobber --repo "${{ github.repository }}"
             gh release edit "$tag" --notes "$notes" --repo "${{ github.repository }}"
           else

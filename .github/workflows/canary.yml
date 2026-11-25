@@ -39,6 +39,9 @@ jobs:
           notes="The newest build from main. Version $version, commit $short."
           ls -l release
           if gh release view canary --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            for asset in $(gh release view canary --json assets --jq '.assets[].name' --repo "${{ github.repository }}"); do
+              gh release delete-asset canary "$asset" --yes --repo "${{ github.repository }}"
+            done
             gh release upload canary release/* --clobber --repo "${{ github.repository }}"
             gh release edit canary --notes "$notes" --repo "${{ github.repository }}"
           else
