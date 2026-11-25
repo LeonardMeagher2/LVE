@@ -9,16 +9,6 @@ const AO_LEVELS: Array[float] = [0.0, 1.0 / 3.0, 2.0 / 3.0, 1.0]
 var arrays: Array = []
 var atlas: RefCounted
 var error: Error = OK
-var profile := false
-var protect_us := 0
-var triangulate_us := 0
-var vertices_us := 0
-var atlas_us := 0
-var uvs_us := 0
-var loops_us := 0
-var simplify_us := 0
-var protect_inner_us := 0
-var normal_us := 0
 
 
 func run(source_arrays: Array, frame: VoxelFrame, origin := Vector3.ZERO, checkpoint := Callable(), smooth_normals := false, ao_strength := 0.0) -> void:
@@ -26,31 +16,14 @@ func run(source_arrays: Array, frame: VoxelFrame, origin := Vector3.ZERO, checkp
 	error = OK
 	var raw := checkpoint
 	checkpoint = _latched_checkpoint(checkpoint)
-	var timers := {}
-	if profile:
-		timers = {"protect": 0, "triangulate": 0, "vertices": 0}
-	arrays = _build(source_arrays, frame, origin, atlas, checkpoint, raw, smooth_normals, ao_strength, timers)
-	if profile:
-		protect_us = timers.get("protect", 0)
-		triangulate_us = timers.get("triangulate", 0)
-		vertices_us = timers.get("vertices", 0)
-		loops_us = timers.get("raw_loops", 0)
-		simplify_us = timers.get("simplify", 0)
-		protect_inner_us = timers.get("protect_inner", 0)
-		normal_us = timers.get("normal", 0)
+	arrays = _build(source_arrays, frame, origin, atlas, checkpoint, raw, smooth_normals, ao_strength)
 	if arrays.is_empty():
 		error = ERR_UNAVAILABLE
 		return
-	var bake_started := Time.get_ticks_usec() if profile else 0
 	error = atlas.bake(checkpoint)
-	if profile:
-		atlas_us = Time.get_ticks_usec() - bake_started
-	var uvs_started := Time.get_ticks_usec() if profile else 0
 	if error == OK and not _finish_uvs(arrays, atlas, checkpoint):
 		arrays = []
 		error = ERR_UNAVAILABLE
-	if profile:
-		uvs_us = Time.get_ticks_usec() - uvs_started
 
 
 func run_groups(groups: Dictionary, frame: VoxelFrame, origin := Vector3.ZERO, checkpoint := Callable(), smooth_normals := false, corner_occupancy: Variant = null, ao_strength := 0.0) -> void:
@@ -58,31 +31,14 @@ func run_groups(groups: Dictionary, frame: VoxelFrame, origin := Vector3.ZERO, c
 	error = OK
 	var raw := checkpoint
 	checkpoint = _latched_checkpoint(checkpoint)
-	var timers := {}
-	if profile:
-		timers = {"protect": 0, "triangulate": 0, "vertices": 0}
-	arrays = _finish(groups, frame, origin, atlas, checkpoint, raw, smooth_normals, corner_occupancy, ao_strength, timers)
-	if profile:
-		protect_us = timers.get("protect", 0)
-		triangulate_us = timers.get("triangulate", 0)
-		vertices_us = timers.get("vertices", 0)
-		loops_us = timers.get("raw_loops", 0)
-		simplify_us = timers.get("simplify", 0)
-		protect_inner_us = timers.get("protect_inner", 0)
-		normal_us = timers.get("normal", 0)
+	arrays = _finish(groups, frame, origin, atlas, checkpoint, raw, smooth_normals, corner_occupancy, ao_strength)
 	if arrays.is_empty():
 		error = ERR_UNAVAILABLE
 		return
-	var bake_started := Time.get_ticks_usec() if profile else 0
 	error = atlas.bake(checkpoint)
-	if profile:
-		atlas_us = Time.get_ticks_usec() - bake_started
-	var uvs_started := Time.get_ticks_usec() if profile else 0
 	if error == OK and not _finish_uvs(arrays, atlas, checkpoint):
 		arrays = []
 		error = ERR_UNAVAILABLE
-	if profile:
-		uvs_us = Time.get_ticks_usec() - uvs_started
 
 
 static func merge(source_arrays: Array, checkpoint := Callable()) -> Array:
@@ -105,13 +61,13 @@ static func _latched_checkpoint(checkpoint: Callable) -> Callable:
 		return not state.cancelled
 
 
-static func _build(source_arrays: Array, frame: VoxelFrame, world_origin: Vector3, bake: RefCounted, checkpoint: Callable, raw: Callable, smooth_normals: bool, ao_strength := 0.0, timers := {}) -> Array:
+static func _build(source_arrays: Array, frame: VoxelFrame, world_origin: Vector3, bake: RefCounted, checkpoint: Callable, raw: Callable, smooth_normals: bool, ao_strength := 0.0) -> Array:
 	if not checkpoint.call(0):
 		return []
 	var groups: Variant = _groups_from_arrays(source_arrays, frame, world_origin, checkpoint, smooth_normals, ao_strength)
 	if groups == null:
 		return []
-	return _finish(groups, frame, world_origin, bake, checkpoint, raw, smooth_normals, null, ao_strength, timers)
+	return _finish(groups, frame, world_origin, bake, checkpoint, raw, smooth_normals, null, ao_strength)
 
 
 static func _groups_from_arrays(source_arrays: Array, frame: VoxelFrame, world_origin: Vector3, checkpoint: Callable, smooth_normals: bool, ao_strength := 0.0) -> Variant:
@@ -174,7 +130,7 @@ static func _groups_from_arrays(source_arrays: Array, frame: VoxelFrame, world_o
 	return groups
 
 
-static func _finish(groups: Dictionary, frame: VoxelFrame, world_origin: Vector3, bake: RefCounted, checkpoint: Callable, raw: Callable, smooth_normals: bool, corner_occupancy: Variant = null, ao_strength := 0.0, timers := {}) -> Array:
+static func _finish(groups: Dictionary, frame: VoxelFrame, world_origin: Vector3, bake: RefCounted, checkpoint: Callable, raw: Callable, smooth_normals: bool, corner_occupancy: Variant = null, ao_strength := 0.0) -> Array:
 	var use_corner_normals := smooth_normals and (frame != null or corner_occupancy != null)
 	var use_ao := ao_strength > 0.0 and frame != null
 	var result := []
@@ -184,20 +140,13 @@ static func _finish(groups: Dictionary, frame: VoxelFrame, world_origin: Vector3
 	var colors := PackedColorArray()
 	var indices := PackedInt32Array()
 	var patch_ids := PackedInt32Array()
-	var protect_started := Time.get_ticks_usec() if not timers.is_empty() else 0
-	var protected := _protect_groups(groups, checkpoint, raw, timers)
-	if not timers.is_empty():
-		timers["protect"] = Time.get_ticks_usec() - protect_started
+	var protected := _protect_groups(groups, checkpoint, raw)
 	if protected.is_empty():
 		return []
-	var triangulate_started := Time.get_ticks_usec() if not timers.is_empty() else 0
 	if not _triangulate_groups(groups, protected, checkpoint, raw):
 		return []
-	if not timers.is_empty():
-		timers["triangulate"] = Time.get_ticks_usec() - triangulate_started
 	var vertices := {}
 	var corner_cache := {}
-	var normal_time := 0
 	var corner_table := PackedFloat32Array()
 	var corner_seen := PackedByteArray()
 	var use_corner_table := false
@@ -207,7 +156,6 @@ static func _finish(groups: Dictionary, frame: VoxelFrame, world_origin: Vector3
 		corner_seen.resize(corner_count)
 		use_corner_table = true
 	var vertex_map := PackedInt32Array()
-	var vertices_started := Time.get_ticks_usec() if not timers.is_empty() else 0
 	for group: Dictionary in groups.values():
 		if not checkpoint.call(0):
 			return []
@@ -259,7 +207,6 @@ static func _finish(groups: Dictionary, frame: VoxelFrame, world_origin: Vector3
 				if flat:
 					normal = fallback_normal
 				elif use_corner_table:
-					var normal_started := Time.get_ticks_usec() if not timers.is_empty() else 0
 					var cx := 0
 					var cy := 0
 					var cz := 0
@@ -292,13 +239,8 @@ static func _finish(groups: Dictionary, frame: VoxelFrame, world_origin: Vector3
 						normal = Vector3(corner_table[base * 3], corner_table[base * 3 + 1], corner_table[base * 3 + 2])
 					else:
 						normal = fallback_normal
-					if not timers.is_empty():
-						normal_time += Time.get_ticks_usec() - normal_started
 				else:
-					var normal_started := Time.get_ticks_usec() if not timers.is_empty() else 0
 					normal = _vertex_normal(group, frame, use_corner_normals, point, position, world_origin, fallback_normal, corner_occupancy, corner_cache)
-					if not timers.is_empty():
-						normal_time += Time.get_ticks_usec() - normal_started
 				var ao := 1.0
 				if use_ao:
 					var level: int = corners.get(Vector2i(roundi(point.x), roundi(point.y)), 3)
@@ -344,9 +286,6 @@ static func _finish(groups: Dictionary, frame: VoxelFrame, world_origin: Vector3
 				indices.append(vertex_map[polygon.indices[offset + second]])
 				indices.append(vertex_map[polygon.indices[offset + third]])
 				offset += 3
-	if not timers.is_empty():
-		timers["vertices"] = Time.get_ticks_usec() - vertices_started
-		timers["normal"] = normal_time
 	result[Mesh.ARRAY_VERTEX] = positions
 	result[Mesh.ARRAY_NORMAL] = normals
 	if use_ao:
@@ -359,11 +298,9 @@ static func _finish(groups: Dictionary, frame: VoxelFrame, world_origin: Vector3
 static var EMPTY_DICT := {}
 
 
-static func _protect_groups(groups: Dictionary, checkpoint: Callable, raw: Callable, timers := {}) -> Dictionary:
+static func _protect_groups(groups: Dictionary, checkpoint: Callable, raw: Callable) -> Dictionary:
 	var protected_positions := {}
 	var protected_planes := {}
-	var loops_us := 0
-	var simplify_us := 0
 	var uses_planes := false
 	for group: Dictionary in groups.values():
 		if not checkpoint.call(0):
@@ -371,13 +308,9 @@ static func _protect_groups(groups: Dictionary, checkpoint: Callable, raw: Calla
 		var plane: Vector3i = group.plane
 		protected_planes[plane] = {}
 		var axis0: int = plane.x
-		var t0 := Time.get_ticks_usec() if not timers.is_empty() else 0
 		group.raw_loops = REGION.raw_loops(group.cells, raw)
-		var t1 := Time.get_ticks_usec() if not timers.is_empty() else 0
-		loops_us += t1 - t0
 		var turns := 0
 		for loop: PackedVector2Array in group.raw_loops:
-			var t2 := Time.get_ticks_usec() if not timers.is_empty() else 0
 			var size := loop.size()
 			if size > 0:
 				var previous: Vector2 = loop[size - 1]
@@ -405,19 +338,11 @@ static func _protect_groups(groups: Dictionary, checkpoint: Callable, raw: Calla
 							dbl.y = roundi(2.0 * point.y - 1.0)
 						protected_positions[dbl] = true
 					previous = point
-			if not timers.is_empty():
-				simplify_us += Time.get_ticks_usec() - t2
 		group.unit_loops = turns == group.cells.size() * 4
 		if not group.unit_loops:
 			uses_planes = true
-	if not timers.is_empty():
-		timers["raw_loops"] = loops_us
-		timers["simplify"] = simplify_us
 	if uses_planes:
-		var t3 := Time.get_ticks_usec() if not timers.is_empty() else 0
 		_protect(protected_positions, protected_planes)
-		if not timers.is_empty():
-			timers["protect_inner"] = Time.get_ticks_usec() - t3
 	return {"positions": protected_positions, "planes": protected_planes}
 
 

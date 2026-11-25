@@ -101,8 +101,6 @@ func _run_pass(name: String, row: Dictionary) -> void:
 		"us": 0, "snapshot": 0, "scan": 0, "finish": 0, "chunks": 0, "culled": 0, "empty": 0,
 		"vertices": 0, "triangles": 0, "chunks_read": 0, "cells_read": 0, "decodes": 0,
 		"queries": 0, "groups": 0, "atlas_bytes": 0,
-		"protect": 0, "triangulate": 0, "vertices_surf": 0, "atlas_ph": 0, "uvs": 0,
-		"loops": 0, "simplify": 0, "protect_inner": 0, "normal": 0,
 	}
 	var started_us := Time.get_ticks_usec()
 	for location: Vector3i in frame.chunks:
@@ -121,15 +119,6 @@ func _run_pass(name: String, row: Dictionary) -> void:
 			totals["culled"] += 1
 		totals["vertices"] += builder.surface_arrays[Mesh.ARRAY_VERTEX].size()
 		totals["triangles"] += builder.surface_arrays[Mesh.ARRAY_INDEX].size() / 3
-		totals["protect"] += builder.protect_us
-		totals["triangulate"] += builder.triangulate_us
-		totals["vertices_surf"] += builder.vertices_surf_us
-		totals["atlas_ph"] += builder.atlas_ph_us
-		totals["uvs"] += builder.uvs_us
-		totals["loops"] += builder.loops_us
-		totals["simplify"] += builder.simplify_us
-		totals["protect_inner"] += builder.protect_inner_us
-		totals["normal"] += builder.normal_us
 		totals["chunks_read"] += builder.snapshot_chunks
 		totals["cells_read"] += builder.snapshot_cells
 		totals["decodes"] += builder.snapshot_decodes
@@ -159,7 +148,6 @@ func _check(name: String, row: Dictionary) -> void:
 		name, total, medians["snapshot"], medians["scan"], medians["finish"], phases,
 		100.0 * float(phases) / float(maxi(1, total)),
 	])
-	print("MEASURE mesher_phases %s surface: protect=%d triangulate=%d vertices=%d atlas=%d uvs=%d loops=%d simplify=%d protect_inner=%d normal=%d" % [name, medians["protect"], medians["triangulate"], medians["vertices_surf"], medians["atlas_ph"], medians["uvs"], medians["loops"], medians["simplify"], medians["protect_inner"], medians["normal"]])
 	print("MEASURE mesher_phases %s reads: snapshot_chunks=%d snapshot_cells=%d decodes=%d queries=%d atlas_bytes=%d" % [
 		name, medians["chunks_read"], medians["cells_read"], medians["decodes"],
 		medians["queries"], medians["atlas_bytes"],
