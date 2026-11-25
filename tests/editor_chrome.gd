@@ -32,6 +32,7 @@ func _ready() -> void:
 	test("thumbnail requests coalesce and render the final document state", _thumbnail_run, "thumbnail_updates")
 	test("the tool menu button selects on the first click and opens its menu on the second", _tool_select_run, "tool_select")
 	test("the editor reopens the last document or the splash sample", _startup_run, "startup_document")
+	test("a restart without open documents opens the splash", _startup_closed_run, "startup_closed_documents")
 	test("a new version opens the splash as the active first tab", _startup_splash_run, "startup_splash")
 	test("a first run opens the splash once", _startup_first_run, "startup_first_run")
 	test("an existing splash tab moves to the first position", _splash_reorder_run, "splash_reorder")
@@ -367,6 +368,45 @@ func _startup_run() -> void:
 	step("Then the splash sample opens as an unsaved document", func():
 		expect(State.document.file_path == "res://splash.lve", "the splash document is open")
 		expect(startup_menu.current_save_path.is_empty(), "the sample has no save path")
+	)
+
+
+func _startup_closed_run() -> void:
+	step("Given a session with a remembered document", func():
+		startup_menu = main.get_node("%MenuBar")
+		var stamp := Time.get_ticks_usec()
+		startup_settings_path = "user://startup_closed_%s.cfg" % stamp
+		startup_session_path = startup_settings_path
+		settings_saved_path = str(main.get("settings_path"))
+		main.set("settings_path", startup_settings_path)
+		var saved := "user://startup_closed_%s.lve" % stamp
+		expect(startup_menu.open_document("res://splash.lve", false), "the splash document opens")
+		var document: VoxelDocument = State.document
+		expect(document.save_file(saved, null, document.encode_document()) == OK, "the document copy saves")
+		startup_documents.append(saved)
+		State.remember_document(saved, startup_session_path)
+		expect(State.last_document_path(startup_session_path) == saved, "the session remembers the document")
+	)
+
+	step("When the last document closes", func():
+		var blank := State.new_document()
+		var documents: Array[VoxelDocument] = [blank]
+		State.set_tabs(documents, 0)
+		State.remember_session(startup_session_path)
+	)
+
+	step("Then the session forgets the document", func():
+		expect(State.last_document_path(startup_session_path).is_empty(), "the session has no last document")
+	)
+
+	step("When the editor starts again", func():
+		main._restore_startup_document(true, startup_session_path)
+	)
+
+	step("Then the splash opens", func():
+		expect(State.tabs.size() == 1, "only the splash opens")
+		expect(State.document.file_path == "res://splash.lve", "the splash is the active document")
+		expect(startup_menu.current_save_path.is_empty(), "the splash has no save path")
 	)
 
 

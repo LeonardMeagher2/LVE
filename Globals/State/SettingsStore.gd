@@ -152,7 +152,9 @@ func remember_session(documents: Array[VoxelDocument], active_index: int, config
 		active = clampi(stored_active, 0, maxi(paths.size() - 1, 0))
 	config.set_value("files", "tabs", paths)
 	config.set_value("files", "active", active)
-	if not paths.is_empty():
+	if paths.is_empty():
+		config.erase_section_key("files", "last_document")
+	else:
 		config.set_value("files", "last_document", paths[active])
 	var error := _save_config_file(config, config_path)
 	if error != OK:
