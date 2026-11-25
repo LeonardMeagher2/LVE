@@ -2,19 +2,22 @@
 
 Create voxel art and animation.
 
-![Leonard's Voxel Editor editing a voxel dragon](docs/lve-editor.jpg)
-
-LVE is a voxel editor for 3D pixel art and animation. Paint and sculpt voxels, give each voxel its own material, and animate frames with tags. Export a low-poly glTF mesh, a sprite sheet with optional normal and specular maps, or an animated GIF.
-
 ## Download
 
 | Windows | Linux | Android |
 | --- | --- | --- |
 | [LVE-windows-x86_64.zip](https://github.com/LeonardMeagher2/LVE/releases/latest/download/LVE-windows-x86_64.zip) | [LVE-linux-x86_64.zip](https://github.com/LeonardMeagher2/LVE/releases/latest/download/LVE-linux-x86_64.zip) | [LVE-android-arm64-v8a.apk](https://github.com/LeonardMeagher2/LVE/releases/latest/download/LVE-android-arm64-v8a.apk) |
 
-The Android build runs the phone layout. The palette and the frames share a dock. The controls keep clear of the notch and the gesture area. The documents and the exports match the desktop build.
+LVE is a voxel editor for 3D pixel art and animation. Paint and sculpt voxels, give each voxel its own material, and animate frames with tags. Export a low-poly glTF mesh, a sprite sheet with optional normal and specular maps, or an animated GIF.
 
-![The phone layout on Android](docs/lve-android.png)
+<table>
+<tr>
+<td><img src="docs/lve-editor.jpg" width="520" alt="The desktop editor with a voxel dragon"></td>
+<td><img src="docs/lve-android.png" width="240" alt="The phone layout"></td>
+</tr>
+</table>
+
+The Android build runs the phone layout. The palette and the frames share a dock. The controls keep clear of the notch and the gesture area. The documents and the exports match the desktop build.
 
 ## Features
 
