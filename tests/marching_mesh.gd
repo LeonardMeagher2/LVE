@@ -19,12 +19,12 @@ func _ready() -> void:
 	test("two adjacent voxels merge into one closed surface", _adjacent_voxels, "march_adjacent_voxels")
 	test("random layouts stay closed across chunk seams", _random_layouts, "march_watertight")
 	test("a slice drops the cells outside its layers", _slice, "march_slice")
-	test("two diagonal voxels make two closed blobs", _diagonal_voxels, "march_diagonal_voxels")
 	test("a solid 2x2x2 block stays closed", _solid_block, "march_solid_block")
 	test("a 16-cell slab spans the chunk", _slab, "march_slab")
 	test("a hollow shell keeps its inner cavity", _hollow_shell, "march_hollow_shell")
 	test("the low-poly style renders in the editor viewport", _viewport_style, "march_viewport_style")
 	test("the settings modal stores one undoable style change", _style_undo, "march_style_undo")
+	test("a diagonal pair draws one bridged surface in the viewport", _bridge_viewport, "march_bridge_viewport")
 
 
 func _single_voxel() -> void:
@@ -51,6 +51,12 @@ func _single_voxel() -> void:
 			if normals[indices[offset]].dot(centroid) <= 0.0:
 				outward = false
 		expect(outward, "every normal points away from the voxel")
+		var front_facing := true
+		for offset in range(0, indices.size(), 3):
+			var winding := (positions[indices[offset + 1]] - positions[indices[offset]]).cross(positions[indices[offset + 2]] - positions[indices[offset]])
+			if winding.dot(normals[indices[offset]]) >= 0.0:
+				front_facing = false
+		expect(front_facing, "the winding is clockwise as Godot front faces require")
 		var colored := true
 		for color in colors:
 			if not color.is_equal_approx(Color(0.8, 0.2, 0.1)):
@@ -173,22 +179,6 @@ func _viewport_style() -> void:
 	)
 
 
-func _diagonal_voxels() -> void:
-	step("Given two voxels that share only an edge", func():
-		var frame := VoxelFrame.new()
-		frame.set_cell(Vector3i.ZERO, VoxelFrame.material(Color.WHITE))
-		frame.set_cell(Vector3i(1, 1, 0), VoxelFrame.material(Color.WHITE))
-		_builder = _march(frame, Vector3i.ZERO)
-	)
-	step("Then the surface is closed and stays in two pieces", func():
-		var positions: PackedVector3Array = _builder.surface_arrays[Mesh.ARRAY_VERTEX]
-		var indices: PackedInt32Array = _builder.surface_arrays[Mesh.ARRAY_INDEX]
-		expect(indices.size() == 48, "the two blobs keep sixteen triangles")
-		expect(_closed(positions, indices), "the diagonal blobs have no boundary")
-		expect(_max_valence(positions, indices) <= 4, "the blobs do not share a welded vertex")
-	)
-
-
 func _solid_block() -> void:
 	step("Given a solid 2x2x2 block", func():
 		var frame := VoxelFrame.new()
@@ -287,6 +277,28 @@ func _style_undo() -> void:
 	)
 
 
+func _bridge_viewport() -> void:
+	step("Given two diagonal voxels and the low-poly style", func():
+		State.get_current_voxel_frame().set_cell(Vector3i.ZERO, VoxelFrame.material(Color.RED))
+		State.get_current_voxel_frame().set_cell(Vector3i(1, 1, 0), VoxelFrame.material(Color.RED))
+		State.frames_changed.emit()
+		_renderer = editor_viewport().get_node("ViewportScene/VoxelRenderer")
+		State.set_mesh_style(1, false)
+	)
+	await _settle()
+	step("Then the chunk draws the bridged pair", func():
+		var mesh: Mesh = _renderer._chunk_instances[Vector3i.ZERO].mesh
+		expect(mesh != null, "the bridged chunk has a mesh")
+		if mesh != null:
+			var positions: PackedVector3Array = mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+			var indices: PackedInt32Array = mesh.surface_get_arrays(0)[Mesh.ARRAY_INDEX]
+			expect(_has_gap_face(positions, indices), "the viewport fills the gap")
+		if DisplayServer.get_name() != "headless":
+			RenderingServer.force_draw()
+			get_tree().root.get_texture().get_image().save_png(_dir() + "/low_poly_bridge.png")
+	)
+
+
 func _settle() -> void:
 	while not _renderer.is_settled():
 		await get_tree().process_frame
@@ -369,24 +381,9 @@ func _closed(positions: PackedVector3Array, indices: PackedInt32Array) -> bool:
 	return not edges.is_empty()
 
 
-func _max_valence(positions: PackedVector3Array, indices: PackedInt32Array) -> int:
-	var welded := {}
-	var canonical := PackedInt32Array()
-	canonical.resize(positions.size())
-	for index in positions.size():
-		var key := Vector3i(
-			roundi(positions[index].x * 1024.0),
-			roundi(positions[index].y * 1024.0),
-			roundi(positions[index].z * 1024.0)
-		)
-		if not welded.has(key):
-			welded[key] = welded.size()
-		canonical[index] = welded[key]
-	var usage := PackedInt32Array()
-	usage.resize(welded.size())
-	for index in canonical.size():
-		usage[canonical[index]] += 1
-	var highest := 0
-	for count in usage:
-		highest = maxi(highest, count)
-	return highest
+func _has_gap_face(positions: PackedVector3Array, indices: PackedInt32Array) -> bool:
+	for offset in range(0, indices.size(), 3):
+		var centroid := (positions[indices[offset]] + positions[indices[offset + 1]] + positions[indices[offset + 2]]) / 3.0
+		if centroid.x > 0.3 and centroid.x < 0.7 and centroid.y > 0.3 and centroid.y < 0.7 and absf(centroid.z) > 0.25:
+			return true
+	return false

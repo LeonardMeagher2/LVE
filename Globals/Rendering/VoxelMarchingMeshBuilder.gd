@@ -3,7 +3,18 @@ extends RefCounted
 
 
 const CHUNK_SIZE := VoxelFrame.CHUNK_SIZE
-const PADDED_CHUNK_SIZE := CHUNK_SIZE + 2
+const SAMPLE_PADDING := 2
+const SAMPLE_SIZE := CHUNK_SIZE + SAMPLE_PADDING * 2
+const FACE_OFFSETS: Array[Vector3i] = [
+	Vector3i(1, 0, 0), Vector3i(-1, 0, 0),
+	Vector3i(0, 1, 0), Vector3i(0, -1, 0),
+	Vector3i(0, 0, 1), Vector3i(0, 0, -1),
+]
+const EDGE_OFFSETS: Array[Vector3i] = [
+	Vector3i(1, 1, 0), Vector3i(1, -1, 0), Vector3i(-1, 1, 0), Vector3i(-1, -1, 0),
+	Vector3i(1, 0, 1), Vector3i(1, 0, -1), Vector3i(-1, 0, 1), Vector3i(-1, 0, -1),
+	Vector3i(0, 1, 1), Vector3i(0, 1, -1), Vector3i(0, -1, 1), Vector3i(0, -1, -1),
+]
 const CORNER_OFFSETS: Array[Vector3i] = [
 	Vector3i(0, 0, 0), Vector3i(1, 0, 0), Vector3i(0, 1, 0), Vector3i(1, 1, 0),
 	Vector3i(0, 0, 1), Vector3i(1, 0, 1), Vector3i(0, 1, 1), Vector3i(1, 1, 1),
@@ -21,6 +32,7 @@ const FACES: Array = [
 	[[0, 4, 5, 1], [8, 4, 9, 0]],
 	[[2, 3, 7, 6], [2, 10, 6, 11]],
 ]
+
 static var _case_triangles: Array[PackedInt32Array] = []
 
 var source_frame: VoxelFrame
@@ -38,6 +50,8 @@ var ao_strength := 0.0
 var slice_axis := -1
 var slice_index := 0
 var slice_count := 1
+var bridge_cells := 0
+var rejected_third_material := 0
 
 
 static func _static_init() -> void:
@@ -50,37 +64,41 @@ func run() -> void:
 	var frame := source_frame
 	source_frame = null
 	var occupancy := PackedByteArray()
-	var colors := PackedColorArray()
+	var material_ids := PackedInt32Array()
+	var materials := PackedFloat32Array()
 	if frame != null:
 		var sampled := _sample(frame, chunk_location, slice_axis, slice_index, slice_count)
 		occupancy = sampled[0]
-		colors = sampled[1]
-	_build(occupancy, colors)
+		material_ids = sampled[1]
+		materials = sampled[2]
+	_build(occupancy, material_ids, materials)
 
 
-static func _sample(frame: VoxelFrame, location: Vector3i, slice_axis: int, slice_index: int, slice_count: int) -> Array:
-	var cells := PADDED_CHUNK_SIZE * PADDED_CHUNK_SIZE * PADDED_CHUNK_SIZE
+func _sample(frame: VoxelFrame, location: Vector3i, slice_axis: int, slice_index: int, slice_count: int) -> Array:
+	var cells := SAMPLE_SIZE * SAMPLE_SIZE * SAMPLE_SIZE
 	var occupancy := PackedByteArray()
 	occupancy.resize(cells)
-	var colors := PackedColorArray()
-	colors.resize(cells)
-	colors.fill(Color.TRANSPARENT)
-	var padded_origin := location * CHUNK_SIZE - Vector3i.ONE
+	var material_ids := PackedInt32Array()
+	material_ids.resize(cells)
+	var materials := VoxelFrame.material(Color.TRANSPARENT)
+	var material_table := {}
+	var sample_origin := location * CHUNK_SIZE - Vector3i.ONE * SAMPLE_PADDING
 	for z in range(-1, 2):
 		for y in range(-1, 2):
 			for x in range(-1, 2):
 				var neighbor: VoxelFrame.Chunk = frame.chunks.get(location + Vector3i(x, y, z))
 				if neighbor == null:
 					continue
-				var origin_delta := neighbor.origin() - padded_origin
+				var origin_delta := neighbor.origin() - sample_origin
 				var x_first := maxi(0, -origin_delta.x)
-				var x_last := mini(CHUNK_SIZE, PADDED_CHUNK_SIZE - origin_delta.x)
+				var x_last := mini(CHUNK_SIZE, SAMPLE_SIZE - origin_delta.x)
 				var y_first := maxi(0, -origin_delta.y)
-				var y_last := mini(CHUNK_SIZE, PADDED_CHUNK_SIZE - origin_delta.y)
+				var y_last := mini(CHUNK_SIZE, SAMPLE_SIZE - origin_delta.y)
 				var z_first := maxi(0, -origin_delta.z)
-				var z_last := mini(CHUNK_SIZE, PADDED_CHUNK_SIZE - origin_delta.z)
+				var z_last := mini(CHUNK_SIZE, SAMPLE_SIZE - origin_delta.z)
 				var rows := neighbor.occupancy_rows()
-				var materials := neighbor.materials
+				var neighbor_materials := neighbor.materials
+				var row_ids := {}
 				var slice_last := slice_index + slice_count
 				for row in rows.masks.size():
 					var mask := rows.masks[row]
@@ -98,21 +116,132 @@ static func _sample(frame: VoxelFrame, location: Vector3i, slice_axis: int, slic
 						if local_x < x_first or local_x >= x_last:
 							continue
 						if slice_axis >= 0:
-							var layer := neighbor.location[slice_axis] * CHUNK_SIZE + Vector3i(local_x, local_y, local_z)[slice_axis]
+							var local_layer := local_x if slice_axis == 0 else (local_y if slice_axis == 1 else local_z)
+							var layer := neighbor.location[slice_axis] * CHUNK_SIZE + local_layer
 							if layer < slice_index or layer >= slice_last:
 								continue
 						var id := neighbor.cell_id_at_slot(row * CHUNK_SIZE + local_x)
 						if id == 0:
 							continue
 						var sample_x := origin_delta.x + local_x
-						var index := sample_x + PADDED_CHUNK_SIZE * (sample_y + PADDED_CHUNK_SIZE * sample_z)
+						var index := sample_x + SAMPLE_SIZE * (sample_y + SAMPLE_SIZE * sample_z)
 						occupancy[index] = 1
 						var base := (id - 1) * VoxelFrame.MATERIAL_STRIDE
-						colors[index] = Color(materials[base], materials[base + 1], materials[base + 2], materials[base + 3])
-	return [occupancy, colors]
+						var cell_material := neighbor_materials.slice(base, base + VoxelFrame.MATERIAL_STRIDE)
+						var material_id: int = row_ids.get(id, 0)
+						if material_id == 0:
+							material_id = material_table.get(cell_material, 0)
+							if material_id == 0:
+								material_id = materials.size() / VoxelFrame.MATERIAL_STRIDE
+								material_table[cell_material] = material_id
+								materials.append_array(cell_material)
+							row_ids[id] = material_id
+						material_ids[index] = material_id
+	materials = _fill_bridges(occupancy, material_ids, materials)
+	return [occupancy, material_ids, materials]
 
 
-func _build(occupancy: PackedByteArray, colors: PackedColorArray) -> void:
+func _fill_bridges(occupancy: PackedByteArray, material_ids: PackedInt32Array, materials: PackedFloat32Array) -> PackedFloat32Array:
+	var real := occupancy.duplicate()
+	for z in range(1, SAMPLE_SIZE - 1):
+		for y in range(1, SAMPLE_SIZE - 1):
+			for x in range(1, SAMPLE_SIZE - 1):
+				var index := x + SAMPLE_SIZE * (y + SAMPLE_SIZE * z)
+				if real[index] != 0:
+					continue
+				var face_solids: Array[Vector4i] = []
+				var edge_solids: Array[Vector4i] = []
+				for offset: Vector3i in FACE_OFFSETS:
+					var neighbor_index := index + offset.x + SAMPLE_SIZE * (offset.y + SAMPLE_SIZE * offset.z)
+					if real[neighbor_index] != 0:
+						face_solids.append(Vector4i(offset.x, offset.y, offset.z, material_ids[neighbor_index]))
+				if face_solids.is_empty() or face_solids.size() == FACE_OFFSETS.size():
+					continue
+				for offset: Vector3i in EDGE_OFFSETS:
+					var neighbor_index := index + offset.x + SAMPLE_SIZE * (offset.y + SAMPLE_SIZE * offset.z)
+					if real[neighbor_index] != 0:
+						edge_solids.append(Vector4i(offset.x, offset.y, offset.z, material_ids[neighbor_index]))
+				var pair_first := 0
+				var pair_second := 0
+				for first in face_solids.size():
+					for second in range(first + 1, face_solids.size()):
+						var a: Vector4i = face_solids[first]
+						var b: Vector4i = face_solids[second]
+						if a.w != b.w:
+							continue
+						var differences := 0
+						if a.x != b.x:
+							differences += 1
+						if a.y != b.y:
+							differences += 1
+						if a.z != b.z:
+							differences += 1
+						if differences != 2:
+							continue
+						var opposite := index + a.x + b.x + SAMPLE_SIZE * (a.y + b.y + SAMPLE_SIZE * (a.z + b.z))
+						if real[opposite] == 0:
+							pair_first = a.w
+							pair_second = b.w
+							break
+					if pair_first != 0:
+						break
+				if pair_first == 0:
+					for face: Vector4i in face_solids:
+						for edge: Vector4i in edge_solids:
+							if face.w != edge.w:
+								continue
+							var span := Vector3i(edge.x - face.x, edge.y - face.y, edge.z - face.z)
+							if absi(span.x) != 1 or absi(span.y) != 1 or absi(span.z) != 1:
+								continue
+							if _box_clear(real, x + face.x, y + face.y, z + face.z, span):
+								pair_first = face.w
+								pair_second = edge.w
+								break
+						if pair_first != 0:
+							break
+				if pair_first == 0:
+					continue
+				if not _no_third_material(real, material_ids, x, y, z, pair_first, pair_second):
+					rejected_third_material += 1
+					continue
+				occupancy[index] = 1
+				material_ids[index] = pair_first
+				bridge_cells += 1
+	return materials
+
+
+static func _no_third_material(real: PackedByteArray, material_ids: PackedInt32Array, x: int, y: int, z: int, first: int, second: int) -> bool:
+	for offset_z in range(-1, 2):
+		for offset_y in range(-1, 2):
+			for offset_x in range(-1, 2):
+				if offset_x == 0 and offset_y == 0 and offset_z == 0:
+					continue
+				var neighbor_index := x + offset_x + SAMPLE_SIZE * (y + offset_y + SAMPLE_SIZE * (z + offset_z))
+				if real[neighbor_index] == 0:
+					continue
+				var material_id := material_ids[neighbor_index]
+				if material_id != first and material_id != second:
+					return false
+	return true
+
+
+static func _box_clear(real: PackedByteArray, corner_x: int, corner_y: int, corner_z: int, span: Vector3i) -> bool:
+	for step_z in 2:
+		for step_y in 2:
+			for step_x in 2:
+				if step_x == 0 and step_y == 0 and step_z == 0:
+					continue
+				if step_x == 1 and step_y == 1 and step_z == 1:
+					continue
+				var x := corner_x + step_x * span.x
+				var y := corner_y + step_y * span.y
+				var z := corner_z + step_z * span.z
+				if real[x + SAMPLE_SIZE * (y + SAMPLE_SIZE * z)] != 0:
+					return false
+	return true
+
+
+func _build(occupancy: PackedByteArray, material_ids: PackedInt32Array, materials: PackedFloat32Array) -> void:
 	var positions := PackedVector3Array()
 	var normals := PackedVector3Array()
 	var vertex_colors := PackedColorArray()
@@ -128,14 +257,17 @@ func _build(occupancy: PackedByteArray, colors: PackedColorArray) -> void:
 				var color_sum := Color(0.0, 0.0, 0.0, 0.0)
 				for corner in 8:
 					var offset: Vector3i = CORNER_OFFSETS[corner]
-					var sample := cell + offset + Vector3i.ONE
-					if occupancy[sample.x + PADDED_CHUNK_SIZE * (sample.y + PADDED_CHUNK_SIZE * sample.z)] == 0:
+					var sample := cell + offset + Vector3i.ONE * SAMPLE_PADDING
+					var sample_index := sample.x + SAMPLE_SIZE * (sample.y + SAMPLE_SIZE * sample.z)
+					if occupancy[sample_index] == 0:
 						continue
 					if first_solid < 0:
 						first_solid = corner
 					bits |= 1 << corner
 					solid += 1
-					color_sum += colors[sample.x + PADDED_CHUNK_SIZE * (sample.y + PADDED_CHUNK_SIZE * sample.z)]
+					var material_id := material_ids[sample_index]
+					var base := material_id * VoxelFrame.MATERIAL_STRIDE
+					color_sum += Color(materials[base], materials[base + 1], materials[base + 2], materials[base + 3])
 				if first_solid < 0:
 					continue
 				if VoxelFrame.chunk_position(origin + cell + CORNER_OFFSETS[first_solid]) != chunk_location:
@@ -145,38 +277,39 @@ func _build(occupancy: PackedByteArray, colors: PackedColorArray) -> void:
 					continue
 				var face_color := color_sum / float(solid)
 				for index in range(0, triangle_edges.size(), 3):
-					var first := triangle_edges[index]
-					var second := triangle_edges[index + 1]
-					var third := triangle_edges[index + 2]
-					var first_point := _edge_point(cell, first)
-					var second_point := _edge_point(cell, second)
-					var third_point := _edge_point(cell, third)
-					var normal := (second_point - first_point).cross(third_point - first_point)
-					if normal.length_squared() < 0.0000000001:
-						continue
-					var inside := _inside_gradient(bits, (first_point + second_point + third_point) / 3.0 - Vector3(cell))
-					if normal.dot(inside) > 0.0:
-						var swap := second_point
-						second_point = third_point
-						third_point = swap
-						normal = -normal
-					normal = normal.normalized()
-					var first_vertex := positions.size()
-					positions.append(first_point)
-					positions.append(second_point)
-					positions.append(third_point)
-					for vertex in 3:
-						normals.append(normal)
-						vertex_colors.append(face_color)
-					indices.append(first_vertex)
-					indices.append(first_vertex + 1)
-					indices.append(first_vertex + 2)
+					var first_point := _edge_point(cell, triangle_edges[index])
+					var second_point := _edge_point(cell, triangle_edges[index + 1])
+					var third_point := _edge_point(cell, triangle_edges[index + 2])
+					_append_oriented_triangle(cell, bits, first_point, second_point, third_point, face_color, positions, normals, vertex_colors, indices)
 	surface_arrays.resize(Mesh.ARRAY_MAX)
 	surface_arrays[Mesh.ARRAY_VERTEX] = positions
 	surface_arrays[Mesh.ARRAY_NORMAL] = normals
 	surface_arrays[Mesh.ARRAY_COLOR] = vertex_colors
 	surface_arrays[Mesh.ARRAY_INDEX] = indices
 	geometry_bytes = positions.size() * 40 + indices.size() * 4
+
+
+func _append_oriented_triangle(cell: Vector3i, bits: int, first: Vector3, second: Vector3, third: Vector3, color: Color, positions: PackedVector3Array, normals: PackedVector3Array, vertex_colors: PackedColorArray, indices: PackedInt32Array) -> void:
+	var winding := (second - first).cross(third - first)
+	if winding.length_squared() < 0.0000000001:
+		return
+	var inside := _inside_gradient(bits, (first + second + third) / 3.0 - Vector3(cell))
+	if winding.dot(inside) < 0.0:
+		var swap := second
+		second = third
+		third = swap
+		winding = -winding
+	var shading := -winding.normalized()
+	var first_vertex := positions.size()
+	positions.append(first)
+	positions.append(second)
+	positions.append(third)
+	for vertex in 3:
+		normals.append(shading)
+		vertex_colors.append(color)
+	indices.append(first_vertex)
+	indices.append(first_vertex + 1)
+	indices.append(first_vertex + 2)
 
 
 static func _edge_point(cell: Vector3i, edge: int) -> Vector3:
