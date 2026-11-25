@@ -66,7 +66,9 @@ func _run() -> void:
 		expect(not exporter._dialog.visible and not exporter._sheet_dialog.visible, "opening Export creates no save dialog")
 		expect(exporter._menu_item.get_node("ExportBtn").button_pressed, "the export toggle shows the active workspace")
 		expect(not exporter._workspace.has_node("Header"), "the previews use the space without a workspace heading")
-		expect(exporter._workspace.get_node("Panels") is HBoxContainer, "the export panels use a fixed layout")
+		var panels: Control = exporter._workspace.get_node("Panels")
+		expect(panels is BoxContainer, "the export panels share one container")
+		expect(not (panels as BoxContainer).vertical, "the desktop keeps the panels side by side")
 		expect(not exporter._model.has_node("Title") and not exporter._controls.has_node("Title"), "the previews start without redundant headings")
 		expect(not exporter._workspace.has_node("Activity") and not exporter._model.has_node("Summary") and not exporter._controls.has_node("Summary"), "the workspace uses the shared bottom status bar")
 	)
@@ -345,9 +347,16 @@ func _preview_behavior() -> void:
 		expect(exporter._controls.get_node("Preview")._pan == Vector2(12, 8), "a property change keeps the sheet pan")
 	)
 	error = await exporter.export_sprite_sheet(SHEET_PATH, 0, 1, 32, 2, false)
+	for _frame in 120:
+		if exporter._preview_image != null:
+			break
+		await get_tree().process_frame
 	step("Then the saved PNG matches the sheet preview", func():
 		var image := Image.new()
 		image.load(SHEET_PATH)
+		expect(exporter._preview_image != null, "the export leaves a preview image")
+		if exporter._preview_image == null:
+			return
 		expect(error == OK and image.get_data() == exporter._preview_image.get_data(), "preview and export contain the same PNG pixels")
 		expect(not FileAccess.file_exists(SHEET_PATH.get_basename() + ".json"), "PNG-only export creates no JSON sidecar")
 	)
