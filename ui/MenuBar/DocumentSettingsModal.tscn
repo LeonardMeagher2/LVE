@@ -9,9 +9,11 @@
 
 [sub_resource type="ButtonGroup" id="ButtonGroup_normals"]
 
+[sub_resource type="ButtonGroup" id="ButtonGroup_style"]
+
 [node name="DocumentSettingsModal" type="ConfirmationDialog"]
 title = "Document Properties"
-size = Vector2i(392, 102)
+size = Vector2i(392, 148)
 script = ExtResource("1_script")
 
 [node name="Margin" type="MarginContainer" parent="."]
@@ -87,6 +89,31 @@ toggle_mode = true
 button_group = SubResource("ButtonGroup_normals")
 icon = ExtResource("4_smooth")
 icon_alignment = 1
+
+[node name="MeshLabel" type="Label" parent="Margin/Layout"]
+layout_mode = 2
+vertical_alignment = 1
+text = "Mesh"
+
+[node name="StyleRow" type="HBoxContainer" parent="Margin/Layout"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="Blocks" type="Button" parent="Margin/Layout/StyleRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "Blocks: one quad per exposed voxel face"
+toggle_mode = true
+button_group = SubResource("ButtonGroup_style")
+text = "Blocks"
+
+[node name="Low" type="Button" parent="Margin/Layout/StyleRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "Low poly: a smooth marching-cubes surface over the voxels"
+toggle_mode = true
+button_group = SubResource("ButtonGroup_style")
+text = "Low Poly"
 
 [node name="AoLabel" type="Label" parent="Margin/Layout"]
 layout_mode = 2

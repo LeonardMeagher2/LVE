@@ -223,7 +223,7 @@ func _request(active_frame: VoxelFrame, chunk_location: Vector3i) -> void:
 			_inflight_surface_keys.erase(chunk_location)
 			_retire(chunk_location)
 			return
-	var surface_key := _signature(active_frame, chunk_location, State.document.smooth_normals, slice_axis, slice_index, slice_count, State.document.ao_strength)
+	var surface_key := _signature(active_frame, chunk_location, State.document.smooth_normals, slice_axis, slice_index, slice_count, State.document.ao_strength, State.document.mesh_style)
 	if _displayed_surface_keys.get(chunk_location) == surface_key:
 		_pending_surface_keys.erase(chunk_location)
 		_inflight_surface_keys.erase(chunk_location)
@@ -250,14 +250,14 @@ func _update_chunks(updated_frame: int, chunk_positions: Array[Vector3i]) -> voi
 	_report_activity()
 
 
-static func _signature(active_frame: VoxelFrame, chunk_location: Vector3i, smooth_normals: bool, slice_axis := -1, slice_index := 0, slice_count := 1, ao_strength := 0.0) -> PackedInt64Array:
+static func _signature(active_frame: VoxelFrame, chunk_location: Vector3i, smooth_normals: bool, slice_axis := -1, slice_index := 0, slice_count := 1, ao_strength := 0.0, mesh_style := 0) -> PackedInt64Array:
 	var ao_enabled := ao_strength > 0.0
-	var offsets := VoxelMeshBuilder.neighbor_offsets(smooth_normals or ao_enabled)
+	var offsets := VoxelMeshBuilder.neighbor_offsets(smooth_normals or ao_enabled or mesh_style != 0)
 	var surface_key := PackedInt64Array()
 	var tail := 4 if slice_axis >= 0 else 0
 	var extra := 1 if ao_enabled else 0
 	surface_key.resize(1 + offsets.size() * 2 + tail + extra)
-	surface_key[0] = (1 if smooth_normals else 0) | (2 if ao_enabled else 0)
+	surface_key[0] = (1 if smooth_normals else 0) | (2 if ao_enabled else 0) | (mesh_style << 2)
 	var index := 1
 	for offset: Vector3i in offsets:
 		var chunk: VoxelFrame.Chunk = active_frame.chunks.get(chunk_location + offset)
@@ -298,7 +298,7 @@ func _update_surfaces() -> void:
 				_profile.truncated += 1
 			return
 	for surface_key in _surface_jobs.keys():
-		var surface_job: VoxelMeshBuilder = _surface_jobs[surface_key]
+		var surface_job = _surface_jobs[surface_key]
 		if WorkerThreadPool.is_task_completed(surface_job.worker_task_id):
 			var reap_started_us := Time.get_ticks_usec()
 			WorkerThreadPool.wait_for_task_completion(surface_job.worker_task_id)
@@ -393,14 +393,23 @@ func _launch_surface(chunk_location: Vector3i, active_frame: VoxelFrame) -> void
 		return
 	if _surface_jobs.size() >= _job_limit():
 		return
-	var surface_job := VoxelMeshBuilder.new()
+	var surface_job
+	if State.document.mesh_style == 0:
+		var greedy := VoxelMeshBuilder.new()
+		greedy.smooth_normals = State.document.smooth_normals
+		greedy.ao_strength = State.document.ao_strength
+		greedy.slice_axis = slice_axis
+		greedy.slice_index = slice_index
+		greedy.slice_count = slice_count
+		surface_job = greedy
+	else:
+		var marching := VoxelMarchingMeshBuilder.new()
+		marching.slice_axis = slice_axis
+		marching.slice_index = slice_index
+		marching.slice_count = slice_count
+		surface_job = marching
 	surface_job.source_frame = _snapshot_for_launch(active_frame)
 	surface_job.chunk_location = chunk_location
-	surface_job.smooth_normals = State.document.smooth_normals
-	surface_job.ao_strength = State.document.ao_strength
-	surface_job.slice_axis = slice_axis
-	surface_job.slice_index = slice_index
-	surface_job.slice_count = slice_count
 	surface_job.worker_task_id = WorkerThreadPool.add_task(surface_job.run, false, "Voxel surface")
 	_surface_jobs[surface_key] = surface_job
 	_inflight_surface_keys[chunk_location] = surface_key
@@ -448,7 +457,7 @@ static func _cache_surface(surface_key: PackedInt64Array, chunk_surface: ArrayMe
 		_surface_cache.erase(oldest_surface_key)
 
 
-func _build_material(surface_job: VoxelMeshBuilder) -> StandardMaterial3D:
+func _build_material(surface_job) -> StandardMaterial3D:
 	if surface_job.atlas_size.x == 0:
 		return null
 	var shared_material: Material = mesh.surface_get_material(0) if mesh and mesh.get_surface_count() > 0 else null

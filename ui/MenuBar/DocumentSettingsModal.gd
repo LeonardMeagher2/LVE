@@ -3,6 +3,8 @@ extends ConfirmationDialog
 
 @onready var _flat: Button = $Margin/Layout/NormalsRow/Flat
 @onready var _smooth: Button = $Margin/Layout/NormalsRow/Smooth
+@onready var _blocks: Button = $Margin/Layout/StyleRow/Blocks
+@onready var _low: Button = $Margin/Layout/StyleRow/Low
 @onready var _ao = $Margin/Layout/AoRow/AO
 @onready var _size_x: SpinBox = $Margin/Layout/SizeRow/SizeX
 @onready var _size_y: SpinBox = $Margin/Layout/SizeRow/SizeY
@@ -11,6 +13,7 @@ extends ConfirmationDialog
 
 var _before_smooth := false
 var _before_ao := 1.0
+var _before_style := 0
 var _before_size := Vector3i.ZERO
 var _syncing := false
 
@@ -18,6 +21,8 @@ var _syncing := false
 func _ready() -> void:
 	_flat.toggled.connect(_on_normals_toggled)
 	_smooth.toggled.connect(_on_normals_toggled)
+	_blocks.toggled.connect(_on_style_toggled)
+	_low.toggled.connect(_on_style_toggled)
 	_ao.value_changed.connect(_on_ao_changed)
 	_size_x.value_changed.connect(_on_size_changed)
 	_size_y.value_changed.connect(_on_size_changed)
@@ -27,13 +32,16 @@ func _ready() -> void:
 	canceled.connect(_on_canceled)
 
 
-func open(current_size: Vector3i, smooth_normals: bool, ao_strength := 1.0) -> void:
+func open(current_size: Vector3i, smooth_normals: bool, ao_strength := 1.0, mesh_style := 0) -> void:
 	_before_smooth = smooth_normals
 	_before_ao = ao_strength
+	_before_style = mesh_style
 	_before_size = current_size
 	_syncing = true
 	_flat.set_pressed_no_signal(not smooth_normals)
 	_smooth.set_pressed_no_signal(smooth_normals)
+	_blocks.set_pressed_no_signal(mesh_style == 0)
+	_low.set_pressed_no_signal(mesh_style != 0)
 	_ao.set_value_no_signal(ao_strength)
 	_size_x.set_value_no_signal(current_size.x)
 	_size_y.set_value_no_signal(current_size.y)
@@ -44,6 +52,10 @@ func open(current_size: Vector3i, smooth_normals: bool, ao_strength := 1.0) -> v
 
 
 func _on_normals_toggled(_pressed: bool) -> void:
+	_apply_preview()
+
+
+func _on_style_toggled(_pressed: bool) -> void:
 	_apply_preview()
 
 
@@ -60,16 +72,18 @@ func _apply_preview() -> void:
 		return
 	State.set_document_properties(_smooth.button_pressed, _current_size(), false)
 	State.set_ao_strength(_ao.value, false)
+	State.set_mesh_style(1 if _low.button_pressed else 0, false)
 
 
 func _on_confirmed() -> void:
-	State.commit_document_settings(_before_smooth, _before_size, _before_ao)
+	State.commit_document_settings(_before_smooth, _before_size, _before_ao, _before_style)
 
 
 func _on_canceled() -> void:
 	_syncing = true
 	State.set_document_properties(_before_smooth, _before_size, false)
 	State.set_ao_strength(_before_ao, false)
+	State.set_mesh_style(_before_style, false)
 	_syncing = false
 
 

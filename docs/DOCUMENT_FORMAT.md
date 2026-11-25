@@ -43,6 +43,7 @@ A missing `size` means no document bound.
 | `frames` | Untyped array | Frame dictionaries |
 | `tags` | Untyped array | Animation tag dictionaries |
 | `smooth_normals` | Boolean | Model shading option |
+| `mesh_style` | Integer | Surface style. `0` uses axis-aligned blocks. `1` uses a low-poly marching-cubes surface. Optional. Older files use `0`. |
 | `ao` | Float from 0 to 1 | Ambient occlusion strength. Zero disables it. |
 | `lighting` | Untyped dictionary | Editor lighting settings |
 | `export` | Untyped dictionary | Export workspace settings |
