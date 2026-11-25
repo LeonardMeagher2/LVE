@@ -10,6 +10,7 @@ const MCP_SERVER_SCRIPT := preload("res://Globals/MCP/MCPServer.gd")
 const MCP_BRIDGE_SCRIPT := preload("res://Globals/MCP/MCPBridge.gd")
 const AUTOSAVE_SCRIPT := preload("res://Globals/Autosave/Autosave.gd")
 const MCP_PORT := 17373
+const MCP_DOC_URL := "https://github.com/LeonardMeagher2/LVE/blob/main/docs/MCP.md"
 const ANDROID_BASE_DPI := 160.0
 const MOBILE_SCALE_FACTOR := 0.85
 var settings_path := ""
@@ -342,6 +343,13 @@ func mcp_url() -> String:
 	if port <= 0:
 		return ""
 	return "http://127.0.0.1:%d/mcp" % port
+
+
+func mcp_setup_prompt() -> String:
+	var url := mcp_url()
+	if url.is_empty():
+		return ""
+	return "Add the local voxel editor as an MCP server named lve.\n\n- URL: %s\n- Transport: HTTP. No OAuth.\n- The server reads and edits the document that is open in my editor.\n\nLoad its tools, then read the lve://guide resource. Setup notes for each harness: %s" % [url, MCP_DOC_URL]
 
 
 func _start_mcp() -> void:

@@ -17,6 +17,9 @@ var mcp_status: EditorStatusBar
 var mcp_blocker: TCPServer
 var mcp_client: StreamPeerTCP
 var mcp_settings_path := ""
+var mcp_live_port := 0
+var clipboard_before := ""
+var clipboard_saved := false
 var settings_saved_path := ""
 var mcp_saved_port := 0
 var mcp_port_saved := false
@@ -67,6 +70,9 @@ func after_test() -> void:
 	if mcp_client != null:
 		mcp_client.disconnect_from_host()
 		mcp_client = null
+	if clipboard_saved:
+		DisplayServer.clipboard_set(clipboard_before)
+		clipboard_saved = false
 	if not mcp_settings_path.is_empty():
 		DirAccess.remove_absolute(mcp_settings_path)
 		mcp_settings_path = ""
@@ -151,6 +157,8 @@ func _mcp_toggle_run() -> void:
 		main.set("settings_path", mcp_settings_path)
 		main.set("mcp_port", 0)
 		expect(not bool(main.call("is_mcp_enabled")), "the server starts off")
+		clipboard_before = DisplayServer.clipboard_get()
+		clipboard_saved = true
 		mcp_status = load("res://ui/StatusBar/StatusBar.tscn").instantiate()
 		main.add_child(mcp_status)
 	)
@@ -158,7 +166,7 @@ func _mcp_toggle_run() -> void:
 	var button: Button = mcp_status.get_node("%MCP")
 	step("Then the status icon is visible and off", func():
 		expect(button.visible, "the MCP icon is visible")
-		expect(button.tooltip_text.contains("off"), "the tooltip says the server is off")
+		expect(button.tooltip_text == "MCP server off. Click to start.", "the tooltip says the server is off")
 	)
 	step("When the user clicks the status icon", func():
 		button.pressed.emit()
@@ -167,13 +175,30 @@ func _mcp_toggle_run() -> void:
 	step("Then the server listens and saves the on state", func():
 		expect(bool(main.call("is_mcp_enabled")), "the server starts")
 		var port := int(main.call("mcp_local_port"))
+		mcp_live_port = port
 		expect(port > 0, "the server has a port")
-		expect(button.tooltip_text.contains("127.0.0.1"), "the tooltip shows the endpoint")
+		expect(button.tooltip_text == "MCP server on at http://127.0.0.1:%d/mcp. Click to stop." % port, "the tooltip shows the endpoint")
 		var settings := ConfigFile.new()
 		settings.load(mcp_settings_path)
 		expect(bool(settings.get_value("agent", "mcp_enabled", false)), "the on state is saved")
 		mcp_client = StreamPeerTCP.new()
 		expect(mcp_client.connect_to_host("127.0.0.1", port) == OK, "a client can reach the port")
+	)
+	step("Then the setup prompt is in the clipboard", func():
+		var notice: Label = mcp_status.get_node("%Notice")
+		expect(notice.visible, "the status bar shows a notice")
+		expect(notice.text == "Setup prompt copied to the clipboard", "the notice names the clipboard")
+		if DisplayServer.get_name() == "headless":
+			return
+		var prompt := DisplayServer.clipboard_get()
+		expect(prompt.contains("http://127.0.0.1:%d/mcp" % mcp_live_port), "the prompt names the endpoint")
+		expect(prompt.contains("docs/MCP.md"), "the prompt links to the MCP doc")
+	)
+	step("When the notice time ends", func():
+		mcp_status.get_node("NoticeTimer").timeout.emit()
+	)
+	step("Then the notice clears", func():
+		expect(not mcp_status.get_node("%Notice").visible, "the notice hides")
 	)
 	await _wait_client(mcp_client)
 	step("Then the server accepts the client", func():
@@ -188,6 +213,7 @@ func _mcp_toggle_run() -> void:
 	step("Then the server stops and saves the off state", func():
 		expect(not bool(main.call("is_mcp_enabled")), "the server stops")
 		expect(int(main.call("mcp_local_port")) == 0, "the port is free")
+		expect(button.tooltip_text == "MCP server off. Click to start.", "the tooltip drops the endpoint")
 		var settings := ConfigFile.new()
 		settings.load(mcp_settings_path)
 		expect(not bool(settings.get_value("agent", "mcp_enabled", true)), "the off state is saved")

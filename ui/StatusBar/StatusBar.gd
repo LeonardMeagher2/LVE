@@ -10,6 +10,8 @@ const UPDATE_COLOR := Color(1, 1, 1, 0.7)
 
 @onready var _left: Label = $StatusLeft
 @onready var _right: Label = $StatusRight
+@onready var _notice: Label = %Notice
+@onready var _notice_timer: Timer = $NoticeTimer
 @onready var _mcp: Button = $MCP
 @onready var _activity: JobStatusWidget = $Activity
 @onready var _version: LinkButton = $Version
@@ -34,6 +36,7 @@ func _ready() -> void:
 	_version.visible = not _current_version.is_empty()
 	_checker.latest_release.connect(show_latest)
 	_checker.start.call_deferred()
+	_notice_timer.timeout.connect(_on_notice_timeout)
 	_mcp.pressed.connect(_on_mcp_pressed)
 	_mcp.visible = false
 	if State.context != null and is_instance_valid(State.context.main):
@@ -99,9 +102,9 @@ func _sync_mcp() -> void:
 	var url := str(_main.call("mcp_url"))
 	var place := " in line mode" if url.is_empty() else " at %s" % url
 	if enabled:
-		_mcp.tooltip_text = "MCP server on%s. Any local program can use the editor tools. Click to stop." % place
+		_mcp.tooltip_text = "MCP server on%s. Click to stop." % place
 	else:
-		_mcp.tooltip_text = "MCP server off. Click to start%s." % place
+		_mcp.tooltip_text = "MCP server off. Click to start."
 
 
 func _on_mcp_changed(_enabled: bool, _port: int) -> void:
@@ -111,8 +114,11 @@ func _on_mcp_changed(_enabled: bool, _port: int) -> void:
 func _on_mcp_pressed() -> void:
 	if _main == null:
 		return
-	var result: Variant = _main.call("set_mcp_enabled", not bool(_main.call("is_mcp_enabled")), true)
+	var enabling := not bool(_main.call("is_mcp_enabled"))
+	var result: Variant = _main.call("set_mcp_enabled", enabling, true)
 	var error: Error = result if result is int else ERR_UNAVAILABLE
+	if error == OK and enabling:
+		_copy_mcp_setup()
 	_sync_mcp()
 	if error == OK:
 		return
@@ -122,6 +128,24 @@ func _on_mcp_pressed() -> void:
 		error_string(error),
 	]
 	%MCPError.popup_centered()
+
+
+func _copy_mcp_setup() -> void:
+	var prompt := str(_main.call("mcp_setup_prompt"))
+	if prompt.is_empty():
+		return
+	DisplayServer.clipboard_set(prompt)
+	_show_notice("Setup prompt copied to the clipboard")
+
+
+func _show_notice(text: String) -> void:
+	_notice.text = text
+	_notice.visible = true
+	_notice_timer.start()
+
+
+func _on_notice_timeout() -> void:
+	_notice.visible = false
 
 
 func show_latest(version: String, url: String, newer: bool) -> void:
