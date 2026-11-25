@@ -6,12 +6,15 @@
 [ext_resource type="Texture2D" uid="uid://broaps7lc7g1u" path="res://icons/sphere.svg" id="4_smooth"]
 [ext_resource type="Texture2D" uid="uid://denrh23gr1h22" path="res://icons/shadow.svg" id="5_ao"]
 [ext_resource type="PackedScene" uid="uid://kxi223occ3vl" path="res://ui/ValueButton/ValueButton.tscn" id="6_value"]
+[ext_resource type="Texture2D" path="res://icons/sculpt_surface.svg" id="7_surface"]
 
 [sub_resource type="ButtonGroup" id="ButtonGroup_normals"]
 
+[sub_resource type="ButtonGroup" id="ButtonGroup_surface"]
+
 [node name="DocumentSettingsModal" type="ConfirmationDialog"]
 title = "Document Properties"
-size = Vector2i(392, 102)
+size = Vector2i(392, 190)
 script = ExtResource("1_script")
 
 [node name="Margin" type="MarginContainer" parent="."]
@@ -86,6 +89,31 @@ tooltip_text = "Smooth normals: blend the face normals across shared corners"
 toggle_mode = true
 button_group = SubResource("ButtonGroup_normals")
 icon = ExtResource("4_smooth")
+icon_alignment = 1
+
+[node name="SurfaceLabel" type="Label" parent="Margin/Layout"]
+layout_mode = 2
+vertical_alignment = 1
+text = "Surface"
+
+[node name="SurfaceRow" type="HBoxContainer" parent="Margin/Layout"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="Voxel" type="Button" parent="Margin/Layout/SurfaceRow"]
+layout_mode = 2
+tooltip_text = "Voxel surface: keep the blocky voxel shape"
+toggle_mode = true
+button_group = SubResource("ButtonGroup_surface")
+icon = ExtResource("3_flat")
+icon_alignment = 1
+
+[node name="LowPoly" type="Button" parent="Margin/Layout/SurfaceRow"]
+layout_mode = 2
+tooltip_text = "Low poly surface: fuse the voxels into one faceted mass"
+toggle_mode = true
+button_group = SubResource("ButtonGroup_surface")
+icon = ExtResource("7_surface")
 icon_alignment = 1
 
 [node name="AoLabel" type="Label" parent="Margin/Layout"]

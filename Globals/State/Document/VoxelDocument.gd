@@ -24,6 +24,7 @@ static var _profile_rescan_us := 0
 @export var tags: Array[AnimationTag] = []
 @export var smooth_normals := false
 @export_range(0.0, 1.0, 0.01) var ao_strength := 1.0
+@export var low_poly := false
 @export var lighting_settings: Dictionary = {}
 @export var export_settings: Dictionary = {}
 @export var tool_settings: Dictionary = {}
@@ -77,7 +78,7 @@ func document_data() -> Dictionary:
 	var tag_data := []
 	for tag in tags:
 		tag_data.append({"name": tag.name, "from": tag.from, "to": tag.to, "loop_mode": tag.loop_mode, "repeats": tag.repeats})
-	return {"palette": palette_data, "frames": frame_data, "tags": tag_data, "smooth_normals": smooth_normals, "ao": ao_strength, "lighting": _storage_settings(lighting_settings), "export": _storage_settings(export_settings), "tools": _storage_settings(tool_settings), "view": _storage_settings(view_settings), "camera": _storage_settings(edit_camera), "edit_frame": edit_frame, "edit_tag": edit_tag if not tags.is_empty() else -1, "edit_playing": edit_playing, "size": size}
+	return {"palette": palette_data, "frames": frame_data, "tags": tag_data, "smooth_normals": smooth_normals, "ao": ao_strength, "low_poly": low_poly, "lighting": _storage_settings(lighting_settings), "export": _storage_settings(export_settings), "tools": _storage_settings(tool_settings), "view": _storage_settings(view_settings), "camera": _storage_settings(edit_camera), "edit_frame": edit_frame, "edit_tag": edit_tag if not tags.is_empty() else -1, "edit_playing": edit_playing, "size": size}
 
 
 static func _storage_settings(settings: Dictionary) -> Dictionary:
@@ -184,6 +185,8 @@ static func decode_document(data: PackedByteArray) -> VoxelDocument:
 	document.smooth_normals = fields.smooth_normals
 	var stored_ao: Variant = fields.get("ao", 1.0)
 	document.ao_strength = 1.0 if stored_ao is bool else float(stored_ao)
+	var stored_low_poly: Variant = fields.get("low_poly", false)
+	document.low_poly = stored_low_poly if stored_low_poly is bool else false
 	document.lighting_settings = fields.lighting
 	document.export_settings = fields.export
 	var stored_tools: Variant = fields.get("tools", {})
@@ -361,6 +364,8 @@ static func _valid_document_data(data: Variant) -> bool:
 			return false
 	var ao: Variant = data.get("ao")
 	if ao != null and not _number_in(ao, 0.0, 1.0):
+		return false
+	if not data.get("low_poly", false) is bool:
 		return false
 	if not _integer_in(data.get("edit_frame", 0), 0, MAX_FRAMES - 1):
 		return false

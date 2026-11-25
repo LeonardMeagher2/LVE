@@ -16,6 +16,26 @@ static var _active_renderer_count := 0
 var _chunk_notice_frame := -1
 var _chunk_notice_pending := false
 static var _surface_job_limit := 0
+var _low_poly_instance: MeshInstance3D
+var _low_poly_job: LowPolyJob
+var _low_poly_key := PackedInt64Array()
+var _low_poly_dirty := false
+var _low_poly_material_base: StandardMaterial3D
+
+
+class LowPolyJob extends VoxelFrame.EditJob:
+	var frame: VoxelFrame
+	var mesh: ArrayMesh
+
+	func run() -> void:
+		stage("Building low poly surface", 1)
+		var builder := VoxelLowPolyMesh.new()
+		builder.build(frame)
+		if builder.arrays[Mesh.ARRAY_VERTEX].is_empty():
+			return
+		mesh = ArrayMesh.new()
+		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, builder.arrays)
+		checkpoint(1)
 
 
 static func _job_limit() -> int:
@@ -151,12 +171,22 @@ func _exit_tree() -> void:
 		chunk_instance.free()
 	_retired_chunk_instances.clear()
 	_launch_snapshot = null
+	if _low_poly_job != null:
+		WorkerThreadPool.wait_for_task_completion(_low_poly_job.worker_task_id)
+		_low_poly_job = null
+	if _low_poly_instance != null:
+		_low_poly_instance.free()
+		_low_poly_instance = null
 
 
 func _get_frame() -> VoxelFrame:
 	if source_frame:
 		return source_frame
 	return State.get_voxel_frame(frame) if frame >= 0 else State.get_current_voxel_frame()
+
+
+func _uses_low_poly() -> bool:
+	return State.document.low_poly and slice_axis < 0
 
 
 func _on_frame_changed() -> void:
@@ -167,6 +197,16 @@ func _on_frame_changed() -> void:
 func _rebuild(hide_all := true) -> void:
 	if not is_inside_tree():
 		return
+	if _uses_low_poly():
+		_displayed_frame = _get_frame()
+		_pending_surface_keys.clear()
+		_inflight_surface_keys.clear()
+		for chunk_instance in _chunk_instances.values():
+			chunk_instance.visible = false
+		_low_poly_dirty = true
+		_report_activity()
+		return
+	_clear_low_poly()
 	var active_frame := _get_frame()
 	if active_frame != _displayed_frame:
 		if hide_all:
@@ -186,6 +226,10 @@ func _rebuild(hide_all := true) -> void:
 
 func _update(updated_frame: int, affected_cells: Array[Vector3i]) -> void:
 	if updated_frame != (frame if frame >= 0 else State.current_frame):
+		return
+	if _uses_low_poly():
+		_low_poly_dirty = true
+		_report_activity()
 		return
 	if affected_cells.is_empty():
 		_rebuild()
@@ -277,8 +321,95 @@ static func _signature(active_frame: VoxelFrame, chunk_location: Vector3i, smoot
 
 
 func _process(_delta: float) -> void:
-	_update_surfaces()
+	if _uses_low_poly():
+		_update_low_poly()
+	else:
+		_update_surfaces()
 	_report_activity()
+
+
+func _update_low_poly() -> void:
+	if _low_poly_job == null and _low_poly_dirty:
+		var frame := _get_frame()
+		if frame == null:
+			_low_poly_dirty = false
+			return
+		_low_poly_dirty = false
+		var job := LowPolyJob.new()
+		job.frame = frame.copy_frame()
+		_low_poly_key = _low_poly_signature(frame)
+		job.worker_task_id = WorkerThreadPool.add_task(job.run, false, "Low poly surface")
+		_low_poly_job = job
+	if _low_poly_job == null or not WorkerThreadPool.is_task_completed(_low_poly_job.worker_task_id):
+		return
+	WorkerThreadPool.wait_for_task_completion(_low_poly_job.worker_task_id)
+	var job := _low_poly_job
+	_low_poly_job = null
+	var frame := _get_frame()
+	if frame != null and _low_poly_signature(frame) == _low_poly_key:
+		_install_low_poly(job)
+	else:
+		_low_poly_dirty = true
+
+
+func _install_low_poly(job: LowPolyJob) -> void:
+	if _low_poly_instance == null:
+		_low_poly_instance = MeshInstance3D.new()
+		add_child(_low_poly_instance)
+	_low_poly_instance.mesh = job.mesh
+	_low_poly_instance.material_override = _low_poly_material()
+	_low_poly_instance.visible = job.mesh != null
+
+
+func _clear_low_poly() -> void:
+	if _low_poly_instance != null:
+		_low_poly_instance.queue_free()
+		_low_poly_instance = null
+	if _low_poly_job != null:
+		WorkerThreadPool.wait_for_task_completion(_low_poly_job.worker_task_id)
+		_low_poly_job = null
+	_low_poly_dirty = false
+	_low_poly_key = PackedInt64Array()
+
+
+func _low_poly_material() -> Material:
+	if override_material:
+		return override_material
+	if _low_poly_material_base == null:
+		_low_poly_material_base = StandardMaterial3D.new()
+		_low_poly_material_base.vertex_color_use_as_albedo = true
+		_low_poly_material_base.vertex_color_is_srgb = false
+		_low_poly_material_base.roughness = 0.9
+		_low_poly_material_base.metallic = 0.0
+	var material: Material = _low_poly_material_base
+	if unshaded:
+		var unshaded_material := StandardMaterial3D.new()
+		unshaded_material.vertex_color_use_as_albedo = true
+		unshaded_material.vertex_color_is_srgb = false
+		unshaded_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		material = unshaded_material
+	if material_builder.is_valid():
+		return material_builder.call(material)
+	return material
+
+
+static func _low_poly_signature(source: VoxelFrame) -> PackedInt64Array:
+	var key := PackedInt64Array()
+	var locations: Array = source.chunks.keys()
+	locations.sort_custom(func(a: Vector3i, b: Vector3i) -> bool:
+		if a.x != b.x:
+			return a.x < b.x
+		if a.y != b.y:
+			return a.y < b.y
+		return a.z < b.z
+	)
+	for location: Vector3i in locations:
+		var chunk: VoxelFrame.Chunk = source.chunks[location]
+		key.append(location.x)
+		key.append(location.y)
+		key.append(location.z)
+		key.append(chunk.voxel_revision)
+	return key
 
 
 func _work_slice_us() -> int:
@@ -538,6 +669,8 @@ func _apply_materials() -> void:
 	for chunk_location in _chunk_instances:
 		var chunk_instance: MeshInstance3D = _chunk_instances[chunk_location]
 		chunk_instance.material_override = _instance_material(chunk_location, _chunk_materials.get(chunk_location))
+	if _low_poly_instance != null:
+		_low_poly_instance.material_override = _low_poly_material()
 
 
 func _retire(chunk_location: Vector3i) -> void:
@@ -553,6 +686,8 @@ func _retire(chunk_location: Vector3i) -> void:
 
 
 func is_settled() -> bool:
+	if _uses_low_poly():
+		return not _low_poly_dirty and _low_poly_job == null
 	return _pending_surface_keys.is_empty()
 
 

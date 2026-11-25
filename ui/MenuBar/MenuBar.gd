@@ -79,7 +79,7 @@ func _sync_model_settings() -> void:
 
 
 func _on_model_settings_pressed() -> void:
-	%DocumentSettingsModal.open(State.document.size, State.document.smooth_normals, State.document.ao_strength)
+	%DocumentSettingsModal.open(State.document.size, State.document.smooth_normals, State.document.ao_strength, State.document.low_poly)
 
 
 func save_doc(path: String) -> Error:

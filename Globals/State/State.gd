@@ -203,13 +203,15 @@ func commit_document_properties(before_smooth: bool, before_size: Vector3i) -> v
 	_commit_history(false)
 
 
-func commit_document_settings(before_smooth: bool, before_size: Vector3i, before_ao: float) -> void:
+func commit_document_settings(before_smooth: bool, before_size: Vector3i, before_ao: float, before_low_poly := false) -> void:
 	var after_smooth := document.smooth_normals
 	var after_size := document.size
 	var after_ao := document.ao_strength
+	var after_low_poly := document.low_poly
 	var properties_changed := before_smooth != after_smooth or before_size != after_size
 	var ao_changed := not is_equal_approx(before_ao, after_ao)
-	if not properties_changed and not ao_changed:
+	var low_poly_changed := before_low_poly != after_low_poly
+	if not properties_changed and not ao_changed and not low_poly_changed:
 		return
 	undo_redo.create_action("Set Document Settings")
 	if properties_changed:
@@ -218,6 +220,9 @@ func commit_document_settings(before_smooth: bool, before_size: Vector3i, before
 	if ao_changed:
 		undo_redo.add_undo_method(_apply_ao_strength.bind(before_ao))
 		undo_redo.add_do_method(_apply_ao_strength.bind(after_ao))
+	if low_poly_changed:
+		undo_redo.add_undo_method(_apply_low_poly.bind(before_low_poly))
+		undo_redo.add_do_method(_apply_low_poly.bind(after_low_poly))
 	_commit_history(false)
 
 
@@ -894,6 +899,22 @@ func commit_ao_strength(before: float) -> void:
 
 func _apply_ao_strength(value: float) -> void:
 	document.ao_strength = value
+	model_settings_changed.emit()
+
+
+func set_low_poly(value: bool, record_history := true) -> void:
+	if edit_busy() or document.low_poly == value:
+		return
+	if record_history:
+		undo_redo.create_action("Set Low Poly Surface")
+		undo_redo.add_undo_method(_apply_low_poly.bind(document.low_poly))
+		undo_redo.add_do_method(_apply_low_poly.bind(value))
+		_commit_history(false)
+	_apply_low_poly(value)
+
+
+func _apply_low_poly(value: bool) -> void:
+	document.low_poly = value
 	model_settings_changed.emit()
 
 
