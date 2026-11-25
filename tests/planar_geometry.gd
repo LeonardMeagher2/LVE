@@ -237,7 +237,7 @@ func _count_workload() -> void:
 			if REGION._twice_area(loop) < 0.0:
 				holes += 1
 	var always := func(_progress: int) -> bool: return true
-	var protected: Dictionary = SURFACE._protect_groups(groups, always)
+	var protected: Dictionary = SURFACE._protect_groups(groups, always, always)
 	var rounds := _mirror_rounds(groups, protected)
 	counts = {
 		"groups": groups.size(),
@@ -381,7 +381,7 @@ func _time_finish(reference: bool, groups: Dictionary, frame: VoxelFrame, origin
 	if reference:
 		result = SURFACE_REFERENCE._finish(groups, frame, origin, bake, always, smooth, corner)
 	else:
-		result = SURFACE._finish(groups, frame, origin, bake, always, smooth, corner)
+		result = SURFACE._finish(groups, frame, origin, bake, always, always, smooth, corner)
 	return [Time.get_ticks_usec() - started_us, result]
 
 
@@ -500,7 +500,7 @@ func _compare() -> void:
 		if box == null:
 			continue
 		compacted += 1
-		if REGION._box_loops(box, Callable()) != REGION._contours(cells, {}, Callable(), true):
+		if REGION._box_loops(box, false, Callable()) != REGION._contours(cells, {}, false, Callable(), true):
 			box_error = "%s differs" % paths_labels[index]
 			break
 	if box_error.is_empty() and compacted != paths_cases.size() - 2:
@@ -647,17 +647,17 @@ func _planar_regions() -> void:
 		var error := _check_mesh(cells, output, _rectangle(Vector2i(-1, -1), Vector2i(14, 10)))
 		var rectangle: PackedVector2Array = REGION.contours(region_cases[4])[0]
 		var ties := Geometry2D.triangulate_polygon(rectangle)
-		var stable := REGION._improve(rectangle, ties.duplicate(), Callable()) == ties
+		var stable := REGION._improve(rectangle, ties.duplicate(), false, Callable()) == ties
 		var translated := PackedVector2Array()
 		for point in points:
 			translated.append(point + Vector2(4096, -4096))
-		stable = stable and output.size() == 1 and REGION._improve(translated, initial.duplicate(), Callable()) == output[0].indices
+		stable = stable and output.size() == 1 and REGION._improve(translated, initial.duplicate(), false, Callable()) == output[0].indices
 		var calls := [0]
 		var stop: int = initial.size() / 3 + 2
 		var cancel := func(_progress):
 			calls[0] += 1
 			return calls[0] != stop
-		var cancelled: bool = REGION._improve(points, initial.duplicate(), cancel).is_empty() and calls[0] == stop
+		var cancelled: bool = REGION._improve(points, initial.duplicate(), true, cancel).is_empty() and calls[0] == stop
 		expect(same_counts and after > before + 0.000001 and error.is_empty() and _conforming(output) and output == REGION.triangulate(cells) and stable and cancelled, "internal flips improve angles and preserve counts, boundaries, ties, determinism, and cancellation" + _detail(error) + " (angles %.6f to %.6f)" % [before, after])
 	)
 	step("Then cancellation discards contours and partial triangulations", func():

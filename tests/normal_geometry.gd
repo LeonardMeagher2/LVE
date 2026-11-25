@@ -95,7 +95,7 @@ func _expect_end_to_end(fixture: Dictionary) -> void:
 	welded[Mesh.ARRAY_VERTEX] = world_positions
 	var always := func(_progress: int) -> bool: return true
 	var bake: RefCounted = ATLAS.new()
-	var reference: Array = SURFACE._build(welded, frame, Vector3.ZERO, bake, always, true)
+	var reference: Array = SURFACE._build(welded, frame, Vector3.ZERO, bake, always, always, true)
 	var direct_positions: PackedVector3Array = direct.surface_arrays[Mesh.ARRAY_VERTEX]
 	for index in direct_positions.size():
 		direct_positions[index] += origin
@@ -107,8 +107,8 @@ func _expect_end_to_end(fixture: Dictionary) -> void:
 func _finish_pair(frame: VoxelFrame, origin: Vector3, builder: VoxelMeshBuilder, colors: PackedColorArray, occupancy: PackedInt32Array, materials: PackedFloat32Array, planes: PackedInt32Array, always: Callable) -> Array:
 	var reference_bake: RefCounted = ATLAS.new()
 	var snapshot_bake: RefCounted = ATLAS.new()
-	var reference: Array = SURFACE._finish(builder._collect_groups(colors, occupancy, materials, planes), frame, origin, reference_bake, always, true)
-	var snapshot_result: Array = SURFACE._finish(builder._collect_groups(colors, occupancy, materials, planes), frame, origin, snapshot_bake, always, true, occupancy)
+	var reference: Array = SURFACE._finish(builder._collect_groups(colors, occupancy, materials, planes), frame, origin, reference_bake, always, always, true)
+	var snapshot_result: Array = SURFACE._finish(builder._collect_groups(colors, occupancy, materials, planes), frame, origin, snapshot_bake, always, always, true, occupancy)
 	return [reference, snapshot_result]
 
 

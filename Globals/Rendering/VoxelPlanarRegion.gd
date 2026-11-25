@@ -55,31 +55,33 @@ static func _latch(checkpoint: Callable, state: Dictionary) -> Callable:
 
 static func raw_loops(cells: Dictionary, checkpoint := Callable()) -> Array[PackedVector2Array]:
 	var state := {"cancelled": false}
+	var live := checkpoint.is_valid()
 	var check := _latch(checkpoint, state)
-	if not check.call(0):
+	if live and not check.call(0):
 		return []
 	var box := _compact(cells)
 	if box == null:
-		return _contours(cells, {}, check, true)
-	return _box_loops(box, check)
+		return _contours(cells, {}, live, check, true)
+	return _box_loops(box, live, check)
 
 
 static func contours(cells: Dictionary, checkpoint := Callable()) -> Array[PackedVector2Array]:
 	var state := {"cancelled": false}
+	var live := checkpoint.is_valid()
 	var check := _latch(checkpoint, state)
-	if not check.call(0):
+	if live and not check.call(0):
 		return []
 	var box := _compact(cells)
 	var loops: Array[PackedVector2Array]
 	if box == null:
-		loops = _contours(cells, {}, check, true)
+		loops = _contours(cells, {}, live, check, true)
 	else:
-		loops = _box_loops(box, check)
+		loops = _box_loops(box, live, check)
 	if state.cancelled:
 		return []
 	var result: Array[PackedVector2Array] = []
 	for loop in loops:
-		if not _check(check, result.size()):
+		if live and not check.call(result.size()):
 			return []
 		result.append(_simplify(loop, {}))
 	return result
@@ -87,11 +89,12 @@ static func contours(cells: Dictionary, checkpoint := Callable()) -> Array[Packe
 
 static func triangulate(cells: Dictionary, protected: Dictionary = {}, checkpoint := Callable(), prepared: Array = [], prepared_units := false) -> Array:
 	var state := {"cancelled": false}
+	var live := checkpoint.is_valid()
 	var check := _latch(checkpoint, state)
-	if not check.call(0) or cells.is_empty():
+	if (live and not check.call(0)) or cells.is_empty():
 		return []
 	if not prepared.is_empty() and (prepared_units or _all_unit_squares(prepared)):
-		return _unit_square_faces(cells, prepared, check)
+		return _unit_square_faces(cells, prepared, live, check)
 	var box := _compact(cells)
 	var queue: Array[Dictionary] = [cells]
 	var queue_boxes: Array[Cells] = [box]
@@ -109,19 +112,19 @@ static func triangulate(cells: Dictionary, protected: Dictionary = {}, checkpoin
 		if first and not prepared.is_empty():
 			loops = prepared
 		elif mask_box == null:
-			loops = _contours(mask, {}, check, true)
+			loops = _contours(mask, {}, live, check, true)
 		else:
-			loops = _box_loops(mask_box, check)
+			loops = _box_loops(mask_box, live, check)
 		first = false
 		if state.cancelled:
 			return []
 		if loops.is_empty():
-			return _unit_faces(cells, check)
+			return _unit_faces(cells, live, check)
 		var parts: Array[PackedVector2Array] = []
 		for loop in loops:
 			parts.append_array(_split_loops(loop))
 		if parts.is_empty():
-			return _unit_faces(cells, check)
+			return _unit_faces(cells, live, check)
 		var cut := 0
 		var has_hole := false
 		for loop in parts:
@@ -141,19 +144,19 @@ static func triangulate(cells: Dictionary, protected: Dictionary = {}, checkpoin
 			var above_box: Cells = null
 			if mask_box == null:
 				for cell: Vector2i in mask:
-					if not check.call(below.size() + above.size()):
+					if live and not check.call(below.size() + above.size()):
 						return []
 					if cell.y < cut:
 						below[cell] = true
 					else:
 						above[cell] = true
 				if below.is_empty() or above.is_empty():
-					return _unit_faces(cells, check)
+					return _unit_faces(cells, live, check)
 			else:
 				below_box = _split_box(mask_box, cut)
 				above_box = _split_box(mask_box, cut, true)
 				if below_box.count == 0 or above_box.count == 0:
-					return _unit_faces(cells, check)
+					return _unit_faces(cells, live, check)
 			queue.append(below)
 			queue.append(above)
 			queue_boxes.append(below_box)
@@ -166,18 +169,18 @@ static func triangulate(cells: Dictionary, protected: Dictionary = {}, checkpoin
 	var result := []
 	var area := 0.0
 	for loop in leaves:
-		if not check.call(result.size()):
+		if live and not check.call(result.size()):
 			return []
 		var points := _simplify(loop, retained)
-		var indices := _triangles(points, check)
+		var indices := _triangles(points, live, check)
 		if state.cancelled:
 			return []
 		if indices.is_empty():
-			return _unit_faces(cells, check)
+			return _unit_faces(cells, live, check)
 		area += _twice_area(points)
 		result.append({"points": points, "indices": indices})
 	if area != cells.size() * 2.0:
-		return _unit_faces(cells, check)
+		return _unit_faces(cells, live, check)
 	return result
 
 
@@ -255,7 +258,7 @@ static func _all_cells_isolated(box: Cells) -> bool:
 	return true
 
 
-static func _box_isolated_loops(box: Cells, check: Callable) -> Array[PackedVector2Array]:
+static func _box_isolated_loops(box: Cells, live: bool, check: Callable) -> Array[PackedVector2Array]:
 	var ox := box.origin.x
 	var oy := box.origin.y
 	var result: Array[PackedVector2Array] = []
@@ -265,7 +268,7 @@ static func _box_isolated_loops(box: Cells, check: Callable) -> Array[PackedVect
 			var bit := 1 << x
 			if row & bit == 0:
 				continue
-			if not _check(check, result.size()):
+			if live and not check.call(result.size()):
 				return []
 			var loop := PackedVector2Array()
 			loop.append(Vector2(ox + x, oy + y))
@@ -276,9 +279,9 @@ static func _box_isolated_loops(box: Cells, check: Callable) -> Array[PackedVect
 	return result
 
 
-static func _box_loops(box: Cells, check: Callable) -> Array[PackedVector2Array]:
+static func _box_loops(box: Cells, live: bool, check: Callable) -> Array[PackedVector2Array]:
 	if _all_cells_isolated(box):
-		return _box_isolated_loops(box, check)
+		return _box_isolated_loops(box, live, check)
 	var starts := _box_edge_starts(box)
 	if starts.is_empty():
 		return []
@@ -302,7 +305,7 @@ static func _box_loops(box: Cells, check: Callable) -> Array[PackedVector2Array]
 		var edge_z: int = start_z
 		var loop := PackedVector2Array()
 		while true:
-			if not _check(check, result.size()):
+			if live and not check.call(result.size()):
 				return []
 			var corner := edge_x - ox + grid_w * (edge_y - oy)
 			state[corner] &= ~(1 << edge_z)
@@ -360,15 +363,15 @@ static func _split_loops(loop: PackedVector2Array) -> Array[PackedVector2Array]:
 	return result
 
 
-static func _contours(cells: Dictionary, protected: Dictionary, checkpoint: Callable, keep_collinear := false) -> Array[PackedVector2Array]:
-	if not _check(checkpoint, 0):
+static func _contours(cells: Dictionary, protected: Dictionary, live: bool, check: Callable, keep_collinear := false) -> Array[PackedVector2Array]:
+	if live and not check.call(0):
 		return []
 	var edges := {}
 	var order := cells.keys()
 	order.sort_custom(func(a: Vector2i, b: Vector2i): return a.y < b.y or (a.y == b.y and a.x < b.x))
 	var starts: Array[Vector3i] = []
 	for cell: Vector2i in order:
-		if not _check(checkpoint, starts.size()):
+		if live and not check.call(starts.size()):
 			return []
 		var corners := [cell, cell + Vector2i.RIGHT, cell + Vector2i.ONE, cell + Vector2i.DOWN]
 		var neighbors := [Vector2i.UP, Vector2i.RIGHT, Vector2i.DOWN, Vector2i.LEFT]
@@ -385,7 +388,7 @@ static func _contours(cells: Dictionary, protected: Dictionary, checkpoint: Call
 		var edge := first
 		var loop := PackedVector2Array()
 		while true:
-			if not _check(checkpoint, edges.size()):
+			if live and not check.call(edges.size()):
 				return []
 			if not edges.has(edge):
 				return []
@@ -430,7 +433,7 @@ static func _simplify(loop: PackedVector2Array, protected: Dictionary) -> Packed
 	return result
 
 
-static func _triangles(points: PackedVector2Array, checkpoint: Callable) -> PackedInt32Array:
+static func _triangles(points: PackedVector2Array, live: bool, check: Callable) -> PackedInt32Array:
 	if _unit_square(points):
 		return PackedInt32Array([3, 0, 1, 1, 2, 3])
 	var turns := _simplify(points, {})
@@ -441,7 +444,7 @@ static func _triangles(points: PackedVector2Array, checkpoint: Callable) -> Pack
 	var indices := PackedInt32Array()
 	var used := {}
 	for offset in range(0, source.size(), 3):
-		if not _check(checkpoint, offset):
+		if live and not check.call(offset):
 			return PackedInt32Array()
 		var a: int = lookup[turns[source[offset]]]
 		var b: int = lookup[turns[source[offset + 1]]]
@@ -460,7 +463,7 @@ static func _triangles(points: PackedVector2Array, checkpoint: Callable) -> Pack
 			continue
 		var inserted := false
 		for offset in range(0, indices.size(), 3):
-			if not _check(checkpoint, offset):
+			if live and not check.call(offset):
 				return PackedInt32Array()
 			for side in 3:
 				var a := indices[offset + side]
@@ -480,11 +483,11 @@ static func _triangles(points: PackedVector2Array, checkpoint: Callable) -> Pack
 				break
 		if not inserted:
 			return PackedInt32Array()
-	indices = _improve(points, indices, checkpoint)
+	indices = _improve(points, indices, live, check)
 	var boundary := {}
 	var area := 0.0
 	for offset in range(0, indices.size(), 3):
-		if not _check(checkpoint, offset):
+		if live and not check.call(offset):
 			return PackedInt32Array()
 		var a := points[indices[offset]]
 		var b := points[indices[offset + 1]]
@@ -539,23 +542,23 @@ static func _all_unit_squares(loops: Array) -> bool:
 static var _UNIT_SQUARE_INDICES := PackedInt32Array([3, 0, 1, 1, 2, 3])
 
 
-static func _unit_square_faces(cells: Dictionary, loops: Array, check: Callable) -> Array:
+static func _unit_square_faces(cells: Dictionary, loops: Array, live: bool, check: Callable) -> Array:
 	var result := []
 	for loop: PackedVector2Array in loops:
-		if not check.call(result.size()):
+		if live and not check.call(result.size()):
 			return []
 		result.append({"points": loop, "indices": _UNIT_SQUARE_INDICES})
 	if result.size() != cells.size():
-		return _unit_faces(cells, check)
+		return _unit_faces(cells, live, check)
 	return result
 
 
-static func _improve(points: PackedVector2Array, indices: PackedInt32Array, checkpoint: Callable) -> PackedInt32Array:
+static func _improve(points: PackedVector2Array, indices: PackedInt32Array, live: bool, check: Callable) -> PackedInt32Array:
 	var adjacency := {}
 	var queue: Array[Vector2i] = []
 	var pending := {}
 	for base in range(0, indices.size(), 3):
-		if not _check(checkpoint, base):
+		if live and not check.call(base):
 			return PackedInt32Array()
 		for side in 3:
 			var edge := Vector2i(indices[base + side], indices[base + (side + 1) % 3])
@@ -565,7 +568,7 @@ static func _improve(points: PackedVector2Array, indices: PackedInt32Array, chec
 	var flips := 0
 	var limit: int = indices.size() / 3 * 8
 	while cursor < queue.size() and flips < limit:
-		if not _check(checkpoint, cursor):
+		if live and not check.call(cursor):
 			return PackedInt32Array()
 		var edge := queue[cursor]
 		cursor += 1
@@ -640,17 +643,13 @@ static func _twice_area(points: PackedVector2Array) -> float:
 	return area
 
 
-static func _unit_faces(cells: Dictionary, checkpoint: Callable) -> Array:
+static func _unit_faces(cells: Dictionary, live: bool, check: Callable) -> Array:
 	var result := []
 	var order := cells.keys()
 	order.sort_custom(func(a: Vector2i, b: Vector2i): return a.y < b.y or (a.y == b.y and a.x < b.x))
 	for cell: Vector2i in order:
-		if not _check(checkpoint, result.size()):
+		if live and not check.call(result.size()):
 			return []
 		var points := PackedVector2Array([Vector2(cell), Vector2(cell + Vector2i.RIGHT), Vector2(cell + Vector2i.ONE), Vector2(cell + Vector2i.DOWN)])
 		result.append({"points": points, "indices": PackedInt32Array([0, 1, 2, 0, 2, 3])})
 	return result
-
-
-static func _check(checkpoint: Callable, progress: int) -> bool:
-	return not checkpoint.is_valid() or checkpoint.call(progress)

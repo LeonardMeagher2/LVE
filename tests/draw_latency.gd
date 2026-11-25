@@ -431,7 +431,7 @@ func _time_stages() -> Array:
 	var bake: RefCounted = atlas.new()
 	var always := func(_progress: int) -> bool: return true
 	var started_us := Time.get_ticks_usec()
-	var built: Array = surface._build(source_arrays, frame, Vector3.ZERO, bake, always, false)
+	var built: Array = surface._build(source_arrays, frame, Vector3.ZERO, bake, always, always, false)
 	var regions_us := Time.get_ticks_usec() - started_us
 	started_us = Time.get_ticks_usec()
 	bake.bake(always)
@@ -456,14 +456,14 @@ func _time_substages() -> Array:
 	var grouping_us := Time.get_ticks_usec() - started_us
 	var alone: Dictionary = surface._groups_from_arrays(greedy.surface_arrays, frame, Vector3.ZERO, always, false)
 	started_us = Time.get_ticks_usec()
-	var protected: Dictionary = surface._protect_groups(alone, always)
+	var protected: Dictionary = surface._protect_groups(alone, always, always)
 	var protect_us := Time.get_ticks_usec() - started_us
 	started_us = Time.get_ticks_usec()
-	surface._triangulate_groups(alone, protected, always)
+	surface._triangulate_groups(alone, protected, always, always)
 	var triangulate_us := Time.get_ticks_usec() - started_us
 	var bake: RefCounted = atlas.new()
 	started_us = Time.get_ticks_usec()
-	surface._finish(groups, frame, Vector3.ZERO, bake, always, false)
+	surface._finish(groups, frame, Vector3.ZERO, bake, always, always, false)
 	var finish_us := Time.get_ticks_usec() - started_us
 	return [grouping_us, protect_us, triangulate_us, finish_us - protect_us - triangulate_us]
 

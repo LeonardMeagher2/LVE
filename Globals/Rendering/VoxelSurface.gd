@@ -24,11 +24,12 @@ var normal_us := 0
 func run(source_arrays: Array, frame: VoxelFrame, origin := Vector3.ZERO, checkpoint := Callable(), smooth_normals := false, ao_strength := 0.0) -> void:
 	atlas = ATLAS.new()
 	error = OK
+	var raw := checkpoint
 	checkpoint = _latched_checkpoint(checkpoint)
 	var timers := {}
 	if profile:
 		timers = {"protect": 0, "triangulate": 0, "vertices": 0}
-	arrays = _build(source_arrays, frame, origin, atlas, checkpoint, smooth_normals, ao_strength, timers)
+	arrays = _build(source_arrays, frame, origin, atlas, checkpoint, raw, smooth_normals, ao_strength, timers)
 	if profile:
 		protect_us = timers.get("protect", 0)
 		triangulate_us = timers.get("triangulate", 0)
@@ -55,11 +56,12 @@ func run(source_arrays: Array, frame: VoxelFrame, origin := Vector3.ZERO, checkp
 func run_groups(groups: Dictionary, frame: VoxelFrame, origin := Vector3.ZERO, checkpoint := Callable(), smooth_normals := false, corner_occupancy: Variant = null, ao_strength := 0.0) -> void:
 	atlas = ATLAS.new()
 	error = OK
+	var raw := checkpoint
 	checkpoint = _latched_checkpoint(checkpoint)
 	var timers := {}
 	if profile:
 		timers = {"protect": 0, "triangulate": 0, "vertices": 0}
-	arrays = _finish(groups, frame, origin, atlas, checkpoint, smooth_normals, corner_occupancy, ao_strength, timers)
+	arrays = _finish(groups, frame, origin, atlas, checkpoint, raw, smooth_normals, corner_occupancy, ao_strength, timers)
 	if profile:
 		protect_us = timers.get("protect", 0)
 		triangulate_us = timers.get("triangulate", 0)
@@ -84,9 +86,10 @@ func run_groups(groups: Dictionary, frame: VoxelFrame, origin := Vector3.ZERO, c
 
 
 static func merge(source_arrays: Array, checkpoint := Callable()) -> Array:
+	var raw := checkpoint
 	checkpoint = _latched_checkpoint(checkpoint)
 	var bake := ATLAS.new()
-	var result := _build(source_arrays, null, Vector3.ZERO, bake, checkpoint, false, 0.0)
+	var result := _build(source_arrays, null, Vector3.ZERO, bake, checkpoint, raw, false, 0.0)
 	if result.is_empty() or bake.bake(checkpoint) != OK:
 		return []
 	if not _finish_uvs(result, bake, checkpoint):
@@ -102,13 +105,13 @@ static func _latched_checkpoint(checkpoint: Callable) -> Callable:
 		return not state.cancelled
 
 
-static func _build(source_arrays: Array, frame: VoxelFrame, world_origin: Vector3, bake: RefCounted, checkpoint: Callable, smooth_normals: bool, ao_strength := 0.0, timers := {}) -> Array:
+static func _build(source_arrays: Array, frame: VoxelFrame, world_origin: Vector3, bake: RefCounted, checkpoint: Callable, raw: Callable, smooth_normals: bool, ao_strength := 0.0, timers := {}) -> Array:
 	if not checkpoint.call(0):
 		return []
 	var groups: Variant = _groups_from_arrays(source_arrays, frame, world_origin, checkpoint, smooth_normals, ao_strength)
 	if groups == null:
 		return []
-	return _finish(groups, frame, world_origin, bake, checkpoint, smooth_normals, null, ao_strength, timers)
+	return _finish(groups, frame, world_origin, bake, checkpoint, raw, smooth_normals, null, ao_strength, timers)
 
 
 static func _groups_from_arrays(source_arrays: Array, frame: VoxelFrame, world_origin: Vector3, checkpoint: Callable, smooth_normals: bool, ao_strength := 0.0) -> Variant:
@@ -171,7 +174,7 @@ static func _groups_from_arrays(source_arrays: Array, frame: VoxelFrame, world_o
 	return groups
 
 
-static func _finish(groups: Dictionary, frame: VoxelFrame, world_origin: Vector3, bake: RefCounted, checkpoint: Callable, smooth_normals: bool, corner_occupancy: Variant = null, ao_strength := 0.0, timers := {}) -> Array:
+static func _finish(groups: Dictionary, frame: VoxelFrame, world_origin: Vector3, bake: RefCounted, checkpoint: Callable, raw: Callable, smooth_normals: bool, corner_occupancy: Variant = null, ao_strength := 0.0, timers := {}) -> Array:
 	var use_corner_normals := smooth_normals and (frame != null or corner_occupancy != null)
 	var use_ao := ao_strength > 0.0 and frame != null
 	var result := []
@@ -182,13 +185,13 @@ static func _finish(groups: Dictionary, frame: VoxelFrame, world_origin: Vector3
 	var indices := PackedInt32Array()
 	var patch_ids := PackedInt32Array()
 	var protect_started := Time.get_ticks_usec() if not timers.is_empty() else 0
-	var protected := _protect_groups(groups, checkpoint, timers)
+	var protected := _protect_groups(groups, checkpoint, raw, timers)
 	if not timers.is_empty():
 		timers["protect"] = Time.get_ticks_usec() - protect_started
 	if protected.is_empty():
 		return []
 	var triangulate_started := Time.get_ticks_usec() if not timers.is_empty() else 0
-	if not _triangulate_groups(groups, protected, checkpoint):
+	if not _triangulate_groups(groups, protected, checkpoint, raw):
 		return []
 	if not timers.is_empty():
 		timers["triangulate"] = Time.get_ticks_usec() - triangulate_started
@@ -356,7 +359,7 @@ static func _finish(groups: Dictionary, frame: VoxelFrame, world_origin: Vector3
 static var EMPTY_DICT := {}
 
 
-static func _protect_groups(groups: Dictionary, checkpoint: Callable, timers := {}) -> Dictionary:
+static func _protect_groups(groups: Dictionary, checkpoint: Callable, raw: Callable, timers := {}) -> Dictionary:
 	var protected_positions := {}
 	var protected_planes := {}
 	var loops_us := 0
@@ -369,7 +372,7 @@ static func _protect_groups(groups: Dictionary, checkpoint: Callable, timers := 
 		protected_planes[plane] = {}
 		var axis0: int = plane.x
 		var t0 := Time.get_ticks_usec() if not timers.is_empty() else 0
-		group.raw_loops = REGION.raw_loops(group.cells, checkpoint)
+		group.raw_loops = REGION.raw_loops(group.cells, raw)
 		var t1 := Time.get_ticks_usec() if not timers.is_empty() else 0
 		loops_us += t1 - t0
 		var turns := 0
@@ -418,7 +421,7 @@ static func _protect_groups(groups: Dictionary, checkpoint: Callable, timers := 
 	return {"positions": protected_positions, "planes": protected_planes}
 
 
-static func _triangulate_groups(groups: Dictionary, protected: Dictionary, checkpoint: Callable) -> bool:
+static func _triangulate_groups(groups: Dictionary, protected: Dictionary, checkpoint: Callable, raw: Callable) -> bool:
 	var protected_positions: Dictionary = protected.positions
 	var protected_planes: Dictionary = protected.planes
 	while true:
@@ -426,7 +429,7 @@ static func _triangulate_groups(groups: Dictionary, protected: Dictionary, check
 		for group: Dictionary in groups.values():
 			if not checkpoint.call(0):
 				return false
-			group.polygons = REGION.triangulate(group.cells, protected_planes[group.plane], checkpoint, group.raw_loops, group.unit_loops)
+			group.polygons = REGION.triangulate(group.cells, protected_planes[group.plane], raw, group.raw_loops, group.unit_loops)
 			if group.polygons.is_empty():
 				return false
 			if not group.unit_loops:
