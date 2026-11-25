@@ -6,6 +6,8 @@ const FIELD_PAD := 3
 const OWNED_PAD := 1
 const SEARCH_RADIUS := 3
 const REGULARIZATION := 0.01
+const ATLAS := preload("./VoxelAtlas.gd")
+const AO_LEVELS: Array[float] = [0.0, 1.0 / 3.0, 2.0 / 3.0, 1.0]
 const NO_CELL := Vector3i(2147483647, 2147483647, 2147483647)
 const CORNERS := [
 	Vector3i(0, 0, 0), Vector3i(1, 0, 0), Vector3i(0, 1, 0), Vector3i(1, 1, 0),
@@ -30,6 +32,9 @@ const OWNER_OFFSETS := [
 var arrays: Array = []
 var merge_faces := false
 var smooth_normals := false
+var ao_strength := 0.0
+var atlas: RefCounted
+var material_uvs := {}
 var triangle_count := 0
 var surface_cells := 0
 var build_us := 0
@@ -50,15 +55,16 @@ var _cell_vertex := PackedInt32Array()
 var _cell_positions := PackedVector3Array()
 var _cell_solids: Array = []
 var _mesh_triangles := PackedInt32Array()
-var _mesh_colors: Array[Color] = []
 var _mesh_materials: Array[PackedFloat32Array] = []
+var _vertex_ao := PackedFloat32Array()
+var _uvs := PackedVector2Array()
 var _positions := PackedVector3Array()
 var _normals := PackedVector3Array()
 var _colors := PackedColorArray()
 var _indices := PackedInt32Array()
 
 
-func build_region(frame: VoxelFrame, owned_min: Vector3i, owned_size: Vector3i) -> void:
+func build_region(frame: VoxelFrame, owned_min: Vector3i, owned_size: Vector3i, shared_atlas: RefCounted = null, shared_material_uvs: Dictionary = {}) -> void:
 	var started := Time.get_ticks_usec()
 	_frame = frame
 	_owned_min = owned_min
@@ -70,12 +76,14 @@ func build_region(frame: VoxelFrame, owned_min: Vector3i, owned_size: Vector3i) 
 	_positions = PackedVector3Array()
 	_normals = PackedVector3Array()
 	_colors = PackedColorArray()
+	_uvs = PackedVector2Array()
 	_indices = PackedInt32Array()
 	_cell_positions = PackedVector3Array()
 	_cell_solids = []
 	_mesh_triangles = PackedInt32Array()
-	_mesh_colors = []
 	_mesh_materials = []
+	atlas = null
+	material_uvs = {}
 	if owned_size.x <= 0 or owned_size.y <= 0 or owned_size.z <= 0:
 		build_us = Time.get_ticks_usec() - started
 		return
@@ -91,10 +99,13 @@ func build_region(frame: VoxelFrame, owned_min: Vector3i, owned_size: Vector3i) 
 	_orient_triangles()
 	if merge_faces:
 		_merge_coplanar_faces()
+	_build_material_atlas(shared_atlas, shared_material_uvs)
+	_build_vertex_ao()
 	_expand()
 	arrays[Mesh.ARRAY_VERTEX] = _positions
 	arrays[Mesh.ARRAY_NORMAL] = _normals
 	arrays[Mesh.ARRAY_COLOR] = _colors
+	arrays[Mesh.ARRAY_TEX_UV] = _uvs
 	arrays[Mesh.ARRAY_INDEX] = _indices
 	triangle_count = _indices.size() / 3
 	build_us = Time.get_ticks_usec() - started
@@ -125,6 +136,7 @@ func _empty_arrays() -> Array:
 	result[Mesh.ARRAY_VERTEX] = PackedVector3Array()
 	result[Mesh.ARRAY_NORMAL] = PackedVector3Array()
 	result[Mesh.ARRAY_COLOR] = PackedColorArray()
+	result[Mesh.ARRAY_TEX_UV] = PackedVector2Array()
 	result[Mesh.ARRAY_INDEX] = PackedInt32Array()
 	return result
 
@@ -584,7 +596,6 @@ func _add_triangle(first: int, second: int, third: int) -> void:
 	_mesh_triangles.append(second)
 	_mesh_triangles.append(third)
 	_mesh_materials.append(material)
-	_mesh_colors.append(VoxelFrame.material_color(material))
 
 
 func _merge_coplanar_faces() -> void:
@@ -595,7 +606,6 @@ func _merge_coplanar_faces() -> void:
 	var visited := PackedByteArray()
 	visited.resize(total)
 	var result := PackedInt32Array()
-	var colors: Array[Color] = []
 	var materials: Array[PackedFloat32Array] = []
 	for seed in total:
 		if visited[seed] != 0:
@@ -606,7 +616,7 @@ func _merge_coplanar_faces() -> void:
 		var c := _triangle_vertex(seed, 2)
 		var normal := (b - a).cross(c - a)
 		if normal.length_squared() < 1.0e-12:
-			_append_triangle(result, colors, materials, seed)
+			_append_triangle(result, materials, seed)
 			continue
 		normal = normal.normalized()
 		var offset := normal.dot(a)
@@ -627,29 +637,26 @@ func _merge_coplanar_faces() -> void:
 					visited[neighbor] = 1
 					stack.append(neighbor)
 		if group.size() == 1:
-			_append_triangle(result, colors, materials, seed)
+			_append_triangle(result, materials, seed)
 			continue
 		var merged := _triangulate_group(group, normal)
 		if merged.is_empty():
 			for triangle: int in group:
-				_append_triangle(result, colors, materials, triangle)
+				_append_triangle(result, materials, triangle)
 			continue
 		for index in range(0, merged.size(), 3):
 			result.append(merged[index])
 			result.append(merged[index + 1])
 			result.append(merged[index + 2])
-			colors.append(_mesh_colors[seed])
 			materials.append(_mesh_materials[seed])
 	_mesh_triangles = result
-	_mesh_colors = colors
 	_mesh_materials = materials
 
 
-func _append_triangle(result: PackedInt32Array, colors: Array[Color], materials: Array[PackedFloat32Array], triangle: int) -> void:
+func _append_triangle(result: PackedInt32Array, materials: Array[PackedFloat32Array], triangle: int) -> void:
 	result.append(_mesh_triangles[triangle * 3])
 	result.append(_mesh_triangles[triangle * 3 + 1])
 	result.append(_mesh_triangles[triangle * 3 + 2])
-	colors.append(_mesh_colors[triangle])
 	materials.append(_mesh_materials[triangle])
 
 
@@ -783,6 +790,92 @@ func _simplify_loop(points: PackedVector2Array) -> PackedInt32Array:
 	return kept
 
 
+func _build_material_atlas(shared_atlas: RefCounted, shared_material_uvs: Dictionary) -> void:
+	if not shared_material_uvs.is_empty():
+		atlas = shared_atlas
+		material_uvs = shared_material_uvs
+		return
+	atlas = shared_atlas if shared_atlas != null else ATLAS.new()
+	var patches := {}
+	for material in _mesh_materials:
+		if patches.has(material):
+			continue
+		patches[material] = atlas.add_patch(material, Vector2i.ONE)
+	if atlas.bake(func(_progress: int) -> bool: return true) != OK:
+		return
+	material_uvs = {}
+	for material in patches:
+		var corners: PackedVector2Array = atlas.patch_uvs(patches[material])
+		material_uvs[material] = (corners[0] + corners[2]) * 0.5
+
+
+func _build_vertex_ao() -> void:
+	_vertex_ao = PackedFloat32Array()
+	_vertex_ao.resize(_cell_positions.size())
+	_vertex_ao.fill(1.0)
+	if ao_strength <= 0.0:
+		return
+	var normals := PackedVector3Array()
+	normals.resize(_cell_positions.size())
+	for triangle in range(0, _mesh_triangles.size(), 3):
+		var first := _mesh_triangles[triangle]
+		var second := _mesh_triangles[triangle + 1]
+		var third := _mesh_triangles[triangle + 2]
+		var normal := (_cell_positions[second] - _cell_positions[first]).cross(_cell_positions[third] - _cell_positions[first])
+		normals[first] += normal
+		normals[second] += normal
+		normals[third] += normal
+	for index in normals.size():
+		normals[index] = normals[index].normalized()
+	for index in _cell_positions.size():
+		var normal := normals[index]
+		if normal.length_squared() < 0.5:
+			continue
+		var vertex := _cell_positions[index]
+		var source := NO_CELL
+		var best := 1.0e9
+		for cell: Vector3i in _cell_solids[index]:
+			var distance := vertex.distance_squared_to(Vector3(cell) + Vector3.ONE * 0.5)
+			if distance < best:
+				best = distance
+				source = cell
+		if source == NO_CELL:
+			continue
+		var axis := normal.abs().max_axis_index()
+		var direction := 1 if normal[axis] > 0.0 else -1
+		var outside := source
+		outside[axis] += direction
+		if _solid_at(outside):
+			continue
+		var first_axis := (axis + 1) % 3
+		var second_axis := (axis + 2) % 3
+		var far_first := 1 if vertex[first_axis] > source[first_axis] + 0.5 else -1
+		var far_second := 1 if vertex[second_axis] > source[second_axis] + 0.5 else -1
+		var side_first := outside
+		side_first[first_axis] += far_first
+		var side_second := outside
+		side_second[second_axis] += far_second
+		var diagonal := side_first
+		diagonal[second_axis] += far_second
+		var level := _ao_level(_solid_at(side_first), _solid_at(side_second), _solid_at(diagonal))
+		_vertex_ao[index] = 1.0 - (1.0 - AO_LEVELS[level]) * ao_strength
+
+
+static func _ao_level(first: bool, second: bool, diagonal: bool) -> int:
+	if first and second:
+		return 0
+	return 3 - (1 if first else 0) - (1 if second else 0) - (1 if diagonal else 0)
+
+
+func _solid_at(cell: Vector3i) -> bool:
+	var x := cell.x - _grid_min.x
+	var y := cell.y - _grid_min.y
+	var z := cell.z - _grid_min.z
+	if x < 0 or x >= _grid_size.x or y < 0 or y >= _grid_size.y or z < 0 or z >= _grid_size.z:
+		return false
+	return _solid[_grid_index(x, y, z)] != 0
+
+
 func _expand() -> void:
 	var smooth := PackedVector3Array()
 	if smooth_normals:
@@ -817,7 +910,10 @@ func _expand() -> void:
 			second_normal = normal
 		if third_normal.length_squared() < 0.5:
 			third_normal = normal
-		var color := _mesh_colors[triangle / 3]
+		var uv: Vector2 = material_uvs.get(_mesh_materials[triangle / 3], Vector2.ZERO)
+		var first_ao := _vertex_ao[first]
+		var second_ao := _vertex_ao[second]
+		var third_ao := _vertex_ao[third]
 		var base := _positions.size()
 		_positions.append(a - _origin)
 		_positions.append(b - _origin)
@@ -825,9 +921,12 @@ func _expand() -> void:
 		_normals.append(first_normal)
 		_normals.append(second_normal)
 		_normals.append(third_normal)
-		_colors.append(color)
-		_colors.append(color)
-		_colors.append(color)
+		_colors.append(Color(first_ao, first_ao, first_ao, 1.0))
+		_colors.append(Color(second_ao, second_ao, second_ao, 1.0))
+		_colors.append(Color(third_ao, third_ao, third_ao, 1.0))
+		_uvs.append(uv)
+		_uvs.append(uv)
+		_uvs.append(uv)
 		_indices.append(base)
 		_indices.append(base + 2)
 		_indices.append(base + 1)

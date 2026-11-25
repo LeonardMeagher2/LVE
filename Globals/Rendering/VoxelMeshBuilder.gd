@@ -11,6 +11,8 @@ const SURFACE := preload("./VoxelSurface.gd")
 var source_frame: VoxelFrame
 var chunk_location := Vector3i.ZERO
 var low_poly := false
+var shared_atlas: RefCounted
+var shared_uvs := {}
 var smooth_normals := false
 var ao_strength := 0.0
 var texture_materials := true
@@ -43,11 +45,16 @@ func run() -> void:
 		var low_poly_started_us := Time.get_ticks_usec() if profile else 0
 		var mesher := VoxelLowPolyMesh.new()
 		mesher.smooth_normals = smooth_normals
-		mesher.build_region(source_frame, chunk_location * CHUNK_SIZE, Vector3i.ONE * CHUNK_SIZE)
+		mesher.ao_strength = ao_strength
+		mesher.build_region(source_frame, chunk_location * CHUNK_SIZE, Vector3i.ONE * CHUNK_SIZE, shared_atlas, shared_uvs)
 		surface_arrays = mesher.arrays
-		atlas = null
-		atlas_size = Vector2i.ZERO
-		geometry_bytes = surface_arrays[Mesh.ARRAY_VERTEX].size() * 40 + surface_arrays[Mesh.ARRAY_INDEX].size() * 4
+		atlas = mesher.atlas
+		atlas_size = atlas.size if atlas != null else Vector2i.ZERO
+		if atlas != null and atlas.albedo:
+			atlas_albedo = atlas.albedo.get_data()
+			atlas_orm = atlas.orm.get_data()
+			atlas_emission = atlas.emission.get_data()
+		geometry_bytes = surface_arrays[Mesh.ARRAY_VERTEX].size() * 48 + surface_arrays[Mesh.ARRAY_INDEX].size() * 4
 		if profile:
 			scan_us += Time.get_ticks_usec() - low_poly_started_us
 		source_frame = null

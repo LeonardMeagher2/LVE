@@ -16,8 +16,6 @@ static var _active_renderer_count := 0
 var _chunk_notice_frame := -1
 var _chunk_notice_pending := false
 static var _surface_job_limit := 0
-var _low_poly_material_base: StandardMaterial3D
-var _low_poly_unshaded: StandardMaterial3D
 
 
 static func _job_limit() -> int:
@@ -287,21 +285,6 @@ func _process(_delta: float) -> void:
 	_report_activity()
 
 
-func _low_poly_material() -> StandardMaterial3D:
-	if _low_poly_material_base == null:
-		_low_poly_material_base = StandardMaterial3D.new()
-		_low_poly_material_base.vertex_color_use_as_albedo = true
-		_low_poly_material_base.vertex_color_is_srgb = true
-		_low_poly_material_base.roughness = 0.9
-		_low_poly_material_base.metallic = 0.0
-	if not unshaded:
-		return _low_poly_material_base
-	if _low_poly_unshaded == null:
-		_low_poly_unshaded = _low_poly_material_base.duplicate()
-		_low_poly_unshaded.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	return _low_poly_unshaded
-
-
 func _work_slice_us() -> int:
 	return State.WORK_SLICE_US
 
@@ -471,8 +454,6 @@ static func _cache_surface(surface_key: PackedInt64Array, chunk_surface: ArrayMe
 
 
 func _build_material(surface_job: VoxelMeshBuilder) -> StandardMaterial3D:
-	if surface_job.low_poly:
-		return _low_poly_material()
 	if surface_job.atlas_size.x == 0:
 		return null
 	var shared_material: Material = mesh.surface_get_material(0) if mesh and mesh.get_surface_count() > 0 else null

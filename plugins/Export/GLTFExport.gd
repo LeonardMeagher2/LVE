@@ -40,6 +40,28 @@ class ExportJob extends VoxelFrame.EditJob:
 			var normals := PackedVector3Array()
 			var colors := PackedColorArray()
 			var indices := PackedInt32Array()
+			var uvs := PackedVector2Array()
+			var frame_atlas: RefCounted = null
+			var frame_uvs := {}
+			if low_poly:
+				frame_atlas = ATLAS.new()
+				var seen := {}
+				for chunk: VoxelFrame.Chunk in frame.chunks.values():
+					var materials: PackedFloat32Array = chunk.materials
+					for base in range(0, materials.size(), VoxelFrame.MATERIAL_STRIDE):
+						var material := materials.slice(base, base + VoxelFrame.MATERIAL_STRIDE)
+						if seen.has(material):
+							continue
+						seen[material] = true
+						frame_uvs[material] = frame_atlas.add_patch(material, Vector2i.ONE)
+				var bake_error: Error = frame_atlas.bake(func(_progress: int) -> bool: return true)
+				if bake_error != OK:
+					error = bake_error
+					return
+				for material in frame_uvs:
+					var corners: PackedVector2Array = frame_atlas.patch_uvs(frame_uvs[material])
+					frame_uvs[material] = (corners[0] + corners[2]) * 0.5
+				frame_atlases.append(frame_atlas)
 			for chunk_location: Vector3i in frame.chunks:
 				if not checkpoint(completed):
 					return
@@ -47,6 +69,8 @@ class ExportJob extends VoxelFrame.EditJob:
 				mesh_job.source_frame = frame
 				mesh_job.chunk_location = chunk_location
 				mesh_job.low_poly = low_poly
+				mesh_job.shared_atlas = frame_atlas
+				mesh_job.shared_uvs = frame_uvs
 				mesh_job.smooth_normals = smooth_normals
 				mesh_job.ao_strength = ao_strength
 				mesh_job.texture_materials = false
@@ -59,16 +83,31 @@ class ExportJob extends VoxelFrame.EditJob:
 					min_position = min_position.min(world_position)
 					max_position = max_position.max(world_position)
 				normals.append_array(mesh_job.surface_arrays[Mesh.ARRAY_NORMAL])
-				for color: Color in mesh_job.surface_arrays[Mesh.ARRAY_COLOR]:
-					colors.append(color.srgb_to_linear())
+				if low_poly:
+					colors.append_array(mesh_job.surface_arrays[Mesh.ARRAY_COLOR])
+					uvs.append_array(mesh_job.surface_arrays[Mesh.ARRAY_TEX_UV])
+				else:
+					for color: Color in mesh_job.surface_arrays[Mesh.ARRAY_COLOR]:
+						colors.append(color.srgb_to_linear())
 				for triangle_index: int in mesh_job.surface_arrays[Mesh.ARRAY_INDEX]:
 					indices.append(first_vertex + triangle_index)
 				completed += 1
+			if low_poly:
+				var used_uvs := {}
+				for uv: Vector2 in uvs:
+					used_uvs[uv] = true
+				frame_atlas.has_transparency = false
+				for material in frame_uvs:
+					if used_uvs.has(frame_uvs[material]) and VoxelFrame.material_color(material).a < 1.0:
+						frame_atlas.has_transparency = true
+						break
 			var arrays := []
 			arrays.resize(Mesh.ARRAY_MAX)
 			arrays[Mesh.ARRAY_VERTEX] = positions
 			arrays[Mesh.ARRAY_NORMAL] = normals
 			arrays[Mesh.ARRAY_COLOR] = colors
+			if low_poly:
+				arrays[Mesh.ARRAY_TEX_UV] = uvs
 			arrays[Mesh.ARRAY_INDEX] = indices
 			frame_surfaces.append(arrays)
 		checkpoint(completed)
@@ -237,18 +276,10 @@ func export_gltf(path: String, center_origin := true, tag_index := -1, overrides
 		var frame_node: Node3D
 		var arrays := job.frame_surfaces[frame_index]
 		if not arrays[Mesh.ARRAY_VERTEX].is_empty():
-			var material: StandardMaterial3D
-			if job.low_poly:
-				material = StandardMaterial3D.new()
-				material.vertex_color_use_as_albedo = true
-				material.vertex_color_is_srgb = false
-				material.roughness = 0.9
-				material.metallic = 0.0
-			else:
-				material = job.frame_atlases[frame_index].create_material()
+			var material: StandardMaterial3D = job.frame_atlases[frame_index].create_material()
 			if job.unlit:
 				material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-			if job.ao_strength > 0.0 and not job.low_poly:
+			if job.ao_strength > 0.0:
 				material.vertex_color_use_as_albedo = true
 				material.vertex_color_is_srgb = false
 			var frame_mesh := ArrayMesh.new()

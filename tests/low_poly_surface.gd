@@ -10,6 +10,8 @@ var voxel_mesh: Mesh
 var low_poly_mesh: Mesh
 var exporter: Node
 var export_error := OK
+var first_mesh: Mesh
+var cached_surfaces := 0
 
 
 func _ready() -> void:
@@ -24,10 +26,13 @@ func _run() -> void:
 		State.document.smooth_normals = false
 		var cells := {}
 		var material := VoxelFrame.material(Color(1.0, 0.0, 1.0))
+		var metal := VoxelFrame.material(Color(0.8, 0.2, 0.2), Color(0.2, 0.0, 0.0), 0.9, 0.2)
 		for x in range(-1, 2):
 			for y in range(-1, 2):
 				for z in range(-1, 2):
-					cells[Vector3i(x, y, z)] = material
+					if x < 1 and y < 1 and z < 1:
+						continue
+					cells[Vector3i(x, y, z)] = metal if x > 0 else material
 		State.get_current_voxel_frame().set_cells(cells)
 		State.frames_changed.emit()
 		renderer = editor_viewport().get_node("ViewportScene/VoxelRenderer")
@@ -49,6 +54,8 @@ func _run() -> void:
 		expect(low_poly_mesh != null and low_poly_mesh != voxel_mesh, "the chunk mesh is rebuilt for low poly")
 		var material := renderer._chunk_instances[Vector3i.ZERO].material_override as StandardMaterial3D
 		expect(material != null and material.vertex_color_use_as_albedo, "the low poly chunk uses the vertex colour material")
+		expect(material != null and material.albedo_texture != null and material.roughness_texture != null and material.metallic_texture != null and material.emission_texture != null, "the low poly chunk keeps its material textures")
+		expect(_all_uvs_match_vertices(), "the low poly chunks keep one UV per vertex")
 	)
 	step("When the document enables smooth normals", func():
 		State.document.smooth_normals = true
@@ -64,7 +71,24 @@ func _run() -> void:
 		State.model_settings_changed.emit()
 	)
 	await _settle()
+	step("When ambient occlusion is disabled", func():
+		State.document.ao_strength = 0.0
+		State.model_settings_changed.emit()
+	)
 	await _settle()
+	step("Then the low poly colours are open", func():
+		expect(_all_open_colors(), "zero strength leaves every low poly colour open")
+	)
+	step("When ambient occlusion is enabled", func():
+		State.document.ao_strength = 1.0
+		State.model_settings_changed.emit()
+	)
+	await _settle()
+	step("Then the low poly crease darkens", func():
+		expect(_all_has_dark_color(), "the low poly crease darkens with ambient occlusion")
+		var material := renderer._chunk_instances[Vector3i.ZERO].material_override as StandardMaterial3D
+		expect(material != null and material.vertex_color_use_as_albedo, "the low poly material uses the ambient occlusion colours")
+	)
 	exporter = plugin("ExportPlugin")
 	export_error = await exporter.export_gltf(MODEL_PATH)
 	step("Then the glTF keeps the low poly mesh", func():
@@ -83,6 +107,15 @@ func _run() -> void:
 				colors += mesh.surface_get_arrays(surface)[Mesh.ARRAY_COLOR].size()
 			expect(triangles > 0, "the exported low poly mesh has triangles")
 			expect(colors == triangles * 3, "the exported low poly mesh keeps one colour per vertex")
+			var uvs := 0
+			for surface in mesh.get_surface_count():
+				uvs += mesh.surface_get_arrays(surface)[Mesh.ARRAY_TEX_UV].size()
+			expect(uvs == triangles * 3, "the exported low poly mesh keeps its UVs")
+			var distinct_uvs := {}
+			for surface in mesh.get_surface_count():
+				for uv: Vector2 in mesh.surface_get_arrays(surface)[Mesh.ARRAY_TEX_UV]:
+					distinct_uvs[uv] = true
+			expect(distinct_uvs.size() >= 2, "the exported low poly mesh keeps one UV per material")
 			var arrays := mesh.surface_get_arrays(0)
 			var welded := PackedInt32Array()
 			var lookup := {}
@@ -129,6 +162,29 @@ func _run() -> void:
 		var mesh: Mesh = renderer._chunk_instances[Vector3i.ZERO].mesh
 		expect(mesh != null and mesh != low_poly_mesh, "the voxel mesh replaces the low poly mesh")
 	)
+	step("When the document returns to low poly", func():
+		State.document.low_poly = true
+		State.model_settings_changed.emit()
+	)
+	await _settle()
+	step("When the document duplicates the low poly frame", func():
+		first_mesh = renderer._chunk_instances[Vector3i.ZERO].mesh
+		cached_surfaces = renderer._surface_cache.size()
+		State.duplicate_frame()
+	)
+	await _settle()
+	step("Then the duplicate reuses the cached mesh", func():
+		expect(State.current_frame == 1, "the duplicate becomes the current frame")
+		expect(renderer._chunk_instances[Vector3i.ZERO].mesh == first_mesh, "the duplicate frame reuses the low poly mesh")
+		expect(renderer._surface_cache.size() == cached_surfaces, "the duplicate frame adds no surface to the cache")
+	)
+	step("When the document returns to the first frame", func():
+		State.current_frame = 0
+	)
+	await _settle()
+	step("Then the first frame keeps its cached mesh", func():
+		expect(renderer._chunk_instances[Vector3i.ZERO].mesh == first_mesh, "the first frame keeps its low poly mesh")
+	)
 	for path in [TEST_PATH, MODEL_PATH]:
 		if FileAccess.file_exists(path):
 			DirAccess.remove_absolute(path)
@@ -145,4 +201,39 @@ func _has_smooth_normals(mesh: Mesh) -> bool:
 			var largest_component := maxf(absf(normal.x), maxf(absf(normal.y), absf(normal.z)))
 			if largest_component < 0.99 and normal.length() > 0.99:
 				return true
+	return false
+
+
+func _all_uvs_match_vertices() -> bool:
+	for chunk: MeshInstance3D in renderer._chunk_instances.values():
+		if chunk.mesh == null:
+			continue
+		for surface in chunk.mesh.get_surface_count():
+			var arrays := chunk.mesh.surface_get_arrays(surface)
+			if arrays[Mesh.ARRAY_TEX_UV].size() != arrays[Mesh.ARRAY_VERTEX].size():
+				return false
+	return true
+
+
+func _all_colors() -> PackedColorArray:
+	var colors := PackedColorArray()
+	for chunk: MeshInstance3D in renderer._chunk_instances.values():
+		if chunk.mesh == null:
+			continue
+		for surface in chunk.mesh.get_surface_count():
+			colors.append_array(chunk.mesh.surface_get_arrays(surface)[Mesh.ARRAY_COLOR])
+	return colors
+
+
+func _all_open_colors() -> bool:
+	for color in _all_colors():
+		if color.r < 0.999:
+			return false
+	return true
+
+
+func _all_has_dark_color() -> bool:
+	for color in _all_colors():
+		if color.r < 0.999:
+			return true
 	return false
