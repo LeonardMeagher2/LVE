@@ -1,48 +1,48 @@
 [gd_resource type="Theme" format=3]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_track_v"]
-content_margin_left = 6.0
+content_margin_left = 5.0
 content_margin_top = 2.0
-content_margin_right = 6.0
+content_margin_right = 5.0
 content_margin_bottom = 2.0
 bg_color = Color(0, 0, 0, 0.18)
-corner_radius_top_left = 6
-corner_radius_top_right = 6
-corner_radius_bottom_right = 6
-corner_radius_bottom_left = 6
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_track_h"]
 content_margin_left = 2.0
-content_margin_top = 6.0
+content_margin_top = 5.0
 content_margin_right = 2.0
-content_margin_bottom = 6.0
+content_margin_bottom = 5.0
 bg_color = Color(0, 0, 0, 0.18)
-corner_radius_top_left = 6
-corner_radius_top_right = 6
-corner_radius_bottom_right = 6
-corner_radius_bottom_left = 6
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_grabber"]
-content_margin_left = 6.0
+content_margin_left = 5.0
 content_margin_top = 4.0
-content_margin_right = 6.0
+content_margin_right = 5.0
 content_margin_bottom = 4.0
 bg_color = Color(0.52, 0.55, 0.6, 1)
-corner_radius_top_left = 6
-corner_radius_top_right = 6
-corner_radius_bottom_right = 6
-corner_radius_bottom_left = 6
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_grabber_highlight"]
-content_margin_left = 6.0
+content_margin_left = 5.0
 content_margin_top = 4.0
-content_margin_right = 6.0
+content_margin_right = 5.0
 content_margin_bottom = 4.0
 bg_color = Color(0.68, 0.71, 0.76, 1)
-corner_radius_top_left = 6
-corner_radius_top_right = 6
-corner_radius_bottom_right = 6
-corner_radius_bottom_left = 6
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
 
 [resource]
 HScrollBar/styles/grabber = SubResource("StyleBoxFlat_grabber")
