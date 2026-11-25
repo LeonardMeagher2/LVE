@@ -63,7 +63,7 @@ See [docs/DOCUMENT_FORMAT.md](docs/DOCUMENT_FORMAT.md) for the format.
 
 ## Agent access
 
-An agent can use the editor through a local MCP server. Click the server icon in the status bar to start or stop it. The app remembers the last state. See [docs/MCP.md](docs/MCP.md) to connect a harness.
+An agent can use the editor through a local MCP server. Click the server icon in the status bar to start or stop it. The app copies a setup prompt to the clipboard when the server starts. The app remembers the last state. See [docs/MCP.md](docs/MCP.md) to connect a harness.
 
 ## Development
 

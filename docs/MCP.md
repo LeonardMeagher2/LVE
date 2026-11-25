@@ -4,7 +4,7 @@ The editor hosts a local Model Context Protocol server. An agent can read the do
 
 ## Start the server
 
-Click the server icon in the status bar. The icon is dim when the server is off. It is bright when the server is on. The tooltip shows the endpoint.
+Click the server icon in the status bar. The icon is dim when the server is off. It is bright when the server is on. The tooltip shows the endpoint when the server is on.
 
 The server listens on `http://127.0.0.1:17373/mcp` while it runs. Use `--mcp-port=<port>` to change the port.
 
