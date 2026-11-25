@@ -9,12 +9,16 @@ var clip_camera: EditorCameraRig
 var far_before := 0.0
 var flat_helper: AABB
 var near_helper: AABB
+var pan_rig: EditorCameraRig
+var pan_first := 0.0
+var pan_box := AABB(Vector3(-4, -4, -4), Vector3(8, 8, 8))
 
 
 func _ready() -> void:
 	test("can orbit and pan the camera", _run)
 	test("the orthographic clip range covers helper bounds", _clip_run, "orthographic_clip")
 	test("the view reset does not store its pose", _reset_run, "reset_pose")
+	test("panning follows the view span at any field of view", _pan_run, "pan_fov")
 
 
 func _run() -> void:
@@ -118,3 +122,50 @@ func _reset_run() -> void:
 		expect(State.document.edit_camera.is_empty(), "the reset does not store a camera")
 		expect(is_equal_approx(camera_rig()._pitch, deg_to_rad(45.0)), "the reset uses the default pitch")
 	)
+
+
+func _pan_run() -> void:
+	step("Given a perspective camera framed on a box", func():
+		pan_rig = camera_rig()
+		pan_rig.is_orthogonal = false
+		pan_rig.set_field_of_view(45.0)
+		pan_rig.center_on(pan_box)
+	)
+	step("When the user drags a tenth of the view height", func():
+		pan_first = _pan_tenth()
+	)
+	step("Then the content moves a tenth of the view", func():
+		expect(is_equal_approx(pan_first, _view_span() * 0.1), "the pan follows the view span")
+	)
+	step("When the field of view narrows to twenty degrees", func():
+		pan_rig.set_field_of_view(20.0)
+		pan_rig.center_on(pan_box)
+	)
+	step("Then the same drag still moves a tenth of the view", func():
+		var second := _pan_tenth()
+		expect(is_equal_approx(second, _view_span() * 0.1), "the narrowed field of view keeps the pan distance")
+		expect(is_equal_approx(second, pan_first), "the drag moves the same world distance")
+	)
+	step("When the camera turns orthographic", func():
+		pan_rig.set_field_of_view(0.0)
+		pan_rig.center_on(pan_box)
+	)
+	step("Then the drag still moves a tenth of the view", func():
+		var third := _pan_tenth()
+		expect(pan_rig.is_orthogonal, "the camera is orthographic")
+		expect(is_equal_approx(third, pan_rig.size * 0.1), "the orthographic pan follows the view span")
+	)
+
+
+func _pan_tenth() -> float:
+	var before := pan_rig._target
+	pan_rig.pan(Vector2(0.0, _pan_height() * 0.1))
+	return (pan_rig._target - before).length()
+
+
+func _pan_height() -> float:
+	return maxf(pan_rig.get_viewport().get_visible_rect().size.y, 1.0)
+
+
+func _view_span() -> float:
+	return 2.0 * pan_rig._dist * tan(deg_to_rad(pan_rig.fov) * 0.5)
