@@ -217,54 +217,78 @@ static func _finish(groups: Dictionary, frame: VoxelFrame, world_origin: Vector3
 		var corners: Dictionary = group.get("corners", {})
 		var flat: bool = not use_corner_normals and group.normals.is_empty()
 		var axis0: int = plane.x
-		var code := patch * 8 + axis0 * 2 + (1 if plane.y > 0 else 0)
+		var plane_z := plane.z * 0.5
+		var plane_slot := floori(plane.z * 0.5) + 1
 		var group_vertices = {} if flat and not use_ao else null
 		var second := 2 if plane.y > 0 else 1
 		var third := 1 if plane.y > 0 else 2
 		for polygon: Dictionary in group.polygons:
 			vertex_map.clear()
 			for point: Vector2 in polygon.points:
-				var position := Vector3.ZERO
 				var dbl := Vector3i.ZERO
 				if axis0 == 0:
-					position.x = plane.z * 0.5
-					position.y = point.x - 0.5
-					position.z = point.y - 0.5
 					dbl.x = plane.z
 					dbl.y = roundi(2.0 * point.x - 1.0)
 					dbl.z = roundi(2.0 * point.y - 1.0)
 				elif axis0 == 1:
-					position.y = plane.z * 0.5
-					position.x = point.y - 0.5
-					position.z = point.x - 0.5
 					dbl.y = plane.z
 					dbl.x = roundi(2.0 * point.y - 1.0)
 					dbl.z = roundi(2.0 * point.x - 1.0)
 				else:
-					position.z = plane.z * 0.5
-					position.x = point.x - 0.5
-					position.y = point.y - 0.5
 					dbl.z = plane.z
 					dbl.x = roundi(2.0 * point.x - 1.0)
 					dbl.y = roundi(2.0 * point.y - 1.0)
+				var position := Vector3.ZERO
+				if not use_corner_table:
+					if axis0 == 0:
+						position.x = plane_z
+						position.y = point.x - 0.5
+						position.z = point.y - 0.5
+					elif axis0 == 1:
+						position.y = plane_z
+						position.x = point.y - 0.5
+						position.z = point.x - 0.5
+					else:
+						position.z = plane_z
+						position.x = point.x - 0.5
+						position.y = point.y - 0.5
 				var normal: Vector3
 				if flat:
 					normal = fallback_normal
 				elif use_corner_table:
 					var normal_started := Time.get_ticks_usec() if not timers.is_empty() else 0
-					var cx := floori(position.x) + 1
-					var cy := floori(position.y) + 1
-					var cz := floori(position.z) + 1
+					var cx := 0
+					var cy := 0
+					var cz := 0
+					if axis0 == 0:
+						cx = plane_slot
+						cy = floori(point.x - 0.5) + 1
+						cz = floori(point.y - 0.5) + 1
+					elif axis0 == 1:
+						cx = floori(point.y - 0.5) + 1
+						cy = plane_slot
+						cz = floori(point.x - 0.5) + 1
+					else:
+						cx = floori(point.x - 0.5) + 1
+						cy = floori(point.y - 0.5) + 1
+						cz = plane_slot
 					var base := (cz * CORNER_RANGE + cy) * CORNER_RANGE + cx
 					if corner_seen[base] == 0:
 						var corner_normal := _corner_normal_occupied(Vector3i(cx, cy, cz), corner_occupancy)
-						corner_seen[base] = 1
 						var nb := base * 3
 						corner_table[nb] = corner_normal.x
 						corner_table[nb + 1] = corner_normal.y
 						corner_table[nb + 2] = corner_normal.z
-					normal = Vector3(corner_table[base * 3], corner_table[base * 3 + 1], corner_table[base * 3 + 2])
-					normal = fallback_normal if normal.is_zero_approx() else normal
+						if corner_normal.is_zero_approx():
+							corner_seen[base] = 1
+							normal = fallback_normal
+						else:
+							corner_seen[base] = 2
+							normal = corner_normal
+					elif corner_seen[base] == 2:
+						normal = Vector3(corner_table[base * 3], corner_table[base * 3 + 1], corner_table[base * 3 + 2])
+					else:
+						normal = fallback_normal
 					if not timers.is_empty():
 						normal_time += Time.get_ticks_usec() - normal_started
 				else:
@@ -286,11 +310,24 @@ static func _finish(groups: Dictionary, frame: VoxelFrame, world_origin: Vector3
 						patch_ids.append(patch)
 					vertex_map.append(existing)
 				else:
-					var key := [dbl, code] if flat and not use_ao else [dbl, normal, patch, roundi(ao * 255.0)]
+					var key := [dbl, normal, patch, roundi(ao * 255.0)] if use_ao else [dbl, normal, patch]
 					var existing: int = vertices.get(key, -1)
 					if existing < 0:
 						existing = positions.size()
 						vertices[key] = existing
+						if use_corner_table:
+							if axis0 == 0:
+								position.x = plane_z
+								position.y = point.x - 0.5
+								position.z = point.y - 0.5
+							elif axis0 == 1:
+								position.y = plane_z
+								position.x = point.y - 0.5
+								position.z = point.x - 0.5
+							else:
+								position.z = plane_z
+								position.x = point.x - 0.5
+								position.y = point.y - 0.5
 						positions.append(position)
 						normals.append(normal)
 						if use_ao:
