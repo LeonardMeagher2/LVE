@@ -2,7 +2,7 @@ name: PR build
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, closed]
 
 concurrency:
   group: pr-build-${{ github.event.pull_request.number }}
@@ -10,10 +10,12 @@ concurrency:
 
 jobs:
   build:
+    if: github.event.action != 'closed'
     uses: ./.github/workflows/build-presets.yml
     secrets: inherit
 
   publish:
+    if: github.event.action != 'closed'
     needs: [build]
     runs-on: ubuntu-latest
     permissions:
@@ -54,3 +56,31 @@ jobs:
               --target "$HEAD_SHA" \
               --repo "${{ github.repository }}"
           fi
+
+  cleanup:
+    if: github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - name: Delete the PR release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          if gh release view "pr-$PR_NUMBER" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            gh release delete "pr-$PR_NUMBER" --yes --cleanup-tag --repo "${{ github.repository }}"
+          fi
+
+      - name: Delete the PR build artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -e
+          ids=$(gh api "repos/${{ github.repository }}/actions/artifacts?per_page=100" --paginate \
+            --jq ".artifacts[] | select(.workflow_run.head_branch == \"$HEAD_REF\") | .id")
+          for id in $ids; do
+            gh api -X DELETE "repos/${{ github.repository }}/actions/artifacts/$id"
+          done
