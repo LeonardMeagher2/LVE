@@ -223,6 +223,10 @@ jobs:
       - name: Prepare the Android toolchain
         if: matrix.package == 'android'
         shell: pwsh
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_ALIAS: ${{ secrets.ANDROID_KEYSTORE_ALIAS }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
         run: |
           $ErrorActionPreference = 'Stop'
           $sdk = $env:ANDROID_SDK_ROOT
@@ -239,11 +243,9 @@ jobs:
           & (Join-Path $sdk 'cmdline-tools/latest/bin/sdkmanager') "build-tools;36.0.0" "platforms;android-36" "platform-tools"
           if ($LASTEXITCODE -ne 0) { throw 'sdkmanager failed.' }
 
-          $keystore = Join-Path $HOME 'debug.keystore'
-          & (Join-Path $java 'bin/keytool') -genkeypair -v -keystore $keystore -storetype PKCS12 `
-            -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 `
-            -storepass android -keypass android -dname "CN=Android Debug,O=Android,C=US"
-          if ($LASTEXITCODE -ne 0) { throw 'keytool failed.' }
+          $keystore = Join-Path $HOME 'lve-android.keystore'
+          if (-not $env:ANDROID_KEYSTORE_BASE64) { throw 'The keystore secret is missing.' }
+          [System.IO.File]::WriteAllBytes($keystore, [Convert]::FromBase64String($env:ANDROID_KEYSTORE_BASE64))
 
           $settingsDir = Join-Path $HOME '.config/godot'
           New-Item -ItemType Directory -Force $settingsDir | Out-Null
@@ -254,8 +256,8 @@ jobs:
             "export/android/android_sdk_path = `"$sdk`""
             "export/android/java_sdk_path = `"$java`""
             "export/android/debug_keystore = `"$keystore`""
-            'export/android/debug_keystore_user = "androiddebugkey"'
-            'export/android/debug_keystore_pass = "android"'
+            "export/android/debug_keystore_user = `"$env:ANDROID_KEYSTORE_ALIAS`""
+            "export/android/debug_keystore_pass = `"$env:ANDROID_KEYSTORE_PASSWORD`""
           ) -join "`n"
           Set-Content -Path (Join-Path $settingsDir 'editor_settings-4.7.tres') -Value $settings
           Write-Output "Android SDK: $sdk"

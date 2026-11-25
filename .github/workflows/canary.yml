@@ -1,0 +1,52 @@
+name: Canary
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: canary-main
+  cancel-in-progress: true
+
+jobs:
+  build-android:
+    uses: ./.github/workflows/build-android.yml
+    secrets: inherit
+    with:
+      apk_name: LVE-canary.apk
+
+  publish:
+    needs: [build-android]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v5
+
+      - name: Download the APK
+        uses: actions/download-artifact@v4
+        with:
+          path: release
+          merge-multiple: true
+
+      - name: Refresh the canary release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          version=$(grep -m1 '^config/version=' project.godot | cut -d'"' -f2)
+          short=$(echo "${{ github.sha }}" | cut -c1-7)
+          notes="The newest build from main. Version $version, commit $short."
+          if gh release view canary --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            gh release upload canary release/LVE-canary.apk --clobber --repo "${{ github.repository }}"
+            gh release edit canary --notes "$notes" --repo "${{ github.repository }}"
+          else
+            gh release create canary release/LVE-canary.apk \
+              --title "Canary build" \
+              --notes "$notes" \
+              --prerelease \
+              --target "${{ github.sha }}" \
+              --repo "${{ github.repository }}"
+          fi

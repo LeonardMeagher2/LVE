@@ -1,0 +1,54 @@
+name: PR build
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+concurrency:
+  group: pr-build-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  build-android:
+    uses: ./.github/workflows/build-android.yml
+    secrets: inherit
+    with:
+      apk_name: LVE-pr-${{ github.event.pull_request.number }}.apk
+
+  publish:
+    needs: [build-android]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v5
+
+      - name: Download the APK
+        uses: actions/download-artifact@v4
+        with:
+          path: release
+          merge-multiple: true
+
+      - name: Publish the PR release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -e
+          tag="pr-$PR_NUMBER"
+          short=$(echo "$HEAD_SHA" | cut -c1-7)
+          notes="Build of PR #$PR_NUMBER. Commit $short. $PR_TITLE"
+          if gh release view "$tag" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            gh release upload "$tag" "release/LVE-pr-$PR_NUMBER.apk" --clobber --repo "${{ github.repository }}"
+            gh release edit "$tag" --notes "$notes" --repo "${{ github.repository }}"
+          else
+            gh release create "$tag" "release/LVE-pr-$PR_NUMBER.apk" \
+              --title "PR #$PR_NUMBER" \
+              --notes "$notes" \
+              --prerelease \
+              --target "$HEAD_SHA" \
+              --repo "${{ github.repository }}"
+          fi
