@@ -2,6 +2,7 @@ extends RefCounted
 
 
 const SETTINGS_PATH := "user://settings.cfg"
+const BOOT_SCENE := "res://App.tscn"
 const LEGACY_SETTINGS_PATHS := [
 	"user://interface.cfg",
 	"user://session.cfg",
@@ -161,6 +162,8 @@ func remember_session(documents: Array[VoxelDocument], active_index: int, config
 func is_app_session() -> bool:
 	if tree == null:
 		return false
+	if tree.current_scene != null and tree.current_scene.scene_file_path == BOOT_SCENE:
+		return true
 	var main := tree.root.get_node_or_null("Main")
 	return main != null and tree.current_scene == main
 
