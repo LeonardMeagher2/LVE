@@ -337,6 +337,8 @@ func _reset_sprite_size() -> void:
 
 
 func _view_count() -> int:
+	if not is_instance_valid(_sheet_settings):
+		return 1
 	return int(_sheet_settings.get_node("TurntableRow/Views").value) if _sheet_settings.get_node("TurntableRow/Turntable").button_pressed else 1
 
 
