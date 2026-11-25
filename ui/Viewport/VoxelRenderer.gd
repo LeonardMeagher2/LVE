@@ -175,13 +175,28 @@ func _rebuild(hide_all := true) -> void:
 		_displayed_frame = active_frame
 	_pending_surface_keys.clear()
 	_inflight_surface_keys.clear()
+	var requested := _request_locations(active_frame)
 	for chunk_location in _displayed_surface_keys.keys():
-		if active_frame == null or not active_frame.chunks.has(chunk_location):
+		if not requested.has(chunk_location):
 			_retire(chunk_location)
-	if active_frame:
-		for chunk_location in active_frame.chunks:
-			_request(active_frame, chunk_location)
+	for chunk_location: Vector3i in requested:
+		_request(active_frame, chunk_location)
 	_report_activity()
+
+
+func _request_locations(active_frame: VoxelFrame) -> Dictionary:
+	var locations := {}
+	if active_frame == null:
+		return locations
+	var include_neighbors := State.document.mesh_style != 0
+	for location: Vector3i in active_frame.chunks:
+		locations[location] = true
+		if not include_neighbors:
+			continue
+		for offset: Vector3i in VoxelMeshBuilder.neighbor_offsets(true):
+			if offset != Vector3i.ZERO:
+				locations[location + offset] = true
+	return locations
 
 
 func _update(updated_frame: int, affected_cells: Array[Vector3i]) -> void:
@@ -210,7 +225,7 @@ func _clear_chunk_notice() -> void:
 
 
 func _request(active_frame: VoxelFrame, chunk_location: Vector3i) -> void:
-	if not active_frame.chunks.has(chunk_location):
+	if not active_frame.chunks.has(chunk_location) and State.document.mesh_style == 0:
 		_pending_surface_keys.erase(chunk_location)
 		_inflight_surface_keys.erase(chunk_location)
 		_retire(chunk_location)
@@ -388,7 +403,7 @@ func _launch_surface(chunk_location: Vector3i, active_frame: VoxelFrame) -> void
 	if _surface_jobs.has(surface_key):
 		_inflight_surface_keys[chunk_location] = surface_key
 		return
-	if active_frame == null or not active_frame.chunks.has(chunk_location):
+	if active_frame == null or (State.document.mesh_style == 0 and not active_frame.chunks.has(chunk_location)):
 		_pending_surface_keys.erase(chunk_location)
 		return
 	if _surface_jobs.size() >= _job_limit():
