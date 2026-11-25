@@ -21,7 +21,9 @@ LVE is a voxel editor for 3D pixel art and animation. Paint and sculpt voxels, g
 
 ### Paint and sculpt
 
-- Paint, erase, fill, spray, dither, and pick colors.
+- Draw with the pencil or a straight line, and erase.
+- Paint, fill, spray, dither, and pick colors.
+- Build boxes, ellipsoids, and cylinders, and add, subtract, or intersect them.
 - Stamp a frame from an LVE file or the current selection.
 - Build, dig, flatten, and smooth terrain.
 - Grab and pose connected limbs.
@@ -38,6 +40,11 @@ LVE is a voxel editor for 3D pixel art and animation. Paint and sculpt voxels, g
 - Set albedo, metallic, roughness, and emission per voxel.
 - Preview normal-mapped 2D lighting at the pointer and inspect the normal sheet.
 - Adjust the preview specular light with a drag value button.
+- Import a palette from an image, and save the palette as a PNG.
+
+### View
+
+- Switch between the six side views and isometric, with a perspective or orthographic camera.
 
 ### Export
 
@@ -49,6 +56,8 @@ LVE is a voxel editor for 3D pixel art and animation. Paint and sculpt voxels, g
 - Drop a `.lve` document or an image file on the window to open it.
 - Open either format to restore the animation and the saved settings.
 - Share the original PNG file to preserve its document data.
+- Set the document size, smooth normals, and ambient occlusion.
+- Recover unsaved work after a crash.
 
 See [docs/DOCUMENT_FORMAT.md](docs/DOCUMENT_FORMAT.md) for the format.
 
