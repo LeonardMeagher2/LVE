@@ -57,7 +57,9 @@ var slice_axis := -1
 var slice_index := 0
 var slice_count := 1
 var bridge_cells := 0
-var rejected_third_material := 0
+var per_material := false
+var hard_boundaries := false
+var material_groups: Array = []
 
 
 static func _static_init() -> void:
@@ -205,7 +207,6 @@ func _fill_bridges(occupancy: PackedByteArray, material_ids: PackedInt32Array, m
 					if real[neighbor_index] != 0:
 						edge_solids.append(Vector4i(offset.x, offset.y, offset.z, material_ids[neighbor_index]))
 				var pair_first := 0
-				var pair_second := 0
 				for first in face_solids.size():
 					for second in range(first + 1, face_solids.size()):
 						var a: Vector4i = face_solids[first]
@@ -224,7 +225,6 @@ func _fill_bridges(occupancy: PackedByteArray, material_ids: PackedInt32Array, m
 						var opposite := index + a.x + b.x + SAMPLE_SIZE * (a.y + b.y + SAMPLE_SIZE * (a.z + b.z))
 						if real[opposite] == 0:
 							pair_first = a.w
-							pair_second = b.w
 							break
 					if pair_first != 0:
 						break
@@ -238,34 +238,15 @@ func _fill_bridges(occupancy: PackedByteArray, material_ids: PackedInt32Array, m
 								continue
 							if _box_clear(real, x + face.x, y + face.y, z + face.z, span):
 								pair_first = face.w
-								pair_second = edge.w
 								break
 						if pair_first != 0:
 							break
 				if pair_first == 0:
 					continue
-				if not _no_third_material(real, material_ids, x, y, z, pair_first, pair_second):
-					rejected_third_material += 1
-					continue
 				occupancy[index] = 1
 				material_ids[index] = pair_first
 				bridge_cells += 1
 	return materials
-
-
-static func _no_third_material(real: PackedByteArray, material_ids: PackedInt32Array, x: int, y: int, z: int, first: int, second: int) -> bool:
-	for offset_z in range(-1, 2):
-		for offset_y in range(-1, 2):
-			for offset_x in range(-1, 2):
-				if offset_x == 0 and offset_y == 0 and offset_z == 0:
-					continue
-				var neighbor_index := x + offset_x + SAMPLE_SIZE * (y + offset_y + SAMPLE_SIZE * (z + offset_z))
-				if real[neighbor_index] == 0:
-					continue
-				var material_id := material_ids[neighbor_index]
-				if material_id != first and material_id != second:
-					return false
-	return true
 
 
 static func _box_clear(real: PackedByteArray, corner_x: int, corner_y: int, corner_z: int, span: Vector3i) -> bool:
@@ -286,18 +267,104 @@ static func _box_clear(real: PackedByteArray, corner_x: int, corner_y: int, corn
 
 func _build(occupancy: PackedByteArray, material_ids: PackedInt32Array, materials: PackedFloat32Array, present: PackedByteArray) -> void:
 	if present.is_empty() or present[PRESENT_SELF] == 0:
-		surface_arrays.resize(Mesh.ARRAY_MAX)
-		surface_arrays[Mesh.ARRAY_VERTEX] = PackedVector3Array()
-		surface_arrays[Mesh.ARRAY_NORMAL] = PackedVector3Array()
-		surface_arrays[Mesh.ARRAY_COLOR] = PackedColorArray()
-		surface_arrays[Mesh.ARRAY_INDEX] = PackedInt32Array()
+		_set_empty()
 		return
+	var owners := _build_owners(present)
+	var merged: Array
+	if per_material:
+		merged = _build_per_material(occupancy, material_ids, materials, owners)
+	else:
+		var built := _build_surfaces(occupancy, material_ids, materials, owners)
+		merged = _merge_flats(built[0], built[1], built[2], built[3], built[4])
+	var welded := _weld(merged[0], merged[1], merged[2], merged[3], merged[4])
+	surface_arrays.resize(Mesh.ARRAY_MAX)
+	surface_arrays[Mesh.ARRAY_VERTEX] = welded[0]
+	surface_arrays[Mesh.ARRAY_NORMAL] = welded[1]
+	surface_arrays[Mesh.ARRAY_COLOR] = welded[2]
+	surface_arrays[Mesh.ARRAY_INDEX] = welded[3]
+	geometry_bytes = welded[0].size() * 40 + welded[3].size() * 4
+
+
+func _set_empty() -> void:
+	surface_arrays.resize(Mesh.ARRAY_MAX)
+	surface_arrays[Mesh.ARRAY_VERTEX] = PackedVector3Array()
+	surface_arrays[Mesh.ARRAY_NORMAL] = PackedVector3Array()
+	surface_arrays[Mesh.ARRAY_COLOR] = PackedColorArray()
+	surface_arrays[Mesh.ARRAY_INDEX] = PackedInt32Array()
+
+
+func _build_per_material(occupancy: PackedByteArray, material_ids: PackedInt32Array, materials: PackedFloat32Array, owners: PackedByteArray) -> Array:
+	var material_set := {}
+	for index in occupancy.size():
+		if occupancy[index] != 0:
+			material_set[material_ids[index]] = true
+	var ids: Array = material_set.keys()
+	ids.sort()
+	var group_of_id := {}
+	var group_count := 0
+	var groups: Array = material_groups.duplicate(true)
+	if groups.is_empty():
+		for id: int in ids:
+			group_of_id[id] = group_count
+			group_count += 1
+	else:
+		for id: int in ids:
+			var key := _material_key(id, materials)
+			var group := -1
+			for candidate in groups.size():
+				var keys: Array = groups[candidate]
+				if keys.has(key):
+					group = candidate
+					break
+			if group < 0:
+				group = group_count
+				group_count += 1
+				groups.append([key])
+			group_of_id[id] = group
+		group_count = groups.size()
+	var masks: Array[PackedByteArray] = []
+	masks.resize(group_count)
+	for group in group_count:
+		var mask := PackedByteArray()
+		mask.resize(occupancy.size())
+		masks[group] = mask
+	for index in occupancy.size():
+		if occupancy[index] == 0:
+			continue
+		masks[group_of_id[material_ids[index]]][index] = 1
+	var all_positions := PackedVector3Array()
+	var all_normals := PackedVector3Array()
+	var all_colors := PackedColorArray()
+	var all_materials := PackedInt32Array()
+	var all_indices := PackedInt32Array()
+	for group in group_count:
+		var mask: PackedByteArray = masks[group]
+		var built := _build_surfaces(mask, material_ids, materials, owners)
+		var merged := _merge_flats(built[0], built[1], built[2], built[3], built[4])
+		var offset := all_positions.size()
+		all_positions.append_array(merged[0])
+		all_normals.append_array(merged[1])
+		all_colors.append_array(merged[2])
+		all_materials.append_array(merged[3])
+		for index: int in merged[4]:
+			all_indices.append(offset + index)
+	return [all_positions, all_normals, all_colors, all_materials, all_indices]
+
+
+static func _material_key(id: int, materials: PackedFloat32Array) -> String:
+	var base := id * VoxelFrame.MATERIAL_STRIDE
+	var parts := PackedStringArray()
+	for offset in VoxelFrame.MATERIAL_STRIDE:
+		parts.append(String.num(materials[base + offset], 3))
+	return ",".join(parts)
+
+
+func _build_surfaces(occupancy: PackedByteArray, material_ids: PackedInt32Array, materials: PackedFloat32Array, owners: PackedByteArray) -> Array:
 	var positions := PackedVector3Array()
 	var normals := PackedVector3Array()
 	var vertex_colors := PackedColorArray()
 	var vertex_materials := PackedInt32Array()
 	var indices := PackedInt32Array()
-	var owners := _build_owners(present)
 	for z in range(-MESH_PADDING, CHUNK_SIZE + 1):
 		for y in range(-MESH_PADDING, CHUNK_SIZE + 1):
 			for x in range(-MESH_PADDING, CHUNK_SIZE + 1):
@@ -331,22 +398,25 @@ func _build(occupancy: PackedByteArray, material_ids: PackedInt32Array, material
 						var third_point := _edge_point(cell, third_edge)
 						if _mirror_on_face(cell, first_edge, second_edge, third_edge, occupancy):
 							continue
+						var first_material := _edge_material(cell, first_edge, occupancy, material_ids)
+						var second_material := _edge_material(cell, second_edge, occupancy, material_ids)
+						var third_material := _edge_material(cell, third_edge, occupancy, material_ids)
+						if hard_boundaries:
+							var chosen := first_material
+							if second_material == third_material:
+								chosen = second_material
+							first_material = chosen
+							second_material = chosen
+							third_material = chosen
 						_append_oriented_triangle(
 							cell, bits,
 							first_point, second_point, third_point,
-							_edge_material(cell, first_edge, occupancy, material_ids),
-							_edge_material(cell, second_edge, occupancy, material_ids),
-							_edge_material(cell, third_edge, occupancy, material_ids),
+							first_material,
+							second_material,
+							third_material,
 							materials, positions, normals, vertex_colors, vertex_materials, indices
 						)
-	var merged := _merge_flats(positions, normals, vertex_colors, vertex_materials, indices)
-	var welded := _weld(merged[0], merged[1], merged[2], merged[3], merged[4])
-	surface_arrays.resize(Mesh.ARRAY_MAX)
-	surface_arrays[Mesh.ARRAY_VERTEX] = welded[0]
-	surface_arrays[Mesh.ARRAY_NORMAL] = welded[1]
-	surface_arrays[Mesh.ARRAY_COLOR] = welded[2]
-	surface_arrays[Mesh.ARRAY_INDEX] = welded[3]
-	geometry_bytes = welded[0].size() * 40 + welded[3].size() * 4
+	return [positions, normals, vertex_colors, vertex_materials, indices]
 
 
 static func _merge_flats(positions: PackedVector3Array, normals: PackedVector3Array, colors: PackedColorArray, materials: PackedInt32Array, indices: PackedInt32Array) -> Array:

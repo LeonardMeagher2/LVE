@@ -15,7 +15,7 @@ func _ready() -> void:
 	test("different materials do not join", _different_materials, "bridge_different_materials")
 	test("a finish change alone keeps the pair apart", _material_values, "bridge_material_values")
 	test("two face-adjacent materials keep their own colours", _face_materials, "bridge_face_materials")
-	test("a third material blocks the gap", _third_material, "bridge_third_material")
+	test("a third material does not block the gap", _third_material, "bridge_third_material")
 	test("a concave corner stays open", _concave_corner, "bridge_concave_corner")
 	test("a mixed-material concave corner stays open", _mixed_concave_corner, "bridge_mixed_concave")
 	test("a gap across four chunks joins without a seam", _chunk_seam, "bridge_chunk_seam")
@@ -102,11 +102,11 @@ func _third_material() -> void:
 		})
 	)
 	await _view.settle()
-	step("Then the tainted gap stays open and the clean gap joins", func():
+	step("Then both gaps join and the red voxel keeps its own surface", func():
 		_view.collect()
 		expect(_view.closed(), "the pair has no boundary")
-		expect(_view.components() == 1, "the clean gap joins the pair")
-		expect(not _view.has_vertex(Vector3(1.0, 0.0, 0.5)), "the gap beside the red voxel stays open")
+		expect(_view.components() == 1, "both gaps join the pair")
+		expect(_view.has_vertex(Vector3(1.0, 0.0, 0.5)), "the gap beside the red voxel joins")
 	)
 
 
