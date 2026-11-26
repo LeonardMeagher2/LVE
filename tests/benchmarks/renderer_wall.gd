@@ -52,6 +52,8 @@ func _cost() -> void:
 	var rebuild_started := 0
 	var rebuild_frames := 0
 	var rebuild_frame_us: Array[int] = []
+	var emit_all_us := 0
+	var per_chunk_emit_us: Array[int] = []
 	step("When the document reports its chunks", func():
 		State.chunks_changed.emit(0, locations)
 	)
@@ -87,7 +89,9 @@ func _cost() -> void:
 			State.document.set_cell(0, location * CHUNK + Vector3i(8, 8, 8), VoxelFrame.material(Color.WHITE))
 		renderer.reset_profile()
 		rebuild_started = Time.get_ticks_usec()
+		var emit_started := Time.get_ticks_usec()
 		State.chunks_changed.emit(0, locations)
+		emit_all_us = Time.get_ticks_usec() - emit_started
 	)
 	while rebuild_frames < MAX_FRAMES:
 		var frame_started := Time.get_ticks_usec()
@@ -99,6 +103,14 @@ func _cost() -> void:
 			break
 	var rebuild_elapsed := Time.get_ticks_usec() - rebuild_started
 	var rebuild_profile: Dictionary = renderer.profile_snapshot()
+	for location: Vector3i in locations:
+		State.document.set_cell(0, location * CHUNK + Vector3i(9, 9, 9), VoxelFrame.material(Color.BLACK))
+	renderer.reset_profile()
+	for location: Vector3i in locations:
+		var one: Array[Vector3i] = [location]
+		var single_started := Time.get_ticks_usec()
+		State.chunks_changed.emit(0, one)
+		per_chunk_emit_us.append(Time.get_ticks_usec() - single_started)
 	step("Then the rebuild wall and the cold wall are both reported", func():
 		print("MEASURE renderer_wall rebuild: us=%d frames=%d reaped=%d consume=%d launched=%d install_us=%d truncated=%d" % [
 			rebuild_elapsed, rebuild_frames, int(rebuild_profile.get("reaped", 0)), int(rebuild_profile.get("consume", 0)),
@@ -109,6 +121,8 @@ func _cost() -> void:
 		slowest.reverse()
 		print("MEASURE renderer_wall frames_us: " + str(slowest.slice(0, 8)))
 		print("MEASURE renderer_wall first_frames_us: " + str(rebuild_frame_us.slice(0, 12)))
+		print("MEASURE renderer_wall emit_all_us=%d" % emit_all_us)
+		print("MEASURE renderer_wall per_chunk_emit_us: " + str(per_chunk_emit_us))
 		expect(int(rebuild_profile.get("reaped", 0)) + int(rebuild_profile.get("consume", 0)) >= locations.size(), "the rebuild resolves every chunk")
 	)
 
