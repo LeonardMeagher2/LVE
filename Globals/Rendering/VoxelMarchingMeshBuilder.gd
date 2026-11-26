@@ -205,7 +205,7 @@ func _build(occupancy: PackedByteArray, material_ids: PackedInt32Array, material
 		var built := _build_surfaces(occupancy, material_ids, materials, owners)
 		merged = built
 	var welded := _weld(merged[0], merged[1], merged[2], merged[3], merged[4])
-	_pinch_material_seams(welded[0], welded[4], occupancy, material_ids)
+	_pinch_material_seams(welded[0], welded[4], occupancy, material_ids, welded[3])
 	welded[3] = _drop_degenerate_triangles(welded[0], welded[3])
 	_flip_diagonals(welded[0], welded[3], welded[4])
 	welded[3] = _drop_opposite_duplicate_triangles(welded[0], welded[3])
@@ -579,7 +579,50 @@ static func _material_cut(first: Vector3, first_site: Vector3, second: Vector3, 
 	return first.lerp(second, 0.5)
 
 
-func _pinch_material_seams(positions: PackedVector3Array, vertex_materials: PackedInt32Array, occupancy: PackedByteArray, material_ids: PackedInt32Array) -> void:
+func _straight_seam_keys(positions: PackedVector3Array, vertex_materials: PackedInt32Array, indices: PackedInt32Array) -> Dictionary:
+	var keys: Array[Vector3i] = []
+	keys.resize(positions.size())
+	for index in positions.size():
+		keys[index] = _position_key(positions[index])
+	var edge_materials := {}
+	for triangle in range(0, indices.size(), 3):
+		var material := vertex_materials[indices[triangle]]
+		for corner in 3:
+			var first: Vector3i = keys[indices[triangle + corner]]
+			var second: Vector3i = keys[indices[triangle + (corner + 1) % 3]]
+			if first == second:
+				continue
+			var edge := _edge_key(first, second)
+			var materials: Dictionary = edge_materials.get(edge, {})
+			materials[material] = true
+			edge_materials[edge] = materials
+	var neighbors := {}
+	for edge: String in edge_materials:
+		if edge_materials[edge].size() < 2:
+			continue
+		var parts := edge.split("|")
+		var first := _key_from_string(parts[0])
+		var second := _key_from_string(parts[1])
+		var first_list: Array = neighbors.get(first, [])
+		first_list.append(second)
+		neighbors[first] = first_list
+		var second_list: Array = neighbors.get(second, [])
+		second_list.append(first)
+		neighbors[second] = second_list
+	var straight := {}
+	for key: Vector3i in neighbors:
+		var around: Array = neighbors[key]
+		if around.size() != 2:
+			continue
+		var first := (_key_point(around[0]) - _key_point(key)).normalized()
+		var second := (_key_point(around[1]) - _key_point(key)).normalized()
+		if first.dot(second) < -0.999:
+			straight[key] = true
+	return straight
+
+
+func _pinch_material_seams(positions: PackedVector3Array, vertex_materials: PackedInt32Array, occupancy: PackedByteArray, material_ids: PackedInt32Array, indices: PackedInt32Array) -> void:
+	var straight := _straight_seam_keys(positions, vertex_materials, indices)
 	var seam_ids := {}
 	for index in positions.size():
 		var key := _position_key(positions[index])
@@ -628,7 +671,7 @@ func _pinch_material_seams(positions: PackedVector3Array, vertex_materials: Pack
 						if distance < best_distance:
 							best_distance = distance
 							best = target
-		if best_distance == INF:
+		if best_distance == INF and not straight.has(key):
 			for first_id: int in cells:
 				for second_id: int in cells:
 					if first_id == second_id:

@@ -25,6 +25,7 @@ func _ready() -> void:
 	test("a painted 16-cell slab spans the chunk", _slab, "march_slab")
 	test("a painted flat plate stays one closed surface", _flat_plate, "march_flat_plate")
 	test("a painted hollow shell keeps its cavity", _hollow_shell, "march_hollow_shell")
+	test("a straight material seam keeps its diagonal vertex", _straight_material_seam, "march_straight_material_seam")
 	test("the low-poly style renders in the editor viewport", _viewport_style, "march_viewport_style")
 	test("the settings modal stores one undoable style change", _style_undo, "march_style_undo")
 
@@ -296,6 +297,20 @@ func _hollow_shell() -> void:
 	)
 
 
+func _straight_material_seam() -> void:
+	step("Given the selected red, yellow, blue, and green seam", func():
+		_view = VIEW.new(self)
+		_view.apply(_straight_seam_cells())
+	)
+	await _view.settle()
+	step("Then the seam keeps its straight diagonal vertex", func():
+		_view.collect()
+		expect(not _view.indices.is_empty(), "the seam draws triangles")
+		expect(_view.has_vertex(Vector3(3.25, 0.75, -4.5)), "the seam keeps the midpoint of its diagonal")
+		expect(not _view.has_vertex(Vector3(3.5, 0.5, -4.5)), "the seam vertex does not move to the cell centre")
+	)
+
+
 func _viewport_style() -> void:
 	step("Given one painted voxel and the block style", func():
 		State.get_current_voxel_frame().set_cell(Vector3i.ZERO, VoxelFrame.material(Color.RED))
@@ -363,6 +378,44 @@ func _settle() -> void:
 		await get_tree().process_frame
 	for frame in 3:
 		await get_tree().process_frame
+
+
+func _straight_seam_cells() -> Dictionary:
+	return {
+		Vector3i(2, -2, -5): VoxelFrame.material(Color(1.0, 0.0, 0.0)),
+		Vector3i(3, -2, -5): VoxelFrame.material(Color(1.0, 1.0, 0.0)),
+		Vector3i(4, -2, -5): VoxelFrame.material(Color(1.0, 1.0, 0.0)),
+		Vector3i(5, -2, -5): VoxelFrame.material(Color(1.0, 1.0, 0.0)),
+		Vector3i(2, -1, -5): VoxelFrame.material(Color(1.0, 0.0, 0.0)),
+		Vector3i(3, -1, -5): VoxelFrame.material(Color(1.0, 1.0, 0.0)),
+		Vector3i(4, -1, -5): VoxelFrame.material(Color(1.0, 1.0, 0.0)),
+		Vector3i(5, -1, -5): VoxelFrame.material(Color(1.0, 1.0, 0.0)),
+		Vector3i(1, 0, -5): VoxelFrame.material(Color(0.0, 1.0, 0.0)),
+		Vector3i(3, 0, -5): VoxelFrame.material(Color(1.0, 0.0, 0.0)),
+		Vector3i(4, 0, -5): VoxelFrame.material(Color(1.0, 1.0, 0.0)),
+		Vector3i(5, 0, -5): VoxelFrame.material(Color(1.0, 1.0, 0.0)),
+		Vector3i(4, 1, -5): VoxelFrame.material(Color(1.0, 0.0, 0.0)),
+		Vector3i(5, 1, -5): VoxelFrame.material(Color(1.0, 1.0, 0.0)),
+		Vector3i(5, 2, -5): VoxelFrame.material(Color(1.0, 0.0, 0.0)),
+		Vector3i(1, -2, -4): VoxelFrame.material(Color(0.0, 1.0, 0.0)),
+		Vector3i(2, -2, -4): VoxelFrame.material(Color(0.0, 0.0, 1.0)),
+		Vector3i(3, -2, -4): VoxelFrame.material(Color(0.0, 1.0, 0.0)),
+		Vector3i(4, -2, -4): VoxelFrame.material(Color(1.0, 1.0, 0.0)),
+		Vector3i(5, -2, -4): VoxelFrame.material(Color(1.0, 1.0, 0.0)),
+		Vector3i(1, -1, -4): VoxelFrame.material(Color(0.0, 1.0, 0.0)),
+		Vector3i(2, -1, -4): VoxelFrame.material(Color(0.0, 0.0, 1.0)),
+		Vector3i(3, -1, -4): VoxelFrame.material(Color(1.0, 1.0, 0.0)),
+		Vector3i(4, -1, -4): VoxelFrame.material(Color(1.0, 1.0, 0.0)),
+		Vector3i(5, -1, -4): VoxelFrame.material(Color(1.0, 1.0, 0.0)),
+		Vector3i(1, 0, -4): VoxelFrame.material(Color(0.0, 1.0, 0.0)),
+		Vector3i(2, 0, -4): VoxelFrame.material(Color(0.0, 1.0, 0.0)),
+		Vector3i(3, 0, -4): VoxelFrame.material(Color(0.0, 0.0, 1.0)),
+		Vector3i(4, 0, -4): VoxelFrame.material(Color(1.0, 1.0, 0.0)),
+		Vector3i(5, 0, -4): VoxelFrame.material(Color(1.0, 1.0, 0.0)),
+		Vector3i(4, 1, -4): VoxelFrame.material(Color(0.0, 0.0, 1.0)),
+		Vector3i(5, 1, -4): VoxelFrame.material(Color(1.0, 1.0, 0.0)),
+		Vector3i(5, 2, -4): VoxelFrame.material(Color(0.0, 0.0, 1.0)),
+	}
 
 
 func _random_cells() -> Dictionary:
