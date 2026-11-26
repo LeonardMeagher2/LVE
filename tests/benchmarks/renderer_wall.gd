@@ -16,8 +16,7 @@ func _ready() -> void:
 
 func _cost() -> void:
 	step("Given a 27 chunk mixed document on the editor", func():
-		var document := VoxelDocument.new()
-		document.frames.clear()
+		var document := VoxelDocument.new()		document.frames.clear()
 		var frame := _fixture()
 		document.frames.append(frame)
 		State.stop()
@@ -87,6 +86,13 @@ func _cost() -> void:
 			int(profile.get("truncated", 0)), int(profile.get("snapshots", 0)),
 		])
 		expect(int(profile.get("reaped", 0)) + int(profile.get("consume", 0)) >= locations.size(), "the renderer installs or resolves every chunk")
+	)
+	step("Then the change subscribers are listed", func():
+		for connection in State.chunks_changed.get_connections():
+			print("CHUNKS_CONN " + str(connection["callable"].get_object()))
+		for connection in State.cells_changed.get_connections():
+			print("CELLS_CONN " + str(connection["callable"].get_object()))
+		expect(true, "the subscribers are listed")
 	)
 	step("When every chunk cell changes", func():
 		var mutate_started := Time.get_ticks_usec()
