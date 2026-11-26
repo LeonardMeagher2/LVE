@@ -419,19 +419,20 @@ func _append_material_triangle(cell: Vector3i, bits: int, points: PackedVector3A
 	var last := (unique + 2) % 3
 	var first_cut := _material_cut(points[unique], sites[unique], points[first], sites[first])
 	var last_cut := _material_cut(points[last], sites[last], points[unique], sites[unique])
+	var reference := _inside_gradient(bits, (points[0] + points[1] + points[2]) / 3.0 - Vector3(cell))
 	if labels[first] == labels[last]:
-		_append_oriented_triangle(cell, bits, points[unique], first_cut, last_cut, labels[unique], labels[unique], labels[unique], materials, positions, normals, vertex_colors, vertex_materials, indices)
-		_append_oriented_triangle(cell, bits, first_cut, points[first], points[last], labels[first], labels[first], labels[first], materials, positions, normals, vertex_colors, vertex_materials, indices)
-		_append_oriented_triangle(cell, bits, first_cut, points[last], last_cut, labels[first], labels[first], labels[first], materials, positions, normals, vertex_colors, vertex_materials, indices)
+		_append_oriented_triangle(cell, bits, points[unique], first_cut, last_cut, labels[unique], labels[unique], labels[unique], materials, positions, normals, vertex_colors, vertex_materials, indices, reference)
+		_append_oriented_triangle(cell, bits, first_cut, points[first], points[last], labels[first], labels[first], labels[first], materials, positions, normals, vertex_colors, vertex_materials, indices, reference)
+		_append_oriented_triangle(cell, bits, first_cut, points[last], last_cut, labels[first], labels[first], labels[first], materials, positions, normals, vertex_colors, vertex_materials, indices, reference)
 		return
 	var middle_cut := _material_cut(points[first], sites[first], points[last], sites[last])
 	var centre := _triple_point(points, sites, (first_cut + middle_cut + last_cut) / 3.0)
-	_append_oriented_triangle(cell, bits, points[unique], first_cut, centre, labels[unique], labels[unique], labels[unique], materials, positions, normals, vertex_colors, vertex_materials, indices)
-	_append_oriented_triangle(cell, bits, points[unique], centre, last_cut, labels[unique], labels[unique], labels[unique], materials, positions, normals, vertex_colors, vertex_materials, indices)
-	_append_oriented_triangle(cell, bits, points[first], middle_cut, centre, labels[first], labels[first], labels[first], materials, positions, normals, vertex_colors, vertex_materials, indices)
-	_append_oriented_triangle(cell, bits, points[first], centre, first_cut, labels[first], labels[first], labels[first], materials, positions, normals, vertex_colors, vertex_materials, indices)
-	_append_oriented_triangle(cell, bits, points[last], last_cut, centre, labels[last], labels[last], labels[last], materials, positions, normals, vertex_colors, vertex_materials, indices)
-	_append_oriented_triangle(cell, bits, points[last], centre, middle_cut, labels[last], labels[last], labels[last], materials, positions, normals, vertex_colors, vertex_materials, indices)
+	_append_oriented_triangle(cell, bits, points[unique], first_cut, centre, labels[unique], labels[unique], labels[unique], materials, positions, normals, vertex_colors, vertex_materials, indices, reference)
+	_append_oriented_triangle(cell, bits, points[unique], centre, last_cut, labels[unique], labels[unique], labels[unique], materials, positions, normals, vertex_colors, vertex_materials, indices, reference)
+	_append_oriented_triangle(cell, bits, points[first], middle_cut, centre, labels[first], labels[first], labels[first], materials, positions, normals, vertex_colors, vertex_materials, indices, reference)
+	_append_oriented_triangle(cell, bits, points[first], centre, first_cut, labels[first], labels[first], labels[first], materials, positions, normals, vertex_colors, vertex_materials, indices, reference)
+	_append_oriented_triangle(cell, bits, points[last], last_cut, centre, labels[last], labels[last], labels[last], materials, positions, normals, vertex_colors, vertex_materials, indices, reference)
+	_append_oriented_triangle(cell, bits, points[last], centre, middle_cut, labels[last], labels[last], labels[last], materials, positions, normals, vertex_colors, vertex_materials, indices, reference)
 
 
 static func _triple_point(points: PackedVector3Array, sites: PackedVector3Array, fallback: Vector3) -> Vector3:
@@ -639,11 +640,11 @@ static func _axis_offsets(state: int) -> PackedInt32Array:
 	return PackedInt32Array([0])
 
 
-func _append_oriented_triangle(cell: Vector3i, bits: int, first: Vector3, second: Vector3, third: Vector3, first_material: int, second_material: int, third_material: int, materials: PackedFloat32Array, positions: PackedVector3Array, normals: PackedVector3Array, vertex_colors: PackedColorArray, vertex_materials: PackedInt32Array, indices: PackedInt32Array) -> void:
+func _append_oriented_triangle(cell: Vector3i, bits: int, first: Vector3, second: Vector3, third: Vector3, first_material: int, second_material: int, third_material: int, materials: PackedFloat32Array, positions: PackedVector3Array, normals: PackedVector3Array, vertex_colors: PackedColorArray, vertex_materials: PackedInt32Array, indices: PackedInt32Array, reference := Vector3.ZERO) -> void:
 	var winding := (second - first).cross(third - first)
 	if winding.length_squared() < 0.0000000001:
 		return
-	var inside := _inside_gradient(bits, (first + second + third) / 3.0 - Vector3(cell))
+	var inside := reference if reference.length_squared() > 0.0 else _inside_gradient(bits, (first + second + third) / 3.0 - Vector3(cell))
 	if winding.dot(inside) < 0.0:
 		var swap := second
 		second = third
