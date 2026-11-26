@@ -209,6 +209,7 @@ func _build(occupancy: PackedByteArray, material_ids: PackedInt32Array, material
 	welded[3] = _drop_degenerate_triangles(welded[0], welded[3])
 	_flip_diagonals(welded[0], welded[3], welded[4])
 	welded = _rebuild_flat_normals(welded[0], welded[1], welded[2], welded[4], welded[3], occupancy)
+	welded[3] = _drop_opposite_duplicate_triangles(welded[0], welded[3])
 	welded = _fill_boundary_ears(welded[0], welded[1], welded[2], welded[3], welded[4], occupancy, material_ids, materials)
 	surface_arrays.resize(Mesh.ARRAY_MAX)
 	surface_arrays[Mesh.ARRAY_VERTEX] = welded[0]
@@ -714,6 +715,42 @@ func _rebuild_flat_normals(positions: PackedVector3Array, normals: PackedVector3
 	return _weld(new_positions, new_normals, new_colors, new_materials, new_indices)
 
 
+func _drop_opposite_duplicate_triangles(positions: PackedVector3Array, indices: PackedInt32Array) -> PackedInt32Array:
+	var groups := {}
+	for triangle in range(0, indices.size(), 3):
+		var parts := PackedStringArray()
+		for corner in 3:
+			var key := _position_key(positions[indices[triangle + corner]])
+			parts.append("%d,%d,%d" % [key.x, key.y, key.z])
+		parts.sort()
+		var key := "|".join(parts)
+		var list: Array = groups.get(key, [])
+		list.append(triangle)
+		groups[key] = list
+	var removed := {}
+	for key: String in groups:
+		var list: Array = groups[key]
+		if list.size() < 2:
+			continue
+		var first: int = list[0]
+		var first_normal := _triangle_normal(positions, indices, first)
+		for index in range(1, list.size()):
+			var other: int = list[index]
+			if first_normal.dot(_triangle_normal(positions, indices, other)) < 0.0:
+				removed[first] = true
+				removed[other] = true
+			else:
+				removed[other] = true
+	var kept := PackedInt32Array()
+	for triangle in range(0, indices.size(), 3):
+		if removed.has(triangle):
+			continue
+		kept.append(indices[triangle])
+		kept.append(indices[triangle + 1])
+		kept.append(indices[triangle + 2])
+	return kept
+
+
 func _fill_boundary_ears(positions: PackedVector3Array, normals: PackedVector3Array, colors: PackedColorArray, indices: PackedInt32Array, materials_vertex: PackedInt32Array, occupancy: PackedByteArray, cell_material_ids: PackedInt32Array, palette: PackedFloat32Array) -> Array:
 	var point_of := {}
 	var keys: Array[Vector3i] = []
@@ -794,6 +831,12 @@ func _fill_boundary_ears(positions: PackedVector3Array, normals: PackedVector3Ar
 		if edge_material[first_edge] == edge_material[second_edge]:
 			continue
 		var middle := (first_point + second_point) * 0.5
+		if not _is_half_grid(first_point) or not _is_half_grid(second_point) or not _is_half_grid(tip):
+			continue
+		if absf(first_point.distance_to(second_point) - 1.0) > 0.01:
+			continue
+		if not _is_half_grid(middle):
+			continue
 		var middle_key := _position_key(middle)
 		if handled.has(middle_key) or point_of.has(middle_key):
 			continue
@@ -853,6 +896,10 @@ func _fill_boundary_ears(positions: PackedVector3Array, normals: PackedVector3Ar
 	if not filled:
 		return [positions, normals, colors, indices, materials_vertex]
 	return _weld(new_positions, new_normals, new_colors, new_materials, new_indices)
+
+
+static func _is_half_grid(point: Vector3) -> bool:
+	return absf(point.x * 2.0 - roundf(point.x * 2.0)) < 0.001 and absf(point.y * 2.0 - roundf(point.y * 2.0)) < 0.001 and absf(point.z * 2.0 - roundf(point.z * 2.0)) < 0.001
 
 
 static func _edge_key(first: Vector3i, second: Vector3i) -> String:
