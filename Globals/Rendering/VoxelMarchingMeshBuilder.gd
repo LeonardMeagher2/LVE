@@ -326,7 +326,12 @@ func _build_surfaces(occupancy: PackedByteArray, material_ids: PackedInt32Array,
 				var loops: Array = case_data["loops"]
 				var loop_triangles: Array = case_data["triangles"]
 				for loop_index in loops.size():
+					var loop: PackedInt32Array = loops[loop_index]
 					var triangle_edges: PackedInt32Array = loop_triangles[loop_index]
+					if cell_mixed:
+						var material_diagonal := _material_diagonal(cell, loop, occupancy, material_ids)
+						if not material_diagonal.is_empty():
+							triangle_edges = material_diagonal
 					for index in range(0, triangle_edges.size(), 3):
 						var first_edge := triangle_edges[index]
 						var second_edge := triangle_edges[index + 1]
@@ -686,6 +691,96 @@ func _edge_sample(cell: Vector3i, edge: int, occupancy: PackedByteArray, materia
 		if occupancy[sample_index] != 0:
 			return [Vector3(cell + CORNER_OFFSETS[corner]), material_ids[sample_index]]
 	return [Vector3(cell), 0]
+
+
+func _material_diagonal(cell: Vector3i, loop: PackedInt32Array, occupancy: PackedByteArray, material_ids: PackedInt32Array) -> PackedInt32Array:
+	if loop.size() != 4:
+		return PackedInt32Array()
+	var quad: Array[Vector3i] = []
+	var labels := PackedInt32Array()
+	for edge: int in loop:
+		if edge >= EDGE_CORNERS.size():
+			return PackedInt32Array()
+		var sample := _edge_sample(cell, edge, occupancy, material_ids)
+		var site: Vector3 = sample[0]
+		quad.append(Vector3i(roundi(site.x), roundi(site.y), roundi(site.z)))
+		labels.append(sample[1])
+	if labels[0] != labels[2] or labels[1] != labels[3] or labels[0] == labels[1]:
+		return PackedInt32Array()
+	var constant_axis := -1
+	for axis in 3:
+		if quad[0][axis] == quad[1][axis] and quad[0][axis] == quad[2][axis] and quad[0][axis] == quad[3][axis]:
+			constant_axis = axis
+			break
+	if constant_axis < 0:
+		return PackedInt32Array()
+	var first_axis := (constant_axis + 1) % 3
+	var second_axis := (constant_axis + 2) % 3
+	var first_low := mini(mini(quad[0][first_axis], quad[1][first_axis]), mini(quad[2][first_axis], quad[3][first_axis]))
+	var second_low := mini(mini(quad[0][second_axis], quad[1][second_axis]), mini(quad[2][second_axis], quad[3][second_axis]))
+	var first_high := maxi(maxi(quad[0][first_axis], quad[1][first_axis]), maxi(quad[2][first_axis], quad[3][first_axis]))
+	var second_high := maxi(maxi(quad[0][second_axis], quad[1][second_axis]), maxi(quad[2][second_axis], quad[3][second_axis]))
+	if first_high - first_low != 1 or second_high - second_low != 1:
+		return PackedInt32Array()
+	var components := _quad_components(quad, constant_axis, first_axis, second_axis, first_low - 1, second_low - 1, occupancy, material_ids)
+	if components.is_empty():
+		return PackedInt32Array()
+	var first_component: int = components.get(quad[0], -1)
+	var second_component: int = components.get(quad[1], -1)
+	var third_component: int = components.get(quad[2], -1)
+	var fourth_component: int = components.get(quad[3], -1)
+	if first_component != third_component and second_component == fourth_component:
+		return PackedInt32Array([loop[0], loop[1], loop[2], loop[0], loop[2], loop[3]])
+	if second_component != fourth_component and first_component == third_component:
+		return PackedInt32Array([loop[1], loop[2], loop[3], loop[1], loop[3], loop[0]])
+	return PackedInt32Array()
+
+
+func _quad_components(quad: Array[Vector3i], constant_axis: int, first_axis: int, second_axis: int, first_low: int, second_low: int, occupancy: PackedByteArray, material_ids: PackedInt32Array) -> Dictionary:
+	for second in 4:
+		for first in 4:
+			var cell := Vector3i.ZERO
+			cell[constant_axis] = quad[0][constant_axis]
+			cell[first_axis] = first_low + first
+			cell[second_axis] = second_low + second
+			var sample := cell + Vector3i.ONE * SAMPLE_PADDING
+			if sample.x < 0 or sample.y < 0 or sample.z < 0 or sample.x >= SAMPLE_SIZE or sample.y >= SAMPLE_SIZE or sample.z >= SAMPLE_SIZE:
+				return {}
+	var filled := {}
+	var component := 0
+	for second in 4:
+		for first in 4:
+			var cell := Vector3i.ZERO
+			cell[constant_axis] = quad[0][constant_axis]
+			cell[first_axis] = first_low + first
+			cell[second_axis] = second_low + second
+			var sample := cell + Vector3i.ONE * SAMPLE_PADDING
+			var index := sample.x + SAMPLE_SIZE * (sample.y + SAMPLE_SIZE * sample.z)
+			if occupancy[index] == 0 or filled.has(cell):
+				continue
+			var material := material_ids[index]
+			var stack: Array[Vector3i] = [cell]
+			filled[cell] = component
+			while not stack.is_empty():
+				var current: Vector3i = stack.pop_back()
+				for axis: int in [first_axis, second_axis]:
+					for direction in [-1, 1]:
+						var neighbor := current
+						neighbor[axis] += direction
+						if neighbor[first_axis] < first_low or neighbor[first_axis] > first_low + 3:
+							continue
+						if neighbor[second_axis] < second_low or neighbor[second_axis] > second_low + 3:
+							continue
+						if filled.has(neighbor):
+							continue
+						var neighbor_sample := neighbor + Vector3i.ONE * SAMPLE_PADDING
+						var neighbor_index := neighbor_sample.x + SAMPLE_SIZE * (neighbor_sample.y + SAMPLE_SIZE * neighbor_sample.z)
+						if occupancy[neighbor_index] == 0 or material_ids[neighbor_index] != material:
+							continue
+						filled[neighbor] = component
+						stack.append(neighbor)
+			component += 1
+	return filled
 
 
 static func _opposite_pair(bits: int) -> bool:
