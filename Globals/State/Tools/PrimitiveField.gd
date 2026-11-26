@@ -609,6 +609,18 @@ static func _rasterize_add(request: Dictionary, frame: VoxelFrame, min_cell: Vec
 	var first_offset := -((step - 1) >> 1)
 	var last_offset := step >> 1
 	var blend_active := not existing.is_empty()
+	var existing_min := Vector3i.ZERO
+	var existing_size := Vector3i.ZERO
+	var existing_values := PackedFloat32Array()
+	var existing_occupied := PackedByteArray()
+	if blend_active:
+		existing_min = existing["min"]
+		existing_size = existing["size"]
+		existing_values = existing["values"]
+		existing_occupied = existing.get("occupied", PackedByteArray())
+		blend_active = not existing_values.is_empty()
+	var stride_y := existing_size.x
+	var stride_z := existing_size.x * existing_size.y
 	var prepared := _prepare_distance(request)
 	var completed := 0
 	for x in range(min_cell.x, max_cell.x + 1, step):
@@ -616,19 +628,33 @@ static func _rasterize_add(request: Dictionary, frame: VoxelFrame, min_cell: Vec
 			for z in range(min_cell.z, max_cell.z + 1, step):
 				var sample := Vector3i(x, y, z)
 				var distance := _prepared_field_distance(prepared, Vector3(x, y, z))
-				if blend_active and not frame.has(sample):
-					var existing_distance := _existing_at(existing, sample)
-					if existing_distance < FAR_DISTANCE * 0.5:
-						distance = smin(existing_distance, distance, smooth)
+				var solid := false
+				var local := sample - existing_min
+				var in_field := blend_active and local.x >= 0 and local.y >= 0 and local.z >= 0 and local.x < existing_size.x and local.y < existing_size.y and local.z < existing_size.z
+				if in_field:
+					var index := local.x + stride_y * local.y + stride_z * local.z
+					solid = existing_occupied[index] > 0
+					if not solid:
+						var existing_distance := existing_values[index]
+						if existing_distance < FAR_DISTANCE * 0.5:
+							distance = smin(existing_distance, distance, smooth)
+				else:
+					solid = frame.has(sample)
 				if distance <= 0.0:
-					for dx in range(first_offset, last_offset + 1):
-						for dy in range(first_offset, last_offset + 1):
-							for dz in range(first_offset, last_offset + 1):
-								var cell := Vector3i(x + dx, y + dy, z + dz)
-								if frame.has(cell):
-									if blend_active or frame.matches(cell, material):
-										continue
-								changes[cell] = material
+					if step == 1:
+						if solid and (blend_active or frame.matches(sample, material)):
+							pass
+						else:
+							changes[sample] = material
+					else:
+						for dx in range(first_offset, last_offset + 1):
+							for dy in range(first_offset, last_offset + 1):
+								for dz in range(first_offset, last_offset + 1):
+									var cell := Vector3i(x + dx, y + dy, z + dz)
+									if frame.has(cell):
+										if blend_active or frame.matches(cell, material):
+											continue
+									changes[cell] = material
 				completed += 1
 				if job and completed % 2048 == 0 and not job.checkpoint(completed):
 					changes.clear()
@@ -713,7 +739,7 @@ static func _existing_field(frame: VoxelFrame, min_cell: Vector3i, max_cell: Vec
 		index += 1
 		if job and index % 4096 == 0 and not job.checkpoint(index):
 			return {}
-	return {"min": blend_min, "size": size, "values": values}
+	return {"min": blend_min, "size": size, "values": values, "occupied": occupied}
 
 
 static func _fill_occupied(frame: VoxelFrame, blend_min: Vector3i, size: Vector3i, occupied: PackedByteArray, job: VoxelFrame.EditJob) -> bool:
