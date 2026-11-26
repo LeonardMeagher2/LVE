@@ -22,7 +22,15 @@ func _cost() -> void:
 		document.frames.append(frame)
 		State.stop()
 		State.document = document
+		State.document.smooth_normals = false
+		State.document.ao_strength = 0.0
 		State.current_frame = 0
+		var cap := OS.get_environment("LVE_JOB_CAP")
+		if cap.is_valid_int():
+			VoxelRenderer._surface_job_limit = int(cap)
+		print("DOC_SETTINGS smooth=%s ao=%.2f cap=%d" % [
+			State.document.smooth_normals, State.document.ao_strength, VoxelRenderer._job_limit(),
+		])
 		for location: Vector3i in frame.chunks:
 			locations.append(location)
 		renderer = editor_viewport().find_child("VoxelRenderer", true, false)
