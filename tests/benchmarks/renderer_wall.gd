@@ -47,20 +47,23 @@ func _cost() -> void:
 	while frames < MAX_FRAMES:
 		await get_tree().process_frame
 		frames += 1
-		if int(renderer.profile_snapshot().get("reaped", 0)) >= locations.size():
+		var progress: Dictionary = renderer.profile_snapshot()
+		if int(progress.get("reaped", 0)) + int(progress.get("consume", 0)) >= locations.size():
 			break
 	var elapsed := Time.get_ticks_usec() - started
 	var profile: Dictionary = renderer.profile_snapshot()
 	step("Then the profile reports the shares", func():
 		print("SNAPSHOT " + JSON.stringify(profile))
-		print("MEASURE renderer_wall: us=%d frames=%d chunks=%d reaped=%d cap=%d cores=%d" % [
-			elapsed, frames, locations.size(), int(profile.get("reaped", 0)), VoxelRenderer._job_limit(), OS.get_processor_count(),
+		print("MEASURE renderer_wall: us=%d frames=%d chunks=%d reaped=%d consume=%d launched=%d cap=%d cores=%d" % [
+			elapsed, frames, locations.size(), int(profile.get("reaped", 0)), int(profile.get("consume", 0)),
+			int(profile.get("launch", 0)), VoxelRenderer._job_limit(), OS.get_processor_count(),
 		])
 		print("MEASURE renderer_wall shares: snapshot_us=%d install_us=%d material_us=%d cache_us=%d truncated=%d snapshots=%d" % [
 			int(profile.get("snapshot_us", 0)), int(profile.get("install_us", 0)),
 			int(profile.get("material_us", 0)), int(profile.get("cache_us", 0)),
 			int(profile.get("truncated", 0)), int(profile.get("snapshots", 0)),
 		])
+		expect(int(profile.get("reaped", 0)) + int(profile.get("consume", 0)) >= locations.size(), "the renderer installs or resolves every chunk")
 	)
 
 
