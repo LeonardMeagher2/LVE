@@ -203,6 +203,7 @@ func _build(occupancy: PackedByteArray, material_ids: PackedInt32Array, material
 		var built := _build_surfaces(occupancy, material_ids, materials, owners)
 		merged = built
 	var welded := _weld(merged[0], merged[1], merged[2], merged[3], merged[4])
+	_pinch_material_seams(welded[0], welded[4], occupancy, material_ids)
 	surface_arrays.resize(Mesh.ARRAY_MAX)
 	surface_arrays[Mesh.ARRAY_VERTEX] = welded[0]
 	surface_arrays[Mesh.ARRAY_NORMAL] = welded[1]
@@ -475,6 +476,87 @@ static func _material_cut(first: Vector3, first_site: Vector3, second: Vector3, 
 	return first.lerp(second, 0.5)
 
 
+func _pinch_material_seams(positions: PackedVector3Array, vertex_materials: PackedInt32Array, occupancy: PackedByteArray, material_ids: PackedInt32Array) -> void:
+	var seam_ids := {}
+	for index in positions.size():
+		var key := _position_key(positions[index])
+		var ids: Dictionary = seam_ids.get(key, {})
+		ids[vertex_materials[index]] = true
+		seam_ids[key] = ids
+	var targets := {}
+	for key: Vector3i in seam_ids:
+		var ids: Dictionary = seam_ids[key]
+		if ids.size() < 2:
+			continue
+		var position := Vector3(float(key.x) / 1024.0, float(key.y) / 1024.0, float(key.z) / 1024.0)
+		var cell := Vector3i(floori(position.x), floori(position.y), floori(position.z))
+		var cells := {}
+		for x in range(-1, 2):
+			for y in range(-1, 2):
+				for z in range(-1, 2):
+					var sample_cell := cell + Vector3i(x, y, z)
+					var sample := sample_cell + Vector3i.ONE * SAMPLE_PADDING
+					if sample.x < 0 or sample.y < 0 or sample.z < 0 or sample.x >= SAMPLE_SIZE or sample.y >= SAMPLE_SIZE or sample.z >= SAMPLE_SIZE:
+						continue
+					var index := sample.x + SAMPLE_SIZE * (sample.y + SAMPLE_SIZE * sample.z)
+					if occupancy[index] == 0:
+						continue
+					var material_id := material_ids[index]
+					if not ids.has(material_id):
+						continue
+					var list: Array = cells.get(material_id, [])
+					list.append(sample_cell)
+					cells[material_id] = list
+		var best := position
+		var best_distance := INF
+		for first_id: int in cells:
+			for second_id: int in cells:
+				if first_id == second_id:
+					continue
+				for first_cell: Vector3i in cells[first_id]:
+					for second_cell: Vector3i in cells[second_id]:
+						var difference := first_cell - second_cell
+						if absi(difference.x) + absi(difference.y) + absi(difference.z) != 2:
+							continue
+						var target := _shared_edge_pull(Vector3(first_cell), Vector3(second_cell), position)
+						var distance := target.distance_squared_to(position)
+						if distance < best_distance:
+							best_distance = distance
+							best = target
+		if best_distance < INF:
+			targets[key] = best
+	for index in positions.size():
+		var key := _position_key(positions[index])
+		if targets.has(key):
+			positions[index] = targets[key]
+
+
+static func _position_key(point: Vector3) -> Vector3i:
+	return Vector3i(roundi(point.x * 1024.0), roundi(point.y * 1024.0), roundi(point.z * 1024.0))
+
+
+static func _shared_edge_pull(first_site: Vector3, second_site: Vector3, point: Vector3) -> Vector3:
+	var difference := second_site - first_site
+	var changed := 0
+	var free_axis := -1
+	for axis in 3:
+		var step := absf(difference[axis])
+		if step > 0.5:
+			if step > 1.5:
+				return point
+			changed += 1
+		else:
+			free_axis = axis
+	if changed != 2 or free_axis < 0:
+		return point
+	var target := point
+	for axis in 3:
+		if absf(difference[axis]) > 0.5:
+			target[axis] = (first_site[axis] + second_site[axis]) * 0.5
+	target[free_axis] = clampf(point[free_axis], first_site[free_axis] - 0.5, first_site[free_axis] + 0.5)
+	return target
+
+
 func _edge_sample(cell: Vector3i, edge: int, occupancy: PackedByteArray, material_ids: PackedInt32Array) -> Array:
 	if edge >= EDGE_CORNERS.size():
 		var point := _edge_point(cell, edge)
@@ -595,6 +677,7 @@ static func _weld(positions: PackedVector3Array, normals: PackedVector3Array, co
 	var welded_positions := PackedVector3Array()
 	var welded_normals := PackedVector3Array()
 	var welded_colors := PackedColorArray()
+	var welded_materials := PackedInt32Array()
 	var welded_indices := PackedInt32Array()
 	welded_indices.resize(indices.size())
 	var by_position := {}
@@ -613,11 +696,12 @@ static func _weld(positions: PackedVector3Array, normals: PackedVector3Array, co
 			welded_positions.append(position)
 			welded_normals.append(normal)
 			welded_colors.append(colors[source])
+			welded_materials.append(material_id)
 			by_material[material_id] = vertex
 			by_normal[normal_key] = by_material
 			by_position[position_key] = by_normal
 		welded_indices[index] = vertex
-	return [welded_positions, welded_normals, welded_colors, welded_indices]
+	return [welded_positions, welded_normals, welded_colors, welded_indices, welded_materials]
 
 
 func _mirror_on_face(cell: Vector3i, first_edge: int, second_edge: int, third_edge: int, occupancy: PackedByteArray) -> bool:
