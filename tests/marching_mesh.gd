@@ -23,7 +23,7 @@ func _ready() -> void:
 	test("a painted random model stays closed across seams", _random_model, "march_watertight")
 	test("a painted 2x2x2 block stays closed", _solid_block, "march_solid_block")
 	test("a painted 16-cell slab spans the chunk", _slab, "march_slab")
-	test("a painted flat plate stays one closed surface", _flat_plate, "march_flat_plate")
+	test("a painted flat plate merges its coplanar top", _flat_plate, "march_flat_plate")
 	test("a painted hollow shell keeps its cavity", _hollow_shell, "march_hollow_shell")
 	test("the low-poly style renders in the editor viewport", _viewport_style, "march_viewport_style")
 	test("the settings modal stores one undoable style change", _style_undo, "march_style_undo")
@@ -266,11 +266,16 @@ func _flat_plate() -> void:
 		_view.apply(cells)
 	)
 	await _view.settle()
-	step("Then the plate is one closed surface", func():
+	step("Then the flat top merges into one fan and stays closed", func():
 		_view.collect()
 		expect(_view.closed(), "the plate has no boundary")
 		expect(_view.components() == 1, "the plate is one surface")
 		expect(_view.duplicates() == 0, "no triangle is emitted twice")
+		var top := 0
+		for offset in range(0, _view.indices.size(), 3):
+			if _view.normals[_view.indices[offset]].y > 0.99:
+				top += 1
+		expect(top < 100, "the flat top merges into a fan")
 	)
 
 

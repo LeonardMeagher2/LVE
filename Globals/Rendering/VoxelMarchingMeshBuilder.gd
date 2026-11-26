@@ -58,6 +58,7 @@ var slice_count := 1
 var per_material := false
 var hard_boundaries := false
 
+var merge_flats := true
 var material_groups: Array = []
 
 
@@ -201,7 +202,7 @@ func _build(occupancy: PackedByteArray, material_ids: PackedInt32Array, material
 		merged = _build_per_material(occupancy, material_ids, materials, owners)
 	else:
 		var built := _build_surfaces(occupancy, material_ids, materials, owners)
-		merged = built
+		merged = _merge_flats(built[0], built[1], built[2], built[3], built[4]) if merge_flats else built
 	var welded := _weld(merged[0], merged[1], merged[2], merged[3], merged[4])
 	surface_arrays.resize(Mesh.ARRAY_MAX)
 	surface_arrays[Mesh.ARRAY_VERTEX] = welded[0]
@@ -266,7 +267,7 @@ func _build_per_material(occupancy: PackedByteArray, material_ids: PackedInt32Ar
 	for group in group_count:
 		var mask: PackedByteArray = masks[group]
 		var built := _build_surfaces(mask, material_ids, materials, owners)
-		var merged := built
+		var merged := _merge_flats(built[0], built[1], built[2], built[3], built[4]) if merge_flats else built
 		var offset := all_positions.size()
 		all_positions.append_array(merged[0])
 		all_normals.append_array(merged[1])
@@ -506,6 +507,210 @@ func _edge_sample(cell: Vector3i, edge: int, occupancy: PackedByteArray, materia
 		if occupancy[sample_index] != 0:
 			return [Vector3(cell + CORNER_OFFSETS[corner]), material_ids[sample_index]]
 	return [Vector3(cell), 0]
+
+
+static func _merge_flats(positions: PackedVector3Array, normals: PackedVector3Array, colors: PackedColorArray, materials: PackedInt32Array, indices: PackedInt32Array) -> Array:
+	var triangle_count := indices.size() / 3
+	var consumed := PackedByteArray()
+	consumed.resize(triangle_count)
+	var buckets := {}
+	for triangle in triangle_count:
+		var first := indices[triangle * 3]
+		var second := indices[triangle * 3 + 1]
+		var third := indices[triangle * 3 + 2]
+		var normal := normals[first]
+		var axis := -1
+		for candidate in 3:
+			if absf(normal[candidate]) > 0.999:
+				axis = candidate
+		if axis < 0:
+			continue
+		if materials[first] != materials[second] or materials[first] != materials[third]:
+			continue
+		var sign := 1 if normal[axis] > 0.0 else 0
+		var plane := roundi(positions[first][axis] * 2.0)
+		var key := ((axis * 2 + sign) << 34) | ((plane + 32768) << 18) | materials[first]
+		var entry: Dictionary = buckets.get(key, {})
+		if entry.is_empty():
+			entry = {
+				"normal": normal,
+				"color": colors[first],
+				"material": materials[first],
+				"axis": axis,
+				"plane": positions[first][axis],
+				"u_axis": (axis + 1) % 3,
+				"v_axis": (axis + 2) % 3,
+				"squares": {},
+				"halves": {},
+			}
+			buckets[key] = entry
+		var u_axis: int = entry.u_axis
+		var v_axis: int = entry.v_axis
+		var first_u := roundi(positions[first][u_axis] * 2.0)
+		var first_v := roundi(positions[first][v_axis] * 2.0)
+		var second_u := roundi(positions[second][u_axis] * 2.0)
+		var second_v := roundi(positions[second][v_axis] * 2.0)
+		var third_u := roundi(positions[third][u_axis] * 2.0)
+		var third_v := roundi(positions[third][v_axis] * 2.0)
+		var square := Vector2i(
+			mini(first_u, mini(second_u, third_u)),
+			mini(first_v, mini(second_v, third_v))
+		)
+		var has_low := false
+		var has_high := false
+		var has_right := false
+		var has_up := false
+		var on_square := true
+		for point in [[first_u, first_v], [second_u, second_v], [third_u, third_v]]:
+			if point[0] == square.x and point[1] == square.y:
+				has_low = true
+			elif point[0] == square.x + 2 and point[1] == square.y + 2:
+				has_high = true
+			elif point[0] == square.x + 2 and point[1] == square.y:
+				has_right = true
+			elif point[0] == square.x and point[1] == square.y + 2:
+				has_up = true
+			else:
+				on_square = false
+		if not on_square:
+			continue
+		var squares: Dictionary = entry.squares
+		var mask: int = squares.get(square, 0)
+		if not has_high:
+			mask |= 1
+		elif not has_low:
+			mask |= 2
+		elif not has_right:
+			mask |= 4
+		elif not has_up:
+			mask |= 8
+		squares[square] = mask
+		var halves: Dictionary = entry.halves
+		var list: Array = halves.get(square, [])
+		list.append(triangle)
+		halves[square] = list
+	var merged_positions := PackedVector3Array()
+	var merged_normals := PackedVector3Array()
+	var merged_colors := PackedColorArray()
+	var merged_materials := PackedInt32Array()
+	var merged_indices := PackedInt32Array()
+	for key in buckets:
+		var entry: Dictionary = buckets[key]
+		var squares: Dictionary = entry.squares
+		var complete := {}
+		for square: Vector2i in squares:
+			var mask: int = squares[square]
+			if (mask & 3) == 3 or (mask & 12) == 12:
+				complete[square] = true
+		var order: Array = complete.keys()
+		order.sort_custom(_square_before)
+		for square: Vector2i in order:
+			if not complete.has(square):
+				continue
+			var left := square.x
+			while complete.has(Vector2i(left - 2, square.y)):
+				left -= 2
+			var right := square.x
+			while complete.has(Vector2i(right + 2, square.y)):
+				right += 2
+			var width := (right - left) / 2 + 1
+			var bottom := square.y
+			var growing := true
+			while growing:
+				for offset in width:
+					if not complete.has(Vector2i(left + offset * 2, bottom - 2)):
+						growing = false
+						break
+				if growing:
+					bottom -= 2
+			var top := square.y
+			growing = true
+			while growing:
+				for offset in width:
+					if not complete.has(Vector2i(left + offset * 2, top + 2)):
+						growing = false
+						break
+				if growing:
+					top += 2
+			var height := (top - bottom) / 2 + 1
+			var area := width * height
+			var perimeter := 2 * (width + height)
+			for row in height:
+				for column in width:
+					complete.erase(Vector2i(left + column * 2, bottom + row * 2))
+			if area * 2 <= perimeter:
+				continue
+			for row in height:
+				for column in width:
+					for triangle: int in entry.halves[Vector2i(left + column * 2, bottom + row * 2)]:
+						consumed[triangle] = 1
+			_emit_flat_fan(entry, Vector2(left, bottom) * 0.5, width, height, merged_positions, merged_normals, merged_colors, merged_materials, merged_indices)
+	for triangle in triangle_count:
+		if consumed[triangle] != 0:
+			continue
+		var first_vertex := merged_positions.size()
+		for corner in 3:
+			var source := indices[triangle * 3 + corner]
+			merged_positions.append(positions[source])
+			merged_normals.append(normals[source])
+			merged_colors.append(colors[source])
+			merged_materials.append(materials[source])
+		merged_indices.append(first_vertex)
+		merged_indices.append(first_vertex + 1)
+		merged_indices.append(first_vertex + 2)
+	return [merged_positions, merged_normals, merged_colors, merged_materials, merged_indices]
+
+
+static func _square_before(first: Vector2i, second: Vector2i) -> bool:
+	if first.y != second.y:
+		return first.y < second.y
+	return first.x < second.x
+
+
+static func _emit_flat_fan(entry: Dictionary, corner: Vector2, width: int, height: int, positions: PackedVector3Array, normals: PackedVector3Array, colors: PackedColorArray, materials: PackedInt32Array, indices: PackedInt32Array) -> void:
+	var normal: Vector3 = entry.normal
+	var color: Color = entry.color
+	var material: int = entry.material
+	var axis: int = entry.axis
+	var u_axis: int = entry.u_axis
+	var v_axis: int = entry.v_axis
+	var plane: float = entry.plane
+	var centre := _plane_point(axis, plane, u_axis, v_axis, corner.x + width * 0.5, corner.y + height * 0.5)
+	var loop: Array[Vector3] = []
+	for column in width:
+		loop.append(_plane_point(axis, plane, u_axis, v_axis, corner.x + column, corner.y))
+	for row in height:
+		loop.append(_plane_point(axis, plane, u_axis, v_axis, corner.x + width, corner.y + row))
+	for column in range(width, 0, -1):
+		loop.append(_plane_point(axis, plane, u_axis, v_axis, corner.x + column, corner.y + height))
+	for row in range(height, 0, -1):
+		loop.append(_plane_point(axis, plane, u_axis, v_axis, corner.x, corner.y + row))
+	for index in loop.size():
+		var first := loop[index]
+		var second := loop[(index + 1) % loop.size()]
+		if (first - centre).cross(second - centre).dot(normal) > 0.0:
+			var swap := first
+			first = second
+			second = swap
+		var first_vertex := positions.size()
+		positions.append(centre)
+		positions.append(first)
+		positions.append(second)
+		for vertex in 3:
+			normals.append(normal)
+			colors.append(color)
+			materials.append(material)
+		indices.append(first_vertex)
+		indices.append(first_vertex + 1)
+		indices.append(first_vertex + 2)
+
+
+static func _plane_point(axis: int, plane: float, u_axis: int, v_axis: int, u: float, v: float) -> Vector3:
+	var point := Vector3.ZERO
+	point[axis] = plane
+	point[u_axis] = u
+	point[v_axis] = v
+	return point
 
 
 static func _weld(positions: PackedVector3Array, normals: PackedVector3Array, colors: PackedColorArray, materials: PackedInt32Array, indices: PackedInt32Array) -> Array:
