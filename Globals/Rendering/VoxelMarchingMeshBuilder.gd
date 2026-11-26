@@ -334,18 +334,14 @@ func _build_surfaces(occupancy: PackedByteArray, material_ids: PackedInt32Array,
 						var second_point := _field_point(cell, second_edge, field)
 						var third_point := _field_point(cell, third_edge, field)
 						if cell_mixed:
-							var first_site := _edge_sample(cell, first_edge, occupancy, material_ids)
-							var second_site := _edge_sample(cell, second_edge, occupancy, material_ids)
-							var third_site := _edge_sample(cell, third_edge, occupancy, material_ids)
+							var first_sample := _edge_sample(cell, first_edge, occupancy, material_ids)
+							var second_sample := _edge_sample(cell, second_edge, occupancy, material_ids)
+							var third_sample := _edge_sample(cell, third_edge, occupancy, material_ids)
 							_append_material_triangle(
 								cell, bits,
 								PackedVector3Array([first_point, second_point, third_point]),
-								PackedInt32Array([
-									material_ids[_sample_index(first_site)],
-									material_ids[_sample_index(second_site)],
-									material_ids[_sample_index(third_site)],
-								]),
-								PackedVector3Array([Vector3(first_site), Vector3(second_site), Vector3(third_site)]),
+								PackedInt32Array([first_sample[1], second_sample[1], third_sample[1]]),
+								PackedVector3Array([first_sample[0], second_sample[0], third_sample[0]]),
 								materials, positions, normals, vertex_colors, vertex_materials, indices
 							)
 							continue
@@ -451,14 +447,16 @@ static func _triple_point(points: PackedVector3Array, sites: PackedVector3Array,
 	var second_value := (sites[2].length_squared() - sites[0].length_squared()) * 0.5
 	var plane := normal.dot(points[0])
 	var point := (second_axis.cross(normal) * first_value + normal.cross(first_axis) * second_value + cross * plane) / determinant
-	var first_weight := (points[1] - points[0]).cross(point - points[0]).dot(normal)
-	var second_weight := (points[2] - points[0]).cross(point - points[0]).dot(normal)
 	var squared := normal.length_squared()
-	if first_weight / squared < -0.001 or second_weight / squared < -0.001:
-		return fallback
-	if first_weight / squared + second_weight / squared > 1.001:
-		return fallback
-	return point
+	var second_weight := (points[1] - points[0]).cross(point - points[0]).dot(normal) / squared
+	var third_weight := -(points[2] - points[0]).cross(point - points[0]).dot(normal) / squared
+	second_weight = clampf(second_weight, 0.0, 1.0)
+	third_weight = clampf(third_weight, 0.0, 1.0)
+	if second_weight + third_weight > 1.0:
+		var scale := 1.0 / (second_weight + third_weight)
+		second_weight *= scale
+		third_weight *= scale
+	return points[0] + (points[1] - points[0]) * second_weight + (points[2] - points[0]) * third_weight
 
 
 static func _material_cut(first: Vector3, first_site: Vector3, second: Vector3, second_site: Vector3) -> Vector3:
@@ -474,35 +472,41 @@ static func _material_cut(first: Vector3, first_site: Vector3, second: Vector3, 
 	return first.lerp(second, 0.5)
 
 
-static func _sample_index(site: Vector3i) -> int:
-	var sample := site + Vector3i.ONE * SAMPLE_PADDING
-	return sample.x + SAMPLE_SIZE * (sample.y + SAMPLE_SIZE * sample.z)
-
-
-func _edge_sample(cell: Vector3i, edge: int, occupancy: PackedByteArray, material_ids: PackedInt32Array) -> Vector3i:
+func _edge_sample(cell: Vector3i, edge: int, occupancy: PackedByteArray, material_ids: PackedInt32Array) -> Array:
 	if edge >= EDGE_CORNERS.size():
 		var point := _edge_point(cell, edge)
 		var closest := INF
-		var closest_site := Vector3i.ZERO
-		var closest_material := 0
+		var label := -1
 		for corner in 8:
 			var sample := cell + CORNER_OFFSETS[corner] + Vector3i.ONE * SAMPLE_PADDING
 			var sample_index := sample.x + SAMPLE_SIZE * (sample.y + SAMPLE_SIZE * sample.z)
 			if occupancy[sample_index] == 0:
 				continue
 			var distance := (point - (Vector3(cell) + Vector3(CORNER_OFFSETS[corner]))).length_squared()
-			if distance < closest - 0.000001 or (distance <= closest + 0.000001 and material_ids[sample_index] < closest_material):
+			if distance < closest - 0.000001 or (distance <= closest + 0.000001 and (label < 0 or material_ids[sample_index] < label)):
 				closest = distance
-				closest_site = cell + CORNER_OFFSETS[corner]
-				closest_material = material_ids[sample_index]
-		return closest_site
+				label = material_ids[sample_index]
+		var site := Vector3.ZERO
+		var tied := 0
+		for corner in 8:
+			var sample := cell + CORNER_OFFSETS[corner] + Vector3i.ONE * SAMPLE_PADDING
+			var sample_index := sample.x + SAMPLE_SIZE * (sample.y + SAMPLE_SIZE * sample.z)
+			if occupancy[sample_index] == 0 or material_ids[sample_index] != label:
+				continue
+			var distance := (point - (Vector3(cell) + Vector3(CORNER_OFFSETS[corner]))).length_squared()
+			if distance <= closest + 0.000001:
+				site += Vector3(cell) + Vector3(CORNER_OFFSETS[corner])
+				tied += 1
+		if tied > 0:
+			site /= float(tied)
+		return [site, label]
 	var corners: Array = EDGE_CORNERS[edge]
 	for corner: int in corners:
 		var sample := cell + CORNER_OFFSETS[corner] + Vector3i.ONE * SAMPLE_PADDING
 		var sample_index := sample.x + SAMPLE_SIZE * (sample.y + SAMPLE_SIZE * sample.z)
 		if occupancy[sample_index] != 0:
-			return cell + CORNER_OFFSETS[corner]
-	return Vector3i.ZERO
+			return [Vector3(cell + CORNER_OFFSETS[corner]), material_ids[sample_index]]
+	return [Vector3(cell), 0]
 
 
 static func _merge_flats(positions: PackedVector3Array, normals: PackedVector3Array, colors: PackedColorArray, materials: PackedInt32Array, indices: PackedInt32Array) -> Array:
