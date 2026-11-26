@@ -77,6 +77,18 @@ The loop reran the commands above on `main`. This table supersedes the ranks for
 Ranks 1 and 2 are within the run-to-run band, so the next step measures the mixed atlas surface.
 The export, preview, and document rows come from `export_cost`, `thumbnail_cost`, and `document_io`.
 
+### Parallel surface build (2026-11-25)
+
+`tests/benchmarks/mesh_parallel.tscn` builds the 27-chunk mixed fixture serially and on `WorkerThreadPool`, one task per chunk:
+
+| build | time | vertices | indices |
+| --- | --- | --- | --- |
+| serial | 1.670 s | 550,125 | 1,057,536 |
+| WorkerThreadPool, 16 cores | 0.514 s | 550,125 | 1,057,536 |
+
+The parallel build is 3.25 times faster with identical output.
+The plan for the production path is one build task per chunk from the immutable snapshot, with `ArrayMesh` creation on the main thread and the existing cancel and join contract.
+
 ## 1. Primitive shape preview and apply
 
 ### Evidence
