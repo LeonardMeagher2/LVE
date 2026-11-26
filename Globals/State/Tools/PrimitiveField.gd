@@ -816,6 +816,8 @@ static func _chamfer_forward(values: PackedFloat32Array, size: Vector3i, job: Vo
 			for x in range(sx):
 				var index := row_base + x
 				var best := values[index]
+				if best <= 0.0:
+					continue
 				var candidate := 0.0
 				if x > 0:
 					candidate = values[index - 1] + 1.0
@@ -889,6 +891,8 @@ static func _chamfer_backward(values: PackedFloat32Array, size: Vector3i, job: V
 			for x in range(sx - 1, -1, -1):
 				var index := row_base + x
 				var best := values[index]
+				if best <= 0.0:
+					continue
 				var candidate := 0.0
 				if x < sx - 1:
 					candidate = values[index + 1] + 1.0
