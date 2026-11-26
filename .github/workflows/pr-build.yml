@@ -9,13 +9,16 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # A fork PR gets no secrets and a read-only token, so only a branch of this repository can build and publish.
   build:
-    if: github.event.action != 'closed'
+    if: >
+      github.event.action != 'closed' &&
+      github.event.pull_request.head.repo.full_name == github.repository
     uses: ./.github/workflows/build-presets.yml
     secrets: inherit
 
   publish:
-    if: github.event.action != 'closed'
+    if: needs.build.result == 'success'
     needs: [build]
     runs-on: ubuntu-latest
     permissions:
@@ -58,7 +61,9 @@ jobs:
           fi
 
   cleanup:
-    if: github.event.action == 'closed'
+    if: >
+      github.event.action == 'closed' &&
+      github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     permissions:
       contents: write
