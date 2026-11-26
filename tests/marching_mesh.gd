@@ -28,7 +28,7 @@ func _ready() -> void:
 	test("a straight material seam keeps its diagonal vertex", _straight_material_seam, "march_straight_material_seam")
 	test("an edge seam outside the shared edge keeps its vertex", _edge_seam_span, "march_edge_seam_span")
 	test("an edge seam beyond half a cell keeps its vertex", _edge_seam_travel, "march_edge_seam_travel")
-	test("a four-material face keeps its four materials", _four_material_face, "march_four_material_face")
+	test("a four-material face colours each triangle from its own cell", _four_material_face, "march_four_material_face")
 	test("the low-poly style renders in the editor viewport", _viewport_style, "march_viewport_style")
 	test("the settings modal stores one undoable style change", _style_undo, "march_style_undo")
 
@@ -348,25 +348,30 @@ func _four_material_face() -> void:
 		_view.apply(_four_material_face_cells())
 	)
 	await _view.settle()
-	step("Then each material keeps its own triangles", func():
+	step("Then each face triangle carries the material behind it", func():
 		_view.collect()
-		var colours := _colours_on_face(-3.5)
-		expect(colours.size() == 4, "the face draws four materials")
-		for colour: Color in [Color(1.0, 1.0, 0.0), Color(1.0, 0.0, 0.0), Color(1.0, 0.0, 1.0), Color(0.0, 0.0, 1.0)]:
-			expect(colours.has(colour), "the face draws its %s material" % colour)
+		var cells := _four_material_face_cells()
+		var quadrants := {}
+		var wrong := 0
+		for index in range(0, _view.indices.size(), 3):
+			var first: Vector3 = _view.positions[_view.indices[index]]
+			var second: Vector3 = _view.positions[_view.indices[index + 1]]
+			var third: Vector3 = _view.positions[_view.indices[index + 2]]
+			if absf(first.x + 3.5) > 0.001 or absf(second.x + 3.5) > 0.001 or absf(third.x + 3.5) > 0.001:
+				continue
+			var centre := (first + second + third) / 3.0
+			var cell := Vector3i(-3, roundi(centre.y), roundi(centre.z))
+			quadrants[Vector2i(cell.y, cell.z)] = true
+			if not cells.has(cell):
+				wrong += 1
+				continue
+			var material: PackedFloat32Array = cells[cell]
+			var expected := Color(material[0], material[1], material[2], material[3])
+			if not _view.colors[_view.indices[index]].is_equal_approx(expected):
+				wrong += 1
+		expect(quadrants.size() == 4, "the face draws all four quadrants")
+		expect(wrong == 0, "each face triangle carries the material behind it")
 	)
-
-
-func _colours_on_face(x: float) -> Dictionary:
-	var colours := {}
-	for index in range(0, _view.indices.size(), 3):
-		var first: Vector3 = _view.positions[_view.indices[index]]
-		var second: Vector3 = _view.positions[_view.indices[index + 1]]
-		var third: Vector3 = _view.positions[_view.indices[index + 2]]
-		if absf(first.x - x) > 0.001 or absf(second.x - x) > 0.001 or absf(third.x - x) > 0.001:
-			continue
-		colours[_view.colors[_view.indices[index]]] = true
-	return colours
 
 
 func _viewport_style() -> void:

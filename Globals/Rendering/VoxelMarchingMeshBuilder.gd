@@ -555,8 +555,8 @@ static func _triple_point(points: PackedVector3Array, sites: PackedVector3Array,
 	var plane := normal.dot(points[0])
 	var point := (second_axis.cross(normal) * first_value + normal.cross(first_axis) * second_value + cross * plane) / determinant
 	var squared := normal.length_squared()
-	var second_weight := (points[1] - points[0]).cross(point - points[0]).dot(normal) / squared
-	var third_weight := -(points[2] - points[0]).cross(point - points[0]).dot(normal) / squared
+	var second_weight := (point - points[0]).cross(points[2] - points[0]).dot(normal) / squared
+	var third_weight := (points[1] - points[0]).cross(point - points[0]).dot(normal) / squared
 	second_weight = clampf(second_weight, 0.0, 1.0)
 	third_weight = clampf(third_weight, 0.0, 1.0)
 	if second_weight + third_weight > 1.0:
