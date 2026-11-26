@@ -67,6 +67,9 @@ The loop reran the commands above on `main`. This table supersedes the ranks for
 | 3 | Primitive add without a blend, 64 cubed cells | 0.86 s | 1.16 s |
 | 4 | Chunk surface, mixed materials, color | 0.40 s | 0.35 s |
 | 5 | Spray sampling, width 64 warm | 0.028 s | 0.028 s |
+| 6 | Document load, 52,428 cells, 2 frames | 0.083 s | not measured |
+| 7 | Document encode, same document | 0.026 s | not measured |
+| 8 | Document save, pre-encoded bytes | 0.0004 s | not measured |
 
 The smooth add fell from 3.46 s to 2.33 s in two loop steps.
 The first returned the occupied mask and reused the solid test.
