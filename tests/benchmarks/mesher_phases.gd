@@ -38,9 +38,10 @@ func _attribute() -> void:
 		for fixture in ["uniform", "mixed"]:
 			for smooth in [false, true]:
 				for atlas in [true, false]:
-					var name := _config_name(fixture, smooth, atlas)
-					_order.append(name)
-					_rows[name] = {"fixture": fixture, "smooth": smooth, "atlas": atlas, "passes": []}
+					for ao in ([false, true] if atlas else [false]):
+						var name := _config_name(fixture, smooth, atlas, ao)
+						_order.append(name)
+						_rows[name] = {"fixture": fixture, "smooth": smooth, "atlas": atlas, "ao": ao, "passes": []}
 		for pass_index in WARMUP_PASSES + MEASURE_PASSES:
 			for name in _order:
 				_run_pass(name, _rows[name])
@@ -66,7 +67,7 @@ func _check_ab(config: Dictionary) -> void:
 		production_times.append(_time_production(frame, smooth, atlas))
 	var frozen_median := _median(frozen_times.slice(WARMUP_PASSES))
 	var production_median := _median(production_times.slice(WARMUP_PASSES))
-	var name := _config_name(config["fixture"], smooth, atlas)
+	var name := _config_name(config["fixture"], smooth, atlas, false)
 	print("MEASURE mesher_phases_ab %s: frozen_us=%d production_us=%d ratio=%.3f" % [
 		name, frozen_median, production_median, float(production_median) / float(maxi(1, frozen_median)),
 	])
@@ -97,6 +98,7 @@ func _run_pass(name: String, row: Dictionary) -> void:
 	var frame: VoxelFrame = _fixtures[row["fixture"]]
 	var smooth: bool = row["smooth"]
 	var atlas: bool = row["atlas"]
+	var ao: bool = row["ao"]
 	var totals := {
 		"us": 0, "snapshot": 0, "scan": 0, "finish": 0, "chunks": 0, "culled": 0, "empty": 0,
 		"vertices": 0, "triangles": 0, "chunks_read": 0, "cells_read": 0, "decodes": 0,
@@ -109,6 +111,7 @@ func _run_pass(name: String, row: Dictionary) -> void:
 		builder.chunk_location = location
 		builder.smooth_normals = smooth
 		builder.texture_materials = atlas
+		builder.ao_strength = 1.0 if ao else 0.0
 		builder.profile = true
 		builder.run()
 		totals["snapshot"] += builder.snapshot_us
@@ -197,8 +200,8 @@ func _build_fixture(mixed: bool) -> VoxelFrame:
 	return frame
 
 
-func _config_name(fixture: String, smooth: bool, atlas: bool) -> String:
-	return "%s_%s_%s" % [fixture, "smooth" if smooth else "flat", "atlas" if atlas else "color"]
+func _config_name(fixture: String, smooth: bool, atlas: bool, ao: bool) -> String:
+	return "%s_%s_%s%s" % [fixture, "smooth" if smooth else "flat", "atlas" if atlas else "color", "_ao" if ao else ""]
 
 
 func _median(values: Array) -> int:
