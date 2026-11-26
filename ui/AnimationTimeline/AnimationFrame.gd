@@ -35,7 +35,11 @@ func _on_frame_changed() -> void:
 
 func _on_cells_changed(frame: int, _affected: Array[Vector3i]) -> void:
 	if frame == frame_index:
+		var started := Time.get_ticks_usec()
 		VoxelImageRenderer.request_frame_render(frame_index)
+		var spent := Time.get_ticks_usec() - started
+		if spent > 50_000:
+			print("SLOW_THUMBNAIL_REQUEST us=%d" % spent)
 
 func _on_frame_rendered(rendered_index: int, rendered: ImageTexture) -> void:
 	if rendered_index == frame_index:
