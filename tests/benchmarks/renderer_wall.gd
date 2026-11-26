@@ -48,6 +48,12 @@ func _cost() -> void:
 		await get_tree().process_frame
 		frames += 1
 		var progress: Dictionary = renderer.profile_snapshot()
+		if frames <= 40:
+			print("FRAME %d pending=%d inflight=%d jobs=%d reaped=%d consume=%d truncated=%d" % [
+				frames, int(progress.get("pending", 0)), int(progress.get("inflight", 0)),
+				int(progress.get("jobs", 0)), int(progress.get("reaped", 0)),
+				int(progress.get("consume", 0)), int(progress.get("truncated", 0)),
+			])
 		if int(progress.get("reaped", 0)) + int(progress.get("consume", 0)) >= locations.size():
 			break
 	var elapsed := Time.get_ticks_usec() - started
