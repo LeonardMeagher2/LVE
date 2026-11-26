@@ -57,6 +57,7 @@ var slice_index := 0
 var slice_count := 1
 var per_material := false
 var hard_boundaries := false
+var _pinned_seams: Dictionary = {}
 
 var material_groups: Array = []
 
@@ -195,6 +196,7 @@ func _build(occupancy: PackedByteArray, material_ids: PackedInt32Array, material
 	if present.is_empty() or present[PRESENT_SELF] == 0:
 		_set_empty()
 		return
+	_pinned_seams.clear()
 	var owners := _build_owners(present)
 	var merged: Array
 	if per_material:
@@ -451,15 +453,29 @@ func _append_material_corner(cell: Vector3i, bits: int, loop: PackedInt32Array, 
 			majority = label
 	if outlier < 0 or majority < 0:
 		return false
-	var opposite := (outlier + 2) % 4
-	var outlier_edge := loop[outlier]
-	var opposite_edge := loop[opposite]
-	var first_has_outlier := triangle_edges[0] == outlier_edge or triangle_edges[1] == outlier_edge or triangle_edges[2] == outlier_edge
-	var second_has_outlier := triangle_edges[3] == outlier_edge or triangle_edges[4] == outlier_edge or triangle_edges[5] == outlier_edge
-	var first_has_opposite := triangle_edges[0] == opposite_edge or triangle_edges[1] == opposite_edge or triangle_edges[2] == opposite_edge
-	var second_has_opposite := triangle_edges[3] == opposite_edge or triangle_edges[4] == opposite_edge or triangle_edges[5] == opposite_edge
-	if not first_has_outlier or not second_has_outlier or not first_has_opposite or not second_has_opposite:
+	var constant_axis := -1
+	for axis in 3:
+		if absf(points[0][axis] - points[1][axis]) < 0.0001 and absf(points[0][axis] - points[2][axis]) < 0.0001 and absf(points[0][axis] - points[3][axis]) < 0.0001:
+			constant_axis = axis
+			break
+	if constant_axis < 0:
 		return false
+	var first_axis := (constant_axis + 1) % 3
+	var second_axis := (constant_axis + 2) % 3
+	var origin := Vector3i(roundi(sites[outlier].x), roundi(sites[outlier].y), roundi(sites[outlier].z))
+	var opposite := (outlier + 2) % 4
+	var first_step := signi(roundi(points[opposite][first_axis] - points[outlier][first_axis]))
+	var second_step := signi(roundi(points[opposite][second_axis] - points[outlier][second_axis]))
+	if first_step == 0 or second_step == 0:
+		return false
+	var beyond := origin
+	beyond[first_axis] -= first_step
+	beyond[second_axis] -= second_step
+	var sample := beyond + Vector3i.ONE * SAMPLE_PADDING
+	if sample.x < 0 or sample.y < 0 or sample.z < 0 or sample.x >= SAMPLE_SIZE or sample.y >= SAMPLE_SIZE or sample.z >= SAMPLE_SIZE:
+		return false
+	var index := sample.x + SAMPLE_SIZE * (sample.y + SAMPLE_SIZE * sample.z)
+	var capped := occupancy[index] != 0 and material_ids[index] == labels[outlier]
 	if _mirror_on_face(cell, triangle_edges[0], triangle_edges[1], triangle_edges[2], occupancy):
 		return false
 	if _mirror_on_face(cell, triangle_edges[3], triangle_edges[4], triangle_edges[5], occupancy):
@@ -469,6 +485,17 @@ func _append_material_corner(cell: Vector3i, bits: int, loop: PackedInt32Array, 
 	var previous_cut := _material_cut(points[outlier], sites[outlier], points[previous], sites[previous])
 	var next_cut := _material_cut(points[outlier], sites[outlier], points[next], sites[next])
 	_append_oriented_triangle(cell, bits, points[outlier], previous_cut, next_cut, labels[outlier], labels[outlier], labels[outlier], materials, positions, normals, vertex_colors, vertex_materials, indices)
+	if capped:
+		var centre := (points[0] + points[1] + points[2] + points[3]) * 0.25
+		_pinned_seams[_position_key(previous_cut)] = true
+		_pinned_seams[_position_key(next_cut)] = true
+		_pinned_seams[_position_key(centre)] = true
+		_append_oriented_triangle(cell, bits, centre, previous_cut, next_cut, majority, majority, majority, materials, positions, normals, vertex_colors, vertex_materials, indices)
+		_append_oriented_triangle(cell, bits, centre, next_cut, points[next], majority, majority, majority, materials, positions, normals, vertex_colors, vertex_materials, indices)
+		_append_oriented_triangle(cell, bits, centre, points[next], points[opposite], majority, majority, majority, materials, positions, normals, vertex_colors, vertex_materials, indices)
+		_append_oriented_triangle(cell, bits, centre, points[opposite], points[previous], majority, majority, majority, materials, positions, normals, vertex_colors, vertex_materials, indices)
+		_append_oriented_triangle(cell, bits, centre, points[previous], previous_cut, majority, majority, majority, materials, positions, normals, vertex_colors, vertex_materials, indices)
+		return true
 	_append_oriented_triangle(cell, bits, points[opposite], points[next], next_cut, majority, majority, majority, materials, positions, normals, vertex_colors, vertex_materials, indices)
 	_append_oriented_triangle(cell, bits, points[opposite], next_cut, previous_cut, majority, majority, majority, materials, positions, normals, vertex_colors, vertex_materials, indices)
 	_append_oriented_triangle(cell, bits, points[opposite], previous_cut, points[previous], majority, majority, majority, materials, positions, normals, vertex_colors, vertex_materials, indices)
@@ -555,6 +582,8 @@ func _pinch_material_seams(positions: PackedVector3Array, vertex_materials: Pack
 		seam_ids[key] = ids
 	var targets := {}
 	for key: Vector3i in seam_ids:
+		if _pinned_seams.has(key):
+			continue
 		var ids: Dictionary = seam_ids[key]
 		if ids.size() < 2:
 			continue
