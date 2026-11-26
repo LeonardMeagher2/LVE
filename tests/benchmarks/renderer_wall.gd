@@ -51,6 +51,7 @@ func _cost() -> void:
 	var frames := 0
 	var rebuild_started := 0
 	var rebuild_frames := 0
+	var rebuild_frame_us: Array[int] = []
 	step("When the document reports its chunks", func():
 		State.chunks_changed.emit(0, locations)
 	)
@@ -89,7 +90,9 @@ func _cost() -> void:
 		State.chunks_changed.emit(0, locations)
 	)
 	while rebuild_frames < MAX_FRAMES:
+		var frame_started := Time.get_ticks_usec()
 		await get_tree().process_frame
+		rebuild_frame_us.append(Time.get_ticks_usec() - frame_started)
 		rebuild_frames += 1
 		var rebuild_progress: Dictionary = renderer.profile_snapshot()
 		if int(rebuild_progress.get("reaped", 0)) + int(rebuild_progress.get("consume", 0)) >= locations.size():
@@ -101,6 +104,11 @@ func _cost() -> void:
 			rebuild_elapsed, rebuild_frames, int(rebuild_profile.get("reaped", 0)), int(rebuild_profile.get("consume", 0)),
 			int(rebuild_profile.get("launch", 0)), int(rebuild_profile.get("install_us", 0)), int(rebuild_profile.get("truncated", 0)),
 		])
+		var slowest := rebuild_frame_us.duplicate()
+		slowest.sort()
+		slowest.reverse()
+		print("MEASURE renderer_wall frames_us: " + str(slowest.slice(0, 8)))
+		print("MEASURE renderer_wall first_frames_us: " + str(rebuild_frame_us.slice(0, 12)))
 		expect(int(rebuild_profile.get("reaped", 0)) + int(rebuild_profile.get("consume", 0)) >= locations.size(), "the rebuild resolves every chunk")
 	)
 
