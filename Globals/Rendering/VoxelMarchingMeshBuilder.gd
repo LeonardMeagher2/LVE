@@ -336,7 +336,13 @@ func _build_surfaces(occupancy: PackedByteArray, material_ids: PackedInt32Array,
 				for loop_index in loops.size():
 					var loop: PackedInt32Array = loops[loop_index]
 					var triangle_edges: PackedInt32Array = loop_triangles[loop_index]
+					var face_material := -1
+					if cell_mixed:
+						face_material = _face_material(cell, bits, loop, occupancy, material_ids)
+					var first_vertex := vertex_materials.size()
 					if cell_mixed and _append_material_corner(cell, bits, loop, triangle_edges, occupancy, material_ids, materials, field, positions, normals, vertex_colors, vertex_materials, indices):
+						if face_material >= 0:
+							_set_face_colour(first_vertex, face_material, vertex_colors, materials)
 						continue
 					if cell_mixed:
 						var material_diagonal := _material_diagonal(cell, loop, occupancy, material_ids)
@@ -369,7 +375,64 @@ func _build_surfaces(occupancy: PackedByteArray, material_ids: PackedInt32Array,
 							cell_material, cell_material, cell_material,
 							materials, positions, normals, vertex_colors, vertex_materials, indices
 						)
+					if face_material >= 0:
+						_set_face_colour(first_vertex, face_material, vertex_colors, materials)
 	return [positions, normals, vertex_colors, vertex_materials, indices]
+
+
+func _set_face_colour(start: int, material: int, vertex_colors: PackedColorArray, materials: PackedFloat32Array) -> void:
+	var base := material * VoxelFrame.MATERIAL_STRIDE
+	var colour := Color(materials[base], materials[base + 1], materials[base + 2], materials[base + 3])
+	for index in range(start, vertex_colors.size()):
+		vertex_colors[index] = colour
+
+
+func _face_material(cell: Vector3i, bits: int, loop: PackedInt32Array, occupancy: PackedByteArray, material_ids: PackedInt32Array) -> int:
+	if loop.size() != 4:
+		return -1
+	var labels := {}
+	for edge: int in loop:
+		var sample := _edge_sample(cell, edge, occupancy, material_ids)
+		labels[sample[1]] = true
+	if labels.size() < 4:
+		return -1
+	var axis := -1
+	var solid_offset := -1
+	for edge: int in loop:
+		if edge >= EDGE_CORNERS.size():
+			return -1
+		var corners: Array = EDGE_CORNERS[edge]
+		var first: Vector3i = CORNER_OFFSETS[corners[0]]
+		var second: Vector3i = CORNER_OFFSETS[corners[1]]
+		var edge_axis := -1
+		for candidate in 3:
+			if first[candidate] != second[candidate]:
+				edge_axis = candidate
+				break
+		if edge_axis < 0:
+			return -1
+		if axis < 0:
+			axis = edge_axis
+		elif axis != edge_axis:
+			return -1
+		var first_solid: bool = bits & (1 << corners[0]) != 0
+		var second_solid: bool = bits & (1 << corners[1]) != 0
+		if first_solid == second_solid:
+			return -1
+		var offset := first[axis] if first_solid else second[axis]
+		if solid_offset < 0:
+			solid_offset = offset
+		elif solid_offset != offset:
+			return -1
+	var solid_cell := cell
+	solid_cell[axis] += solid_offset
+	var sample := solid_cell + Vector3i.ONE * SAMPLE_PADDING
+	if sample.x < 0 or sample.y < 0 or sample.z < 0 or sample.x >= SAMPLE_SIZE or sample.y >= SAMPLE_SIZE or sample.z >= SAMPLE_SIZE:
+		return -1
+	var index := sample.x + SAMPLE_SIZE * (sample.y + SAMPLE_SIZE * sample.z)
+	if occupancy[index] == 0:
+		return -1
+	return material_ids[index]
 
 
 func _union_field(occupancy: PackedByteArray) -> PackedFloat32Array:
@@ -1138,7 +1201,10 @@ static func _shared_edge_pull(first_site: Vector3, second_site: Vector3, point: 
 	var target := point
 	for axis in 3:
 		if absf(difference[axis]) > 0.5:
-			target[axis] = (first_site[axis] + second_site[axis]) * 0.5
+			var midpoint := (first_site[axis] + second_site[axis]) * 0.5
+			if absf(point[axis] - midpoint) > 0.5:
+				return point
+			target[axis] = midpoint
 	target[free_axis] = clampf(point[free_axis], first_site[free_axis] - 0.5, first_site[free_axis] + 0.5)
 	return target
 

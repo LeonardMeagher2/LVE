@@ -27,6 +27,8 @@ func _ready() -> void:
 	test("a painted hollow shell keeps its cavity", _hollow_shell, "march_hollow_shell")
 	test("a straight material seam keeps its diagonal vertex", _straight_material_seam, "march_straight_material_seam")
 	test("an edge seam outside the shared edge keeps its vertex", _edge_seam_span, "march_edge_seam_span")
+	test("an edge seam beyond half a cell keeps its vertex", _edge_seam_travel, "march_edge_seam_travel")
+	test("a four-material face keeps one material", _four_material_face, "march_four_material_face")
 	test("the low-poly style renders in the editor viewport", _viewport_style, "march_viewport_style")
 	test("the settings modal stores one undoable style change", _style_undo, "march_style_undo")
 
@@ -326,6 +328,42 @@ func _edge_seam_span() -> void:
 	)
 
 
+func _edge_seam_travel() -> void:
+	step("Given the selected seam beyond the shared edge span", func():
+		_view = VIEW.new(self)
+		_view.apply(_edge_seam_travel_cells())
+	)
+	await _view.settle()
+	step("Then the seam keeps its own vertex", func():
+		_view.collect()
+		expect(not _view.indices.is_empty(), "the seam draws triangles")
+		expect(_view.has_vertex(Vector3(8.75, -13.75, -4.5)), "the seam keeps its diagonal midpoint")
+		expect(not _view.has_vertex(Vector3(7.5, -13.75, -4.5)), "the seam vertex does not travel to the shared edge")
+	)
+
+
+func _four_material_face() -> void:
+	step("Given four materials around one face corner", func():
+		_view = VIEW.new(self)
+		_view.apply(_four_material_face_cells())
+	)
+	await _view.settle()
+	step("Then the face centre carries the face material", func():
+		_view.collect()
+		var colours := _colours_at(Vector3(-3.5, 0.5, 0.5))
+		expect(colours.size() == 1, "the face centre carries one material")
+		expect(colours.has(Color(1.0, 1.0, 0.0)), "the face centre carries the solid cell material")
+	)
+
+
+func _colours_at(point: Vector3) -> Dictionary:
+	var colours := {}
+	for index in _view.positions.size():
+		if _view.positions[index].is_equal_approx(point):
+			colours[_view.colors[index]] = true
+	return colours
+
+
 func _viewport_style() -> void:
 	step("Given one painted voxel and the block style", func():
 		State.get_current_voxel_frame().set_cell(Vector3i.ZERO, VoxelFrame.material(Color.RED))
@@ -484,6 +522,70 @@ func _edge_seam_cells() -> Dictionary:
 		Vector3i(5, -10, -4): VoxelFrame.material(Color(1.0, 1.0, 0.0)),
 		Vector3i(6, -10, -4): VoxelFrame.material(Color(1.0, 1.0, 0.0)),
 		Vector3i(7, -10, -4): VoxelFrame.material(Color(1.0, 1.0, 0.0)),
+	}
+
+
+func _four_material_face_cells() -> Dictionary:
+	return {
+		Vector3i(-3, 0, 0): VoxelFrame.material(Color(1.0, 1.0, 0.0)),
+		Vector3i(-3, 0, 1): VoxelFrame.material(Color(1.0, 0.0, 0.0)),
+		Vector3i(-3, 1, 0): VoxelFrame.material(Color(1.0, 0.0, 1.0)),
+		Vector3i(-3, 1, 1): VoxelFrame.material(Color(0.0, 0.0, 1.0)),
+	}
+
+
+func _edge_seam_travel_cells() -> Dictionary:
+	return {
+		Vector3i(6, -15, -5): VoxelFrame.material(Color(1.0, 0.0, 0.0)),
+		Vector3i(5, -14, -5): VoxelFrame.material(Color(1.0, 0.0, 0.0)),
+		Vector3i(6, -14, -5): VoxelFrame.material(Color(1.0, 1.0, 0.0)),
+		Vector3i(7, -14, -5): VoxelFrame.material(Color(1.0, 0.0, 0.0)),
+		Vector3i(8, -14, -5): VoxelFrame.material(Color(1.0, 0.0, 0.0)),
+		Vector3i(4, -13, -5): VoxelFrame.material(Color(1.0, 0.0, 0.0)),
+		Vector3i(5, -13, -5): VoxelFrame.material(Color(1.0, 0.0, 0.0)),
+		Vector3i(6, -13, -5): VoxelFrame.material(Color(1.0, 1.0, 0.0)),
+		Vector3i(7, -13, -5): VoxelFrame.material(Color(1.0, 1.0, 0.0)),
+		Vector3i(8, -13, -5): VoxelFrame.material(Color(1.0, 1.0, 0.0)),
+		Vector3i(9, -13, -5): VoxelFrame.material(Color(1.0, 0.0, 0.0)),
+		Vector3i(4, -12, -5): VoxelFrame.material(Color(1.0, 0.0, 0.0)),
+		Vector3i(5, -12, -5): VoxelFrame.material(Color(1.0, 1.0, 0.0)),
+		Vector3i(6, -12, -5): VoxelFrame.material(Color(1.0, 1.0, 0.0)),
+		Vector3i(7, -12, -5): VoxelFrame.material(Color(1.0, 1.0, 0.0)),
+		Vector3i(8, -12, -5): VoxelFrame.material(Color(1.0, 1.0, 0.0)),
+		Vector3i(9, -12, -5): VoxelFrame.material(Color(1.0, 1.0, 0.0)),
+		Vector3i(10, -12, -5): VoxelFrame.material(Color(1.0, 0.0, 0.0)),
+		Vector3i(4, -11, -5): VoxelFrame.material(Color(1.0, 1.0, 0.0)),
+		Vector3i(5, -11, -5): VoxelFrame.material(Color(1.0, 1.0, 0.0)),
+		Vector3i(6, -11, -5): VoxelFrame.material(Color(1.0, 1.0, 0.0)),
+		Vector3i(7, -11, -5): VoxelFrame.material(Color(1.0, 1.0, 0.0)),
+		Vector3i(8, -11, -5): VoxelFrame.material(Color(1.0, 1.0, 0.0)),
+		Vector3i(9, -11, -5): VoxelFrame.material(Color(1.0, 1.0, 0.0)),
+		Vector3i(10, -11, -5): VoxelFrame.material(Color(1.0, 1.0, 0.0)),
+		Vector3i(6, -15, -4): VoxelFrame.material(Color(0.0, 0.0, 1.0)),
+		Vector3i(5, -14, -4): VoxelFrame.material(Color(0.0, 0.0, 1.0)),
+		Vector3i(6, -14, -4): VoxelFrame.material(Color(1.0, 1.0, 0.0)),
+		Vector3i(7, -14, -4): VoxelFrame.material(Color(0.0, 0.0, 1.0)),
+		Vector3i(8, -14, -4): VoxelFrame.material(Color(0.0, 0.0, 1.0)),
+		Vector3i(4, -13, -4): VoxelFrame.material(Color(0.0, 0.0, 1.0)),
+		Vector3i(5, -13, -4): VoxelFrame.material(Color(0.0, 0.0, 1.0)),
+		Vector3i(6, -13, -4): VoxelFrame.material(Color(1.0, 1.0, 0.0)),
+		Vector3i(7, -13, -4): VoxelFrame.material(Color(0.0, 1.0, 0.0)),
+		Vector3i(8, -13, -4): VoxelFrame.material(Color(1.0, 1.0, 0.0)),
+		Vector3i(9, -13, -4): VoxelFrame.material(Color(0.0, 0.0, 1.0)),
+		Vector3i(4, -12, -4): VoxelFrame.material(Color(0.0, 0.0, 1.0)),
+		Vector3i(5, -12, -4): VoxelFrame.material(Color(1.0, 1.0, 0.0)),
+		Vector3i(6, -12, -4): VoxelFrame.material(Color(0.0, 1.0, 0.0)),
+		Vector3i(7, -12, -4): VoxelFrame.material(Color(1.0, 1.0, 0.0)),
+		Vector3i(8, -12, -4): VoxelFrame.material(Color(1.0, 1.0, 0.0)),
+		Vector3i(9, -12, -4): VoxelFrame.material(Color(1.0, 1.0, 0.0)),
+		Vector3i(10, -12, -4): VoxelFrame.material(Color(0.0, 0.0, 1.0)),
+		Vector3i(4, -11, -4): VoxelFrame.material(Color(1.0, 1.0, 0.0)),
+		Vector3i(5, -11, -4): VoxelFrame.material(Color(0.0, 1.0, 0.0)),
+		Vector3i(6, -11, -4): VoxelFrame.material(Color(1.0, 1.0, 0.0)),
+		Vector3i(7, -11, -4): VoxelFrame.material(Color(1.0, 1.0, 0.0)),
+		Vector3i(8, -11, -4): VoxelFrame.material(Color(1.0, 1.0, 0.0)),
+		Vector3i(9, -11, -4): VoxelFrame.material(Color(1.0, 1.0, 0.0)),
+		Vector3i(10, -11, -4): VoxelFrame.material(Color(1.0, 1.0, 0.0)),
 	}
 
 
