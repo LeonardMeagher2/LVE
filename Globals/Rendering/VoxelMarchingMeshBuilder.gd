@@ -319,6 +319,8 @@ func _build_surfaces(occupancy: PackedByteArray, material_ids: PackedInt32Array,
 					continue
 				var mask := _diagonal_faces(bits)
 				var case_data := _case_data(bits, mask)
+				if _opposite_pair(bits) and _append_antiprism(cell, bits, case_data, field, occupancy, material_ids, materials, positions, normals, vertex_colors, vertex_materials, indices):
+					continue
 				var loops: Array = case_data["loops"]
 				var loop_triangles: Array = case_data["triangles"]
 				for loop_index in loops.size():
@@ -406,20 +408,21 @@ static func _field_point(cell: Vector3i, edge: int, field: PackedFloat32Array) -
 	return Vector3(cell) + Vector3(first) + Vector3(second - first) * t
 
 
-func _append_material_triangle(cell: Vector3i, bits: int, points: PackedVector3Array, labels: PackedInt32Array, sites: PackedVector3Array, materials: PackedFloat32Array, positions: PackedVector3Array, normals: PackedVector3Array, vertex_colors: PackedColorArray, vertex_materials: PackedInt32Array, indices: PackedInt32Array) -> void:
+func _append_material_triangle(cell: Vector3i, bits: int, points: PackedVector3Array, labels: PackedInt32Array, sites: PackedVector3Array, materials: PackedFloat32Array, positions: PackedVector3Array, normals: PackedVector3Array, vertex_colors: PackedColorArray, vertex_materials: PackedInt32Array, indices: PackedInt32Array, reference := Vector3.ZERO) -> void:
+	if reference.length_squared() == 0.0:
+		reference = _inside_gradient(bits, (points[0] + points[1] + points[2]) / 3.0 - Vector3(cell))
 	var unique := -1
 	for index in 3:
 		if labels[index] != labels[(index + 1) % 3] and labels[index] != labels[(index + 2) % 3]:
 			unique = index
 			break
 	if unique < 0:
-		_append_oriented_triangle(cell, bits, points[0], points[1], points[2], labels[0], labels[0], labels[0], materials, positions, normals, vertex_colors, vertex_materials, indices)
+		_append_oriented_triangle(cell, bits, points[0], points[1], points[2], labels[0], labels[0], labels[0], materials, positions, normals, vertex_colors, vertex_materials, indices, reference)
 		return
 	var first := (unique + 1) % 3
 	var last := (unique + 2) % 3
 	var first_cut := _material_cut(points[unique], sites[unique], points[first], sites[first])
 	var last_cut := _material_cut(points[last], sites[last], points[unique], sites[unique])
-	var reference := _inside_gradient(bits, (points[0] + points[1] + points[2]) / 3.0 - Vector3(cell))
 	if labels[first] == labels[last]:
 		_append_oriented_triangle(cell, bits, points[unique], first_cut, last_cut, labels[unique], labels[unique], labels[unique], materials, positions, normals, vertex_colors, vertex_materials, indices, reference)
 		_append_oriented_triangle(cell, bits, first_cut, points[first], points[last], labels[first], labels[first], labels[first], materials, positions, normals, vertex_colors, vertex_materials, indices, reference)
@@ -507,6 +510,85 @@ func _edge_sample(cell: Vector3i, edge: int, occupancy: PackedByteArray, materia
 		if occupancy[sample_index] != 0:
 			return [Vector3(cell + CORNER_OFFSETS[corner]), material_ids[sample_index]]
 	return [Vector3(cell), 0]
+
+
+static func _opposite_pair(bits: int) -> bool:
+	var solid: Array[int] = []
+	for corner in 8:
+		if bits & (1 << corner):
+			solid.append(corner)
+	if solid.size() != 2:
+		return false
+	return CORNER_OFFSETS[solid[0]] + CORNER_OFFSETS[solid[1]] == Vector3i.ONE
+
+
+func _append_antiprism(cell: Vector3i, bits: int, case_data: Dictionary, field: PackedFloat32Array, occupancy: PackedByteArray, material_ids: PackedInt32Array, materials: PackedFloat32Array, positions: PackedVector3Array, normals: PackedVector3Array, vertex_colors: PackedColorArray, vertex_materials: PackedInt32Array, indices: PackedInt32Array) -> bool:
+	var groups: Array = case_data["triangles"]
+	if groups.size() != 2:
+		return false
+	var caps: Array = []
+	var edges := PackedInt32Array()
+	var points: Array[Vector3] = []
+	for group: PackedInt32Array in groups:
+		if group.size() != 3:
+			return false
+		var cap := PackedInt32Array([group[0], group[1], group[2]])
+		cap.sort()
+		caps.append(cap)
+		for edge in group:
+			edges.append(edge)
+			points.append(_field_point(cell, edge, field))
+	if edges.size() != 6:
+		return false
+	var centre := Vector3(cell) + Vector3(0.5, 0.5, 0.5)
+	var sides: Array = []
+	for first in 6:
+		for second in range(first + 1, 6):
+			for third in range(second + 1, 6):
+				var a := points[first]
+				var b := points[second]
+				var c := points[third]
+				var normal := (b - a).cross(c - a)
+				if normal.length_squared() < 0.0000000001:
+					continue
+				var above := 0
+				var below := 0
+				for other in 6:
+					if other == first or other == second or other == third:
+						continue
+					var side := normal.dot(points[other] - a)
+					if side > 0.0001:
+						above += 1
+					elif side < -0.0001:
+						below += 1
+				if above > 0 and below > 0:
+					continue
+				var triple := PackedInt32Array([edges[first], edges[second], edges[third]])
+				triple.sort()
+				if triple == caps[0] or triple == caps[1]:
+					continue
+				sides.append([first, second, third])
+	if sides.size() != 6:
+		return false
+	for side: Array in sides:
+		var first: int = side[0]
+		var second: int = side[1]
+		var third: int = side[2]
+		var face_centre := (points[first] + points[second] + points[third]) / 3.0
+		var inside := centre - face_centre
+		var order := [first, second, third]
+		if (points[second] - points[first]).cross(points[third] - points[first]).dot(inside) > 0.0:
+			order = [first, third, second]
+		var labels := PackedInt32Array()
+		var sites := PackedVector3Array()
+		var triangle := PackedVector3Array()
+		for index: int in order:
+			var sample := _edge_sample(cell, edges[index], occupancy, material_ids)
+			labels.append(sample[1])
+			sites.append(sample[0])
+			triangle.append(points[index])
+		_append_material_triangle(cell, bits, triangle, labels, sites, materials, positions, normals, vertex_colors, vertex_materials, indices, inside)
+	return true
 
 
 static func _weld(positions: PackedVector3Array, normals: PackedVector3Array, colors: PackedColorArray, materials: PackedInt32Array, indices: PackedInt32Array) -> Array:

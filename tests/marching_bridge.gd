@@ -49,10 +49,11 @@ func _corner_pair() -> void:
 		})
 	)
 	await _view.settle()
-	step("Then the pair stays two shells", func():
+	step("Then the pair joins into one surface", func():
 		_view.collect()
 		expect(_view.closed(), "the corner pair has no boundary")
-		expect(_view.components() == 2, "a corner-only pair keeps its own shell")
+		expect(_view.components() == 1, "a corner-only pair joins through the cell")
+		expect(_view.volume() > 0.4, "the corner join adds the tunnel volume")
 		expect(_view.bounds().is_equal_approx(AABB(Vector3.ONE * -0.5, Vector3.ONE * 2.0)), "the pair fills the two-cell block")
 		expect(not _view.has_vertex(Vector3.ONE * 0.5), "the shells do not pinch at one point")
 	)
