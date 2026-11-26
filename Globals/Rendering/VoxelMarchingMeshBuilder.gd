@@ -603,30 +603,44 @@ static func _merge_flats(positions: PackedVector3Array, normals: PackedVector3Ar
 		for square: Vector2i in order:
 			if not complete.has(square):
 				continue
-			var width := 1
-			while complete.has(Vector2i(square.x + width * 2, square.y)):
-				width += 1
-			var height := 1
+			var left := square.x
+			while complete.has(Vector2i(left - 2, square.y)):
+				left -= 2
+			var right := square.x
+			while complete.has(Vector2i(right + 2, square.y)):
+				right += 2
+			var width := (right - left) / 2 + 1
+			var bottom := square.y
 			var growing := true
 			while growing:
 				for offset in width:
-					if not complete.has(Vector2i(square.x + offset * 2, square.y + height * 2)):
+					if not complete.has(Vector2i(left + offset * 2, bottom - 2)):
 						growing = false
 						break
 				if growing:
-					height += 1
+					bottom -= 2
+			var top := square.y
+			growing = true
+			while growing:
+				for offset in width:
+					if not complete.has(Vector2i(left + offset * 2, top + 2)):
+						growing = false
+						break
+				if growing:
+					top += 2
+			var height := (top - bottom) / 2 + 1
 			var area := width * height
 			var perimeter := 2 * (width + height)
 			for row in height:
 				for column in width:
-					complete.erase(Vector2i(square.x + column * 2, square.y + row * 2))
+					complete.erase(Vector2i(left + column * 2, bottom + row * 2))
 			if area * 2 <= perimeter:
 				continue
 			for row in height:
 				for column in width:
-					for triangle: int in entry.halves[Vector2i(square.x + column * 2, square.y + row * 2)]:
+					for triangle: int in entry.halves[Vector2i(left + column * 2, bottom + row * 2)]:
 						consumed[triangle] = 1
-			_emit_flat_fan(entry, Vector2(square) * 0.5, width, height, merged_positions, merged_normals, merged_colors, merged_materials, merged_indices)
+			_emit_flat_fan(entry, Vector2(left, bottom) * 0.5, width, height, merged_positions, merged_normals, merged_colors, merged_materials, merged_indices)
 	for triangle in triangle_count:
 		if consumed[triangle] != 0:
 			continue
@@ -957,6 +971,13 @@ static func _face_corners_adjacent(first: int, second: int) -> bool:
 	return (first + 1) % 4 == second or (second + 1) % 4 == first
 
 
+static func _face_aligned(loop: PackedInt32Array) -> bool:
+	var common := 63
+	for edge in loop:
+		common &= _edge_faces[edge]
+	return common != 0
+
+
 static func _triangulate_loop(loop: PackedInt32Array) -> PackedInt32Array:
 	var triangles := PackedInt32Array()
 	if loop.size() < 3:
@@ -1021,19 +1042,38 @@ static func _triangulate_loop(loop: PackedInt32Array) -> PackedInt32Array:
 	var order: Array[int] = []
 	for index in points.size():
 		order.append(index)
+	var longest := not _face_aligned(loop)
 	while order.size() > 3:
-		var clipped := false
+		var clipped := -1
+		var best_span := -INF
+		var best_area := -INF
+		var best_alignment := -INF
+		var plane := normal.normalized()
 		for position in order.size():
 			var previous := order[(position + order.size() - 1) % order.size()]
 			var current := order[position]
 			var next := order[(position + 1) % order.size()]
-			if _is_ear(flat, order, previous, current, next, orientation):
-				triangles.append_array(PackedInt32Array([loop[previous], loop[current], loop[next]]))
-				order.remove_at(position)
-				clipped = true
+			if not _is_ear(flat, order, previous, current, next, orientation):
+				continue
+			if not longest:
+				clipped = position
 				break
-		if not clipped:
+			var span := points[previous].distance_squared_to(points[next])
+			var ear_area := absf((flat[current] - flat[previous]).cross(flat[next] - flat[previous]))
+			var ear_normal := (points[current] - points[previous]).cross(points[next] - points[previous])
+			var alignment := absf(ear_normal.normalized().dot(plane)) if ear_normal.length_squared() > 0.000000001 else 0.0
+			if span > best_span + 0.000000001 or (absf(span - best_span) <= 0.000000001 and (ear_area > best_area + 0.000000001 or (absf(ear_area - best_area) <= 0.000000001 and alignment > best_alignment + 0.000000001))):
+				best_span = span
+				best_area = ear_area
+				best_alignment = alignment
+				clipped = position
+		if clipped < 0:
 			break
+		var previous := order[(clipped + order.size() - 1) % order.size()]
+		var current := order[clipped]
+		var next := order[(clipped + 1) % order.size()]
+		triangles.append_array(PackedInt32Array([loop[previous], loop[current], loop[next]]))
+		order.remove_at(clipped)
 	if order.size() == 3:
 		triangles.append_array(PackedInt32Array([loop[order[0]], loop[order[1]], loop[order[2]]]))
 	elif order.size() > 3:
