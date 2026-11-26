@@ -278,7 +278,12 @@ static func _signature(active_frame: VoxelFrame, chunk_location: Vector3i, smoot
 
 
 func _process(_delta: float) -> void:
+	var update_started := Time.get_ticks_usec()
 	_update_surfaces()
+	if profile_surfaces:
+		var update_us := Time.get_ticks_usec() - update_started
+		if update_us > 100_000:
+			print("SLOW_UPDATE us=%d pending=%d jobs=%d" % [update_us, _pending_surface_keys.size(), _surface_jobs.size()])
 	_report_activity()
 
 
