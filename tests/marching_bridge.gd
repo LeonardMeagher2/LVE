@@ -49,12 +49,12 @@ func _corner_pair() -> void:
 		})
 	)
 	await _view.settle()
-	step("Then the pair fills the two-cell block", func():
+	step("Then the pair stays two shells", func():
 		_view.collect()
 		expect(_view.closed(), "the corner pair has no boundary")
-		expect(_view.components() == 1, "the corner pair is one surface")
+		expect(_view.components() == 2, "a corner-only pair keeps its own shell")
 		expect(_view.bounds().is_equal_approx(AABB(Vector3.ONE * -0.5, Vector3.ONE * 2.0)), "the pair fills the two-cell block")
-		expect(not _view.has_vertex(Vector3.ONE * 0.5), "the join does not pinch at one point")
+		expect(not _view.has_vertex(Vector3.ONE * 0.5), "the shells do not pinch at one point")
 	)
 
 
@@ -106,7 +106,12 @@ func _third_material() -> void:
 		_view.collect()
 		expect(_view.closed(), "the pair has no boundary")
 		expect(_view.components() == 1, "both gaps join the pair")
-		expect(_view.has_vertex(Vector3(1.0, 0.0, 0.5)), "the gap beside the red voxel joins")
+		var red := VoxelFrame.material_color(State.get_current_voxel_frame().get_material(Vector3i(2, 1, 0)))
+		var red_triangles := 0
+		for offset in range(0, _view.indices.size(), 3):
+			if _matches(_view.colors[_view.indices[offset]], red):
+				red_triangles += 1
+		expect(red_triangles > 0, "the red voxel keeps its own surface")
 	)
 
 

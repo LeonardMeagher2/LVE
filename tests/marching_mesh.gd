@@ -16,6 +16,10 @@ func _ready() -> void:
 	test("one painted voxel draws a closed octahedron", _single_voxel, "march_single_voxel")
 	test("one painted voxel in a negative chunk keeps the shape", _negative_voxel, "march_single_voxel_negative")
 	test("two painted adjacent voxels merge", _adjacent_voxels, "march_adjacent_voxels")
+	test("two materials meet on their own edge", _material_boundary, "march_material_boundary")
+	test("a material seam across two chunks stays closed", _material_seam_chunk, "march_material_seam_chunk")
+	test("a diagonal pair of one material joins without a lid", _diagonal_join, "march_diagonal_join")
+	test("a diagonal pair of two materials stays apart", _diagonal_separate, "march_diagonal_separate")
 	test("a painted random model stays closed across seams", _random_model, "march_watertight")
 	test("a painted 2x2x2 block stays closed", _solid_block, "march_solid_block")
 	test("a painted 16-cell slab spans the chunk", _slab, "march_slab")
@@ -75,6 +79,131 @@ func _adjacent_voxels() -> void:
 		expect(_view.closed(), "the merged surface has no boundary")
 		expect(not _view.has_vertex(Vector3(0.5, 0.0, 0.0)), "no vertex remains on the shared face")
 		expect(_view.bounds().is_equal_approx(AABB(Vector3.ONE * -0.5, Vector3(2.0, 1.0, 1.0))), "the surface spans both cells")
+	)
+
+
+func _material_boundary() -> void:
+	step("Given two painted voxels with different materials", func():
+		_view = VIEW.new(self)
+		_view.apply({
+			Vector3i.ZERO: VoxelFrame.material(Color.RED),
+			Vector3i(1, 0, 0): VoxelFrame.material(Color.BLUE),
+		})
+	)
+	await _view.settle()
+	step("Then each triangle carries one material and the seam has an edge", func():
+		_view.collect()
+		expect(_view.closed(), "the seam keeps the surface closed")
+		var mixed := 0
+		var red := 0
+		var blue := 0
+		for offset in range(0, _view.indices.size(), 3):
+			var first: Color = _view.colors[_view.indices[offset]]
+			var second: Color = _view.colors[_view.indices[offset + 1]]
+			var third: Color = _view.colors[_view.indices[offset + 2]]
+			if first != second or second != third:
+				mixed += 1
+			elif first == Color.RED:
+				red += 1
+			elif first == Color.BLUE:
+				blue += 1
+		expect(mixed == 0, "no triangle spans both materials")
+		expect(red > 0 and blue > 0, "both materials draw their own triangles")
+		var shared := 0
+		for index in _view.positions.size():
+			for other in range(index + 1, _view.positions.size()):
+				if not _view.positions[index].is_equal_approx(_view.positions[other]):
+					continue
+				if _view.colors[index] != _view.colors[other]:
+					shared += 1
+					break
+		expect(shared > 0, "the seam has two materials on one line")
+	)
+
+
+func _material_seam_chunk() -> void:
+	step("Given two materials that meet at a chunk border", func():
+		_view = VIEW.new(self)
+		_view.apply({
+			Vector3i(VoxelFrame.CHUNK_SIZE - 1, 0, 0): VoxelFrame.material(Color.RED),
+			Vector3i(VoxelFrame.CHUNK_SIZE, 0, 0): VoxelFrame.material(Color.BLUE),
+		})
+	)
+	await _view.settle()
+	step("Then both chunks split the seam the same way", func():
+		_view.collect()
+		expect(_view.closed(), "the seam has no boundary across the border")
+		expect(_view.duplicates() == 0, "no triangle is emitted twice")
+		expect(not _view.indices.is_empty(), "the seam draws triangles")
+	)
+
+
+func _diagonal_join() -> void:
+	step("Given a diagonal pair of one material over a floor", func():
+		_view = VIEW.new(self)
+		var cells := {}
+		for z in 4:
+			for x in 4:
+				cells[Vector3i(x, 0, z)] = VoxelFrame.material(Color.WHITE)
+		cells[Vector3i(0, 1, 0)] = VoxelFrame.material(Color.RED)
+		cells[Vector3i(1, 1, 1)] = VoxelFrame.material(Color.RED)
+		_view.apply(cells)
+	)
+	await _view.settle()
+	step("Then the pair joins and the empty cells stay open", func():
+		_view.collect()
+		expect(_view.duplicates() == 0, "no triangle is emitted twice")
+		var lid := 0
+		for offset in range(0, _view.indices.size(), 3):
+			var first: Color = _view.colors[_view.indices[offset]]
+			if first != Color.RED:
+				continue
+			var centre: Vector3 = (_view.positions[_view.indices[offset]] + _view.positions[_view.indices[offset + 1]] + _view.positions[_view.indices[offset + 2]]) / 3.0
+			var covers_first := centre.x > 0.6 and centre.x < 1.4 and centre.z > -0.4 and centre.z < 0.4
+			var covers_second := centre.x > -0.4 and centre.x < 0.4 and centre.z > 0.6 and centre.z < 1.4
+			if centre.y > 1.1 and (covers_first or covers_second):
+				lid += 1
+		expect(lid == 0, "no material covers the empty diagonal cells")
+		var bridge := 0
+		for offset in range(0, _view.indices.size(), 3):
+			var first: Color = _view.colors[_view.indices[offset]]
+			if first != Color.RED:
+				continue
+			var centre: Vector3 = (_view.positions[_view.indices[offset]] + _view.positions[_view.indices[offset + 1]] + _view.positions[_view.indices[offset + 2]]) / 3.0
+			if absf(centre.x - 0.5) < 0.35 and absf(centre.z - 0.5) < 0.35 and centre.y > 0.5 and centre.y < 1.5:
+				bridge += 1
+		expect(bridge > 0, "the pair joins across the shared corner")
+	)
+
+
+func _diagonal_separate() -> void:
+	step("Given a diagonal pair of two materials over a floor", func():
+		_view = VIEW.new(self)
+		var cells := {}
+		for z in 4:
+			for x in 4:
+				cells[Vector3i(x, 0, z)] = VoxelFrame.material(Color.WHITE)
+		cells[Vector3i(0, 1, 0)] = VoxelFrame.material(Color.RED)
+		cells[Vector3i(1, 1, 1)] = VoxelFrame.material(Color.BLUE)
+		_view.apply(cells)
+	)
+	await _view.settle()
+	step("Then the two materials keep their own corners", func():
+		_view.collect()
+		expect(not _view.indices.is_empty(), "the surface draws triangles")
+		var mixed := 0
+		var red := 0
+		var blue := 0
+		for offset in range(0, _view.indices.size(), 3):
+			var first: Color = _view.colors[_view.indices[offset]]
+			if _view.colors[_view.indices[offset + 1]] != first or _view.colors[_view.indices[offset + 2]] != first:
+				mixed += 1
+			elif first == Color.RED:
+				red += 1
+			elif first == Color.BLUE:
+				blue += 1
+		expect(mixed == 0, "no triangle spans both materials")
+		expect(red > 0 and blue > 0, "both materials draw their own triangles")
 	)
 
 
