@@ -125,46 +125,61 @@ func _greedy_dense(padded_cell_colors: PackedColorArray, padded_cell_materials: 
 	var vertex_normals := PackedVector3Array()
 	var vertex_colors := PackedColorArray()
 	var triangle_indices := PackedInt32Array()
-	var face_materials := PackedInt32Array()
 	var corner_normals := {}
-	face_materials.resize(CHUNK_SIZE * CHUNK_SIZE)
+	var plane_stride := CHUNK_SIZE * CHUNK_SIZE
+	var plane_count := plane_stride * CHUNK_SIZE
+	var face_planes := PackedInt32Array()
+	face_planes.resize(plane_count * 2)
 	for face_axis in 3:
+		face_planes.fill(0)
 		var column_axis := (face_axis + 1) % 3
 		var row_axis := (face_axis + 2) % 3
 		var column_stride: int = PADDED_AXIS_STRIDE[column_axis]
 		var row_stride: int = PADDED_AXIS_STRIDE[row_axis]
 		var face_stride: int = PADDED_AXIS_STRIDE[face_axis]
+		for layer_index in CHUNK_SIZE:
+			if occupied_planes[face_axis] & (1 << (layer_index + 1)) == 0:
+				continue
+			var layer_base := PADDED_ORIGIN + layer_index * face_stride
+			var plane_base := layer_index * plane_stride
+			for row in CHUNK_SIZE:
+				var row_base := layer_base + row * row_stride
+				var cell_base := plane_base + CHUNK_SIZE * row
+				for column in CHUNK_SIZE:
+					var sample_index := row_base + column * column_stride
+					var voxel_color := padded_cell_colors[sample_index]
+					if voxel_color == Color.TRANSPARENT:
+						continue
+					var back_color := padded_cell_colors[sample_index - face_stride]
+					if back_color.a < 1.0 and back_color != voxel_color:
+						face_planes[cell_base + column] = padded_cell_materials[sample_index]
+					var forward_color := padded_cell_colors[sample_index + face_stride]
+					if forward_color.a < 1.0 and forward_color != voxel_color:
+						face_planes[cell_base + plane_count + column] = padded_cell_materials[sample_index]
 		for face_sign: int in [-1, 1]:
-			var neighbor_step := face_sign * face_stride
 			var face_normal := Vector3.ZERO
 			face_normal[face_axis] = face_sign
+			var sign_base := 0 if face_sign < 0 else plane_count
 			for layer_index in CHUNK_SIZE:
 				if occupied_planes[face_axis] & (1 << (layer_index + 1)) == 0:
 					continue
-				var layer_base := PADDED_ORIGIN + layer_index * face_stride
-				for row in CHUNK_SIZE:
-					var row_base := layer_base + row * row_stride
-					for column in CHUNK_SIZE:
-						var sample_index := row_base + column * column_stride
-						var voxel_color := padded_cell_colors[sample_index]
-						var neighbor_color := padded_cell_colors[sample_index + neighbor_step]
-						face_materials[column + CHUNK_SIZE * row] = padded_cell_materials[sample_index] if voxel_color != Color.TRANSPARENT and neighbor_color.a < 1.0 and neighbor_color != voxel_color else 0
+				var plane_offset := sign_base + layer_index * plane_stride
 				var row := 0
 				while row < CHUNK_SIZE:
 					var column := 0
 					while column < CHUNK_SIZE:
-						var material_id := face_materials[column + CHUNK_SIZE * row]
+						var material_id := face_planes[plane_offset + column + CHUNK_SIZE * row]
 						if material_id == 0:
 							column += 1
 							continue
 						var quad_width := 1
-						while column + quad_width < CHUNK_SIZE and face_materials[column + quad_width + CHUNK_SIZE * row] == material_id:
+						while column + quad_width < CHUNK_SIZE and face_planes[plane_offset + column + quad_width + CHUNK_SIZE * row] == material_id:
 							quad_width += 1
 						var quad_height := 1
 						var row_matches := true
 						while row + quad_height < CHUNK_SIZE and row_matches:
 							for column_offset in quad_width:
-								var next_material := face_materials[column + column_offset + CHUNK_SIZE * (row + quad_height)]
+								var next_material := face_planes[plane_offset + column + column_offset + CHUNK_SIZE * (row + quad_height)]
 								if next_material != material_id:
 									row_matches = false
 									break
@@ -215,7 +230,7 @@ func _greedy_dense(padded_cell_colors: PackedColorArray, padded_cell_materials: 
 							triangle_indices[index_start + 5] = first_vertex + 3
 						for row_offset in quad_height:
 							for column_offset in quad_width:
-								face_materials[column + column_offset + CHUNK_SIZE * (row + row_offset)] = 0
+								face_planes[plane_offset + column + column_offset + CHUNK_SIZE * (row + row_offset)] = 0
 						column += quad_width
 					row += 1
 	return [vertex_positions, vertex_normals, vertex_colors, triangle_indices]
