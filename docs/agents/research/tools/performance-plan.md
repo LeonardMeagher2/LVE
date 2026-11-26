@@ -56,6 +56,22 @@ A primitive preview runs on every gizmo motion, so a slow rasterize is visible.
 Spray sampling itself is already fast: width 64 warm reads 27.5 ms against 1790 ms for the frozen path, which is 65 times faster.
 Its press cost is in the write and the surface install, not the sampler.
 
+### Remeasured 2026-11-25
+
+The loop reran the commands above on `main`. This table supersedes the ranks for the measured paths.
+
+| Rank | Operation | 2026-11-25 | 2026-11-18 |
+| --- | --- | --- | --- |
+| 1 | Primitive add with a smooth blend, 64 cubed cells | 2.84 to 2.97 s | 13.33 s |
+| 2 | Chunk surface, mixed materials, atlas, 27 chunks | 1.66 s total, finish 1.34 s | 4.68 s |
+| 3 | Primitive add without a blend, 64 cubed cells | 0.83 to 0.90 s | 1.16 s |
+| 4 | Chunk surface, mixed materials, color | 0.40 s | 0.35 s |
+| 5 | Spray sampling, width 64 warm | 0.028 s | 0.028 s |
+
+The smooth add now splits into 1.33 s in `_existing_field` and 1.43 s in the rasterize loop.
+The loop step that returns the occupied mask and reuses the solid test cut the loop by 31 percent.
+`_existing_field` is the next target.
+
 ## 1. Primitive shape preview and apply
 
 ### Evidence
