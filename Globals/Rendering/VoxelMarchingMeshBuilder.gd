@@ -334,9 +334,9 @@ func _build_surfaces(occupancy: PackedByteArray, material_ids: PackedInt32Array,
 						var second_point := _field_point(cell, second_edge, field)
 						var third_point := _field_point(cell, third_edge, field)
 						if cell_mixed:
-							var first_site := _edge_sample(cell, first_edge, occupancy)
-							var second_site := _edge_sample(cell, second_edge, occupancy)
-							var third_site := _edge_sample(cell, third_edge, occupancy)
+							var first_site := _edge_sample(cell, first_edge, occupancy, material_ids)
+							var second_site := _edge_sample(cell, second_edge, occupancy, material_ids)
+							var third_site := _edge_sample(cell, third_edge, occupancy, material_ids)
 							_append_material_triangle(
 								cell, bits,
 								PackedVector3Array([first_point, second_point, third_point]),
@@ -479,20 +479,22 @@ static func _sample_index(site: Vector3i) -> int:
 	return sample.x + SAMPLE_SIZE * (sample.y + SAMPLE_SIZE * sample.z)
 
 
-func _edge_sample(cell: Vector3i, edge: int, occupancy: PackedByteArray) -> Vector3i:
+func _edge_sample(cell: Vector3i, edge: int, occupancy: PackedByteArray, material_ids: PackedInt32Array) -> Vector3i:
 	if edge >= EDGE_CORNERS.size():
 		var point := _edge_point(cell, edge)
 		var closest := INF
 		var closest_site := Vector3i.ZERO
+		var closest_material := 0
 		for corner in 8:
 			var sample := cell + CORNER_OFFSETS[corner] + Vector3i.ONE * SAMPLE_PADDING
 			var sample_index := sample.x + SAMPLE_SIZE * (sample.y + SAMPLE_SIZE * sample.z)
 			if occupancy[sample_index] == 0:
 				continue
 			var distance := (point - (Vector3(cell) + Vector3(CORNER_OFFSETS[corner]))).length_squared()
-			if distance < closest:
+			if distance < closest - 0.000001 or (distance <= closest + 0.000001 and material_ids[sample_index] < closest_material):
 				closest = distance
 				closest_site = cell + CORNER_OFFSETS[corner]
+				closest_material = material_ids[sample_index]
 		return closest_site
 	var corners: Array = EDGE_CORNERS[edge]
 	for corner: int in corners:
