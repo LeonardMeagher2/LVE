@@ -975,6 +975,43 @@ static func _face_corners_adjacent(first: int, second: int) -> bool:
 	return (first + 1) % 4 == second or (second + 1) % 4 == first
 
 
+static func _canonical_loop(loop: PackedInt32Array, points: Array[Vector3]) -> Array:
+	var count := loop.size()
+	var best_key := PackedFloat32Array()
+	var best_edges := loop
+	var best_points := points
+	for reflected in 2:
+		for direction in 2:
+			for rotation in count:
+				var key := PackedFloat32Array()
+				var edges := PackedInt32Array()
+				var ordered: Array[Vector3] = []
+				for step in count:
+					var index := (rotation + step) % count if direction == 0 else (rotation - step + count * count) % count
+					var point := points[index]
+					if reflected == 1:
+						point = Vector3(1.0 - point.x, point.y, point.z)
+					edges.append(loop[index])
+					ordered.append(point)
+					key.append(roundf(point.x * 1024.0) / 1024.0)
+					key.append(roundf(point.y * 1024.0) / 1024.0)
+					key.append(roundf(point.z * 1024.0) / 1024.0)
+				if best_key.is_empty() or _key_before(key, best_key):
+					best_key = key
+					best_edges = edges
+					best_points = ordered
+	return [best_edges, best_points]
+
+
+static func _key_before(first: PackedFloat32Array, second: PackedFloat32Array) -> bool:
+	for index in mini(first.size(), second.size()):
+		if first[index] < second[index] - 0.0000001:
+			return true
+		if first[index] > second[index] + 0.0000001:
+			return false
+	return first.size() < second.size()
+
+
 static func _face_aligned(loop: PackedInt32Array) -> bool:
 	var common := 63
 	for edge in loop:
@@ -1015,6 +1052,11 @@ static func _triangulate_loop(loop: PackedInt32Array) -> PackedInt32Array:
 		var first: Vector3 = Vector3(CORNER_OFFSETS[corners[0]])
 		var second: Vector3 = Vector3(CORNER_OFFSETS[corners[1]])
 		points.append((first + second) * 0.5)
+	var canonical := _canonical_loop(loop, points)
+	var canonical_edges: PackedInt32Array = canonical[0]
+	var canonical_points: Array = canonical[1]
+	loop = canonical_edges
+	points = canonical_points
 	var normal := Vector3.ZERO
 	for index in points.size():
 		var current := points[index]
