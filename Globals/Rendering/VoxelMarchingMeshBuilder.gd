@@ -204,7 +204,7 @@ func _build(occupancy: PackedByteArray, material_ids: PackedInt32Array, material
 		merged = built
 	var welded := _weld(merged[0], merged[1], merged[2], merged[3], merged[4])
 	_pinch_material_seams(welded[0], welded[4], occupancy, material_ids)
-	_flip_short_diagonals(welded[0], welded[3], welded[4])
+	_flip_diagonals(welded[0], welded[3], welded[4])
 	surface_arrays.resize(Mesh.ARRAY_MAX)
 	surface_arrays[Mesh.ARRAY_VERTEX] = welded[0]
 	surface_arrays[Mesh.ARRAY_NORMAL] = welded[1]
@@ -565,7 +565,19 @@ func _pinch_material_seams(positions: PackedVector3Array, vertex_materials: Pack
 			positions[index] = targets[key]
 
 
-func _flip_short_diagonals(positions: PackedVector3Array, indices: PackedInt32Array, materials: PackedInt32Array) -> void:
+func _flip_diagonals(positions: PackedVector3Array, indices: PackedInt32Array, materials: PackedInt32Array) -> void:
+	var position_materials := {}
+	for triangle in range(0, indices.size(), 3):
+		var material := materials[indices[triangle]]
+		for corner in 3:
+			var key := _position_key(positions[indices[triangle + corner]])
+			var ids: Dictionary = position_materials.get(key, {})
+			ids[material] = true
+			position_materials[key] = ids
+	var seam_count := PackedInt32Array()
+	seam_count.resize(positions.size())
+	for index in positions.size():
+		seam_count[index] = position_materials[_position_key(positions[index])].size()
 	var edges := {}
 	for triangle in range(0, indices.size(), 3):
 		for corner in 3:
@@ -593,8 +605,18 @@ func _flip_short_diagonals(positions: PackedVector3Array, indices: PackedInt32Ar
 		var material := materials[first]
 		if materials[second] != material or materials[first_opposite] != material or materials[second_opposite] != material:
 			continue
-		if positions[first_opposite].distance_squared_to(positions[second_opposite]) >= positions[first].distance_squared_to(positions[second]) - 0.0001:
-			continue
+		var old_squared := positions[first].distance_squared_to(positions[second])
+		var new_squared := positions[first_opposite].distance_squared_to(positions[second_opposite])
+		if new_squared >= old_squared - 0.0001:
+			if absf(new_squared - old_squared) > 0.0001:
+				continue
+			var current_spread := absi(seam_count[first] - seam_count[second])
+			var alternative_spread := absi(seam_count[first_opposite] - seam_count[second_opposite])
+			if alternative_spread >= current_spread:
+				continue
+			var new_key := Vector2i(mini(first_opposite, second_opposite), maxi(first_opposite, second_opposite))
+			if edges.has(new_key):
+				continue
 		var old_normal := _triangle_normal(positions, indices, first_triangle) + _triangle_normal(positions, indices, second_triangle)
 		if old_normal.length_squared() < 0.00000001:
 			continue
