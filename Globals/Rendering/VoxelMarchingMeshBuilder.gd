@@ -490,7 +490,7 @@ func _append_material_corner(cell: Vector3i, bits: int, loop: PackedInt32Array, 
 		_pinned_seams[_position_key(previous_cut)] = true
 		_pinned_seams[_position_key(next_cut)] = true
 		_pinned_seams[_position_key(centre)] = true
-		_append_oriented_triangle(cell, bits, centre, previous_cut, next_cut, majority, majority, majority, materials, positions, normals, vertex_colors, vertex_materials, indices)
+		_append_oriented_triangle(cell, bits, centre, previous_cut, next_cut, labels[outlier], labels[outlier], labels[outlier], materials, positions, normals, vertex_colors, vertex_materials, indices)
 		_append_oriented_triangle(cell, bits, centre, next_cut, points[next], majority, majority, majority, materials, positions, normals, vertex_colors, vertex_materials, indices)
 		_append_oriented_triangle(cell, bits, centre, points[next], points[opposite], majority, majority, majority, materials, positions, normals, vertex_colors, vertex_materials, indices)
 		_append_oriented_triangle(cell, bits, centre, points[opposite], points[previous], majority, majority, majority, materials, positions, normals, vertex_colors, vertex_materials, indices)
