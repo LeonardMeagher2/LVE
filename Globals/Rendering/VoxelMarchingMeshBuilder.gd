@@ -205,14 +205,9 @@ func _build(occupancy: PackedByteArray, material_ids: PackedInt32Array, material
 		var built := _build_surfaces(occupancy, material_ids, materials, owners)
 		merged = built
 	var welded := _weld(merged[0], merged[1], merged[2], merged[3], merged[4])
-	_pinch_material_seams(welded[0], welded[4], occupancy, material_ids, welded[3])
 	welded[3] = _drop_degenerate_triangles(welded[0], welded[3])
-	_flip_diagonals(welded[0], welded[3], welded[4])
 	welded[3] = _drop_opposite_duplicate_triangles(welded[0], welded[3])
-	_collapse_near_hole_vertices(welded[0], welded[3])
-	welded[3] = _drop_degenerate_triangles(welded[0], welded[3])
 	welded = _rebuild_flat_normals(welded[0], welded[1], welded[2], welded[4], welded[3], occupancy)
-	welded = _fill_boundary_ears(welded[0], welded[1], welded[2], welded[3], welded[4], occupancy, material_ids, materials)
 	surface_arrays.resize(Mesh.ARRAY_MAX)
 	surface_arrays[Mesh.ARRAY_VERTEX] = welded[0]
 	surface_arrays[Mesh.ARRAY_NORMAL] = welded[1]
@@ -336,12 +331,27 @@ func _build_surfaces(occupancy: PackedByteArray, material_ids: PackedInt32Array,
 				for loop_index in loops.size():
 					var loop: PackedInt32Array = loops[loop_index]
 					var triangle_edges: PackedInt32Array = loop_triangles[loop_index]
+					if cell_mixed and _append_two_two_face_partition(cell, bits, loop, field, occupancy, material_ids, materials, positions, normals, vertex_colors, vertex_materials, indices):
+						continue
 					if cell_mixed and _append_material_corner(cell, bits, loop, triangle_edges, occupancy, material_ids, materials, field, positions, normals, vertex_colors, vertex_materials, indices):
 						continue
-					if cell_mixed:
+					if loop.size() == 4:
+						var fan_data := _quad_fan_data(cell, loop, field, occupancy, material_ids)
+						if fan_data.get("ambiguous", false) and fan_data.get("uniform", false):
+							if _append_quad_fan(cell, bits, loop, fan_data.labels, field, occupancy, material_ids, materials, positions, normals, vertex_colors, vertex_materials, indices, false):
+								continue
+						var flat_diagonal := _canonical_flat_quad(cell, loop, field, occupancy, material_ids)
+						if not flat_diagonal.is_empty():
+							triangle_edges = flat_diagonal
+						elif cell_mixed:
+							var material_diagonal := _material_diagonal(cell, loop, occupancy, material_ids)
+							if not material_diagonal.is_empty():
+								triangle_edges = material_diagonal
+					elif cell_mixed:
 						var material_diagonal := _material_diagonal(cell, loop, occupancy, material_ids)
 						if not material_diagonal.is_empty():
 							triangle_edges = material_diagonal
+					var range_start := positions.size()
 					for index in range(0, triangle_edges.size(), 3):
 						var first_edge := triangle_edges[index]
 						var second_edge := triangle_edges[index + 1]
@@ -369,7 +379,121 @@ func _build_surfaces(occupancy: PackedByteArray, material_ids: PackedInt32Array,
 							cell_material, cell_material, cell_material,
 							materials, positions, normals, vertex_colors, vertex_materials, indices
 						)
+					if cell_mixed and loop.size() == 4:
+						_recolour_same_material_bridge(cell, loop, range_start, occupancy, material_ids, materials, vertex_colors, vertex_materials)
 	return [positions, normals, vertex_colors, vertex_materials, indices]
+
+
+func _recolour_same_material_bridge(cell: Vector3i, loop: PackedInt32Array, range_start: int, occupancy: PackedByteArray, material_ids: PackedInt32Array, materials: PackedFloat32Array, vertex_colors: PackedColorArray, vertex_materials: PackedInt32Array) -> void:
+	var labels := PackedInt32Array()
+	for edge: int in loop:
+		labels.append(_edge_sample(cell, edge, occupancy, material_ids)[1])
+	var counts := {}
+	for label: int in labels:
+		counts[label] = counts.get(label, 0) + 1
+	if counts.size() != 3:
+		return
+	var duplicate := -1
+	for label: int in counts:
+		if counts[label] == 2:
+			duplicate = label
+	if duplicate < 0:
+		return
+	var first := labels.find(duplicate)
+	var second := labels.find(duplicate, first + 1)
+	if (second - first) % 4 != 2:
+		return
+	var opposite := (first + 1) % 4
+	var beyond := (first + 3) % 4
+	var bridge := mini(labels[opposite], labels[beyond])
+	var base := duplicate * VoxelFrame.MATERIAL_STRIDE
+	var colour := Color(materials[base], materials[base + 1], materials[base + 2], materials[base + 3])
+	for index in range(range_start, vertex_materials.size()):
+		if vertex_materials[index] != bridge:
+			continue
+		vertex_materials[index] = duplicate
+		vertex_colors[index] = colour
+
+
+func _append_two_two_face_partition(cell: Vector3i, bits: int, loop: PackedInt32Array, field: PackedFloat32Array, occupancy: PackedByteArray, material_ids: PackedInt32Array, materials: PackedFloat32Array, positions: PackedVector3Array, normals: PackedVector3Array, vertex_colors: PackedColorArray, vertex_materials: PackedInt32Array, indices: PackedInt32Array) -> bool:
+	if loop.size() != 4:
+		return false
+	var points: Array[Vector3] = []
+	var labels := PackedInt32Array()
+	var counts := {}
+	for edge: int in loop:
+		points.append(_field_point(cell, edge, field))
+		var label: int = _edge_sample(cell, edge, occupancy, material_ids)[1]
+		labels.append(label)
+		counts[label] = counts.get(label, 0) + 1
+	if counts.size() != 2:
+		return false
+	for label: int in counts:
+		if counts[label] != 2:
+			return false
+	var sites: Array[Vector3] = []
+	for edge: int in loop:
+		sites.append(_edge_sample(cell, edge, occupancy, material_ids)[0])
+	for index in 4:
+		var next := (index + 1) % 4
+		if labels[index] == labels[next]:
+			return false
+		var cut := _material_cut(points[index], sites[index], points[next], sites[next])
+		var middle := (points[index] + points[next]) * 0.5
+		if cut.distance_to(middle) > 0.001:
+			return false
+	var constant_axis := -1
+	for axis in 3:
+		if absf(points[0][axis] - points[1][axis]) < 0.001 and absf(points[0][axis] - points[2][axis]) < 0.001 and absf(points[0][axis] - points[3][axis]) < 0.001:
+			constant_axis = axis
+			break
+	if constant_axis < 0:
+		return false
+	var first_axis := (constant_axis + 1) % 3
+	var second_axis := (constant_axis + 2) % 3
+	var first_low := INF
+	var first_high := -INF
+	var second_low := INF
+	var second_high := -INF
+	for point: Vector3 in points:
+		first_low = minf(first_low, point[first_axis])
+		first_high = maxf(first_high, point[first_axis])
+		second_low = minf(second_low, point[second_axis])
+		second_high = maxf(second_high, point[second_axis])
+	if absf(first_high - first_low - 1.0) > 0.001 or absf(second_high - second_low - 1.0) > 0.001:
+		return false
+	var centre := (points[0] + points[1] + points[2] + points[3]) * 0.25
+	var inside := _inside_gradient(bits, centre - Vector3(cell))
+	if inside.length_squared() < 0.0000000001:
+		return false
+	var side := signi(roundi(inside[constant_axis] * 2.0))
+	if side == 0:
+		return false
+	var corner_materials := PackedInt32Array()
+	var behind: Array[Vector3i] = []
+	for point: Vector3 in points:
+		var behind_cell := Vector3i(roundi(point.x), roundi(point.y), roundi(point.z))
+		behind_cell[constant_axis] = roundi(point[constant_axis] + side * 0.5)
+		var sample := behind_cell + Vector3i.ONE * SAMPLE_PADDING
+		if sample.x < 0 or sample.y < 0 or sample.z < 0 or sample.x >= SAMPLE_SIZE or sample.y >= SAMPLE_SIZE or sample.z >= SAMPLE_SIZE:
+			return false
+		var index := sample.x + SAMPLE_SIZE * (sample.y + SAMPLE_SIZE * sample.z)
+		if occupancy[index] == 0:
+			return false
+		for existing: Vector3i in behind:
+			if existing == behind_cell:
+				return false
+		behind.append(behind_cell)
+		corner_materials.append(material_ids[index])
+	for index in 4:
+		var point := points[index]
+		var next := points[(index + 1) % 4]
+		var previous := points[(index + 3) % 4]
+		var next_middle := (point + next) * 0.5
+		var previous_middle := (point + previous) * 0.5
+		_append_oriented_triangle(cell, bits, point, next_middle, centre, corner_materials[index], corner_materials[index], corner_materials[index], materials, positions, normals, vertex_colors, vertex_materials, indices)
+		_append_oriented_triangle(cell, bits, point, centre, previous_middle, corner_materials[index], corner_materials[index], corner_materials[index], materials, positions, normals, vertex_colors, vertex_materials, indices)
+	return true
 
 
 func _union_field(occupancy: PackedByteArray) -> PackedFloat32Array:
@@ -525,7 +649,7 @@ func _append_material_triangle(cell: Vector3i, bits: int, points: PackedVector3A
 	var last_cut := _material_cut(points[last], sites[last], points[unique], sites[unique])
 	if labels[first] == labels[last]:
 		_append_oriented_triangle(cell, bits, points[unique], first_cut, last_cut, labels[unique], labels[unique], labels[unique], materials, positions, normals, vertex_colors, vertex_materials, indices, reference)
-		if first_cut.distance_squared_to(points[last]) <= points[first].distance_squared_to(last_cut):
+		if _first_diagonal_wins(first_cut, points[first], points[last], last_cut, reference):
 			_append_oriented_triangle(cell, bits, first_cut, points[first], points[last], labels[first], labels[first], labels[first], materials, positions, normals, vertex_colors, vertex_materials, indices, reference)
 			_append_oriented_triangle(cell, bits, first_cut, points[last], last_cut, labels[first], labels[first], labels[first], materials, positions, normals, vertex_colors, vertex_materials, indices, reference)
 		else:
@@ -540,6 +664,18 @@ func _append_material_triangle(cell: Vector3i, bits: int, points: PackedVector3A
 	_append_oriented_triangle(cell, bits, points[first], centre, first_cut, labels[first], labels[first], labels[first], materials, positions, normals, vertex_colors, vertex_materials, indices, reference)
 	_append_oriented_triangle(cell, bits, points[last], last_cut, centre, labels[last], labels[last], labels[last], materials, positions, normals, vertex_colors, vertex_materials, indices, reference)
 	_append_oriented_triangle(cell, bits, points[last], centre, middle_cut, labels[last], labels[last], labels[last], materials, positions, normals, vertex_colors, vertex_materials, indices, reference)
+
+
+static func _first_diagonal_wins(first_cut: Vector3, first: Vector3, last: Vector3, last_cut: Vector3, reference: Vector3) -> bool:
+	var first_diagonal := first_cut.distance_squared_to(last)
+	var second_diagonal := first.distance_squared_to(last_cut)
+	if first_diagonal != second_diagonal:
+		return first_diagonal < second_diagonal
+	var first_dot := absf((first_cut - last).dot(reference))
+	var second_dot := absf((first - last_cut).dot(reference))
+	if absf(first_dot - second_dot) > 0.000001:
+		return first_dot < second_dot
+	return true
 
 
 static func _triple_point(points: PackedVector3Array, sites: PackedVector3Array, fallback: Vector3) -> Vector3:
@@ -1181,6 +1317,171 @@ func _edge_sample(cell: Vector3i, edge: int, occupancy: PackedByteArray, materia
 		if occupancy[sample_index] != 0:
 			return [Vector3(cell + CORNER_OFFSETS[corner]), material_ids[sample_index]]
 	return [Vector3(cell), 0]
+
+
+func _quad_fan_data(cell: Vector3i, loop: PackedInt32Array, field: PackedFloat32Array, occupancy: PackedByteArray, material_ids: PackedInt32Array) -> Dictionary:
+	if loop.size() != 4:
+		return {"ambiguous": false, "uniform": false, "labels": PackedInt32Array()}
+	var points: Array[Vector3] = []
+	var labels := PackedInt32Array()
+	var sites: Array[Vector3i] = []
+	for edge: int in loop:
+		points.append(_field_point(cell, edge, field))
+		var sample := _edge_sample(cell, edge, occupancy, material_ids)
+		labels.append(sample[1])
+		sites.append(Vector3i(roundi(sample[0].x), roundi(sample[0].y), roundi(sample[0].z)))
+	var uniform := labels[0] == labels[1] and labels[1] == labels[2] and labels[2] == labels[3]
+	var sums: Array = _component_sums(sites, occupancy, material_ids)
+	var sums_tie: bool = sums[0] < 0 or sums[1] < 0 or sums[0] == sums[1]
+	var first_diagonal := points[0].distance_to(points[2])
+	var second_diagonal := points[1].distance_to(points[3])
+	var lengths_tie: bool = absf(first_diagonal - second_diagonal) <= 0.0001
+	var first_key: PackedFloat32Array = _split_intrinsic_key(points, PackedInt32Array([0, 1, 2, 3]))
+	var second_key: PackedFloat32Array = _split_intrinsic_key(points, PackedInt32Array([1, 2, 3, 0]))
+	var keys_tie: bool = not _key_before(first_key, second_key) and not _key_before(second_key, first_key)
+	return {
+		"ambiguous": sums_tie and lengths_tie and keys_tie,
+		"uniform": uniform,
+		"labels": labels,
+		"sites": sites,
+	}
+
+
+func _append_quad_fan(cell: Vector3i, bits: int, loop: PackedInt32Array, labels: PackedInt32Array, field: PackedFloat32Array, occupancy: PackedByteArray, material_ids: PackedInt32Array, materials: PackedFloat32Array, positions: PackedVector3Array, normals: PackedVector3Array, vertex_colors: PackedColorArray, vertex_materials: PackedInt32Array, indices: PackedInt32Array, mixed: bool) -> bool:
+	if loop.size() != 4:
+		return false
+	var points: Array[Vector3] = []
+	for edge: int in loop:
+		points.append(_field_point(cell, edge, field))
+	var centre := (points[0] + points[1] + points[2] + points[3]) * 0.25
+	if mixed:
+		var counts := {}
+		for label: int in labels:
+			counts[label] = counts.get(label, 0) + 1
+		var majority := -1
+		var best := 0
+		for label: int in counts:
+			if counts[label] > best:
+				best = counts[label]
+				majority = label
+		var sites: Array[Vector3] = []
+		for edge: int in loop:
+			sites.append(_edge_sample(cell, edge, occupancy, material_ids)[0])
+		var centre_site := (sites[0] + sites[1] + sites[2] + sites[3]) * 0.25
+		for index in 4:
+			var next := (index + 1) % 4
+			_append_material_triangle(
+				cell, bits,
+				PackedVector3Array([points[index], points[next], centre]),
+				PackedInt32Array([labels[index], labels[next], majority]),
+				PackedVector3Array([sites[index], sites[next], centre_site]),
+				materials, positions, normals, vertex_colors, vertex_materials, indices
+			)
+		return true
+	var material: int = labels[0]
+	for index in 4:
+		var next := (index + 1) % 4
+		_append_oriented_triangle(
+			cell, bits,
+			points[index], points[next], centre,
+			material, material, material,
+			materials, positions, normals, vertex_colors, vertex_materials, indices
+		)
+	return true
+
+
+func _canonical_flat_quad(cell: Vector3i, loop: PackedInt32Array, field: PackedFloat32Array, occupancy: PackedByteArray, material_ids: PackedInt32Array) -> PackedInt32Array:
+	if loop.size() != 4:
+		return PackedInt32Array()
+	var points: Array[Vector3] = []
+	var labels := PackedInt32Array()
+	var sites: Array[Vector3i] = []
+	for edge: int in loop:
+		points.append(_field_point(cell, edge, field))
+		var sample := _edge_sample(cell, edge, occupancy, material_ids)
+		labels.append(sample[1])
+		sites.append(Vector3i(roundi(sample[0].x), roundi(sample[0].y), roundi(sample[0].z)))
+	var normal: Vector3 = (points[1] - points[0]).cross(points[2] - points[0])
+	if normal.length_squared() < 0.0000000001:
+		return PackedInt32Array()
+	var clean_a := labels[0] == labels[1] and labels[1] == labels[2] and labels[2] == labels[3]
+	var clean_b := clean_a
+	var sums := _component_sums(sites, occupancy, material_ids)
+	var first_distinct := _distinct_count(labels, [0, 1, 2]) + _distinct_count(labels, [0, 2, 3])
+	var second_distinct := _distinct_count(labels, [1, 2, 3]) + _distinct_count(labels, [1, 3, 0])
+	var choose_a := true
+	if clean_a != clean_b:
+		choose_a = clean_a
+	elif first_distinct != second_distinct:
+		choose_a = first_distinct > second_distinct
+	elif sums[0] >= 0 and sums[1] >= 0 and sums[0] != sums[1]:
+		choose_a = sums[0] < sums[1]
+	else:
+		var first_diagonal := points[0].distance_to(points[2])
+		var second_diagonal := points[1].distance_to(points[3])
+		if absf(first_diagonal - second_diagonal) > 0.0001:
+			choose_a = first_diagonal > second_diagonal
+		else:
+			choose_a = _key_before(_split_intrinsic_key(points, PackedInt32Array([0, 1, 2, 3])), _split_intrinsic_key(points, PackedInt32Array([1, 2, 3, 0])))
+	if choose_a:
+		return PackedInt32Array([loop[0], loop[1], loop[2], loop[0], loop[2], loop[3]])
+	return PackedInt32Array([loop[1], loop[2], loop[3], loop[1], loop[3], loop[0]])
+
+
+func _component_sums(sites: Array[Vector3i], occupancy: PackedByteArray, material_ids: PackedInt32Array) -> Array:
+	var constant_axis := -1
+	for axis in 3:
+		if sites[0][axis] == sites[1][axis] and sites[0][axis] == sites[2][axis] and sites[0][axis] == sites[3][axis]:
+			constant_axis = axis
+			break
+	if constant_axis < 0:
+		return [-1, -1]
+	var first_axis := (constant_axis + 1) % 3
+	var second_axis := (constant_axis + 2) % 3
+	var first_low := mini(mini(sites[0][first_axis], sites[1][first_axis]), mini(sites[2][first_axis], sites[3][first_axis])) - 1
+	var second_low := mini(mini(sites[0][second_axis], sites[1][second_axis]), mini(sites[2][second_axis], sites[3][second_axis])) - 1
+	var components := _quad_components(sites, constant_axis, first_axis, second_axis, first_low, second_low, occupancy, material_ids)
+	if components.is_empty():
+		return [-1, -1]
+	var sizes := {}
+	for current: Vector3i in components:
+		var component: int = components[current]
+		sizes[component] = sizes.get(component, 0) + 1
+	var first_component: int = components.get(sites[0], -1)
+	var second_component: int = components.get(sites[1], -1)
+	var third_component: int = components.get(sites[2], -1)
+	var fourth_component: int = components.get(sites[3], -1)
+	if first_component < 0 or second_component < 0 or third_component < 0 or fourth_component < 0:
+		return [-1, -1]
+	return [sizes[first_component] + sizes[third_component], sizes[second_component] + sizes[fourth_component]]
+
+
+static func _distinct_count(labels: PackedInt32Array, indices: Array) -> int:
+	var set := {}
+	for index: int in indices:
+		set[labels[index]] = true
+	return set.size()
+
+
+static func _split_intrinsic_key(points: Array[Vector3], order: PackedInt32Array) -> PackedFloat32Array:
+	var triangles := [[order[0], order[1], order[2]], [order[0], order[2], order[3]]]
+	var keys := []
+	for triangle: Array in triangles:
+		var lengths := []
+		for index in 3:
+			lengths.append(points[triangle[index]].distance_to(points[triangle[(index + 1) % 3]]))
+		lengths.sort()
+		keys.append(lengths)
+	keys.sort_custom(func(first: Array, second: Array) -> bool:
+		for index in 3:
+			if absf(first[index] - second[index]) > 0.0001:
+				return first[index] < second[index]
+		return false)
+	var key := PackedFloat32Array()
+	for lengths: Array in keys:
+		for length: float in lengths:
+			key.append(roundf(length * 10000.0) / 10000.0)
+	return key
 
 
 func _material_diagonal(cell: Vector3i, loop: PackedInt32Array, occupancy: PackedByteArray, material_ids: PackedInt32Array) -> PackedInt32Array:
