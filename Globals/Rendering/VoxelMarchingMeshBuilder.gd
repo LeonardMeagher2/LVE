@@ -523,6 +523,30 @@ func _pinch_material_seams(positions: PackedVector3Array, vertex_materials: Pack
 						if distance < best_distance:
 							best_distance = distance
 							best = target
+		if best_distance == INF:
+			for first_id: int in cells:
+				for second_id: int in cells:
+					if first_id == second_id:
+						continue
+					for first_cell: Vector3i in cells[first_id]:
+						for second_cell: Vector3i in cells[second_id]:
+							var difference := first_cell - second_cell
+							if absi(difference.x) + absi(difference.y) + absi(difference.z) != 3:
+								continue
+							var between := true
+							for axis in 3:
+								var low := minf(float(first_cell[axis]), float(second_cell[axis]))
+								var high := maxf(float(first_cell[axis]), float(second_cell[axis]))
+								if position[axis] <= low + 0.0001 or position[axis] >= high - 0.0001:
+									between = false
+									break
+							if not between:
+								continue
+							var target := (Vector3(first_cell) + Vector3(second_cell)) * 0.5
+							var distance := target.distance_squared_to(position)
+							if distance < best_distance:
+								best_distance = distance
+								best = target
 		if best_distance < INF:
 			targets[key] = best
 	for index in positions.size():
