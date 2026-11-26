@@ -92,6 +92,43 @@ The parallel build is 3.25 times faster with identical output.
 
 So the `mesher_phases` totals are serial CPU sums, not the user path. No integration is needed, and the parallel probe validates the shipped scheduler instead of exposing a new opportunity. The remaining surface cost is per-chunk CPU, where six measured rewrites of the inner loops all lost to the current code.
 
+### Dense greedy quad emit (2026-11-25)
+
+Measured: the greedy dense merge holds 68.6 percent of the color scan.
+Over 1,120 builds the merge is 8.41 s.
+Of that, `_emit_quad` is 5.77 s and quad scanning is 2.64 s.
+
+Measured: one empty call with the same 18 arguments costs 0.221 us.
+One `_emit_quad` call costs 1.599 us per quad over 3,702,510 quads.
+So the call holds 14 percent of the emit.
+
+Three single-variable rewrites of the body measured inside the noise band, and each was reverted:
+
+| Rewrite | Result |
+| --- | --- |
+| Per-material `Color` cache | mixed cases inside the existing range |
+| Axis-branch face origin and edges | mixed cases inside the existing range |
+| Indexed normals and colors instead of append | mixed cases inside the existing range |
+
+Measured: inlining the body into the dense loop removes the call and wins.
+
+| Case | Before | After |
+| --- | --- | --- |
+| Emit per quad | 1.599 us | 1.276 us |
+| Merge, 1,120 builds | 8.62 s | 7.43 s |
+| `mixed_flat_color`, no timers | 358,000 to 395,000 us | 332,857 us |
+| `mixed_smooth_color`, no timers | 702,000 to 785,000 us | 689,312 us |
+
+The vertex and triangle counts do not change: 705,024 and 352,512.
+The sparse path still calls `_emit_quad`, because `chunk.is_sparse()` selects it.
+The dense path holds a second copy of the emit body on purpose.
+A change to one emit body must reach the other.
+The gate scenes pass: `mesh_regressions`, `surface_rendering`, `mesher_read_parity`, `export_smooth_meshing`, `mesher_enclosed`, and `large_surface_edit`.
+
+This moves the color row of the ranked table from 0.40 s to 0.33 s for the flat case.
+The smooth color case is 0.69 s.
+The atlas case is unchanged, because it finishes through `VoxelSurface`.
+
 ## 1. Primitive shape preview and apply
 
 ### Evidence
