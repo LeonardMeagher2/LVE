@@ -204,6 +204,7 @@ func _build(occupancy: PackedByteArray, material_ids: PackedInt32Array, material
 		merged = built
 	var welded := _weld(merged[0], merged[1], merged[2], merged[3], merged[4])
 	_pinch_material_seams(welded[0], welded[4], occupancy, material_ids)
+	_flip_short_diagonals(welded[0], welded[3], welded[4])
 	surface_arrays.resize(Mesh.ARRAY_MAX)
 	surface_arrays[Mesh.ARRAY_VERTEX] = welded[0]
 	surface_arrays[Mesh.ARRAY_NORMAL] = welded[1]
@@ -557,6 +558,71 @@ func _pinch_material_seams(positions: PackedVector3Array, vertex_materials: Pack
 		var key := _position_key(positions[index])
 		if targets.has(key):
 			positions[index] = targets[key]
+
+
+func _flip_short_diagonals(positions: PackedVector3Array, indices: PackedInt32Array, materials: PackedInt32Array) -> void:
+	var edges := {}
+	for triangle in range(0, indices.size(), 3):
+		for corner in 3:
+			var first := indices[triangle + corner]
+			var second := indices[triangle + (corner + 1) % 3]
+			var key := Vector2i(mini(first, second), maxi(first, second))
+			var list: Array = edges.get(key, [])
+			list.append(triangle)
+			edges[key] = list
+	var used := {}
+	for key: Vector2i in edges:
+		var triangles: Array = edges[key]
+		if triangles.size() != 2:
+			continue
+		var first_triangle: int = triangles[0]
+		var second_triangle: int = triangles[1]
+		if used.has(first_triangle) or used.has(second_triangle):
+			continue
+		var first := key.x
+		var second := key.y
+		var first_opposite := _opposite_vertex(indices, first_triangle, first, second)
+		var second_opposite := _opposite_vertex(indices, second_triangle, first, second)
+		if first_opposite < 0 or second_opposite < 0 or first_opposite == second_opposite:
+			continue
+		var material := materials[first]
+		if materials[second] != material or materials[first_opposite] != material or materials[second_opposite] != material:
+			continue
+		if positions[first_opposite].distance_squared_to(positions[second_opposite]) >= positions[first].distance_squared_to(positions[second]) - 0.0001:
+			continue
+		var old_normal := _triangle_normal(positions, indices, first_triangle) + _triangle_normal(positions, indices, second_triangle)
+		if old_normal.length_squared() < 0.00000001:
+			continue
+		var first_cross := (positions[second_opposite] - positions[first]).cross(positions[first_opposite] - positions[first])
+		var second_cross := (positions[first_opposite] - positions[second]).cross(positions[second_opposite] - positions[second])
+		if first_cross.length_squared() < 0.0000000001 or second_cross.length_squared() < 0.0000000001:
+			continue
+		if first_cross.dot(old_normal) < 0.0:
+			_write_triangle(indices, first_triangle, first, first_opposite, second_opposite)
+			_write_triangle(indices, second_triangle, second, second_opposite, first_opposite)
+		else:
+			_write_triangle(indices, first_triangle, first, second_opposite, first_opposite)
+			_write_triangle(indices, second_triangle, second, first_opposite, second_opposite)
+		used[first_triangle] = true
+		used[second_triangle] = true
+
+
+static func _opposite_vertex(indices: PackedInt32Array, triangle: int, first: int, second: int) -> int:
+	for corner in 3:
+		var vertex := indices[triangle + corner]
+		if vertex != first and vertex != second:
+			return vertex
+	return -1
+
+
+static func _triangle_normal(positions: PackedVector3Array, indices: PackedInt32Array, triangle: int) -> Vector3:
+	return (positions[indices[triangle + 1]] - positions[indices[triangle]]).cross(positions[indices[triangle + 2]] - positions[indices[triangle]])
+
+
+static func _write_triangle(indices: PackedInt32Array, triangle: int, first: int, second: int, third: int) -> void:
+	indices[triangle] = first
+	indices[triangle + 1] = second
+	indices[triangle + 2] = third
 
 
 static func _position_key(point: Vector3) -> Vector3i:
