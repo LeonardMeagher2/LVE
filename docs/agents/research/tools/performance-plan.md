@@ -87,7 +87,10 @@ The export, preview, and document rows come from `export_cost`, `thumbnail_cost`
 | WorkerThreadPool, 16 cores | 0.514 s | 550,125 | 1,057,536 |
 
 The parallel build is 3.25 times faster with identical output.
-The plan for the production path is one build task per chunk from the immutable snapshot, with `ArrayMesh` creation on the main thread and the existing cancel and join contract.
+
+**This is already the production design.** `ui/Viewport/VoxelRenderer.gd` launches one `VoxelMeshBuilder.run` task per chunk on `WorkerThreadPool` (line 404), caps concurrency at `clamp(cores - 1, 2, 8)` (lines 8 to 24), reaps finished jobs and creates the `ArrayMesh` on the main thread, and budgets each frame with `State.WORK_SLICE_US`.
+
+So the `mesher_phases` totals are serial CPU sums, not the user path. No integration is needed, and the parallel probe validates the shipped scheduler instead of exposing a new opportunity. The remaining surface cost is per-chunk CPU, where six measured rewrites of the inner loops all lost to the current code.
 
 ## 1. Primitive shape preview and apply
 
