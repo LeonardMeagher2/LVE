@@ -62,15 +62,16 @@ The loop reran the commands above on `main`. This table supersedes the ranks for
 
 | Rank | Operation | 2026-11-25 | 2026-11-18 |
 | --- | --- | --- | --- |
-| 1 | Primitive add with a smooth blend, 64 cubed cells | 2.84 to 2.97 s | 13.33 s |
+| 1 | Primitive add with a smooth blend, 64 cubed cells | 2.33 s | 13.33 s |
 | 2 | Chunk surface, mixed materials, atlas, 27 chunks | 1.66 s total, finish 1.34 s | 4.68 s |
-| 3 | Primitive add without a blend, 64 cubed cells | 0.83 to 0.90 s | 1.16 s |
+| 3 | Primitive add without a blend, 64 cubed cells | 0.86 s | 1.16 s |
 | 4 | Chunk surface, mixed materials, color | 0.40 s | 0.35 s |
 | 5 | Spray sampling, width 64 warm | 0.028 s | 0.028 s |
 
-The smooth add now splits into 1.33 s in `_existing_field` and 1.43 s in the rasterize loop.
-The loop step that returns the occupied mask and reuses the solid test cut the loop by 31 percent.
-`_existing_field` is the next target.
+The smooth add fell from 3.46 s to 2.33 s in two loop steps.
+The first returned the occupied mask and reused the solid test.
+The second skipped chamfer seed cells that hold 0.
+The rasterize loop and `_existing_field` now hold similar shares, so the next step attributes both again.
 
 ## 1. Primitive shape preview and apply
 
