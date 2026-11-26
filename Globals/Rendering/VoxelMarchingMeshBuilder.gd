@@ -1133,6 +1133,8 @@ static func _shared_edge_pull(first_site: Vector3, second_site: Vector3, point: 
 			free_axis = axis
 	if changed != 2 or free_axis < 0:
 		return point
+	if point[free_axis] < first_site[free_axis] - 0.0001 or point[free_axis] > first_site[free_axis] + 1.0001:
+		return point
 	var target := point
 	for axis in 3:
 		if absf(difference[axis]) > 0.5:
