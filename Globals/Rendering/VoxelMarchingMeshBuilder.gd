@@ -3,7 +3,8 @@ extends RefCounted
 
 
 const CHUNK_SIZE := VoxelFrame.CHUNK_SIZE
-const SAMPLE_PADDING := 2
+const SAMPLE_PADDING := 3
+const MESH_PADDING := 2
 const SAMPLE_SIZE := CHUNK_SIZE + SAMPLE_PADDING * 2
 const FACE_OFFSETS: Array[Vector3i] = [
 	Vector3i(1, 0, 0), Vector3i(-1, 0, 0),
@@ -32,9 +33,13 @@ const FACES: Array = [
 	[[0, 4, 5, 1], [8, 4, 9, 0]],
 	[[2, 3, 7, 6], [2, 10, 6, 11]],
 ]
+const FACE_AXES: Array[int] = [2, 0, 1]
+const PRESENT_SELF := 13
 
 static var _case_loops: Array = []
 static var _case_loop_triangles: Array = []
+static var _edge_faces: PackedInt32Array = PackedInt32Array()
+static var _face_triangles: Array = []
 
 var source_frame: VoxelFrame
 var chunk_location := Vector3i.ZERO
@@ -65,6 +70,28 @@ static func _static_init() -> void:
 			triangles.append(_triangulate_loop(loop))
 		_case_loops[bits] = loops
 		_case_loop_triangles[bits] = triangles
+	_edge_faces.resize(EDGE_CORNERS.size())
+	for face in FACES.size():
+		for edge: int in FACES[face][1]:
+			_edge_faces[edge] |= 1 << face
+	_face_triangles.resize(256)
+	for bits in 256:
+		var face_triangles: Array[PackedInt32Array] = []
+		face_triangles.resize(FACES.size())
+		for group: PackedInt32Array in _case_loop_triangles[bits]:
+			for index in range(0, group.size(), 3):
+				var common := 63
+				for corner in 3:
+					common &= _edge_faces[group[index + corner]]
+				var face := -1
+				for candidate in FACES.size():
+					if common == 1 << candidate:
+						face = candidate
+						break
+				if face < 0:
+					continue
+				face_triangles[face] = PackedInt32Array([group[index], group[index + 1], group[index + 2]])
+		_face_triangles[bits] = face_triangles
 
 
 func run() -> void:
@@ -73,12 +100,14 @@ func run() -> void:
 	var occupancy := PackedByteArray()
 	var material_ids := PackedInt32Array()
 	var materials := PackedFloat32Array()
+	var present := PackedByteArray()
 	if frame != null:
 		var sampled := _sample(frame, chunk_location, slice_axis, slice_index, slice_count)
 		occupancy = sampled[0]
 		material_ids = sampled[1]
 		materials = sampled[2]
-	_build(occupancy, material_ids, materials)
+		present = sampled[3]
+	_build(occupancy, material_ids, materials, present)
 
 
 func _sample(frame: VoxelFrame, location: Vector3i, slice_axis: int, slice_index: int, slice_count: int) -> Array:
@@ -90,6 +119,13 @@ func _sample(frame: VoxelFrame, location: Vector3i, slice_axis: int, slice_index
 	var materials := VoxelFrame.material(Color.TRANSPARENT)
 	var material_table := {}
 	var sample_origin := location * CHUNK_SIZE - Vector3i.ONE * SAMPLE_PADDING
+	var present := PackedByteArray()
+	present.resize(27)
+	for z in range(-1, 2):
+		for y in range(-1, 2):
+			for x in range(-1, 2):
+				if frame.chunks.has(location + Vector3i(x, y, z)):
+					present[(x + 1) + 3 * ((y + 1) + 3 * (z + 1))] = 1
 	for z in range(-1, 2):
 		for y in range(-1, 2):
 			for x in range(-1, 2):
@@ -145,7 +181,7 @@ func _sample(frame: VoxelFrame, location: Vector3i, slice_axis: int, slice_index
 							row_ids[id] = material_id
 						material_ids[index] = material_id
 	materials = _fill_bridges(occupancy, material_ids, materials)
-	return [occupancy, material_ids, materials]
+	return [occupancy, material_ids, materials, present]
 
 
 func _fill_bridges(occupancy: PackedByteArray, material_ids: PackedInt32Array, materials: PackedFloat32Array) -> PackedFloat32Array:
@@ -248,30 +284,37 @@ static func _box_clear(real: PackedByteArray, corner_x: int, corner_y: int, corn
 	return true
 
 
-func _build(occupancy: PackedByteArray, material_ids: PackedInt32Array, materials: PackedFloat32Array) -> void:
+func _build(occupancy: PackedByteArray, material_ids: PackedInt32Array, materials: PackedFloat32Array, present: PackedByteArray) -> void:
+	if present.is_empty() or present[PRESENT_SELF] == 0:
+		surface_arrays.resize(Mesh.ARRAY_MAX)
+		surface_arrays[Mesh.ARRAY_VERTEX] = PackedVector3Array()
+		surface_arrays[Mesh.ARRAY_NORMAL] = PackedVector3Array()
+		surface_arrays[Mesh.ARRAY_COLOR] = PackedColorArray()
+		surface_arrays[Mesh.ARRAY_INDEX] = PackedInt32Array()
+		return
 	var positions := PackedVector3Array()
 	var normals := PackedVector3Array()
 	var vertex_colors := PackedColorArray()
 	var vertex_materials := PackedInt32Array()
 	var indices := PackedInt32Array()
-	var origin := chunk_location * CHUNK_SIZE
-	for z in range(-1, CHUNK_SIZE):
-		for y in range(-1, CHUNK_SIZE):
-			for x in range(-1, CHUNK_SIZE):
+	var owners := _build_owners(present)
+	for z in range(-MESH_PADDING, CHUNK_SIZE + 1):
+		for y in range(-MESH_PADDING, CHUNK_SIZE + 1):
+			for x in range(-MESH_PADDING, CHUNK_SIZE + 1):
 				var cell := Vector3i(x, y, z)
 				var bits := 0
-				var first_solid := -1
 				for corner in 8:
 					var sample := cell + CORNER_OFFSETS[corner] + Vector3i.ONE * SAMPLE_PADDING
 					var sample_index := sample.x + SAMPLE_SIZE * (sample.y + SAMPLE_SIZE * sample.z)
 					if occupancy[sample_index] == 0:
 						continue
-					if first_solid < 0:
-						first_solid = corner
 					bits |= 1 << corner
-				if first_solid < 0:
+				if bits == 0:
 					continue
-				if VoxelFrame.chunk_position(origin + cell + CORNER_OFFSETS[first_solid]) != chunk_location:
+				var state_x := 0 if x <= 0 else (2 if x >= CHUNK_SIZE - 2 else 1)
+				var state_y := 0 if y <= 0 else (2 if y >= CHUNK_SIZE - 2 else 1)
+				var state_z := 0 if z <= 0 else (2 if z >= CHUNK_SIZE - 2 else 1)
+				if owners[(state_x * 3 + state_y) * 3 + state_z] == 2:
 					continue
 				var loops: Array = _case_loops[bits]
 				if loops.is_empty():
@@ -283,21 +326,217 @@ func _build(occupancy: PackedByteArray, material_ids: PackedInt32Array, material
 						var first_edge := triangle_edges[index]
 						var second_edge := triangle_edges[index + 1]
 						var third_edge := triangle_edges[index + 2]
+						var first_point := _edge_point(cell, first_edge)
+						var second_point := _edge_point(cell, second_edge)
+						var third_point := _edge_point(cell, third_edge)
+						if _mirror_on_face(cell, first_edge, second_edge, third_edge, occupancy):
+							continue
 						_append_oriented_triangle(
 							cell, bits,
-							_edge_point(cell, first_edge), _edge_point(cell, second_edge), _edge_point(cell, third_edge),
+							first_point, second_point, third_point,
 							_edge_material(cell, first_edge, occupancy, material_ids),
 							_edge_material(cell, second_edge, occupancy, material_ids),
 							_edge_material(cell, third_edge, occupancy, material_ids),
 							materials, positions, normals, vertex_colors, vertex_materials, indices
 						)
-	var welded := _weld(positions, normals, vertex_colors, vertex_materials, indices)
+	var merged := _merge_flats(positions, normals, vertex_colors, vertex_materials, indices)
+	var welded := _weld(merged[0], merged[1], merged[2], merged[3], merged[4])
 	surface_arrays.resize(Mesh.ARRAY_MAX)
 	surface_arrays[Mesh.ARRAY_VERTEX] = welded[0]
 	surface_arrays[Mesh.ARRAY_NORMAL] = welded[1]
 	surface_arrays[Mesh.ARRAY_COLOR] = welded[2]
 	surface_arrays[Mesh.ARRAY_INDEX] = welded[3]
 	geometry_bytes = welded[0].size() * 40 + welded[3].size() * 4
+
+
+static func _merge_flats(positions: PackedVector3Array, normals: PackedVector3Array, colors: PackedColorArray, materials: PackedInt32Array, indices: PackedInt32Array) -> Array:
+	var triangle_count := indices.size() / 3
+	var consumed := PackedByteArray()
+	consumed.resize(triangle_count)
+	var buckets := {}
+	for triangle in triangle_count:
+		var first := indices[triangle * 3]
+		var second := indices[triangle * 3 + 1]
+		var third := indices[triangle * 3 + 2]
+		var normal := normals[first]
+		var axis := -1
+		for candidate in 3:
+			if absf(normal[candidate]) > 0.999:
+				axis = candidate
+		if axis < 0:
+			continue
+		if materials[first] != materials[second] or materials[first] != materials[third]:
+			continue
+		var sign := 1 if normal[axis] > 0.0 else 0
+		var plane := roundi(positions[first][axis] * 2.0)
+		var key := ((axis * 2 + sign) << 34) | ((plane + 32768) << 18) | materials[first]
+		var entry: Dictionary = buckets.get(key, {})
+		if entry.is_empty():
+			entry = {
+				"normal": normal,
+				"color": colors[first],
+				"material": materials[first],
+				"axis": axis,
+				"plane": positions[first][axis],
+				"u_axis": (axis + 1) % 3,
+				"v_axis": (axis + 2) % 3,
+				"squares": {},
+				"halves": {},
+			}
+			buckets[key] = entry
+		var u_axis: int = entry.u_axis
+		var v_axis: int = entry.v_axis
+		var first_u := roundi(positions[first][u_axis] * 2.0)
+		var first_v := roundi(positions[first][v_axis] * 2.0)
+		var second_u := roundi(positions[second][u_axis] * 2.0)
+		var second_v := roundi(positions[second][v_axis] * 2.0)
+		var third_u := roundi(positions[third][u_axis] * 2.0)
+		var third_v := roundi(positions[third][v_axis] * 2.0)
+		var square := Vector2i(
+			mini(first_u, mini(second_u, third_u)),
+			mini(first_v, mini(second_v, third_v))
+		)
+		var has_low := false
+		var has_high := false
+		var has_right := false
+		var has_up := false
+		var on_square := true
+		for point in [[first_u, first_v], [second_u, second_v], [third_u, third_v]]:
+			if point[0] == square.x and point[1] == square.y:
+				has_low = true
+			elif point[0] == square.x + 2 and point[1] == square.y + 2:
+				has_high = true
+			elif point[0] == square.x + 2 and point[1] == square.y:
+				has_right = true
+			elif point[0] == square.x and point[1] == square.y + 2:
+				has_up = true
+			else:
+				on_square = false
+		if not on_square:
+			continue
+		var squares: Dictionary = entry.squares
+		var mask: int = squares.get(square, 0)
+		if not has_high:
+			mask |= 1
+		elif not has_low:
+			mask |= 2
+		elif not has_right:
+			mask |= 4
+		elif not has_up:
+			mask |= 8
+		squares[square] = mask
+		var halves: Dictionary = entry.halves
+		var list: Array = halves.get(square, [])
+		list.append(triangle)
+		halves[square] = list
+	var merged_positions := PackedVector3Array()
+	var merged_normals := PackedVector3Array()
+	var merged_colors := PackedColorArray()
+	var merged_materials := PackedInt32Array()
+	var merged_indices := PackedInt32Array()
+	for key in buckets:
+		var entry: Dictionary = buckets[key]
+		var squares: Dictionary = entry.squares
+		var complete := {}
+		for square: Vector2i in squares:
+			var mask: int = squares[square]
+			if (mask & 3) == 3 or (mask & 12) == 12:
+				complete[square] = true
+		var order: Array = complete.keys()
+		order.sort_custom(_square_before)
+		for square: Vector2i in order:
+			if not complete.has(square):
+				continue
+			var width := 1
+			while complete.has(Vector2i(square.x + width * 2, square.y)):
+				width += 1
+			var height := 1
+			var growing := true
+			while growing:
+				for offset in width:
+					if not complete.has(Vector2i(square.x + offset * 2, square.y + height * 2)):
+						growing = false
+						break
+				if growing:
+					height += 1
+			var area := width * height
+			var perimeter := 2 * (width + height)
+			for row in height:
+				for column in width:
+					complete.erase(Vector2i(square.x + column * 2, square.y + row * 2))
+			if area * 2 <= perimeter:
+				continue
+			for row in height:
+				for column in width:
+					for triangle: int in entry.halves[Vector2i(square.x + column * 2, square.y + row * 2)]:
+						consumed[triangle] = 1
+			_emit_flat_fan(entry, Vector2(square) * 0.5, width, height, merged_positions, merged_normals, merged_colors, merged_materials, merged_indices)
+	for triangle in triangle_count:
+		if consumed[triangle] != 0:
+			continue
+		var first_vertex := merged_positions.size()
+		for corner in 3:
+			var source := indices[triangle * 3 + corner]
+			merged_positions.append(positions[source])
+			merged_normals.append(normals[source])
+			merged_colors.append(colors[source])
+			merged_materials.append(materials[source])
+		merged_indices.append(first_vertex)
+		merged_indices.append(first_vertex + 1)
+		merged_indices.append(first_vertex + 2)
+	return [merged_positions, merged_normals, merged_colors, merged_materials, merged_indices]
+
+
+static func _square_before(first: Vector2i, second: Vector2i) -> bool:
+	if first.y != second.y:
+		return first.y < second.y
+	return first.x < second.x
+
+
+static func _emit_flat_fan(entry: Dictionary, corner: Vector2, width: int, height: int, positions: PackedVector3Array, normals: PackedVector3Array, colors: PackedColorArray, materials: PackedInt32Array, indices: PackedInt32Array) -> void:
+	var normal: Vector3 = entry.normal
+	var color: Color = entry.color
+	var material: int = entry.material
+	var axis: int = entry.axis
+	var u_axis: int = entry.u_axis
+	var v_axis: int = entry.v_axis
+	var plane: float = entry.plane
+	var centre := _plane_point(axis, plane, u_axis, v_axis, corner.x + width * 0.5, corner.y + height * 0.5)
+	var loop: Array[Vector3] = []
+	for column in width:
+		loop.append(_plane_point(axis, plane, u_axis, v_axis, corner.x + column, corner.y))
+	for row in height:
+		loop.append(_plane_point(axis, plane, u_axis, v_axis, corner.x + width, corner.y + row))
+	for column in range(width, 0, -1):
+		loop.append(_plane_point(axis, plane, u_axis, v_axis, corner.x + column, corner.y + height))
+	for row in range(height, 0, -1):
+		loop.append(_plane_point(axis, plane, u_axis, v_axis, corner.x, corner.y + row))
+	for index in loop.size():
+		var first := loop[index]
+		var second := loop[(index + 1) % loop.size()]
+		if (first - centre).cross(second - centre).dot(normal) > 0.0:
+			var swap := first
+			first = second
+			second = swap
+		var first_vertex := positions.size()
+		positions.append(centre)
+		positions.append(first)
+		positions.append(second)
+		for vertex in 3:
+			normals.append(normal)
+			colors.append(color)
+			materials.append(material)
+		indices.append(first_vertex)
+		indices.append(first_vertex + 1)
+		indices.append(first_vertex + 2)
+
+
+static func _plane_point(axis: int, plane: float, u_axis: int, v_axis: int, u: float, v: float) -> Vector3:
+	var point := Vector3.ZERO
+	point[axis] = plane
+	point[u_axis] = u
+	point[v_axis] = v
+	return point
 
 
 static func _weld(positions: PackedVector3Array, normals: PackedVector3Array, colors: PackedColorArray, materials: PackedInt32Array, indices: PackedInt32Array) -> Array:
@@ -327,6 +566,81 @@ static func _weld(positions: PackedVector3Array, normals: PackedVector3Array, co
 			by_position[position_key] = by_normal
 		welded_indices[index] = vertex
 	return [welded_positions, welded_normals, welded_colors, welded_indices]
+
+
+func _mirror_on_face(cell: Vector3i, first_edge: int, second_edge: int, third_edge: int, occupancy: PackedByteArray) -> bool:
+	var common := _edge_faces[first_edge] & _edge_faces[second_edge] & _edge_faces[third_edge]
+	var face := -1
+	for candidate in FACES.size():
+		if common == 1 << candidate:
+			face = candidate
+			break
+	if face < 0:
+		return false
+	var axis: int = FACE_AXES[face / 2]
+	var neighbor := cell
+	var neighbor_face := face + 1
+	if face % 2 == 0:
+		neighbor[axis] -= 1
+	else:
+		neighbor[axis] += 1
+		neighbor_face = face - 1
+	var neighbor_bits := 0
+	for corner in 8:
+		var sample := neighbor + CORNER_OFFSETS[corner] + Vector3i.ONE * SAMPLE_PADDING
+		var index := sample.x + SAMPLE_SIZE * (sample.y + SAMPLE_SIZE * sample.z)
+		if occupancy[index] != 0:
+			neighbor_bits |= 1 << corner
+	var face_triangles: Array = _face_triangles[neighbor_bits]
+	var mirrored: PackedInt32Array = face_triangles[neighbor_face]
+	if mirrored.is_empty():
+		return false
+	return _same_face_triangle(cell, [first_edge, second_edge, third_edge], neighbor, mirrored)
+
+
+static func _same_face_triangle(first_cell: Vector3i, first_edges: Array, second_cell: Vector3i, second_edges: PackedInt32Array) -> bool:
+	if first_edges.size() != second_edges.size():
+		return false
+	var first: Array[Vector3i] = []
+	var second: Array[Vector3i] = []
+	for edge: int in first_edges:
+		var corners: Array = EDGE_CORNERS[edge]
+		first.append(first_cell * 2 + CORNER_OFFSETS[corners[0]] + CORNER_OFFSETS[corners[1]])
+	for edge: int in second_edges:
+		var corners: Array = EDGE_CORNERS[edge]
+		second.append(second_cell * 2 + CORNER_OFFSETS[corners[0]] + CORNER_OFFSETS[corners[1]])
+	first.sort()
+	second.sort()
+	return first == second
+
+
+static func _build_owners(present: PackedByteArray) -> PackedByteArray:
+	var owners := PackedByteArray()
+	owners.resize(27)
+	for state_x in 3:
+		for state_y in 3:
+			for state_z in 3:
+				var winner := Vector3i.ZERO
+				var found := false
+				for offset_x in _axis_offsets(state_x):
+					for offset_y in _axis_offsets(state_y):
+						for offset_z in _axis_offsets(state_z):
+							if found:
+								continue
+							var index := (offset_x + 1) + 3 * ((offset_y + 1) + 3 * (offset_z + 1))
+							if present[index] != 0:
+								winner = Vector3i(offset_x, offset_y, offset_z)
+								found = true
+				owners[(state_x * 3 + state_y) * 3 + state_z] = 1 if winner == Vector3i.ZERO else 2
+	return owners
+
+
+static func _axis_offsets(state: int) -> PackedInt32Array:
+	if state == 0:
+		return PackedInt32Array([-1, 0])
+	if state == 2:
+		return PackedInt32Array([0, 1])
+	return PackedInt32Array([0])
 
 
 func _append_oriented_triangle(cell: Vector3i, bits: int, first: Vector3, second: Vector3, third: Vector3, first_material: int, second_material: int, third_material: int, materials: PackedFloat32Array, positions: PackedVector3Array, normals: PackedVector3Array, vertex_colors: PackedColorArray, vertex_materials: PackedInt32Array, indices: PackedInt32Array) -> void:
