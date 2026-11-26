@@ -206,7 +206,10 @@ func _build(occupancy: PackedByteArray, material_ids: PackedInt32Array, material
 		merged = built
 	var welded := _weld(merged[0], merged[1], merged[2], merged[3], merged[4])
 	_pinch_material_seams(welded[0], welded[4], occupancy, material_ids)
+	welded[3] = _drop_degenerate_triangles(welded[0], welded[3])
 	_flip_diagonals(welded[0], welded[3], welded[4])
+	welded = _rebuild_flat_normals(welded[0], welded[1], welded[2], welded[4], welded[3], occupancy)
+	welded = _fill_boundary_ears(welded[0], welded[1], welded[2], welded[3], welded[4], occupancy, material_ids, materials)
 	surface_arrays.resize(Mesh.ARRAY_MAX)
 	surface_arrays[Mesh.ARRAY_VERTEX] = welded[0]
 	surface_arrays[Mesh.ARRAY_NORMAL] = welded[1]
@@ -652,6 +655,218 @@ func _pinch_material_seams(positions: PackedVector3Array, vertex_materials: Pack
 		var key := _position_key(positions[index])
 		if targets.has(key):
 			positions[index] = targets[key]
+
+
+func _drop_degenerate_triangles(positions: PackedVector3Array, indices: PackedInt32Array) -> PackedInt32Array:
+	var kept := PackedInt32Array()
+	for triangle in range(0, indices.size(), 3):
+		var first := _position_key(positions[indices[triangle]])
+		var second := _position_key(positions[indices[triangle + 1]])
+		var third := _position_key(positions[indices[triangle + 2]])
+		if first == second or second == third or first == third:
+			continue
+		kept.append(indices[triangle])
+		kept.append(indices[triangle + 1])
+		kept.append(indices[triangle + 2])
+	return kept
+
+
+func _rebuild_flat_normals(positions: PackedVector3Array, normals: PackedVector3Array, colors: PackedColorArray, materials: PackedInt32Array, indices: PackedInt32Array, occupancy: PackedByteArray) -> Array:
+	var new_positions := PackedVector3Array()
+	var new_normals := PackedVector3Array()
+	var new_colors := PackedColorArray()
+	var new_materials := PackedInt32Array()
+	var new_indices := PackedInt32Array()
+	for triangle in range(0, indices.size(), 3):
+		var first := positions[indices[triangle]]
+		var second := positions[indices[triangle + 1]]
+		var third := positions[indices[triangle + 2]]
+		var normal := normals[indices[triangle]]
+		var winding := (second - first).cross(third - first)
+		if winding.length_squared() >= 0.0000000001:
+			var face := winding.normalized()
+			var centre := (first + second + third) / 3.0
+			var plus := Vector3i(roundi(centre.x + face.x * 0.3), roundi(centre.y + face.y * 0.3), roundi(centre.z + face.z * 0.3)) + Vector3i.ONE * SAMPLE_PADDING
+			var minus := Vector3i(roundi(centre.x - face.x * 0.3), roundi(centre.y - face.y * 0.3), roundi(centre.z - face.z * 0.3)) + Vector3i.ONE * SAMPLE_PADDING
+			if plus.x >= 0 and plus.y >= 0 and plus.z >= 0 and plus.x < SAMPLE_SIZE and plus.y < SAMPLE_SIZE and plus.z < SAMPLE_SIZE and minus.x >= 0 and minus.y >= 0 and minus.z >= 0 and minus.x < SAMPLE_SIZE and minus.y < SAMPLE_SIZE and minus.z < SAMPLE_SIZE:
+				var plus_solid := occupancy[plus.x + SAMPLE_SIZE * (plus.y + SAMPLE_SIZE * plus.z)] != 0
+				var minus_solid := occupancy[minus.x + SAMPLE_SIZE * (minus.y + SAMPLE_SIZE * minus.z)] != 0
+				if plus_solid != minus_solid:
+					normal = -face if plus_solid else face
+		var vertex := new_positions.size()
+		new_positions.append(first)
+		new_positions.append(second)
+		new_positions.append(third)
+		new_normals.append(normal)
+		new_normals.append(normal)
+		new_normals.append(normal)
+		var colour := colors[indices[triangle]]
+		new_colors.append(colour)
+		new_colors.append(colour)
+		new_colors.append(colour)
+		var material := materials[indices[triangle]]
+		new_materials.append(material)
+		new_materials.append(material)
+		new_materials.append(material)
+		new_indices.append(vertex)
+		new_indices.append(vertex + 1)
+		new_indices.append(vertex + 2)
+	return _weld(new_positions, new_normals, new_colors, new_materials, new_indices)
+
+
+func _fill_boundary_ears(positions: PackedVector3Array, normals: PackedVector3Array, colors: PackedColorArray, indices: PackedInt32Array, materials_vertex: PackedInt32Array, occupancy: PackedByteArray, cell_material_ids: PackedInt32Array, palette: PackedFloat32Array) -> Array:
+	var point_of := {}
+	var keys: Array[Vector3i] = []
+	keys.resize(positions.size())
+	for index in positions.size():
+		var key := _position_key(positions[index])
+		keys[index] = key
+		if not point_of.has(key):
+			point_of[key] = positions[index]
+	var edge_data := {}
+	for triangle in range(0, indices.size(), 3):
+		var material := materials_vertex[indices[triangle]]
+		for corner in 3:
+			var first := keys[indices[triangle + corner]]
+			var second := keys[indices[triangle + (corner + 1) % 3]]
+			var edge := _edge_key(first, second)
+			var entry: Array = edge_data.get(edge, [0, material])
+			entry[0] += 1
+			edge_data[edge] = entry
+	var neighbors := {}
+	var edge_material := {}
+	for edge: String in edge_data:
+		if edge_data[edge][0] != 1:
+			continue
+		edge_material[edge] = edge_data[edge][1]
+		var parts := edge.split("|")
+		var first := _key_from_string(parts[0])
+		var second := _key_from_string(parts[1])
+		var first_list: Array = neighbors.get(first, [])
+		first_list.append(second)
+		neighbors[first] = first_list
+		var second_list: Array = neighbors.get(second, [])
+		second_list.append(first)
+		neighbors[second] = second_list
+	var new_positions := positions.duplicate()
+	var new_normals := normals.duplicate()
+	var new_colors := colors.duplicate()
+	var new_materials := materials_vertex.duplicate()
+	var new_indices := indices.duplicate()
+	var handled := {}
+	var filled := false
+	for corner: Vector3i in neighbors:
+		var around: Array = neighbors[corner]
+		if around.size() != 2:
+			continue
+		var first_point: Vector3 = point_of[around[0]]
+		var second_point: Vector3 = point_of[around[1]]
+		var tip: Vector3 = point_of[corner]
+		var constant_axis := -1
+		for candidate in 3:
+			if absf(first_point[candidate] - second_point[candidate]) < 0.001 and absf(first_point[candidate] - tip[candidate]) < 0.001:
+				constant_axis = candidate
+				break
+		if constant_axis < 0:
+			continue
+		var first_axis := (constant_axis + 1) % 3
+		var second_axis := (constant_axis + 2) % 3
+		var chord_axis := -1
+		var shared_axis := -1
+		if absf(first_point[first_axis] - second_point[first_axis]) < 0.001:
+			chord_axis = second_axis
+			shared_axis = first_axis
+		elif absf(first_point[second_axis] - second_point[second_axis]) < 0.001:
+			chord_axis = first_axis
+			shared_axis = second_axis
+		if chord_axis < 0:
+			continue
+		if absf(tip[shared_axis] - first_point[shared_axis]) < 0.5:
+			continue
+		var low := minf(first_point[chord_axis], second_point[chord_axis])
+		var high := maxf(first_point[chord_axis], second_point[chord_axis])
+		if tip[chord_axis] <= low + 0.001 or tip[chord_axis] >= high - 0.001:
+			continue
+		var first_edge := _edge_key(around[0], corner)
+		var second_edge := _edge_key(corner, around[1])
+		if not edge_material.has(first_edge) or not edge_material.has(second_edge):
+			continue
+		if edge_material[first_edge] == edge_material[second_edge]:
+			continue
+		var middle := (first_point + second_point) * 0.5
+		var middle_key := _position_key(middle)
+		if handled.has(middle_key) or point_of.has(middle_key):
+			continue
+		var centre := (first_point + second_point + tip) / 3.0
+		var direction := Vector3.ZERO
+		direction[constant_axis] = 1.0
+		var plus := Vector3i(roundi(centre.x + direction.x * 0.3), roundi(centre.y + direction.y * 0.3), roundi(centre.z + direction.z * 0.3)) + Vector3i.ONE * SAMPLE_PADDING
+		var minus := Vector3i(roundi(centre.x - direction.x * 0.3), roundi(centre.y - direction.y * 0.3), roundi(centre.z - direction.z * 0.3)) + Vector3i.ONE * SAMPLE_PADDING
+		if plus.x < 0 or plus.y < 0 or plus.z < 0 or plus.x >= SAMPLE_SIZE or plus.y >= SAMPLE_SIZE or plus.z >= SAMPLE_SIZE:
+			continue
+		if minus.x < 0 or minus.y < 0 or minus.z < 0 or minus.x >= SAMPLE_SIZE or minus.y >= SAMPLE_SIZE or minus.z >= SAMPLE_SIZE:
+			continue
+		var plus_solid := occupancy[plus.x + SAMPLE_SIZE * (plus.y + SAMPLE_SIZE * plus.z)] != 0
+		var minus_solid := occupancy[minus.x + SAMPLE_SIZE * (minus.y + SAMPLE_SIZE * minus.z)] != 0
+		if plus_solid == minus_solid:
+			continue
+		var outward := direction if not plus_solid and minus_solid else -direction
+		for triangle: Array in [[first_point, tip, middle], [middle, tip, second_point]]:
+			var first := triangle[0] as Vector3
+			var second := triangle[1] as Vector3
+			var third := triangle[2] as Vector3
+			var triangle_centre := (first + second + third) / 3.0
+			var solid_point := triangle_centre - outward * 0.3
+			var cell := Vector3i(roundi(solid_point.x), roundi(solid_point.y), roundi(solid_point.z)) + Vector3i.ONE * SAMPLE_PADDING
+			if cell.x < 0 or cell.y < 0 or cell.z < 0 or cell.x >= SAMPLE_SIZE or cell.y >= SAMPLE_SIZE or cell.z >= SAMPLE_SIZE:
+				continue
+			var cell_index := cell.x + SAMPLE_SIZE * (cell.y + SAMPLE_SIZE * cell.z)
+			if occupancy[cell_index] == 0:
+				continue
+			var material_id := cell_material_ids[cell_index]
+			var base := material_id * VoxelFrame.MATERIAL_STRIDE
+			if base + 3 >= palette.size():
+				continue
+			var colour := Color(palette[base], palette[base + 1], palette[base + 2], palette[base + 3])
+			if (second - first).cross(third - first).dot(outward) > 0.0:
+				var swap := second
+				second = third
+				third = swap
+			var vertex := new_positions.size()
+			new_positions.append(first)
+			new_positions.append(second)
+			new_positions.append(third)
+			new_normals.append(outward)
+			new_normals.append(outward)
+			new_normals.append(outward)
+			new_colors.append(colour)
+			new_colors.append(colour)
+			new_colors.append(colour)
+			new_materials.append(material_id)
+			new_materials.append(material_id)
+			new_materials.append(material_id)
+			new_indices.append(vertex)
+			new_indices.append(vertex + 1)
+			new_indices.append(vertex + 2)
+			filled = true
+		handled[middle_key] = true
+	if not filled:
+		return [positions, normals, colors, indices, materials_vertex]
+	return _weld(new_positions, new_normals, new_colors, new_materials, new_indices)
+
+
+static func _edge_key(first: Vector3i, second: Vector3i) -> String:
+	var low := first
+	var high := second
+	if low.x > high.x or (low.x == high.x and (low.y > high.y or (low.y == high.y and low.z > high.z))):
+		low = second
+		high = first
+	return "%d,%d,%d|%d,%d,%d" % [low.x, low.y, low.z, high.x, high.y, high.z]
+
+
+static func _key_from_string(text: String) -> Vector3i:
+	var parts := text.split(",")
+	return Vector3i(int(parts[0]), int(parts[1]), int(parts[2]))
 
 
 func _flip_diagonals(positions: PackedVector3Array, indices: PackedInt32Array, materials: PackedInt32Array) -> void:
