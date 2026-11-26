@@ -17,6 +17,7 @@ var slice_axis := -1
 var slice_index := 0
 var slice_count := 1
 var worker_task_id := -1
+var build_started_us := 0
 var surface_arrays: Array = []
 var geometry_bytes := 0
 var atlas_size := Vector2i.ZERO
