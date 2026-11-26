@@ -170,7 +170,49 @@ func _greedy_dense(padded_cell_colors: PackedColorArray, padded_cell_materials: 
 									break
 							if row_matches:
 								quad_height += 1
-						_emit_quad(face_axis, face_sign, layer_index, column_axis, row_axis, column, row, quad_width, quad_height, material_id, face_normal, materials, padded_cell_colors, corner_normals, vertex_positions, vertex_normals, vertex_colors, triangle_indices)
+						var face_origin := Vector3.ZERO
+						face_origin[face_axis] = layer_index + face_sign * 0.5
+						face_origin[column_axis] = column - 0.5
+						face_origin[row_axis] = row - 0.5
+						var column_edge := Vector3.ZERO
+						var row_edge := Vector3.ZERO
+						column_edge[column_axis] = quad_width
+						row_edge[row_axis] = quad_height
+						var first_vertex := vertex_positions.size()
+						var base := material_id * VoxelFrame.MATERIAL_STRIDE
+						var face_color := Color(materials[base], materials[base + 1], materials[base + 2], materials[base + 3])
+						vertex_positions.resize(first_vertex + 4)
+						vertex_positions[first_vertex] = face_origin
+						vertex_positions[first_vertex + 1] = face_origin + column_edge
+						vertex_positions[first_vertex + 2] = face_origin + column_edge + row_edge
+						vertex_positions[first_vertex + 3] = face_origin + row_edge
+						for vertex_corner in 4:
+							var normal := face_normal
+							if smooth_normals:
+								var corner := Vector3i(vertex_positions[first_vertex + vertex_corner].floor())
+								if not corner_normals.has(corner):
+									corner_normals[corner] = _corner_normal(corner, padded_cell_colors)
+								normal = corner_normals[corner]
+								if normal.is_zero_approx():
+									normal = face_normal
+							vertex_normals.append(normal)
+							vertex_colors.append(face_color)
+						var index_start := triangle_indices.size()
+						triangle_indices.resize(index_start + 6)
+						if face_sign > 0:
+							triangle_indices[index_start] = first_vertex
+							triangle_indices[index_start + 1] = first_vertex + 2
+							triangle_indices[index_start + 2] = first_vertex + 1
+							triangle_indices[index_start + 3] = first_vertex
+							triangle_indices[index_start + 4] = first_vertex + 3
+							triangle_indices[index_start + 5] = first_vertex + 2
+						else:
+							triangle_indices[index_start] = first_vertex
+							triangle_indices[index_start + 1] = first_vertex + 1
+							triangle_indices[index_start + 2] = first_vertex + 2
+							triangle_indices[index_start + 3] = first_vertex
+							triangle_indices[index_start + 4] = first_vertex + 2
+							triangle_indices[index_start + 5] = first_vertex + 3
 						for row_offset in quad_height:
 							for column_offset in quad_width:
 								face_materials[column + column_offset + CHUNK_SIZE * (row + row_offset)] = 0
