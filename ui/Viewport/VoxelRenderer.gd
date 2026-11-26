@@ -4,13 +4,17 @@ extends Node3D
 
 const CHUNK_SIZE := VoxelFrame.CHUNK_SIZE
 const SURFACE_CACHE_LIMIT_BYTES := 64 * 1024 * 1024
+const SURFACE_CACHE_LIMIT_BYTES_LOW_POLY := 256 * 1024 * 1024
 const SURFACE_CACHE_LIMIT_ENTRIES := 1024
+const SURFACE_CACHE_LIMIT_ENTRIES_LOW_POLY := 4096
 const SURFACE_JOB_LIMIT_MIN := 2
 const SURFACE_JOB_LIMIT_MAX := 8
 
 static var _surface_cache: Dictionary = {}
 static var _surface_use_order: Array[PackedInt64Array] = []
 static var _surface_cache_bytes := 0
+static var _surface_cache_filled := 0
+static var _surface_cache_has_low_poly := false
 static var _surface_jobs: Dictionary = {}
 static var _active_renderer_count := 0
 var _chunk_notice_frame := -1
@@ -147,6 +151,8 @@ func _exit_tree() -> void:
 		_surface_cache.clear()
 		_surface_use_order.clear()
 		_surface_cache_bytes = 0
+		_surface_cache_filled = 0
+		_surface_cache_has_low_poly = false
 	for chunk_instance in _retired_chunk_instances:
 		chunk_instance.free()
 	_retired_chunk_instances.clear()
@@ -466,9 +472,18 @@ static func _cache_surface(surface_key: PackedInt64Array, chunk_surface: ArrayMe
 	_surface_cache[surface_key] = {"surface": chunk_surface, "material": material, "bytes": geometry_bytes}
 	_surface_use_order.append(surface_key)
 	_surface_cache_bytes += geometry_bytes
-	while (_surface_cache_bytes > SURFACE_CACHE_LIMIT_BYTES or _surface_cache.size() > SURFACE_CACHE_LIMIT_ENTRIES) and _surface_use_order.size() > 1:
+	if chunk_surface != null:
+		_surface_cache_filled += 1
+	if (surface_key[0] & 4) != 0:
+		_surface_cache_has_low_poly = true
+	var byte_limit := SURFACE_CACHE_LIMIT_BYTES_LOW_POLY if _surface_cache_has_low_poly else SURFACE_CACHE_LIMIT_BYTES
+	var entry_limit := SURFACE_CACHE_LIMIT_ENTRIES_LOW_POLY if _surface_cache_has_low_poly else SURFACE_CACHE_LIMIT_ENTRIES
+	while (_surface_cache_bytes > byte_limit or _surface_cache_filled > entry_limit) and _surface_use_order.size() > 1:
 		var oldest_surface_key: PackedInt64Array = _surface_use_order.pop_front()
-		_surface_cache_bytes -= _surface_cache[oldest_surface_key].bytes
+		var oldest: Dictionary = _surface_cache[oldest_surface_key]
+		_surface_cache_bytes -= oldest.bytes
+		if oldest.surface != null:
+			_surface_cache_filled -= 1
 		_surface_cache.erase(oldest_surface_key)
 
 

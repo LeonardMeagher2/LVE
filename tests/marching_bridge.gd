@@ -14,6 +14,7 @@ func _ready() -> void:
 	test("a same-material corner pair joins through the block", _corner_pair, "bridge_corner_pair")
 	test("different materials do not join", _different_materials, "bridge_different_materials")
 	test("a finish change alone keeps the pair apart", _material_values, "bridge_material_values")
+	test("two face-adjacent materials keep their own colours", _face_materials, "bridge_face_materials")
 	test("a third material blocks the gap", _third_material, "bridge_third_material")
 	test("a concave corner stays open", _concave_corner, "bridge_concave_corner")
 	test("a mixed-material concave corner stays open", _mixed_concave_corner, "bridge_mixed_concave")
@@ -107,6 +108,32 @@ func _third_material() -> void:
 		expect(_view.components() == 1, "the clean gap joins the pair")
 		expect(not _view.has_vertex(Vector3(1.0, 0.0, 0.5)), "the gap beside the red voxel stays open")
 	)
+
+
+func _face_materials() -> void:
+	step("Given two face-adjacent voxels of different materials", func():
+		_view = VIEW.new(self)
+		_view.apply({
+			Vector3i.ZERO: VoxelFrame.material(Color.WHITE),
+			Vector3i(1, 0, 0): VoxelFrame.material(Color.RED),
+		})
+	)
+	await _view.settle()
+	step("Then every vertex keeps one of the two material colours", func():
+		_view.collect()
+		expect(_view.closed(), "the pair has no boundary")
+		var white := VoxelFrame.material_color(State.get_current_voxel_frame().get_material(Vector3i.ZERO))
+		var red := VoxelFrame.material_color(State.get_current_voxel_frame().get_material(Vector3i(1, 0, 0)))
+		var mixed := false
+		for color in _view.colors:
+			if not _matches(color, white) and not _matches(color, red):
+				mixed = true
+		expect(not mixed, "no patch blends the two materials")
+	)
+
+
+func _matches(color: Color, expected: Color) -> bool:
+	return absf(color.r - expected.r) < 0.01 and absf(color.g - expected.g) < 0.01 and absf(color.b - expected.b) < 0.01 and absf(color.a - expected.a) < 0.01
 
 
 func _concave_corner() -> void:
