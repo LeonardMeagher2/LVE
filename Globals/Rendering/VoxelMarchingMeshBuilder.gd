@@ -208,8 +208,10 @@ func _build(occupancy: PackedByteArray, material_ids: PackedInt32Array, material
 	_pinch_material_seams(welded[0], welded[4], occupancy, material_ids)
 	welded[3] = _drop_degenerate_triangles(welded[0], welded[3])
 	_flip_diagonals(welded[0], welded[3], welded[4])
-	welded = _rebuild_flat_normals(welded[0], welded[1], welded[2], welded[4], welded[3], occupancy)
 	welded[3] = _drop_opposite_duplicate_triangles(welded[0], welded[3])
+	_collapse_near_hole_vertices(welded[0], welded[3])
+	welded[3] = _drop_degenerate_triangles(welded[0], welded[3])
+	welded = _rebuild_flat_normals(welded[0], welded[1], welded[2], welded[4], welded[3], occupancy)
 	welded = _fill_boundary_ears(welded[0], welded[1], welded[2], welded[3], welded[4], occupancy, material_ids, materials)
 	surface_arrays.resize(Mesh.ARRAY_MAX)
 	surface_arrays[Mesh.ARRAY_VERTEX] = welded[0]
@@ -656,6 +658,73 @@ func _pinch_material_seams(positions: PackedVector3Array, vertex_materials: Pack
 		var key := _position_key(positions[index])
 		if targets.has(key):
 			positions[index] = targets[key]
+
+
+func _collapse_near_hole_vertices(positions: PackedVector3Array, indices: PackedInt32Array) -> void:
+	var keys: Array[Vector3i] = []
+	keys.resize(positions.size())
+	for index in positions.size():
+		keys[index] = _position_key(positions[index])
+	var uses := {}
+	for triangle in range(0, indices.size(), 3):
+		for corner in 3:
+			var first: Vector3i = keys[indices[triangle + corner]]
+			var second: Vector3i = keys[indices[triangle + (corner + 1) % 3]]
+			if first == second:
+				continue
+			var edge := _edge_key(first, second)
+			uses[edge] = uses.get(edge, 0) + 1
+	var neighbors := {}
+	for edge: String in uses:
+		if uses[edge] != 1:
+			continue
+		var parts := edge.split("|")
+		var first := _key_from_string(parts[0])
+		var second := _key_from_string(parts[1])
+		var first_list: Array = neighbors.get(first, [])
+		first_list.append(second)
+		neighbors[first] = first_list
+		var second_list: Array = neighbors.get(second, [])
+		second_list.append(first)
+		neighbors[second] = second_list
+	var slivers := {}
+	for vertex: Vector3i in neighbors:
+		var around: Array = neighbors[vertex]
+		if around.size() != 2 or around[0] == around[1]:
+			continue
+		var key := _edge_key(around[0], around[1])
+		var list: Array = slivers.get(key, [])
+		list.append(vertex)
+		slivers[key] = list
+	var moves := {}
+	for key: String in slivers:
+		var list: Array = slivers[key]
+		for first_index in list.size():
+			if moves.has(list[first_index]):
+				continue
+			for second_index in range(first_index + 1, list.size()):
+				if moves.has(list[second_index]):
+					continue
+				var first: Vector3i = list[first_index]
+				var second: Vector3i = list[second_index]
+				var gap := _key_distance(first, second)
+				if gap > 0.3:
+					continue
+				var middle := (_key_point(first) + _key_point(second)) * 0.5
+				moves[first] = middle
+				moves[second] = middle
+				break
+	for index in positions.size():
+		if moves.has(keys[index]):
+			positions[index] = moves[keys[index]]
+
+
+static func _key_point(key: Vector3i) -> Vector3:
+	return Vector3(float(key.x) / 1024.0, float(key.y) / 1024.0, float(key.z) / 1024.0)
+
+
+static func _key_distance(first: Vector3i, second: Vector3i) -> float:
+	return _key_point(first).distance_to(_key_point(second))
 
 
 func _drop_degenerate_triangles(positions: PackedVector3Array, indices: PackedInt32Array) -> PackedInt32Array:
