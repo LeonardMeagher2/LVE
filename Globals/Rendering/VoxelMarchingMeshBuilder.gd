@@ -836,6 +836,10 @@ func _material_diagonal(cell: Vector3i, loop: PackedInt32Array, occupancy: Packe
 	var components := _quad_components(quad, constant_axis, first_axis, second_axis, first_low - 1, second_low - 1, occupancy, material_ids)
 	if components.is_empty():
 		return PackedInt32Array()
+	var component_sizes := {}
+	for component_cell: Vector3i in components:
+		var component: int = components[component_cell]
+		component_sizes[component] = component_sizes.get(component, 0) + 1
 	var first_component: int = components.get(quad[0], -1)
 	var second_component: int = components.get(quad[1], -1)
 	var third_component: int = components.get(quad[2], -1)
@@ -844,6 +848,13 @@ func _material_diagonal(cell: Vector3i, loop: PackedInt32Array, occupancy: Packe
 		return PackedInt32Array([loop[0], loop[1], loop[2], loop[0], loop[2], loop[3]])
 	if second_component != fourth_component and first_component == third_component:
 		return PackedInt32Array([loop[1], loop[2], loop[3], loop[1], loop[3], loop[0]])
+	if first_component != third_component and second_component != fourth_component:
+		var first_size: int = component_sizes.get(first_component, 0) + component_sizes.get(third_component, 0)
+		var second_size: int = component_sizes.get(second_component, 0) + component_sizes.get(fourth_component, 0)
+		if first_size < second_size:
+			return PackedInt32Array([loop[0], loop[1], loop[2], loop[0], loop[2], loop[3]])
+		if second_size < first_size:
+			return PackedInt32Array([loop[1], loop[2], loop[3], loop[1], loop[3], loop[0]])
 	return PackedInt32Array()
 
 
