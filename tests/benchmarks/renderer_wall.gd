@@ -22,8 +22,8 @@ func _cost() -> void:
 		document.frames.append(frame)
 		State.stop()
 		State.document = document
-		State.document.smooth_normals = false
-		State.document.ao_strength = 0.0
+		State.document.smooth_normals = OS.get_environment("LVE_SMOOTH") == "1"
+		State.document.ao_strength = float(OS.get_environment("LVE_AO")) if OS.get_environment("LVE_AO").is_valid_float() else 0.0
 		State.current_frame = 0
 		var cap := OS.get_environment("LVE_JOB_CAP")
 		if cap.is_valid_int():

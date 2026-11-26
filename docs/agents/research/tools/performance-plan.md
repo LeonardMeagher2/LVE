@@ -63,7 +63,7 @@ The loop reran the commands above on `main`. This table supersedes the ranks for
 | Rank | Operation | 2026-11-25 | 2026-11-18 |
 | --- | --- | --- | --- |
 | 1 | Primitive add with a smooth blend, 64 cubed cells | 1.64 s | 13.33 s |
-| 2 | Chunk surface, mixed materials, atlas, 27 chunks | 1.66 s total, finish 1.34 s | 4.68 s |
+| 2 | Chunk surface, mixed materials, atlas, 27 chunks | 1.52 s flat, 2.14 s smooth | 4.68 s |
 | 3 | Sprite sheet export, 24 frames, 128 px | 1.28 s | not measured |
 | 4 | Primitive add without a blend, 64 cubed cells | 0.51 s | 1.16 s |
 | 5 | GIF export, 24 frames, 128 px | 0.69 s | not measured |
@@ -285,6 +285,25 @@ The mixed fixture builds 550,125 vertices and 352,512 triangles.
 
 Measured: the mixed fixture writes every cell with one of four materials in a diagonal pattern.
 This is the worst fragmentation case.
+
+### Finish attribution 2026-11-25
+
+Measured per chunk with phase timers, 140 flat and 238 smooth builds:
+
+| chunk kind | vertices | protect, us per vertex | triangulate, us per vertex | vertex loop, us per vertex |
+| --- | --- | --- | --- | --- |
+| mixed flat atlas | 20,375 | 0.77 | 0.16 | 1.11 |
+| mixed smooth atlas | 19,340 | 0.80 | 0.16 | 2.00 |
+
+The atlas bake is 0.05 ms per chunk. The UV pass is 2.9 ms per chunk.
+The row totals are 1.52 s for the flat atlas and 2.14 s for the smooth atlas.
+The smooth vertex loop holds 70 percent of the smooth finish, so it is the next target.
+
+Measured: the normal cannot leave the smooth vertex key.
+The key `[dbl, patch]` merges the two sides of a one-voxel wall, because `dbl` holds the plane position and not the plane sign.
+`mixed_smooth_atlas` falls from 522,188 to 210,982 vertices.
+The faster per-vertex number came from the lost vertices.
+Reverted.
 
 ### Code path
 
