@@ -28,7 +28,7 @@ func _ready() -> void:
 	test("a straight material seam keeps its diagonal vertex", _straight_material_seam, "march_straight_material_seam")
 	test("an edge seam outside the shared edge keeps its vertex", _edge_seam_span, "march_edge_seam_span")
 	test("an edge seam beyond half a cell keeps its vertex", _edge_seam_travel, "march_edge_seam_travel")
-	test("a four-material face keeps one material", _four_material_face, "march_four_material_face")
+	test("a four-material face keeps its four materials", _four_material_face, "march_four_material_face")
 	test("the low-poly style renders in the editor viewport", _viewport_style, "march_viewport_style")
 	test("the settings modal stores one undoable style change", _style_undo, "march_style_undo")
 
@@ -348,19 +348,24 @@ func _four_material_face() -> void:
 		_view.apply(_four_material_face_cells())
 	)
 	await _view.settle()
-	step("Then the face centre carries the face material", func():
+	step("Then each material keeps its own triangles", func():
 		_view.collect()
-		var colours := _colours_at(Vector3(-3.5, 0.5, 0.5))
-		expect(colours.size() == 1, "the face centre carries one material")
-		expect(colours.has(Color(1.0, 1.0, 0.0)), "the face centre carries the solid cell material")
+		var colours := _colours_on_face(-3.5)
+		expect(colours.size() == 4, "the face draws four materials")
+		for colour: Color in [Color(1.0, 1.0, 0.0), Color(1.0, 0.0, 0.0), Color(1.0, 0.0, 1.0), Color(0.0, 0.0, 1.0)]:
+			expect(colours.has(colour), "the face draws its %s material" % colour)
 	)
 
 
-func _colours_at(point: Vector3) -> Dictionary:
+func _colours_on_face(x: float) -> Dictionary:
 	var colours := {}
-	for index in _view.positions.size():
-		if _view.positions[index].is_equal_approx(point):
-			colours[_view.colors[index]] = true
+	for index in range(0, _view.indices.size(), 3):
+		var first: Vector3 = _view.positions[_view.indices[index]]
+		var second: Vector3 = _view.positions[_view.indices[index + 1]]
+		var third: Vector3 = _view.positions[_view.indices[index + 2]]
+		if absf(first.x - x) > 0.001 or absf(second.x - x) > 0.001 or absf(third.x - x) > 0.001:
+			continue
+		colours[_view.colors[_view.indices[index]]] = true
 	return colours
 
 
