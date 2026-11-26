@@ -54,6 +54,10 @@ func _cost() -> void:
 	var rebuild_frame_us: Array[int] = []
 	var emit_all_us := 0
 	var per_chunk_emit_us: Array[int] = []
+	var rebuild_mutate_us := 0
+	var rebuild_emit_us := 0
+	var rebuild_first_wait_us := 0
+	var rebuild_window_started := 0
 	step("When the document reports its chunks", func():
 		State.chunks_changed.emit(0, locations)
 	)
@@ -85,14 +89,20 @@ func _cost() -> void:
 		expect(int(profile.get("reaped", 0)) + int(profile.get("consume", 0)) >= locations.size(), "the renderer installs or resolves every chunk")
 	)
 	step("When every chunk cell changes", func():
+		var mutate_started := Time.get_ticks_usec()
 		for location: Vector3i in locations:
 			State.document.set_cell(0, location * CHUNK + Vector3i(8, 8, 8), VoxelFrame.material(Color.WHITE))
+		var mutate_ended := Time.get_ticks_usec()
 		renderer.reset_profile()
-		rebuild_started = Time.get_ticks_usec()
-		var emit_started := Time.get_ticks_usec()
+		rebuild_started = mutate_ended
 		State.chunks_changed.emit(0, locations)
-		emit_all_us = Time.get_ticks_usec() - emit_started
+		var emit_ended := Time.get_ticks_usec()
+		rebuild_mutate_us = mutate_ended - mutate_started
+		rebuild_emit_us = emit_ended - mutate_ended
+		rebuild_window_started = emit_ended
 	)
+	await get_tree().process_frame
+	rebuild_first_wait_us = Time.get_ticks_usec() - rebuild_window_started
 	while rebuild_frames < MAX_FRAMES:
 		var frame_started := Time.get_ticks_usec()
 		await get_tree().process_frame
@@ -122,6 +132,12 @@ func _cost() -> void:
 		print("MEASURE renderer_wall frames_us: " + str(slowest.slice(0, 8)))
 		print("MEASURE renderer_wall first_frames_us: " + str(rebuild_frame_us.slice(0, 12)))
 		print("MEASURE renderer_wall emit_all_us=%d" % emit_all_us)
+		var frame_sum := 0
+		for value in rebuild_frame_us:
+			frame_sum += int(value)
+		print("MEASURE renderer_wall stages: mutate_us=%d emit_us=%d first_wait_us=%d frames=%d frame_sum_us=%d wall_from_emit_us=%d" % [
+			rebuild_mutate_us, rebuild_emit_us, rebuild_first_wait_us, rebuild_frames, frame_sum, rebuild_elapsed,
+		])
 		print("MEASURE renderer_wall per_chunk_emit_us: " + str(per_chunk_emit_us))
 		expect(int(rebuild_profile.get("reaped", 0)) + int(rebuild_profile.get("consume", 0)) >= locations.size(), "the rebuild resolves every chunk")
 	)
