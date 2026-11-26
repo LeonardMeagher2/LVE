@@ -608,6 +608,25 @@ static func _rasterize_add(request: Dictionary, frame: VoxelFrame, min_cell: Vec
 	var prepared_smooth: float = prepared["smooth"]
 	var prepared_shell: float = prepared["shell"]
 	var primitive_count := prepared_primitives.size()
+	var primitive_kinds := PackedInt32Array()
+	var primitive_inverses: Array[Quaternion] = []
+	var primitive_centers: Array[Vector3] = []
+	var primitive_extents: Array[Vector3] = []
+	var primitive_sizes := PackedFloat32Array()
+	var primitive_records: Array[PackedFloat32Array] = []
+	for index in primitive_count:
+		var record: PackedFloat32Array = prepared_primitives[index]
+		primitive_kinds.append(int(record[0]))
+		primitive_inverses.append(Quaternion(record[1], record[2], record[3], record[4]))
+		primitive_centers.append(Vector3(record[5], record[6], record[7]))
+		if int(record[0]) == KIND_CONE:
+			primitive_extents.append(Vector3.ZERO)
+			primitive_sizes.append(0.0)
+			primitive_records.append(record)
+		else:
+			primitive_extents.append(Vector3(record[8], record[9], record[10]))
+			primitive_sizes.append(record[11])
+			primitive_records.append(PackedFloat32Array())
 	var completed := 0
 	for x in range(min_cell.x, max_cell.x + 1, step):
 		for y in range(min_cell.y, max_cell.y + 1, step):
@@ -617,20 +636,20 @@ static func _rasterize_add(request: Dictionary, frame: VoxelFrame, min_cell: Vec
 				var distance := 1.0
 				if primitive_count > 0:
 					for primitive_index in primitive_count:
-						var record: PackedFloat32Array = prepared_primitives[primitive_index]
-						var kind := int(record[0])
+						var kind := primitive_kinds[primitive_index]
 						var value := 0.0
 						if kind == KIND_CONE:
-							value = _prepared_primitive_distance(record, point)
+							value = _prepared_primitive_distance(primitive_records[primitive_index], point)
 						else:
-							var local := Quaternion(record[1], record[2], record[3], record[4]) * (point - Vector3(record[5], record[6], record[7]))
+							var local := primitive_inverses[primitive_index] * (point - primitive_centers[primitive_index])
 							if kind == KIND_ELLIPSOID:
-								var scaled := local / Vector3(record[8], record[9], record[10])
-								value = (scaled.length() - 1.0) * record[11]
+								var scaled := local / primitive_extents[primitive_index]
+								value = (scaled.length() - 1.0) * primitive_sizes[primitive_index]
 							else:
-								var q := Vector3(absf(local.x) - record[8], absf(local.y) - record[9], absf(local.z) - record[10])
+								var extent := primitive_extents[primitive_index]
+								var q := Vector3(absf(local.x) - extent.x, absf(local.y) - extent.y, absf(local.z) - extent.z)
 								var outside := Vector3(maxf(q.x, 0.0), maxf(q.y, 0.0), maxf(q.z, 0.0))
-								value = outside.length() + minf(maxf(q.x, maxf(q.y, q.z)), 0.0) - record[11]
+								value = outside.length() + minf(maxf(q.x, maxf(q.y, q.z)), 0.0) - primitive_sizes[primitive_index]
 						if primitive_index == 0:
 							distance = value
 						else:
