@@ -593,15 +593,23 @@ static func neighbor_offsets(use_smooth_normals: bool) -> Array[Vector3i]:
 
 
 static func _face_ao_code(padded_cell_materials: PackedInt32Array, outside: int, column_stride: int, row_stride: int) -> int:
+	var back_column := padded_cell_materials[outside - column_stride] != 0
+	var forward_column := padded_cell_materials[outside + column_stride] != 0
+	var back_row := padded_cell_materials[outside - row_stride] != 0
+	var forward_row := padded_cell_materials[outside + row_stride] != 0
+	var back_back := padded_cell_materials[outside - column_stride - row_stride] != 0
+	var back_forward := padded_cell_materials[outside - column_stride + row_stride] != 0
+	var forward_back := padded_cell_materials[outside + column_stride - row_stride] != 0
+	var forward_forward := padded_cell_materials[outside + column_stride + row_stride] != 0
 	var code := 0
-	for index in 4:
-		var far_column := -1 if (index & 1) == 0 else 1
-		var far_row := -1 if (index & 2) == 0 else 1
-		var side1 := outside + column_stride * far_column
-		var side2 := outside + row_stride * far_row
-		var diagonal := outside + column_stride * far_column + row_stride * far_row
-		var level: int = SURFACE._ao_level(padded_cell_materials[side1] != 0, padded_cell_materials[side2] != 0, padded_cell_materials[diagonal] != 0)
-		code |= level << (index * 2)
+	if not (back_column and back_row):
+		code = 3 - (1 if back_column else 0) - (1 if back_row else 0) - (1 if back_back else 0)
+	if not (forward_column and back_row):
+		code |= (3 - (1 if forward_column else 0) - (1 if back_row else 0) - (1 if forward_back else 0)) << 2
+	if not (back_column and forward_row):
+		code |= (3 - (1 if back_column else 0) - (1 if forward_row else 0) - (1 if back_forward else 0)) << 4
+	if not (forward_column and forward_row):
+		code |= (3 - (1 if forward_column else 0) - (1 if forward_row else 0) - (1 if forward_forward else 0)) << 6
 	return code
 
 
