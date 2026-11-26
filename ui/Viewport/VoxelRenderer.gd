@@ -260,10 +260,12 @@ func _update_chunks(updated_frame: int, chunk_positions: Array[Vector3i]) -> voi
 	var active_frame := _get_frame()
 	var requested := {}
 	for chunk_location in chunk_positions:
-		if requested.has(chunk_location):
-			continue
-		requested[chunk_location] = true
-		_request(active_frame, chunk_location)
+		for offset: Vector3i in VoxelMeshBuilder.neighbor_offsets(true):
+			var neighbor := chunk_location + offset
+			if requested.has(neighbor):
+				continue
+			requested[neighbor] = true
+			_request(active_frame, neighbor)
 	_chunk_notice_frame = updated_frame
 	if not _chunk_notice_pending:
 		_chunk_notice_pending = true
