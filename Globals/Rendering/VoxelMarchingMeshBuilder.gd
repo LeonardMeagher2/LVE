@@ -426,8 +426,12 @@ func _append_material_triangle(cell: Vector3i, bits: int, points: PackedVector3A
 	var last_cut := _material_cut(points[last], sites[last], points[unique], sites[unique])
 	if labels[first] == labels[last]:
 		_append_oriented_triangle(cell, bits, points[unique], first_cut, last_cut, labels[unique], labels[unique], labels[unique], materials, positions, normals, vertex_colors, vertex_materials, indices, reference)
-		_append_oriented_triangle(cell, bits, first_cut, points[first], points[last], labels[first], labels[first], labels[first], materials, positions, normals, vertex_colors, vertex_materials, indices, reference)
-		_append_oriented_triangle(cell, bits, first_cut, points[last], last_cut, labels[first], labels[first], labels[first], materials, positions, normals, vertex_colors, vertex_materials, indices, reference)
+		if first_cut.distance_squared_to(points[last]) <= points[first].distance_squared_to(last_cut):
+			_append_oriented_triangle(cell, bits, first_cut, points[first], points[last], labels[first], labels[first], labels[first], materials, positions, normals, vertex_colors, vertex_materials, indices, reference)
+			_append_oriented_triangle(cell, bits, first_cut, points[last], last_cut, labels[first], labels[first], labels[first], materials, positions, normals, vertex_colors, vertex_materials, indices, reference)
+		else:
+			_append_oriented_triangle(cell, bits, first_cut, points[first], last_cut, labels[first], labels[first], labels[first], materials, positions, normals, vertex_colors, vertex_materials, indices, reference)
+			_append_oriented_triangle(cell, bits, points[first], points[last], last_cut, labels[first], labels[first], labels[first], materials, positions, normals, vertex_colors, vertex_materials, indices, reference)
 		return
 	var middle_cut := _material_cut(points[first], sites[first], points[last], sites[last])
 	var centre := _triple_point(points, sites, (first_cut + middle_cut + last_cut) / 3.0)
