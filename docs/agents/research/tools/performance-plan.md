@@ -131,6 +131,27 @@ This moves the color row of the ranked table from 0.40 s to 0.33 s for the flat 
 The smooth color case is 0.69 s.
 The atlas case is unchanged, because it finishes through `VoxelSurface`.
 
+### Dense fill for both signs (2026-11-25)
+
+Measured: the fill is 30 percent of the dense merge, and it ran once per face sign.
+Both passes read the same centre cells and differed only in the neighbour.
+
+Measured: one pass that writes both sign planes to a 2 MB buffer wins.
+The merges then run in the same axis, sign, layer, row, column order, so the arrays stay identical.
+
+| row | scan before | scan after |
+| --- | --- | --- |
+| uniform flat color | 103,283 us | 74,844 us |
+| uniform smooth color | 104,142 us | 76,266 us |
+| mixed flat color | 283,522 us | 270,777 us |
+| mixed smooth color | 613,509 us | 591,181 us |
+
+Solid scenes gain 27 percent, because their second sign pass repeated the same reads for no new faces.
+The mixed fixture gains about 4 percent, because its face fraction is near one.
+Counts do not change: 705,024 vertices and 352,512 triangles mixed, 216 and 108 uniform.
+The buffer costs 2 MB per build and 16 MB at the 8 task cap.
+The eight gate scenes pass.
+
 ## 1. Primitive shape preview and apply
 
 ### Evidence
