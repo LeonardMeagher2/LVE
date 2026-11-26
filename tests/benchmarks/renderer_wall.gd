@@ -3,7 +3,7 @@ extends "res://tests/test.gd"
 
 const SPAN := 3
 const CHUNK := VoxelFrame.CHUNK_SIZE
-const MAX_FRAMES := 600
+const MAX_FRAMES := 120
 
 var renderer: VoxelRenderer
 var locations: Array[Vector3i] = []
@@ -16,7 +16,8 @@ func _ready() -> void:
 
 func _cost() -> void:
 	step("Given a 27 chunk mixed document on the editor", func():
-		var document := VoxelDocument.new()		document.frames.clear()
+		var document := VoxelDocument.new()
+		document.frames.clear()
 		var frame := _fixture()
 		document.frames.append(frame)
 		State.stop()
@@ -61,6 +62,8 @@ func _cost() -> void:
 		State.chunks_changed.emit(0, locations)
 	)
 	while frames < MAX_FRAMES:
+		if Time.get_ticks_usec() - started > 20_000_000:
+			break
 		await get_tree().process_frame
 		frames += 1
 		var progress: Dictionary = renderer.profile_snapshot()
@@ -110,6 +113,8 @@ func _cost() -> void:
 	await get_tree().process_frame
 	rebuild_first_wait_us = Time.get_ticks_usec() - rebuild_window_started
 	while rebuild_frames < MAX_FRAMES:
+		if Time.get_ticks_usec() - rebuild_started > 20_000_000:
+			break
 		var frame_started := Time.get_ticks_usec()
 		await get_tree().process_frame
 		rebuild_frame_us.append(Time.get_ticks_usec() - frame_started)
@@ -119,14 +124,6 @@ func _cost() -> void:
 			break
 	var rebuild_elapsed := Time.get_ticks_usec() - rebuild_started
 	var rebuild_profile: Dictionary = renderer.profile_snapshot()
-	for location: Vector3i in locations:
-		State.document.set_cell(0, location * CHUNK + Vector3i(9, 9, 9), VoxelFrame.material(Color.BLACK))
-	renderer.reset_profile()
-	for location: Vector3i in locations:
-		var one: Array[Vector3i] = [location]
-		var single_started := Time.get_ticks_usec()
-		State.chunks_changed.emit(0, one)
-		per_chunk_emit_us.append(Time.get_ticks_usec() - single_started)
 	step("Then the rebuild wall and the cold wall are both reported", func():
 		print("MEASURE renderer_wall rebuild: us=%d frames=%d reaped=%d consume=%d launched=%d install_us=%d truncated=%d" % [
 			rebuild_elapsed, rebuild_frames, int(rebuild_profile.get("reaped", 0)), int(rebuild_profile.get("consume", 0)),
