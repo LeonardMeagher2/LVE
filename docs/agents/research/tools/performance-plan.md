@@ -76,6 +76,8 @@ The loop reran the commands above on `main`. This table supersedes the ranks for
 
 Ranks 1 and 2 are within the run-to-run band, so the next step measures the mixed atlas surface.
 The export, preview, and document rows come from `export_cost`, `thumbnail_cost`, and `document_io`.
+The AO rows of the same fixture are slower still: 2.60 s flat and 2.94 s smooth.
+See the AO section under the atlas cost.
 
 ### Parallel surface build (2026-11-25)
 
@@ -303,6 +305,27 @@ Measured: the normal cannot leave the smooth vertex key.
 The key `[dbl, patch]` merges the two sides of a one-voxel wall, because `dbl` holds the plane position and not the plane sign.
 `mixed_smooth_atlas` falls from 522,188 to 210,982 vertices.
 The faster per-vertex number came from the lost vertices.
+Reverted.
+
+### AO cost, 2026-11-25
+
+The benchmark now builds AO rows with `builder.ao_strength = 1.0`.
+Before this, no row measured AO.
+
+| row | total | scan | finish |
+| --- | --- | --- | --- |
+| mixed flat atlas | 1.46 s | 165 ms | 1.19 s |
+| mixed flat atlas, AO | 2.60 s | 537 ms | 1.91 s |
+| mixed smooth atlas | 2.08 s | 166 ms | 1.80 s |
+| mixed smooth atlas, AO | 2.94 s | 547 ms | 2.24 s |
+
+AO triples the scan and adds 0.7 s to the flat finish.
+The AO rows are the slowest measured surface rows.
+AO also splits one group into 2.3 more groups: 2,754 becomes 6,417 for 27 chunks.
+
+Measured: inlining `_ao_level` into `VoxelMeshBuilder._face_ao_code` is neutral.
+The scan falls from 537,364 to 524,423 us and from 547,155 to 524,525 us.
+The non-AO scan moves 3.7 percent between the same two runs, so the change is inside the band.
 Reverted.
 
 ### Code path
