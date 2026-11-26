@@ -49,6 +49,8 @@ func _cost() -> void:
 		return
 	var started := Time.get_ticks_usec()
 	var frames := 0
+	var rebuild_started := 0
+	var rebuild_frames := 0
 	step("When the document reports its chunks", func():
 		State.chunks_changed.emit(0, locations)
 	)
@@ -78,6 +80,28 @@ func _cost() -> void:
 			int(profile.get("truncated", 0)), int(profile.get("snapshots", 0)),
 		])
 		expect(int(profile.get("reaped", 0)) + int(profile.get("consume", 0)) >= locations.size(), "the renderer installs or resolves every chunk")
+	)
+	step("When every chunk cell changes", func():
+		for location: Vector3i in locations:
+			State.document.set_cell(0, location * CHUNK + Vector3i(8, 8, 8), VoxelFrame.material(Color.WHITE))
+		renderer.reset_profile()
+		rebuild_started = Time.get_ticks_usec()
+		State.chunks_changed.emit(0, locations)
+	)
+	while rebuild_frames < MAX_FRAMES:
+		await get_tree().process_frame
+		rebuild_frames += 1
+		var rebuild_progress: Dictionary = renderer.profile_snapshot()
+		if int(rebuild_progress.get("reaped", 0)) + int(rebuild_progress.get("consume", 0)) >= locations.size():
+			break
+	var rebuild_elapsed := Time.get_ticks_usec() - rebuild_started
+	var rebuild_profile: Dictionary = renderer.profile_snapshot()
+	step("Then the rebuild wall and the cold wall are both reported", func():
+		print("MEASURE renderer_wall rebuild: us=%d frames=%d reaped=%d consume=%d launched=%d install_us=%d truncated=%d" % [
+			rebuild_elapsed, rebuild_frames, int(rebuild_profile.get("reaped", 0)), int(rebuild_profile.get("consume", 0)),
+			int(rebuild_profile.get("launch", 0)), int(rebuild_profile.get("install_us", 0)), int(rebuild_profile.get("truncated", 0)),
+		])
+		expect(int(rebuild_profile.get("reaped", 0)) + int(rebuild_profile.get("consume", 0)) >= locations.size(), "the rebuild resolves every chunk")
 	)
 
 
