@@ -56,7 +56,7 @@ var slice_index := 0
 var slice_count := 1
 var per_material := false
 var hard_boundaries := false
-var join_diagonals := true
+
 var merge_flats := true
 var material_groups: Array = []
 
@@ -312,7 +312,7 @@ func _build_surfaces(occupancy: PackedByteArray, material_ids: PackedInt32Array,
 					continue
 				for material_id: int in material_masks:
 					var bits: int = material_masks[material_id]
-					var mask := _diagonal_faces(bits) if join_diagonals else 0
+					var mask := _diagonal_faces(bits)
 					var case_data := _case_data(bits, mask)
 					var loops: Array = case_data["loops"]
 					var loop_triangles: Array = case_data["triangles"]
@@ -577,7 +577,7 @@ func _mirror_on_face(cell: Vector3i, first_edge: int, second_edge: int, third_ed
 		var index := sample.x + SAMPLE_SIZE * (sample.y + SAMPLE_SIZE * sample.z)
 		if occupancy[index] != 0 and material_ids[index] == material_id:
 			neighbor_bits |= 1 << corner
-	var neighbor_mask := _diagonal_faces(neighbor_bits) if join_diagonals else 0
+	var neighbor_mask := _diagonal_faces(neighbor_bits)
 	var face_triangles: Array = _case_data(neighbor_bits, neighbor_mask)["face_triangles"]
 	var candidates: Array = face_triangles[neighbor_face]
 	for mirrored: PackedInt32Array in candidates:
