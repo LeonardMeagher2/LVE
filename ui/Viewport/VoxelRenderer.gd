@@ -17,8 +17,10 @@ static var _surface_cache_filled := 0
 static var _surface_cache_has_low_poly := false
 static var _surface_jobs: Dictionary = {}
 static var _active_renderer_count := 0
-var _chunk_notice_frame := -1
-var _chunk_notice_pending := false
+var _pending_cells: Array[Vector3i] = []
+var _pending_chunks: Array[Vector3i] = []
+var _pending_frame := -1
+var _update_scheduled := false
 static var _surface_job_limit := 0
 
 
@@ -173,6 +175,9 @@ func _on_frame_changed() -> void:
 func _rebuild(hide_all := true) -> void:
 	if not is_inside_tree():
 		return
+	_pending_cells.clear()
+	_pending_chunks.clear()
+	_pending_frame = -1
 	var active_frame := _get_frame()
 	if active_frame != _displayed_frame:
 		if hide_all:
@@ -211,23 +216,45 @@ func _update(updated_frame: int, affected_cells: Array[Vector3i]) -> void:
 	if affected_cells.is_empty():
 		_rebuild()
 		return
-	if _chunk_notice_pending and _chunk_notice_frame == updated_frame:
-		_report_activity()
+	if _pending_frame != updated_frame:
+		_pending_cells.clear()
+		_pending_chunks.clear()
+		_pending_frame = updated_frame
+	_pending_cells.append_array(affected_cells)
+	_schedule_update()
+
+
+func _schedule_update() -> void:
+	if _update_scheduled:
 		return
+	_update_scheduled = true
+	_flush_updates.call_deferred()
+
+
+func _flush_updates() -> void:
+	_update_scheduled = false
+	var cells := _pending_cells
+	var chunks := _pending_chunks
+	_pending_cells = []
+	_pending_chunks = []
 	var active_frame := _get_frame()
-	var affected_chunks := {}
-	for cell_position in affected_cells:
+	var requested := {}
+	for cell_position in cells:
 		var chunk_location := VoxelFrame.chunk_position(cell_position)
-		affected_chunks[chunk_location] = true
+		_request_chunk(active_frame, chunk_location, requested)
 		for offset in VoxelFrame.crosstalk_chunks(cell_position):
-			affected_chunks[chunk_location + offset] = true
-	for chunk_location in affected_chunks:
-		_request(active_frame, chunk_location)
+			_request_chunk(active_frame, chunk_location + offset, requested)
+	for chunk_location in chunks:
+		for offset: Vector3i in VoxelMeshBuilder.neighbor_offsets(true):
+			_request_chunk(active_frame, chunk_location + offset, requested)
 	_report_activity()
 
 
-func _clear_chunk_notice() -> void:
-	_chunk_notice_pending = false
+func _request_chunk(active_frame: VoxelFrame, chunk_location: Vector3i, requested: Dictionary) -> void:
+	if requested.has(chunk_location):
+		return
+	requested[chunk_location] = true
+	_request(active_frame, chunk_location)
 
 
 func _request(active_frame: VoxelFrame, chunk_location: Vector3i) -> void:
@@ -257,20 +284,12 @@ func _request(active_frame: VoxelFrame, chunk_location: Vector3i) -> void:
 func _update_chunks(updated_frame: int, chunk_positions: Array[Vector3i]) -> void:
 	if updated_frame != (frame if frame >= 0 else State.current_frame):
 		return
-	var active_frame := _get_frame()
-	var requested := {}
-	for chunk_location in chunk_positions:
-		for offset: Vector3i in VoxelMeshBuilder.neighbor_offsets(true):
-			var neighbor := chunk_location + offset
-			if requested.has(neighbor):
-				continue
-			requested[neighbor] = true
-			_request(active_frame, neighbor)
-	_chunk_notice_frame = updated_frame
-	if not _chunk_notice_pending:
-		_chunk_notice_pending = true
-		_clear_chunk_notice.call_deferred()
-	_report_activity()
+	if _pending_frame != updated_frame:
+		_pending_cells.clear()
+		_pending_chunks.clear()
+		_pending_frame = updated_frame
+	_pending_chunks.append_array(chunk_positions)
+	_schedule_update()
 
 
 static func _signature(active_frame: VoxelFrame, chunk_location: Vector3i, smooth_normals: bool, slice_axis := -1, slice_index := 0, slice_count := 1, ao_strength := 0.0, mesh_style := 0) -> PackedInt64Array:
