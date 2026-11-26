@@ -328,6 +328,8 @@ func _build_surfaces(occupancy: PackedByteArray, material_ids: PackedInt32Array,
 				for loop_index in loops.size():
 					var loop: PackedInt32Array = loops[loop_index]
 					var triangle_edges: PackedInt32Array = loop_triangles[loop_index]
+					if cell_mixed and _append_material_corner(cell, bits, loop, triangle_edges, occupancy, material_ids, materials, field, positions, normals, vertex_colors, vertex_materials, indices):
+						continue
 					if cell_mixed:
 						var material_diagonal := _material_diagonal(cell, loop, occupancy, material_ids)
 						if not material_diagonal.is_empty():
@@ -413,6 +415,64 @@ static func _field_point(cell: Vector3i, edge: int, field: PackedFloat32Array) -
 	if absf(difference) > 0.0001:
 		t = clampf(first_value / difference, 0.02, 0.98)
 	return Vector3(cell) + Vector3(first) + Vector3(second - first) * t
+
+
+func _append_material_corner(cell: Vector3i, bits: int, loop: PackedInt32Array, triangle_edges: PackedInt32Array, occupancy: PackedByteArray, material_ids: PackedInt32Array, materials: PackedFloat32Array, field: PackedFloat32Array, positions: PackedVector3Array, normals: PackedVector3Array, vertex_colors: PackedColorArray, vertex_materials: PackedInt32Array, indices: PackedInt32Array) -> bool:
+	if loop.size() != 4 or triangle_edges.size() != 6:
+		return false
+	var labels := PackedInt32Array()
+	var counts := {}
+	var points := PackedVector3Array()
+	var sites := PackedVector3Array()
+	for edge: int in loop:
+		var sample := _edge_sample(cell, edge, occupancy, material_ids)
+		labels.append(sample[1])
+		sites.append(sample[0])
+		points.append(_field_point(cell, edge, field))
+		counts[sample[1]] = counts.get(sample[1], 0) + 1
+	if counts.size() != 2:
+		return false
+	var normal := (points[1] - points[0]).cross(points[2] - points[0])
+	if normal.length_squared() < 0.0000000001:
+		return false
+	if absf(normal.dot(points[3] - points[0])) > 0.0001:
+		return false
+	for index in 4:
+		var next_index := (index + 1) % 4
+		var after_index := (index + 2) % 4
+		if (points[next_index] - points[index]).cross(points[after_index] - points[next_index]).dot(normal) < 0.0:
+			return false
+	var outlier := -1
+	var majority := -1
+	for label: int in counts:
+		if counts[label] == 1:
+			outlier = labels.find(label)
+		else:
+			majority = label
+	if outlier < 0 or majority < 0:
+		return false
+	var opposite := (outlier + 2) % 4
+	var outlier_edge := loop[outlier]
+	var opposite_edge := loop[opposite]
+	var first_has_outlier := triangle_edges[0] == outlier_edge or triangle_edges[1] == outlier_edge or triangle_edges[2] == outlier_edge
+	var second_has_outlier := triangle_edges[3] == outlier_edge or triangle_edges[4] == outlier_edge or triangle_edges[5] == outlier_edge
+	var first_has_opposite := triangle_edges[0] == opposite_edge or triangle_edges[1] == opposite_edge or triangle_edges[2] == opposite_edge
+	var second_has_opposite := triangle_edges[3] == opposite_edge or triangle_edges[4] == opposite_edge or triangle_edges[5] == opposite_edge
+	if not first_has_outlier or not second_has_outlier or not first_has_opposite or not second_has_opposite:
+		return false
+	if _mirror_on_face(cell, triangle_edges[0], triangle_edges[1], triangle_edges[2], occupancy):
+		return false
+	if _mirror_on_face(cell, triangle_edges[3], triangle_edges[4], triangle_edges[5], occupancy):
+		return false
+	var previous := (outlier + 3) % 4
+	var next := (outlier + 1) % 4
+	var previous_cut := _material_cut(points[outlier], sites[outlier], points[previous], sites[previous])
+	var next_cut := _material_cut(points[outlier], sites[outlier], points[next], sites[next])
+	_append_oriented_triangle(cell, bits, points[outlier], previous_cut, next_cut, labels[outlier], labels[outlier], labels[outlier], materials, positions, normals, vertex_colors, vertex_materials, indices)
+	_append_oriented_triangle(cell, bits, points[opposite], points[next], next_cut, majority, majority, majority, materials, positions, normals, vertex_colors, vertex_materials, indices)
+	_append_oriented_triangle(cell, bits, points[opposite], next_cut, previous_cut, majority, majority, majority, materials, positions, normals, vertex_colors, vertex_materials, indices)
+	_append_oriented_triangle(cell, bits, points[opposite], previous_cut, points[previous], majority, majority, majority, materials, positions, normals, vertex_colors, vertex_materials, indices)
+	return true
 
 
 func _append_material_triangle(cell: Vector3i, bits: int, points: PackedVector3Array, labels: PackedInt32Array, sites: PackedVector3Array, materials: PackedFloat32Array, positions: PackedVector3Array, normals: PackedVector3Array, vertex_colors: PackedColorArray, vertex_materials: PackedInt32Array, indices: PackedInt32Array, reference := Vector3.ZERO) -> void:
