@@ -80,9 +80,9 @@ func _material_boundary() -> void:
 		_view.apply(cells)
 	)
 	await _view.settle()
-	step("Then the two colours render their own surfaces", func():
+	step("Then the two colours render on one joined surface", func():
 		_view.collect()
 		expect(_view.closed(), "both chains have no boundary")
-		expect(_view.components() == 2, "the material change splits the surface")
+		expect(_view.components() == 1, "the material change keeps one surface")
 		expect(_view.duplicates() == 0, "no triangle is emitted twice")
 	)

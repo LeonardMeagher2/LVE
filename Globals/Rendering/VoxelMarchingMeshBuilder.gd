@@ -35,6 +35,7 @@ const FACES: Array = [
 ]
 const FACE_AXES: Array[int] = [2, 0, 1]
 const PRESENT_SELF := 13
+const FIELD_RADIUS := 2
 
 static var _case_cache: Dictionary = {}
 static var _edge_faces: PackedInt32Array = PackedInt32Array()
@@ -266,7 +267,7 @@ func _build_per_material(occupancy: PackedByteArray, material_ids: PackedInt32Ar
 	for group in group_count:
 		var mask: PackedByteArray = masks[group]
 		var built := _build_surfaces(mask, material_ids, materials, owners)
-		var merged := _merge_flats(built[0], built[1], built[2], built[3], built[4])
+		var merged := _merge_flats(built[0], built[1], built[2], built[3], built[4]) if merge_flats else built
 		var offset := all_positions.size()
 		all_positions.append_array(merged[0])
 		all_normals.append_array(merged[1])
@@ -291,48 +292,203 @@ func _build_surfaces(occupancy: PackedByteArray, material_ids: PackedInt32Array,
 	var vertex_colors := PackedColorArray()
 	var vertex_materials := PackedInt32Array()
 	var indices := PackedInt32Array()
+	var field := _union_field(occupancy)
 	for z in range(-MESH_PADDING, CHUNK_SIZE + 1):
 		for y in range(-MESH_PADDING, CHUNK_SIZE + 1):
 			for x in range(-MESH_PADDING, CHUNK_SIZE + 1):
 				var cell := Vector3i(x, y, z)
-				var material_masks := {}
+				var bits := 0
+				var cell_material := -1
+				var cell_mixed := false
 				for corner in 8:
 					var sample := cell + CORNER_OFFSETS[corner] + Vector3i.ONE * SAMPLE_PADDING
 					var sample_index := sample.x + SAMPLE_SIZE * (sample.y + SAMPLE_SIZE * sample.z)
 					if occupancy[sample_index] == 0:
 						continue
-					var material_id := material_ids[sample_index]
-					material_masks[material_id] = material_masks.get(material_id, 0) | (1 << corner)
-				if material_masks.is_empty():
+					bits |= 1 << corner
+					var corner_material := material_ids[sample_index]
+					if cell_material < 0:
+						cell_material = corner_material
+					elif corner_material != cell_material:
+						cell_mixed = true
+				if bits == 0:
 					continue
 				var state_x := 0 if x <= 0 else (2 if x >= CHUNK_SIZE - 2 else 1)
 				var state_y := 0 if y <= 0 else (2 if y >= CHUNK_SIZE - 2 else 1)
 				var state_z := 0 if z <= 0 else (2 if z >= CHUNK_SIZE - 2 else 1)
 				if owners[(state_x * 3 + state_y) * 3 + state_z] == 2:
 					continue
-				for material_id: int in material_masks:
-					var bits: int = material_masks[material_id]
-					var mask := _diagonal_faces(bits)
-					var case_data := _case_data(bits, mask)
-					var loops: Array = case_data["loops"]
-					var loop_triangles: Array = case_data["triangles"]
-					for loop_index in loops.size():
-						var triangle_edges: PackedInt32Array = loop_triangles[loop_index]
-						for index in range(0, triangle_edges.size(), 3):
-							var first_edge := triangle_edges[index]
-							var second_edge := triangle_edges[index + 1]
-							var third_edge := triangle_edges[index + 2]
-							if _mirror_on_face(cell, first_edge, second_edge, third_edge, occupancy, material_ids, material_id):
-								continue
-							_append_oriented_triangle(
+				var mask := _diagonal_faces(bits)
+				var case_data := _case_data(bits, mask)
+				var loops: Array = case_data["loops"]
+				var loop_triangles: Array = case_data["triangles"]
+				for loop_index in loops.size():
+					var triangle_edges: PackedInt32Array = loop_triangles[loop_index]
+					for index in range(0, triangle_edges.size(), 3):
+						var first_edge := triangle_edges[index]
+						var second_edge := triangle_edges[index + 1]
+						var third_edge := triangle_edges[index + 2]
+						if _mirror_on_face(cell, first_edge, second_edge, third_edge, occupancy):
+							continue
+						var first_point := _field_point(cell, first_edge, field)
+						var second_point := _field_point(cell, second_edge, field)
+						var third_point := _field_point(cell, third_edge, field)
+						if cell_mixed:
+							var first_site := _edge_sample(cell, first_edge, occupancy)
+							var second_site := _edge_sample(cell, second_edge, occupancy)
+							var third_site := _edge_sample(cell, third_edge, occupancy)
+							_append_material_triangle(
 								cell, bits,
-								_edge_point(cell, first_edge),
-								_edge_point(cell, second_edge),
-								_edge_point(cell, third_edge),
-								material_id, material_id, material_id,
+								PackedVector3Array([first_point, second_point, third_point]),
+								PackedInt32Array([
+									material_ids[_sample_index(first_site)],
+									material_ids[_sample_index(second_site)],
+									material_ids[_sample_index(third_site)],
+								]),
+								PackedVector3Array([Vector3(first_site), Vector3(second_site), Vector3(third_site)]),
 								materials, positions, normals, vertex_colors, vertex_materials, indices
 							)
+							continue
+						_append_oriented_triangle(
+							cell, bits,
+							first_point, second_point, third_point,
+							cell_material, cell_material, cell_material,
+							materials, positions, normals, vertex_colors, vertex_materials, indices
+						)
 	return [positions, normals, vertex_colors, vertex_materials, indices]
+
+
+func _union_field(occupancy: PackedByteArray) -> PackedFloat32Array:
+	var field := PackedFloat32Array()
+	field.resize(SAMPLE_SIZE * SAMPLE_SIZE * SAMPLE_SIZE)
+	field.fill(4.0)
+	for z in SAMPLE_SIZE:
+		for y in SAMPLE_SIZE:
+			for x in SAMPLE_SIZE:
+				var closest := 4.0
+				for offset_z in range(-FIELD_RADIUS, FIELD_RADIUS + 1):
+					var zz := z + offset_z
+					if zz < 0 or zz >= SAMPLE_SIZE:
+						continue
+					for offset_y in range(-FIELD_RADIUS, FIELD_RADIUS + 1):
+						var yy := y + offset_y
+						if yy < 0 or yy >= SAMPLE_SIZE:
+							continue
+						for offset_x in range(-FIELD_RADIUS, FIELD_RADIUS + 1):
+							var xx := x + offset_x
+							if xx < 0 or xx >= SAMPLE_SIZE:
+								continue
+							if occupancy[xx + SAMPLE_SIZE * (yy + SAMPLE_SIZE * zz)] == 0:
+								continue
+							var qx := absf(offset_x) - 0.5
+							var qy := absf(offset_y) - 0.5
+							var qz := absf(offset_z) - 0.5
+							var outside_x := maxf(qx, 0.0)
+							var outside_y := maxf(qy, 0.0)
+							var outside_z := maxf(qz, 0.0)
+							var distance := sqrt(outside_x * outside_x + outside_y * outside_y + outside_z * outside_z) + minf(maxf(qx, maxf(qy, qz)), 0.0)
+							closest = minf(closest, distance)
+				field[x + SAMPLE_SIZE * (y + SAMPLE_SIZE * z)] = closest
+	return field
+
+
+static func _field_point(cell: Vector3i, edge: int, field: PackedFloat32Array) -> Vector3:
+	if edge >= EDGE_CORNERS.size():
+		return _edge_point(cell, edge)
+	var corners: Array = EDGE_CORNERS[edge]
+	var first: Vector3i = CORNER_OFFSETS[corners[0]]
+	var second: Vector3i = CORNER_OFFSETS[corners[1]]
+	var first_sample := cell + first + Vector3i.ONE * SAMPLE_PADDING
+	var second_sample := cell + second + Vector3i.ONE * SAMPLE_PADDING
+	var first_index := first_sample.x + SAMPLE_SIZE * (first_sample.y + SAMPLE_SIZE * first_sample.z)
+	var second_index := second_sample.x + SAMPLE_SIZE * (second_sample.y + SAMPLE_SIZE * second_sample.z)
+	var first_value := field[first_index]
+	var second_value := field[second_index]
+	var difference := first_value - second_value
+	var t := 0.5
+	if absf(difference) > 0.0001:
+		t = clampf(first_value / difference, 0.02, 0.98)
+	return Vector3(cell) + Vector3(first) + Vector3(second - first) * t
+
+
+func _append_material_triangle(cell: Vector3i, bits: int, points: PackedVector3Array, labels: PackedInt32Array, sites: PackedVector3Array, materials: PackedFloat32Array, positions: PackedVector3Array, normals: PackedVector3Array, vertex_colors: PackedColorArray, vertex_materials: PackedInt32Array, indices: PackedInt32Array, depth := 0) -> void:
+	var unique := -1
+	for index in 3:
+		if labels[index] != labels[(index + 1) % 3] and labels[index] != labels[(index + 2) % 3]:
+			unique = index
+			break
+	if unique < 0:
+		_append_oriented_triangle(cell, bits, points[0], points[1], points[2], labels[0], labels[0], labels[0], materials, positions, normals, vertex_colors, vertex_materials, indices)
+		return
+	var first := (unique + 1) % 3
+	var last := (unique + 2) % 3
+	if labels[first] != labels[last] and depth < 1:
+		var centre := (points[0] + points[1] + points[2]) / 3.0
+		var centre_label := labels[0]
+		if labels[1] == labels[2]:
+			centre_label = labels[1]
+		var centre_site := Vector3(999999.0, 999999.0, 999999.0)
+		for index in 3:
+			_append_material_triangle(
+				cell, bits,
+				PackedVector3Array([points[index], points[(index + 1) % 3], centre]),
+				PackedInt32Array([labels[index], labels[(index + 1) % 3], centre_label]),
+				PackedVector3Array([sites[index], sites[(index + 1) % 3], centre_site]),
+				materials, positions, normals, vertex_colors, vertex_materials, indices, depth + 1
+			)
+		return
+	var start := _material_cut(points[unique], sites[unique], points[first], sites[first])
+	var end := _material_cut(points[last], sites[last], points[unique], sites[unique])
+	_append_oriented_triangle(cell, bits, points[unique], start, end, labels[unique], labels[unique], labels[unique], materials, positions, normals, vertex_colors, vertex_materials, indices)
+	_append_oriented_triangle(cell, bits, start, points[first], points[last], labels[first], labels[first], labels[first], materials, positions, normals, vertex_colors, vertex_materials, indices)
+	_append_oriented_triangle(cell, bits, start, points[last], end, labels[first], labels[first], labels[first], materials, positions, normals, vertex_colors, vertex_materials, indices)
+
+
+static func _material_cut(first: Vector3, first_site: Vector3, second: Vector3, second_site: Vector3) -> Vector3:
+	var delta := second_site - first_site
+	var axis := -1
+	for candidate in 3:
+		if delta[candidate] == 0.0:
+			continue
+		if axis >= 0:
+			axis = -2
+			break
+		axis = candidate
+	if axis >= 0:
+		var plane := (first_site[axis] + second_site[axis]) * 0.5
+		var span := second[axis] - first[axis]
+		if absf(span) > 0.0001:
+			return first.lerp(second, clampf((plane - first[axis]) / span, 0.05, 0.95))
+	return first.lerp(second, 0.5)
+
+
+static func _sample_index(site: Vector3i) -> int:
+	var sample := site + Vector3i.ONE * SAMPLE_PADDING
+	return sample.x + SAMPLE_SIZE * (sample.y + SAMPLE_SIZE * sample.z)
+
+
+func _edge_sample(cell: Vector3i, edge: int, occupancy: PackedByteArray) -> Vector3i:
+	if edge >= EDGE_CORNERS.size():
+		var point := _edge_point(cell, edge)
+		var closest := INF
+		var closest_site := Vector3i.ZERO
+		for corner in 8:
+			var sample := cell + CORNER_OFFSETS[corner] + Vector3i.ONE * SAMPLE_PADDING
+			var sample_index := sample.x + SAMPLE_SIZE * (sample.y + SAMPLE_SIZE * sample.z)
+			if occupancy[sample_index] == 0:
+				continue
+			var distance := (point - (Vector3(cell) + Vector3(CORNER_OFFSETS[corner]))).length_squared()
+			if distance < closest:
+				closest = distance
+				closest_site = cell + CORNER_OFFSETS[corner]
+		return closest_site
+	var corners: Array = EDGE_CORNERS[edge]
+	for corner: int in corners:
+		var sample := cell + CORNER_OFFSETS[corner] + Vector3i.ONE * SAMPLE_PADDING
+		var sample_index := sample.x + SAMPLE_SIZE * (sample.y + SAMPLE_SIZE * sample.z)
+		if occupancy[sample_index] != 0:
+			return cell + CORNER_OFFSETS[corner]
+	return Vector3i.ZERO
 
 
 static func _merge_flats(positions: PackedVector3Array, normals: PackedVector3Array, colors: PackedColorArray, materials: PackedInt32Array, indices: PackedInt32Array) -> Array:
@@ -554,7 +710,7 @@ static func _weld(positions: PackedVector3Array, normals: PackedVector3Array, co
 	return [welded_positions, welded_normals, welded_colors, welded_indices]
 
 
-func _mirror_on_face(cell: Vector3i, first_edge: int, second_edge: int, third_edge: int, occupancy: PackedByteArray, material_ids: PackedInt32Array, material_id: int) -> bool:
+func _mirror_on_face(cell: Vector3i, first_edge: int, second_edge: int, third_edge: int, occupancy: PackedByteArray) -> bool:
 	var common := _edge_faces[first_edge] & _edge_faces[second_edge] & _edge_faces[third_edge]
 	var face := -1
 	for candidate in FACES.size():
@@ -575,7 +731,7 @@ func _mirror_on_face(cell: Vector3i, first_edge: int, second_edge: int, third_ed
 	for corner in 8:
 		var sample := neighbor + CORNER_OFFSETS[corner] + Vector3i.ONE * SAMPLE_PADDING
 		var index := sample.x + SAMPLE_SIZE * (sample.y + SAMPLE_SIZE * sample.z)
-		if occupancy[index] != 0 and material_ids[index] == material_id:
+		if occupancy[index] != 0:
 			neighbor_bits |= 1 << corner
 	var neighbor_mask := _diagonal_faces(neighbor_bits)
 	var face_triangles: Array = _case_data(neighbor_bits, neighbor_mask)["face_triangles"]

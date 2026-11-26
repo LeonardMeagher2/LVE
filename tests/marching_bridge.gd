@@ -12,8 +12,8 @@ func _ready() -> void:
 	timeout = 60.0
 	test("a same-material diagonal pair joins with a filled gap", _diagonal_pair, "bridge_diagonal_pair")
 	test("a same-material corner pair joins through the block", _corner_pair, "bridge_corner_pair")
-	test("different materials do not join", _different_materials, "bridge_different_materials")
-	test("a finish change alone keeps the pair apart", _material_values, "bridge_material_values")
+	test("different materials join with a seam", _different_materials, "bridge_different_materials")
+	test("a finish change alone keeps the pair joined", _material_values, "bridge_material_values")
 	test("two face-adjacent materials keep their own colours", _face_materials, "bridge_face_materials")
 	test("a third material does not block the gap", _third_material, "bridge_third_material")
 	test("a concave corner stays open", _concave_corner, "bridge_concave_corner")
@@ -67,11 +67,11 @@ func _different_materials() -> void:
 		})
 	)
 	await _view.settle()
-	step("Then the surfaces stay apart", func():
+	step("Then the surfaces join and keep the gap volume", func():
 		_view.collect()
 		expect(_view.closed(), "both blobs have no boundary")
-		expect(_view.components() == 2, "different materials do not join")
-		expect(not _view.has_gap_face(), "no bridge forms between the colours")
+		expect(_view.components() == 1, "different materials join through the gap")
+		expect(_view.has_gap_face(), "the join keeps the gap volume")
 	)
 
 
@@ -84,11 +84,11 @@ func _material_values() -> void:
 		})
 	)
 	await _view.settle()
-	step("Then the pair stays apart", func():
+	step("Then the pair still joins", func():
 		_view.collect()
 		expect(_view.closed(), "both blobs have no boundary")
-		expect(_view.components() == 2, "roughness alone keeps the pair apart")
-		expect(not _view.has_gap_face(), "no bridge forms between the materials")
+		expect(_view.components() == 1, "roughness alone does not break the join")
+		expect(_view.has_gap_face(), "the join keeps the gap volume")
 	)
 
 
