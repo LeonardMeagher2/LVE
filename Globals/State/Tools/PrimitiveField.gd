@@ -622,12 +622,24 @@ static func _rasterize_add(request: Dictionary, frame: VoxelFrame, min_cell: Vec
 	var stride_y := existing_size.x
 	var stride_z := existing_size.x * existing_size.y
 	var prepared := _prepare_distance(request)
+	var prepared_primitives: Array = prepared["primitives"]
+	var prepared_smooth: float = prepared["smooth"]
+	var prepared_shell: float = prepared["shell"]
+	var primitive_count := prepared_primitives.size()
 	var completed := 0
 	for x in range(min_cell.x, max_cell.x + 1, step):
 		for y in range(min_cell.y, max_cell.y + 1, step):
 			for z in range(min_cell.z, max_cell.z + 1, step):
 				var sample := Vector3i(x, y, z)
-				var distance := _prepared_field_distance(prepared, Vector3(x, y, z))
+				var point := Vector3(x, y, z)
+				var distance := 1.0
+				if primitive_count > 0:
+					distance = _prepared_primitive_distance(prepared_primitives[0], point)
+					for primitive_index in range(1, primitive_count):
+						var next_distance := _prepared_primitive_distance(prepared_primitives[primitive_index], point)
+						distance = smin(distance, next_distance, prepared_smooth) if prepared_smooth > 0.0 else minf(distance, next_distance)
+					if prepared_shell > 0.0:
+						distance = maxf(absf(distance) - prepared_shell, distance)
 				var solid := false
 				var local := sample - existing_min
 				var in_field := blend_active and local.x >= 0 and local.y >= 0 and local.z >= 0 and local.x < existing_size.x and local.y < existing_size.y and local.z < existing_size.z
