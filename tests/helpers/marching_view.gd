@@ -121,6 +121,13 @@ func bounds() -> AABB:
 	return box
 
 
+func volume() -> float:
+	var total := 0.0
+	for offset in range(0, indices.size(), 3):
+		total += positions[indices[offset]].dot(positions[indices[offset + 1]].cross(positions[indices[offset + 2]])) / 6.0
+	return absf(total)
+
+
 func has_gap_face() -> bool:
 	for offset in range(0, indices.size(), 3):
 		var centroid := (positions[indices[offset]] + positions[indices[offset + 1]] + positions[indices[offset + 2]]) / 3.0

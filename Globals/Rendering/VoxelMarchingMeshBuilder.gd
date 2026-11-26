@@ -411,7 +411,7 @@ static func _field_point(cell: Vector3i, edge: int, field: PackedFloat32Array) -
 	return Vector3(cell) + Vector3(first) + Vector3(second - first) * t
 
 
-func _append_material_triangle(cell: Vector3i, bits: int, points: PackedVector3Array, labels: PackedInt32Array, sites: PackedVector3Array, materials: PackedFloat32Array, positions: PackedVector3Array, normals: PackedVector3Array, vertex_colors: PackedColorArray, vertex_materials: PackedInt32Array, indices: PackedInt32Array, depth := 0) -> void:
+func _append_material_triangle(cell: Vector3i, bits: int, points: PackedVector3Array, labels: PackedInt32Array, sites: PackedVector3Array, materials: PackedFloat32Array, positions: PackedVector3Array, normals: PackedVector3Array, vertex_colors: PackedColorArray, vertex_materials: PackedInt32Array, indices: PackedInt32Array) -> void:
 	var unique := -1
 	for index in 3:
 		if labels[index] != labels[(index + 1) % 3] and labels[index] != labels[(index + 2) % 3]:
@@ -422,43 +422,55 @@ func _append_material_triangle(cell: Vector3i, bits: int, points: PackedVector3A
 		return
 	var first := (unique + 1) % 3
 	var last := (unique + 2) % 3
-	if labels[first] != labels[last] and depth < 1:
-		var centre := (points[0] + points[1] + points[2]) / 3.0
-		var centre_label := labels[0]
-		if labels[1] == labels[2]:
-			centre_label = labels[1]
-		var centre_site := Vector3(999999.0, 999999.0, 999999.0)
-		for index in 3:
-			_append_material_triangle(
-				cell, bits,
-				PackedVector3Array([points[index], points[(index + 1) % 3], centre]),
-				PackedInt32Array([labels[index], labels[(index + 1) % 3], centre_label]),
-				PackedVector3Array([sites[index], sites[(index + 1) % 3], centre_site]),
-				materials, positions, normals, vertex_colors, vertex_materials, indices, depth + 1
-			)
+	var first_cut := _material_cut(points[unique], sites[unique], points[first], sites[first])
+	var last_cut := _material_cut(points[last], sites[last], points[unique], sites[unique])
+	if labels[first] == labels[last]:
+		_append_oriented_triangle(cell, bits, points[unique], first_cut, last_cut, labels[unique], labels[unique], labels[unique], materials, positions, normals, vertex_colors, vertex_materials, indices)
+		_append_oriented_triangle(cell, bits, first_cut, points[first], points[last], labels[first], labels[first], labels[first], materials, positions, normals, vertex_colors, vertex_materials, indices)
+		_append_oriented_triangle(cell, bits, first_cut, points[last], last_cut, labels[first], labels[first], labels[first], materials, positions, normals, vertex_colors, vertex_materials, indices)
 		return
-	var start := _material_cut(points[unique], sites[unique], points[first], sites[first])
-	var end := _material_cut(points[last], sites[last], points[unique], sites[unique])
-	_append_oriented_triangle(cell, bits, points[unique], start, end, labels[unique], labels[unique], labels[unique], materials, positions, normals, vertex_colors, vertex_materials, indices)
-	_append_oriented_triangle(cell, bits, start, points[first], points[last], labels[first], labels[first], labels[first], materials, positions, normals, vertex_colors, vertex_materials, indices)
-	_append_oriented_triangle(cell, bits, start, points[last], end, labels[first], labels[first], labels[first], materials, positions, normals, vertex_colors, vertex_materials, indices)
+	var middle_cut := _material_cut(points[first], sites[first], points[last], sites[last])
+	var centre := _triple_point(points, sites, (first_cut + middle_cut + last_cut) / 3.0)
+	_append_oriented_triangle(cell, bits, points[unique], first_cut, centre, labels[unique], labels[unique], labels[unique], materials, positions, normals, vertex_colors, vertex_materials, indices)
+	_append_oriented_triangle(cell, bits, points[unique], centre, last_cut, labels[unique], labels[unique], labels[unique], materials, positions, normals, vertex_colors, vertex_materials, indices)
+	_append_oriented_triangle(cell, bits, points[first], middle_cut, centre, labels[first], labels[first], labels[first], materials, positions, normals, vertex_colors, vertex_materials, indices)
+	_append_oriented_triangle(cell, bits, points[first], centre, first_cut, labels[first], labels[first], labels[first], materials, positions, normals, vertex_colors, vertex_materials, indices)
+	_append_oriented_triangle(cell, bits, points[last], last_cut, centre, labels[last], labels[last], labels[last], materials, positions, normals, vertex_colors, vertex_materials, indices)
+	_append_oriented_triangle(cell, bits, points[last], centre, middle_cut, labels[last], labels[last], labels[last], materials, positions, normals, vertex_colors, vertex_materials, indices)
+
+
+static func _triple_point(points: PackedVector3Array, sites: PackedVector3Array, fallback: Vector3) -> Vector3:
+	var first_axis := sites[1] - sites[0]
+	var second_axis := sites[2] - sites[0]
+	var normal := (points[1] - points[0]).cross(points[2] - points[0])
+	var cross := first_axis.cross(second_axis)
+	var determinant := normal.dot(cross)
+	if absf(determinant) < 0.000001:
+		return fallback
+	var first_value := (sites[1].length_squared() - sites[0].length_squared()) * 0.5
+	var second_value := (sites[2].length_squared() - sites[0].length_squared()) * 0.5
+	var plane := normal.dot(points[0])
+	var point := (second_axis.cross(normal) * first_value + normal.cross(first_axis) * second_value + cross * plane) / determinant
+	var first_weight := (points[1] - points[0]).cross(point - points[0]).dot(normal)
+	var second_weight := (points[2] - points[0]).cross(point - points[0]).dot(normal)
+	var squared := normal.length_squared()
+	if first_weight / squared < -0.001 or second_weight / squared < -0.001:
+		return fallback
+	if first_weight / squared + second_weight / squared > 1.001:
+		return fallback
+	return point
 
 
 static func _material_cut(first: Vector3, first_site: Vector3, second: Vector3, second_site: Vector3) -> Vector3:
-	var delta := second_site - first_site
-	var axis := -1
-	for candidate in 3:
-		if delta[candidate] == 0.0:
-			continue
-		if axis >= 0:
-			axis = -2
-			break
-		axis = candidate
-	if axis >= 0:
-		var plane := (first_site[axis] + second_site[axis]) * 0.5
-		var span := second[axis] - first[axis]
-		if absf(span) > 0.0001:
-			return first.lerp(second, clampf((plane - first[axis]) / span, 0.05, 0.95))
+	if first_site.x > 999998.0 or second_site.x > 999998.0:
+		return first.lerp(second, 0.5)
+	var middle := (first_site + second_site) * 0.5
+	var normal := second_site - first_site
+	var first_side := (first - middle).dot(normal)
+	var second_side := (second - middle).dot(normal)
+	var difference := first_side - second_side
+	if absf(difference) > 0.0001:
+		return first.lerp(second, clampf(first_side / difference, 0.05, 0.95))
 	return first.lerp(second, 0.5)
 
 

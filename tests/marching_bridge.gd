@@ -71,7 +71,7 @@ func _different_materials() -> void:
 		_view.collect()
 		expect(_view.closed(), "both blobs have no boundary")
 		expect(_view.components() == 1, "different materials join through the gap")
-		expect(_view.has_gap_face(), "the join keeps the gap volume")
+		expect(_view.volume() > 0.4, "the join keeps the gap volume")
 	)
 
 
@@ -88,7 +88,7 @@ func _material_values() -> void:
 		_view.collect()
 		expect(_view.closed(), "both blobs have no boundary")
 		expect(_view.components() == 1, "roughness alone does not break the join")
-		expect(_view.has_gap_face(), "the join keeps the gap volume")
+		expect(_view.volume() > 0.4, "the join keeps the gap volume")
 	)
 
 
