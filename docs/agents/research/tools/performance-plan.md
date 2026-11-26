@@ -328,6 +328,23 @@ The scan falls from 537,364 to 524,423 us and from 547,155 to 524,525 us.
 The non-AO scan moves 3.7 percent between the same two runs, so the change is inside the band.
 Reverted.
 
+Measured: the four corner levels need 8 neighbour cells, not 12.
+Reading each of the 8 once and inlining the level rule wins.
+
+| row | scan before | scan after |
+| --- | --- | --- |
+| mixed flat atlas, AO | 537,364 us | 384,157 us |
+| mixed smooth atlas, AO | 547,155 us | 376,589 us |
+
+That is 29 percent of the AO scan.
+Vertices, triangles and group counts do not change: 550,125, 352,512 and 6,417 for the flat row.
+A truth table over all 256 combinations of the 8 inputs matches the old code.
+The eight gate scenes pass, including `voxel_ao` and `surface_key`.
+
+The AO finish is still 61 percent vertex loop and 33 percent protection.
+The protection cost follows the 2.3 times higher group count that per-corner AO codes create.
+No measured rewrite of that split has won yet.
+
 ### Code path
 
 `VoxelMeshBuilder.run` calls `VoxelSurface.run_groups`.
