@@ -3,6 +3,7 @@ extends RefCounted
 
 
 const CHUNK_SIZE := VoxelFrame.CHUNK_SIZE
+const ATLAS := preload("./VoxelAtlas.gd")
 const SAMPLE_PADDING := 3
 const MESH_PADDING := 2
 const SAMPLE_SIZE := CHUNK_SIZE + SAMPLE_PADDING * 2
@@ -72,6 +73,8 @@ var field_us := 0
 var cells_us := 0
 var drop_us := 0
 var normals_us := 0
+var atlas_us := 0
+var smooth_normals := false
 var ao_strength := 0.0
 var slice_axis := -1
 var slice_index := 0
@@ -246,15 +249,20 @@ func _build(occupancy: PackedByteArray, material_ids: PackedInt32Array, material
 	if profile:
 		drop_us = Time.get_ticks_usec() - drop_started
 	var normals_started := Time.get_ticks_usec() if profile else 0
-	welded = _rebuild_flat_normals(welded[0], welded[1], welded[2], welded[4], welded[3], occupancy)
+	welded = _rebuild_flat_normals(welded[0], welded[1], welded[2], welded[4], welded[3], occupancy, smooth_normals)
 	if profile:
 		normals_us = Time.get_ticks_usec() - normals_started
+	var atlas_started := Time.get_ticks_usec() if profile else 0
+	var uvs := _build_atlas_uvs(welded[4], materials)
+	if profile:
+		atlas_us = Time.get_ticks_usec() - atlas_started
 	surface_arrays.resize(Mesh.ARRAY_MAX)
 	surface_arrays[Mesh.ARRAY_VERTEX] = welded[0]
 	surface_arrays[Mesh.ARRAY_NORMAL] = welded[1]
 	surface_arrays[Mesh.ARRAY_COLOR] = welded[2]
 	surface_arrays[Mesh.ARRAY_INDEX] = welded[3]
-	geometry_bytes = welded[0].size() * 40 + welded[3].size() * 4
+	surface_arrays[Mesh.ARRAY_TEX_UV] = uvs
+	geometry_bytes = welded[0].size() * (48 if not uvs.is_empty() else 40) + welded[3].size() * 4
 
 
 func _set_empty() -> void:
@@ -263,6 +271,48 @@ func _set_empty() -> void:
 	surface_arrays[Mesh.ARRAY_NORMAL] = PackedVector3Array()
 	surface_arrays[Mesh.ARRAY_COLOR] = PackedColorArray()
 	surface_arrays[Mesh.ARRAY_INDEX] = PackedInt32Array()
+	surface_arrays[Mesh.ARRAY_TEX_UV] = PackedVector2Array()
+
+
+func _build_atlas_uvs(vertex_materials: PackedInt32Array, materials: PackedFloat32Array) -> PackedVector2Array:
+	atlas = null
+	atlas_size = Vector2i.ZERO
+	atlas_albedo = PackedByteArray()
+	atlas_orm = PackedByteArray()
+	atlas_emission = PackedByteArray()
+	if vertex_materials.is_empty():
+		return PackedVector2Array()
+	var used := {}
+	for id: int in vertex_materials:
+		used[id] = true
+	var ids: Array = used.keys()
+	ids.sort()
+	var bake := ATLAS.new()
+	var checkpoint := func(_index: int) -> bool: return true
+	var patch_of := {}
+	for id: int in ids:
+		var base := id * VoxelFrame.MATERIAL_STRIDE
+		var patch: int = bake.add_patch(materials.slice(base, base + VoxelFrame.MATERIAL_STRIDE), Vector2i.ONE, checkpoint)
+		if patch < 0:
+			return PackedVector2Array()
+		patch_of[id] = patch
+	if bake.bake(checkpoint) != OK or bake.albedo == null:
+		return PackedVector2Array()
+	var centre_of := {}
+	for id: int in ids:
+		var corners: PackedVector2Array = bake.patch_uvs(patch_of[id])
+		centre_of[id] = (corners[0] + corners[2]) * 0.5
+	var uvs := PackedVector2Array()
+	uvs.resize(vertex_materials.size())
+	for index in vertex_materials.size():
+		uvs[index] = centre_of[vertex_materials[index]]
+	atlas = bake
+	atlas_size = bake.size
+	atlas_albedo = bake.albedo.get_data()
+	atlas_orm = bake.orm.get_data()
+	atlas_emission = bake.emission.get_data()
+	return uvs
+	surface_arrays[Mesh.ARRAY_TEX_UV] = PackedVector2Array()
 
 
 func _build_per_material(occupancy: PackedByteArray, material_ids: PackedInt32Array, materials: PackedFloat32Array, owners: PackedByteArray) -> Array:
@@ -1063,35 +1113,73 @@ func _drop_degenerate_triangles(positions: PackedVector3Array, indices: PackedIn
 	return kept
 
 
-func _rebuild_flat_normals(positions: PackedVector3Array, normals: PackedVector3Array, colors: PackedColorArray, materials: PackedInt32Array, indices: PackedInt32Array, occupancy: PackedByteArray) -> Array:
+func _rebuild_flat_normals(positions: PackedVector3Array, normals: PackedVector3Array, colors: PackedColorArray, materials: PackedInt32Array, indices: PackedInt32Array, occupancy: PackedByteArray, smooth := false) -> Array:
 	var new_positions := PackedVector3Array()
 	var new_normals := PackedVector3Array()
 	var new_colors := PackedColorArray()
 	var new_materials := PackedInt32Array()
 	var new_indices := PackedInt32Array()
+	var face_normals := PackedVector3Array()
+	var smooth_normals := {}
+	if smooth and not indices.is_empty():
+		face_normals.resize(indices.size() / 3)
+		for triangle in range(0, indices.size(), 3):
+			var first := positions[indices[triangle]]
+			var second := positions[indices[triangle + 1]]
+			var third := positions[indices[triangle + 2]]
+			var normal := normals[indices[triangle]]
+			var winding := (second - first).cross(third - first)
+			if winding.length_squared() >= 0.0000000001:
+				var face := winding.normalized()
+				var centre := (first + second + third) / 3.0
+				var plus := Vector3i(roundi(centre.x + face.x * 0.3), roundi(centre.y + face.y * 0.3), roundi(centre.z + face.z * 0.3)) + Vector3i.ONE * SAMPLE_PADDING
+				var minus := Vector3i(roundi(centre.x - face.x * 0.3), roundi(centre.y - face.y * 0.3), roundi(centre.z - face.z * 0.3)) + Vector3i.ONE * SAMPLE_PADDING
+				if plus.x >= 0 and plus.y >= 0 and plus.z >= 0 and plus.x < SAMPLE_SIZE and plus.y < SAMPLE_SIZE and plus.z < SAMPLE_SIZE and minus.x >= 0 and minus.y >= 0 and minus.z >= 0 and minus.x < SAMPLE_SIZE and minus.y < SAMPLE_SIZE and minus.z < SAMPLE_SIZE:
+					var plus_solid := occupancy[plus.x + SAMPLE_SIZE * (plus.y + SAMPLE_SIZE * plus.z)] != 0
+					var minus_solid := occupancy[minus.x + SAMPLE_SIZE * (minus.y + SAMPLE_SIZE * minus.z)] != 0
+					if plus_solid != minus_solid:
+						normal = -face if plus_solid else face
+			face_normals[triangle / 3] = normal
+			var area := winding.length()
+			for point: Vector3 in [first, second, third]:
+				var key := _position_key(point)
+				smooth_normals[key] = smooth_normals.get(key, Vector3.ZERO) + normal * area
 	for triangle in range(0, indices.size(), 3):
 		var first := positions[indices[triangle]]
 		var second := positions[indices[triangle + 1]]
 		var third := positions[indices[triangle + 2]]
 		var normal := normals[indices[triangle]]
-		var winding := (second - first).cross(third - first)
-		if winding.length_squared() >= 0.0000000001:
-			var face := winding.normalized()
-			var centre := (first + second + third) / 3.0
-			var plus := Vector3i(roundi(centre.x + face.x * 0.3), roundi(centre.y + face.y * 0.3), roundi(centre.z + face.z * 0.3)) + Vector3i.ONE * SAMPLE_PADDING
-			var minus := Vector3i(roundi(centre.x - face.x * 0.3), roundi(centre.y - face.y * 0.3), roundi(centre.z - face.z * 0.3)) + Vector3i.ONE * SAMPLE_PADDING
-			if plus.x >= 0 and plus.y >= 0 and plus.z >= 0 and plus.x < SAMPLE_SIZE and plus.y < SAMPLE_SIZE and plus.z < SAMPLE_SIZE and minus.x >= 0 and minus.y >= 0 and minus.z >= 0 and minus.x < SAMPLE_SIZE and minus.y < SAMPLE_SIZE and minus.z < SAMPLE_SIZE:
-				var plus_solid := occupancy[plus.x + SAMPLE_SIZE * (plus.y + SAMPLE_SIZE * plus.z)] != 0
-				var minus_solid := occupancy[minus.x + SAMPLE_SIZE * (minus.y + SAMPLE_SIZE * minus.z)] != 0
-				if plus_solid != minus_solid:
-					normal = -face if plus_solid else face
+		if smooth:
+			normal = face_normals[triangle / 3]
+		else:
+			var winding := (second - first).cross(third - first)
+			if winding.length_squared() >= 0.0000000001:
+				var face := winding.normalized()
+				var centre := (first + second + third) / 3.0
+				var plus := Vector3i(roundi(centre.x + face.x * 0.3), roundi(centre.y + face.y * 0.3), roundi(centre.z + face.z * 0.3)) + Vector3i.ONE * SAMPLE_PADDING
+				var minus := Vector3i(roundi(centre.x - face.x * 0.3), roundi(centre.y - face.y * 0.3), roundi(centre.z - face.z * 0.3)) + Vector3i.ONE * SAMPLE_PADDING
+				if plus.x >= 0 and plus.y >= 0 and plus.z >= 0 and plus.x < SAMPLE_SIZE and plus.y < SAMPLE_SIZE and plus.z < SAMPLE_SIZE and minus.x >= 0 and minus.y >= 0 and minus.z >= 0 and minus.x < SAMPLE_SIZE and minus.y < SAMPLE_SIZE and minus.z < SAMPLE_SIZE:
+					var plus_solid := occupancy[plus.x + SAMPLE_SIZE * (plus.y + SAMPLE_SIZE * plus.z)] != 0
+					var minus_solid := occupancy[minus.x + SAMPLE_SIZE * (minus.y + SAMPLE_SIZE * minus.z)] != 0
+					if plus_solid != minus_solid:
+						normal = -face if plus_solid else face
 		var vertex := new_positions.size()
 		new_positions.append(first)
 		new_positions.append(second)
 		new_positions.append(third)
-		new_normals.append(normal)
-		new_normals.append(normal)
-		new_normals.append(normal)
+		var first_normal := normal
+		var second_normal := normal
+		var third_normal := normal
+		if smooth:
+			first_normal = smooth_normals.get(_position_key(first), Vector3.ZERO)
+			second_normal = smooth_normals.get(_position_key(second), Vector3.ZERO)
+			third_normal = smooth_normals.get(_position_key(third), Vector3.ZERO)
+			first_normal = first_normal.normalized() if first_normal.length_squared() > 0.0000000001 else normal
+			second_normal = second_normal.normalized() if second_normal.length_squared() > 0.0000000001 else normal
+			third_normal = third_normal.normalized() if third_normal.length_squared() > 0.0000000001 else normal
+		new_normals.append(first_normal)
+		new_normals.append(second_normal)
+		new_normals.append(third_normal)
 		var colour := colors[indices[triangle]]
 		new_colors.append(colour)
 		new_colors.append(colour)

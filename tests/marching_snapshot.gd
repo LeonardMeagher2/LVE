@@ -3,7 +3,7 @@ extends "res://tests/test.gd"
 
 const FIXTURE := preload("res://tests/helpers/marching_fixture.gd")
 const EXPECTED_CELLS_HASH := 5752160045764862365
-const EXPECTED_GEOMETRY_HASH := 1437062865021484261
+const EXPECTED_GEOMETRY_HASH := -435897250055646049
 const EXPECTED_CHUNKS := 64
 const EXPECTED_NONEMPTY := 8
 const EXPECTED_VERTICES := 3194
@@ -55,5 +55,5 @@ func _snapshot() -> void:
 		expect(_nonempty == EXPECTED_NONEMPTY, "the sphere fills eight chunks")
 		expect(_vertices == EXPECTED_VERTICES, "the mesh keeps its vertex count")
 		expect(_triangles == EXPECTED_TRIANGLES, "the mesh keeps its triangle count")
-		expect(_hash == EXPECTED_GEOMETRY_HASH, "the mesh keeps every position, normal, colour, and index")
+		expect(_hash == EXPECTED_GEOMETRY_HASH, "the mesh keeps every position, normal, colour, UV, and index")
 	)

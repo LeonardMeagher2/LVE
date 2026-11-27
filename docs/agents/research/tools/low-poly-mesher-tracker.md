@@ -12,19 +12,25 @@ Done:
 
 - The low-poly surface style renders with one material per triangle.
 - The material bridge compares full material values.
-- The mesher cost fell 2.8x to 15x on the tested scenes.
+- The mesher cost fell 2.8x to 14x on the tested scenes.
 - The geometry snapshot test is in the suite.
 - The benchmark reports phases and the editor viewport settle.
+- The low-poly mesh writes atlas UVs and uses the PBR atlas material.
+- The low-poly mesh supports smooth normals.
+- The cache entry limit now counts empty surfaces.
 
 In progress:
 
-- Comparison research between the low-poly path and the base greedy path.
+- Dragon frame switching flashes in smooth mode.
 
 Open:
 
-- Atlas UVs and PBR materials in the low-poly path.
-- Smooth normals in the low-poly path.
-- Dragon frame switching flashes in smooth mode.
+- No coplanar merge in the low-poly path.
+- No enclosed, empty, or sparse fast path in the low-poly path.
+- Low-poly slice ownership can disagree with the slice range.
+- Low-poly export uses the base block mesh.
+- No ambient occlusion in the low-poly path.
+- Cache lifetime test has a pre-existing isolation failure.
 
 ## Constraints
 
@@ -34,64 +40,42 @@ Open:
 - Do not hardcode a symmetry plane.
 - Keep the old stable mesher available for comparison.
 
-## LPM-1: Atlas UVs and PBR materials
+## Done: atlas UVs and PBR materials
 
-Status: open.
+The builder writes one 1x1 `VoxelAtlas` patch for each material in the final mesh.
+It writes the patch centre to each vertex.
+It fills `atlas_albedo`, `atlas_orm`, and `atlas_emission`.
+`VoxelRenderer._build_material` builds the atlas material from those arrays.
 
-The low-poly builder writes vertex colours only.
-It does not write UVs or atlas bytes.
-The renderer returns a null material when `atlas_size.x == 0`.
-The low-poly path therefore loses metallic, roughness, emission, and transparency.
+Evidence:
 
-Plan:
+- `tests/marching_material.gd` checks albedo, metallic, roughness, and emission.
+- The chunk material uses the blue channel for metal and the green channel for roughness.
+- The emission energy stays at the atlas default of 1.0.
 
-1. Build a `VoxelAtlas` in `VoxelMarchingMeshBuilder`.
-2. Add one 1x1 patch for each material that a final vertex uses.
-3. Bake the atlas after the mesh pass.
-4. Map each vertex material to the centre of its patch UV.
-5. Write `Mesh.ARRAY_TEX_UV` and the `atlas_*` arrays.
-6. Count the UV bytes in `geometry_bytes`.
-7. Test a metal, a rough, an emissive, and a transparent material.
-8. Verify that the renderer builds the atlas material and the values reach the mesh.
+Limits:
 
-Acceptance:
+- The atlas costs about 1 ms per benchmark scene.
+- The geometry hash now covers UVs.
+- The hash does not cover the atlas texels.
 
-- The atlas material uses the expected albedo, ORM, and emission texels.
-- The geometry hash changes only by the added UVs.
-- The existing marching suite stays green.
+## Done: smooth normals
 
-Risks:
+The renderer passes `State.document.smooth_normals` to the marching builder.
+The builder averages the corrected face normals by area at each position.
+It welds by position, normal, and material.
+A zero average falls back to the face normal.
+Flat mode keeps one normal per triangle.
 
-- The atlas bake can run out of memory.
-- A material patch can bleed without padding.
-- The renderer must not fall back to vertex colours when the atlas exists.
+Evidence:
 
-## LPM-2: Smooth normals
+- `tests/marching_material.gd` checks flat and smooth output.
+- The renderer test checks that the document setting reaches the mesh.
+- The smooth block uses fewer vertices than the flat block.
 
-Status: open.
+Open:
 
-The low-poly builder always rebuilds flat triangle normals.
-It ignores `VoxelRenderer` smooth normal settings.
-
-Plan:
-
-1. Add `smooth_normals` and `ao_strength` inputs to the builder.
-2. Reuse the base corner normal rule where it fits.
-3. Define a smooth normal for edge points, cut points, and cell centres.
-4. Keep the flat rule as the default.
-5. Verify the strict symmetry result and the watertight tests in both modes.
-
-Acceptance:
-
-- Smooth mode produces shared normals across a smooth surface.
-- Flat mode keeps the current snapshot.
-- The renderer passes the document setting to the builder.
-
-Risks:
-
-- The low-poly vertices are not lattice corners.
-- A smooth normal can change the visible silhouette or the seam pins.
-- The material bridge rule must not depend on the normal.
+- Ambient occlusion is still absent.
 
 ## LPM-3: Dragon frame switching
 
@@ -103,48 +87,102 @@ Symptom:
 - The model disappears, then chunks appear one by one.
 - It looks like the renderer recalculates many chunk surfaces.
 
-Known facts:
+Facts:
 
 - Dragon uses style 0, smooth normals, 7 frames.
 - Each frame holds 74 to 76 chunks and about 51,326 cells.
-- `VoxelRenderer._rebuild()` hides every chunk at once on a frame change.
-- The surface key uses chunk instance ids and revisions, not frame content.
-- The style-0 surface cache limit is 64 MB and 1024 entries.
+- One playback frame change causes one `_rebuild`.
+- `_rebuild` hides every chunk instance at once.
+- A loaded document has independent chunk objects for each frame.
+- The surface key uses chunk instance ids and revisions, not content.
+- The style-0 cache holds 64 MB and 1024 entries.
+- 7 frames * 75 chunks = 525 entries.
+- 64 MB holds all frames only when a chunk costs 125 KiB or less.
+- The LRU evicts the frame just left first.
+- The 3 ms work slice installs about 3 chunks per frame.
+- Each miss also builds a material and three textures.
 
-Work:
+Likely causes:
 
-1. Count the jobs launched by one frame switch.
-2. Measure the cache bytes for all seven frames.
-3. Check whether earlier frames are evicted, so a return rebuilds them.
-4. Decide whether to keep the old frame visible until the first new surface is ready.
-5. Add a test that proves the chosen behavior.
+1. The blank frame comes from the bulk hide.
+2. The pop-in comes from the work slice and the install cost.
+3. Revisits rebuild when the 64 MB budget cannot hold all frames.
 
-Acceptance:
+Fix options:
 
-- One switch launches only the surfaces that differ.
-- A frame switch does not blank the whole model.
-- Revisiting a frame reuses its surfaces when the cache holds them.
+1. Install cache hits before the hide.
+   - Hide only the chunks whose new key is a miss.
+   - Keep the hard cut for a cold different frame.
+   - This is the smallest safe fix.
+2. Keep each old chunk until its replacement is installed.
+   - This removes the blank on a cold frame.
+   - It shows old geometry during the switch.
+   - It needs a deliberate change to `tests/drawing_visibility.gd`.
+3. Share unchanged chunks across loaded frames.
+   - Hash the chunk grid and materials.
+   - Reuse the surface when the hash matches.
+4. Raise the cache budget or prefetch neighbouring frames.
+   - Measure first. Do not guess the budget.
 
-Risks:
+Next measurements:
 
-- The old frame can show stale geometry during a switch.
-- A content key can merge chunks that need different shading.
-- The cache limit can trade memory for repeated work.
+1. Warm all seven frames. Print `_surface_cache_bytes` and `_surface_cache.size()` after each.
+2. Revisit each frame. Print `profile_snapshot()` and `launch`.
+3. Count identical chunks between frames.
+4. Time `install_us`, `material_us`, and `cache_us`.
+
+Tests:
+
+- Add a warm revisit case: switch back, assert no launch and the exact displayed key.
+- Keep the cold different-frame hide test.
+- Add a cache budget test for seven frames.
 
 ## LPM-4: Comparison research
 
-Status: in progress.
+Status: done.
 
-The comparison covers:
+Key findings:
 
-- Base greedy features and optimizations.
-- Low-poly features and optimizations.
-- Shared renderer features.
-- Missing features and their impact.
+- The viewport style 0 path uses the atlas group and planar region path, not `_greedy_dense`.
+  `texture_materials` defaults to true, and the renderer never clears it.
+- The base path reduces work:
+  - coplanar/planar merge,
+  - enclosed chunk cull,
+  - sparse row and occupied plane skips,
+  - AO,
+  - smooth normals,
+  - atlas/PBR,
+  - export.
+- The low-poly path reduces per-cell work:
+  - case tables,
+  - field splat,
+  - shared quad data,
+  - packed components,
+  - weld and duplicate cleanup.
+- There is no fair base vs low-poly measurement on one fixture.
+  The base mixed fixture is a translucent checkerboard worst case.
+- The low-poly path has dead repair passes.
+  `_fill_boundary_ears`, `_pinch_material_seams`, `_collapse_near_hole_vertices`, and `_flip_diagonals` are not called.
+- `hard_boundaries` and `per_material` are not used by the renderer.
+- The surface cache entry limit counted only non-empty surfaces.
+  The entry limit now uses the dictionary size.
+- `tests/surface_cache_lifetime` still fails in this process.
+  It fails on `64e1418` without the current changes.
+  The test assumes an empty cache and the style-0 limit.
+  A loaded low-poly document sets the shared low-poly limit to 4096.
 
-It also covers the Dragon frame-switch path.
+## Gaps ranked
 
-The result will update the gap list in this tracker.
+| Rank | Gap | Impact | Effort | Risk |
+| --- | --- | --- | --- | --- |
+| 1 | Dragon frame switch blank and rebuild | High | S-M | Stale geometry |
+| 2 | No coplanar merge in low-poly | Medium-high GPU | L | Watertightness |
+| 3 | No enclosed, empty, or sparse fast path | Medium CPU | S | Low |
+| 4 | No ambient occlusion | High visual | M | Normal and colour keys |
+| 5 | Slice ownership ignores the slice range | Medium correctness | M | Holes at the cap |
+| 6 | Low-poly export uses the block mesh | Medium | M | Export tests |
+| 7 | Dead repair passes and unused flags | Low | S | Geometry change if wired |
+| 8 | No LOD or draw call batching | Medium at scale | L | Popping |
 
 ## Commands
 
@@ -152,6 +190,12 @@ Snapshot test:
 
 ```text
 godot --headless --path . res://tests/marching_snapshot.test.tscn
+```
+
+Material and normal tests:
+
+```text
+godot --headless --path . res://tests/marching_material.test.tscn
 ```
 
 Benchmark:
@@ -163,12 +207,15 @@ godot --headless --path . res://tests/benchmarks/marching_surface.tscn
 Marching suite:
 
 ```text
-godot --path . -s res://addons/test_kit/run.gd -- marching_mesh marching_bridge marching_chunks marching_snapshot
+godot --path . -s res://addons/test_kit/run.gd -- marching_mesh marching_bridge marching_chunks marching_material marching_snapshot
 ```
 
 ## Decisions
 
-- The benchmark hash covers position, normal, colour, and index.
-- The hash does not cover UVs yet.
+- The benchmark hash covers position, normal, colour, UV, and index.
+- The hash does not cover atlas texel values.
+- Smooth normals use area-weighted face normals at each position.
+- The atlas uses one 1x1 patch per material with the patch centre as the UV.
 - The prototype model files stay untracked.
-- The low-poly limits stay at 256 MB and 4096 entries.
+- The style-0 cache keeps 64 MB and 1024 entries.
+- The low-poly cache keeps 256 MB and 4096 entries.

@@ -70,10 +70,12 @@ static func geometry_hash(arrays: Array, location: Vector3i, rolling: int) -> in
 		return rolling
 	var normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
 	var colors: PackedColorArray = arrays[Mesh.ARRAY_COLOR]
+	var uvs: PackedVector2Array = arrays[Mesh.ARRAY_TEX_UV] if arrays.size() > Mesh.ARRAY_TEX_UV else PackedVector2Array()
 	var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
 	rolling = rolling * 33 + location.x
 	rolling = rolling * 33 + location.y
 	rolling = rolling * 33 + location.z
+	rolling = rolling * 33 + uvs.size()
 	for index in positions.size():
 		rolling = rolling * 33 + roundi(positions[index].x * 1024.0)
 		rolling = rolling * 33 + roundi(positions[index].y * 1024.0)
@@ -85,6 +87,9 @@ static func geometry_hash(arrays: Array, location: Vector3i, rolling: int) -> in
 		rolling = rolling * 33 + roundi(colors[index].g * 255.0)
 		rolling = rolling * 33 + roundi(colors[index].b * 255.0)
 		rolling = rolling * 33 + roundi(colors[index].a * 255.0)
+		if index < uvs.size():
+			rolling = rolling * 33 + roundi(uvs[index].x * 1024.0)
+			rolling = rolling * 33 + roundi(uvs[index].y * 1024.0)
 	for value: int in indices:
 		rolling = rolling * 33 + value
 	return rolling

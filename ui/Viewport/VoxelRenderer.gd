@@ -446,6 +446,7 @@ func _launch_surface(chunk_location: Vector3i, active_frame: VoxelFrame) -> void
 		surface_job = greedy
 	else:
 		var marching := VoxelMarchingMeshBuilder.new()
+		marching.smooth_normals = State.document.smooth_normals
 		marching.slice_axis = slice_axis
 		marching.slice_index = slice_index
 		marching.slice_count = slice_count
@@ -499,7 +500,7 @@ static func _cache_surface(surface_key: PackedInt64Array, chunk_surface: ArrayMe
 		_surface_cache_has_low_poly = true
 	var byte_limit := SURFACE_CACHE_LIMIT_BYTES_LOW_POLY if _surface_cache_has_low_poly else SURFACE_CACHE_LIMIT_BYTES
 	var entry_limit := SURFACE_CACHE_LIMIT_ENTRIES_LOW_POLY if _surface_cache_has_low_poly else SURFACE_CACHE_LIMIT_ENTRIES
-	while (_surface_cache_bytes > byte_limit or _surface_cache_filled > entry_limit) and _surface_use_order.size() > 1:
+	while (_surface_cache_bytes > byte_limit or _surface_cache.size() > entry_limit) and _surface_use_order.size() > 1:
 		var oldest_surface_key: PackedInt64Array = _surface_use_order.pop_front()
 		var oldest: Dictionary = _surface_cache[oldest_surface_key]
 		_surface_cache_bytes -= oldest.bytes

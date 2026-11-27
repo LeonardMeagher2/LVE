@@ -23,7 +23,7 @@ godot --headless --path . res://tests/benchmarks/marching_surface.tscn
 Run the marching suite:
 
 ```text
-godot --path . -s res://addons/test_kit/run.gd -- marching_mesh marching_bridge marching_chunks marching_snapshot
+godot --path . -s res://addons/test_kit/run.gd -- marching_mesh marching_bridge marching_chunks marching_material marching_snapshot
 ```
 
 ## Method
@@ -40,10 +40,11 @@ godot --path . -s res://addons/test_kit/run.gd -- marching_mesh marching_bridge 
 The hash covers each non-empty chunk location.
 It covers each vertex position and normal at 1/1024 precision.
 It covers each vertex colour at 8-bit precision.
+It covers each UV at 1/1024 precision.
 It covers each index.
 
-The low-poly material uses vertex colours.
-The hash does not cover metallic or roughness values.
+The hash covers the UV mapping.
+It does not cover the atlas texel values.
 
 The viewport measurement loads the same sphere into the editor renderer.
 It times the frame copy, the worker jobs, the mesh install, and the material.
@@ -53,11 +54,11 @@ It reports one run after the mesher passes.
 
 | Scene | Chunks | Non-empty | Vertices | Triangles | Hash |
 | --- | --- | --- | --- | --- | --- |
-| Material sphere, radius 5 | 64 | 8 | 3194 | 2606 | 1437062865021484261 |
-| Testing2 frame 0 | 66 | 5 | 6075 | 6444 | 1949223109262883231 |
-| Test3 frame 0 | 27 | 1 | 240 | 128 | 8805424844172740783 |
-| Testing frame 0 | 48 | 4 | 778 | 952 | -5652785560359355839 |
-| me frame 0 | 48 | 4 | 7730 | 9464 | 6203146698049274931 |
+| Material sphere, radius 5 | 64 | 8 | 3194 | 2606 | -435897250055646049 |
+| Testing2 frame 0 | 66 | 5 | 6075 | 6444 | 5692302950244434500 |
+| Test3 frame 0 | 27 | 1 | 240 | 128 | -7364442111179200461 |
+| Testing frame 0 | 48 | 4 | 778 | 952 | 3222390777430573707 |
+| me frame 0 | 48 | 4 | 7730 | 9464 | -3618734854920861444 |
 
 The radius-5 sphere is deterministic and runs in the test suite.
 It uses four materials.
@@ -75,30 +76,45 @@ The "after" column is the optimized builder.
 
 | Scene | Before (us) | After (us) | Speedup |
 | --- | --- | --- | --- |
-| Material sphere | 1049239 | 125643 | 8.4x |
-| Testing2 | 940450 | 197839 | 4.8x |
-| Test3 | 121936 | 8134 | 15.0x |
-| Testing | 502327 | 44370 | 11.3x |
-| me | 985508 | 347572 | 2.8x |
+| Material sphere | 1049239 | 131623 | 8.0x |
+| Testing2 | 940450 | 203272 | 4.6x |
+| Test3 | 121936 | 8753 | 13.9x |
+| Testing | 502327 | 45620 | 11.0x |
+| me | 985508 | 357165 | 2.8x |
 
-The editor viewport settles the sphere in 117440 us in one run.
+The editor viewport settles the sphere in 119496 us in one run.
 This value includes the parallel chunk jobs and the frame waits.
 
 After phases:
 
-| Scene | Sample | Field | Cells | Drop | Normals |
-| --- | --- | --- | --- | --- | --- |
-| Material sphere | 9011 | 41136 | 53582 | 9357 | 9707 |
-| Testing2 | 7114 | 24539 | 113611 | 24333 | 23418 |
-| me | 13265 | 98908 | 162798 | 34778 | 33170 |
+| Scene | Sample | Field | Cells | Drop | Normals | Atlas |
+| --- | --- | --- | --- | --- | --- | --- |
+| Material sphere | 9180 | 40992 | 56330 | 9844 | 10284 | 926 |
+| Testing2 | 7209 | 24942 | 117174 | 23384 | 24454 | 852 |
+| me | 13359 | 100684 | 165789 | 35087 | 36467 | 1053 |
 
 All values are microseconds.
 
-The before and after runs printed the same hash for every scene.
+The performance changes kept every hash equal at their commit.
+The atlas and smooth normal changes add UVs and optional smooth normals.
+Their snapshot is the newer value in the table above.
 
 The field phase was the largest cost before the change.
 On Testing2 it fell from 776717 to 25107 microseconds.
 The cell phase is now the largest cost on Testing2 and me.
+
+## Materials and normals
+
+The builder now writes one 1x1 atlas patch for each material in the final mesh.
+It writes the patch centre as the UV of each vertex.
+The chunk material therefore gets the albedo, ORM, and emission textures.
+Metal, roughness, emission, and transparency use the same atlas path as style 0.
+
+Smooth normals are optional.
+The renderer passes the document setting to the builder.
+The smooth pass averages the adjacent triangle normals by area at each position.
+Flat mode keeps one normal per triangle.
+A zero average falls back to the face normal.
 
 ## Changes
 
