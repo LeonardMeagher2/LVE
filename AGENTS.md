@@ -10,8 +10,7 @@ Leonard's Voxel Editor is a Godot voxel-animation editor. Godot is the only tool
 - Add abstractions only for a concrete need. Explain non-obvious choices and their tradeoffs.
 - When committing, prefer whole-file staging over partial staging.
 - Record verified engine and workflow learnings in [MEMORY.md](MEMORY.md) during the task that finds them.
-- Use [docs/agents/tool-flows/README.md](docs/agents/tool-flows/README.md) for current tool behavior.
-- Use [docs/agents/research/tools/README.md](docs/agents/research/tools/README.md) for evidence and design notes.
+- Read the code for current behavior.
 - Keep MCP responses compact. Follow the forms in [docs/MCP.md](docs/MCP.md).
 
 ## Documentation
