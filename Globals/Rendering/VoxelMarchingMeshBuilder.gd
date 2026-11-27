@@ -34,10 +34,25 @@ const FACES: Array = [
 	[[2, 3, 7, 6], [2, 10, 6, 11]],
 ]
 const FACE_AXES: Array[int] = [2, 0, 1]
+const COMPONENT_STEPS: Array[int] = [-1, 1, -4, 4]
+const CORNER_STEPS := [
+	0,
+	1,
+	SAMPLE_SIZE,
+	SAMPLE_SIZE + 1,
+	SAMPLE_SIZE * SAMPLE_SIZE,
+	SAMPLE_SIZE * SAMPLE_SIZE + 1,
+	SAMPLE_SIZE * SAMPLE_SIZE + SAMPLE_SIZE,
+	SAMPLE_SIZE * SAMPLE_SIZE + SAMPLE_SIZE + 1,
+]
 const PRESENT_SELF := 13
 const FIELD_RADIUS := 2
 
-static var _case_cache: Dictionary = {}
+static var _case_by_bits: Array = []
+static var _diagonal_masks: PackedInt32Array = PackedInt32Array()
+static var _opposite_pairs: PackedByteArray = PackedByteArray()
+static var _field_distances: PackedFloat32Array = PackedFloat32Array()
+static var _corner_points: PackedVector3Array = PackedVector3Array()
 static var _edge_faces: PackedInt32Array = PackedInt32Array()
 
 var source_frame: VoxelFrame
@@ -51,6 +66,12 @@ var atlas_emission := PackedByteArray()
 var geometry_bytes := 0
 var enclosed_culled := false
 var worker_task_id := -1
+var profile := false
+var sample_us := 0
+var field_us := 0
+var cells_us := 0
+var drop_us := 0
+var normals_us := 0
 var ao_strength := 0.0
 var slice_axis := -1
 var slice_index := 0
@@ -69,14 +90,27 @@ static func _static_init() -> void:
 			_edge_faces[edge] |= 1 << face
 		_edge_faces[EDGE_CORNERS.size() + face * 2] |= 1 << face
 		_edge_faces[EDGE_CORNERS.size() + face * 2 + 1] |= 1 << face
+	_diagonal_masks.resize(256)
+	_opposite_pairs.resize(256)
+	_case_by_bits.resize(256)
 	for bits in 256:
-		_case_data(bits, 0)
+		_diagonal_masks[bits] = _diagonal_faces(bits)
+		_opposite_pairs[bits] = 1 if _opposite_pair_for(bits) else 0
+		_case_by_bits[bits] = _build_case_data(bits, _diagonal_masks[bits])
+	for offset_z in range(-FIELD_RADIUS, FIELD_RADIUS + 1):
+		for offset_y in range(-FIELD_RADIUS, FIELD_RADIUS + 1):
+			for offset_x in range(-FIELD_RADIUS, FIELD_RADIUS + 1):
+				_field_distances.append(_field_distance(offset_x, offset_y, offset_z))
+	_corner_points.resize(CORNER_OFFSETS.size())
+	for corner in CORNER_OFFSETS.size():
+		_corner_points[corner] = Vector3(CORNER_OFFSETS[corner])
 
 
-static func _case_data(bits: int, mask: int) -> Dictionary:
-	var key := (bits << 6) | mask
-	if _case_cache.has(key):
-		return _case_cache[key]
+static func _case_data(bits: int) -> Dictionary:
+	return _case_by_bits[bits]
+
+
+static func _build_case_data(bits: int, mask: int) -> Dictionary:
 	var loops := _case_loops_for(bits, mask)
 	var triangles: Array[PackedInt32Array] = []
 	for loop: PackedInt32Array in loops:
@@ -98,9 +132,7 @@ static func _case_data(bits: int, mask: int) -> Dictionary:
 			if face < 0:
 				continue
 			face_triangles[face].append(PackedInt32Array([group[index], group[index + 1], group[index + 2]]))
-	var data := {"loops": loops, "triangles": triangles, "face_triangles": face_triangles}
-	_case_cache[key] = data
-	return data
+	return {"loops": loops, "triangles": triangles, "face_triangles": face_triangles}
 
 
 func run() -> void:
@@ -111,7 +143,10 @@ func run() -> void:
 	var materials := PackedFloat32Array()
 	var present := PackedByteArray()
 	if frame != null:
+		var sample_started := Time.get_ticks_usec() if profile else 0
 		var sampled := _sample(frame, chunk_location, slice_axis, slice_index, slice_count)
+		if profile:
+			sample_us = Time.get_ticks_usec() - sample_started
 		occupancy = sampled[0]
 		material_ids = sampled[1]
 		materials = sampled[2]
@@ -204,10 +239,16 @@ func _build(occupancy: PackedByteArray, material_ids: PackedInt32Array, material
 	else:
 		var built := _build_surfaces(occupancy, material_ids, materials, owners)
 		merged = built
-	var welded := _weld(merged[0], merged[1], merged[2], merged[3], merged[4])
+	var welded := [merged[0], merged[1], merged[2], merged[4], merged[3]]
+	var drop_started := Time.get_ticks_usec() if profile else 0
 	welded[3] = _drop_degenerate_triangles(welded[0], welded[3])
 	welded[3] = _drop_opposite_duplicate_triangles(welded[0], welded[3])
+	if profile:
+		drop_us = Time.get_ticks_usec() - drop_started
+	var normals_started := Time.get_ticks_usec() if profile else 0
 	welded = _rebuild_flat_normals(welded[0], welded[1], welded[2], welded[4], welded[3], occupancy)
+	if profile:
+		normals_us = Time.get_ticks_usec() - normals_started
 	surface_arrays.resize(Mesh.ARRAY_MAX)
 	surface_arrays[Mesh.ARRAY_VERTEX] = welded[0]
 	surface_arrays[Mesh.ARRAY_NORMAL] = welded[1]
@@ -296,61 +337,62 @@ func _build_surfaces(occupancy: PackedByteArray, material_ids: PackedInt32Array,
 	var vertex_colors := PackedColorArray()
 	var vertex_materials := PackedInt32Array()
 	var indices := PackedInt32Array()
+	var field_started := Time.get_ticks_usec() if profile else 0
 	var field := _union_field(occupancy)
+	if profile:
+		field_us += Time.get_ticks_usec() - field_started
+	var cells_started := Time.get_ticks_usec() if profile else 0
 	for z in range(-MESH_PADDING, CHUNK_SIZE + 1):
 		for y in range(-MESH_PADDING, CHUNK_SIZE + 1):
 			for x in range(-MESH_PADDING, CHUNK_SIZE + 1):
-				var cell := Vector3i(x, y, z)
+				var origin := (x + SAMPLE_PADDING) + SAMPLE_SIZE * ((y + SAMPLE_PADDING) + SAMPLE_SIZE * (z + SAMPLE_PADDING))
 				var bits := 0
+				for corner in 8:
+					if occupancy[origin + CORNER_STEPS[corner]] != 0:
+						bits |= 1 << corner
+				if bits == 0 or bits == 255:
+					continue
+				var cell := Vector3i(x, y, z)
 				var cell_material := -1
 				var cell_mixed := false
 				for corner in 8:
-					var sample := cell + CORNER_OFFSETS[corner] + Vector3i.ONE * SAMPLE_PADDING
-					var sample_index := sample.x + SAMPLE_SIZE * (sample.y + SAMPLE_SIZE * sample.z)
-					if occupancy[sample_index] == 0:
+					if bits & (1 << corner) == 0:
 						continue
-					bits |= 1 << corner
-					var corner_material := material_ids[sample_index]
+					var corner_material := material_ids[origin + CORNER_STEPS[corner]]
 					if cell_material < 0:
 						cell_material = corner_material
 					elif corner_material != cell_material:
 						cell_mixed = true
-				if bits == 0:
-					continue
 				var state_x := 0 if x <= 0 else (2 if x >= CHUNK_SIZE - 2 else 1)
 				var state_y := 0 if y <= 0 else (2 if y >= CHUNK_SIZE - 2 else 1)
 				var state_z := 0 if z <= 0 else (2 if z >= CHUNK_SIZE - 2 else 1)
 				if owners[(state_x * 3 + state_y) * 3 + state_z] == 2:
 					continue
-				var mask := _diagonal_faces(bits)
-				var case_data := _case_data(bits, mask)
-				if _opposite_pair(bits) and _append_antiprism(cell, bits, case_data, field, occupancy, material_ids, materials, positions, normals, vertex_colors, vertex_materials, indices):
+				var case_data := _case_data(bits)
+				if _opposite_pairs[bits] != 0 and _append_antiprism(cell, bits, case_data, field, occupancy, material_ids, materials, positions, normals, vertex_colors, vertex_materials, indices):
 					continue
 				var loops: Array = case_data["loops"]
 				var loop_triangles: Array = case_data["triangles"]
 				for loop_index in loops.size():
 					var loop: PackedInt32Array = loops[loop_index]
 					var triangle_edges: PackedInt32Array = loop_triangles[loop_index]
-					if cell_mixed and _append_two_two_face_partition(cell, bits, loop, field, occupancy, material_ids, materials, positions, normals, vertex_colors, vertex_materials, indices):
-						continue
-					if cell_mixed and _append_material_corner(cell, bits, loop, triangle_edges, occupancy, material_ids, materials, field, positions, normals, vertex_colors, vertex_materials, indices):
-						continue
 					if loop.size() == 4:
-						var fan_data := _quad_fan_data(cell, loop, field, occupancy, material_ids)
+						var loop_data := _loop_data(cell, loop, field, occupancy, material_ids)
+						if cell_mixed and _append_two_two_face_partition(cell, bits, loop, loop_data, occupancy, material_ids, materials, positions, normals, vertex_colors, vertex_materials, indices):
+							continue
+						if cell_mixed and _append_material_corner(cell, bits, loop, triangle_edges, loop_data, occupancy, material_ids, materials, positions, normals, vertex_colors, vertex_materials, indices):
+							continue
+						var fan_data := _quad_fan_data(loop_data)
 						if fan_data.get("ambiguous", false) and fan_data.get("uniform", false):
-							if _append_quad_fan(cell, bits, loop, fan_data.labels, field, occupancy, material_ids, materials, positions, normals, vertex_colors, vertex_materials, indices, false):
+							if _append_quad_fan(cell, bits, loop, loop_data, materials, positions, normals, vertex_colors, vertex_materials, indices, false):
 								continue
-						var flat_diagonal := _canonical_flat_quad(cell, loop, field, occupancy, material_ids)
+						var flat_diagonal := _canonical_flat_quad(loop, loop_data)
 						if not flat_diagonal.is_empty():
 							triangle_edges = flat_diagonal
 						elif cell_mixed:
-							var material_diagonal := _material_diagonal(cell, loop, occupancy, material_ids)
+							var material_diagonal := _material_diagonal(loop, loop_data)
 							if not material_diagonal.is_empty():
 								triangle_edges = material_diagonal
-					elif cell_mixed:
-						var material_diagonal := _material_diagonal(cell, loop, occupancy, material_ids)
-						if not material_diagonal.is_empty():
-							triangle_edges = material_diagonal
 					var range_start := positions.size()
 					for index in range(0, triangle_edges.size(), 3):
 						var first_edge := triangle_edges[index]
@@ -381,6 +423,8 @@ func _build_surfaces(occupancy: PackedByteArray, material_ids: PackedInt32Array,
 						)
 					if cell_mixed and loop.size() == 4:
 						_recolour_same_material_bridge(cell, loop, range_start, occupancy, material_ids, materials, vertex_colors, vertex_materials)
+	if profile:
+		cells_us += Time.get_ticks_usec() - cells_started
 	return [positions, normals, vertex_colors, vertex_materials, indices]
 
 
@@ -431,25 +475,74 @@ static func _material_values(label: int, materials: PackedFloat32Array) -> Packe
 	return key
 
 
-func _append_two_two_face_partition(cell: Vector3i, bits: int, loop: PackedInt32Array, field: PackedFloat32Array, occupancy: PackedByteArray, material_ids: PackedInt32Array, materials: PackedFloat32Array, positions: PackedVector3Array, normals: PackedVector3Array, vertex_colors: PackedColorArray, vertex_materials: PackedInt32Array, indices: PackedInt32Array) -> bool:
-	if loop.size() != 4:
-		return false
+func _loop_data(cell: Vector3i, loop: PackedInt32Array, field: PackedFloat32Array, occupancy: PackedByteArray, material_ids: PackedInt32Array) -> Dictionary:
 	var points: Array[Vector3] = []
+	var site_points: Array[Vector3] = []
+	var sites: Array[Vector3i] = []
 	var labels := PackedInt32Array()
-	var counts := {}
 	for edge: int in loop:
 		points.append(_field_point(cell, edge, field))
-		var label: int = _edge_sample(cell, edge, occupancy, material_ids)[1]
-		labels.append(label)
+		var sample := _edge_sample(cell, edge, occupancy, material_ids)
+		labels.append(sample[1])
+		site_points.append(sample[0])
+		sites.append(Vector3i(roundi(sample[0].x), roundi(sample[0].y), roundi(sample[0].z)))
+	var constant_axis := -1
+	for axis in 3:
+		if sites[0][axis] == sites[1][axis] and sites[0][axis] == sites[2][axis] and sites[0][axis] == sites[3][axis]:
+			constant_axis = axis
+			break
+	var components := PackedInt32Array()
+	var component_sizes := PackedInt32Array()
+	var sums: Array = [-1, -1]
+	var first_axis := -1
+	var second_axis := -1
+	var first_low := 0
+	var second_low := 0
+	if constant_axis >= 0:
+		first_axis = (constant_axis + 1) % 3
+		second_axis = (constant_axis + 2) % 3
+		first_low = mini(mini(sites[0][first_axis], sites[1][first_axis]), mini(sites[2][first_axis], sites[3][first_axis])) - 1
+		second_low = mini(mini(sites[0][second_axis], sites[1][second_axis]), mini(sites[2][second_axis], sites[3][second_axis])) - 1
+		components = _quad_components(sites, constant_axis, first_axis, second_axis, first_low, second_low, occupancy, material_ids)
+		if not components.is_empty():
+			component_sizes.resize(16)
+			component_sizes.fill(0)
+			for value: int in components:
+				if value >= 0:
+					component_sizes[value] += 1
+			var first_component := _component_at(sites[0], first_axis, second_axis, first_low, second_low, components)
+			var second_component := _component_at(sites[1], first_axis, second_axis, first_low, second_low, components)
+			var third_component := _component_at(sites[2], first_axis, second_axis, first_low, second_low, components)
+			var fourth_component := _component_at(sites[3], first_axis, second_axis, first_low, second_low, components)
+			if first_component >= 0 and second_component >= 0 and third_component >= 0 and fourth_component >= 0:
+				sums = [component_sizes[first_component] + component_sizes[third_component], component_sizes[second_component] + component_sizes[fourth_component]]
+	var uniform := labels[0] == labels[1] and labels[1] == labels[2] and labels[2] == labels[3]
+	return {
+		"points": points,
+		"site_points": site_points,
+		"sites": sites,
+		"labels": labels,
+		"components": components,
+		"component_sizes": component_sizes,
+		"sums": sums,
+		"uniform": uniform,
+	}
+
+
+func _append_two_two_face_partition(cell: Vector3i, bits: int, loop: PackedInt32Array, loop_data: Dictionary, occupancy: PackedByteArray, material_ids: PackedInt32Array, materials: PackedFloat32Array, positions: PackedVector3Array, normals: PackedVector3Array, vertex_colors: PackedColorArray, vertex_materials: PackedInt32Array, indices: PackedInt32Array) -> bool:
+	if loop.size() != 4:
+		return false
+	var points: Array[Vector3] = loop_data["points"]
+	var labels: PackedInt32Array = loop_data["labels"]
+	var counts := {}
+	for label: int in labels:
 		counts[label] = counts.get(label, 0) + 1
 	if counts.size() != 2:
 		return false
 	for label: int in counts:
 		if counts[label] != 2:
 			return false
-	var sites: Array[Vector3] = []
-	for edge: int in loop:
-		sites.append(_edge_sample(cell, edge, occupancy, material_ids)[0])
+	var sites: Array[Vector3] = loop_data["site_points"]
 	for index in 4:
 		var next := (index + 1) % 4
 		if labels[index] == labels[next]:
@@ -516,34 +609,73 @@ func _union_field(occupancy: PackedByteArray) -> PackedFloat32Array:
 	var field := PackedFloat32Array()
 	field.resize(SAMPLE_SIZE * SAMPLE_SIZE * SAMPLE_SIZE)
 	field.fill(4.0)
-	for z in SAMPLE_SIZE:
-		for y in SAMPLE_SIZE:
-			for x in SAMPLE_SIZE:
-				var closest := 4.0
-				for offset_z in range(-FIELD_RADIUS, FIELD_RADIUS + 1):
-					var zz := z + offset_z
-					if zz < 0 or zz >= SAMPLE_SIZE:
+	var distances := _field_distances
+	var size := SAMPLE_SIZE
+	var row_step := size
+	var layer_step := size * size
+	var solid_count := 0
+	for index in occupancy.size():
+		solid_count += occupancy[index]
+	var skip_interior := solid_count * 4 > occupancy.size()
+	for z in size:
+		for y in size:
+			for x in size:
+				var solid := x + size * (y + size * z)
+				if occupancy[solid] == 0:
+					continue
+				var surface := true
+				if skip_interior and x > 0 and y > 0 and z > 0 and x < size - 1 and y < size - 1 and z < size - 1:
+					surface = false
+					if occupancy[solid - 1] == 0 or occupancy[solid + 1] == 0:
+						surface = true
+					elif occupancy[solid - row_step] == 0 or occupancy[solid + row_step] == 0:
+						surface = true
+					elif occupancy[solid - layer_step] == 0 or occupancy[solid + layer_step] == 0:
+						surface = true
+					if not surface:
+						for dz in range(-1, 2):
+							for dy in range(-1, 2):
+								for dx in range(-1, 2):
+									if dx == 0 and dy == 0 and dz == 0:
+										continue
+									if occupancy[solid + dx + row_step * dy + layer_step * dz] == 0:
+										surface = true
+										break
+								if surface:
+									break
+							if surface:
+								break
+				if not surface:
+					continue
+				for dz in range(-FIELD_RADIUS, FIELD_RADIUS + 1):
+					var target_z := z + dz
+					if target_z < 0 or target_z >= size:
 						continue
-					for offset_y in range(-FIELD_RADIUS, FIELD_RADIUS + 1):
-						var yy := y + offset_y
-						if yy < 0 or yy >= SAMPLE_SIZE:
+					for dy in range(-FIELD_RADIUS, FIELD_RADIUS + 1):
+						var target_y := y + dy
+						if target_y < 0 or target_y >= size:
 							continue
-						for offset_x in range(-FIELD_RADIUS, FIELD_RADIUS + 1):
-							var xx := x + offset_x
-							if xx < 0 or xx >= SAMPLE_SIZE:
+						var row := target_y + size * target_z
+						var distance_row := (dz + FIELD_RADIUS) * 25 + (dy + FIELD_RADIUS) * 5
+						for dx in range(-FIELD_RADIUS, FIELD_RADIUS + 1):
+							var target_x := x + dx
+							if target_x < 0 or target_x >= size:
 								continue
-							if occupancy[xx + SAMPLE_SIZE * (yy + SAMPLE_SIZE * zz)] == 0:
-								continue
-							var qx := absf(offset_x) - 0.5
-							var qy := absf(offset_y) - 0.5
-							var qz := absf(offset_z) - 0.5
-							var outside_x := maxf(qx, 0.0)
-							var outside_y := maxf(qy, 0.0)
-							var outside_z := maxf(qz, 0.0)
-							var distance := sqrt(outside_x * outside_x + outside_y * outside_y + outside_z * outside_z) + minf(maxf(qx, maxf(qy, qz)), 0.0)
-							closest = minf(closest, distance)
-				field[x + SAMPLE_SIZE * (y + SAMPLE_SIZE * z)] = closest
+							var target := target_x + size * row
+							var distance := distances[distance_row + dx + FIELD_RADIUS]
+							if distance < field[target]:
+								field[target] = distance
 	return field
+
+
+static func _field_distance(offset_x: int, offset_y: int, offset_z: int) -> float:
+	var qx := absf(offset_x) - 0.5
+	var qy := absf(offset_y) - 0.5
+	var qz := absf(offset_z) - 0.5
+	var outside_x := maxf(qx, 0.0)
+	var outside_y := maxf(qy, 0.0)
+	var outside_z := maxf(qz, 0.0)
+	return sqrt(outside_x * outside_x + outside_y * outside_y + outside_z * outside_z) + minf(maxf(qx, maxf(qy, qz)), 0.0)
 
 
 static func _field_point(cell: Vector3i, edge: int, field: PackedFloat32Array) -> Vector3:
@@ -552,10 +684,9 @@ static func _field_point(cell: Vector3i, edge: int, field: PackedFloat32Array) -
 	var corners: Array = EDGE_CORNERS[edge]
 	var first: Vector3i = CORNER_OFFSETS[corners[0]]
 	var second: Vector3i = CORNER_OFFSETS[corners[1]]
-	var first_sample := cell + first + Vector3i.ONE * SAMPLE_PADDING
-	var second_sample := cell + second + Vector3i.ONE * SAMPLE_PADDING
-	var first_index := first_sample.x + SAMPLE_SIZE * (first_sample.y + SAMPLE_SIZE * first_sample.z)
-	var second_index := second_sample.x + SAMPLE_SIZE * (second_sample.y + SAMPLE_SIZE * second_sample.z)
+	var origin := (cell.x + SAMPLE_PADDING) + SAMPLE_SIZE * ((cell.y + SAMPLE_PADDING) + SAMPLE_SIZE * (cell.z + SAMPLE_PADDING))
+	var first_index: int = origin + CORNER_STEPS[corners[0]]
+	var second_index: int = origin + CORNER_STEPS[corners[1]]
 	var first_value := field[first_index]
 	var second_value := field[second_index]
 	var difference := first_value - second_value
@@ -565,21 +696,17 @@ static func _field_point(cell: Vector3i, edge: int, field: PackedFloat32Array) -
 	return Vector3(cell) + Vector3(first) + Vector3(second - first) * t
 
 
-func _append_material_corner(cell: Vector3i, bits: int, loop: PackedInt32Array, triangle_edges: PackedInt32Array, occupancy: PackedByteArray, material_ids: PackedInt32Array, materials: PackedFloat32Array, field: PackedFloat32Array, positions: PackedVector3Array, normals: PackedVector3Array, vertex_colors: PackedColorArray, vertex_materials: PackedInt32Array, indices: PackedInt32Array) -> bool:
+func _append_material_corner(cell: Vector3i, bits: int, loop: PackedInt32Array, triangle_edges: PackedInt32Array, loop_data: Dictionary, occupancy: PackedByteArray, material_ids: PackedInt32Array, materials: PackedFloat32Array, positions: PackedVector3Array, normals: PackedVector3Array, vertex_colors: PackedColorArray, vertex_materials: PackedInt32Array, indices: PackedInt32Array) -> bool:
 	if loop.size() != 4 or triangle_edges.size() != 6:
 		return false
-	var labels := PackedInt32Array()
+	var labels: PackedInt32Array = loop_data["labels"]
 	var counts := {}
-	var points := PackedVector3Array()
-	var sites := PackedVector3Array()
-	for edge: int in loop:
-		var sample := _edge_sample(cell, edge, occupancy, material_ids)
-		labels.append(sample[1])
-		sites.append(sample[0])
-		points.append(_field_point(cell, edge, field))
-		counts[sample[1]] = counts.get(sample[1], 0) + 1
+	for label: int in labels:
+		counts[label] = counts.get(label, 0) + 1
 	if counts.size() != 2:
 		return false
+	var points: Array[Vector3] = loop_data["points"]
+	var sites: Array[Vector3] = loop_data["site_points"]
 	var normal := (points[1] - points[0]).cross(points[2] - points[0])
 	if normal.length_squared() < 0.0000000001:
 		return false
@@ -982,29 +1109,46 @@ func _rebuild_flat_normals(positions: PackedVector3Array, normals: PackedVector3
 func _drop_opposite_duplicate_triangles(positions: PackedVector3Array, indices: PackedInt32Array) -> PackedInt32Array:
 	var groups := {}
 	for triangle in range(0, indices.size(), 3):
-		var parts := PackedStringArray()
-		for corner in 3:
-			var key := _position_key(positions[indices[triangle + corner]])
-			parts.append("%d,%d,%d" % [key.x, key.y, key.z])
-		parts.sort()
-		var key := "|".join(parts)
-		var list: Array = groups.get(key, [])
+		var first := _position_key(positions[indices[triangle]])
+		var second := _position_key(positions[indices[triangle + 1]])
+		var third := _position_key(positions[indices[triangle + 2]])
+		if first > second:
+			var swap := first
+			first = second
+			second = swap
+		if second > third:
+			var swap := second
+			second = third
+			third = swap
+		if first > second:
+			var swap := first
+			first = second
+			second = swap
+		var by_second: Dictionary = groups.get(first, {})
+		var list: Array = by_second.get(second, {}).get(third, [])
 		list.append(triangle)
-		groups[key] = list
+		by_second[second] = by_second.get(second, {})
+		var by_third: Dictionary = by_second[second]
+		by_third[third] = list
+		groups[first] = by_second
 	var removed := {}
-	for key: String in groups:
-		var list: Array = groups[key]
-		if list.size() < 2:
-			continue
-		var first: int = list[0]
-		var first_normal := _triangle_normal(positions, indices, first)
-		for index in range(1, list.size()):
-			var other: int = list[index]
-			if first_normal.dot(_triangle_normal(positions, indices, other)) < 0.0:
-				removed[first] = true
-				removed[other] = true
-			else:
-				removed[other] = true
+	for first: Vector3i in groups:
+		var by_second: Dictionary = groups[first]
+		for second: Vector3i in by_second:
+			var by_third: Dictionary = by_second[second]
+			for third: Vector3i in by_third:
+				var list: Array = by_third[third]
+				if list.size() < 2:
+					continue
+				var head: int = list[0]
+				var head_normal := _triangle_normal(positions, indices, head)
+				for index in range(1, list.size()):
+					var other: int = list[index]
+					if head_normal.dot(_triangle_normal(positions, indices, other)) < 0.0:
+						removed[head] = true
+						removed[other] = true
+					else:
+						removed[other] = true
 	var kept := PackedInt32Array()
 	for triangle in range(0, indices.size(), 3):
 		if removed.has(triangle):
@@ -1299,76 +1443,64 @@ static func _shared_edge_pull(first_site: Vector3, second_site: Vector3, point: 
 
 
 func _edge_sample(cell: Vector3i, edge: int, occupancy: PackedByteArray, material_ids: PackedInt32Array) -> Array:
+	var origin := (cell.x + SAMPLE_PADDING) + SAMPLE_SIZE * ((cell.y + SAMPLE_PADDING) + SAMPLE_SIZE * (cell.z + SAMPLE_PADDING))
+	var cell_point := Vector3(cell)
 	if edge >= EDGE_CORNERS.size():
 		var point := _edge_point(cell, edge)
 		var closest := INF
 		var label := -1
 		for corner in 8:
-			var sample := cell + CORNER_OFFSETS[corner] + Vector3i.ONE * SAMPLE_PADDING
-			var sample_index := sample.x + SAMPLE_SIZE * (sample.y + SAMPLE_SIZE * sample.z)
+			var sample_index: int = origin + CORNER_STEPS[corner]
 			if occupancy[sample_index] == 0:
 				continue
-			var distance := (point - (Vector3(cell) + Vector3(CORNER_OFFSETS[corner]))).length_squared()
+			var distance := (point - (cell_point + _corner_points[corner])).length_squared()
 			if distance < closest - 0.000001 or (distance <= closest + 0.000001 and (label < 0 or material_ids[sample_index] < label)):
 				closest = distance
 				label = material_ids[sample_index]
 		var site := Vector3.ZERO
 		var tied := 0
 		for corner in 8:
-			var sample := cell + CORNER_OFFSETS[corner] + Vector3i.ONE * SAMPLE_PADDING
-			var sample_index := sample.x + SAMPLE_SIZE * (sample.y + SAMPLE_SIZE * sample.z)
+			var sample_index: int = origin + CORNER_STEPS[corner]
 			if occupancy[sample_index] == 0 or material_ids[sample_index] != label:
 				continue
-			var distance := (point - (Vector3(cell) + Vector3(CORNER_OFFSETS[corner]))).length_squared()
+			var distance := (point - (cell_point + _corner_points[corner])).length_squared()
 			if distance <= closest + 0.000001:
-				site += Vector3(cell) + Vector3(CORNER_OFFSETS[corner])
+				site += cell_point + _corner_points[corner]
 				tied += 1
 		if tied > 0:
 			site /= float(tied)
 		return [site, label]
 	var corners: Array = EDGE_CORNERS[edge]
 	for corner: int in corners:
-		var sample := cell + CORNER_OFFSETS[corner] + Vector3i.ONE * SAMPLE_PADDING
-		var sample_index := sample.x + SAMPLE_SIZE * (sample.y + SAMPLE_SIZE * sample.z)
+		var sample_index: int = origin + CORNER_STEPS[corner]
 		if occupancy[sample_index] != 0:
-			return [Vector3(cell + CORNER_OFFSETS[corner]), material_ids[sample_index]]
-	return [Vector3(cell), 0]
+			return [cell_point + _corner_points[corner], material_ids[sample_index]]
+	return [cell_point, 0]
 
 
-func _quad_fan_data(cell: Vector3i, loop: PackedInt32Array, field: PackedFloat32Array, occupancy: PackedByteArray, material_ids: PackedInt32Array) -> Dictionary:
-	if loop.size() != 4:
-		return {"ambiguous": false, "uniform": false, "labels": PackedInt32Array()}
-	var points: Array[Vector3] = []
-	var labels := PackedInt32Array()
-	var sites: Array[Vector3i] = []
-	for edge: int in loop:
-		points.append(_field_point(cell, edge, field))
-		var sample := _edge_sample(cell, edge, occupancy, material_ids)
-		labels.append(sample[1])
-		sites.append(Vector3i(roundi(sample[0].x), roundi(sample[0].y), roundi(sample[0].z)))
-	var uniform := labels[0] == labels[1] and labels[1] == labels[2] and labels[2] == labels[3]
-	var sums: Array = _component_sums(sites, occupancy, material_ids)
+func _quad_fan_data(loop_data: Dictionary) -> Dictionary:
+	var points: Array[Vector3] = loop_data["points"]
+	var sums: Array = loop_data["sums"]
 	var sums_tie: bool = sums[0] < 0 or sums[1] < 0 or sums[0] == sums[1]
-	var first_diagonal := points[0].distance_to(points[2])
-	var second_diagonal := points[1].distance_to(points[3])
+	var first_diagonal: float = points[0].distance_to(points[2])
+	var second_diagonal: float = points[1].distance_to(points[3])
 	var lengths_tie: bool = absf(first_diagonal - second_diagonal) <= 0.0001
-	var first_key: PackedFloat32Array = _split_intrinsic_key(points, PackedInt32Array([0, 1, 2, 3]))
-	var second_key: PackedFloat32Array = _split_intrinsic_key(points, PackedInt32Array([1, 2, 3, 0]))
-	var keys_tie: bool = not _key_before(first_key, second_key) and not _key_before(second_key, first_key)
+	var keys_tie := false
+	if sums_tie and lengths_tie:
+		var first_key: PackedFloat32Array = _split_intrinsic_key(points, PackedInt32Array([0, 1, 2, 3]))
+		var second_key: PackedFloat32Array = _split_intrinsic_key(points, PackedInt32Array([1, 2, 3, 0]))
+		keys_tie = not _key_before(first_key, second_key) and not _key_before(second_key, first_key)
 	return {
 		"ambiguous": sums_tie and lengths_tie and keys_tie,
-		"uniform": uniform,
-		"labels": labels,
-		"sites": sites,
+		"uniform": loop_data["uniform"],
 	}
 
 
-func _append_quad_fan(cell: Vector3i, bits: int, loop: PackedInt32Array, labels: PackedInt32Array, field: PackedFloat32Array, occupancy: PackedByteArray, material_ids: PackedInt32Array, materials: PackedFloat32Array, positions: PackedVector3Array, normals: PackedVector3Array, vertex_colors: PackedColorArray, vertex_materials: PackedInt32Array, indices: PackedInt32Array, mixed: bool) -> bool:
+func _append_quad_fan(cell: Vector3i, bits: int, loop: PackedInt32Array, loop_data: Dictionary, materials: PackedFloat32Array, positions: PackedVector3Array, normals: PackedVector3Array, vertex_colors: PackedColorArray, vertex_materials: PackedInt32Array, indices: PackedInt32Array, mixed: bool) -> bool:
 	if loop.size() != 4:
 		return false
-	var points: Array[Vector3] = []
-	for edge: int in loop:
-		points.append(_field_point(cell, edge, field))
+	var points: Array[Vector3] = loop_data["points"]
+	var labels: PackedInt32Array = loop_data["labels"]
 	var centre := (points[0] + points[1] + points[2] + points[3]) * 0.25
 	if mixed:
 		var counts := {}
@@ -1380,9 +1512,7 @@ func _append_quad_fan(cell: Vector3i, bits: int, loop: PackedInt32Array, labels:
 			if counts[label] > best:
 				best = counts[label]
 				majority = label
-		var sites: Array[Vector3] = []
-		for edge: int in loop:
-			sites.append(_edge_sample(cell, edge, occupancy, material_ids)[0])
+		var sites: Array[Vector3] = loop_data["site_points"]
 		var centre_site := (sites[0] + sites[1] + sites[2] + sites[3]) * 0.25
 		for index in 4:
 			var next := (index + 1) % 4
@@ -1406,23 +1536,17 @@ func _append_quad_fan(cell: Vector3i, bits: int, loop: PackedInt32Array, labels:
 	return true
 
 
-func _canonical_flat_quad(cell: Vector3i, loop: PackedInt32Array, field: PackedFloat32Array, occupancy: PackedByteArray, material_ids: PackedInt32Array) -> PackedInt32Array:
+func _canonical_flat_quad(loop: PackedInt32Array, loop_data: Dictionary) -> PackedInt32Array:
 	if loop.size() != 4:
 		return PackedInt32Array()
-	var points: Array[Vector3] = []
-	var labels := PackedInt32Array()
-	var sites: Array[Vector3i] = []
-	for edge: int in loop:
-		points.append(_field_point(cell, edge, field))
-		var sample := _edge_sample(cell, edge, occupancy, material_ids)
-		labels.append(sample[1])
-		sites.append(Vector3i(roundi(sample[0].x), roundi(sample[0].y), roundi(sample[0].z)))
+	var points: Array[Vector3] = loop_data["points"]
+	var labels: PackedInt32Array = loop_data["labels"]
 	var normal: Vector3 = (points[1] - points[0]).cross(points[2] - points[0])
 	if normal.length_squared() < 0.0000000001:
 		return PackedInt32Array()
 	var clean_a := labels[0] == labels[1] and labels[1] == labels[2] and labels[2] == labels[3]
 	var clean_b := clean_a
-	var sums := _component_sums(sites, occupancy, material_ids)
+	var sums: Array = loop_data["sums"]
 	var first_distinct := _distinct_count(labels, [0, 1, 2]) + _distinct_count(labels, [0, 2, 3])
 	var second_distinct := _distinct_count(labels, [1, 2, 3]) + _distinct_count(labels, [1, 3, 0])
 	var choose_a := true
@@ -1442,34 +1566,6 @@ func _canonical_flat_quad(cell: Vector3i, loop: PackedInt32Array, field: PackedF
 	if choose_a:
 		return PackedInt32Array([loop[0], loop[1], loop[2], loop[0], loop[2], loop[3]])
 	return PackedInt32Array([loop[1], loop[2], loop[3], loop[1], loop[3], loop[0]])
-
-
-func _component_sums(sites: Array[Vector3i], occupancy: PackedByteArray, material_ids: PackedInt32Array) -> Array:
-	var constant_axis := -1
-	for axis in 3:
-		if sites[0][axis] == sites[1][axis] and sites[0][axis] == sites[2][axis] and sites[0][axis] == sites[3][axis]:
-			constant_axis = axis
-			break
-	if constant_axis < 0:
-		return [-1, -1]
-	var first_axis := (constant_axis + 1) % 3
-	var second_axis := (constant_axis + 2) % 3
-	var first_low := mini(mini(sites[0][first_axis], sites[1][first_axis]), mini(sites[2][first_axis], sites[3][first_axis])) - 1
-	var second_low := mini(mini(sites[0][second_axis], sites[1][second_axis]), mini(sites[2][second_axis], sites[3][second_axis])) - 1
-	var components := _quad_components(sites, constant_axis, first_axis, second_axis, first_low, second_low, occupancy, material_ids)
-	if components.is_empty():
-		return [-1, -1]
-	var sizes := {}
-	for current: Vector3i in components:
-		var component: int = components[current]
-		sizes[component] = sizes.get(component, 0) + 1
-	var first_component: int = components.get(sites[0], -1)
-	var second_component: int = components.get(sites[1], -1)
-	var third_component: int = components.get(sites[2], -1)
-	var fourth_component: int = components.get(sites[3], -1)
-	if first_component < 0 or second_component < 0 or third_component < 0 or fourth_component < 0:
-		return [-1, -1]
-	return [sizes[first_component] + sizes[third_component], sizes[second_component] + sizes[fourth_component]]
 
 
 static func _distinct_count(labels: PackedInt32Array, indices: Array) -> int:
@@ -1500,18 +1596,11 @@ static func _split_intrinsic_key(points: Array[Vector3], order: PackedInt32Array
 	return key
 
 
-func _material_diagonal(cell: Vector3i, loop: PackedInt32Array, occupancy: PackedByteArray, material_ids: PackedInt32Array) -> PackedInt32Array:
+func _material_diagonal(loop: PackedInt32Array, loop_data: Dictionary) -> PackedInt32Array:
 	if loop.size() != 4:
 		return PackedInt32Array()
-	var quad: Array[Vector3i] = []
-	var labels := PackedInt32Array()
-	for edge: int in loop:
-		if edge >= EDGE_CORNERS.size():
-			return PackedInt32Array()
-		var sample := _edge_sample(cell, edge, occupancy, material_ids)
-		var site: Vector3 = sample[0]
-		quad.append(Vector3i(roundi(site.x), roundi(site.y), roundi(site.z)))
-		labels.append(sample[1])
+	var quad: Array[Vector3i] = loop_data["sites"]
+	var labels: PackedInt32Array = loop_data["labels"]
 	if labels[0] != labels[2] or labels[1] != labels[3] or labels[0] == labels[1]:
 		return PackedInt32Array()
 	var constant_axis := -1
@@ -1529,24 +1618,21 @@ func _material_diagonal(cell: Vector3i, loop: PackedInt32Array, occupancy: Packe
 	var second_high := maxi(maxi(quad[0][second_axis], quad[1][second_axis]), maxi(quad[2][second_axis], quad[3][second_axis]))
 	if first_high - first_low != 1 or second_high - second_low != 1:
 		return PackedInt32Array()
-	var components := _quad_components(quad, constant_axis, first_axis, second_axis, first_low - 1, second_low - 1, occupancy, material_ids)
+	var components: PackedInt32Array = loop_data["components"]
 	if components.is_empty():
 		return PackedInt32Array()
-	var component_sizes := {}
-	for component_cell: Vector3i in components:
-		var component: int = components[component_cell]
-		component_sizes[component] = component_sizes.get(component, 0) + 1
-	var first_component: int = components.get(quad[0], -1)
-	var second_component: int = components.get(quad[1], -1)
-	var third_component: int = components.get(quad[2], -1)
-	var fourth_component: int = components.get(quad[3], -1)
+	var component_sizes: PackedInt32Array = loop_data["component_sizes"]
+	var first_component := _component_at(quad[0], first_axis, second_axis, first_low - 1, second_low - 1, components)
+	var second_component := _component_at(quad[1], first_axis, second_axis, first_low - 1, second_low - 1, components)
+	var third_component := _component_at(quad[2], first_axis, second_axis, first_low - 1, second_low - 1, components)
+	var fourth_component := _component_at(quad[3], first_axis, second_axis, first_low - 1, second_low - 1, components)
 	if first_component != third_component and second_component == fourth_component:
 		return PackedInt32Array([loop[0], loop[1], loop[2], loop[0], loop[2], loop[3]])
 	if second_component != fourth_component and first_component == third_component:
 		return PackedInt32Array([loop[1], loop[2], loop[3], loop[1], loop[3], loop[0]])
 	if first_component != third_component and second_component != fourth_component:
-		var first_size: int = component_sizes.get(first_component, 0) + component_sizes.get(third_component, 0)
-		var second_size: int = component_sizes.get(second_component, 0) + component_sizes.get(fourth_component, 0)
+		var first_size := (component_sizes[first_component] if first_component >= 0 else 0) + (component_sizes[third_component] if third_component >= 0 else 0)
+		var second_size := (component_sizes[second_component] if second_component >= 0 else 0) + (component_sizes[fourth_component] if fourth_component >= 0 else 0)
 		if first_size < second_size:
 			return PackedInt32Array([loop[0], loop[1], loop[2], loop[0], loop[2], loop[3]])
 		if second_size < first_size:
@@ -1554,54 +1640,62 @@ func _material_diagonal(cell: Vector3i, loop: PackedInt32Array, occupancy: Packe
 	return PackedInt32Array()
 
 
-func _quad_components(quad: Array[Vector3i], constant_axis: int, first_axis: int, second_axis: int, first_low: int, second_low: int, occupancy: PackedByteArray, material_ids: PackedInt32Array) -> Dictionary:
+func _quad_components(quad: Array[Vector3i], constant_axis: int, first_axis: int, second_axis: int, first_low: int, second_low: int, occupancy: PackedByteArray, material_ids: PackedInt32Array) -> PackedInt32Array:
+	var samples := PackedInt32Array()
+	samples.resize(16)
+	var constant_value := quad[0][constant_axis]
 	for second in 4:
 		for first in 4:
 			var cell := Vector3i.ZERO
-			cell[constant_axis] = quad[0][constant_axis]
+			cell[constant_axis] = constant_value
 			cell[first_axis] = first_low + first
 			cell[second_axis] = second_low + second
 			var sample := cell + Vector3i.ONE * SAMPLE_PADDING
 			if sample.x < 0 or sample.y < 0 or sample.z < 0 or sample.x >= SAMPLE_SIZE or sample.y >= SAMPLE_SIZE or sample.z >= SAMPLE_SIZE:
-				return {}
-	var filled := {}
+				return PackedInt32Array()
+			samples[second * 4 + first] = sample.x + SAMPLE_SIZE * (sample.y + SAMPLE_SIZE * sample.z)
+	var components := PackedInt32Array()
+	components.resize(16)
+	components.fill(-1)
 	var component := 0
-	for second in 4:
-		for first in 4:
-			var cell := Vector3i.ZERO
-			cell[constant_axis] = quad[0][constant_axis]
-			cell[first_axis] = first_low + first
-			cell[second_axis] = second_low + second
-			var sample := cell + Vector3i.ONE * SAMPLE_PADDING
-			var index := sample.x + SAMPLE_SIZE * (sample.y + SAMPLE_SIZE * sample.z)
-			if occupancy[index] == 0 or filled.has(cell):
-				continue
-			var material := material_ids[index]
-			var stack: Array[Vector3i] = [cell]
-			filled[cell] = component
-			while not stack.is_empty():
-				var current: Vector3i = stack.pop_back()
-				for axis: int in [first_axis, second_axis]:
-					for direction in [-1, 1]:
-						var neighbor := current
-						neighbor[axis] += direction
-						if neighbor[first_axis] < first_low or neighbor[first_axis] > first_low + 3:
-							continue
-						if neighbor[second_axis] < second_low or neighbor[second_axis] > second_low + 3:
-							continue
-						if filled.has(neighbor):
-							continue
-						var neighbor_sample := neighbor + Vector3i.ONE * SAMPLE_PADDING
-						var neighbor_index := neighbor_sample.x + SAMPLE_SIZE * (neighbor_sample.y + SAMPLE_SIZE * neighbor_sample.z)
-						if occupancy[neighbor_index] == 0 or material_ids[neighbor_index] != material:
-							continue
-						filled[neighbor] = component
-						stack.append(neighbor)
-			component += 1
-	return filled
+	var stack: Array[int] = []
+	for start in 16:
+		if components[start] >= 0 or occupancy[samples[start]] == 0:
+			continue
+		var material := material_ids[samples[start]]
+		components[start] = component
+		stack.append(start)
+		while not stack.is_empty():
+			var current: int = stack.pop_back()
+			var current_first := current % 4
+			for offset: int in COMPONENT_STEPS:
+				var neighbor := current + offset
+				if neighbor < 0 or neighbor >= 16:
+					continue
+				if offset == -1 and current_first == 0:
+					continue
+				if offset == 1 and current_first == 3:
+					continue
+				if components[neighbor] >= 0:
+					continue
+				var neighbor_index := samples[neighbor]
+				if occupancy[neighbor_index] == 0 or material_ids[neighbor_index] != material:
+					continue
+				components[neighbor] = component
+				stack.append(neighbor)
+		component += 1
+	return components
 
 
-static func _opposite_pair(bits: int) -> bool:
+static func _component_at(site: Vector3i, first_axis: int, second_axis: int, first_low: int, second_low: int, components: PackedInt32Array) -> int:
+	var first := site[first_axis] - first_low
+	var second := site[second_axis] - second_low
+	if first < 0 or first > 3 or second < 0 or second > 3:
+		return -1
+	return components[second * 4 + first]
+
+
+static func _opposite_pair_for(bits: int) -> bool:
 	var solid: Array[int] = []
 	for corner in 8:
 		if bits & (1 << corner):
@@ -1734,8 +1828,7 @@ func _mirror_on_face(cell: Vector3i, first_edge: int, second_edge: int, third_ed
 		var index := sample.x + SAMPLE_SIZE * (sample.y + SAMPLE_SIZE * sample.z)
 		if occupancy[index] != 0:
 			neighbor_bits |= 1 << corner
-	var neighbor_mask := _diagonal_faces(neighbor_bits)
-	var face_triangles: Array = _case_data(neighbor_bits, neighbor_mask)["face_triangles"]
+	var face_triangles: Array = _case_data(neighbor_bits)["face_triangles"]
 	var candidates: Array = face_triangles[neighbor_face]
 	for mirrored: PackedInt32Array in candidates:
 		if _same_face_triangle(cell, [first_edge, second_edge, third_edge], neighbor, mirrored):
