@@ -372,6 +372,7 @@ static func _grid_pass(data: PackedByteArray, stride_x: int, stride_y: int, budg
 		var face_z := data[base - 1] == 1
 		var back_z := data[base + 1] == 1
 		var has_face := face_x or back_x or face_y or back_y or face_z or back_z
+		var face_count := int(self_occupied) + int(face_x) + int(back_x) + int(face_y) + int(back_y) + int(face_z) + int(back_z)
 		var gradient_x := int(face_x) - int(back_x)
 		var gradient_y := int(face_y) - int(back_y)
 		var gradient_z := int(face_z) - int(back_z)
@@ -392,7 +393,7 @@ static func _grid_pass(data: PackedByteArray, stride_x: int, stride_y: int, budg
 			elif base_count != 3:
 				if _grid_fraction(data, fraction_deltas, base) < remove_threshold:
 					remove.append(index)
-			elif _grid_base_occupied(data, base, true, remove_limit, stride_x, stride_y, extra_deltas) < remove_limit:
+			elif _grid_base_occupied(data, base, face_count, remove_limit, extra_deltas) < remove_limit:
 				remove.append(index)
 		else:
 			if broad and not _grid_thin_around(data, run_deltas, base, use_radius) and _grid_enclosed(data, touch_memo, ball_deltas, base):
@@ -400,7 +401,7 @@ static func _grid_pass(data: PackedByteArray, stride_x: int, stride_y: int, budg
 			elif base_count != 3:
 				if _grid_fraction(data, fraction_deltas, base) > add_threshold:
 					add.append(index)
-			elif _grid_base_occupied(data, base, false, add_limit, stride_x, stride_y, extra_deltas) >= add_limit:
+			elif _grid_base_occupied(data, base, face_count, add_limit, extra_deltas) >= add_limit:
 				add.append(index)
 	return {"remove": remove, "add": add, "evaluated": evaluated}
 
@@ -491,18 +492,7 @@ static func _grid_run(data: PackedByteArray, base: int, step: int, limit: int) -
 	return length
 
 
-static func _grid_base_occupied(data: PackedByteArray, base: int, self_occupied: bool, limit: int, stride_x: int, stride_y: int, extra_deltas: PackedInt32Array) -> int:
-	var count := int(self_occupied)
-	count += int(data[base - stride_x] == 1)
-	count += int(data[base + stride_x] == 1)
-	if count >= limit:
-		return count
-	count += int(data[base - stride_y] == 1)
-	count += int(data[base + stride_y] == 1)
-	if count >= limit:
-		return count
-	count += int(data[base - 1] == 1)
-	count += int(data[base + 1] == 1)
+static func _grid_base_occupied(data: PackedByteArray, base: int, count: int, limit: int, extra_deltas: PackedInt32Array) -> int:
 	if count >= limit:
 		return count
 	for delta in extra_deltas:
