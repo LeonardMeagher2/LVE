@@ -424,6 +424,8 @@ func _rebuild_scope_run() -> void:
 func _scope_edit(cell_position: Vector3i) -> Array[Vector3i]:
 	var changed := scope_frame.set_cells({cell_position: VoxelFrame.material(Color.BLUE)})
 	State.chunks_changed.emit(State.current_frame, changed)
+	if not changed.is_empty():
+		scope_renderer._flush_updates()
 	return changed
 
 

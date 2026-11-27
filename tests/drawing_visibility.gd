@@ -3,6 +3,8 @@ extends "res://tests/test.gd"
 var renderer: VoxelRenderer
 var kept_visible := true
 var edit: VoxelEditTransaction
+var first_frame_mesh: Mesh
+var second_frame_mesh: Mesh
 
 
 func _ready() -> void:
@@ -24,8 +26,6 @@ func _run() -> void:
 	for x in range(13, 20):
 		var cell := Vector3i(x, 0, 0)
 		State.paint(cell, VoxelFrame.material(Color.BLUE))
-		var affected: Array[Vector3i] = [cell]
-		State.cells_changed.emit(0, affected)
 		kept_visible = kept_visible and _mesh_at(Vector3.ZERO) != null
 		kept_visible = kept_visible and _mesh_at(Vector3(16, 0, 0)) != null
 		await get_tree().process_frame
@@ -46,17 +46,29 @@ func _run() -> void:
 	step("When the user switches to another frame with different voxels in the same chunk", func():
 		State.document.add_frame()
 		State.document.set_cell(1, Vector3i(14, 0, 0), VoxelFrame.material(Color.YELLOW))
+		first_frame_mesh = _mesh_at(Vector3.ZERO)
 		State.current_frame = 1
-		expect(_mesh_at(Vector3.ZERO) == null, "the new frame hides the previous frame's geometry")
+		expect(_mesh_at(Vector3.ZERO) != null, "the previous frame's geometry stays visible until the replacement is ready")
+		expect(_mesh_at(Vector3.ZERO) == first_frame_mesh, "the previous frame's mesh stays in place during the switch")
 	)
 	await _settle()
 	step("Then the new frame displays its own completed surface", func():
-		expect(_mesh_at(Vector3.ZERO) != null, "the new frame has a visible surface")
+		second_frame_mesh = _mesh_at(Vector3.ZERO)
+		expect(second_frame_mesh != null, "the new frame has a visible surface")
+		expect(second_frame_mesh != first_frame_mesh, "the new frame's surface replaces the previous mesh")
+	)
+	step("When the user returns to each cached frame", func():
+		State.current_frame = 0
+		var restored_first := _mesh_at(Vector3.ZERO)
+		expect(restored_first != null, "the cached first frame shows without a blank")
+		expect(restored_first == first_frame_mesh, "the cached first frame restores its mesh")
+		State.current_frame = 1
+		var restored_second := _mesh_at(Vector3.ZERO)
+		expect(restored_second != null, "the cached second frame shows without a blank")
+		expect(restored_second == second_frame_mesh, "the cached second frame restores its mesh")
 	)
 	step("When the user erases the last voxel in the chunk", func():
 		State.paint(Vector3i(14, 0, 0), VoxelFrame.material(Color.TRANSPARENT))
-		var affected: Array[Vector3i] = [Vector3i(14, 0, 0)]
-		State.cells_changed.emit(1, affected)
 		expect(_mesh_at(Vector3.ZERO) == null, "the erased chunk disappears immediately")
 	)
 

@@ -203,13 +203,15 @@ func commit_document_properties(before_smooth: bool, before_size: Vector3i) -> v
 	_commit_history(false)
 
 
-func commit_document_settings(before_smooth: bool, before_size: Vector3i, before_ao: float) -> void:
+func commit_document_settings(before_smooth: bool, before_size: Vector3i, before_ao: float, before_style := 0) -> void:
 	var after_smooth := document.smooth_normals
 	var after_size := document.size
 	var after_ao := document.ao_strength
+	var after_style := document.mesh_style
 	var properties_changed := before_smooth != after_smooth or before_size != after_size
 	var ao_changed := not is_equal_approx(before_ao, after_ao)
-	if not properties_changed and not ao_changed:
+	var style_changed := before_style != after_style
+	if not properties_changed and not ao_changed and not style_changed:
 		return
 	undo_redo.create_action("Set Document Settings")
 	if properties_changed:
@@ -218,6 +220,9 @@ func commit_document_settings(before_smooth: bool, before_size: Vector3i, before
 	if ao_changed:
 		undo_redo.add_undo_method(_apply_ao_strength.bind(before_ao))
 		undo_redo.add_do_method(_apply_ao_strength.bind(after_ao))
+	if style_changed:
+		undo_redo.add_undo_method(_apply_mesh_style.bind(before_style))
+		undo_redo.add_do_method(_apply_mesh_style.bind(after_style))
 	_commit_history(false)
 
 
@@ -515,13 +520,18 @@ func remove_plugin(plugin: VoxelPlugin) -> void:
 
 
 func paint(position: Vector3i, cell_material: PackedFloat32Array) -> void:
+	var painted: Array[Vector3i] = []
 	if symmetry_axes == 0 and not slice_enabled and not document.has_size() and edits.active_edit() == null:
 		document.paint(current_frame, position, cell_material)
-		return
-	var context := drawing_context()
-	var changes := context.expand({position: cell_material}, get_current_voxel_frame(), false, null)
-	get_current_voxel_frame().set_cells(changes)
-	document._bounds_dirty = true
+		painted.append(position)
+	else:
+		var context := drawing_context()
+		var changes := context.expand({position: cell_material}, get_current_voxel_frame(), false, null)
+		get_current_voxel_frame().set_cells(changes)
+		document._bounds_dirty = true
+		painted.assign(changes.keys())
+	if not painted.is_empty():
+		cells_changed.emit(current_frame, painted)
 
 
 func drawing_context() -> VoxelFrame.EditContext:
@@ -867,6 +877,23 @@ func set_smooth_normals(value: bool) -> void:
 
 func _apply_smooth_normals(value: bool) -> void:
 	document.smooth_normals = value
+	model_settings_changed.emit()
+
+
+func set_mesh_style(value: int, record_history := true) -> void:
+	value = clampi(value, 0, 1)
+	if edit_busy() or value == document.mesh_style:
+		return
+	if record_history:
+		undo_redo.create_action("Set Mesh Style")
+		undo_redo.add_undo_method(_apply_mesh_style.bind(document.mesh_style))
+		undo_redo.add_do_method(_apply_mesh_style.bind(value))
+		_commit_history(false)
+	_apply_mesh_style(value)
+
+
+func _apply_mesh_style(value: int) -> void:
+	document.mesh_style = value
 	model_settings_changed.emit()
 
 

@@ -10,10 +10,6 @@
     }
   },
   "permission": {
-    "edit": {
-      "**/*.gd": "allow",
-      "**/*.md": "allow"
-    },
     "bash": {
       "godot *": "allow"
     }
