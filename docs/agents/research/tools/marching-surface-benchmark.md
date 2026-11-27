@@ -1,10 +1,10 @@
 # Low-poly surface benchmark
 
-Date: 2026-11-26.
+Date: 2026-11-27.
 
 Status: measured and committed.
 The benchmark guards the geometry of the low-poly mesh style.
-The optimization keeps every tested mesh identical.
+The coplanar merge changes the accepted geometry and the hashes.
 
 ## Commands
 
@@ -54,11 +54,11 @@ It reports one run after the mesher passes.
 
 | Scene | Chunks | Non-empty | Vertices | Triangles | Hash |
 | --- | --- | --- | --- | --- | --- |
-| Material sphere, radius 5 | 64 | 8 | 3194 | 2606 | -435897250055646049 |
-| Testing2 frame 0 | 66 | 5 | 6075 | 6444 | 5692302950244434500 |
+| Material sphere, radius 5 | 64 | 8 | 3188 | 2594 | 1883275330112574591 |
+| Testing2 frame 0 | 66 | 5 | 5249 | 4792 | -5498388611216165116 |
 | Test3 frame 0 | 27 | 1 | 240 | 128 | -7364442111179200461 |
-| Testing frame 0 | 48 | 4 | 778 | 952 | 3222390777430573707 |
-| me frame 0 | 48 | 4 | 7730 | 9464 | -3618734854920861444 |
+| Testing frame 0 | 48 | 4 | 570 | 536 | 7524680455144278717 |
+| me frame 0 | 48 | 4 | 5928 | 5860 | 6804043150157951673 |
 
 The radius-5 sphere is deterministic and runs in the test suite.
 It uses four materials.
@@ -68,6 +68,8 @@ The input cells have their own hash: 5752160045764862365.
 The prototype models are not tracked.
 The benchmark skips a model when its file is absent.
 The snapshot test does not use a model file.
+The benchmark builds the models in flat mode.
+The smooth viewport path skips the merge to keep the smooth normal interpolation.
 
 ## Cost
 
@@ -76,32 +78,53 @@ The "after" column is the optimized builder.
 
 | Scene | Before (us) | After (us) | Speedup |
 | --- | --- | --- | --- |
-| Material sphere | 1049239 | 131623 | 8.0x |
-| Testing2 | 940450 | 203272 | 4.6x |
-| Test3 | 121936 | 8753 | 13.9x |
-| Testing | 502327 | 45620 | 11.0x |
-| me | 985508 | 357165 | 2.8x |
+| Material sphere | 1049239 | 139323 | 7.5x |
+| Testing2 | 940450 | 251660 | 3.7x |
+| Test3 | 121936 | 8604 | 14.2x |
+| Testing | 502327 | 53493 | 9.4x |
+| me | 985508 | 446905 | 2.2x |
 
-The editor viewport settles the sphere in 119496 us in one run.
+The editor viewport settles the sphere in 106776 us in one run.
 This value includes the parallel chunk jobs and the frame waits.
 
 After phases:
 
-| Scene | Sample | Field | Cells | Drop | Normals | Atlas |
-| --- | --- | --- | --- | --- | --- | --- |
-| Material sphere | 9180 | 40992 | 56330 | 9844 | 10284 | 926 |
-| Testing2 | 7209 | 24942 | 117174 | 23384 | 24454 | 852 |
-| me | 13359 | 100684 | 165789 | 35087 | 36467 | 1053 |
+| Scene | Sample | Field | Cells | Drop | Normals | Merge | Atlas |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Material sphere | 9122 | 41746 | 53357 | 8823 | 9808 | 12557 | 851 |
+| Testing2 | 7166 | 25401 | 113843 | 22838 | 22969 | 53792 | 751 |
+| Test3 | 918 | 788 | 4954 | 398 | 511 | 423 | 110 |
+| Testing | 3490 | 6180 | 26136 | 3204 | 3352 | 9903 | 211 |
+| me | 13052 | 101293 | 162984 | 34680 | 34176 | 94771 | 781 |
 
 All values are microseconds.
 
-The performance changes kept every hash equal at their commit.
+The performance changes kept every hash equal until the coplanar merge.
 The atlas and smooth normal changes add UVs and optional smooth normals.
-Their snapshot is the newer value in the table above.
+The coplanar merge changes the accepted geometry and its hash.
 
 The field phase was the largest cost before the change.
 On Testing2 it fell from 776717 to 25107 microseconds.
 The cell phase is now the largest cost on Testing2 and me.
+
+## Coplanar merge
+
+Flat mode merges coplanar triangle fans after the normal rebuild.
+The merge removes an interior vertex when its incident triangles share one normal, one material, and one plane, and the link is one convex loop.
+It retriangulates the loop and keeps every boundary vertex.
+Smooth mode skips the merge.
+| Scene | Triangles before | Triangles after | Change | Merge (us) |
+| --- | --- | --- | --- | --- |
+| Material sphere | 2606 | 2594 | -0.5% | 12557 |
+| Testing2 | 6444 | 4792 | -25.6% | 53792 |
+| Test3 | 128 | 128 | 0% | 423 |
+| Testing | 952 | 536 | -43.7% | 9903 |
+| me | 9464 | 5860 | -38.1% | 94771 |
+
+The mesh build is slower by 6% on the sphere and 17% to 25% on the models.
+The rendered triangle count falls 26% to 44% on the models.
+The material coverage stays the same.
+Triangle-level symmetry is not kept for coplanar faces.
 
 ## Materials and normals
 
@@ -145,10 +168,7 @@ A zero average falls back to the face normal.
 
 - The marching suite passes with the snapshot scene.
 - The snapshot hash matches on all four models and on the sphere.
-- The full suite has three failures. They also fail on the unmodified commit:
-  - `chunk_materials`, 3 of 149 checks.
-  - `draw_profile`, 1 of 5 checks.
-  - `drawing_visibility`, 1 of 6 checks.
+- The full suite passes.
 
 ## Update the snapshot
 

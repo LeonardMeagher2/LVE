@@ -25,6 +25,7 @@ Done:
 - The low-poly mesh bakes ambient occlusion into the vertex colors.
 - A slice keeps its cap at a chunk row edge.
 - The glTF export uses the marching mesh for the low-poly style.
+- Flat mode merges coplanar triangle fans.
 
 In progress:
 
@@ -32,7 +33,6 @@ In progress:
 
 Open:
 
-- No coplanar merge in the low-poly path.
 - Dead repair passes and unused flags remain in the builder.
 - No LOD or draw call batching.
 
@@ -76,6 +76,40 @@ Evidence:
 - `tests/marching_material.gd` checks flat and smooth output.
 - The renderer test checks that the document setting reaches the mesh.
 - The smooth block uses fewer vertices than the flat block.
+
+## Done: coplanar fan merge
+
+Flat mode merges coplanar triangle fans after the normal rebuild and after ambient occlusion.
+The merge removes an interior vertex when its incident triangles share one normal, one material, and one plane, and the link is one convex loop.
+It retriangulates the link and keeps every boundary vertex.
+Smooth mode and non-convex links skip the merge.
+
+Triangle changes:
+
+- Material sphere: 2606 to 2594.
+- Testing2: 6444 to 4792.
+- Test3: 128 to 128.
+- Testing: 952 to 536.
+- me: 9464 to 5860.
+
+Cost:
+
+- The merge phase takes 12.6 ms on the sphere, 53.8 ms on Testing2, and 94.8 ms on me.
+- The total build is 6% slower on the sphere and 17% to 25% slower on the models.
+- The rendered triangle count falls 26% to 44% on the models.
+
+Constraints:
+
+- The merge keeps one material per triangle.
+- The material coverage stays symmetric.
+- Triangle-level symmetry is not kept for coplanar faces.
+- The geometry snapshot and the benchmark hashes change.
+
+Evidence:
+
+- `tests/marching_mesh.gd` keeps every surface closed.
+- `tests/marching_bridge.gd` and `tests/marching_chunks.gd` keep the seams closed and unique.
+- `tests/marching_snapshot.gd` and the benchmark use the new hashes.
 
 ## Done: ambient occlusion
 
@@ -245,17 +279,13 @@ Key findings:
 
 | Rank | Gap | Impact | Effort | Risk |
 | --- | --- | --- | --- | --- |
-| 1 | No coplanar merge in low-poly | Medium-high GPU | L | Watertightness and symmetry |
-| 2 | Dead repair passes and unused flags | Low | S | Geometry change if wired |
-| 3 | No LOD or draw call batching | Medium at scale | L | Popping |
+| 1 | Dead repair passes and unused flags | Low | S | Geometry change if wired |
+| 2 | No LOD or draw call batching | Medium at scale | L | Popping |
 
-The coplanar study recommends a local fan merge after the weld, in flat mode only.
-Group by one material ID, one normal, and one plane.
-Replace an interior fan with a triangulation of its link.
-Keep every boundary vertex.
-Skip smooth mode, concave or non-manifold links, and mixed materials.
-The strict Testing2 triangle symmetry is the remaining risk.
-Measure before you accept a general merge.
+The coplanar fan merge is done for flat mode.
+Smooth mode keeps the unmerged mesh, because the larger fans change the smooth normal interpolation.
+The strict Testing2 triangle symmetry is no longer required for coplanar faces.
+The material coverage stays symmetric.
 
 ## Commands
 
@@ -306,3 +336,6 @@ godot --path . -s res://addons/test_kit/run.gd -- marching_mesh marching_bridge 
 - The low-poly export uses one frame atlas and one patch-centre UV per vertex.
 - A full rebuild requests only the occupied chunks.
 - A slice filters the present neighbours by the slice row range.
+- Flat mode merges coplanar fans after the normals and ambient occlusion.
+- Coplanar merging may change triangle-level symmetry. Material coverage stays symmetric.
+- Smooth mode skips the merge to keep the smooth normal interpolation.

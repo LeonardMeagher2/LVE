@@ -73,9 +73,11 @@ var field_us := 0
 var cells_us := 0
 var drop_us := 0
 var normals_us := 0
+var merge_us := 0
 var atlas_us := 0
 var smooth_normals := false
 var ao_strength := 0.0
+var merge_coplanar := true
 var skip_atlas := false
 var vertex_materials := PackedInt32Array()
 var material_table := PackedFloat32Array()
@@ -271,6 +273,11 @@ func _build(occupancy: PackedByteArray, material_ids: PackedInt32Array, material
 		normals_us = Time.get_ticks_usec() - normals_started
 	if ao_strength > 0.0:
 		_apply_edge_ambient_occlusion(welded[0], welded[2], welded[3], ao_strength)
+	var merge_started := Time.get_ticks_usec() if profile else 0
+	if not smooth_normals and merge_coplanar:
+		welded = _merge_coplanar_fans(welded[0], welded[1], welded[2], welded[4], welded[3])
+	if profile:
+		merge_us = Time.get_ticks_usec() - merge_started
 	var atlas_started := Time.get_ticks_usec() if profile else 0
 	var uvs := _build_atlas_uvs(welded[4], materials) if not skip_atlas else PackedVector2Array()
 	if profile:
@@ -301,6 +308,7 @@ func _set_empty() -> void:
 	geometry_bytes = 0
 	vertex_materials = PackedInt32Array()
 	material_table = PackedFloat32Array()
+	merge_us = 0
 
 
 func _apply_edge_ambient_occlusion(positions: PackedVector3Array, colors: PackedColorArray, indices: PackedInt32Array, strength: float) -> void:
@@ -1338,6 +1346,168 @@ func _drop_opposite_duplicate_triangles(positions: PackedVector3Array, indices: 
 		kept.append(indices[triangle + 1])
 		kept.append(indices[triangle + 2])
 	return kept
+
+
+func _merge_coplanar_fans(positions: PackedVector3Array, normals: PackedVector3Array, colors: PackedColorArray, materials: PackedInt32Array, indices: PackedInt32Array) -> Array:
+	if indices.is_empty():
+		return [positions, normals, colors, indices, materials]
+	var triangles: Array[PackedInt32Array] = []
+	for triangle in indices.size() / 3:
+		triangles.append(PackedInt32Array([indices[triangle * 3], indices[triangle * 3 + 1], indices[triangle * 3 + 2]]))
+	var vertex_triangles := {}
+	for triangle in triangles.size():
+		_register_merge_triangle(triangle, triangles[triangle], vertex_triangles)
+	var removed := {}
+	var merged := {}
+	var queue: Array[int] = []
+	for vertex in positions.size():
+		queue.append(vertex)
+	var queued := {}
+	for vertex in queue:
+		queued[vertex] = true
+	while not queue.is_empty():
+		var vertex: int = queue.pop_back()
+		queued.erase(vertex)
+		if merged.has(vertex):
+			continue
+		var incident: Array = vertex_triangles.get(vertex, [])
+		if incident.size() < 3:
+			continue
+		var cycle: Array = _merge_coplanar_vertex(vertex, triangles, positions, materials, incident, vertex_triangles, removed)
+		if cycle.is_empty():
+			continue
+		merged[vertex] = true
+		for link_vertex: int in cycle:
+			if not queued.has(link_vertex):
+				queued[link_vertex] = true
+				queue.append(link_vertex)
+	var kept: Array[PackedInt32Array] = []
+	for triangle in triangles.size():
+		if not removed.has(triangle):
+			kept.append(triangles[triangle])
+	if kept.size() == triangles.size():
+		return [positions, normals, colors, indices, materials]
+	var vertex_map := {}
+	var merged_positions := PackedVector3Array()
+	var merged_normals := PackedVector3Array()
+	var merged_colors := PackedColorArray()
+	var merged_materials := PackedInt32Array()
+	for triangle: PackedInt32Array in kept:
+		for corner in 3:
+			var vertex := triangle[corner]
+			if vertex_map.has(vertex):
+				continue
+			vertex_map[vertex] = merged_positions.size()
+			merged_positions.append(positions[vertex])
+			merged_normals.append(normals[vertex])
+			merged_colors.append(colors[vertex])
+			merged_materials.append(materials[vertex])
+	var merged_indices := PackedInt32Array()
+	for triangle: PackedInt32Array in kept:
+		merged_indices.append(vertex_map[triangle[0]])
+		merged_indices.append(vertex_map[triangle[1]])
+		merged_indices.append(vertex_map[triangle[2]])
+	return [merged_positions, merged_normals, merged_colors, merged_indices, merged_materials]
+
+
+func _register_merge_triangle(triangle: int, points: PackedInt32Array, vertex_triangles: Dictionary) -> void:
+	for corner in 3:
+		var vertex := points[corner]
+		var incident: Array = vertex_triangles.get(vertex, [])
+		incident.append(triangle)
+		vertex_triangles[vertex] = incident
+
+
+func _unregister_merge_triangle(triangle: int, points: PackedInt32Array, vertex_triangles: Dictionary) -> void:
+	for corner in 3:
+		var vertex := points[corner]
+		var incident: Array = vertex_triangles.get(vertex, [])
+		incident.erase(triangle)
+		vertex_triangles[vertex] = incident
+
+
+func _merge_coplanar_vertex(vertex: int, triangles: Array[PackedInt32Array], positions: PackedVector3Array, materials: PackedInt32Array, incident: Array, vertex_triangles: Dictionary, removed: Dictionary) -> Array:
+	var incident_count := incident.size()
+	var first_triangle: PackedInt32Array = triangles[incident[0]]
+	var reference_point := positions[first_triangle[0]]
+	var first_normal := (positions[first_triangle[1]] - reference_point).cross(positions[first_triangle[2]] - reference_point)
+	if first_normal.length_squared() < 0.0000000001:
+		return []
+	first_normal = -first_normal.normalized()
+	var normal_key := Vector3i(roundi(first_normal.x * 1024.0), roundi(first_normal.y * 1024.0), roundi(first_normal.z * 1024.0))
+	var material := materials[first_triangle[0]]
+	for triangle_index: int in incident:
+		var points: PackedInt32Array = triangles[triangle_index]
+		var triangle_vertex := points[0]
+		if materials[triangle_vertex] != material:
+			return []
+		var triangle_first := positions[points[0]]
+		var triangle_normal := (positions[points[1]] - triangle_first).cross(positions[points[2]] - triangle_first)
+		if triangle_normal.length_squared() < 0.0000000001:
+			return []
+		triangle_normal = -triangle_normal.normalized()
+		if Vector3i(roundi(triangle_normal.x * 1024.0), roundi(triangle_normal.y * 1024.0), roundi(triangle_normal.z * 1024.0)) != normal_key:
+			return []
+	var next := {}
+	var previous := {}
+	for triangle_index: int in incident:
+		var points: PackedInt32Array = triangles[triangle_index]
+		var corner := points.find(vertex)
+		if corner < 0:
+			return []
+		var first := points[(corner + 1) % 3]
+		var second := points[(corner + 2) % 3]
+		if next.has(first) or previous.has(second):
+			return []
+		next[first] = second
+		previous[second] = first
+	if next.size() != incident_count or previous.size() != incident_count:
+		return []
+	var start: int = next.keys()[0]
+	var cycle: Array[int] = [start]
+	var current: int = next[start]
+	while current != start:
+		if cycle.size() > next.size() or not next.has(current):
+			return []
+		cycle.append(current)
+		current = next[current]
+	if cycle.size() != next.size():
+		return []
+	var orientation := 0
+	for index in cycle.size():
+		var first := positions[cycle[index]]
+		var second := positions[cycle[(index + 1) % cycle.size()]]
+		var third := positions[cycle[(index + 2) % cycle.size()]]
+		var turn := (second - first).cross(third - second).dot(first_normal)
+		if absf(turn) < 0.000001:
+			return []
+		var direction := 1 if turn > 0.0 else -1
+		if orientation == 0:
+			orientation = direction
+		elif orientation != direction:
+			return []
+	var first_point := positions[cycle[0]]
+	var second_point := positions[cycle[1]]
+	var third_point := positions[cycle[2]]
+	if (second_point - first_point).cross(third_point - first_point).dot(first_normal) > 0.0:
+		cycle.reverse()
+	var added: Array[PackedInt32Array] = []
+	for index in range(1, cycle.size() - 1):
+		var triangle := PackedInt32Array([cycle[0], cycle[index], cycle[index + 1]])
+		var first := positions[triangle[0]]
+		var second := positions[triangle[1]]
+		var third := positions[triangle[2]]
+		if (second - first).cross(third - first).dot(first_normal) >= 0.0:
+			return []
+		added.append(triangle)
+	for triangle_index: int in incident.duplicate():
+		removed[triangle_index] = true
+		_unregister_merge_triangle(triangle_index, triangles[triangle_index], vertex_triangles)
+	for triangle: PackedInt32Array in added:
+		var triangle_index := triangles.size()
+		triangles.append(triangle)
+		_register_merge_triangle(triangle_index, triangle, vertex_triangles)
+	return cycle
 
 
 func _fill_boundary_ears(positions: PackedVector3Array, normals: PackedVector3Array, colors: PackedColorArray, indices: PackedInt32Array, materials_vertex: PackedInt32Array, occupancy: PackedByteArray, cell_material_ids: PackedInt32Array, palette: PackedFloat32Array) -> Array:

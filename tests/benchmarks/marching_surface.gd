@@ -5,14 +5,14 @@ const FIXTURE := preload("res://tests/helpers/marching_fixture.gd")
 const VIEW := preload("res://tests/helpers/marching_view.gd")
 const MODEL_NAMES: Array[String] = ["Testing2", "Test3", "Testing", "me"]
 const MODEL_HASHES := {
-	"Testing2": 5692302950244434500,
+	"Testing2": -5498388611216165116,
 	"Test3": -7364442111179200461,
-	"Testing": 3222390777430573707,
-	"me": -3618734854920861444,
+	"Testing": 7524680455144278717,
+	"me": 6804043150157951673,
 }
-const SPHERE_HASH := -435897250055646049
-const SPHERE_VERTICES := 3194
-const SPHERE_TRIANGLES := 2606
+const SPHERE_HASH := 1883275330112574591
+const SPHERE_VERTICES := 3188
+const SPHERE_TRIANGLES := 2594
 const WARMUPS := 1
 const PASSES := 3
 
@@ -78,7 +78,7 @@ func _measure(name: String, row: Dictionary) -> void:
 	var passes: Array = []
 	for pass_index in WARMUPS + PASSES:
 		var totals := {
-			"us": 0, "sample": 0, "field": 0, "cells": 0, "drop": 0, "normals": 0, "atlas": 0,
+			"us": 0, "sample": 0, "field": 0, "cells": 0, "drop": 0, "normals": 0, "merge": 0, "atlas": 0,
 			"chunks": locations.size(), "nonempty": 0, "vertices": 0, "triangles": 0, "hash": 5381,
 		}
 		var started := Time.get_ticks_usec()
@@ -99,6 +99,7 @@ func _measure(name: String, row: Dictionary) -> void:
 			totals["cells"] += builder.cells_us
 			totals["drop"] += builder.drop_us
 			totals["normals"] += builder.normals_us
+			totals["merge"] += builder.merge_us
 			totals["atlas"] += builder.atlas_us
 		totals["us"] = Time.get_ticks_usec() - started
 		passes.append(totals)
@@ -107,10 +108,10 @@ func _measure(name: String, row: Dictionary) -> void:
 		medians[key] = _median(passes.slice(WARMUPS), key)
 	row["passes"] = passes
 	row["medians"] = medians
-	print("MEASURE marching_surface %s: chunks=%d nonempty=%d vertices=%d triangles=%d us=%d sample_us=%d field_us=%d cells_us=%d drop_us=%d normals_us=%d atlas_us=%d hash=%d" % [
+	print("MEASURE marching_surface %s: chunks=%d nonempty=%d vertices=%d triangles=%d us=%d sample_us=%d field_us=%d cells_us=%d drop_us=%d normals_us=%d merge_us=%d atlas_us=%d hash=%d" % [
 		name, medians["chunks"], medians["nonempty"], medians["vertices"], medians["triangles"],
 		medians["us"], medians["sample"], medians["field"], medians["cells"], medians["drop"],
-		medians["normals"], medians["atlas"], medians["hash"],
+		medians["normals"], medians["merge"], medians["atlas"], medians["hash"],
 	])
 
 

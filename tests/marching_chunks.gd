@@ -7,6 +7,8 @@ var _view
 var _enclosed_builder
 var _shell_builder
 var _slice_builder
+var _merged_builder
+var _unmerged_builder
 
 
 func _ready() -> void:
@@ -17,6 +19,7 @@ func _ready() -> void:
 	test("a painted material boundary keeps two surfaces", _material_boundary, "chunk_material_boundary")
 	test("an enclosed chunk builds no surface", _enclosed_chunk, "chunk_enclosed")
 	test("a slice keeps the cap at a chunk row edge", _slice_cap, "chunk_slice_cap")
+	test("coplanar flat faces merge and keep their material coverage", _coplanar_merge, "chunk_coplanar_merge")
 
 
 func _large_block() -> void:
@@ -121,6 +124,64 @@ func _chunk_builder(frame: VoxelFrame, location: Vector3i) -> VoxelMarchingMeshB
 	builder.smooth_normals = true
 	builder.run()
 	return builder
+
+
+func _flat_builder(frame: VoxelFrame, location: Vector3i, merge: bool) -> VoxelMarchingMeshBuilder:
+	var builder := VoxelMarchingMeshBuilder.new()
+	builder.source_frame = frame
+	builder.chunk_location = location
+	builder.merge_coplanar = merge
+	builder.run()
+	return builder
+
+
+func _coplanar_merge() -> void:
+	step("Given a symmetric flat plate with a frame and a centre", func():
+		var frame := VoxelFrame.new()
+		var red := VoxelFrame.material(Color.RED)
+		var blue := VoxelFrame.material(Color.BLUE)
+		for z in 4:
+			for x in 6:
+				var material := red if x == 0 or x == 5 else blue
+				frame.set_cell(Vector3i(x, 0, z), material)
+		_merged_builder = _flat_builder(frame, Vector3i.ZERO, true)
+		_unmerged_builder = _flat_builder(frame, Vector3i.ZERO, false)
+	)
+	step("Then the plate loses triangles and keeps its material coverage", func():
+		var merged_arrays: Array = _merged_builder.surface_arrays
+		var unmerged_arrays: Array = _unmerged_builder.surface_arrays
+		expect(merged_arrays[Mesh.ARRAY_INDEX].size() < unmerged_arrays[Mesh.ARRAY_INDEX].size(), "the merge removes triangles")
+		expect(merged_arrays[Mesh.ARRAY_VERTEX].size() < unmerged_arrays[Mesh.ARRAY_VERTEX].size(), "the merge removes vertices")
+		var view = VIEW.new(self)
+		view.positions = merged_arrays[Mesh.ARRAY_VERTEX]
+		view.indices = merged_arrays[Mesh.ARRAY_INDEX]
+		expect(view.closed(), "the merged plate has no boundary")
+		expect(view.duplicates() == 0, "the merged plate emits no triangle twice")
+		var merged_sides := _material_sides(_merged_builder)
+		var unmerged_sides := _material_sides(_unmerged_builder)
+		expect(is_equal_approx(merged_sides["red_left"], merged_sides["red_right"]), "the red frame stays symmetric")
+		expect(is_equal_approx(merged_sides["blue_left"], merged_sides["blue_right"]), "the blue centre stays symmetric")
+		expect(is_equal_approx(merged_sides["red_left"] + merged_sides["red_right"], unmerged_sides["red_left"] + unmerged_sides["red_right"]) or absf(merged_sides["red_left"] + merged_sides["red_right"] - unmerged_sides["red_left"] - unmerged_sides["red_right"]) < 0.01, "the merge keeps the red area")
+		expect(absf(merged_sides["blue_left"] + merged_sides["blue_right"] - unmerged_sides["blue_left"] - unmerged_sides["blue_right"]) < 0.01, "the merge keeps the blue area")
+	)
+
+
+func _material_sides(builder: VoxelMarchingMeshBuilder) -> Dictionary:
+	var positions: PackedVector3Array = builder.surface_arrays[Mesh.ARRAY_VERTEX]
+	var colors: PackedColorArray = builder.surface_arrays[Mesh.ARRAY_COLOR]
+	var indices: PackedInt32Array = builder.surface_arrays[Mesh.ARRAY_INDEX]
+	var sides := {"red_left": 0.0, "red_right": 0.0, "blue_left": 0.0, "blue_right": 0.0}
+	for triangle in indices.size() / 3:
+		var first := positions[indices[triangle * 3]]
+		var second := positions[indices[triangle * 3 + 1]]
+		var third := positions[indices[triangle * 3 + 2]]
+		var area := (second - first).cross(third - first).length() * 0.5
+		var center := (first + second + third) / 3.0
+		var color := colors[indices[triangle * 3]]
+		var side := "left" if center.x < 2.5 else "right"
+		var key := ("red_" if color.r > color.b else "blue_") + side
+		sides[key] += area
+	return sides
 
 
 func _slice_cap() -> void:

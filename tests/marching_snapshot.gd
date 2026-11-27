@@ -3,11 +3,11 @@ extends "res://tests/test.gd"
 
 const FIXTURE := preload("res://tests/helpers/marching_fixture.gd")
 const EXPECTED_CELLS_HASH := 5752160045764862365
-const EXPECTED_GEOMETRY_HASH := -435897250055646049
+const EXPECTED_GEOMETRY_HASH := 1883275330112574591
 const EXPECTED_CHUNKS := 64
 const EXPECTED_NONEMPTY := 8
-const EXPECTED_VERTICES := 3194
-const EXPECTED_TRIANGLES := 2606
+const EXPECTED_VERTICES := 3188
+const EXPECTED_TRIANGLES := 2594
 
 var _frame: VoxelFrame
 var _locations: Array[Vector3i] = []
