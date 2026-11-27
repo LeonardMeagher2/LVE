@@ -242,6 +242,24 @@ Measured: the stroke publishes 125 dabs for 12 pointer steps.
 The benchmark sets strength to 1, so one dab runs one pass.
 So one dab costs about 33 ms.
 
+### Remeasured 2026-11-27
+
+The drag is 1.60 s of edit time at radius 32 on both models, and 0.39 s at radius 16.
+This is the slowest measured user action in the app, more than three times Build at radius 32 (0.51 s).
+
+Measured split inside `SmoothOperation.relax` over 2,954 calls:
+the bounds and order scan 21.9 percent, the grid build 23.6 percent, the pass scan 54.5 percent.
+At 5,000 to 20,000 candidates one call costs 6.5 ms of scan, 6.9 ms of build and 15.9 ms of pass.
+
+Measured: the candidate list from `_weighted_sphere` is already sorted by y, z, x, and its box is known once per radius.
+Passing both into `relax` removes the scan: 814 us and 6,520 us per call become 3.1 us.
+The radius-32 drag falls to 1.473 s on the large model and 1.538 s on the small one, 6 to 8 percent, and radius 16 falls 2 to 6 percent.
+The sphere box may exceed the accepted cells. That is safe, because no cell outside the candidate bounds plus the halo is read.
+The seven terrain scenes pass.
+
+Next: the grid build walks the whole occupied dictionary on every call to fill the local box.
+A 27-chunk document holds tens of thousands of cells; passing the local occupancy from the tool would remove that walk.
+
 ### Code path
 
 `TerrainTool._smooth_tick` calls `_run_smooth`.
