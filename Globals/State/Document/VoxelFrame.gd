@@ -1272,7 +1272,8 @@ func apply_published(locations: Array[Vector3i], published: VoxelFrame) -> void:
 		if chunk == null:
 			chunks.erase(location)
 			_shared_chunks.erase(location)
-			grows_only = false
+			if previous != null:
+				grows_only = false
 			continue
 		chunks[location] = chunk
 		if published._shared_chunks.has(location):
