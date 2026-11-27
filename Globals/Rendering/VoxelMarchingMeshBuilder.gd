@@ -405,7 +405,15 @@ func _recolour_same_material_bridge(cell: Vector3i, loop: PackedInt32Array, rang
 		return
 	var opposite := (first + 1) % 4
 	var beyond := (first + 3) % 4
-	var bridge := mini(labels[opposite], labels[beyond])
+	var opposite_key := _material_values(labels[opposite], materials)
+	var beyond_key := _material_values(labels[beyond], materials)
+	var bridge := -1
+	if _key_before(opposite_key, beyond_key):
+		bridge = labels[beyond]
+	elif _key_before(beyond_key, opposite_key):
+		bridge = labels[opposite]
+	else:
+		return
 	var base := duplicate * VoxelFrame.MATERIAL_STRIDE
 	var colour := Color(materials[base], materials[base + 1], materials[base + 2], materials[base + 3])
 	for index in range(range_start, vertex_materials.size()):
@@ -413,6 +421,14 @@ func _recolour_same_material_bridge(cell: Vector3i, loop: PackedInt32Array, rang
 			continue
 		vertex_materials[index] = duplicate
 		vertex_colors[index] = colour
+
+
+static func _material_values(label: int, materials: PackedFloat32Array) -> PackedFloat32Array:
+	var key := PackedFloat32Array()
+	var base := label * VoxelFrame.MATERIAL_STRIDE
+	for offset in VoxelFrame.MATERIAL_STRIDE:
+		key.append(materials[base + offset])
+	return key
 
 
 func _append_two_two_face_partition(cell: Vector3i, bits: int, loop: PackedInt32Array, field: PackedFloat32Array, occupancy: PackedByteArray, material_ids: PackedInt32Array, materials: PackedFloat32Array, positions: PackedVector3Array, normals: PackedVector3Array, vertex_colors: PackedColorArray, vertex_materials: PackedInt32Array, indices: PackedInt32Array) -> bool:
