@@ -6,9 +6,9 @@ const VIEW := preload("res://tests/helpers/marching_view.gd")
 const NORMAL_LIMIT := 8.05
 const COLOUR_LIMIT := 0.021
 const AREA_LIMIT := 0.02
-const EXPECTED_VERTICES := 567
-const EXPECTED_TRIANGLES := 992
-const EXPECTED_HASH := -5756327514759218800
+const EXPECTED_VERTICES := 574
+const EXPECTED_TRIANGLES := 1006
+const EXPECTED_HASH := 1856081747413111391
 
 var _frame: VoxelFrame
 var _merged: Array
@@ -20,6 +20,9 @@ var _warning := 0.0
 var _mean := 0.0
 var _colour := 0.0
 var _errors := 0
+var _dissolver
+var _dissolved_polygon := PackedInt32Array()
+var _polygon_corners: Array = []
 
 
 func _ready() -> void:
@@ -29,6 +32,9 @@ func _ready() -> void:
 	test("the dissolve keeps the smooth normal and colour field", _dissolve_normals, "dissolve_normals")
 	test("the dissolve keeps the seams and the material coverage", _dissolve_seams, "dissolve_seams")
 	test("the dissolved smooth geometry keeps its snapshot", _dissolve_snapshot, "dissolve_snapshot")
+	test("a concave link polygon triangulates inside itself", _dissolve_concave_polygon, "dissolve_concave_polygon")
+	test("a concave link stays inside its polygon", _dissolve_concave, "dissolve_concave")
+	test("every accepted diagonal enters the edge set", _dissolve_edges, "dissolve_edges")
 
 
 func before_test() -> void:
@@ -44,6 +50,7 @@ func before_test() -> void:
 	_merged = merged_builder.surface_arrays
 	_merged_materials = merged_builder.vertex_materials
 	var dissolved_builder := VoxelMarchingMeshBuilder.new()
+	_dissolver = dissolved_builder
 	dissolved_builder.smooth_normals = true
 	dissolved_builder.merge_coplanar = true
 	dissolved_builder.source_frame = _frame
@@ -193,6 +200,263 @@ func _dissolve_seams() -> void:
 				continue
 			expect(absf(merged_sides[key] - dissolved_sides[key]) <= AREA_LIMIT * maxf(merged_sides[key], 1.0), "the material area changes less than two percent")
 	)
+
+
+func _dissolve_concave_polygon() -> void:
+	step("Given a concave link polygon in the builder plane", func():
+		var builder := VoxelMarchingMeshBuilder.new()
+		var flat := PackedVector2Array()
+		flat.resize(16)
+		var points := PackedVector3Array()
+		points.resize(16)
+		var normals := PackedVector3Array()
+		normals.resize(16)
+		var colours := PackedColorArray()
+		colours.resize(16)
+		var corners := [
+			Vector2(0.0, 0.0), Vector2(3.0, 0.0), Vector2(3.0, 3.0), Vector2(2.0, 3.0),
+			Vector2(2.0, 1.0), Vector2(1.0, 1.0), Vector2(1.0, 3.0), Vector2(0.0, 3.0),
+		]
+		for index in 8:
+			var corner: Vector2 = corners[index]
+			flat[index] = corner
+			points[index] = Vector3(corner.x, corner.y, 0.0)
+			normals[index] = Vector3.BACK
+			colours[index] = Color.WHITE
+		builder._dissolve_flat = flat
+		builder._dissolve_points = points
+		builder._dissolve_normals = normals
+		builder._dissolve_colours = colours
+		builder._dissolve_outward = Vector3.FORWARD
+		builder._dissolve_removed_position = Vector3(1.5, 1.5, 0.0)
+		builder._dissolve_removed_normal = Vector3.BACK
+		builder._dissolve_removed_colour = Color.WHITE
+		builder._dissolve_flat_point = Vector2(1.5, 1.5)
+		_dissolved_polygon = builder._dissolve_triangulate(8)
+		_polygon_corners = corners
+		expect(_dissolved_polygon.size() == 18, "the concave link becomes six triangles")
+	)
+	step("Then every new triangle lies inside the polygon once", func():
+		var flat := PackedVector2Array()
+		var corners: Array = _polygon_corners
+		var area := 0.0
+		for index in corners.size():
+			var current: Vector2 = corners[index]
+			var follow: Vector2 = corners[(index + 1) % corners.size()]
+			area += current.cross(follow)
+		var covered := 0.0
+		var outside := 0
+		for triangle in _dissolved_polygon.size() / 3:
+			var first: Vector2 = corners[_dissolved_polygon[triangle * 3]]
+			var second: Vector2 = corners[_dissolved_polygon[triangle * 3 + 1]]
+			var third: Vector2 = corners[_dissolved_polygon[triangle * 3 + 2]]
+			var triangle_area := (second - first).cross(third - first)
+			if triangle_area <= 0.0:
+				outside += 1
+				continue
+			covered += triangle_area
+			flat.resize(corners.size())
+			for index in corners.size():
+				flat[index] = corners[index]
+			if not _inside_polygon((first + second + third) / 3.0, flat):
+				outside += 1
+		expect(outside == 0, "no triangle of the concave link lies outside the polygon")
+		expect(absf(covered - area) < 0.01 * maxf(area, 1.0), "the triangles cover the polygon area once")
+	)
+
+
+func _dissolve_concave() -> void:
+	step("Given every removed vertex and its ordered link", func():
+		var before_positions: PackedVector3Array = _merged[Mesh.ARRAY_VERTEX]
+		var before_indices: PackedInt32Array = _merged[Mesh.ARRAY_INDEX]
+		var after_positions: PackedVector3Array = _dissolved[Mesh.ARRAY_VERTEX]
+		var after_indices: PackedInt32Array = _dissolved[Mesh.ARRAY_INDEX]
+		var before_triangles := _triangles_by_vertex(before_indices)
+		var after_by_position := _triangles_by_position(after_positions, after_indices)
+		var concave_links := 0
+		var checked := 0
+		var outside := 0
+		var overlap := 0
+		var uncovered := 0
+		for key: Vector3i in _removed:
+			var vertex: int = _removed[key]
+			var cycle := _link_cycle(vertex, before_indices, before_triangles)
+			if cycle.size() < 4:
+				continue
+			var polygon := _link_polygon(cycle, before_positions)
+			if polygon.is_empty():
+				continue
+			var flat: PackedVector2Array = polygon["flat"]
+			var count := cycle.size()
+			var area := 0.0
+			var is_concave := false
+			for index in count:
+				var first := flat[index]
+				var second := flat[(index + 1) % count]
+				var third := flat[(index + 2) % count]
+				area += first.cross(second)
+				if (second - first).cross(third - second) <= 0.0:
+					is_concave = true
+			if is_concave:
+				concave_links += 1
+			var link := {}
+			for index in count:
+				link[_key(before_positions[cycle[index]])] = true
+			var replacement := PackedInt32Array()
+			for link_key: Vector3i in link:
+				for triangle: int in after_by_position.get(link_key, []):
+					if replacement.has(triangle):
+						continue
+					var inside := true
+					for corner in 3:
+						if not link.has(_key(after_positions[after_indices[triangle * 3 + corner]])):
+							inside = false
+					if inside:
+						replacement.append(triangle)
+			if replacement.size() != count - 2:
+				continue
+			checked += 1
+			var covered := 0.0
+			for triangle in replacement:
+				var first := _project(after_positions[after_indices[triangle * 3]], polygon)
+				var second := _project(after_positions[after_indices[triangle * 3 + 1]], polygon)
+				var third := _project(after_positions[after_indices[triangle * 3 + 2]], polygon)
+				var triangle_area := (second - first).cross(third - first)
+				if triangle_area <= 0.0:
+					outside += 1
+					continue
+				covered += triangle_area * 0.5
+				if not _inside_polygon((first + second + third) / 3.0, flat):
+					outside += 1
+			if absf(covered - area * 0.5) > 0.01 * maxf(area * 0.5, 1.0):
+				overlap += 1
+		expect(checked > 20, "the fixture dissolves enough links to check")
+		expect(concave_links > 0, "at least one removed link is concave")
+		expect(outside == 0, "no new triangle lies outside the link polygon")
+		expect(overlap == 0, "the new triangles cover the link polygon once")
+	)
+
+
+func _dissolve_edges() -> void:
+	step("Given the builder after the dissolve", func():
+		expect(_removed.size() >= 90, "the fixture dissolves enough vertices to add many diagonals")
+		var edge_set: Dictionary = _dissolver._dissolve_edge_set
+		var merged_indices: PackedInt32Array = _merged[Mesh.ARRAY_INDEX]
+		var merged_edges := {}
+		for triangle in merged_indices.size() / 3:
+			for corner in 3:
+				var first := mini(merged_indices[triangle * 3 + corner], merged_indices[triangle * 3 + (corner + 1) % 3])
+				var second := maxi(merged_indices[triangle * 3 + corner], merged_indices[triangle * 3 + (corner + 1) % 3])
+				merged_edges[(first << 32) | second] = true
+		expect(edge_set.size() > merged_edges.size(), "each accepted diagonal enters the edge set")
+		expect(edge_set.size() - merged_edges.size() >= _removed.size(), "the edge set keeps at least one diagonal for each removed vertex")
+	)
+
+
+func _triangles_by_vertex(indices: PackedInt32Array) -> Dictionary:
+	var triangles := {}
+	for triangle in indices.size() / 3:
+		for corner in 3:
+			var vertex := indices[triangle * 3 + corner]
+			var list: Array = triangles.get(vertex, [])
+			list.append(triangle)
+			triangles[vertex] = list
+	return triangles
+
+
+func _triangles_by_position(positions: PackedVector3Array, indices: PackedInt32Array) -> Dictionary:
+	var triangles := {}
+	for triangle in indices.size() / 3:
+		for corner in 3:
+			var key := _key(positions[indices[triangle * 3 + corner]])
+			var list: Array = triangles.get(key, [])
+			if list.is_empty() or list[-1] != triangle:
+				list.append(triangle)
+			triangles[key] = list
+	return triangles
+
+
+func _link_cycle(vertex: int, indices: PackedInt32Array, triangles: Dictionary) -> PackedInt32Array:
+	var next := {}
+	var start := -1
+	for triangle: int in triangles.get(vertex, []):
+		var base := triangle * 3
+		var corner := 0
+		while indices[base + corner] != vertex:
+			corner += 1
+		var first := indices[base + (corner + 1) % 3]
+		var second := indices[base + (corner + 2) % 3]
+		if next.has(first):
+			return PackedInt32Array()
+		next[first] = second
+		if start < 0:
+			start = first
+	if start < 0:
+		return PackedInt32Array()
+	var cycle := PackedInt32Array()
+	var current := start
+	while cycle.size() <= next.size():
+		cycle.append(current)
+		if not next.has(current):
+			return PackedInt32Array()
+		current = next[current]
+		if current == start:
+			return cycle
+	return PackedInt32Array()
+
+
+func _link_polygon(cycle: PackedInt32Array, positions: PackedVector3Array) -> Dictionary:
+	var normal := Vector3.ZERO
+	for index in cycle.size():
+		var current := positions[cycle[index]]
+		var follow := positions[cycle[(index + 1) % cycle.size()]]
+		normal.x += (current.y - follow.y) * (current.z + follow.z)
+		normal.y += (current.z - follow.z) * (current.x + follow.x)
+		normal.z += (current.x - follow.x) * (current.y + follow.y)
+	if normal.length_squared() < 0.0000000001:
+		return {}
+	normal = normal.normalized()
+	var axis := Vector3.RIGHT
+	if absf(normal.y) <= absf(normal.x) and absf(normal.y) <= absf(normal.z):
+		axis = Vector3.UP
+	elif absf(normal.z) <= absf(normal.x):
+		axis = Vector3.FORWARD
+	var across := normal.cross(axis)
+	if across.length_squared() < 0.0000000001:
+		return {}
+	across = across.normalized()
+	var down := normal.cross(across)
+	var flat := PackedVector2Array()
+	flat.resize(cycle.size())
+	var direction := 1.0
+	for pass_index in 2:
+		for index in cycle.size():
+			var point := positions[cycle[index]]
+			flat[index] = Vector2(point.dot(across), point.dot(down) * direction)
+		var area := 0.0
+		for index in cycle.size():
+			area += flat[index].cross(flat[(index + 1) % cycle.size()])
+		if area > 0.0:
+			break
+		direction = -1.0
+	return {"flat": flat, "across": across, "down": down, "direction": direction, "normal": normal}
+
+
+func _project(point: Vector3, polygon: Dictionary) -> Vector2:
+	return Vector2(point.dot(polygon["across"]), point.dot(polygon["down"]) * polygon["direction"])
+
+
+static func _inside_polygon(point: Vector2, flat: PackedVector2Array) -> bool:
+	var inside := false
+	for index in flat.size():
+		var current := flat[index]
+		var follow := flat[(index + 1) % flat.size()]
+		if (current.y > point.y) == (follow.y > point.y):
+			continue
+		var crossing := current.x + (point.y - current.y) * (follow.x - current.x) / (follow.y - current.y)
+		if point.x < crossing:
+			inside = not inside
+	return inside
 
 
 func _material_sides(arrays: Array) -> Dictionary:
@@ -401,4 +665,6 @@ static func _triangle_normal(positions: PackedVector3Array, indices: PackedInt32
 	if winding.length_squared() < 0.0000000001:
 		return Vector3.ZERO
 	return -winding.normalized()
+
+
 

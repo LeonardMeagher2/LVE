@@ -1904,7 +1904,7 @@ func _dissolve_vertex(vertex: int, triangles: PackedInt32Array, positions: Packe
 	var list := _dissolve_triangulate(count)
 	if list.is_empty():
 		return PackedInt32Array()
-	var diagonals := PackedInt32Array()
+	var diagonal_keys := PackedInt64Array()
 	for index in range(0, list.size(), 3):
 		for corner in 3:
 			var first := list[index + corner]
@@ -1912,14 +1912,12 @@ func _dissolve_vertex(vertex: int, triangles: PackedInt32Array, positions: Packe
 			var step := (second - first + count) % count
 			if step == 1 or step == count - 1:
 				continue
-			var low := mini(first, second)
-			var high := maxi(first, second)
-			var key := low * count + high
-			if diagonals.has(key):
+			var key := _dissolve_edge_key(cycle[first], cycle[second])
+			if diagonal_keys.has(key):
 				continue
-			diagonals.append(key)
-			if _dissolve_edge_set.has(_dissolve_edge_key(cycle[low], cycle[high])):
+			if _dissolve_edge_set.has(key):
 				return PackedInt32Array()
+			diagonal_keys.append(key)
 	var covered := false
 	for index in range(0, list.size(), 3):
 		if not _dissolve_triangle_check(list[index], list[index + 1], list[index + 2]):
@@ -1928,6 +1926,8 @@ func _dissolve_vertex(vertex: int, triangles: PackedInt32Array, positions: Packe
 			covered = true
 	if not covered:
 		return PackedInt32Array()
+	for key: int in diagonal_keys:
+		_dissolve_edge_set[key] = true
 	var added := PackedInt32Array()
 	added.resize(list.size())
 	for index in list.size():
@@ -1940,6 +1940,12 @@ func _dissolve_triangulate(count: int) -> PackedInt32Array:
 		if not _dissolve_shape(0, 1, 2):
 			return PackedInt32Array()
 		return PackedInt32Array([0, 1, 2])
+	for index in count:
+		var first := _dissolve_flat[index]
+		var second := _dissolve_flat[(index + 1) % count]
+		var third := _dissolve_flat[(index + 2) % count]
+		if (second - first).cross(third - second) <= 0.0:
+			return _dissolve_ear_triangulation(count)
 	var first := -1
 	var second := -1
 	var third := -1
@@ -2018,9 +2024,18 @@ func _dissolve_ear_triangulation(count: int) -> PackedInt32Array:
 				if not _dissolve_shape(remaining[(position + size - 1) % size], remaining[position], remaining[(position + 1) % size]):
 					tried[position] = 1
 					continue
-				if _triangle_spread < best_spread - 0.0000001 or (_triangle_spread < best_spread + 0.0000001 and _triangle_quality > best_quality + 0.0000001):
-					best_spread = _triangle_spread
-					best_quality = _triangle_quality
+				var spread := _triangle_spread
+				var quality := _triangle_quality
+				if size == 4:
+					var tail_first := remaining[(position + 1) % size]
+					var tail_second := remaining[(position + 2) % size]
+					var tail_last := remaining[(position + 3) % size]
+					if not _dissolve_shape(tail_first, tail_second, tail_last):
+						tried[position] = 1
+						continue
+				if spread < best_spread - 0.0000001 or (spread < best_spread + 0.0000001 and quality > best_quality + 0.0000001):
+					best_spread = spread
+					best_quality = quality
 					best_position = position
 			if best_position < 0:
 				return PackedInt32Array()
@@ -2064,32 +2079,46 @@ func _dissolve_shape(first: int, middle: int, last: int) -> bool:
 	var shape := area / (a.distance_squared_to(b) + b.distance_squared_to(c) + c.distance_squared_to(a))
 	if shape < DISSOLVE_QUALITY_LIMIT:
 		return false
-	var normal_a := _dissolve_normals[first]
-	var normal_b := _dissolve_normals[middle]
-	var normal_c := _dissolve_normals[last]
-	var spread := 2.0 - 2.0 * normal_a.dot(normal_b)
-	spread = maxf(spread, 2.0 - 2.0 * normal_b.dot(normal_c))
-	spread = maxf(spread, 2.0 - 2.0 * normal_c.dot(normal_a))
-	var point_a := _dissolve_points[first]
-	var point_b := _dissolve_points[middle]
-	var point_c := _dissolve_points[last]
-	var winding := (point_b - point_a).cross(point_c - point_a)
-	var squared := winding.length_squared()
-	if squared < 0.0000000000000001:
-		return false
-	var offset := point_a - _dissolve_removed_position
-	var weight_middle := (point_c - point_a).cross(offset).dot(winding) / squared
-	var weight_last := (point_b - point_a).cross(offset).dot(winding) / squared
-	var weight_first := 1.0 - weight_middle - weight_last
-	if weight_first > -0.001 and weight_middle > -0.001 and weight_last > -0.001:
-		var blended := normal_a * maxf(weight_first, 0.0) + normal_b * maxf(weight_middle, 0.0) + normal_c * maxf(weight_last, 0.0)
+	var offset := _dissolve_flat_point - a
+	var flat_middle := offset.cross(c - a) / area
+	var flat_last := (b - a).cross(offset) / area
+	var flat_first := 1.0 - flat_middle - flat_last
+	if flat_first > -0.001 and flat_middle > -0.001 and flat_last > -0.001:
+		var point_a := _dissolve_points[first]
+		var point_b := _dissolve_points[middle]
+		var point_c := _dissolve_points[last]
+		var winding := (point_b - point_a).cross(point_c - point_a)
+		var squared := winding.length_squared()
+		if squared < 0.0000000000000001:
+			return false
+		var side := _dissolve_removed_position - point_a
+		var weight_middle := clampf((point_c - point_a).cross(side).dot(winding) / squared, 0.0, 1.0)
+		var weight_last := clampf((point_b - point_a).cross(side).dot(winding) / squared, 0.0, 1.0)
+		var weight_first := clampf(1.0 - weight_middle - weight_last, 0.0, 1.0)
+		var total := weight_first + weight_middle + weight_last
+		if total <= 0.0:
+			return false
+		var inverse := 1.0 / total
+		weight_first *= inverse
+		weight_middle *= inverse
+		weight_last *= inverse
+		var normal_a := _dissolve_normals[first]
+		var normal_b := _dissolve_normals[middle]
+		var normal_c := _dissolve_normals[last]
+		var blended := normal_a * weight_first + normal_b * weight_middle + normal_c * weight_last
 		if blended.length_squared() < 0.0000000001:
 			return false
 		if blended.normalized().dot(_dissolve_removed_normal) < DISSOLVE_NORMAL_COSINE:
 			return false
-		var colour := _dissolve_colours[first] * maxf(weight_first, 0.0) + _dissolve_colours[middle] * maxf(weight_middle, 0.0) + _dissolve_colours[last] * maxf(weight_last, 0.0)
+		var colour := _dissolve_colours[first] * weight_first + _dissolve_colours[middle] * weight_middle + _dissolve_colours[last] * weight_last
 		if absf(colour.r - _dissolve_removed_colour.r) > DISSOLVE_COLOUR_LIMIT or absf(colour.g - _dissolve_removed_colour.g) > DISSOLVE_COLOUR_LIMIT or absf(colour.b - _dissolve_removed_colour.b) > DISSOLVE_COLOUR_LIMIT:
 			return false
+	var normal_first := _dissolve_normals[first]
+	var normal_second := _dissolve_normals[middle]
+	var normal_third := _dissolve_normals[last]
+	var spread := 2.0 - 2.0 * normal_first.dot(normal_second)
+	spread = maxf(spread, 2.0 - 2.0 * normal_second.dot(normal_third))
+	spread = maxf(spread, 2.0 - 2.0 * normal_third.dot(normal_first))
 	_triangle_spread = spread
 	_triangle_quality = shape
 	return true
@@ -2102,30 +2131,47 @@ func _dissolve_triangle_check(first: int, middle: int, last: int) -> bool:
 	var winding := (point_b - point_a).cross(point_c - point_a)
 	if winding.dot(_dissolve_outward) >= 0.0:
 		return false
-	if winding.length_squared() < 0.0000000000000001:
+	var squared := winding.length_squared()
+	if squared < 0.0000000000000001:
 		return false
-	var offset := point_a - _dissolve_removed_position
-	var weight_middle := (point_c - point_a).cross(offset).dot(winding) / winding.length_squared()
-	var weight_last := (point_b - point_a).cross(offset).dot(winding) / winding.length_squared()
-	var weight_first := 1.0 - weight_middle - weight_last
-	_triangle_covers = weight_first > -0.001 and weight_middle > -0.001 and weight_last > -0.001
+	var a := _dissolve_flat[first]
+	var b := _dissolve_flat[middle]
+	var c := _dissolve_flat[last]
+	var area := (b - a).cross(c - a)
+	if area <= DISSOLVE_AREA_LIMIT:
+		return false
+	var offset := _dissolve_flat_point - a
+	var flat_middle := offset.cross(c - a) / area
+	var flat_last := (b - a).cross(offset) / area
+	var flat_first := 1.0 - flat_middle - flat_last
+	_triangle_covers = flat_first > -0.001 and flat_middle > -0.001 and flat_last > -0.001
 	if not _triangle_covers:
 		return true
+	var side := _dissolve_removed_position - point_a
+	var weight_middle := clampf((point_c - point_a).cross(side).dot(winding) / squared, 0.0, 1.0)
+	var weight_last := clampf((point_b - point_a).cross(side).dot(winding) / squared, 0.0, 1.0)
+	var weight_first := clampf(1.0 - weight_middle - weight_last, 0.0, 1.0)
+	var total := weight_first + weight_middle + weight_last
+	if total <= 0.0:
+		return false
+	var inverse := 1.0 / total
+	weight_first *= inverse
+	weight_middle *= inverse
+	weight_last *= inverse
 	var normal_a := _dissolve_normals[first]
 	var normal_b := _dissolve_normals[middle]
 	var normal_c := _dissolve_normals[last]
-	var blended := normal_a * maxf(weight_first, 0.0) + normal_b * maxf(weight_middle, 0.0) + normal_c * maxf(weight_last, 0.0)
+	var blended := normal_a * weight_first + normal_b * weight_middle + normal_c * weight_last
 	if blended.length_squared() < 0.0000000001:
 		return false
 	var dot := blended.normalized().dot(_dissolve_removed_normal)
 	if dot < DISSOLVE_NORMAL_COSINE:
 		return false
-	var colour := _dissolve_colours[first] * maxf(weight_first, 0.0) + _dissolve_colours[middle] * maxf(weight_middle, 0.0) + _dissolve_colours[last] * maxf(weight_last, 0.0)
+	var colour := _dissolve_colours[first] * weight_first + _dissolve_colours[middle] * weight_middle + _dissolve_colours[last] * weight_last
 	var colour_error := maxf(maxf(absf(colour.r - _dissolve_removed_colour.r), absf(colour.g - _dissolve_removed_colour.g)), absf(colour.b - _dissolve_removed_colour.b))
 	if colour_error > DISSOLVE_COLOUR_LIMIT:
 		return false
 	return true
-
 func _fill_boundary_ears(positions: PackedVector3Array, normals: PackedVector3Array, colors: PackedColorArray, indices: PackedInt32Array, materials_vertex: PackedInt32Array, occupancy: PackedByteArray, cell_material_ids: PackedInt32Array, palette: PackedFloat32Array) -> Array:
 	var point_of := {}
 	var keys: Array[Vector3i] = []
@@ -3203,4 +3249,9 @@ static func _point_in_triangle(point: Vector2, first: Vector2, second: Vector2, 
 	var second_side := (third - second).cross(point - second)
 	var third_side := (first - third).cross(point - third)
 	return (first_side >= 0.0 and second_side >= 0.0 and third_side >= 0.0) or (first_side <= 0.0 and second_side <= 0.0 and third_side <= 0.0)
+
+
+
+
+
 

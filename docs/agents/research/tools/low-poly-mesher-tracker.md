@@ -339,21 +339,31 @@ Every triangle is checked for its inward winding and its area after the choice.
 
 Triangle changes:
 
-- Material sphere smooth: 2606 to 2490.
-- Testing2 smooth: 5116 to 4466.
-- me smooth: 7714 to 5714.
+- Material sphere smooth: 2606 to 2438.
+- Testing2 smooth: 5116 to 4298.
+- me smooth: 7714 to 5020.
 
 Cost:
 
-- The dissolve phase takes 14.7 ms on the sphere, 42.7 ms on Testing2, and 125.6 ms on me.
-- The smooth build is 14.7% slower on the sphere, 24.1% on Testing2, and 36.2% on me.
+- The dissolve phase takes 17.5 ms on the sphere, 50.5 ms on Testing2, and 149.0 ms on me.
+- The smooth build is 16.8% slower on the sphere, 24.8% on Testing2, and 46.6% on me.
 - The medians use five measured passes of the smooth build on all occupied chunks.
 
 Errors:
 
 - The normal error at each removed position is at most 8.0 degrees, equal to the limit.
-- The mean error is 0.7 degrees on Testing2, 1.1 on me, and 2.6 on the sphere.
+- The mean error is 0.5 degrees on Testing2, 0.8 on me, and 2.3 on the sphere.
 - The colour error is zero on these models, because their occlusion strength is zero.
+
+Hardening:
+
+- The pass detects a concave link in its best-fit plane before it tries a fan.
+  A fan cannot cover a notch, so a concave link goes straight to the ear clip.
+- An accepted dissolve adds its new diagonals to the seam edge set.
+  A later dissolve therefore rejects a diagonal that is already a mesh edge.
+- The coverage test uses the link-plane weights.
+  The normal and colour error uses the barycentric weights of each triangle plane.
+  A tilted triangle then cannot hide its error.
 
 Constraints:
 
@@ -365,6 +375,7 @@ Constraints:
 Evidence:
 
 - `tests/marching_dissolve.gd` checks the topology, the seams, the material area, and the normal tolerance.
+- `tests/marching_dissolve.gd` also checks a concave link polygon and the grown seam edge set.
 - The flat benchmark hashes and the snapshot hash do not change.
 - Front screenshots of `me.lve` and `Dragon.lve` show no crack, band, or seam.
   The largest shading change is a soft gradient of about 6% on one head region.
@@ -374,10 +385,11 @@ Limit:
 - A chunk mesh is open at its own chunk face.
   A vertex on that face carries a boundary edge, so it is a seam vertex.
   Most vertices near a chunk face cannot dissolve.
-  Testing2 therefore reaches 12.7% and not the 15% aim.
+  Testing2 reaches 16.0% after the concave link fix.
 - Two dissolves next to each other can add their normal errors.
   The final surface can differ by more than 8 degrees at a position that a later dissolve retriangulated.
   The limit is therefore per dissolve and not on the final surface.
+- The ear clip costs more than a fan, so me now takes 149 ms in the dissolve phase.
 
 ## LPM-4: Comparison research
 
@@ -486,3 +498,4 @@ godot --path . -s res://addons/test_kit/run.gd -- marching_mesh marching_bridge 
 - The dissolve picks the fan with the lowest maximum normal spread, then the best shape, then an ear clip.
 - The dissolve cost is reported in its own benchmark phase.
 - The smooth dissolve adds 24% to the Testing2 build and 36% to the me build.
+

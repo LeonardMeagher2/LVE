@@ -218,20 +218,20 @@ The "before" column is the same build with the dissolve off.
 
 | Scene | Merged triangles | Dissolved triangles | Change | Dissolve (us) | Build before (us) | Build after (us) | Change |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Material sphere | 2606 | 2490 | -4.5% | 14746 | 107951 | 123824 | +14.7% |
-| Testing2 | 5116 | 4466 | -12.7% | 42734 | 203898 | 253092 | +24.1% |
-| me | 7714 | 5714 | -25.9% | 125554 | 341962 | 465671 | +36.2% |
+| Material sphere | 2606 | 2438 | -6.5% | 17461 | 109787 | 128244 | +16.8% |
+| Testing2 | 5116 | 4298 | -16.0% | 50525 | 202759 | 252978 | +24.8% |
+| me | 7714 | 5020 | -34.9% | 149049 | 326071 | 478068 | +46.6% |
 
-Removed vertices: 58 on the sphere, 325 on Testing2, and 1000 on me.
+Removed vertices: 84 on the sphere, 409 on Testing2, and 1347 on me.
 Each removed vertex removes exactly two triangles.
 
 Normal and colour error at the removed position, per dissolve:
 
 | Scene | Maximum (deg) | Mean (deg) | Maximum colour |
 | --- | --- | --- | --- |
-| Material sphere | 7.90 | 2.56 | 0.0 |
-| Testing2 | 8.00 | 0.71 | 0.0 |
-| me | 8.00 | 1.06 | 0.0 |
+| Material sphere | 7.90 | 2.29 | 0.0 |
+| Testing2 | 8.00 | 0.49 | 0.0 |
+| me | 8.00 | 0.83 | 0.0 |
 
 The colour error is zero because these models have no ambient occlusion.
 The deterministic dissolve fixture measures a maximum of 7.90 degrees, a mean of 1.09 degrees, and a zero colour error on its final surface.
