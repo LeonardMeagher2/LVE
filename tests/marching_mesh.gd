@@ -9,6 +9,7 @@ var _bar
 var _dialog
 var _block_mesh: Mesh
 var _seed := 1
+var _crosstalk_before := 0
 
 
 func _ready() -> void:
@@ -30,6 +31,7 @@ func _ready() -> void:
 	test("an edge seam beyond half a cell keeps its vertex", _edge_seam_travel, "march_edge_seam_travel")
 	test("a four-material face colours each triangle from its own cell", _four_material_face, "march_four_material_face")
 	test("the low-poly style renders in the editor viewport", _viewport_style, "march_viewport_style")
+	test("a boundary cell edit rebuilds the adjacent low-poly chunk", _style_crosstalk, "march_style_crosstalk")
 	test("the settings modal stores one undoable style change", _style_undo, "march_style_undo")
 
 
@@ -404,6 +406,51 @@ func _viewport_style() -> void:
 	)
 
 
+func _style_crosstalk() -> void:
+	step("Given a voxel on each side of a chunk boundary in the low-poly style", func():
+		var cells := {}
+		var material := VoxelFrame.material(Color.WHITE)
+		cells[Vector3i(15, 8, 8)] = material
+		cells[Vector3i(17, 8, 8)] = material
+		_view = VIEW.new(self)
+		_view.apply(cells, 1)
+	)
+	await _view.settle()
+	step("When the user paints the cell on the boundary", func():
+		_renderer = _view.renderer
+		expect(_renderer._chunk_instances.has(Vector3i.ZERO), "the adjacent chunk draws a surface")
+		_crosstalk_before = _mesh_hash(Vector3i.ZERO)
+		expect(_crosstalk_before != 0, "the adjacent chunk has a surface before the paint")
+		State.get_current_voxel_frame().set_cell(Vector3i(16, 8, 8), VoxelFrame.material(Color.WHITE))
+		var affected: Array[Vector3i] = [Vector3i(16, 8, 8)]
+		State.cells_changed.emit(0, affected)
+	)
+	await _view.settle()
+	step("Then the adjacent chunk rebuilds and the combined surface stays closed", func():
+		expect(_mesh_hash(Vector3i.ZERO) != _crosstalk_before, "the adjacent chunk rebuilds after one boundary cell paint")
+		_view.collect()
+		expect(_view.closed(), "the combined surface has no boundary")
+		expect(_view.duplicates() == 0, "no triangle is emitted twice")
+	)
+
+
+func _mesh_hash(location: Vector3i) -> int:
+	var instance: MeshInstance3D = _renderer._chunk_instances.get(location)
+	if instance == null or instance.mesh == null or instance.mesh.get_surface_count() == 0:
+		return 0
+	var arrays := instance.mesh.surface_get_arrays(0)
+	var positions: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
+	var hash := 5381
+	for position: Vector3 in positions:
+		hash = hash * 33 + roundi(position.x * 1024.0)
+		hash = hash * 33 + roundi(position.y * 1024.0)
+		hash = hash * 33 + roundi(position.z * 1024.0)
+	for index: int in indices:
+		hash = hash * 33 + index
+	return hash
+
+
 func _style_undo() -> void:
 	step("Given the document settings modal and the block style", func():
 		_bar = main.get_node("%MenuBar")
@@ -611,3 +658,4 @@ func _random_cells() -> Dictionary:
 	if cells.is_empty():
 		cells[Vector3i.ZERO] = VoxelFrame.material(Color.WHITE)
 	return cells
+

@@ -28,6 +28,7 @@ Done:
 - Flat and smooth modes merge coplanar triangle fans when the fan normals match.
 - The build uses padded field writes and packed merge and drop passes.
 - Smooth mode dissolves near-planar interior vertices after the merge.
+- A regression test covers the low-poly chunk crosstalk rebuild.
 
 In progress:
 
@@ -283,6 +284,20 @@ Limit:
 
 - The normal rebuild keeps its cost.
 - A fused weld call was slower than the separate pass.
+
+## Done: low-poly chunk crosstalk test
+
+The marching mesher samples the 3x3x3 chunk neighbourhood.
+A boundary cell edit must rebuild the adjacent chunk.
+The renderer adds `VoxelFrame.crosstalk_chunks(cell_position)` for each changed cell.
+The style-1 surface key also covers the 26 neighbour chunks.
+
+`tests/marching_mesh.gd` checks the rebuild.
+It paints a voxel on each side of a chunk boundary.
+It then paints the boundary cell and emits `cells_changed`.
+It checks that the adjacent chunk rebuild changed its geometry and that the model stays closed.
+
+The test fails when the crosstalk loop is removed.
 
 ## Done: limited dissolve
 
