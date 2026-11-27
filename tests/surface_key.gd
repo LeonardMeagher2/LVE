@@ -21,7 +21,7 @@ var parity_mismatches := 0
 
 func _ready() -> void:
 	timeout = 60.0
-	test("the packed surface key matches the legacy key and costs less", _run)
+	test("the packed surface key matches the content reference and costs less", _run)
 
 
 func _run() -> void:
@@ -32,17 +32,18 @@ func _run() -> void:
 		frame = _neighbor_frame()
 		expect(frame.chunks.size() == 3, "the frame holds the center chunk and two face neighbors")
 	)
-	step("Then the packed key matches the legacy key for unchanged state", func():
+	step("Then the packed key matches the reference key for unchanged state", func():
 		_expect_parity(frame, Vector3i.ZERO, false, "flat unchanged")
 		_expect_parity(frame, Vector3i.ZERO, true, "smooth unchanged")
-		expect(parity_mismatches == 0, "every unchanged-state key matches the legacy key")
+		expect(parity_mismatches == 0, "every unchanged-state key matches the reference key")
 	)
 	step("Then a flat key holds the shading mode and seven ordered pairs", func():
 		var key := _key(frame, Vector3i.ZERO, false)
 		var chunk: VoxelFrame.Chunk = frame.chunks[Vector3i.ZERO]
+		var content := chunk.content_key()
 		expect(key.size() == 1 + 7 * 2, "the flat key holds one mode and seven pairs")
 		expect(key[0] == 0, "the flat key marks flat shading")
-		expect(key[1] == chunk.get_instance_id() and key[2] == chunk.voxel_revision, "the first pair is the center chunk")
+		expect(key[1] == content[0] and key[2] == content[1], "the first pair is the center chunk content")
 	)
 	step("Then a smooth key holds the shading mode and twenty-seven ordered pairs", func():
 		var key := _key(frame, Vector3i.ZERO, true)
@@ -57,7 +58,7 @@ func _run() -> void:
 		for pair in range(1, 7):
 			missing = missing and key[1 + pair * 2] == 0 and key[2 + pair * 2] == 0
 		expect(missing, "every missing face neighbor writes a zero pair")
-		expect(key[1] != 0, "the present center chunk writes a nonzero instance id")
+		expect(key[1] != 0, "the present center chunk writes a nonzero content hash")
 	)
 	step("When only the voxel revision changes", func():
 		var before := _key(frame, Vector3i.ZERO, false)
@@ -176,7 +177,7 @@ func _run() -> void:
 	step("Then the signature cost is reported", func():
 		var legacy_median: int = legacy_samples[legacy_samples.size() / 2]
 		var new_median: int = new_samples[new_samples.size() / 2]
-		print("MEASURE signature A/B: %d chunks, legacy median %d us, packed median %d us, ratio %.2f" % [
+		print("MEASURE signature A/B: %d chunks, reference median %d us, packed median %d us, ratio %.2f" % [
 			bench_chunks.size(), legacy_median, new_median, float(new_median) / maxf(1.0, float(legacy_median)),
 		])
 		expect(legacy_samples.size() == BENCH_REPEATS and new_samples.size() == BENCH_REPEATS, "the benchmark kept independent samples")
@@ -206,12 +207,12 @@ func _expect_packed_behavior() -> void:
 
 func _expect_parity(active_frame: VoxelFrame, chunk_location: Vector3i, smooth_normals: bool, label: String) -> void:
 	var packed := VoxelRenderer._signature(active_frame, chunk_location, smooth_normals)
-	var legacy := REFERENCE.legacy_signature(active_frame, chunk_location, smooth_normals)
+	var expected := REFERENCE.reference_signature(active_frame, chunk_location, smooth_normals)
 	var decoded := REFERENCE.decode(packed, smooth_normals)
 	parity_cases += 1
-	if decoded != legacy:
+	if decoded != expected:
 		parity_mismatches += 1
-	expect(decoded == legacy, "%s: the packed key decodes to the legacy key" % label)
+	expect(decoded == expected, "%s: the packed key decodes to the content reference" % label)
 
 
 func _key(active_frame: VoxelFrame, chunk_location: Vector3i, smooth_normals: bool) -> PackedInt64Array:
@@ -249,18 +250,24 @@ func _measure_cache_eviction() -> void:
 	var saved_cache := VoxelRenderer._surface_cache.duplicate()
 	var saved_order: Array[PackedInt64Array] = VoxelRenderer._surface_use_order.duplicate()
 	var saved_bytes: int = VoxelRenderer._surface_cache_bytes
+	var saved_filled: int = VoxelRenderer._surface_cache_filled
+	var saved_low_poly: bool = VoxelRenderer._surface_cache_has_low_poly
 	VoxelRenderer._surface_cache.clear()
 	VoxelRenderer._surface_use_order.clear()
 	VoxelRenderer._surface_cache_bytes = 0
+	VoxelRenderer._surface_cache_filled = 0
+	VoxelRenderer._surface_cache_has_low_poly = false
 	var limit := VoxelRenderer.SURFACE_CACHE_LIMIT_ENTRIES
 	for index in limit + 1:
-		VoxelRenderer._cache_surface(PackedInt64Array([index + 1]), null, 0, null)
+		VoxelRenderer._cache_surface(PackedInt64Array([0, index + 1]), null, 0, null)
 	expect(VoxelRenderer._surface_cache.size() == limit, "the cache keeps its entry limit with packed keys")
-	expect(VoxelRenderer._surface_cache.has(PackedInt64Array([limit + 1])), "a content-equal packed key hits the latest entry")
-	expect(not VoxelRenderer._surface_cache.has(PackedInt64Array([1])), "the oldest packed key is evicted")
+	expect(VoxelRenderer._surface_cache.has(PackedInt64Array([0, limit + 1])), "a content-equal packed key hits the latest entry")
+	expect(not VoxelRenderer._surface_cache.has(PackedInt64Array([0, 1])), "the oldest packed key is evicted")
 	VoxelRenderer._surface_cache = saved_cache
 	VoxelRenderer._surface_use_order = saved_order
 	VoxelRenderer._surface_cache_bytes = saved_bytes
+	VoxelRenderer._surface_cache_filled = saved_filled
+	VoxelRenderer._surface_cache_has_low_poly = saved_low_poly
 
 
 func _benchmark() -> void:
@@ -294,7 +301,7 @@ func _legacy_loop(smooth_normals: bool) -> int:
 	var sink := 0
 	var started := Time.get_ticks_usec()
 	for location in bench_chunks:
-		sink += REFERENCE.legacy_signature(bench_frame, location, smooth_normals).length()
+		sink += REFERENCE.reference_signature(bench_frame, location, smooth_normals).length()
 	legacy_sink = sink
 	return Time.get_ticks_usec() - started
 

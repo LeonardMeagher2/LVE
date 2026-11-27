@@ -113,6 +113,8 @@ Test scenes are `*.test.tscn`. The runner finds them anywhere under `res://`.
 - A case that records no check fails. Pass `config.allow_no_checks` only for a print-only probe.
 - Pass `config` to `test()` for per-test settings. The keys are `timeout` and `allow_no_checks`.
 - Use `step("Given ...", func)`, `step("When ...", func)`, and `step("Then ...", func)` for setup, actions, and checks.
+- Build mesher cases through the document and the viewport renderer. Paint the cells, wait for the renderer to settle, then read the merged chunk meshes. Do not build mesher arrays directly in a test.
+- Compare voxels by the full nine-float material. A colour comparison misses emission, metallic, and roughness.
 - Use `expect(condition, message)` with an affirmative description of the required state.
 - Put waits in the test body, not step lambdas. Use member variables for state shared between steps.
 - The LVE adapter waits two frames before each test. Its per-test watchdog covers setup, the test body, and cleanup.

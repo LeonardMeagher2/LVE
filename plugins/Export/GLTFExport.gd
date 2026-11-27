@@ -13,6 +13,7 @@ func _init(owner_node: Node) -> void:
 
 class ExportJob extends VoxelFrame.EditJob:
 	const WELD_EPSILON := 0.00001
+	const DISSOLVE_LINK_LIMIT := 16
 	const ATLAS := preload("res://Globals/Rendering/VoxelAtlas.gd")
 	const SURFACE := preload("res://Globals/Rendering/VoxelSurface.gd")
 	var frames: Array[VoxelFrame] = []
@@ -24,6 +25,7 @@ class ExportJob extends VoxelFrame.EditJob:
 	var smooth_normals := false
 	var ao_strength := 1.0
 	var unlit := false
+	var mesh_style := 0
 
 	func run() -> void:
 		var total := 0
@@ -35,6 +37,15 @@ class ExportJob extends VoxelFrame.EditJob:
 		var max_position := Vector3(-INF, -INF, -INF)
 		var vertex_count := 0
 		for frame in frames:
+			if mesh_style == 1:
+				var bounds := _build_marching_frame(frame)
+				if error != OK:
+					return
+				min_position = min_position.min(bounds[0])
+				max_position = max_position.max(bounds[1])
+				vertex_count += bounds[2]
+				completed += frame.chunks.size()
+				continue
 			var positions := PackedVector3Array()
 			var normals := PackedVector3Array()
 			var colors := PackedColorArray()
@@ -71,6 +82,8 @@ class ExportJob extends VoxelFrame.EditJob:
 			frame_surfaces.append(arrays)
 		checkpoint(completed)
 		for frame_index in frame_surfaces.size():
+			if mesh_style == 1:
+				continue
 			var welded := _weld_frame(frame_surfaces[frame_index], frame_index)
 			if welded.is_empty():
 				return
@@ -99,6 +112,177 @@ class ExportJob extends VoxelFrame.EditJob:
 					return
 			arrays[Mesh.ARRAY_VERTEX] = positions
 		checkpoint(completed)
+
+	func _build_marching_frame(frame: VoxelFrame) -> Array:
+		var positions := PackedVector3Array()
+		var normals := PackedVector3Array()
+		var colors := PackedColorArray()
+		var indices := PackedInt32Array()
+		var vertex_materials := PackedInt32Array()
+		var material_table := PackedFloat32Array()
+		var material_ids := {}
+		var completed := 0
+		for chunk_location: Vector3i in frame.chunks:
+			if not checkpoint(completed):
+				error = ERR_UNAVAILABLE
+				return [Vector3.ZERO, Vector3.ZERO, 0]
+			var mesh_job := VoxelMarchingMeshBuilder.new()
+			mesh_job.source_frame = frame
+			mesh_job.chunk_location = chunk_location
+			mesh_job.smooth_normals = smooth_normals
+			mesh_job.ao_strength = ao_strength
+			mesh_job.skip_atlas = true
+			mesh_job.dissolve_limited = false
+			mesh_job.run()
+			var source_positions: PackedVector3Array = mesh_job.surface_arrays[Mesh.ARRAY_VERTEX]
+			if not source_positions.is_empty():
+				var first_vertex := positions.size()
+				var origin := Vector3(chunk_location * VoxelFrame.CHUNK_SIZE)
+				for position: Vector3 in source_positions:
+					positions.append(position + origin)
+				normals.append_array(mesh_job.surface_arrays[Mesh.ARRAY_NORMAL])
+				if ao_strength > 0.0:
+					colors.append_array(mesh_job.surface_arrays[Mesh.ARRAY_COLOR])
+				for triangle_index: int in mesh_job.surface_arrays[Mesh.ARRAY_INDEX]:
+					indices.append(first_vertex + triangle_index)
+				var local_materials: PackedInt32Array = mesh_job.vertex_materials
+				var source_table: PackedFloat32Array = mesh_job.material_table
+				for vertex in source_positions.size():
+					var local_id: int = local_materials[vertex]
+					var values := source_table.slice(local_id * VoxelFrame.MATERIAL_STRIDE, (local_id + 1) * VoxelFrame.MATERIAL_STRIDE)
+					var frame_id: int = material_ids.get(values, -1)
+					if frame_id < 0:
+						frame_id = material_table.size() / VoxelFrame.MATERIAL_STRIDE
+						material_ids[values] = frame_id
+						material_table.append_array(values)
+					vertex_materials.append(frame_id)
+			completed += 1
+		if indices.is_empty():
+			return [Vector3.ZERO, Vector3.ZERO, 0]
+		var welded := _weld_marching(positions, normals, colors, vertex_materials, indices)
+		if welded.is_empty():
+			error = ERR_UNAVAILABLE
+			return [Vector3.ZERO, Vector3.ZERO, 0]
+		positions = welded[0]
+		normals = welded[1]
+		colors = welded[2]
+		vertex_materials = welded[3]
+		indices = welded[4]
+		if smooth_normals:
+			var dissolver := VoxelMarchingMeshBuilder.new()
+			dissolver.dissolve_link_limit = DISSOLVE_LINK_LIMIT
+			var fill := colors
+			if fill.size() != positions.size():
+				fill = PackedColorArray()
+				fill.resize(positions.size())
+				fill.fill(Color.WHITE)
+			var dissolved := dissolver.dissolve_surface(positions, normals, colors if colors.size() == positions.size() else fill, vertex_materials, indices)
+			positions = dissolved[0]
+			normals = dissolved[1]
+			colors = dissolved[2]
+			indices = dissolved[3]
+			vertex_materials = dissolved[4]
+		var min_position := Vector3(INF, INF, INF)
+		var max_position := Vector3(-INF, -INF, -INF)
+		for position: Vector3 in positions:
+			min_position = min_position.min(position)
+			max_position = max_position.max(position)
+		var atlas := ATLAS.new()
+		var used := {}
+		for id: int in vertex_materials:
+			used[id] = true
+		var used_ids: Array = used.keys()
+		used_ids.sort()
+		var patch_of := {}
+		for id: int in used_ids:
+			var base := id * VoxelFrame.MATERIAL_STRIDE
+			var patch := atlas.add_patch(material_table.slice(base, base + VoxelFrame.MATERIAL_STRIDE), Vector2i.ONE, checkpoint)
+			if patch < 0:
+				error = ERR_UNAVAILABLE
+				return [Vector3.ZERO, Vector3.ZERO, 0]
+			patch_of[id] = patch
+		var bake_error := atlas.bake(checkpoint)
+		if bake_error != OK:
+			error = bake_error
+			return [Vector3.ZERO, Vector3.ZERO, 0]
+		var uvs := PackedVector2Array()
+		uvs.resize(vertex_materials.size())
+		for vertex in vertex_materials.size():
+			var corners: PackedVector2Array = atlas.patch_uvs(patch_of[vertex_materials[vertex]])
+			uvs[vertex] = (corners[0] + corners[2]) * 0.5
+		var arrays := []
+		arrays.resize(Mesh.ARRAY_MAX)
+		arrays[Mesh.ARRAY_VERTEX] = positions
+		arrays[Mesh.ARRAY_NORMAL] = normals
+		if ao_strength > 0.0:
+			arrays[Mesh.ARRAY_COLOR] = colors
+		arrays[Mesh.ARRAY_INDEX] = indices
+		arrays[Mesh.ARRAY_TEX_UV] = uvs
+		frame_surfaces.append(arrays)
+		frame_atlases.append(atlas)
+		return [min_position, max_position, positions.size()]
+
+
+	func _weld_marching(positions: PackedVector3Array, normals: PackedVector3Array, colors: PackedColorArray, vertex_materials: PackedInt32Array, indices: PackedInt32Array) -> Array:
+		var count := positions.size()
+		var vertex_map := PackedInt32Array()
+		vertex_map.resize(count)
+		var merged_positions := PackedVector3Array()
+		var merged_normals := PackedVector3Array()
+		var merged_colors := PackedColorArray()
+		var merged_materials := PackedInt32Array()
+		var merged_counts := PackedInt32Array()
+		var wants_colours := not colors.is_empty()
+		var buckets := {}
+		stage("Welding frame vertices", count)
+		for vertex in count:
+			if vertex % 2048 == 0 and not checkpoint(vertex):
+				return []
+			var position := positions[vertex]
+			var material := vertex_materials[vertex]
+			var key := Vector4i(roundi(position.x * 1024.0), roundi(position.y * 1024.0), roundi(position.z * 1024.0), material)
+			var target := -1
+			if smooth_normals:
+				target = buckets.get(key, -1)
+			else:
+				var normal := normals[vertex]
+				var normal_key := Vector3i(roundi(normal.x * 1024.0), roundi(normal.y * 1024.0), roundi(normal.z * 1024.0))
+				var by_normal: Dictionary = buckets.get(key, {})
+				target = by_normal.get(normal_key, -1)
+				if target >= 0:
+					vertex_map[vertex] = target
+					continue
+				by_normal[normal_key] = merged_positions.size()
+				buckets[key] = by_normal
+				target = -1
+			if target < 0:
+				vertex_map[vertex] = merged_positions.size()
+				merged_positions.append(position)
+				merged_normals.append(normals[vertex])
+				merged_colors.append(colors[vertex] if wants_colours else Color.WHITE)
+				merged_materials.append(material)
+				merged_counts.append(1)
+				if smooth_normals:
+					buckets[key] = merged_positions.size() - 1
+				continue
+			vertex_map[vertex] = target
+			merged_normals[target] = merged_normals[target] + normals[vertex]
+			if wants_colours:
+				merged_colors[target] = merged_colors[target] + colors[vertex]
+			merged_counts[target] += 1
+		if smooth_normals:
+			for vertex in merged_normals.size():
+				var normal := merged_normals[vertex]
+				merged_normals[vertex] = normal.normalized() if normal.length_squared() > 0.0000000001 else Vector3.UP
+				if wants_colours:
+					var divisor := float(maxi(merged_counts[vertex], 1))
+					merged_colors[vertex] = merged_colors[vertex] / divisor
+		var merged_indices := PackedInt32Array()
+		merged_indices.resize(indices.size())
+		for index in indices.size():
+			merged_indices[index] = vertex_map[indices[index]]
+		return [merged_positions, merged_normals, merged_colors, merged_materials, merged_indices]
+
 
 	func _weld_frame(arrays: Array, frame_index: int) -> Array:
 		var source_positions: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
@@ -187,6 +371,7 @@ func export_gltf(path: String, center_origin := true, tag_index := -1, overrides
 	job.smooth_normals = bool(overrides.get("smooth_normals", State.document.smooth_normals))
 	job.ao_strength = clampf(float(overrides.get("ao", State.document.ao_strength)), 0.0, 1.0)
 	job.unlit = bool(overrides.get("unlit", false))
+	job.mesh_style = State.document.mesh_style
 	var selected_tag := State.document.get_tag(tag_index)
 	var first := selected_tag.from if selected_tag else 0
 	var last := selected_tag.to if selected_tag else State.get_frame_count() - 1

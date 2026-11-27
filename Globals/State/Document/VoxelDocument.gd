@@ -23,6 +23,7 @@ static var _profile_rescan_us := 0
 @export var frames: Array[VoxelFrame] = []
 @export var tags: Array[AnimationTag] = []
 @export var smooth_normals := false
+@export_range(0, 1, 1) var mesh_style := 0
 @export_range(0.0, 1.0, 0.01) var ao_strength := 1.0
 @export var lighting_settings: Dictionary = {}
 @export var export_settings: Dictionary = {}
@@ -77,7 +78,7 @@ func document_data() -> Dictionary:
 	var tag_data := []
 	for tag in tags:
 		tag_data.append({"name": tag.name, "from": tag.from, "to": tag.to, "loop_mode": tag.loop_mode, "repeats": tag.repeats})
-	return {"palette": palette_data, "frames": frame_data, "tags": tag_data, "smooth_normals": smooth_normals, "ao": ao_strength, "lighting": _storage_settings(lighting_settings), "export": _storage_settings(export_settings), "tools": _storage_settings(tool_settings), "view": _storage_settings(view_settings), "camera": _storage_settings(edit_camera), "edit_frame": edit_frame, "edit_tag": edit_tag if not tags.is_empty() else -1, "edit_playing": edit_playing, "size": size}
+	return {"palette": palette_data, "frames": frame_data, "tags": tag_data, "smooth_normals": smooth_normals, "mesh_style": mesh_style, "ao": ao_strength, "lighting": _storage_settings(lighting_settings), "export": _storage_settings(export_settings), "tools": _storage_settings(tool_settings), "view": _storage_settings(view_settings), "camera": _storage_settings(edit_camera), "edit_frame": edit_frame, "edit_tag": edit_tag if not tags.is_empty() else -1, "edit_playing": edit_playing, "size": size}
 
 
 static func _storage_settings(settings: Dictionary) -> Dictionary:
@@ -185,6 +186,8 @@ static func decode_document(data: PackedByteArray) -> VoxelDocument:
 	for tag_data in fields.tags:
 		document.add_tag(tag_data.name, tag_data.from, tag_data.to, tag_data.loop_mode, tag_data.repeats)
 	document.smooth_normals = fields.smooth_normals
+	var stored_style: Variant = fields.get("mesh_style", 0)
+	document.mesh_style = int(stored_style) if stored_style is int else 0
 	var stored_ao: Variant = fields.get("ao", 1.0)
 	document.ao_strength = 1.0 if stored_ao is bool else float(stored_ao)
 	document.lighting_settings = fields.lighting
@@ -371,7 +374,7 @@ static func _valid_document_data(data: Variant) -> bool:
 		return false
 	if not data.get("edit_playing", false) is bool:
 		return false
-	return data.get("smooth_normals") is bool and _valid_document_size(data.get("size")) and _valid_lighting(data.get("lighting"), false) and _valid_export(data.get("export"), data.tags.size()) and _valid_tool_settings(data.get("tools", {})) and _valid_view_settings(data.get("view", {})) and _valid_camera(data.get("camera", {}))
+	return data.get("smooth_normals") is bool and _integer_in(data.get("mesh_style", 0), 0, 1) and _valid_document_size(data.get("size")) and _valid_lighting(data.get("lighting"), false) and _valid_export(data.get("export"), data.tags.size()) and _valid_tool_settings(data.get("tools", {})) and _valid_view_settings(data.get("view", {})) and _valid_camera(data.get("camera", {}))
 
 
 static func _valid_tool_settings(data: Variant) -> bool:

@@ -35,6 +35,7 @@ func _run() -> void:
 		for mode in 4:
 			source.add_tag("Tag %s 🦩" % mode, 0, 2, mode, mode)
 		source.smooth_normals = true
+		source.mesh_style = 1
 		source.size = Vector3i(5, 6, 7)
 		source.edit_frame = 1
 		source.edit_tag = 2
@@ -76,6 +77,7 @@ func _run() -> void:
 			if loaded:
 				expect(loaded.document_data() == source.document_data(), "the %s file preserves every document field" % suffix)
 				expect(loaded.size == source.size, "the file preserves the centered document size")
+				expect(loaded.mesh_style == 1, "the file preserves the low-poly mesh style")
 				expect(loaded.edit_frame == 1 and loaded.edit_tag == 2, "the file preserves the frame and tag")
 				expect(loaded.tool_settings == source.tool_settings, "the file preserves the editor tools")
 				expect(loaded.view_settings == source.view_settings, "the file preserves the editor view")
