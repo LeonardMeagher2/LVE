@@ -11,6 +11,7 @@ var _block_mesh: Mesh
 var _seed := 1
 var _crosstalk_before := 0
 var _near_face_key := PackedInt64Array()
+var _disabled_renderers: Array[VoxelRenderer] = []
 
 
 func _ready() -> void:
@@ -34,6 +35,7 @@ func _ready() -> void:
 	test("the low-poly style renders in the editor viewport", _viewport_style, "march_viewport_style")
 	test("a boundary cell edit rebuilds the adjacent low-poly chunk", _style_crosstalk, "march_style_crosstalk")
 	test("a near-face cell edit rebuilds the adjacent low-poly chunk", _style_crosstalk_near_face, "march_style_crosstalk_near_face")
+	test("a stale inflight key does not block a pending surface", _stale_inflight, "march_style_stale_inflight")
 	test("the settings modal stores one undoable style change", _style_undo, "march_style_undo")
 
 
@@ -464,6 +466,67 @@ func _style_crosstalk_near_face() -> void:
 		expect(_view.closed(), "the combined surface has no boundary")
 		expect(_view.duplicates() == 0, "no triangle is emitted twice")
 	)
+
+
+func _stale_inflight() -> void:
+	for other in _disabled_renderers:
+		if is_instance_valid(other):
+			other.set_process(true)
+	_disabled_renderers.clear()
+	step("Given a slab across two chunks in the low-poly style", func():
+		var cells := {}
+		var material := VoxelFrame.material(Color.WHITE)
+		for x in range(12, 20):
+			for y in range(6, 10):
+				for z in range(6, 10):
+					cells[Vector3i(x, y, z)] = material
+		_view = VIEW.new(self)
+		_view.apply(cells, 1)
+	)
+	await _view.settle()
+	step("When a new edit supersedes two cached surfaces that are still inflight", func():
+		_renderer = _view.renderer
+		_disabled_renderers = _other_renderers(_renderer)
+		for other in _disabled_renderers:
+			other.set_process(false)
+		var center := Vector3i.ZERO
+		var neighbor := Vector3i(1, 0, 0)
+		var old_center: PackedInt64Array = _renderer._displayed_surface_keys[center]
+		var old_neighbor: PackedInt64Array = _renderer._displayed_surface_keys[neighbor]
+		var frame := State.get_current_voxel_frame()
+		frame.set_cell(Vector3i(15, 8, 8), VoxelFrame.material(Color.RED))
+		frame.set_cell(Vector3i(16, 8, 8), VoxelFrame.material(Color.BLUE))
+		var new_center := VoxelRenderer._signature(frame, center, State.document.smooth_normals, -1, 0, 1, State.document.ao_strength, 1)
+		var new_neighbor := VoxelRenderer._signature(frame, neighbor, State.document.smooth_normals, -1, 0, 1, State.document.ao_strength, 1)
+		expect(new_center != old_center and new_neighbor != old_neighbor, "the edit changes both surface keys")
+		expect(VoxelRenderer._surface_cache.has(old_center) and VoxelRenderer._surface_cache.has(old_neighbor), "both old surfaces stay cached")
+		_renderer._pending_surface_keys[center] = new_center
+		_renderer._pending_surface_keys[neighbor] = new_neighbor
+		_renderer._inflight_surface_keys[center] = old_center
+		_renderer._inflight_surface_keys[neighbor] = old_neighbor
+		_renderer._gate_group = true
+	)
+	var deadline := Time.get_ticks_msec() + 5000
+	while not _renderer.is_settled() and Time.get_ticks_msec() < deadline:
+		await get_tree().process_frame
+	step("Then the pending surfaces resolve", func():
+		for other in _disabled_renderers:
+			if is_instance_valid(other):
+				other.set_process(true)
+		_disabled_renderers.clear()
+		expect(_renderer.is_settled(), "the pending surfaces replace the stale inflight keys")
+	)
+
+
+func _other_renderers(keep: VoxelRenderer) -> Array[VoxelRenderer]:
+	var found: Array[VoxelRenderer] = []
+	var stack: Array[Node] = [get_tree().root]
+	while not stack.is_empty():
+		var node: Node = stack.pop_back()
+		if node is VoxelRenderer and node != keep:
+			found.append(node)
+		stack.append_array(node.get_children())
+	return found
 
 
 func _mesh_hash(location: Vector3i) -> int:

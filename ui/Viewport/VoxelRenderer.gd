@@ -430,6 +430,7 @@ func _consume_inflight(chunk_location: Vector3i) -> bool:
 		_inflight_surface_keys.erase(chunk_location)
 		return false
 	var surface_key: PackedInt64Array = _inflight_surface_keys[chunk_location]
+	var wanted: PackedInt64Array = _pending_surface_keys[chunk_location]
 	if not _surface_cache.has(surface_key):
 		if _surface_jobs.has(surface_key):
 			return false
@@ -437,12 +438,15 @@ func _consume_inflight(chunk_location: Vector3i) -> bool:
 		if profile_surfaces:
 			_profile.lost += 1
 		return false
-	if not _group_ready(chunk_location):
+	var ready := _group_ready(chunk_location)
+	if wanted != surface_key and not ready:
+		_inflight_surface_keys.erase(chunk_location)
+		return false
+	if not ready:
 		return false
 	_install(chunk_location, surface_key, _surface_cache[surface_key])
 	_touch_surface(surface_key)
 	_inflight_surface_keys.erase(chunk_location)
-	var wanted: PackedInt64Array = _pending_surface_keys[chunk_location]
 	if wanted == surface_key:
 		_pending_surface_keys.erase(chunk_location)
 	if profile_surfaces:

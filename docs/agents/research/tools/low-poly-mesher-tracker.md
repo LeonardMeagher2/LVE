@@ -395,6 +395,16 @@ The near-face test samples every frame and fails without the gate.
 The near-face case fails without the reach.
 The test fails when the crosstalk loop is removed.
 
+A completed surface job can be superseded before it installs.
+The renderer keeps its key in `_inflight_surface_keys` while the crosstalk group is not ready.
+The pending key can change to a newer edit at any time.
+The pending launch loop skips a chunk that has an inflight key.
+Two chunks can then wait for each other's newest key, and no job builds that key.
+The renderer now drops the inflight key when it differs from the pending key and the crosstalk group is not ready.
+The pending key then launches its own job.
+`march_style_stale_inflight` reproduces the stall.
+It fails without the drop.
+
 ## Done: limited dissolve
 
 Date: 2026-11-27.
