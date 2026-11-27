@@ -3,7 +3,7 @@
 Read [AGENTS.md](../../AGENTS.md) first.
 These notes give the development context for people and agents.
 
-- [Roadmap](../../TASKS.md)
+- [Open work](https://github.com/LeonardMeagher2/LVE/issues)
 - [Verified memory](../../MEMORY.md)
 - [Tool flow maps](tool-flows/README.md)
 - [Tool research](research/tools/README.md)

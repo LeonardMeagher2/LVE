@@ -197,7 +197,7 @@ The request snapshot holds only the chunks in the read box.
 The box reaches `watch_half(radius) + radius + 1` cells around the picked cell.
 A hover then costs the read box, not the whole frame.
 The press read still costs about 55 milliseconds at size 32.
-That press read cost is an open task in `../../../TASKS.md`.
+That press read cost is a known limit.
 
 Source:
 
@@ -656,9 +656,9 @@ The ring shows the footprint, not the edit.
 - The ring keeps its fallback pose while an idle read runs, so a full-size hover keeps the main thread free.
 - The ring is the whole cursor. It has no idle map and no terrain prediction.
 - All press reads run on the main thread at the full size.
-- The press read costs about 55 milliseconds at size 32. That press read cost is an open task in `../../../TASKS.md`.
+- The press read costs about 55 milliseconds at size 32. That cost is a known limit.
 - The `TerrainPreview` helpers accept a `TerrainQueryContext`. The tool never constructs one.
-- The column walk at maximum size on sparse models remains a pending measurement.
+- The column walk at maximum size on sparse models has no measurement.
 - This page does not assert a shared 1 through 64 size range.
 - This page describes the local Smooth rounding fields only.
 - There is no new `CursorJob` or controller hierarchy.

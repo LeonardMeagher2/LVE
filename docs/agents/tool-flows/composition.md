@@ -409,7 +409,7 @@ The tool poses the ring from a published hover frame only when `last_publish_tar
 A cell change, a document change, an undo or redo, or a clear invalidates the preview cache.
 A crossed cell refits at the full size, on the worker pool.
 The ring keeps its fallback pose while the idle fit runs, so a move stays cheap.
-The press fit costs about 55 milliseconds at size 32. That cost is an open task in `../../../TASKS.md`.
+The press fit costs about 55 milliseconds at size 32. That cost is a known limit.
 The idle pose uses the entered face or floor and the fitted surface plane.
 A Surface source fits the surface. A Face source and Grab use the exact entered face.
 A floor miss uses the floor plane.

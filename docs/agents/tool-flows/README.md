@@ -49,5 +49,5 @@ Use a Markdown viewer with Mermaid support to display the graphs.
 - Measure complete tool flows before selecting performance changes.
 - Keep unused helpers and planned features separate from runtime behavior.
 
-See [TASKS.md](../../../TASKS.md) for open work.
+See [GitHub issues](https://github.com/LeonardMeagher2/LVE/issues) for active work.
 See [MEMORY.md](../../../MEMORY.md) for measured results and verified constraints.

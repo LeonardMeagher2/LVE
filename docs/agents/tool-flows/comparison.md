@@ -106,4 +106,4 @@ Use these detailed lists for the remaining hypotheses:
 8. Does a proposed helper remove duplication without hiding policy?
 
 Do not infer speed from fewer graph nodes.
-Use [MEMORY.md](../../../MEMORY.md) for measurements and [TASKS.md](../../../TASKS.md) for unresolved work.
+Use [MEMORY.md](../../../MEMORY.md) for measurements. Use [GitHub issues](https://github.com/LeonardMeagher2/LVE/issues) for active work.

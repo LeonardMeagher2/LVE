@@ -4,7 +4,7 @@ Leonard's Voxel Editor is a Godot voxel-animation editor. Godot is the only tool
 
 ## Workflow
 
-- Use [TASKS.md](TASKS.md) for the roadmap.
+- Use GitHub issues for active work.
 - Read adjacent files before editing. Follow their structure and style.
 - Reuse suitable resources, utilities, and engine features.
 - Add abstractions only for a concrete need. Explain non-obvious choices and their tradeoffs.
