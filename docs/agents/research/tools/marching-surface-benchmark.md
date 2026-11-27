@@ -249,6 +249,30 @@ Limits:
 The flat path does not run the dissolve.
 Every flat model hash and the snapshot hash stay equal.
 
+## Low-poly export
+
+The style-1 export welds the whole frame before the atlas UVs.
+A smooth weld keys on the quantized world position and the material id, and it averages the normals and colours.
+A flat weld adds the quantized normal to the key.
+The export then runs one dissolve on the whole frame.
+The per-chunk export build skips its dissolve, so a chunk face is not a seam.
+
+| Scene | Chunks | Chunk vertices | Chunk triangles | Welded vertices | Export vertices | Export triangles | Triangle change |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Testing2 | 6 | 4164 | 5116 | 4010 | 3574 | 4244 | -17.0% |
+| me | 4 | 5601 | 7714 | 5417 | 4011 | 4902 | -36.5% |
+| Material sphere, radius 4 | 8 | 1540 | 1546 | 1366 | 1253 | 1320 | -14.6% |
+
+The weld takes 2.6 ms on Testing2, 3.7 ms on me, and 1.0 ms on the sphere.
+The global dissolve takes 52.5 ms, 156.5 ms, and 14.6 ms.
+These values come from one measured frame.
+
+The weld removes 3% to 4% of the vertices.
+The chunk mesh is already welded inside a chunk, so only the chunk face duplicates and the cross-chunk normal difference remain.
+The global dissolve removes 2% more triangles than the chunk passes on these models.
+
+`tests/export_low_poly.gd` checks the duplicate count, the triangle drop, the closed and manifold surface, the materials, the UVs, the normals, and the flat facets.
+
 ## Materials and normals
 
 The builder now writes one 1x1 atlas patch for each material in the final mesh.

@@ -29,6 +29,7 @@ Done:
 - The build uses padded field writes and packed merge and drop passes.
 - Smooth mode dissolves near-planar interior vertices after the merge.
 - A regression test covers the low-poly chunk crosstalk rebuild.
+- The style-1 export welds the whole frame and dissolves it once.
 
 In progress:
 
@@ -284,6 +285,47 @@ Limit:
 
 - The normal rebuild keeps its cost.
 - A fused weld call was slower than the separate pass.
+
+## Done: export weld and global dissolve
+
+The style-1 export did not weld across chunks.
+`_build_marching_frame` now welds the whole frame before it builds the atlas UVs.
+
+- With smooth normals, the key is the quantized world position and the material id.
+  The normal and the colour average over the group, then the normal normalizes.
+- With flat normals, the key is the quantized world position, the normal, and the material id.
+- The position precision is 1/1024 cell.
+- Two material ids never merge, because the atlas gives one patch-centre UV for each material.
+
+The export then runs one dissolve on the whole frame.
+The per-chunk build skips its dissolve, so a chunk face is no longer a seam.
+The pass calls `VoxelMarchingMeshBuilder.dissolve_surface`.
+The atlas UVs rebuild from the surviving material ids.
+The frame material table stays.
+
+Measurements (one smooth frame):
+
+| Scene | Chunks | Chunk vertices | Chunk triangles | Welded vertices | Export vertices | Export triangles | Weld (us) | Dissolve (us) |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Testing2 | 6 | 4164 | 5116 | 4010 | 3574 | 4244 | 2647 | 52490 |
+| me | 4 | 5601 | 7714 | 5417 | 4011 | 4902 | 3712 | 156491 |
+| Material sphere, radius 4 | 8 | 1540 | 1546 | 1366 | 1253 | 1320 | 961 | 14645 |
+
+Triangle change: -17.0% on Testing2, -36.5% on me, and -14.6% on the sphere.
+The per-chunk dissolve reached -34.9% on me, so the global pass removes 2% more.
+The weld removes 3% to 4% of the vertices.
+The export job takes 283 ms on Testing2 and 524 ms on me for one smooth frame.
+
+Evidence:
+
+- `tests/export_low_poly.gd` checks that no two vertices share a position and a material.
+- It checks the triangle drop, the closed and manifold surface, the four materials, the unit normals, and the flat facets.
+- Without the weld, the duplicate check fails.
+- The flat export keeps one normal for each triangle.
+
+Limit:
+
+- The export only. The runtime chunked renderer still welds inside a chunk and dissolves each chunk.
 
 ## Done: low-poly chunk crosstalk test
 

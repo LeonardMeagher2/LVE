@@ -1666,6 +1666,10 @@ func _merge_coplanar_vertex(vertex: int, triangles: PackedInt32Array, positions:
 	return cycle
 
 
+func dissolve_surface(positions: PackedVector3Array, normals: PackedVector3Array, colors: PackedColorArray, materials: PackedInt32Array, indices: PackedInt32Array) -> Array:
+	return _dissolve_smooth_vertices(positions, normals, colors, materials, indices)
+
+
 func _dissolve_smooth_vertices(positions: PackedVector3Array, normals: PackedVector3Array, colors: PackedColorArray, materials: PackedInt32Array, indices: PackedInt32Array) -> Array:
 	if indices.is_empty():
 		return [positions, normals, colors, indices, materials]
