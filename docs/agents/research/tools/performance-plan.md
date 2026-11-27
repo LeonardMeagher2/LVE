@@ -257,8 +257,12 @@ The radius-32 drag falls to 1.473 s on the large model and 1.538 s on the small 
 The sphere box may exceed the accepted cells. That is safe, because no cell outside the candidate bounds plus the halo is read.
 The seven terrain scenes pass.
 
-Next: the grid build walks the whole occupied dictionary on every call to fill the local box.
-A 27-chunk document holds tens of thousands of cells; passing the local occupancy from the tool would remove that walk.
+Next: the grid build was 23.6 percent of `relax` and built a budget and a base for every candidate.
+
+Measured: the field now carries its weights in candidate order, and the bases follow the y, z, x sort, so only a row or layer boundary recomputes three multiplies.
+The build falls from 6,940 to 6,054 us per call at 5,000 to 20,000 candidates, 12.8 percent.
+The radius-32 drag reads 1.427 s on the large model and 1.510 s on the small one.
+The remaining share is the pass scan at 54.5 percent, which is the per-cell kernel itself.
 
 ### Code path
 
