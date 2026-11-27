@@ -23,6 +23,14 @@ Do not read an inference as a measurement.
 - A performance change must keep every affected test green. A faster wrong result is a failure.
 - The plan adds no limit to a grid, a scene, or a tool range. A slow case must get faster, not smaller.
 
+Measured 2026-11-27: a benchmark must not keep a timing value in a member field that a step lambda writes.
+The lambda may run, but the body reads the old value.
+`renderer_wall` printed a mutate and emit of 0 us and a 6 to 7 s wall, while stamps printed from inside the same lambda read 634 and 1,018 us.
+The wall and the first wait were `Time.get_ticks_usec()` minus a field that stayed 0, so they equalled process uptime.
+Return the values from the lambda with `await step(...)`, or keep them in locals.
+Treat a wall that equals first wait plus frame sum with a zero stage as a broken stamp.
+A wall that grows with process age is the same symptom.
+
 Benchmark commands:
 
 ```text

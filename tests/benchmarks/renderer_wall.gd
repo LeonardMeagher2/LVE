@@ -3,7 +3,7 @@ extends "res://tests/test.gd"
 
 const SPAN := 3
 const CHUNK := VoxelFrame.CHUNK_SIZE
-const MAX_FRAMES := 120
+const MAX_FRAMES := 240
 
 var renderer: VoxelRenderer
 var locations: Array[Vector3i] = []
@@ -97,7 +97,7 @@ func _cost() -> void:
 			print("CELLS_CONN " + str(connection["callable"].get_object()))
 		expect(true, "the subscribers are listed")
 	)
-	var stamps = step("When every chunk cell changes", func():
+	var stamps = await step("When every chunk cell changes", func():
 		var mutate_started := Time.get_ticks_usec()
 		for location: Vector3i in locations:
 			State.document.set_cell(0, location * CHUNK + Vector3i(8, 8, 8), VoxelFrame.material(Color.WHITE))
