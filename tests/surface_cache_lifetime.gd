@@ -5,6 +5,11 @@ var enclosed_voxel := Vector3i(24, 24, 24)
 var enclosed_chunk := Vector3i(1, 1, 1)
 var visible_surface_count := 0
 var edit: VoxelEditTransaction
+var _saved_cache := {}
+var _saved_order: Array[PackedInt64Array] = []
+var _saved_bytes := 0
+var _saved_filled := 0
+var _saved_low_poly := false
 
 
 func _ready() -> void:
@@ -13,6 +18,18 @@ func _ready() -> void:
 
 
 func _run() -> void:
+	step("Given an isolated surface cache", func():
+		_saved_cache = VoxelRenderer._surface_cache
+		_saved_order = VoxelRenderer._surface_use_order
+		_saved_bytes = VoxelRenderer._surface_cache_bytes
+		_saved_filled = VoxelRenderer._surface_cache_filled
+		_saved_low_poly = VoxelRenderer._surface_cache_has_low_poly
+		VoxelRenderer._surface_cache = {}
+		VoxelRenderer._surface_use_order = []
+		VoxelRenderer._surface_cache_bytes = 0
+		VoxelRenderer._surface_cache_filled = 0
+		VoxelRenderer._surface_cache_has_low_poly = false
+	)
 	step("Given a solid block with a fully enclosed center chunk", func():
 		State.document = VoxelDocument.new()
 		for z in 48:
@@ -84,8 +101,18 @@ func _settle() -> void:
 		await get_tree().process_frame
 
 
+func after_test() -> void:
+	if is_instance_valid(scene_renderer):
+		await _settle()
+	VoxelRenderer._surface_cache = _saved_cache
+	VoxelRenderer._surface_use_order = _saved_order
+	VoxelRenderer._surface_cache_bytes = _saved_bytes
+	VoxelRenderer._surface_cache_filled = _saved_filled
+	VoxelRenderer._surface_cache_has_low_poly = _saved_low_poly
+
+
 func _history_key(index: int) -> PackedInt64Array:
-	return PackedInt64Array([index + 1, 1])
+	return PackedInt64Array([0, index + 1])
 
 
 func _visible_count() -> int:

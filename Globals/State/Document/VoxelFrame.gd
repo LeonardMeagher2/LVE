@@ -277,6 +277,10 @@ class Chunk extends RefCounted:
 
 	var voxel_revision := 0
 
+	var _content_key := PackedInt64Array()
+
+	var _content_key_revision := -1
+
 	var occupied_bounds := AABB()
 
 	var bounds_dirty := false
@@ -504,6 +508,20 @@ class Chunk extends RefCounted:
 				if materials[base + offset] != other.materials[other_base + offset]:
 					return false
 		return true
+
+
+	func content_key() -> PackedInt64Array:
+		if _content_key_revision == voxel_revision and not _content_key.is_empty():
+			return _content_key
+		var cells := grid
+		if cells.is_empty():
+			cells = PackedInt32Array()
+			cells.resize(VoxelFrame.CHUNK_SIZE * VoxelFrame.CHUNK_SIZE * VoxelFrame.CHUNK_SIZE)
+			for index in _sparse_slots.size():
+				cells[_sparse_slots[index]] = _sparse_values[index]
+		_content_key = PackedInt64Array([hash(cells), hash(materials), occupied_count])
+		_content_key_revision = voxel_revision
+		return _content_key
 
 
 	func store(cell_position: Vector3i, cell_material: PackedFloat32Array) -> void:

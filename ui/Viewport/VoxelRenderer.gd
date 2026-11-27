@@ -47,7 +47,7 @@ var source_frame: VoxelFrame:
 			return
 		source_frame = value
 		if is_inside_tree():
-			_rebuild(false)
+			_rebuild()
 var slice_axis := -1:
 	set(value):
 		if value == slice_axis:
@@ -127,7 +127,7 @@ func _enter_tree() -> void:
 	State.frames_changed.connect(_rebuild)
 	State.cells_changed.connect(_update)
 	State.chunks_changed.connect(_update_chunks)
-	State.document_changed.connect(_rebuild)
+	State.document_changed.connect(_on_document_changed)
 	State.model_settings_changed.connect(_rebuild)
 
 
@@ -141,7 +141,7 @@ func _exit_tree() -> void:
 	State.frames_changed.disconnect(_rebuild)
 	State.cells_changed.disconnect(_update)
 	State.chunks_changed.disconnect(_update_chunks)
-	State.document_changed.disconnect(_rebuild)
+	State.document_changed.disconnect(_on_document_changed)
 	State.model_settings_changed.disconnect(_rebuild)
 	State.finish_operation(_operation_id)
 	_operation_id = 0
@@ -172,15 +172,20 @@ func _on_frame_changed() -> void:
 		_rebuild()
 
 
-func _rebuild(hide_all := true) -> void:
+func _on_document_changed() -> void:
+	_rebuild(true)
+
+
+func _rebuild(replace_context := false) -> void:
 	if not is_inside_tree():
 		return
 	_pending_cells.clear()
 	_pending_chunks.clear()
 	_pending_frame = -1
 	var active_frame := _get_frame()
-	if active_frame != _displayed_frame:
-		if hide_all:
+	var frame_switched := active_frame != _displayed_frame
+	if frame_switched:
+		if replace_context:
 			for chunk_instance in _chunk_instances.values():
 				chunk_instance.visible = false
 		_displayed_frame = active_frame
@@ -191,7 +196,7 @@ func _rebuild(hide_all := true) -> void:
 		if not requested.has(chunk_location):
 			_retire(chunk_location)
 	for chunk_location: Vector3i in requested:
-		_request(active_frame, chunk_location)
+		_request(active_frame, chunk_location, frame_switched and source_frame == null)
 	_report_activity()
 
 
@@ -199,14 +204,8 @@ func _request_locations(active_frame: VoxelFrame) -> Dictionary:
 	var locations := {}
 	if active_frame == null:
 		return locations
-	var include_neighbors := State.document.mesh_style != 0
 	for location: Vector3i in active_frame.chunks:
 		locations[location] = true
-		if not include_neighbors:
-			continue
-		for offset: Vector3i in VoxelMeshBuilder.neighbor_offsets(true):
-			if offset != Vector3i.ZERO:
-				locations[location + offset] = true
 	return locations
 
 
@@ -216,6 +215,15 @@ func _update(updated_frame: int, affected_cells: Array[Vector3i]) -> void:
 	if affected_cells.is_empty():
 		_rebuild()
 		return
+	if State.document.mesh_style == 0:
+		var active_frame := _get_frame()
+		if active_frame != null:
+			for cell_position in affected_cells:
+				var chunk_location := VoxelFrame.chunk_position(cell_position)
+				if not active_frame.chunks.has(chunk_location):
+					_pending_surface_keys.erase(chunk_location)
+					_inflight_surface_keys.erase(chunk_location)
+					_retire(chunk_location)
 	if _pending_frame != updated_frame:
 		_pending_cells.clear()
 		_pending_chunks.clear()
@@ -245,8 +253,7 @@ func _flush_updates() -> void:
 		for offset in VoxelFrame.crosstalk_chunks(cell_position):
 			_request_chunk(active_frame, chunk_location + offset, requested)
 	for chunk_location in chunks:
-		for offset: Vector3i in VoxelMeshBuilder.neighbor_offsets(true):
-			_request_chunk(active_frame, chunk_location + offset, requested)
+		_request_chunk(active_frame, chunk_location, requested)
 	_report_activity()
 
 
@@ -257,8 +264,8 @@ func _request_chunk(active_frame: VoxelFrame, chunk_location: Vector3i, requeste
 	_request(active_frame, chunk_location)
 
 
-func _request(active_frame: VoxelFrame, chunk_location: Vector3i) -> void:
-	if not active_frame.chunks.has(chunk_location) and State.document.mesh_style == 0:
+func _request(active_frame: VoxelFrame, chunk_location: Vector3i, install_cached := false) -> void:
+	if active_frame == null or not active_frame.chunks.has(chunk_location):
 		_pending_surface_keys.erase(chunk_location)
 		_inflight_surface_keys.erase(chunk_location)
 		_retire(chunk_location)
@@ -279,10 +286,16 @@ func _request(active_frame: VoxelFrame, chunk_location: Vector3i) -> void:
 			_chunk_instances[chunk_location].visible = true
 	else:
 		_pending_surface_keys[chunk_location] = surface_key
+		if install_cached and _surface_cache.has(surface_key):
+			_install(chunk_location, surface_key, _surface_cache[surface_key])
+			_touch_surface(surface_key)
+			_pending_surface_keys.erase(chunk_location)
 
 
 func _update_chunks(updated_frame: int, chunk_positions: Array[Vector3i]) -> void:
 	if updated_frame != (frame if frame >= 0 else State.current_frame):
+		return
+	if chunk_positions.is_empty():
 		return
 	if _pending_frame != updated_frame:
 		_pending_cells.clear()
@@ -304,8 +317,9 @@ static func _signature(active_frame: VoxelFrame, chunk_location: Vector3i, smoot
 	for offset: Vector3i in offsets:
 		var chunk: VoxelFrame.Chunk = active_frame.chunks.get(chunk_location + offset)
 		if chunk:
-			surface_key[index] = chunk.get_instance_id()
-			surface_key[index + 1] = chunk.voxel_revision
+			var chunk_key := chunk.content_key()
+			surface_key[index] = chunk_key[0]
+			surface_key[index + 1] = chunk_key[1]
 		index += 2
 	if slice_axis >= 0:
 		surface_key[index] = 1
@@ -426,6 +440,8 @@ func _launch_surface(chunk_location: Vector3i, active_frame: VoxelFrame) -> void
 		_install(chunk_location, surface_key, _surface_cache[surface_key])
 		_pending_surface_keys.erase(chunk_location)
 		_touch_surface(surface_key)
+		if profile_surfaces:
+			_profile.consume += 1
 		return
 	if _surface_jobs.has(surface_key):
 		_inflight_surface_keys[chunk_location] = surface_key
@@ -614,7 +630,7 @@ func _retire(chunk_location: Vector3i) -> void:
 
 
 func is_settled() -> bool:
-	return _pending_surface_keys.is_empty()
+	return _pending_surface_keys.is_empty() and not _update_scheduled
 
 
 func reset_profile() -> void:

@@ -305,6 +305,9 @@ func _shared_views() -> void:
 	)
 	step("When one chunk changes while both views display it", func():
 		_edit_recorded(0, WIDE - 1, 0)
+		renderer._flush_updates()
+		second._flush_updates()
+		_forget_view_key(_watch)
 		_jobs = {}
 	)
 	for index in SETTLE_FRAMES:
@@ -480,6 +483,21 @@ func _view_key(view: VoxelRenderer, location: Vector3i) -> PackedInt64Array:
 	return VoxelRenderer._signature(active, location, State.document.smooth_normals, -1, 0, 1, State.document.ao_strength)
 
 
+func _forget_view_key(location: Vector3i) -> void:
+	var active: VoxelFrame = renderer._get_frame()
+	if active == null or not active.chunks.has(location):
+		return
+	var key := VoxelRenderer._signature(active, location, State.document.smooth_normals, -1, 0, 1, State.document.ao_strength, State.document.mesh_style)
+	if not VoxelRenderer._surface_cache.has(key):
+		return
+	var entry: Dictionary = VoxelRenderer._surface_cache[key]
+	VoxelRenderer._surface_cache_bytes -= int(entry.bytes)
+	if entry.surface != null:
+		VoxelRenderer._surface_cache_filled -= 1
+	VoxelRenderer._surface_use_order.erase(key)
+	VoxelRenderer._surface_cache.erase(key)
+
+
 func _active_key(location: Vector3i) -> PackedInt64Array:
 	return _view_key(renderer, location)
 
@@ -610,6 +628,9 @@ func _shared_snapshot() -> void:
 	step("When two interior chunks are requested in one update", func():
 		_edit_recorded(5, 5, 5)
 		_edit_recorded(21, 5, 5)
+		renderer._flush_updates()
+		_forget_view_key(Vector3i(5, 5, 5))
+		_forget_view_key(Vector3i(21, 5, 5))
 		renderer.profile_surfaces = true
 		renderer.reset_profile()
 		renderer._update_surfaces()
@@ -650,6 +671,8 @@ func _profile_counters() -> void:
 	step("When one surface edit runs through the update", func():
 		renderer.reset_profile()
 		_edit_surface(3)
+		renderer._flush_updates()
+		_forget_view_key(_watch)
 	)
 	var deadline := Time.get_ticks_msec() + 8000
 	while not renderer.is_settled() and Time.get_ticks_msec() < deadline:

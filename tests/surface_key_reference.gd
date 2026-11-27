@@ -1,11 +1,15 @@
 extends RefCounted
 
 
-static func legacy_signature(active_frame: VoxelFrame, chunk_location: Vector3i, smooth_normals: bool) -> String:
+static func reference_signature(active_frame: VoxelFrame, chunk_location: Vector3i, smooth_normals: bool) -> String:
 	var surface_key := "smooth/" if smooth_normals else "flat/"
 	for offset in VoxelMeshBuilder.neighbor_offsets(smooth_normals):
 		var chunk: VoxelFrame.Chunk = active_frame.chunks.get(chunk_location + offset)
-		surface_key += "%s:%s/" % [chunk.get_instance_id(), chunk.voxel_revision] if chunk else "0/"
+		if chunk:
+			var content := chunk.content_key()
+			surface_key += "%s:%s/" % [content[0], content[1]]
+		else:
+			surface_key += "0/"
 	return surface_key
 
 
