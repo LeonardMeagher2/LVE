@@ -27,6 +27,7 @@ Done:
 - The glTF export uses the marching mesh for the low-poly style.
 - Flat and smooth modes merge coplanar triangle fans when the fan normals match.
 - The build uses padded field writes and packed merge and drop passes.
+- Smooth mode dissolves near-planar interior vertices after the merge.
 
 In progress:
 
@@ -283,6 +284,86 @@ Limit:
 - The normal rebuild keeps its cost.
 - A fused weld call was slower than the separate pass.
 
+## Done: limited dissolve
+
+Date: 2026-11-27.
+
+Smooth mode dissolves an interior vertex when its link is almost planar.
+The pass runs after the coplanar merge.
+It runs only when `smooth_normals` and `merge_coplanar` are true.
+
+A vertex is a seam vertex when it touches:
+- A boundary edge with one adjacent triangle.
+- An edge with a face normal angle above 25 degrees.
+- A position that two vertices of different materials share.
+
+The material rule covers the UV case.
+The current atlas gives every vertex of a material the same patch-centre UV.
+A material change therefore also changes the UV.
+
+A vertex dissolves when:
+- Every incident triangle has the vertex material.
+- The link is one closed cycle and every link edge is a mesh edge.
+- The link stays within 0.2 cells of the plane through the vertex.
+- Every new triangle keeps a shape quality above 0.022.
+- The new triangles keep the removed vertex normal within 8 degrees.
+- The new triangles keep the removed vertex colour within 0.02 in linear space.
+- Every new diagonal is not an existing mesh edge.
+
+The normal and colour checks use the barycentric weights of the removed position.
+The weights come from the plane of each new triangle.
+A link-plane projection is not enough, because a tilted triangle then hides its error.
+
+The retriangulation tries a fan from the three link vertices nearest the removed vertex.
+The fan with the lowest maximum normal spread wins.
+A tie takes the best smallest triangle shape.
+When no fan is valid, an ear clip triangulates the link in its best-fit plane.
+The ear score is the normal spread, then the triangle shape.
+A rejected ear is retried with the next best ear.
+Every triangle is checked for its inward winding and its area after the choice.
+
+Triangle changes:
+
+- Material sphere smooth: 2606 to 2490.
+- Testing2 smooth: 5116 to 4466.
+- me smooth: 7714 to 5714.
+
+Cost:
+
+- The dissolve phase takes 14.7 ms on the sphere, 42.7 ms on Testing2, and 125.6 ms on me.
+- The smooth build is 14.7% slower on the sphere, 24.1% on Testing2, and 36.2% on me.
+- The medians use five measured passes of the smooth build on all occupied chunks.
+
+Errors:
+
+- The normal error at each removed position is at most 8.0 degrees, equal to the limit.
+- The mean error is 0.7 degrees on Testing2, 1.1 on me, and 2.6 on the sphere.
+- The colour error is zero on these models, because their occlusion strength is zero.
+
+Constraints:
+
+- Flat mode does not run the pass, so every flat hash and the snapshot stay equal.
+- The pass keeps one material per triangle.
+- Every seam edge and every seam vertex stays in the dissolved surface.
+- The dissolved surface stays closed and manifold.
+
+Evidence:
+
+- `tests/marching_dissolve.gd` checks the topology, the seams, the material area, and the normal tolerance.
+- The flat benchmark hashes and the snapshot hash do not change.
+- Front screenshots of `me.lve` and `Dragon.lve` show no crack, band, or seam.
+  The largest shading change is a soft gradient of about 6% on one head region.
+
+Limit:
+
+- A chunk mesh is open at its own chunk face.
+  A vertex on that face carries a boundary edge, so it is a seam vertex.
+  Most vertices near a chunk face cannot dissolve.
+  Testing2 therefore reaches 12.7% and not the 15% aim.
+- Two dissolves next to each other can add their normal errors.
+  The final surface can differ by more than 8 degrees at a position that a later dissolve retriangulated.
+  The limit is therefore per dissolve and not on the final surface.
+
 ## LPM-4: Comparison research
 
 Status: done.
@@ -327,6 +408,8 @@ Key findings:
 
 The coplanar fan merge is done for flat mode and for smooth fans with one shared normal.
 A smooth fan with mixed normals keeps the unmerged mesh, because the wider fan changes the interpolation.
+The limited dissolve now handles most of those mixed-normal fans.
+A vertex that fails the planar, shape, normal, or colour limit keeps the merged mesh.
 The strict Testing2 triangle symmetry is no longer required for coplanar faces.
 The material coverage stays symmetric.
 
@@ -359,7 +442,7 @@ godot --headless --path . res://tests/benchmarks/marching_surface.tscn
 Marching suite:
 
 ```text
-godot --path . -s res://addons/test_kit/run.gd -- marching_mesh marching_bridge marching_chunks marching_material marching_snapshot
+godot --path . -s res://addons/test_kit/run.gd -- marching_mesh marching_bridge marching_chunks marching_material marching_snapshot marching_dissolve
 ```
 
 ## Decisions
@@ -382,3 +465,9 @@ godot --path . -s res://addons/test_kit/run.gd -- marching_mesh marching_bridge 
 - Flat mode merges coplanar fans after the normals and ambient occlusion.
 - Smooth mode merges only a fan whose vertex normals all match.
 - Coplanar merging may change triangle-level symmetry. Material coverage stays symmetric.
+- The limited dissolve runs after the coplanar merge in smooth mode.
+- A seam vertex does not dissolve. A seam edge is a boundary edge, a material edge, or a crease above 25 degrees.
+- The dissolve keeps the normal at the removed position within 8 degrees and the colour within 0.02.
+- The dissolve picks the fan with the lowest maximum normal spread, then the best shape, then an ear clip.
+- The dissolve cost is reported in its own benchmark phase.
+- The smooth dissolve adds 24% to the Testing2 build and 36% to the me build.

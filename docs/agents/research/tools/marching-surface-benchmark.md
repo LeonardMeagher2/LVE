@@ -5,6 +5,8 @@ Date: 2026-11-27.
 Status: measured and committed.
 The benchmark guards the geometry of the low-poly mesh style.
 The coplanar merge changes the accepted geometry and the hashes.
+The limited dissolve changes only the smooth geometry.
+The flat hashes and the snapshot do not change.
 
 ## Commands
 
@@ -23,7 +25,7 @@ godot --headless --path . res://tests/benchmarks/marching_surface.tscn
 Run the marching suite:
 
 ```text
-godot --path . -s res://addons/test_kit/run.gd -- marching_mesh marching_bridge marching_chunks marching_material marching_snapshot
+godot --path . -s res://addons/test_kit/run.gd -- marching_mesh marching_bridge marching_chunks marching_material marching_snapshot marching_dissolve
 ```
 
 ## Method
@@ -194,6 +196,58 @@ The flat rendered triangle count falls 26% to 44% on the models.
 The smooth rendered triangle count falls 18% to 21%.
 The material coverage stays the same.
 Triangle-level symmetry is not kept for coplanar faces.
+
+## Limited dissolve
+
+Smooth mode dissolves an interior vertex after the coplanar merge.
+A seam vertex does not dissolve.
+A seam edge is a boundary edge, a material edge, or a crease above 25 degrees.
+
+A vertex dissolves when its link is one closed cycle, the link stays within 0.2 cells of a plane, and every new triangle keeps a shape quality above 0.022.
+The new triangles must also keep the removed vertex normal within 8 degrees and the colour within 0.02 in linear space.
+Every new diagonal must be a new mesh edge.
+
+The pass retriangulates the link from a fan of the nearest three link vertices.
+The fan with the lowest maximum normal spread wins, then the best shape.
+A concave link falls back to an ear clip.
+The pass checks every new triangle for an inward winding and a non-zero area.
+
+The smooth rows use the same fixture and order as the flat rows.
+Each value is the median of five measured passes of the smooth build on all occupied chunks.
+The "before" column is the same build with the dissolve off.
+
+| Scene | Merged triangles | Dissolved triangles | Change | Dissolve (us) | Build before (us) | Build after (us) | Change |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Material sphere | 2606 | 2490 | -4.5% | 14746 | 107951 | 123824 | +14.7% |
+| Testing2 | 5116 | 4466 | -12.7% | 42734 | 203898 | 253092 | +24.1% |
+| me | 7714 | 5714 | -25.9% | 125554 | 341962 | 465671 | +36.2% |
+
+Removed vertices: 58 on the sphere, 325 on Testing2, and 1000 on me.
+Each removed vertex removes exactly two triangles.
+
+Normal and colour error at the removed position, per dissolve:
+
+| Scene | Maximum (deg) | Mean (deg) | Maximum colour |
+| --- | --- | --- | --- |
+| Material sphere | 7.90 | 2.56 | 0.0 |
+| Testing2 | 8.00 | 0.71 | 0.0 |
+| me | 8.00 | 1.06 | 0.0 |
+
+The colour error is zero because these models have no ambient occlusion.
+The deterministic dissolve fixture measures a maximum of 7.90 degrees, a mean of 1.09 degrees, and a zero colour error on its final surface.
+
+Limits:
+
+- The limit is per dissolve. Two neighbours can add their errors at one position.
+- A chunk mesh is open at the chunk face, so most vertices near a face are seam vertices and cannot dissolve.
+  Testing2 reaches 12.7%, below the 15% aim.
+- The dissolve is the largest new cost on smooth mode.
+  The me model is above the 25% build guide.
+  Its cost comes from about 6000 vertex attempts and 2400 triangulations in GDScript.
+  The next step is to cut the per-attempt work, not to weaken a limit.
+
+The flat path does not run the dissolve.
+Every flat model hash and the snapshot hash stay equal.
 
 ## Materials and normals
 

@@ -49,6 +49,13 @@ const CORNER_STEPS := [
 const PRESENT_SELF := 13
 const FIELD_RADIUS := 2
 const DEGENERATE_NORMAL_KEY := -999999
+const DISSOLVE_LINK_LIMIT := 9
+const DISSOLVE_CREASE_COSINE := 0.9063077870366499
+const DISSOLVE_NORMAL_COSINE := 0.9902680687415704
+const DISSOLVE_COLOUR_LIMIT := 0.02
+const DISSOLVE_PLANAR_LIMIT := 0.2
+const DISSOLVE_QUALITY_LIMIT := 0.022
+const DISSOLVE_AREA_LIMIT := 0.000001
 const FIELD_SIZE := SAMPLE_SIZE + FIELD_RADIUS * 2
 const FIELD_PADDING := SAMPLE_PADDING + FIELD_RADIUS
 const FIELD_CORNER_STEPS := [
@@ -89,10 +96,12 @@ var cells_us := 0
 var drop_us := 0
 var normals_us := 0
 var merge_us := 0
+var dissolve_us := 0
 var atlas_us := 0
 var smooth_normals := false
 var ao_strength := 0.0
 var merge_coplanar := true
+var dissolve_limited := true
 var skip_atlas := false
 var vertex_materials := PackedInt32Array()
 var material_table := PackedFloat32Array()
@@ -108,6 +117,23 @@ var _merge_next := PackedInt32Array()
 var _merge_next_stamp := PackedInt32Array()
 var _merge_previous_stamp := PackedInt32Array()
 var _merge_stamp := 0
+var _dissolve_next := PackedInt32Array()
+var _dissolve_next_stamp := PackedInt32Array()
+var _dissolve_previous_stamp := PackedInt32Array()
+var _dissolve_stamp := 0
+var _dissolve_points := PackedVector3Array()
+var _dissolve_normals := PackedVector3Array()
+var _dissolve_colours := PackedColorArray()
+var _dissolve_flat := PackedVector2Array()
+var _dissolve_outward := Vector3.ZERO
+var _dissolve_removed_position := Vector3.ZERO
+var _dissolve_flat_point := Vector2.ZERO
+var _dissolve_removed_normal := Vector3.ZERO
+var _dissolve_removed_colour := Color.WHITE
+var _dissolve_edge_set: Dictionary = {}
+var _triangle_spread := 0.0
+var _triangle_quality := 0.0
+var _triangle_covers := false
 
 var material_groups: Array = []
 
@@ -301,6 +327,11 @@ func _build(occupancy: PackedByteArray, material_ids: PackedInt32Array, material
 		welded = _merge_coplanar_fans(welded[0], welded[1], welded[2], welded[4], welded[3])
 	if profile:
 		merge_us = Time.get_ticks_usec() - merge_started
+	var dissolve_started := Time.get_ticks_usec() if profile else 0
+	if smooth_normals and merge_coplanar and dissolve_limited:
+		welded = _dissolve_smooth_vertices(welded[0], welded[1], welded[2], welded[4], welded[3])
+	if profile:
+		dissolve_us = Time.get_ticks_usec() - dissolve_started
 	var atlas_started := Time.get_ticks_usec() if profile else 0
 	var uvs := _build_atlas_uvs(welded[4], materials) if not skip_atlas else PackedVector2Array()
 	if profile:
@@ -332,6 +363,7 @@ func _set_empty() -> void:
 	vertex_materials = PackedInt32Array()
 	material_table = PackedFloat32Array()
 	merge_us = 0
+	dissolve_us = 0
 
 
 func _apply_edge_ambient_occlusion(positions: PackedVector3Array, colors: PackedColorArray, indices: PackedInt32Array, strength: float) -> void:
@@ -1450,6 +1482,10 @@ func _merge_coplanar_fans(positions: PackedVector3Array, normals: PackedVector3A
 				queue.append(link_vertex)
 	if removed.is_empty():
 		return [positions, normals, colors, indices, materials]
+	return _compact_mesh(positions, normals, colors, materials, triangles, removed)
+
+
+func _compact_mesh(positions: PackedVector3Array, normals: PackedVector3Array, colors: PackedColorArray, materials: PackedInt32Array, triangles: PackedInt32Array, removed: Dictionary) -> Array:
 	var kept := PackedInt32Array()
 	for triangle in triangles.size() / 3:
 		if removed.has(triangle):
@@ -1629,6 +1665,466 @@ func _merge_coplanar_vertex(vertex: int, triangles: PackedInt32Array, positions:
 		_register_merge_triangle(triangle_index, triangles, vertex_triangles)
 	return cycle
 
+
+func _dissolve_smooth_vertices(positions: PackedVector3Array, normals: PackedVector3Array, colors: PackedColorArray, materials: PackedInt32Array, indices: PackedInt32Array) -> Array:
+	if indices.is_empty():
+		return [positions, normals, colors, indices, materials]
+	var triangle_count := indices.size() / 3
+	var triangle_normals := PackedVector3Array()
+	triangle_normals.resize(triangle_count)
+	for triangle in triangle_count:
+		var base := triangle * 3
+		var first := positions[indices[base]]
+		var winding := (positions[indices[base + 1]] - first).cross(positions[indices[base + 2]] - first)
+		if winding.length_squared() < 0.0000000001:
+			continue
+		triangle_normals[triangle] = -winding.normalized()
+	var seam := _dissolve_seam_vertices(positions, triangle_normals, indices)
+	var triangles := indices.duplicate()
+	var vertex_triangles := {}
+	for triangle in triangle_count:
+		_register_merge_triangle(triangle, triangles, vertex_triangles)
+	var removed := PackedByteArray()
+	removed.resize(triangle_count + 64)
+	var dirty := PackedByteArray()
+	dirty.resize(positions.size())
+	_dissolve_next.resize(positions.size())
+	_dissolve_next_stamp.resize(positions.size())
+	_dissolve_previous_stamp.resize(positions.size())
+	var queue: Array[int] = []
+	var queued := PackedByteArray()
+	queued.resize(positions.size())
+	for vertex in positions.size():
+		if seam[vertex] != 0:
+			continue
+		if not vertex_triangles.has(vertex):
+			continue
+		var incident: Array = vertex_triangles[vertex]
+		if incident.size() >= 3 and incident.size() <= DISSOLVE_LINK_LIMIT:
+			queue.append(vertex)
+			queued[vertex] = 1
+	var dissolved := 0
+	while not queue.is_empty():
+		var vertex: int = queue.pop_back()
+		queued[vertex] = 0
+		var incident: Array = vertex_triangles[vertex]
+		if dirty[vertex] != 0:
+			dirty[vertex] = 0
+			var write := 0
+			for read in incident.size():
+				var triangle_index: int = incident[read]
+				if removed[triangle_index] == 0:
+					incident[write] = triangle_index
+					write += 1
+			if write != incident.size():
+				incident.resize(write)
+		if incident.size() < 3:
+			continue
+		var added := _dissolve_vertex(vertex, triangles, positions, normals, colors, materials, triangle_normals, vertex_triangles, removed)
+		if added.is_empty():
+			continue
+		for triangle_index: int in incident:
+			removed[triangle_index] = 1
+		dissolved += 1
+		var first_triangle := triangles.size() / 3
+		triangles.append_array(added)
+		if removed.size() < triangles.size() / 3:
+			removed.resize(triangles.size() / 3 + 64)
+		for index in range(0, added.size(), 3):
+			var triangle_index := first_triangle + index / 3
+			for corner in 3:
+				var link_vertex := added[index + corner]
+				dirty[link_vertex] = 1
+				var link_incident: Array = vertex_triangles[link_vertex]
+				link_incident.append(triangle_index)
+				vertex_triangles[link_vertex] = link_incident
+				if queued[link_vertex] != 0:
+					continue
+				if link_incident.size() >= 3 and link_incident.size() <= DISSOLVE_LINK_LIMIT:
+					queue.append(link_vertex)
+					queued[link_vertex] = 1
+	if dissolved == 0:
+		return [positions, normals, colors, indices, materials]
+	var removed_triangles := {}
+	for triangle in triangles.size() / 3:
+		if removed[triangle] != 0:
+			removed_triangles[triangle] = true
+	return _compact_mesh(positions, normals, colors, materials, triangles, removed_triangles)
+
+
+func _dissolve_seam_vertices(positions: PackedVector3Array, triangle_normals: PackedVector3Array, indices: PackedInt32Array) -> PackedByteArray:
+	var seam := PackedByteArray()
+	seam.resize(positions.size())
+	var edges := {}
+	for triangle in indices.size() / 3:
+		var base := triangle * 3
+		for corner in 3:
+			var first := indices[base + corner]
+			var second := indices[base + (corner + 1) % 3]
+			if first == second:
+				continue
+			var low := first if first < second else second
+			var high := second if first < second else first
+			var key := (low << 32) | high
+			if not edges.has(key):
+				edges[key] = triangle
+				continue
+			var other: int = edges[key]
+			if other < 0:
+				seam[low] = 1
+				seam[high] = 1
+				continue
+			if triangle_normals[other].dot(triangle_normals[triangle]) < DISSOLVE_CREASE_COSINE:
+				seam[low] = 1
+				seam[high] = 1
+			edges[key] = -1
+	for key: int in edges:
+		if edges[key] >= 0:
+			seam[key >> 32] = 1
+			seam[key & 0xFFFFFFFF] = 1
+	var known := {}
+	for index in positions.size():
+		var key := _position_key(positions[index])
+		if known.has(key):
+			seam[index] = 1
+			seam[known[key]] = 1
+		else:
+			known[key] = index
+	_dissolve_edge_set = edges
+	return seam
+
+
+static func _dissolve_edge_key(first: int, second: int) -> int:
+	return (first << 32) | second if first < second else (second << 32) | first
+
+
+func _dissolve_vertex(vertex: int, triangles: PackedInt32Array, positions: PackedVector3Array, normals: PackedVector3Array, colors: PackedColorArray, materials: PackedInt32Array, triangle_normals: PackedVector3Array, vertex_triangles: Dictionary, removed: PackedByteArray) -> PackedInt32Array:
+	var incident: Array = vertex_triangles[vertex]
+	var count := incident.size()
+	if count < 3 or count > DISSOLVE_LINK_LIMIT:
+		return PackedInt32Array()
+	var material := materials[vertex]
+	for triangle_index: int in incident:
+		var base := triangle_index * 3
+		if materials[triangles[base]] != material or materials[triangles[base + 1]] != material or materials[triangles[base + 2]] != material:
+			return PackedInt32Array()
+	_dissolve_stamp += 1
+	var stamp := _dissolve_stamp
+	var next_of := _dissolve_next
+	var next_stamp := _dissolve_next_stamp
+	var previous_stamp := _dissolve_previous_stamp
+	var start := -1
+	var links := 0
+	for triangle_index: int in incident:
+		var base := triangle_index * 3
+		var corner := -1
+		if triangles[base] == vertex:
+			corner = 0
+		elif triangles[base + 1] == vertex:
+			corner = 1
+		elif triangles[base + 2] == vertex:
+			corner = 2
+		else:
+			return PackedInt32Array()
+		var first := triangles[base + (corner + 1) % 3]
+		var second := triangles[base + (corner + 2) % 3]
+		if first == second:
+			return PackedInt32Array()
+		if next_stamp[first] == stamp or previous_stamp[second] == stamp:
+			return PackedInt32Array()
+		if start < 0:
+			start = first
+		next_of[first] = second
+		next_stamp[first] = stamp
+		previous_stamp[second] = stamp
+		links += 1
+	if links != count:
+		return PackedInt32Array()
+	var cycle := PackedInt32Array()
+	cycle.resize(count)
+	cycle[0] = start
+	var current := next_of[start]
+	var filled := 1
+	while current != start:
+		if filled >= count or next_stamp[current] != stamp:
+			return PackedInt32Array()
+		cycle[filled] = current
+		filled += 1
+		current = next_of[current]
+	if filled != count:
+		return PackedInt32Array()
+	var outward := Vector3.ZERO
+	for triangle_index: int in incident:
+		var base := triangle_index * 3
+		var first := positions[triangles[base]]
+		outward -= (positions[triangles[base + 1]] - first).cross(positions[triangles[base + 2]] - first)
+	if outward.length_squared() < 0.0000000001:
+		return PackedInt32Array()
+	_dissolve_outward = outward.normalized()
+	var removed_position := positions[vertex]
+	var offset := 0.0
+	for index in count:
+		offset = maxf(offset, absf((positions[cycle[index]] - removed_position).dot(_dissolve_outward)))
+	if offset > DISSOLVE_PLANAR_LIMIT:
+		return PackedInt32Array()
+	var axis := Vector3.RIGHT
+	if absf(_dissolve_outward.y) <= absf(_dissolve_outward.x) and absf(_dissolve_outward.y) <= absf(_dissolve_outward.z):
+		axis = Vector3.UP
+	elif absf(_dissolve_outward.z) <= absf(_dissolve_outward.x):
+		axis = Vector3.FORWARD
+	var across := _dissolve_outward.cross(axis)
+	if across.length_squared() < 0.0000000001:
+		return PackedInt32Array()
+	across = across.normalized()
+	var down := _dissolve_outward.cross(across)
+	if _dissolve_points.size() < DISSOLVE_LINK_LIMIT:
+		_dissolve_points.resize(DISSOLVE_LINK_LIMIT)
+		_dissolve_normals.resize(DISSOLVE_LINK_LIMIT)
+		_dissolve_colours.resize(DISSOLVE_LINK_LIMIT)
+		_dissolve_flat.resize(DISSOLVE_LINK_LIMIT)
+	for index in count:
+		var point := positions[cycle[index]]
+		_dissolve_points[index] = point
+		_dissolve_normals[index] = normals[cycle[index]]
+		_dissolve_colours[index] = colors[cycle[index]]
+		_dissolve_flat[index] = Vector2(point.dot(across), point.dot(down))
+	_dissolve_flat_point = Vector2(removed_position.dot(across), removed_position.dot(down))
+	var area := 0.0
+	for index in count:
+		area += _dissolve_flat[index].cross(_dissolve_flat[(index + 1) % count])
+	if absf(area) < DISSOLVE_AREA_LIMIT * 4.0:
+		return PackedInt32Array()
+	if area < 0.0:
+		for index in count:
+			_dissolve_flat[index] = Vector2(_dissolve_flat[index].x, -_dissolve_flat[index].y)
+		_dissolve_flat_point = Vector2(_dissolve_flat_point.x, -_dissolve_flat_point.y)
+	_dissolve_removed_normal = normals[vertex]
+	_dissolve_removed_colour = colors[vertex]
+	_dissolve_removed_position = removed_position
+	var list := _dissolve_triangulate(count)
+	if list.is_empty():
+		return PackedInt32Array()
+	var diagonals := PackedInt32Array()
+	for index in range(0, list.size(), 3):
+		for corner in 3:
+			var first := list[index + corner]
+			var second := list[index + (corner + 1) % 3]
+			var step := (second - first + count) % count
+			if step == 1 or step == count - 1:
+				continue
+			var low := mini(first, second)
+			var high := maxi(first, second)
+			var key := low * count + high
+			if diagonals.has(key):
+				continue
+			diagonals.append(key)
+			if _dissolve_edge_set.has(_dissolve_edge_key(cycle[low], cycle[high])):
+				return PackedInt32Array()
+	var covered := false
+	for index in range(0, list.size(), 3):
+		if not _dissolve_triangle_check(list[index], list[index + 1], list[index + 2]):
+			return PackedInt32Array()
+		if _triangle_covers:
+			covered = true
+	if not covered:
+		return PackedInt32Array()
+	var added := PackedInt32Array()
+	added.resize(list.size())
+	for index in list.size():
+		added[index] = cycle[list[index]]
+	return added
+
+
+func _dissolve_triangulate(count: int) -> PackedInt32Array:
+	if count <= 3:
+		if not _dissolve_shape(0, 1, 2):
+			return PackedInt32Array()
+		return PackedInt32Array([0, 1, 2])
+	var first := -1
+	var second := -1
+	var third := -1
+	var first_distance := INF
+	var second_distance := INF
+	var third_distance := INF
+	for index in count:
+		var distance := _dissolve_flat[index].distance_squared_to(_dissolve_flat_point)
+		if distance < first_distance:
+			third = second
+			third_distance = second_distance
+			second = first
+			second_distance = first_distance
+			first = index
+			first_distance = distance
+		elif distance < second_distance:
+			third = second
+			third_distance = second_distance
+			second = index
+			second_distance = distance
+		elif distance < third_distance:
+			third = index
+			third_distance = distance
+	var best_apex := -1
+	var best_spread := INF
+	var best_quality := -1.0
+	for apex: int in [first, second, third]:
+		if apex < 0:
+			continue
+		var spread := 0.0
+		var quality := 1.0
+		var valid := true
+		for step in range(1, count - 1):
+			if not _dissolve_shape(apex, (apex + step) % count, (apex + step + 1) % count):
+				valid = false
+				break
+			spread = maxf(spread, _triangle_spread)
+			quality = minf(quality, _triangle_quality)
+		if not valid:
+			continue
+		if spread < best_spread - 0.0000001 or (spread < best_spread + 0.0000001 and quality > best_quality + 0.0000001):
+			best_spread = spread
+			best_quality = quality
+			best_apex = apex
+	if best_apex < 0:
+		return _dissolve_ear_triangulation(count)
+	var list := PackedInt32Array()
+	list.resize((count - 2) * 3)
+	var cursor := 0
+	for step in range(1, count - 1):
+		list[cursor] = best_apex
+		list[cursor + 1] = (best_apex + step) % count
+		list[cursor + 2] = (best_apex + step + 1) % count
+		cursor += 3
+	return list
+
+
+func _dissolve_ear_triangulation(count: int) -> PackedInt32Array:
+	var remaining := PackedInt32Array()
+	remaining.resize(count)
+	for index in count:
+		remaining[index] = index
+	var list := PackedInt32Array()
+	while remaining.size() > 3:
+		var size := remaining.size()
+		var chosen := -1
+		var tried := PackedByteArray()
+		tried.resize(size)
+		while chosen < 0:
+			var best_position := -1
+			var best_spread := INF
+			var best_quality := -1.0
+			for position in size:
+				if tried[position] != 0:
+					continue
+				if not _dissolve_shape(remaining[(position + size - 1) % size], remaining[position], remaining[(position + 1) % size]):
+					tried[position] = 1
+					continue
+				if _triangle_spread < best_spread - 0.0000001 or (_triangle_spread < best_spread + 0.0000001 and _triangle_quality > best_quality + 0.0000001):
+					best_spread = _triangle_spread
+					best_quality = _triangle_quality
+					best_position = position
+			if best_position < 0:
+				return PackedInt32Array()
+			if not _dissolve_ear_clear(best_position, remaining):
+				tried[best_position] = 1
+				continue
+			chosen = best_position
+		list.append(remaining[(chosen + size - 1) % size])
+		list.append(remaining[chosen])
+		list.append(remaining[(chosen + 1) % size])
+		remaining.remove_at(chosen)
+	if not _dissolve_shape(remaining[0], remaining[1], remaining[2]):
+		return PackedInt32Array()
+	list.append(remaining[0])
+	list.append(remaining[1])
+	list.append(remaining[2])
+	return list
+
+
+func _dissolve_ear_clear(position: int, remaining: PackedInt32Array) -> bool:
+	var size := remaining.size()
+	var a := _dissolve_flat[remaining[(position + size - 1) % size]]
+	var b := _dissolve_flat[remaining[position]]
+	var c := _dissolve_flat[remaining[(position + 1) % size]]
+	for index in size:
+		if index == position or index == (position + size - 1) % size or index == (position + 1) % size:
+			continue
+		var point := _dissolve_flat[remaining[index]]
+		if (b - a).cross(point - a) > 0.0 and (c - b).cross(point - b) > 0.0 and (a - c).cross(point - c) > 0.0:
+			return false
+	return true
+
+
+func _dissolve_shape(first: int, middle: int, last: int) -> bool:
+	var a := _dissolve_flat[first]
+	var b := _dissolve_flat[middle]
+	var c := _dissolve_flat[last]
+	var area := (b - a).cross(c - a)
+	if area <= DISSOLVE_AREA_LIMIT:
+		return false
+	var shape := area / (a.distance_squared_to(b) + b.distance_squared_to(c) + c.distance_squared_to(a))
+	if shape < DISSOLVE_QUALITY_LIMIT:
+		return false
+	var normal_a := _dissolve_normals[first]
+	var normal_b := _dissolve_normals[middle]
+	var normal_c := _dissolve_normals[last]
+	var spread := 2.0 - 2.0 * normal_a.dot(normal_b)
+	spread = maxf(spread, 2.0 - 2.0 * normal_b.dot(normal_c))
+	spread = maxf(spread, 2.0 - 2.0 * normal_c.dot(normal_a))
+	var point_a := _dissolve_points[first]
+	var point_b := _dissolve_points[middle]
+	var point_c := _dissolve_points[last]
+	var winding := (point_b - point_a).cross(point_c - point_a)
+	var squared := winding.length_squared()
+	if squared < 0.0000000000000001:
+		return false
+	var offset := point_a - _dissolve_removed_position
+	var weight_middle := (point_c - point_a).cross(offset).dot(winding) / squared
+	var weight_last := (point_b - point_a).cross(offset).dot(winding) / squared
+	var weight_first := 1.0 - weight_middle - weight_last
+	if weight_first > -0.001 and weight_middle > -0.001 and weight_last > -0.001:
+		var blended := normal_a * maxf(weight_first, 0.0) + normal_b * maxf(weight_middle, 0.0) + normal_c * maxf(weight_last, 0.0)
+		if blended.length_squared() < 0.0000000001:
+			return false
+		if blended.normalized().dot(_dissolve_removed_normal) < DISSOLVE_NORMAL_COSINE:
+			return false
+		var colour := _dissolve_colours[first] * maxf(weight_first, 0.0) + _dissolve_colours[middle] * maxf(weight_middle, 0.0) + _dissolve_colours[last] * maxf(weight_last, 0.0)
+		if absf(colour.r - _dissolve_removed_colour.r) > DISSOLVE_COLOUR_LIMIT or absf(colour.g - _dissolve_removed_colour.g) > DISSOLVE_COLOUR_LIMIT or absf(colour.b - _dissolve_removed_colour.b) > DISSOLVE_COLOUR_LIMIT:
+			return false
+	_triangle_spread = spread
+	_triangle_quality = shape
+	return true
+
+
+func _dissolve_triangle_check(first: int, middle: int, last: int) -> bool:
+	var point_a := _dissolve_points[first]
+	var point_b := _dissolve_points[middle]
+	var point_c := _dissolve_points[last]
+	var winding := (point_b - point_a).cross(point_c - point_a)
+	if winding.dot(_dissolve_outward) >= 0.0:
+		return false
+	if winding.length_squared() < 0.0000000000000001:
+		return false
+	var offset := point_a - _dissolve_removed_position
+	var weight_middle := (point_c - point_a).cross(offset).dot(winding) / winding.length_squared()
+	var weight_last := (point_b - point_a).cross(offset).dot(winding) / winding.length_squared()
+	var weight_first := 1.0 - weight_middle - weight_last
+	_triangle_covers = weight_first > -0.001 and weight_middle > -0.001 and weight_last > -0.001
+	if not _triangle_covers:
+		return true
+	var normal_a := _dissolve_normals[first]
+	var normal_b := _dissolve_normals[middle]
+	var normal_c := _dissolve_normals[last]
+	var blended := normal_a * maxf(weight_first, 0.0) + normal_b * maxf(weight_middle, 0.0) + normal_c * maxf(weight_last, 0.0)
+	if blended.length_squared() < 0.0000000001:
+		return false
+	var dot := blended.normalized().dot(_dissolve_removed_normal)
+	if dot < DISSOLVE_NORMAL_COSINE:
+		return false
+	var colour := _dissolve_colours[first] * maxf(weight_first, 0.0) + _dissolve_colours[middle] * maxf(weight_middle, 0.0) + _dissolve_colours[last] * maxf(weight_last, 0.0)
+	var colour_error := maxf(maxf(absf(colour.r - _dissolve_removed_colour.r), absf(colour.g - _dissolve_removed_colour.g)), absf(colour.b - _dissolve_removed_colour.b))
+	if colour_error > DISSOLVE_COLOUR_LIMIT:
+		return false
+	return true
 
 func _fill_boundary_ears(positions: PackedVector3Array, normals: PackedVector3Array, colors: PackedColorArray, indices: PackedInt32Array, materials_vertex: PackedInt32Array, occupancy: PackedByteArray, cell_material_ids: PackedInt32Array, palette: PackedFloat32Array) -> Array:
 	var point_of := {}
@@ -2707,3 +3203,4 @@ static func _point_in_triangle(point: Vector2, first: Vector2, second: Vector2, 
 	var second_side := (third - second).cross(point - second)
 	var third_side := (first - third).cross(point - third)
 	return (first_side >= 0.0 and second_side >= 0.0 and third_side >= 0.0) or (first_side <= 0.0 and second_side <= 0.0 and third_side <= 0.0)
+
