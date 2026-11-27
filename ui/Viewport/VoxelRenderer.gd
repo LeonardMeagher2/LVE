@@ -109,6 +109,7 @@ var _chunk_materials: Dictionary = {}
 var _unshaded_materials: Dictionary = {}
 var _pending_surface_keys: Dictionary = {}
 var _inflight_surface_keys: Dictionary = {}
+var _gate_group := false
 var _retired_chunk_instances: Array[MeshInstance3D] = []
 var _displayed_frame: VoxelFrame
 var _operation_id := 0
@@ -179,6 +180,7 @@ func _on_document_changed() -> void:
 func _rebuild(replace_context := false) -> void:
 	if not is_inside_tree():
 		return
+	_gate_group = false
 	_pending_cells.clear()
 	_pending_chunks.clear()
 	_pending_frame = -1
@@ -245,6 +247,7 @@ func _flush_updates() -> void:
 	var chunks := _pending_chunks
 	_pending_cells = []
 	_pending_chunks = []
+	_gate_group = State.document.mesh_style != 0
 	var active_frame := _get_frame()
 	var requested := {}
 	var reach := VoxelMarchingMeshBuilder.MESH_PADDING if State.document.mesh_style != 0 else 0
@@ -404,6 +407,22 @@ func _update_surfaces() -> void:
 			break
 
 
+func _group_ready(chunk_location: Vector3i) -> bool:
+	if not _gate_group:
+		return true
+	for offset in VoxelFrame.neighbor_chunks(Vector3i.ZERO):
+		var neighbor := chunk_location + offset
+		var wanted: Variant = _pending_surface_keys.get(neighbor)
+		if wanted == null:
+			continue
+		if wanted == _displayed_surface_keys.get(neighbor):
+			continue
+		if _surface_cache.has(wanted):
+			continue
+		return false
+	return true
+
+
 func _consume_inflight(chunk_location: Vector3i) -> bool:
 	if not _inflight_surface_keys.has(chunk_location):
 		return false
@@ -417,6 +436,8 @@ func _consume_inflight(chunk_location: Vector3i) -> bool:
 		_inflight_surface_keys.erase(chunk_location)
 		if profile_surfaces:
 			_profile.lost += 1
+		return false
+	if not _group_ready(chunk_location):
 		return false
 	_install(chunk_location, surface_key, _surface_cache[surface_key])
 	_touch_surface(surface_key)
@@ -441,6 +462,8 @@ func _launch_surface(chunk_location: Vector3i, active_frame: VoxelFrame) -> void
 			_chunk_instances[chunk_location].visible = true
 		return
 	if _surface_cache.has(surface_key):
+		if not _group_ready(chunk_location):
+			return
 		_install(chunk_location, surface_key, _surface_cache[surface_key])
 		_pending_surface_keys.erase(chunk_location)
 		_touch_surface(surface_key)

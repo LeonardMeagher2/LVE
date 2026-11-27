@@ -388,6 +388,10 @@ The first paints a cell on the chunk face.
 The second paints a cell one step inside the face.
 Each case checks that the adjacent chunk key changes and that the model stays closed.
 
+A style-1 incremental update also gates installs by the crosstalk group.
+A chunk installs only when every neighbour's wanted surface is cached or displayed.
+The old meshes stay visible until the group is ready, so no frame shows the hole.
+The near-face test samples every frame and fails without the gate.
 The near-face case fails without the reach.
 The test fails when the crosstalk loop is removed.
 

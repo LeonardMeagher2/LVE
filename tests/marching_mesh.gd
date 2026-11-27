@@ -451,10 +451,15 @@ func _style_crosstalk_near_face() -> void:
 		_near_face_key = _renderer._displayed_surface_keys[Vector3i.ZERO].duplicate()
 		State.paint(Vector3i(17, 11, 8), VoxelFrame.material(Color.TRANSPARENT))
 	)
-	await _view.settle()
-	step("Then the adjacent chunk rebuilds and the combined surface stays closed", func():
+	var hole_seen := false
+	while not _renderer.is_settled():
+		await get_tree().process_frame
+		_view.collect()
+		hole_seen = hole_seen or not _view.closed()
+	step("Then the adjacent chunk rebuilds and no frame shows a boundary", func():
 		var after: PackedInt64Array = _renderer._displayed_surface_keys[Vector3i.ZERO]
 		expect(after != _near_face_key, "the adjacent chunk rebuilds after a near-face cell edit")
+		expect(not hole_seen, "no frame shows a boundary while the neighbour rebuilds")
 		_view.collect()
 		expect(_view.closed(), "the combined surface has no boundary")
 		expect(_view.duplicates() == 0, "no triangle is emitted twice")
