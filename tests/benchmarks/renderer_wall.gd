@@ -97,19 +97,25 @@ func _cost() -> void:
 			print("CELLS_CONN " + str(connection["callable"].get_object()))
 		expect(true, "the subscribers are listed")
 	)
-	step("When every chunk cell changes", func():
+	var stamps = step("When every chunk cell changes", func():
 		var mutate_started := Time.get_ticks_usec()
 		for location: Vector3i in locations:
 			State.document.set_cell(0, location * CHUNK + Vector3i(8, 8, 8), VoxelFrame.material(Color.WHITE))
 		var mutate_ended := Time.get_ticks_usec()
 		renderer.reset_profile()
-		rebuild_started = mutate_ended
 		State.chunks_changed.emit(0, locations)
 		var emit_ended := Time.get_ticks_usec()
-		rebuild_mutate_us = mutate_ended - mutate_started
-		rebuild_emit_us = emit_ended - mutate_ended
-		rebuild_window_started = emit_ended
+		return {
+			"mutate_us": mutate_ended - mutate_started,
+			"emit_us": emit_ended - mutate_ended,
+			"started": mutate_ended,
+			"window": emit_ended,
+		}
 	)
+	rebuild_started = int(stamps.get("started", 0))
+	rebuild_mutate_us = int(stamps.get("mutate_us", 0))
+	rebuild_emit_us = int(stamps.get("emit_us", 0))
+	rebuild_window_started = int(stamps.get("window", 0))
 	await get_tree().process_frame
 	rebuild_first_wait_us = Time.get_ticks_usec() - rebuild_window_started
 	while rebuild_frames < MAX_FRAMES:
