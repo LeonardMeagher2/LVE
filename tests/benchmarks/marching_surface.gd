@@ -2,6 +2,7 @@ extends "res://tests/test.gd"
 
 
 const FIXTURE := preload("res://tests/helpers/marching_fixture.gd")
+const VIEW := preload("res://tests/helpers/marching_view.gd")
 const MODEL_NAMES: Array[String] = ["Testing2", "Test3", "Testing", "me"]
 const MODEL_HASHES := {
 	"Testing2": 1949223109262883231,
@@ -44,6 +45,14 @@ func _run() -> void:
 	step("When each scene builds warmed and repeated", func():
 		for name in _order:
 			_measure(name, _rows[name])
+	)
+	var viewport := await _time_viewport()
+	step("Then the editor viewport builds the same sphere surface", func():
+		print("MEASURE marching_surface viewport: us=%d vertices=%d triangles=%d" % [
+			viewport["us"], viewport["vertices"], viewport["triangles"],
+		])
+		expect(int(viewport["vertices"]) == SPHERE_VERTICES, "the viewport keeps the sphere vertex count")
+		expect(int(viewport["triangles"]) == SPHERE_TRIANGLES, "the viewport keeps the sphere triangle count")
 	)
 	step("Then every scene keeps its snapshot", func():
 		for name in _order:
@@ -110,3 +119,13 @@ func _median(passes: Array, key: String) -> int:
 		values.append(int(pass_data[key]))
 	values.sort()
 	return values[values.size() / 2]
+
+
+func _time_viewport() -> Dictionary:
+	var view = VIEW.new(self)
+	var started := Time.get_ticks_usec()
+	view.apply(FIXTURE.sphere_materials(5, 4), 1)
+	await view.settle()
+	var elapsed := Time.get_ticks_usec() - started
+	view.collect()
+	return {"us": elapsed, "vertices": view.positions.size(), "triangles": view.indices.size() / 3}

@@ -45,6 +45,10 @@ It covers each index.
 The low-poly material uses vertex colours.
 The hash does not cover metallic or roughness values.
 
+The viewport measurement loads the same sphere into the editor renderer.
+It times the frame copy, the worker jobs, the mesh install, and the material.
+It reports one run after the mesher passes.
+
 ## Snapshot
 
 | Scene | Chunks | Non-empty | Vertices | Triangles | Hash |
@@ -71,19 +75,22 @@ The "after" column is the optimized builder.
 
 | Scene | Before (us) | After (us) | Speedup |
 | --- | --- | --- | --- |
-| Material sphere | 1049239 | 123442 | 8.5x |
-| Testing2 | 940450 | 195051 | 4.8x |
-| Test3 | 121936 | 8331 | 14.6x |
-| Testing | 502327 | 43914 | 11.4x |
-| me | 985508 | 348758 | 2.8x |
+| Material sphere | 1049239 | 125643 | 8.4x |
+| Testing2 | 940450 | 197839 | 4.8x |
+| Test3 | 121936 | 8134 | 15.0x |
+| Testing | 502327 | 44370 | 11.3x |
+| me | 985508 | 347572 | 2.8x |
+
+The editor viewport settles the sphere in 117440 us in one run.
+This value includes the parallel chunk jobs and the frame waits.
 
 After phases:
 
 | Scene | Sample | Field | Cells | Drop | Normals |
 | --- | --- | --- | --- | --- | --- |
-| Material sphere | 8745 | 40456 | 53338 | 8724 | 9168 |
-| Testing2 | 7031 | 25107 | 113927 | 23043 | 22022 |
-| me | 12718 | 98370 | 164704 | 35325 | 32729 |
+| Material sphere | 9011 | 41136 | 53582 | 9357 | 9707 |
+| Testing2 | 7114 | 24539 | 113611 | 24333 | 23418 |
+| me | 13265 | 98908 | 162798 | 34778 | 33170 |
 
 All values are microseconds.
 

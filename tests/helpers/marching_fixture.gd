@@ -33,12 +33,17 @@ static func sphere_cells(radius: int, material_count: int) -> Dictionary:
 	return cells
 
 
+static func sphere_materials(radius: int, material_count: int) -> Dictionary:
+	var colors := sphere_cells(radius, material_count)
+	var cells := {}
+	for cell: Vector3i in colors:
+		cells[cell] = VoxelFrame.material(colors[cell])
+	return cells
+
+
 static func sphere_frame(radius: int, material_count: int) -> VoxelFrame:
 	var frame := VoxelFrame.new()
-	var cells := sphere_cells(radius, material_count)
-	for cell: Vector3i in cells:
-		cells[cell] = VoxelFrame.material(cells[cell])
-	frame.set_cells(cells)
+	frame.set_cells(sphere_materials(radius, material_count))
 	return frame
 
 

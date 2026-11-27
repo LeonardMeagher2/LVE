@@ -25,10 +25,7 @@ func _ready() -> void:
 
 func _snapshot() -> void:
 	step("Given a radius five sphere with four materials", func():
-		var colors := FIXTURE.sphere_cells(5, 4)
-		var cells := {}
-		for cell: Vector3i in colors:
-			cells[cell] = VoxelFrame.material(colors[cell])
+		var cells := FIXTURE.sphere_materials(5, 4)
 		_frame = VoxelFrame.new()
 		_frame.set_cells(cells)
 		_locations = FIXTURE.requested_locations(_frame)
