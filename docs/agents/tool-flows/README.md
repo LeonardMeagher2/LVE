@@ -13,7 +13,7 @@ Use a Markdown viewer with Mermaid support to display the graphs.
 1. Start with the shared input, edit, preview, and rendering paths.
 2. Select a tool family from the table.
 3. Compare captured state, work queues, cancellation, and undo boundaries.
-4. Check the proposed changes against each tool's required behavior.
+4. Check each tool's required behavior against the code.
 5. Use the [cross-tool comparison](comparison.md) to find shared steps and required differences.
 6. Use the [composition guide](composition.md) for the current A to H mechanisms.
 

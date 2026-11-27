@@ -621,7 +621,7 @@ Use these checks when you compare the maps with the code.
 4. Release, job completion, commit, and mesh install are separate events.
 5. The undo boundary matches the transaction that the code opens.
 6. The thread label matches the inline limit and the worker call.
-7. A candidate change names its existing mechanism and its preserved contract.
+7. A proposed change names its existing mechanism and its preserved contract.
 8. A TODO stays separate from the shipped path.
 
 ## Source index
