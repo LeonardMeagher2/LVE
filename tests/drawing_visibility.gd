@@ -26,8 +26,6 @@ func _run() -> void:
 	for x in range(13, 20):
 		var cell := Vector3i(x, 0, 0)
 		State.paint(cell, VoxelFrame.material(Color.BLUE))
-		var affected: Array[Vector3i] = [cell]
-		State.cells_changed.emit(0, affected)
 		kept_visible = kept_visible and _mesh_at(Vector3.ZERO) != null
 		kept_visible = kept_visible and _mesh_at(Vector3(16, 0, 0)) != null
 		await get_tree().process_frame
@@ -71,8 +69,6 @@ func _run() -> void:
 	)
 	step("When the user erases the last voxel in the chunk", func():
 		State.paint(Vector3i(14, 0, 0), VoxelFrame.material(Color.TRANSPARENT))
-		var affected: Array[Vector3i] = [Vector3i(14, 0, 0)]
-		State.cells_changed.emit(1, affected)
 		expect(_mesh_at(Vector3.ZERO) == null, "the erased chunk disappears immediately")
 	)
 

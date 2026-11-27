@@ -62,8 +62,6 @@ func _run() -> void:
 	)
 	for color in [Color.BLUE, Color.GREEN, Color.YELLOW]:
 		State.paint(enclosed_voxel, VoxelFrame.material(color))
-		var affected_cells: Array[Vector3i] = [enclosed_voxel]
-		State.cells_changed.emit(0, affected_cells)
 		await _settle()
 		var surface_key: PackedInt64Array = scene_renderer._displayed_surface_keys[enclosed_chunk]
 		expect(VoxelRenderer._surface_cache.size() <= VoxelRenderer.SURFACE_CACHE_LIMIT_ENTRIES, "the edited chunk keeps the cache within its entry limit")

@@ -798,7 +798,6 @@ func _edit_recorded(x: int, y: int, z: int) -> void:
 	var tx := State.begin_edit()
 	State.paint(cell, VoxelFrame.material(Color.BLUE))
 	State.finish_edit(tx)
-	_emit_cells([cell])
 
 
 func _edit_ring(index: int) -> void:

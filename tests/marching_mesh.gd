@@ -421,9 +421,7 @@ func _style_crosstalk() -> void:
 		expect(_renderer._chunk_instances.has(Vector3i.ZERO), "the adjacent chunk draws a surface")
 		_crosstalk_before = _mesh_hash(Vector3i.ZERO)
 		expect(_crosstalk_before != 0, "the adjacent chunk has a surface before the paint")
-		State.get_current_voxel_frame().set_cell(Vector3i(16, 8, 8), VoxelFrame.material(Color.WHITE))
-		var affected: Array[Vector3i] = [Vector3i(16, 8, 8)]
-		State.cells_changed.emit(0, affected)
+		State.paint(Vector3i(16, 8, 8), VoxelFrame.material(Color.WHITE))
 	)
 	await _view.settle()
 	step("Then the adjacent chunk rebuilds and the combined surface stays closed", func():

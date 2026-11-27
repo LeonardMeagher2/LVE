@@ -520,13 +520,18 @@ func remove_plugin(plugin: VoxelPlugin) -> void:
 
 
 func paint(position: Vector3i, cell_material: PackedFloat32Array) -> void:
+	var painted: Array[Vector3i] = []
 	if symmetry_axes == 0 and not slice_enabled and not document.has_size() and edits.active_edit() == null:
 		document.paint(current_frame, position, cell_material)
-		return
-	var context := drawing_context()
-	var changes := context.expand({position: cell_material}, get_current_voxel_frame(), false, null)
-	get_current_voxel_frame().set_cells(changes)
-	document._bounds_dirty = true
+		painted.append(position)
+	else:
+		var context := drawing_context()
+		var changes := context.expand({position: cell_material}, get_current_voxel_frame(), false, null)
+		get_current_voxel_frame().set_cells(changes)
+		document._bounds_dirty = true
+		painted.assign(changes.keys())
+	if not painted.is_empty():
+		cells_changed.emit(current_frame, painted)
 
 
 func drawing_context() -> VoxelFrame.EditContext:

@@ -68,8 +68,6 @@ func _run() -> void:
 	step("When the user switches away and back while a mesh job is pending", func():
 		State.add_frame()
 		State.paint(Vector3i(-1, 0, 0), VoxelFrame.material(Color.BLUE))
-		var affected: Array[Vector3i] = [Vector3i(-1, 0, 0)]
-		State.cells_changed.emit(1, affected)
 		State.current_frame = 0
 	)
 	await _settle()

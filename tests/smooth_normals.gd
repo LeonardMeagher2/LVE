@@ -116,8 +116,6 @@ func _run() -> void:
 		var tx := State.begin_edit()
 		State.paint(Vector3i(16, 16, 0), VoxelFrame.material(Color.TRANSPARENT))
 		State.finish_edit(tx)
-		var affected: Array[Vector3i] = [Vector3i(16, 16, 0)]
-		State.cells_changed.emit(0, affected)
 	)
 	await _settle()
 	step("Then the neighboring surfaces update their shared corner normals", func():
