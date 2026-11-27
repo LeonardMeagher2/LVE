@@ -2,6 +2,7 @@
 
 This document gives the behaviour and the options of the voxel Pose brush. It contains no implementation detail.
 Blender facts come from the pages in [References](#references). A claim that I could not confirm carries the word "unconfirmed".
+Current shipped behavior is in [Deform tool flows](../../tool-flows/deform.md#pose). This page records design history.
 
 ## 1. Purpose
 
@@ -123,36 +124,7 @@ The cell selection is not an option. It always limits the brush, like the transf
 - The rotation axis of Blender's Ctrl twist is unconfirmed. The Pose page states only that Ctrl applies a twist rotation and disables IK segments [R1].
 - The default values in section 8 are choices for this editor. Blender states no default for them on the cited pages.
 
-## Final rules after the playable builds
+## Current behaviour
 
-These rules supersede the earlier sections where they differ. They match the
-shipped tool.
-
-- The joint comes from the occupied cells, not from a fixed offset or an axis
-  estimate. The search walks the brush ball from the press and the joint is its
-  farthest occupied cell, so it always sits on an occupied cell. A tie prefers
-  the cell on the view plane of the press.
-  The bound keeps the walk local, so a connected model cannot send the search
-  across the whole frame.
-- The Connected option applies to the joint search and the captured set. On
-  follows the six face neighbors. Off adds edge and corner contacts. It starts
-  off.
-- The pointer is the tip of the bone. The arm runs from the joint to the pointer,
-  and the angle is the screen angle from the bone to that arm. A travel-based
-  angle leaves the tip off the pointer.
-- The cursor shows the joint and the bone. It shows no cell count.
-- The option bar holds the size and the falloff, shared with Grab. Blend passes,
-  joint count, joint offset, and the angle limit are gone. A
-  single rigid turn is easier to predict, and the falloff already softens the
-  joint neck.
-- The cell selection limits the limb search and the captured cells. The moved
-  cells may land outside it, and the selection then follows them. The transform
-  tools work this way: a transform moves the selection, and a write filter on the
-  destination would make a small selection unmovable. Grab keeps the same rule.
-- The captured cells stay inside the brush ball. A long limb bends one brush span
-  per stroke.
-- A drag that returns to its first position restores the press selection.
-- A turn is a rigid resample. Each destination cell samples one source cell, and
-  each source that the resample misses writes exactly one cell. A source never
-  draws a line to its destination. A line fill turns a thin limb into a solid fan
-  on a wide brush.
+The shipped Pose rules are in [Deform tool flows](../../tool-flows/deform.md#pose).
+This page records the design research and the Blender evidence.

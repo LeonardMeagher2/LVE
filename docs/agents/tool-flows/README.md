@@ -2,12 +2,8 @@
 
 Use these maps to compare the current tool flows.
 Use the source links to check each implementation.
-Treat the remaining candidates as hypotheses, not implementation plans.
-Some former candidates are now working-tree code migrations.
 
-Source baseline: `6cab6c7` plus the current uncommitted working tree.
-The working-tree changes are not a commit.
-Source links for changed files name the symbol and omit line ranges.
+Source links name the symbol and omit line ranges.
 Update the maps when a tool flow changes.
 
 ## Read the maps
@@ -18,12 +14,12 @@ Use a Markdown viewer with Mermaid support to display the graphs.
 2. Select a tool family from the table.
 3. Compare captured state, work queues, cancellation, and undo boundaries.
 4. Check the proposed changes against each tool's required behavior.
-5. Use the [cross-tool comparison](comparison.md) to select a bounded review candidate.
+5. Use the [cross-tool comparison](comparison.md) to find shared steps and required differences.
 6. Use the [composition guide](composition.md) for the current A to H mechanisms.
 
 | Map | Tools and paths |
 | --- | --- |
-| [Cross-tool comparison](comparison.md) | Shared-step candidates, required differences, and review questions |
+| [Cross-tool comparison](comparison.md) | Shared steps, required differences, and review questions |
 | [Composition guide](composition.md) | Current A to H mechanisms, signatures, ownership, and reuse limits |
 | [Shared paths and utilities](shared-and-utilities.md) | Input routing, edit jobs, previews, model rendering, Plane, Symmetry, Eyedropper |
 | [Drawing](drawing.md) | Brush, Eraser, Line, Stamp, Paint Brush, Dither Brush, Fill, Spray, Primitive |

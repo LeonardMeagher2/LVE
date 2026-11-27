@@ -469,29 +469,9 @@ Both apply symmetry before the mode step.
 | Wand small | Seed, material, previous selection, mode. | Inline. | `Wand selection` | Cancel job. |
 | Wand stream | Same, plus queue and cursor. | Worker produces. Main drains. | `Wand selection` | Abort edit, retire job, restore selection. |
 
-## Implemented migrations and remaining candidates
-
-Three former candidates are now working-tree code migrations:
-
-- Clipboard copy, cut, and import use `State.run_edit_job`.
-- Line preview uses `State.run_edit_job`. `LineTool._process` updates idle hover only.
-- Paste shares `_placement_operation_id` through `_begin_preview_operation` and `_finish_preview_operation`.
-
-These migrations are in the verified modular selection.
-This page does not claim a performance result.
-
-The table lists the remaining candidates.
-Each candidate names the existing mechanism, its consumers, the contract to preserve, and the tradeoff.
-
-| Candidate | Existing mechanism and consumers | Preserved contract | Tradeoff | Evidence |
-| --- | --- | --- | --- | --- |
-| Extract the selection mode step. | `VoxelSelection` has `union`, `subtract`, `capture`, and `restore`. `ScreenSelection.Job.run` and `WandJob.run` repeat the replace, add, and subtract baseline. | `REPLACE` drops the previous selection. `ADD` keeps it. `SUBTRACT` keeps it and erases the region. ScreenSelection keeps its extra covered-cell step. | The helper saves few lines. It must not hide the ScreenSelection coverage rule. | Source fact. Runtime gain is a guess. |
-| Merge Box and Lasso into one shape tool. | `SelectTool` already owns press, band, release, switch, and worker flow. `BoxSelectTool` and `LassoSelectTool` supply only shape hooks. | Keep the 7 px click, the 6 px lasso step, the 512 point limit, the polygon rule, and `finish_on_switch`. | One class must branch on the shape. The tool enum and toolbar stay. | Source fact. Maintainability gain is a guess. |
-| Share the clipboard record schema. | `CLIPBOARD_PREFIX`, `VOXEL_RECORD_SIZE`, `JSON.stringify`, and record validation live in `ClipboardPlugin`. `ClipboardCopyJob.run` and `ClipboardImportJob.run` are the consumers. | Keep the `voxel_voxels` and `voxel_selection` keys. Keep 3 integers and 9 floats per record. Keep the 0 to 1 value check. | One schema helper adds a file. Old clipboard text must stay compatible. | Source fact. Compatibility risk is a guess until tested. |
-
 ## Caveats and unverified points
 
-- The verification history is in the composition guide. This page does not claim a performance result.
+- The verification history is in the git history. This page does not claim a performance result.
 - The transform history action is `Stroke`. It is not named `Transform`.
 - Transform has a camera-facing pivot gizmo. It adds no axis constraint, duplicate mode, or destination mask.
 - Transform view-axis drags follow the camera normal. The exact dialog keeps world XYZ values. A non-axis rotation or non-uniform scale resamples the voxel lattice.

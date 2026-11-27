@@ -4,7 +4,7 @@ This page maps the shared tool path and three utility tools.
 It describes current code.
 A short note names one roadmap tool that is not current.
 The paths are relative to this file.
-The verification history is in the composition guide.
+The verification history is in the git history.
 
 The shared path covers plugin registration, pointer input, edit ownership, worker jobs, and preview meshes.
 It also covers visible model renders and optional image renders.
@@ -679,97 +679,7 @@ The source is [`State.gd:672`](../../../Globals/State/State.gd#L672).
 
 ## Implemented mechanisms
 
-These mechanisms are in current code.
-The verification history is in the composition guide.
-
-### A. Existing edit-job runner
-
-- Current signature: `State.run_edit_job(job: VoxelFrame.EditJob, operation_id: int, task_name: String, on_frame: Callable = Callable()) -> void`
-- Callers: `ClipboardPlugin._copy_voxels`, `ClipboardPlugin.paste_voxels`, and `LineTool._start_preview`.
-- Current mechanism: The runner starts one worker task, calls `on_frame` before each progress update, pumps frames, and calls `job.wait_for_worker` before it returns.
-- Exactly-once join: The runner joins once. A caller that waits itself retires the task id, so the runner stops without a second wait. `ClipboardPlugin._exit_tree` uses the same join.
-- Clipboard policy: copy and cut pass a document and frame check. Paste passes the same check for the import. Install happens after the runner returns and the checkpoint passes.
-- Line policy: `_cancel_preview_if_stale` cancels a superseded job. `_process` updates idle hover only. `_service_preview` starts the newest request after the runner returns.
-- Paste policy: `PasteTool._begin_preview_operation` returns `_placement_operation_id`. `_finish_preview_operation` keeps it open. `_cancel_edit` finishes it once.
-
-### C. Preview request identity and final spray centers
-
-- Current signatures: `VoxelPreview.show_voxels(..., token: Variant = null)`, `VoxelPreview._request(..., token: Variant = null)`, `VoxelPreview.SolidPayload.token`, `VoxelPreview.PreviewJob.token`, and `VoxelPreview.installed_token() -> Variant`.
-- Callers: `SprayTool._show_spots` passes `_batch_token` through `show_voxels` or `SolidPayload.token`. Other callers leave the token null.
-- Current mechanism: The token is opaque metadata. It is not part of the mesh key. A worker job keeps its own token. A cache hit reports the token of the request that asked for the hit. A clear drops the installed token.
-- Spray policy: `BatchToken` holds center, frame, axes, origin, and selection. `_shown_owned_by_press` requires the press cell, source frame, and edit context to match. A lagging surface of the same cell and context can paint. A surface of another cell never paints.
-- Write policy: `BrushJob.centers_are_final` skips the second `EditContext.expand` only. The stamp still applies the selection mask, the existing-only filter, and the captured material. Other callers leave the flag false.
-
-### D. Bounded batch cursor
-
-- Consumers: `FillTool._drain_fill_batches` and `WandSelectTool._drain_selection_batches`.
-- Current mechanism: `VoxelRegionSearch.BatchCursor.apply_slice(limit, apply)` hands one `[start, end)` slice of keys to a callback. The callback returns `bool`. The cursor advances only on `true`. A nested call or a `false` callback returns `false` and keeps the slice. `BatchQueue` holds at most four batches. A full queue blocks the producer, not the consumer.
-- Fill policy: adaptive slices from 64 to 512 cells, one 2000 us budget shared by the seeds of a frame, coalesced chunk notifications at three frames and 20 ms, `open_stroke`, and `abort_stroke`. Revision, operation id, seed queues, cancel, and one `Stroke` action stay local.
-- Wand policy: fixed 256-cell slices, one 2000 us budget per frame, one `State.begin_edit`, one final `Wand selection` action, and a local retire and join path.
-- Preserved contract: These callers apply every found key once. A stale callback leaves the slice pending for the next attempt. A cancelled owner discards its own cursor. The producer stops on cancel. The consumer does not wait on a full queue.
-- Evidence: [`VoxelRegionSearch.BatchCursor`](../../../Globals/State/VoxelRegionSearch.gd), [`FillTool._drain_fill_batches`](../../../plugins/paint/FillTool.gd), and [`WandSelectTool._drain_selection_batches`](../../../plugins/selection/tools/WandSelectTool.gd).
-
-### E. Base pick publication gate
-
-- Consumers: `VoxelTool` callers and `EyedropperTool`.
-- Current mechanism: `VoxelTool._apply_pick` calls `apply(target, hit) -> bool`. A `false` result returns before `applied_cells`, so it publishes no cell change. A `true` result appends `applied_cells` and flushes them.
-- Eyedropper: `EyedropperTool.apply` copies the full material through `State.set_material` and returns `false`. It publishes no `cells_changed`, so it does not stop playback. The empty edit remains. No state-only flag was added.
-- Preserved contract: A tool that returns `false` changes no cells. A tool that writes cells returns `true`. `Set Material` remains one undo action.
-- Evidence: [`VoxelTool._apply_pick`](../../../Globals/State/Tools/VoxelTool.gd), [`VoxelTool.apply`](../../../Globals/State/Tools/VoxelTool.gd), and [`VoxelTool.applied_cells`](../../../Globals/State/Tools/VoxelTool.gd).
-
-### F. Publish by chunk location
-
-- Current signature: `VoxelFrame.apply_published(locations: Array[Vector3i], published: VoxelFrame) -> void`
-- Callers: Terrain (tick and Smooth), the deform tools, `StrokeTool` for Brush, Stamp, Paint Brush, and Spray, `LineTool`, `PasteTool`, the Transform preview, the small Fill path, `EraseJob`, and a clipboard cut.
-- Current mechanism: The method replaces only the listed chunks. It copies no chunk.
-- Marker rule: In a job frame, a shared marker means the job did not write that chunk. A neighbor or a reverted baseline chunk keeps its marker, so the undo snapshot stays frozen.
-- Job frame: `VoxelFrame.job_frame(source)` shares the chunk objects without a whole-frame copy. Use it only when the source is not written while the job runs.
-- Baseline previews: Grab and Pose publish the union of the current and previous locations, because they recompute from one baseline.
-- Preserved contract: The bounds flag, the changed chunk list, and the notification order stay the same.
-- Evidence: `chunk_materials.chunk_publish`, `terrain_prep_worker.batch_parity`, and the affected tool suites.
-See the [composition guide](composition.md) for signatures, ownership, and reuse limits.
-
-## Remaining hypotheses
-
-These hypotheses use current code and current symbols.
-Each one lists the consumers, the contract to preserve, the existing mechanism, and the tradeoff.
-
-### 1. Use `VoxelAtlas.create_material` as the only atlas material path
-
-- Consumers: `VoxelPreview._atlas_material`, `VoxelRenderer._build_material`, and `VoxelMeshBuilder` output.
-- Preserved contract: Preview keeps `CULL_DISABLED`. Renderer keeps the shared material fallback for chunks without an atlas.
-- Existing mechanism: `VoxelMeshBuilder` sets `atlas` and `atlas_size` together. `VoxelAtlas.create_material` builds the textures and the channels.
-- Tradeoff: The raw-array fallback has no production caller. `tests/renderer_progress.gd` sets `atlas_size` and the raw arrays directly. Removing the fallback needs a test change. Keeping it needs a comment that names the test path.
-
-Evidence: [`VoxelPreview.gd`](../../../Globals/Rendering/VoxelPreview.gd), [`VoxelRenderer.gd:464`](../../../ui/Viewport/VoxelRenderer.gd#L464), [`VoxelAtlas.gd:164`](../../../Globals/Rendering/VoxelAtlas.gd#L164), and [`renderer_progress.gd:768`](../../../tests/renderer_progress.gd#L768).
-
-### 2. Share single-tool mount and unmount in `VoxelPlugin`
-
-- Consumers: `PlanePlugin` and `EyedropperPlugin`. Their toolbar toggle and editor node mount and unmount have the same shape. Eyedropper has no option bar. `SymmetryPlugin` shares the toolbar toggle shape but not the tool lifetime.
-- Preserved contract: The toolbar button stays pressed. The option bar shows only for the active tool. The editor node mounts and unmounts with the active state. Each plugin keeps its own finish and cancel policy. Plane and Symmetry open no edit. Eyedropper closes an empty edit. Brush, Stamp, Paint, and Terrain call `finish_on_switch`. Line cancels its preview. Selection applies a held outline. Transform commits a pending transform on detach.
-- Existing mechanism: `VoxelPlugin.add_tool_bar_item`, `add_editor_node`, `add_option_bar_item`, `_safe_add`, and `_safe_remove`.
-- Tradeoff: A helper that also calls `finish_on_switch` would change Line and Selection behavior. It would not fit Transform. A helper for mount and unmount only is safe. Symmetry needs a separate active flag.
-
-Evidence: [`PlanePlugin.gd:26`](../../../plugins/Plane/PlanePlugin.gd#L26), [`EyedropperPlugin.gd:24`](../../../plugins/Eyedropper/EyedropperPlugin.gd#L24), [`LineTool.gd`](../../../plugins/brush/LineTool.gd), [`SelectTool.gd:149`](../../../plugins/selection/tools/SelectTool.gd#L149), and [`TransformTool.gd:290`](../../../plugins/Transform/tools/TransformTool.gd#L290).
-
-### 3. Add an explicit state-only tool flag
-
-- Consumers: `EyedropperTool`, `PlaneTool`, and `SymmetryTool`.
-- Current behavior: the base pick honors `apply`, so the Eyedropper publishes no cell change without a flag. The empty edit remains. No state-only flag exists.
-- Preserved contract: State-only tools change no cells and add no stroke undo action. Eyedropper still records `Set Material`. Plane and Symmetry still update `State`.
-- Existing mechanism: `VoxelTool.handle_input` opens an edit before the pick. `VoxelEditTransaction.finish` returns null when nothing changed. Plane and Symmetry already override `handle_input`.
-- Tradeoff: A flag would remove the empty edit. It must not change Plane or Symmetry. It needs tests for Escape and busy states.
-
-Evidence: [`VoxelTool.gd`](../../../Globals/State/Tools/VoxelTool.gd) and [`VoxelEditTransaction.gd:83`](../../../Globals/State/VoxelEditTransaction.gd#L83).
-
-### 4. Use one bounded mesh cache policy
-
-- Consumers: `VoxelPreview._mesh_cache` and `VoxelRenderer._surface_cache`.
-- Preserved contract: Preview keeps 16 entries and 64 MB. Renderer keeps 1024 entries and 64 MB. A cache hit installs the exact surface. A miss starts one job.
-- Existing mechanism: Static dictionaries, `_cache_order` and `_surface_use_order`, byte counters, and eviction loops.
-- Tradeoff: The keys differ. Preview keys include style, color, smooth normals, and a cell hash. Renderer keys are packed chunk signatures. A generic cache needs a key type and a size function. The duplication is small but real.
-
-Evidence: [`VoxelPreview.gd`](../../../Globals/Rendering/VoxelPreview.gd) and [`VoxelRenderer.gd:439`](../../../ui/Viewport/VoxelRenderer.gd#L439).
+See the [composition guide](composition.md) for the current mechanisms A to H.
 
 ## Behavior evidence
 
@@ -814,7 +724,7 @@ Some have no production caller.
 Two earlier Eyedropper ambiguities are resolved in current code.
 `VoxelTool._apply_pick` now honors a `false` `apply` result, so the Eyedropper publishes no `cells_changed` and does not stop playback.
 `EyedropperTool.apply` still records one `Set Material` action. The empty edit adds no stroke action.
-The selected modular tests cover these facts. The final verification is in the composition guide.
+The selected modular tests cover these facts. The verification history is in the git history.
 
 1. `State.floor_axis`, `State.floor_index`, `State.symmetry_axes`, and `State.symmetry_origin` are saved in the document `tools.editing` field. They follow the active document and survive a restart. Resolved.
 2. `ClipboardPlugin._sync_options` attaches the shared controls only to Brush, Paint, Selection, and Transform. The controls are absent for Terrain, Plane, Symmetry, and Eyedropper. Confirm that this behavior is intended.

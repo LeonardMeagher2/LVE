@@ -1,8 +1,6 @@
 # Compare tool flows
 
 Use the family maps as source evidence for this review.
-Some former candidates are now working-tree code migrations.
-Treat the remaining candidates as hypotheses, not approved changes.
 Static review does not prove a performance gain.
 
 ## Compare flow families
@@ -86,13 +84,6 @@ It does not establish performance priority.
 | 4 | Compare request capture structures. | Working-tree code. Terrain uses `StrokeInputs`. Spray uses `BatchToken`. Static review approved. | Keep each tool's settings capture time and accepted input order. | A common request type can accumulate unrelated fields. |
 | 5 | Share small pure rules where contracts match. | Working-tree code. `BatchCursor.apply_slice` serves Fill and Wand. Static review approved. | Preserve selection coverage, alignment, and tool-specific material rules. | A short helper can obscure a meaningful policy difference. |
 | 6 | Honor the base `apply` result. | Working-tree code. A false result publishes no cells. Static review approved. | Keep the `Set Material` action and the empty edit. | A cell-writing tool that returns false would stop publishing. |
-
-Use these detailed lists for the remaining hypotheses:
-
-- [Drawing candidates](drawing.md)
-- [Terrain candidates](terrain.md#consolidation-and-simplification-candidates)
-- [Transform and selection candidates](transform-selection.md#implemented-migrations-and-remaining-candidates)
-- [Shared paths and utility candidates](shared-and-utilities.md)
 
 ## Questions for each graph
 

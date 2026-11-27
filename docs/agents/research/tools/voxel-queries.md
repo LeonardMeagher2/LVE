@@ -123,7 +123,7 @@ Do not rewrite the tie order without a demonstrated counterexample.
 **Policy for this project.**
 
 `MEMORY.md` records the long-distance picking invariant: the bounds clip lets a far ray reach the content.
-The composition guide records all 169 current scenes verified across the full attempt and targeted follow-ups.
+The git history records the verification across the full attempt and targeted follow-ups.
 Keep this behavior.
 **Fact (LVE) and project guide.**
 

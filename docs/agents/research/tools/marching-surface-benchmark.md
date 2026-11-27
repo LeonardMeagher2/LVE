@@ -8,6 +8,35 @@ The coplanar merge changes the accepted geometry and the hashes.
 The limited dissolve changes only the smooth geometry.
 The flat hashes and the snapshot do not change.
 
+## Constraints
+
+- Keep one material per triangle.
+- Keep the material coverage symmetry.
+- Keep the visual design of the current low-poly models.
+- Do not hardcode a symmetry plane.
+- Keep the old stable mesher available for comparison.
+
+The builder still holds unused repair passes: `_fill_boundary_ears`, `_pinch_material_seams`, `_collapse_near_hole_vertices`, and `_flip_diagonals`. `hard_boundaries` and `per_material` are unused.
+
+## Decisions
+
+- The benchmark hash covers position, normal, colour, UV, and index. It does not cover atlas texel values.
+- Smooth normals use area-weighted face normals at each position.
+- The atlas uses one 1x1 patch per material with the patch centre as the UV.
+- The prototype model files stay untracked.
+- The style-0 cache keeps 64 MB and 1024 entries. The low-poly cache keeps 256 MB and 4096 entries.
+- A frame switch keeps the old chunk mesh until the replacement is ready. A document replacement hides the old document at once.
+- The surface key hashes the chunk content, not the chunk instance. The content key hashes the dense cell grid and the material table.
+- Ambient occlusion uses the corrected face normal and a 3-sample outside layer.
+- The low-poly export uses one frame atlas and one patch-centre UV per vertex.
+- A full rebuild requests only the occupied chunks. A slice filters the present neighbours by the slice row range.
+- Flat mode merges coplanar fans after the normals and ambient occlusion. Smooth mode merges only a fan whose vertex normals all match.
+- Coplanar merging may change triangle-level symmetry. Material coverage stays symmetric.
+- The limited dissolve runs after the coplanar merge in smooth mode. A seam vertex does not dissolve. A seam edge is a boundary edge, a material edge, or a crease above 25 degrees.
+- The dissolve keeps the normal at the removed position within 8 degrees and the colour within 0.02.
+- The dissolve picks the fan with the lowest maximum normal spread, then the best shape, then an ear clip.
+- The dissolve cost is reported in its own benchmark phase. The smooth dissolve adds 24% to the Testing2 build and 36% to the me build.
+
 ## Commands
 
 Run the snapshot test:
