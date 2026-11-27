@@ -638,13 +638,13 @@ class Chunk extends RefCounted:
 					target.grid[slot] = target.materials.size() / MATERIAL_STRIDE
 					target.occupied_count += 1
 					target.occupancy_revision += 1
-				if not target.bounds_dirty:
-					min_cell = Vector3i(mini(min_cell.x, local.x), mini(min_cell.y, local.y), mini(min_cell.z, local.z))
-					max_cell = Vector3i(maxi(max_cell.x, local.x), maxi(max_cell.y, local.y), maxi(max_cell.z, local.z))
-			face_bits |= VoxelFrame._face_bits(local)
+			min_cell = Vector3i(mini(min_cell.x, local.x), mini(min_cell.y, local.y), mini(min_cell.z, local.z))
+			max_cell = Vector3i(maxi(max_cell.x, local.x), maxi(max_cell.y, local.y), maxi(max_cell.z, local.z))
 			changed_count += 1
 
 
+		if changed_count > 0:
+			face_bits = _extent_face_bits(min_cell, max_cell)
 		if changed_count > 0 and target.occupied_count > 0 and target.materials.size() > target.occupied_count * MATERIAL_STRIDE * 2:
 			target._compact()
 
@@ -698,13 +698,13 @@ class Chunk extends RefCounted:
 				target.occupied_count += 1
 				target.occupancy_revision += 1
 			target.grid[slot] = new_id
-			face_bits |= VoxelFrame._face_bits(local)
+			min_cell = Vector3i(mini(min_cell.x, local.x), mini(min_cell.y, local.y), mini(min_cell.z, local.z))
+			max_cell = Vector3i(maxi(max_cell.x, local.x), maxi(max_cell.y, local.y), maxi(max_cell.z, local.z))
 			changed_count += 1
-			if not target.bounds_dirty:
-				min_cell = Vector3i(mini(min_cell.x, local.x), mini(min_cell.y, local.y), mini(min_cell.z, local.z))
-				max_cell = Vector3i(maxi(max_cell.x, local.x), maxi(max_cell.y, local.y), maxi(max_cell.z, local.z))
 
 
+		if changed_count > 0:
+			face_bits = _extent_face_bits(min_cell, max_cell)
 		if changed_count > 0 and target.occupied_count > 0 and target.materials.size() > target.occupied_count * MATERIAL_STRIDE * 2:
 			target._compact()
 
