@@ -24,6 +24,7 @@ class ExportJob extends VoxelFrame.EditJob:
 	var smooth_normals := false
 	var ao_strength := 1.0
 	var unlit := false
+	var mesh_style := 0
 
 	func run() -> void:
 		var total := 0
@@ -35,6 +36,15 @@ class ExportJob extends VoxelFrame.EditJob:
 		var max_position := Vector3(-INF, -INF, -INF)
 		var vertex_count := 0
 		for frame in frames:
+			if mesh_style == 1:
+				var bounds := _build_marching_frame(frame)
+				if error != OK:
+					return
+				min_position = min_position.min(bounds[0])
+				max_position = max_position.max(bounds[1])
+				vertex_count += bounds[2]
+				completed += frame.chunks.size()
+				continue
 			var positions := PackedVector3Array()
 			var normals := PackedVector3Array()
 			var colors := PackedColorArray()
@@ -71,6 +81,8 @@ class ExportJob extends VoxelFrame.EditJob:
 			frame_surfaces.append(arrays)
 		checkpoint(completed)
 		for frame_index in frame_surfaces.size():
+			if mesh_style == 1:
+				continue
 			var welded := _weld_frame(frame_surfaces[frame_index], frame_index)
 			if welded.is_empty():
 				return
@@ -99,6 +111,86 @@ class ExportJob extends VoxelFrame.EditJob:
 					return
 			arrays[Mesh.ARRAY_VERTEX] = positions
 		checkpoint(completed)
+
+	func _build_marching_frame(frame: VoxelFrame) -> Array:
+		var positions := PackedVector3Array()
+		var normals := PackedVector3Array()
+		var colors := PackedColorArray()
+		var indices := PackedInt32Array()
+		var vertex_materials := PackedInt32Array()
+		var material_table := PackedFloat32Array()
+		var material_ids := {}
+		var min_position := Vector3(INF, INF, INF)
+		var max_position := Vector3(-INF, -INF, -INF)
+		var completed := 0
+		for chunk_location: Vector3i in frame.chunks:
+			if not checkpoint(completed):
+				error = ERR_UNAVAILABLE
+				return [min_position, max_position, positions.size()]
+			var mesh_job := VoxelMarchingMeshBuilder.new()
+			mesh_job.source_frame = frame
+			mesh_job.chunk_location = chunk_location
+			mesh_job.smooth_normals = smooth_normals
+			mesh_job.ao_strength = ao_strength
+			mesh_job.skip_atlas = true
+			mesh_job.run()
+			var source_positions: PackedVector3Array = mesh_job.surface_arrays[Mesh.ARRAY_VERTEX]
+			if not source_positions.is_empty():
+				var first_vertex := positions.size()
+				var origin := Vector3(chunk_location * VoxelFrame.CHUNK_SIZE)
+				for position: Vector3 in source_positions:
+					var world_position := position + origin
+					positions.append(world_position)
+					min_position = min_position.min(world_position)
+					max_position = max_position.max(world_position)
+				normals.append_array(mesh_job.surface_arrays[Mesh.ARRAY_NORMAL])
+				if ao_strength > 0.0:
+					colors.append_array(mesh_job.surface_arrays[Mesh.ARRAY_COLOR])
+				for triangle_index: int in mesh_job.surface_arrays[Mesh.ARRAY_INDEX]:
+					indices.append(first_vertex + triangle_index)
+				var local_materials: PackedInt32Array = mesh_job.vertex_materials
+				var source_table: PackedFloat32Array = mesh_job.material_table
+				for vertex in source_positions.size():
+					var local_id: int = local_materials[vertex]
+					var values := source_table.slice(local_id * VoxelFrame.MATERIAL_STRIDE, (local_id + 1) * VoxelFrame.MATERIAL_STRIDE)
+					var frame_id: int = material_ids.get(values, -1)
+					if frame_id < 0:
+						frame_id = material_table.size() / VoxelFrame.MATERIAL_STRIDE
+						material_ids[values] = frame_id
+						material_table.append_array(values)
+					vertex_materials.append(frame_id)
+			completed += 1
+		var atlas := ATLAS.new()
+		var patch_of := PackedInt32Array()
+		var material_count := material_table.size() / VoxelFrame.MATERIAL_STRIDE
+		patch_of.resize(material_count)
+		for material_index in material_count:
+			var patch := atlas.add_patch(material_table.slice(material_index * VoxelFrame.MATERIAL_STRIDE, (material_index + 1) * VoxelFrame.MATERIAL_STRIDE), Vector2i.ONE, checkpoint)
+			if patch < 0:
+				error = ERR_UNAVAILABLE
+				return [min_position, max_position, positions.size()]
+			patch_of[material_index] = patch
+		var bake_error := atlas.bake(checkpoint)
+		if bake_error != OK:
+			error = bake_error
+			return [min_position, max_position, positions.size()]
+		var uvs := PackedVector2Array()
+		uvs.resize(vertex_materials.size())
+		for vertex in vertex_materials.size():
+			var corners: PackedVector2Array = atlas.patch_uvs(patch_of[vertex_materials[vertex]])
+			uvs[vertex] = (corners[0] + corners[2]) * 0.5
+		var arrays := []
+		arrays.resize(Mesh.ARRAY_MAX)
+		arrays[Mesh.ARRAY_VERTEX] = positions
+		arrays[Mesh.ARRAY_NORMAL] = normals
+		if ao_strength > 0.0:
+			arrays[Mesh.ARRAY_COLOR] = colors
+		arrays[Mesh.ARRAY_INDEX] = indices
+		arrays[Mesh.ARRAY_TEX_UV] = uvs
+		frame_surfaces.append(arrays)
+		frame_atlases.append(atlas)
+		return [min_position, max_position, positions.size()]
+
 
 	func _weld_frame(arrays: Array, frame_index: int) -> Array:
 		var source_positions: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
@@ -187,6 +279,7 @@ func export_gltf(path: String, center_origin := true, tag_index := -1, overrides
 	job.smooth_normals = bool(overrides.get("smooth_normals", State.document.smooth_normals))
 	job.ao_strength = clampf(float(overrides.get("ao", State.document.ao_strength)), 0.0, 1.0)
 	job.unlit = bool(overrides.get("unlit", false))
+	job.mesh_style = State.document.mesh_style
 	var selected_tag := State.document.get_tag(tag_index)
 	var first := selected_tag.from if selected_tag else 0
 	var last := selected_tag.to if selected_tag else State.get_frame_count() - 1

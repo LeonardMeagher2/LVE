@@ -17,8 +17,9 @@ func attach() -> void:
 	renderer = host.editor_viewport().get_node("ViewportScene/VoxelRenderer")
 
 
-func apply(cells: Dictionary, style := 1) -> void:
+func apply(cells: Dictionary, style := 1, ao_strength := 0.0) -> void:
 	State.get_current_voxel_frame().set_cells(cells)
+	State.document.ao_strength = ao_strength
 	State.set_mesh_style(style, false)
 	renderer = host.editor_viewport().get_node("ViewportScene/VoxelRenderer")
 	State.frames_changed.emit()

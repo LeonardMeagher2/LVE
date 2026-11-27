@@ -21,6 +21,10 @@ Done:
 - A frame switch keeps the old meshes visible until the replacements arrive.
 - The surface key uses the chunk content, not the chunk instance.
 - The cache lifetime test isolates the shared cache.
+- An empty or fully enclosed chunk returns an empty surface before the field pass.
+- The low-poly mesh bakes ambient occlusion into the vertex colors.
+- A slice keeps its cap at a chunk row edge.
+- The glTF export uses the marching mesh for the low-poly style.
 
 In progress:
 
@@ -29,10 +33,8 @@ In progress:
 Open:
 
 - No coplanar merge in the low-poly path.
-- No enclosed, empty, or sparse fast path in the low-poly path.
-- Low-poly slice ownership can disagree with the slice range.
-- Low-poly export uses the base block mesh.
-- No ambient occlusion in the low-poly path.
+- Dead repair passes and unused flags remain in the builder.
+- No LOD or draw call batching.
 
 ## Constraints
 
@@ -75,9 +77,77 @@ Evidence:
 - The renderer test checks that the document setting reaches the mesh.
 - The smooth block uses fewer vertices than the flat block.
 
-Open:
+## Done: ambient occlusion
 
-- Ambient occlusion is still absent.
+The renderer passes the document occlusion strength to the marching builder.
+The builder computes occlusion from the mesh edges after the weld.
+For an edge with two triangles, it uses the outward face normals and the third vertex of each triangle to decide whether the edge is concave.
+It skips flat and convex edges.
+It scales the normal angle by the strength and darkens both edge endpoints.
+The vertex color holds a linear gray factor.
+The renderer multiplies the atlas albedo by that color.
+
+Evidence:
+
+- `tests/marching_material.gd` checks a dark crease, a bright convex cube, and a mirrored U-channel.
+- The U-channel test compares every mirrored vertex and finds no difference.
+- The blocky style keeps its occupancy corner AO.
+
+Limit:
+
+- The edge set is chunk-local.
+  A symmetric model can differ at a few vertices where chunk ownership changes the triangles.
+  Testing2 differs at 18 of 3224 mirrored vertices.
+- `me.lve` also has asymmetric voxels, so its AO follows the model.
+
+The occupancy corner AO of the blocky style cannot move to the marching mesh unchanged.
+The marching mesh has face-center vertices and arbitrary bevels, so the four-corner cell rule has no unique corner there.
+The edge rule is the crease-based equivalent.
+
+## Done: empty and enclosed fast paths
+
+The sample pass counts the occupied sample cells.
+A chunk with no occupied sample cell returns an empty surface.
+A chunk with a fully occupied sample returns an empty surface and sets `enclosed_culled`.
+The empty path also clears the atlas and the geometry byte count.
+
+A full rebuild requests only the occupied chunks.
+The 26-neighbour requests built no triangle on Dragon, and they cost most of the initial settle.
+The renderer also retires an absent chunk at once for every style.
+The editor changed-chunk list is authoritative, so the renderer no longer expands it.
+
+Evidence:
+
+- `tests/marching_chunks.gd` checks an enclosed chunk and a shell chunk.
+- Dragon dropped from 289 requests to 75.
+- The warm cache dropped to 202 entries and 13.7 MB.
+
+## Done: slice caps
+
+`_sample` now filters the `present` map by the same chunk-row range as the renderer.
+Before the change, a chunk outside the slice could own the cap cells of a rendered row.
+The owner chunk was not built, so the cap and the side band were missing.
+
+Evidence:
+
+- `tests/marching_chunks.gd` checks a two-chunk solid column at slice 0, count 2.
+- The lower cap stays at y -0.5 and the slab is closed.
+- The unsliced hashes do not change.
+
+## Done: low-poly glTF export
+
+`ExportJob` takes the document mesh style.
+For style 1 it builds each frame from `VoxelMarchingMeshBuilder`.
+It offsets each chunk by its world origin.
+It maps the per-chunk material values to one frame table.
+It bakes one frame atlas and writes one patch-centre UV for each vertex.
+It stores the ambient occlusion colors only when the strength is above zero.
+The base style path is unchanged.
+
+Evidence:
+
+- `tests/export_low_poly.gd` checks the triangle count, the three atlas colors, two chunks, the occlusion colors, and a GLB round trip.
+- The existing glTF tests stay green.
 
 ## Done: Dragon frame switching
 
@@ -175,13 +245,17 @@ Key findings:
 
 | Rank | Gap | Impact | Effort | Risk |
 | --- | --- | --- | --- | --- |
-| 1 | No coplanar merge in low-poly | Medium-high GPU | L | Watertightness |
-| 2 | No enclosed, empty, or sparse fast path | Medium CPU | S | Low |
-| 3 | No ambient occlusion | High visual | M | Normal and colour keys |
-| 4 | Slice ownership ignores the slice range | Medium correctness | M | Holes at the cap |
-| 5 | Low-poly export uses the block mesh | Medium | M | Export tests |
-| 6 | Dead repair passes and unused flags | Low | S | Geometry change if wired |
-| 7 | No LOD or draw call batching | Medium at scale | L | Popping |
+| 1 | No coplanar merge in low-poly | Medium-high GPU | L | Watertightness and symmetry |
+| 2 | Dead repair passes and unused flags | Low | S | Geometry change if wired |
+| 3 | No LOD or draw call batching | Medium at scale | L | Popping |
+
+The coplanar study recommends a local fan merge after the weld, in flat mode only.
+Group by one material ID, one normal, and one plane.
+Replace an interior fan with a triangulation of its link.
+Keep every boundary vertex.
+Skip smooth mode, concave or non-manifold links, and mixed materials.
+The strict Testing2 triangle symmetry is the remaining risk.
+Measure before you accept a general merge.
 
 ## Commands
 
@@ -195,6 +269,12 @@ Material and normal tests:
 
 ```text
 godot --headless --path . res://tests/marching_material.test.tscn
+```
+
+Low-poly export test:
+
+```text
+godot --path . -s res://addons/test_kit/run.gd -- export_low_poly
 ```
 
 Benchmark:
@@ -222,3 +302,7 @@ godot --path . -s res://addons/test_kit/run.gd -- marching_mesh marching_bridge 
 - A document replacement hides the old document at once.
 - The surface key hashes the chunk content, not the chunk instance.
 - The content key hashes the dense cell grid and the material table.
+- Ambient occlusion uses the corrected face normal and a 3-sample outside layer.
+- The low-poly export uses one frame atlas and one patch-centre UV per vertex.
+- A full rebuild requests only the occupied chunks.
+- A slice filters the present neighbours by the slice row range.

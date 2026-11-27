@@ -13,6 +13,7 @@ var _flat_normals := PackedVector3Array()
 var _flat_indices := PackedInt32Array()
 var _smooth_vertices := 0
 var _smooth_normals := PackedVector3Array()
+var _ao_symmetry_arrays: Array
 
 
 func _ready() -> void:
@@ -21,6 +22,8 @@ func _ready() -> void:
 	test("the low-poly mesh keeps one normal per triangle in flat mode", _flat_normals_test, "march_flat_normals")
 	test("the low-poly mesh blends shared normals in smooth mode", _smooth_normals_test, "march_smooth_normals")
 	test("the renderer passes the smooth normal setting", _smooth_renderer_test, "march_smooth_renderer")
+	test("the low-poly mesh bakes ambient occlusion", _ambient_occlusion_test, "march_ambient_occlusion")
+	test("the low-poly ambient occlusion mirrors with the geometry", _ao_symmetry_test, "march_ao_symmetry")
 
 
 func _atlas() -> void:
@@ -69,6 +72,101 @@ func _atlas() -> void:
 		expect(absf(glow.r - expected_glow.r) < 0.02, "the emission red matches")
 		expect(absf(glow.g - expected_glow.g) < 0.02, "the emission green matches")
 		expect(absf(glow.b - expected_glow.b) < 0.02, "the emission blue matches")
+	)
+
+
+func _ambient_occlusion_test() -> void:
+	step("Given a floor and a wall at full ambient occlusion", func():
+		_view = VIEW.new(self)
+		var cells := {}
+		var material := VoxelFrame.material(ALBEDO)
+		for z in 3:
+			for x in 3:
+				cells[Vector3i(x, 0, z)] = material
+		for z in 3:
+			for y in range(1, 4):
+				cells[Vector3i(0, y, z)] = material
+		_view.apply(cells, 1, 1.0)
+	)
+	await _view.settle()
+	step("Then the material multiplies the vertex colors and the crease darkens", func():
+		var instance := _instance_at(Vector3.ZERO)
+		expect(instance != null, "the chunk instance is visible")
+		if instance == null:
+			return
+		var material: StandardMaterial3D = instance.material_override
+		expect(material != null and material.vertex_color_use_as_albedo, "the chunk material uses the vertex colors")
+		expect(material != null and not material.vertex_color_is_srgb, "the ambient occlusion is linear")
+		var arrays: Array = instance.mesh.surface_get_arrays(0)
+		var colors: PackedColorArray = arrays[Mesh.ARRAY_COLOR]
+		expect(colors.size() == arrays[Mesh.ARRAY_VERTEX].size(), "each vertex has an ambient occlusion color")
+		var darkest := 1.0
+		for color: Color in colors:
+			darkest = minf(darkest, color.r)
+		expect(darkest < 0.99, "a crease vertex darkens")
+	)
+	step("Given a convex cube at full ambient occlusion", func():
+		_view = VIEW.new(self)
+		State.get_current_voxel_frame().clear()
+		var cells := {}
+		var material := VoxelFrame.material(ALBEDO)
+		for z in 2:
+			for y in 2:
+				for x in 2:
+					cells[Vector3i(x, y, z)] = material
+		_view.apply(cells, 1, 1.0)
+	)
+	await _view.settle()
+	step("Then the convex cube keeps every vertex bright", func():
+		var instance := _instance_at(Vector3.ZERO)
+		expect(instance != null, "the cube chunk instance is visible")
+		if instance == null:
+			return
+		var arrays: Array = instance.mesh.surface_get_arrays(0)
+		var colors: PackedColorArray = arrays[Mesh.ARRAY_COLOR]
+		var darkest := 1.0
+		for color: Color in colors:
+			darkest = minf(darkest, color.r)
+		expect(darkest > 0.999, "a convex edge stays bright")
+	)
+
+
+func _ao_symmetry_test() -> void:
+	step("Given a symmetric U-channel at full ambient occlusion", func():
+		var frame := VoxelFrame.new()
+		var material := VoxelFrame.material(ALBEDO)
+		for z in 3:
+			for x in 5:
+				frame.set_cell(Vector3i(x, 0, z), material)
+		for z in 3:
+			for y in range(1, 4):
+				frame.set_cell(Vector3i(0, y, z), material)
+				frame.set_cell(Vector3i(4, y, z), material)
+		var builder := VoxelMarchingMeshBuilder.new()
+		builder.source_frame = frame
+		builder.chunk_location = Vector3i.ZERO
+		builder.ao_strength = 1.0
+		builder.run()
+		_ao_symmetry_arrays = builder.surface_arrays
+	)
+	step("Then each vertex keeps the occlusion of its mirror", func():
+		var positions: PackedVector3Array = _ao_symmetry_arrays[Mesh.ARRAY_VERTEX]
+		var colors: PackedColorArray = _ao_symmetry_arrays[Mesh.ARRAY_COLOR]
+		var values := {}
+		for index in positions.size():
+			var key := Vector3i(roundi(positions[index].x * 1024.0), roundi(positions[index].y * 1024.0), roundi(positions[index].z * 1024.0))
+			values[key] = colors[index].r
+		var compared := 0
+		var mismatches := 0
+		for key: Vector3i in values:
+			var mirror := Vector3i(4096 - key.x, key.y, key.z)
+			if not values.has(mirror):
+				continue
+			compared += 1
+			if absf(values[key] - values[mirror]) > 0.001:
+				mismatches += 1
+		expect(compared > 0, "the U-channel has mirrored vertices")
+		expect(mismatches == 0, "every mirrored vertex keeps the same occlusion")
 	)
 
 

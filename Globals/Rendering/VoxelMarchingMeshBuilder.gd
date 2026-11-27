@@ -76,6 +76,9 @@ var normals_us := 0
 var atlas_us := 0
 var smooth_normals := false
 var ao_strength := 0.0
+var skip_atlas := false
+var vertex_materials := PackedInt32Array()
+var material_table := PackedFloat32Array()
 var slice_axis := -1
 var slice_index := 0
 var slice_count := 1
@@ -145,6 +148,7 @@ func run() -> void:
 	var material_ids := PackedInt32Array()
 	var materials := PackedFloat32Array()
 	var present := PackedByteArray()
+	var occupied := -1
 	if frame != null:
 		var sample_started := Time.get_ticks_usec() if profile else 0
 		var sampled := _sample(frame, chunk_location, slice_axis, slice_index, slice_count)
@@ -154,7 +158,8 @@ func run() -> void:
 		material_ids = sampled[1]
 		materials = sampled[2]
 		present = sampled[3]
-	_build(occupancy, material_ids, materials, present)
+		occupied = sampled[4]
+	_build(occupancy, material_ids, materials, present, occupied)
 
 
 func _sample(frame: VoxelFrame, location: Vector3i, slice_axis: int, slice_index: int, slice_count: int) -> Array:
@@ -168,11 +173,18 @@ func _sample(frame: VoxelFrame, location: Vector3i, slice_axis: int, slice_index
 	var sample_origin := location * CHUNK_SIZE - Vector3i.ONE * SAMPLE_PADDING
 	var present := PackedByteArray()
 	present.resize(27)
+	var occupied := 0
 	for z in range(-1, 2):
 		for y in range(-1, 2):
 			for x in range(-1, 2):
-				if frame.chunks.has(location + Vector3i(x, y, z)):
+				var neighbor_location := location + Vector3i(x, y, z)
+				if slice_axis >= 0:
+					var first_layer := neighbor_location[slice_axis] * CHUNK_SIZE
+					if first_layer + CHUNK_SIZE <= slice_index or first_layer >= slice_index + slice_count:
+						continue
+				if frame.chunks.has(neighbor_location):
 					present[(x + 1) + 3 * ((y + 1) + 3 * (z + 1))] = 1
+	var slice_last := slice_index + slice_count
 	for z in range(-1, 2):
 		for y in range(-1, 2):
 			for x in range(-1, 2):
@@ -189,7 +201,6 @@ func _sample(frame: VoxelFrame, location: Vector3i, slice_axis: int, slice_index
 				var rows := neighbor.occupancy_rows()
 				var neighbor_materials := neighbor.materials
 				var row_ids := {}
-				var slice_last := slice_index + slice_count
 				for row in rows.masks.size():
 					var mask := rows.masks[row]
 					if mask == 0:
@@ -216,6 +227,7 @@ func _sample(frame: VoxelFrame, location: Vector3i, slice_axis: int, slice_index
 						var sample_x := origin_delta.x + local_x
 						var index := sample_x + SAMPLE_SIZE * (sample_y + SAMPLE_SIZE * sample_z)
 						occupancy[index] = 1
+						occupied += 1
 						var base := (id - 1) * VoxelFrame.MATERIAL_STRIDE
 						var cell_material := neighbor_materials.slice(base, base + VoxelFrame.MATERIAL_STRIDE)
 						var material_id: int = row_ids.get(id, 0)
@@ -227,13 +239,18 @@ func _sample(frame: VoxelFrame, location: Vector3i, slice_axis: int, slice_index
 								materials.append_array(cell_material)
 							row_ids[id] = material_id
 						material_ids[index] = material_id
-	return [occupancy, material_ids, materials, present]
+	return [occupancy, material_ids, materials, present, occupied]
 
 
-func _build(occupancy: PackedByteArray, material_ids: PackedInt32Array, materials: PackedFloat32Array, present: PackedByteArray) -> void:
+func _build(occupancy: PackedByteArray, material_ids: PackedInt32Array, materials: PackedFloat32Array, present: PackedByteArray, occupied := -1) -> void:
 	if present.is_empty() or present[PRESENT_SELF] == 0:
 		_set_empty()
 		return
+	if occupied == 0 or occupied == occupancy.size():
+		enclosed_culled = occupied == occupancy.size()
+		_set_empty()
+		return
+	enclosed_culled = false
 	_pinned_seams.clear()
 	var owners := _build_owners(present)
 	var merged: Array
@@ -252,10 +269,14 @@ func _build(occupancy: PackedByteArray, material_ids: PackedInt32Array, material
 	welded = _rebuild_flat_normals(welded[0], welded[1], welded[2], welded[4], welded[3], occupancy, smooth_normals)
 	if profile:
 		normals_us = Time.get_ticks_usec() - normals_started
+	if ao_strength > 0.0:
+		_apply_edge_ambient_occlusion(welded[0], welded[2], welded[3], ao_strength)
 	var atlas_started := Time.get_ticks_usec() if profile else 0
-	var uvs := _build_atlas_uvs(welded[4], materials)
+	var uvs := _build_atlas_uvs(welded[4], materials) if not skip_atlas else PackedVector2Array()
 	if profile:
 		atlas_us = Time.get_ticks_usec() - atlas_started
+	vertex_materials = welded[4]
+	material_table = materials
 	surface_arrays.resize(Mesh.ARRAY_MAX)
 	surface_arrays[Mesh.ARRAY_VERTEX] = welded[0]
 	surface_arrays[Mesh.ARRAY_NORMAL] = welded[1]
@@ -272,6 +293,78 @@ func _set_empty() -> void:
 	surface_arrays[Mesh.ARRAY_COLOR] = PackedColorArray()
 	surface_arrays[Mesh.ARRAY_INDEX] = PackedInt32Array()
 	surface_arrays[Mesh.ARRAY_TEX_UV] = PackedVector2Array()
+	atlas = null
+	atlas_size = Vector2i.ZERO
+	atlas_albedo = PackedByteArray()
+	atlas_orm = PackedByteArray()
+	atlas_emission = PackedByteArray()
+	geometry_bytes = 0
+	vertex_materials = PackedInt32Array()
+	material_table = PackedFloat32Array()
+
+
+func _apply_edge_ambient_occlusion(positions: PackedVector3Array, colors: PackedColorArray, indices: PackedInt32Array, strength: float) -> void:
+	var canonical_of := PackedInt32Array()
+	canonical_of.resize(positions.size())
+	var canonical := {}
+	var points := PackedVector3Array()
+	for vertex in positions.size():
+		var key := Vector3i(roundi(positions[vertex].x * 1024.0), roundi(positions[vertex].y * 1024.0), roundi(positions[vertex].z * 1024.0))
+		var position_index: int = canonical.get(key, -1)
+		if position_index < 0:
+			position_index = points.size()
+			canonical[key] = position_index
+			points.append(positions[vertex])
+		canonical_of[vertex] = position_index
+	var triangle_normals := PackedVector3Array()
+	var triangle_count := indices.size() / 3
+	triangle_normals.resize(triangle_count)
+	var edges := {}
+	for triangle in triangle_count:
+		var first := positions[indices[triangle * 3]]
+		var normal := (positions[indices[triangle * 3 + 1]] - first).cross(positions[indices[triangle * 3 + 2]] - first)
+		if normal.length_squared() < 0.0000000001:
+			continue
+		triangle_normals[triangle] = -normal.normalized()
+		for corner in 3:
+			var from := canonical_of[indices[triangle * 3 + corner]]
+			var to := canonical_of[indices[triangle * 3 + (corner + 1) % 3]]
+			var key := Vector2i(mini(from, to), maxi(from, to))
+			var edge_triangles: Array = edges.get(key, [])
+			if edge_triangles.size() < 3:
+				edge_triangles.append(triangle)
+				edges[key] = edge_triangles
+	var occlusion := {}
+	for key: Vector2i in edges:
+		var edge_triangles: Array = edges[key]
+		if edge_triangles.size() != 2:
+			continue
+		var first_triangle: int = edge_triangles[0]
+		var second_triangle: int = edge_triangles[1]
+		var first_normal := triangle_normals[first_triangle]
+		var second_normal := triangle_normals[second_triangle]
+		var midpoint := (points[key.x] + points[key.y]) * 0.5
+		var first_third := _edge_third(first_triangle, key, positions, indices, canonical_of)
+		var second_third := _edge_third(second_triangle, key, positions, indices, canonical_of)
+		if first_normal.dot(second_third - midpoint) <= 0.0 or second_normal.dot(first_third - midpoint) <= 0.0:
+			continue
+		var normal_angle := acos(clampf(first_normal.dot(second_normal), -1.0, 1.0))
+		var value := clampf(normal_angle / PI, 0.0, 1.0)
+		occlusion[key.x] = maxf(occlusion.get(key.x, 0.0), value)
+		occlusion[key.y] = maxf(occlusion.get(key.y, 0.0), value)
+	for vertex in positions.size():
+		var value: float = occlusion.get(canonical_of[vertex], 0.0)
+		var ao := 1.0 - strength * value
+		colors[vertex] = Color(ao, ao, ao, 1.0)
+
+
+func _edge_third(triangle: int, key: Vector2i, positions: PackedVector3Array, indices: PackedInt32Array, canonical_of: PackedInt32Array) -> Vector3:
+	for corner in 3:
+		var vertex := indices[triangle * 3 + corner]
+		var position_index := canonical_of[vertex]
+		if position_index != key.x and position_index != key.y:
+			return positions[vertex]
+	return Vector3.ZERO
 
 
 func _build_atlas_uvs(vertex_materials: PackedInt32Array, materials: PackedFloat32Array) -> PackedVector2Array:

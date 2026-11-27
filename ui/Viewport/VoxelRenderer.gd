@@ -463,6 +463,7 @@ func _launch_surface(chunk_location: Vector3i, active_frame: VoxelFrame) -> void
 	else:
 		var marching := VoxelMarchingMeshBuilder.new()
 		marching.smooth_normals = State.document.smooth_normals
+		marching.ao_strength = State.document.ao_strength
 		marching.slice_axis = slice_axis
 		marching.slice_index = slice_index
 		marching.slice_count = slice_count

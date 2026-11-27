@@ -4,6 +4,9 @@ extends "res://tests/test.gd"
 const VIEW := preload("res://tests/helpers/marching_view.gd")
 
 var _view
+var _enclosed_builder
+var _shell_builder
+var _slice_builder
 
 
 func _ready() -> void:
@@ -12,6 +15,8 @@ func _ready() -> void:
 	test("a painted wall across the seam renders closed", _seam_wall, "chunk_seam_wall")
 	test("a painted staircase joins across chunks", _diagonal_chain, "chunk_diagonal_chain")
 	test("a painted material boundary keeps two surfaces", _material_boundary, "chunk_material_boundary")
+	test("an enclosed chunk builds no surface", _enclosed_chunk, "chunk_enclosed")
+	test("a slice keeps the cap at a chunk row edge", _slice_cap, "chunk_slice_cap")
 
 
 func _large_block() -> void:
@@ -85,4 +90,67 @@ func _material_boundary() -> void:
 		expect(_view.closed(), "both chains have no boundary")
 		expect(_view.components() == 1, "the material change keeps one surface")
 		expect(_view.duplicates() == 0, "no triangle is emitted twice")
+	)
+
+
+func _enclosed_chunk() -> void:
+	step("Given a solid 48-cube with an enclosed chunk", func():
+		var frame := VoxelFrame.new()
+		var cells := {}
+		var material := VoxelFrame.material(Color.WHITE)
+		for z in 48:
+			for y in 48:
+				for x in 48:
+					cells[Vector3i(x, y, z)] = material
+		frame.set_cells(cells)
+		_enclosed_builder = _chunk_builder(frame, Vector3i(1, 1, 1))
+		_shell_builder = _chunk_builder(frame, Vector3i.ZERO)
+	)
+	step("Then the enclosed chunk builds nothing and the shell keeps its surface", func():
+		expect(_enclosed_builder.surface_arrays[Mesh.ARRAY_VERTEX].is_empty(), "the enclosed chunk has no vertices")
+		expect(_enclosed_builder.enclosed_culled, "the enclosed chunk reports a cull")
+		expect(not _shell_builder.surface_arrays[Mesh.ARRAY_VERTEX].is_empty(), "the shell chunk builds vertices")
+		expect(not _shell_builder.enclosed_culled, "the shell chunk does not report a cull")
+	)
+
+
+func _chunk_builder(frame: VoxelFrame, location: Vector3i) -> VoxelMarchingMeshBuilder:
+	var builder := VoxelMarchingMeshBuilder.new()
+	builder.source_frame = frame
+	builder.chunk_location = location
+	builder.smooth_normals = true
+	builder.run()
+	return builder
+
+
+func _slice_cap() -> void:
+	step("Given a solid two-chunk column", func():
+		var frame := VoxelFrame.new()
+		var cells := {}
+		var material := VoxelFrame.material(Color.WHITE)
+		for z in 16:
+			for y in range(-16, 16):
+				for x in 16:
+					cells[Vector3i(x, y, z)] = material
+		frame.set_cells(cells)
+		_slice_builder = VoxelMarchingMeshBuilder.new()
+		_slice_builder.source_frame = frame
+		_slice_builder.chunk_location = Vector3i.ZERO
+		_slice_builder.smooth_normals = true
+		_slice_builder.slice_axis = Vector3.Axis.AXIS_Y
+		_slice_builder.slice_index = 0
+		_slice_builder.slice_count = 2
+		_slice_builder.run()
+	)
+	step("Then the upper chunk keeps its lower cap and stays closed", func():
+		var arrays: Array = _slice_builder.surface_arrays
+		var positions: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+		var lowest := INF
+		for position: Vector3 in positions:
+			lowest = minf(lowest, position.y)
+		expect(is_equal_approx(lowest, -0.5), "the slice keeps the lower cap at y -0.5")
+		var view = VIEW.new(self)
+		view.positions = positions
+		view.indices = arrays[Mesh.ARRAY_INDEX]
+		expect(view.closed(), "the sliced slab has no boundary")
 	)
