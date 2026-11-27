@@ -102,6 +102,7 @@ var smooth_normals := false
 var ao_strength := 0.0
 var merge_coplanar := true
 var dissolve_limited := true
+var dissolve_link_limit := DISSOLVE_LINK_LIMIT
 var skip_atlas := false
 var vertex_materials := PackedInt32Array()
 var material_table := PackedFloat32Array()
@@ -1704,13 +1705,15 @@ func _dissolve_smooth_vertices(positions: PackedVector3Array, normals: PackedVec
 		if not vertex_triangles.has(vertex):
 			continue
 		var incident: Array = vertex_triangles[vertex]
-		if incident.size() >= 3 and incident.size() <= DISSOLVE_LINK_LIMIT:
+		if incident.size() >= 3 and incident.size() <= dissolve_link_limit:
 			queue.append(vertex)
 			queued[vertex] = 1
 	var dissolved := 0
 	while not queue.is_empty():
 		var vertex: int = queue.pop_back()
 		queued[vertex] = 0
+		if seam[vertex] != 0:
+			continue
 		var incident: Array = vertex_triangles[vertex]
 		if dirty[vertex] != 0:
 			dirty[vertex] = 0
@@ -1744,7 +1747,9 @@ func _dissolve_smooth_vertices(positions: PackedVector3Array, normals: PackedVec
 				vertex_triangles[link_vertex] = link_incident
 				if queued[link_vertex] != 0:
 					continue
-				if link_incident.size() >= 3 and link_incident.size() <= DISSOLVE_LINK_LIMIT:
+				if seam[link_vertex] != 0:
+					continue
+				if link_incident.size() >= 3 and link_incident.size() <= dissolve_link_limit:
 					queue.append(link_vertex)
 					queued[link_vertex] = 1
 	if dissolved == 0:
@@ -1805,7 +1810,7 @@ static func _dissolve_edge_key(first: int, second: int) -> int:
 func _dissolve_vertex(vertex: int, triangles: PackedInt32Array, positions: PackedVector3Array, normals: PackedVector3Array, colors: PackedColorArray, materials: PackedInt32Array, triangle_normals: PackedVector3Array, vertex_triangles: Dictionary, removed: PackedByteArray) -> PackedInt32Array:
 	var incident: Array = vertex_triangles[vertex]
 	var count := incident.size()
-	if count < 3 or count > DISSOLVE_LINK_LIMIT:
+	if count < 3 or count > dissolve_link_limit:
 		return PackedInt32Array()
 	var material := materials[vertex]
 	for triangle_index: int in incident:
@@ -1881,11 +1886,11 @@ func _dissolve_vertex(vertex: int, triangles: PackedInt32Array, positions: Packe
 		return PackedInt32Array()
 	across = across.normalized()
 	var down := _dissolve_outward.cross(across)
-	if _dissolve_points.size() < DISSOLVE_LINK_LIMIT:
-		_dissolve_points.resize(DISSOLVE_LINK_LIMIT)
-		_dissolve_normals.resize(DISSOLVE_LINK_LIMIT)
-		_dissolve_colours.resize(DISSOLVE_LINK_LIMIT)
-		_dissolve_flat.resize(DISSOLVE_LINK_LIMIT)
+	if _dissolve_points.size() < dissolve_link_limit:
+		_dissolve_points.resize(dissolve_link_limit)
+		_dissolve_normals.resize(dissolve_link_limit)
+		_dissolve_colours.resize(dissolve_link_limit)
+		_dissolve_flat.resize(dissolve_link_limit)
 	for index in count:
 		var point := positions[cycle[index]]
 		_dissolve_points[index] = point
@@ -3253,6 +3258,9 @@ static func _point_in_triangle(point: Vector2, first: Vector2, second: Vector2, 
 	var second_side := (third - second).cross(point - second)
 	var third_side := (first - third).cross(point - third)
 	return (first_side >= 0.0 and second_side >= 0.0 and third_side >= 0.0) or (first_side <= 0.0 and second_side <= 0.0 and third_side <= 0.0)
+
+
+
 
 
 

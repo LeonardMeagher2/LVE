@@ -303,29 +303,76 @@ The pass calls `VoxelMarchingMeshBuilder.dissolve_surface`.
 The atlas UVs rebuild from the surviving material ids.
 The frame material table stays.
 
-Measurements (one smooth frame):
+Measurements (one smooth frame, export dissolve link limit 16):
 
 | Scene | Chunks | Chunk vertices | Chunk triangles | Welded vertices | Export vertices | Export triangles | Weld (us) | Dissolve (us) |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Testing2 | 6 | 4164 | 5116 | 4010 | 3574 | 4244 | 2647 | 52490 |
-| me | 4 | 5601 | 7714 | 5417 | 4011 | 4902 | 3712 | 156491 |
-| Material sphere, radius 4 | 8 | 1540 | 1546 | 1366 | 1253 | 1320 | 961 | 14645 |
+| Testing2 | 6 | 4164 | 5116 | 4010 | 3571 | 4238 | 2910 | 52639 |
+| me | 4 | 5601 | 7714 | 5417 | 4078 | 5036 | 3896 | 182137 |
+| Material sphere, radius 4 | 8 | 1540 | 1546 | 1366 | 1275 | 1364 | - | - |
 
-Triangle change: -17.0% on Testing2, -36.5% on me, and -14.6% on the sphere.
-The per-chunk dissolve reached -34.9% on me, so the global pass removes 2% more.
+Triangle change: -17.2% on Testing2, -34.7% on me, and -11.8% on the sphere.
 The weld removes 3% to 4% of the vertices.
-The export job takes 283 ms on Testing2 and 524 ms on me for one smooth frame.
+Error at each removed position: at most 8.0 degrees, mean 0.58 on Testing2 and 0.40 on me.
+The colour error is 0.0001 or less.
 
 Evidence:
 
 - `tests/export_low_poly.gd` checks that no two vertices share a position and a material.
-- It checks the triangle drop, the closed and manifold surface, the four materials, the unit normals, and the flat facets.
+- It checks the triangle drop against both the chunk passes and the chunk dissolve.
+- It pins 1275 vertices and 1364 triangles for the sphere fixture, so a limit change shows.
+- It checks the closed and manifold surface, the four materials, the unit normals, and the flat facets.
 - Without the weld, the duplicate check fails.
-- The flat export keeps one normal for each triangle.
 
 Limit:
 
 - The export only. The runtime chunked renderer still welds inside a chunk and dissolves each chunk.
+
+## Experiment: more export simplification
+
+Date: 2026-11-27.
+
+Goal: approach the Blender result of about half the triangles, with no seam or band.
+
+### A: raise the export dissolve link limit
+
+The export sets `dissolve_link_limit` on the builder. The default stays 9.
+Every seam rule, the normal limit, and the planarity limit stay the same.
+
+| Limit | Testing2 triangles | Testing2 change | me triangles | me change | Dissolve (us), Testing2 / me |
+| --- | --- | --- | --- | --- | --- |
+| 9 | 4268 | -16.6% | 5176 | -32.9% | 46687 / 137053 |
+| 12 | 4246 | -17.0% | 5054 | -34.5% | 50422 / 168500 |
+| 16 | 4238 | -17.2% | 5036 | -34.7% | 52639 / 182137 |
+| 24 | 4238 | -17.2% | 5042 | -34.6% | 53232 / 176161 |
+
+Every limit keeps the surface closed and manifold, with no duplicate triangle and one material per triangle.
+No seam edge or seam vertex is lost.
+The maximum normal error stays at 8.0 degrees and the mean stays at 0.6 and 0.4 degrees.
+The mean colour error stays below 0.0001.
+
+Limit 16 is the choice: limit 24 adds nothing, and limit 12 gives 0.2 points less.
+
+### B: Blender-style edge dissolve, rejected
+
+Measure the regions of a 5-degree face-angle union with the material and crease delimiters:
+
+| Scene | Triangles | Union ceiling (n-2 per region) | Within 0.2 cell planarity |
+| --- | --- | --- | --- |
+| Testing2 | 5116 | 4024 (-21.3%) | 4286 (-16.2%) |
+| me | 7714 | 4384 (-43.2%) | 5254 (-31.9%) |
+
+The union ceiling ignores the normal and colour bounds.
+With the 0.2 cell planarity bound the region result is worse than the vertex dissolve.
+
+Cause: a marching surface is flat patches joined by 30 to 90 degree bevels.
+No edge between 5 and 30 degrees exists, so a 5 degree union cannot cross a bevel.
+The large curved regions that survive the union fail the planarity bound.
+The vertex dissolve already removes the bevel vertices that a region merge cannot touch.
+
+The normal bound is not the blocker either: a 30 degree normal limit at link limit 12 gave -18.3% on Testing2 and -41.1% on me, with mean errors of 1.7 and 2.4 degrees.
+
+Decision: keep A with limit 16. Do not add a region pass.
 
 ## Done: low-poly chunk crosstalk test
 
@@ -381,20 +428,20 @@ Every triangle is checked for its inward winding and its area after the choice.
 
 Triangle changes:
 
-- Material sphere smooth: 2606 to 2438.
-- Testing2 smooth: 5116 to 4298.
-- me smooth: 7714 to 5020.
+- Material sphere smooth: 2606 to 2480.
+- Testing2 smooth: 5116 to 4322.
+- me smooth: 7714 to 5282.
 
 Cost:
 
-- The dissolve phase takes 17.5 ms on the sphere, 50.5 ms on Testing2, and 149.0 ms on me.
-- The smooth build is 16.8% slower on the sphere, 24.8% on Testing2, and 46.6% on me.
+- The dissolve phase takes 14.0 ms on the sphere, 43.9 ms on Testing2, and 125.1 ms on me.
+- The smooth build is 14.1% slower on the sphere, 22.1% on Testing2, and 40.4% on me.
 - The medians use five measured passes of the smooth build on all occupied chunks.
 
 Errors:
 
 - The normal error at each removed position is at most 8.0 degrees, equal to the limit.
-- The mean error is 0.5 degrees on Testing2, 0.8 on me, and 2.3 on the sphere.
+- The mean error is 0.4 degrees on Testing2, 0.8 on me, and 1.8 on the sphere.
 - The colour error is zero on these models, because their occlusion strength is zero.
 
 Hardening:
@@ -406,6 +453,10 @@ Hardening:
 - The coverage test uses the link-plane weights.
   The normal and colour error uses the barycentric weights of each triangle plane.
   A tilted triangle then cannot hide its error.
+- The queue checks the seam flag again at each pop and at each link push.
+  Before this fix, a seam vertex became dissolvable after a neighbour dissolved.
+  A seam check on the models found 18 lost seam edges on Testing2 and 180 on me.
+  `tests/marching_dissolve.gd` now runs a sphere test that fails without the fix.
 
 Constraints:
 

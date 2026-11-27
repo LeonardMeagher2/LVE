@@ -13,6 +13,7 @@ func _init(owner_node: Node) -> void:
 
 class ExportJob extends VoxelFrame.EditJob:
 	const WELD_EPSILON := 0.00001
+	const DISSOLVE_LINK_LIMIT := 16
 	const ATLAS := preload("res://Globals/Rendering/VoxelAtlas.gd")
 	const SURFACE := preload("res://Globals/Rendering/VoxelSurface.gd")
 	var frames: Array[VoxelFrame] = []
@@ -169,6 +170,7 @@ class ExportJob extends VoxelFrame.EditJob:
 		indices = welded[4]
 		if smooth_normals:
 			var dissolver := VoxelMarchingMeshBuilder.new()
+			dissolver.dissolve_link_limit = DISSOLVE_LINK_LIMIT
 			var fill := colors
 			if fill.size() != positions.size():
 				fill = PackedColorArray()

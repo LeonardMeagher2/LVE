@@ -5,6 +5,8 @@ const EXPORT := preload("res://plugins/Export/GLTFExport.gd")
 const FIXTURE := preload("res://tests/helpers/marching_fixture.gd")
 const VIEW := preload("res://tests/helpers/marching_view.gd")
 const ROUND_TRIP := "user://low_poly_export.glb"
+const EXPECTED_VERTICES := 1275
+const EXPECTED_TRIANGLES := 1364
 
 var frame: VoxelFrame
 var job: RefCounted
@@ -134,6 +136,8 @@ func _smooth_export() -> void:
 	step("Then one global dissolve removes triangles without a seam", func():
 		expect(_smooth_triangle_count < _chunk_triangle_count, "the global dissolve removes triangles")
 		expect(_smooth_triangle_count < _chunk_dissolved_count, "the global dissolve removes more than the chunk passes")
+		expect(_smooth_vertex_count == EXPECTED_VERTICES, "the export keeps its welded vertex count")
+		expect(_smooth_triangle_count == EXPECTED_TRIANGLES, "the export keeps its dissolved triangle count")
 		var arrays: Array = job.frame_surfaces[0]
 		var positions: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
 		var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
@@ -268,5 +272,6 @@ func _round_trip() -> void:
 	var state := GLTFState.new()
 	if document.append_from_file(ROUND_TRIP, state) == OK and not state.get_meshes().is_empty():
 		imported_arrays = state.get_meshes()[0].mesh.get_surface_arrays(0)
+
 
 

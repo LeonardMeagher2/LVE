@@ -218,20 +218,20 @@ The "before" column is the same build with the dissolve off.
 
 | Scene | Merged triangles | Dissolved triangles | Change | Dissolve (us) | Build before (us) | Build after (us) | Change |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Material sphere | 2606 | 2438 | -6.5% | 17461 | 109787 | 128244 | +16.8% |
-| Testing2 | 5116 | 4298 | -16.0% | 50525 | 202759 | 252978 | +24.8% |
-| me | 7714 | 5020 | -34.9% | 149049 | 326071 | 478068 | +46.6% |
+| Material sphere | 2606 | 2480 | -4.8% | 13985 | 107368 | 122550 | +14.1% |
+| Testing2 | 5116 | 4322 | -15.5% | 43886 | 201798 | 246342 | +22.1% |
+| me | 7714 | 5282 | -31.5% | 125055 | 330949 | 464797 | +40.4% |
 
-Removed vertices: 84 on the sphere, 409 on Testing2, and 1347 on me.
+Removed vertices: 65 on the sphere, 397 on Testing2, and 1319 on me.
 Each removed vertex removes exactly two triangles.
 
 Normal and colour error at the removed position, per dissolve:
 
 | Scene | Maximum (deg) | Mean (deg) | Maximum colour |
 | --- | --- | --- | --- |
-| Material sphere | 7.90 | 2.29 | 0.0 |
-| Testing2 | 8.00 | 0.49 | 0.0 |
-| me | 8.00 | 0.83 | 0.0 |
+| Material sphere | 7.90 | 1.76 | 0.0 |
+| Testing2 | 8.00 | 0.43 | 0.0 |
+| me | 8.00 | 0.76 | 0.0 |
 
 The colour error is zero because these models have no ambient occlusion.
 The deterministic dissolve fixture measures a maximum of 7.90 degrees, a mean of 1.09 degrees, and a zero colour error on its final surface.
@@ -259,19 +259,37 @@ The per-chunk export build skips its dissolve, so a chunk face is not a seam.
 
 | Scene | Chunks | Chunk vertices | Chunk triangles | Welded vertices | Export vertices | Export triangles | Triangle change |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Testing2 | 6 | 4164 | 5116 | 4010 | 3574 | 4244 | -17.0% |
-| me | 4 | 5601 | 7714 | 5417 | 4011 | 4902 | -36.5% |
-| Material sphere, radius 4 | 8 | 1540 | 1546 | 1366 | 1253 | 1320 | -14.6% |
+| Testing2 | 6 | 4164 | 5116 | 4010 | 3571 | 4238 | -17.2% |
+| me | 4 | 5601 | 7714 | 5417 | 4078 | 5036 | -34.7% |
+| Material sphere, radius 4 | 8 | 1540 | 1546 | 1366 | 1275 | 1364 | -11.8% |
 
-The weld takes 2.6 ms on Testing2, 3.7 ms on me, and 1.0 ms on the sphere.
-The global dissolve takes 52.5 ms, 156.5 ms, and 14.6 ms.
+The weld takes 2.9 ms on Testing2 and 3.9 ms on me.
+The global dissolve takes 52.6 ms on Testing2 and 182.1 ms on me with link limit 16.
 These values come from one measured frame.
 
 The weld removes 3% to 4% of the vertices.
 The chunk mesh is already welded inside a chunk, so only the chunk face duplicates and the cross-chunk normal difference remain.
-The global dissolve removes 2% more triangles than the chunk passes on these models.
+The global dissolve removes 12 to 40 triangles less than the chunk passes on the sphere fixture.
+
+The export dissolve link limit was raised from 9 to 16.
+The table below shows the measured trade-off.
+Limit 24 adds nothing.
+
+| Limit | Testing2 | me | Dissolve (us), Testing2 / me |
+| --- | --- | --- | --- |
+| 9 | -16.6% | -32.9% | 46687 / 137053 |
+| 12 | -17.0% | -34.5% | 50422 / 168500 |
+| 16 | -17.2% | -34.7% | 52639 / 182137 |
+| 24 | -17.2% | -34.6% | 53232 / 176161 |
+
+A Blender-style 5 degree edge dissolve was measured and rejected.
+The 5 degree region union has a ceiling of -21.3% on Testing2 and -43.2% on me, with no normal bound.
+Within the 0.2 cell planarity bound it gives -16.2% and -31.9%, which is worse than the vertex dissolve.
+The cause is the 30 to 90 degree bevel between the flat patches of a marching surface.
+A 5 degree union cannot cross a bevel, and the large curved regions fail the planarity bound.
 
 `tests/export_low_poly.gd` checks the duplicate count, the triangle drop, the closed and manifold surface, the materials, the UVs, the normals, and the flat facets.
+It also pins the sphere fixture at 1275 vertices and 1364 triangles.
 
 ## Materials and normals
 
@@ -324,3 +342,5 @@ A zero average falls back to the face normal.
 3. Compare the vertices, triangles, UVs, and hash with the table.
 4. Change the constants in `tests/marching_snapshot.gd` only for an accepted geometry or UV change.
 5. Change the model hashes in `tests/benchmarks/marching_surface.gd` only for an accepted geometry or UV change.
+
+

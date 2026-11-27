@@ -33,6 +33,7 @@ func _ready() -> void:
 	test("the dissolve keeps the seams and the material coverage", _dissolve_seams, "dissolve_seams")
 	test("the dissolved smooth geometry keeps its snapshot", _dissolve_snapshot, "dissolve_snapshot")
 	test("a concave link polygon triangulates inside itself", _dissolve_concave_polygon, "dissolve_concave_polygon")
+	test("no seam vertex dissolves after its neighbours", _dissolve_sphere_seams, "dissolve_sphere_seams")
 	test("a concave link stays inside its polygon", _dissolve_concave, "dissolve_concave")
 	test("every accepted diagonal enters the edge set", _dissolve_edges, "dissolve_edges")
 
@@ -199,6 +200,49 @@ func _dissolve_seams() -> void:
 			if not dissolved_sides.has(key):
 				continue
 			expect(absf(merged_sides[key] - dissolved_sides[key]) <= AREA_LIMIT * maxf(merged_sides[key], 1.0), "the material area changes less than two percent")
+	)
+
+
+func _dissolve_sphere_seams() -> void:
+	step("Given a smooth sphere with many dissolvable neighbours", func():
+		var sphere := VoxelFrame.new()
+		var cells := {}
+		var material := VoxelFrame.material(Color(0.8, 0.2, 0.1))
+		for z in range(0, 16):
+			for y in range(0, 16):
+				for x in range(0, 16):
+					var offset := Vector3(x, y, z) - Vector3(7.5, 7.5, 7.5)
+					if offset.length_squared() > 25.0:
+						continue
+					cells[Vector3i(x, y, z)] = material
+		sphere.set_cells(cells)
+		var merged_builder := VoxelMarchingMeshBuilder.new()
+		merged_builder.smooth_normals = true
+		merged_builder.dissolve_limited = false
+		merged_builder.source_frame = sphere
+		merged_builder.chunk_location = Vector3i.ZERO
+		merged_builder.run()
+		var dissolved_builder := VoxelMarchingMeshBuilder.new()
+		dissolved_builder.smooth_normals = true
+		dissolved_builder.source_frame = sphere
+		dissolved_builder.chunk_location = Vector3i.ZERO
+		dissolved_builder.run()
+		var map := {}
+		var merged := _mesh_edges(merged_builder.surface_arrays[Mesh.ARRAY_VERTEX], merged_builder.surface_arrays[Mesh.ARRAY_INDEX], map)
+		var seam := _seam_pairs(merged_builder.surface_arrays[Mesh.ARRAY_VERTEX], merged_builder.surface_arrays[Mesh.ARRAY_INDEX], merged_builder.vertex_materials, merged)
+		var dissolved := _mesh_edges(dissolved_builder.surface_arrays[Mesh.ARRAY_VERTEX], dissolved_builder.surface_arrays[Mesh.ARRAY_INDEX], map)
+		var dissolved_positions := _position_set(dissolved_builder.surface_arrays[Mesh.ARRAY_VERTEX])
+		expect(merged["edges"].size() > 0, "the sphere builds a surface")
+		expect(seam["edges"].size() > 0, "the sphere has seam edges")
+		var missing := 0
+		for key: Vector2i in seam["edges"]:
+			if not dissolved["edges"].has(key):
+				missing += 1
+		for key: Vector3i in seam["vertices"]:
+			if not dissolved_positions.has(key):
+				missing += 1
+		expect(missing == 0, "no seam edge or seam vertex dissolves after its neighbours")
+		expect(merged_builder.surface_arrays[Mesh.ARRAY_INDEX].size() > dissolved_builder.surface_arrays[Mesh.ARRAY_INDEX].size(), "the sphere loses triangles")
 	)
 
 
@@ -665,6 +709,7 @@ static func _triangle_normal(positions: PackedVector3Array, indices: PackedInt32
 	if winding.length_squared() < 0.0000000001:
 		return Vector3.ZERO
 	return -winding.normalized()
+
 
 
 
