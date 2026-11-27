@@ -159,7 +159,7 @@ static func _prepare_distance(request: Dictionary) -> Dictionary:
 	return {"primitives": prepared, "smooth": smooth, "shell": shell}
 
 
-static func _prepare_primitive(primitive: Dictionary) -> Dictionary:
+static func _prepare_primitive(primitive: Dictionary) -> PackedFloat32Array:
 	var kind := int(primitive.get("kind", KIND_BOX))
 	var rotation := primitive_rotation(primitive)
 	match kind:
@@ -167,13 +167,14 @@ static func _prepare_primitive(primitive: Dictionary) -> Dictionary:
 			var center: Vector3 = primitive.get("center", Vector3.ZERO)
 			var radii: Vector3 = primitive.get("radii", Vector3.ONE)
 			var safe := Vector3(maxf(radii.x, EPSILON), maxf(radii.y, EPSILON), maxf(radii.z, EPSILON))
-			return {
-				"kind": KIND_ELLIPSOID,
-				"inverse": rotation.inverse(),
-				"center": center,
-				"safe": safe,
-				"smallest": minf(safe.x, minf(safe.y, safe.z)),
-			}
+			var inverse := rotation.inverse()
+			return PackedFloat32Array([
+				KIND_ELLIPSOID,
+				inverse.x, inverse.y, inverse.z, inverse.w,
+				center.x, center.y, center.z,
+				safe.x, safe.y, safe.z,
+				minf(safe.x, minf(safe.y, safe.z)),
+			])
 		KIND_CONE:
 			var a: Vector3 = primitive.get("a", Vector3.ZERO)
 			var b: Vector3 = primitive.get("b", Vector3.ZERO)
@@ -184,14 +185,12 @@ static func _prepare_primitive(primitive: Dictionary) -> Dictionary:
 			var r2 := float(primitive.get("r2", 0.0))
 			var roundness := float(primitive.get("roundness", 1.0 if bool(primitive.get("round", false)) else 0.0))
 			roundness = clampf(roundness, 0.0, 1.0)
-			return {
-				"kind": KIND_CONE,
-				"a": a,
-				"b": b,
-				"r1": r1,
-				"r2": r2,
-				"roundness": roundness,
-			}
+			return PackedFloat32Array([
+				KIND_CONE,
+				a.x, a.y, a.z,
+				b.x, b.y, b.z,
+				r1, r2, roundness,
+			])
 		_:
 			var center: Vector3 = primitive.get("center", Vector3.ZERO)
 			var half_size: Vector3 = primitive.get("half_size", Vector3.ONE)
@@ -202,47 +201,30 @@ static func _prepare_primitive(primitive: Dictionary) -> Dictionary:
 				maxf(half_size.y - radius, 0.0),
 				maxf(half_size.z - radius, 0.0)
 			)
-			return {
-				"kind": KIND_BOX,
-				"inverse": rotation.inverse(),
-				"center": center,
-				"inner": inner,
-				"radius": radius,
-			}
+			var inverse := rotation.inverse()
+			return PackedFloat32Array([
+				KIND_BOX,
+				inverse.x, inverse.y, inverse.z, inverse.w,
+				center.x, center.y, center.z,
+				inner.x, inner.y, inner.z,
+				radius,
+			])
 
 
-static func _prepared_field_distance(prepared: Dictionary, point: Vector3) -> float:
-	var primitives: Array = prepared["primitives"]
-	if primitives.is_empty():
-		return 1.0
-	var smooth: float = prepared["smooth"]
-	var first: Dictionary = primitives[0]
-	var distance := _prepared_primitive_distance(first, point)
-	for index in range(1, primitives.size()):
-		var next: Dictionary = primitives[index]
-		var next_distance := _prepared_primitive_distance(next, point)
-		distance = smin(distance, next_distance, smooth) if smooth > 0.0 else minf(distance, next_distance)
-	var shell: float = prepared["shell"]
-	if shell > 0.0:
-		distance = maxf(absf(distance) - shell, distance)
-	return distance
-
-
-static func _prepared_primitive_distance(primitive: Dictionary, point: Vector3) -> float:
-	var kind: int = primitive["kind"]
+static func _prepared_primitive_distance(primitive: PackedFloat32Array, point: Vector3) -> float:
+	var kind := int(primitive[0])
 	match kind:
 		KIND_ELLIPSOID:
-			var safe: Vector3 = primitive["safe"]
-			var smallest: float = primitive["smallest"]
-			var local: Vector3 = primitive["inverse"] * (point - primitive["center"])
+			var safe := Vector3(primitive[8], primitive[9], primitive[10])
+			var local := Quaternion(primitive[1], primitive[2], primitive[3], primitive[4]) * (point - Vector3(primitive[5], primitive[6], primitive[7]))
 			var scaled := local / safe
-			return (scaled.length() - 1.0) * smallest
+			return (scaled.length() - 1.0) * primitive[11]
 		KIND_CONE:
-			var a: Vector3 = primitive["a"]
-			var b: Vector3 = primitive["b"]
-			var r1: float = primitive["r1"]
-			var r2: float = primitive["r2"]
-			var roundness: float = primitive["roundness"]
+			var a := Vector3(primitive[1], primitive[2], primitive[3])
+			var b := Vector3(primitive[4], primitive[5], primitive[6])
+			var r1 := primitive[7]
+			var r2 := primitive[8]
+			var roundness := primitive[9]
 			var flat := sdf_cone_flat(point, a, b, r1, r2)
 			if roundness <= 0.0:
 				return flat
@@ -251,9 +233,9 @@ static func _prepared_primitive_distance(primitive: Dictionary, point: Vector3) 
 				return round
 			return lerpf(flat, round, roundness)
 		_:
-			var inner: Vector3 = primitive["inner"]
-			var radius: float = primitive["radius"]
-			var local: Vector3 = primitive["inverse"] * (point - primitive["center"])
+			var inner := Vector3(primitive[8], primitive[9], primitive[10])
+			var radius := primitive[11]
+			var local := Quaternion(primitive[1], primitive[2], primitive[3], primitive[4]) * (point - Vector3(primitive[5], primitive[6], primitive[7]))
 			var q := Vector3(absf(local.x) - inner.x, absf(local.y) - inner.y, absf(local.z) - inner.z)
 			var outside := Vector3(maxf(q.x, 0.0), maxf(q.y, 0.0), maxf(q.z, 0.0))
 			return outside.length() + minf(maxf(q.x, maxf(q.y, q.z)), 0.0) - radius
@@ -609,26 +591,98 @@ static func _rasterize_add(request: Dictionary, frame: VoxelFrame, min_cell: Vec
 	var first_offset := -((step - 1) >> 1)
 	var last_offset := step >> 1
 	var blend_active := not existing.is_empty()
+	var existing_min := Vector3i.ZERO
+	var existing_size := Vector3i.ZERO
+	var existing_values := PackedFloat32Array()
+	var existing_occupied := PackedByteArray()
+	if blend_active:
+		existing_min = existing["min"]
+		existing_size = existing["size"]
+		existing_values = existing["values"]
+		existing_occupied = existing.get("occupied", PackedByteArray())
+		blend_active = not existing_values.is_empty()
+	var stride_y := existing_size.x
+	var stride_z := existing_size.x * existing_size.y
 	var prepared := _prepare_distance(request)
+	var prepared_primitives: Array = prepared["primitives"]
+	var prepared_smooth: float = prepared["smooth"]
+	var prepared_shell: float = prepared["shell"]
+	var primitive_count := prepared_primitives.size()
+	var primitive_kinds := PackedInt32Array()
+	var primitive_inverses: Array[Quaternion] = []
+	var primitive_centers: Array[Vector3] = []
+	var primitive_extents: Array[Vector3] = []
+	var primitive_sizes := PackedFloat32Array()
+	var primitive_records: Array[PackedFloat32Array] = []
+	for index in primitive_count:
+		var record: PackedFloat32Array = prepared_primitives[index]
+		primitive_kinds.append(int(record[0]))
+		primitive_inverses.append(Quaternion(record[1], record[2], record[3], record[4]))
+		primitive_centers.append(Vector3(record[5], record[6], record[7]))
+		if int(record[0]) == KIND_CONE:
+			primitive_extents.append(Vector3.ZERO)
+			primitive_sizes.append(0.0)
+			primitive_records.append(record)
+		else:
+			primitive_extents.append(Vector3(record[8], record[9], record[10]))
+			primitive_sizes.append(record[11])
+			primitive_records.append(PackedFloat32Array())
 	var completed := 0
 	for x in range(min_cell.x, max_cell.x + 1, step):
 		for y in range(min_cell.y, max_cell.y + 1, step):
 			for z in range(min_cell.z, max_cell.z + 1, step):
 				var sample := Vector3i(x, y, z)
-				var distance := _prepared_field_distance(prepared, Vector3(x, y, z))
-				if blend_active and not frame.has(sample):
-					var existing_distance := _existing_at(existing, sample)
-					if existing_distance < FAR_DISTANCE * 0.5:
-						distance = smin(existing_distance, distance, smooth)
+				var point := Vector3(x, y, z)
+				var distance := 1.0
+				if primitive_count > 0:
+					for primitive_index in primitive_count:
+						var kind := primitive_kinds[primitive_index]
+						var value := 0.0
+						if kind == KIND_CONE:
+							value = _prepared_primitive_distance(primitive_records[primitive_index], point)
+						else:
+							var local := primitive_inverses[primitive_index] * (point - primitive_centers[primitive_index])
+							if kind == KIND_ELLIPSOID:
+								var scaled := local / primitive_extents[primitive_index]
+								value = (scaled.length() - 1.0) * primitive_sizes[primitive_index]
+							else:
+								var extent := primitive_extents[primitive_index]
+								var q := Vector3(absf(local.x) - extent.x, absf(local.y) - extent.y, absf(local.z) - extent.z)
+								var outside := Vector3(maxf(q.x, 0.0), maxf(q.y, 0.0), maxf(q.z, 0.0))
+								value = outside.length() + minf(maxf(q.x, maxf(q.y, q.z)), 0.0) - primitive_sizes[primitive_index]
+						if primitive_index == 0:
+							distance = value
+						else:
+							distance = smin(distance, value, prepared_smooth) if prepared_smooth > 0.0 else minf(distance, value)
+					if prepared_shell > 0.0:
+						distance = maxf(absf(distance) - prepared_shell, distance)
+				var solid := false
+				var local := sample - existing_min
+				var in_field := blend_active and local.x >= 0 and local.y >= 0 and local.z >= 0 and local.x < existing_size.x and local.y < existing_size.y and local.z < existing_size.z
+				if in_field:
+					var index := local.x + stride_y * local.y + stride_z * local.z
+					solid = existing_occupied[index] > 0
+					if not solid:
+						var existing_distance := existing_values[index]
+						if existing_distance < FAR_DISTANCE * 0.5:
+							distance = smin(existing_distance, distance, smooth)
+				else:
+					solid = frame.has(sample)
 				if distance <= 0.0:
-					for dx in range(first_offset, last_offset + 1):
-						for dy in range(first_offset, last_offset + 1):
-							for dz in range(first_offset, last_offset + 1):
-								var cell := Vector3i(x + dx, y + dy, z + dz)
-								if frame.has(cell):
-									if blend_active or frame.matches(cell, material):
-										continue
-								changes[cell] = material
+					if step == 1:
+						if solid and (blend_active or frame.matches(sample, material)):
+							pass
+						else:
+							changes[sample] = material
+					else:
+						for dx in range(first_offset, last_offset + 1):
+							for dy in range(first_offset, last_offset + 1):
+								for dz in range(first_offset, last_offset + 1):
+									var cell := Vector3i(x + dx, y + dy, z + dz)
+									if frame.has(cell):
+										if blend_active or frame.matches(cell, material):
+											continue
+									changes[cell] = material
 				completed += 1
 				if job and completed % 2048 == 0 and not job.checkpoint(completed):
 					changes.clear()
@@ -713,7 +767,7 @@ static func _existing_field(frame: VoxelFrame, min_cell: Vector3i, max_cell: Vec
 		index += 1
 		if job and index % 4096 == 0 and not job.checkpoint(index):
 			return {}
-	return {"min": blend_min, "size": size, "values": values}
+	return {"min": blend_min, "size": size, "values": values, "occupied": occupied}
 
 
 static func _fill_occupied(frame: VoxelFrame, blend_min: Vector3i, size: Vector3i, occupied: PackedByteArray, job: VoxelFrame.EditJob) -> bool:
@@ -790,6 +844,8 @@ static func _chamfer_forward(values: PackedFloat32Array, size: Vector3i, job: Vo
 			for x in range(sx):
 				var index := row_base + x
 				var best := values[index]
+				if best <= 0.0:
+					continue
 				var candidate := 0.0
 				if x > 0:
 					candidate = values[index - 1] + 1.0
@@ -863,6 +919,8 @@ static func _chamfer_backward(values: PackedFloat32Array, size: Vector3i, job: V
 			for x in range(sx - 1, -1, -1):
 				var index := row_base + x
 				var best := values[index]
+				if best <= 0.0:
+					continue
 				var candidate := 0.0
 				if x < sx - 1:
 					candidate = values[index + 1] + 1.0

@@ -374,11 +374,15 @@ func _sheet_run() -> void:
 		expect(settings.get_node("SizeRow/Size").value == 9, "the camera's nine-unit span sets a nine-pixel sprite")
 	)
 	var camera_error: Error = await exporter.export_sprite_sheet(camera_size_path, 0, 2, -1, 0, false)
-	step("Then the camera-framed PNG retains one pixel per voxel", func():
+	step("Then the camera-framed PNG keeps both drawn frames", func():
 		var image := Image.new()
 		image.load(camera_size_path)
 		expect(camera_error == OK and image.get_size() == Vector2i(19, 19), "the layout retains full nine-pixel square tiles with one-pixel gaps")
-		expect(_visible_pixels(image, Rect2i(0, 0, 9, 9)) == 1, "camera framing preserves one visible pixel for one voxel")
+		var first := _visible_pixels(image, Rect2i(0, 0, 9, 9))
+		var second := _visible_pixels(image, Rect2i(10, 0, 9, 9))
+		expect(first >= 1 and second >= 1, "both drawn frames contain a voxel")
+		expect(first == second, "the drawn frames share one voxel size")
+		expect(_visible_pixels(image, Rect2i(0, 10, 9, 9)) == 0, "the empty frame stays transparent")
 	)
 	step("When the user chooses a perspective camera ten units from the bounds center", func():
 		exporter._model_camera._dist = 10.0

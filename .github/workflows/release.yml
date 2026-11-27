@@ -20,7 +20,7 @@ jobs:
       publish: ${{ steps.prepare.outputs.publish }}
     steps:
       - name: Check out the repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Prepare the release
         id: prepare
@@ -71,7 +71,7 @@ jobs:
       contents: write
     steps:
       - name: Download the builds
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: release
           merge-multiple: true

@@ -170,6 +170,7 @@ func _session() -> void:
 	step("Then the session stores the paths and the active tab", func():
 		expect(State.last_tabs(SESSION_PATH) == PackedStringArray(["user://first.lve", "user://second.lve"]), "the paths are stored")
 		expect(State.last_tab_index(SESSION_PATH) == 1, "the active tab is stored")
+		expect(State.last_document_path(SESSION_PATH) == "user://second.lve", "the active document is the last document")
 	)
 	step("Then the other settings survive", func():
 		var settings := ConfigFile.new()

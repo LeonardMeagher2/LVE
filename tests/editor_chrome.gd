@@ -17,6 +17,9 @@ var mcp_status: EditorStatusBar
 var mcp_blocker: TCPServer
 var mcp_client: StreamPeerTCP
 var mcp_settings_path := ""
+var mcp_live_port := 0
+var clipboard_before := ""
+var clipboard_saved := false
 var settings_saved_path := ""
 var mcp_saved_port := 0
 var mcp_port_saved := false
@@ -32,6 +35,7 @@ func _ready() -> void:
 	test("thumbnail requests coalesce and render the final document state", _thumbnail_run, "thumbnail_updates")
 	test("the tool menu button selects on the first click and opens its menu on the second", _tool_select_run, "tool_select")
 	test("the editor reopens the last document or the splash sample", _startup_run, "startup_document")
+	test("a restart without open documents opens the splash", _startup_closed_run, "startup_closed_documents")
 	test("a new version opens the splash as the active first tab", _startup_splash_run, "startup_splash")
 	test("a first run opens the splash once", _startup_first_run, "startup_first_run")
 	test("an existing splash tab moves to the first position", _splash_reorder_run, "splash_reorder")
@@ -67,6 +71,9 @@ func after_test() -> void:
 	if mcp_client != null:
 		mcp_client.disconnect_from_host()
 		mcp_client = null
+	if clipboard_saved:
+		DisplayServer.clipboard_set(clipboard_before)
+		clipboard_saved = false
 	if not mcp_settings_path.is_empty():
 		DirAccess.remove_absolute(mcp_settings_path)
 		mcp_settings_path = ""
@@ -151,6 +158,8 @@ func _mcp_toggle_run() -> void:
 		main.set("settings_path", mcp_settings_path)
 		main.set("mcp_port", 0)
 		expect(not bool(main.call("is_mcp_enabled")), "the server starts off")
+		clipboard_before = DisplayServer.clipboard_get()
+		clipboard_saved = true
 		mcp_status = load("res://ui/StatusBar/StatusBar.tscn").instantiate()
 		main.add_child(mcp_status)
 	)
@@ -158,7 +167,7 @@ func _mcp_toggle_run() -> void:
 	var button: Button = mcp_status.get_node("%MCP")
 	step("Then the status icon is visible and off", func():
 		expect(button.visible, "the MCP icon is visible")
-		expect(button.tooltip_text.contains("off"), "the tooltip says the server is off")
+		expect(button.tooltip_text == "MCP server off. Click to start.", "the tooltip says the server is off")
 	)
 	step("When the user clicks the status icon", func():
 		button.pressed.emit()
@@ -167,13 +176,30 @@ func _mcp_toggle_run() -> void:
 	step("Then the server listens and saves the on state", func():
 		expect(bool(main.call("is_mcp_enabled")), "the server starts")
 		var port := int(main.call("mcp_local_port"))
+		mcp_live_port = port
 		expect(port > 0, "the server has a port")
-		expect(button.tooltip_text.contains("127.0.0.1"), "the tooltip shows the endpoint")
+		expect(button.tooltip_text == "MCP server on at http://127.0.0.1:%d/mcp. Click to stop." % port, "the tooltip shows the endpoint")
 		var settings := ConfigFile.new()
 		settings.load(mcp_settings_path)
 		expect(bool(settings.get_value("agent", "mcp_enabled", false)), "the on state is saved")
 		mcp_client = StreamPeerTCP.new()
 		expect(mcp_client.connect_to_host("127.0.0.1", port) == OK, "a client can reach the port")
+	)
+	step("Then the setup prompt is in the clipboard", func():
+		var notice: Label = mcp_status.get_node("%Notice")
+		expect(notice.visible, "the status bar shows a notice")
+		expect(notice.text == "Setup prompt copied to the clipboard", "the notice names the clipboard")
+		if DisplayServer.get_name() == "headless":
+			return
+		var prompt := DisplayServer.clipboard_get()
+		expect(prompt.contains("http://127.0.0.1:%d/mcp" % mcp_live_port), "the prompt names the endpoint")
+		expect(prompt.contains("docs/MCP.md"), "the prompt links to the MCP doc")
+	)
+	step("When the notice time ends", func():
+		mcp_status.get_node("NoticeTimer").timeout.emit()
+	)
+	step("Then the notice clears", func():
+		expect(not mcp_status.get_node("%Notice").visible, "the notice hides")
 	)
 	await _wait_client(mcp_client)
 	step("Then the server accepts the client", func():
@@ -188,6 +214,7 @@ func _mcp_toggle_run() -> void:
 	step("Then the server stops and saves the off state", func():
 		expect(not bool(main.call("is_mcp_enabled")), "the server stops")
 		expect(int(main.call("mcp_local_port")) == 0, "the port is free")
+		expect(button.tooltip_text == "MCP server off. Click to start.", "the tooltip drops the endpoint")
 		var settings := ConfigFile.new()
 		settings.load(mcp_settings_path)
 		expect(not bool(settings.get_value("agent", "mcp_enabled", true)), "the off state is saved")
@@ -367,6 +394,45 @@ func _startup_run() -> void:
 	step("Then the splash sample opens as an unsaved document", func():
 		expect(State.document.file_path == "res://splash.lve", "the splash document is open")
 		expect(startup_menu.current_save_path.is_empty(), "the sample has no save path")
+	)
+
+
+func _startup_closed_run() -> void:
+	step("Given a session with a remembered document", func():
+		startup_menu = main.get_node("%MenuBar")
+		var stamp := Time.get_ticks_usec()
+		startup_settings_path = "user://startup_closed_%s.cfg" % stamp
+		startup_session_path = startup_settings_path
+		settings_saved_path = str(main.get("settings_path"))
+		main.set("settings_path", startup_settings_path)
+		var saved := "user://startup_closed_%s.lve" % stamp
+		expect(startup_menu.open_document("res://splash.lve", false), "the splash document opens")
+		var document: VoxelDocument = State.document
+		expect(document.save_file(saved, null, document.encode_document()) == OK, "the document copy saves")
+		startup_documents.append(saved)
+		State.remember_document(saved, startup_session_path)
+		expect(State.last_document_path(startup_session_path) == saved, "the session remembers the document")
+	)
+
+	step("When the last document closes", func():
+		var blank := State.new_document()
+		var documents: Array[VoxelDocument] = [blank]
+		State.set_tabs(documents, 0)
+		State.remember_session(startup_session_path)
+	)
+
+	step("Then the session forgets the document", func():
+		expect(State.last_document_path(startup_session_path).is_empty(), "the session has no last document")
+	)
+
+	step("When the editor starts again", func():
+		main._restore_startup_document(true, startup_session_path)
+	)
+
+	step("Then the splash opens", func():
+		expect(State.tabs.size() == 1, "only the splash opens")
+		expect(State.document.file_path == "res://splash.lve", "the splash is the active document")
+		expect(startup_menu.current_save_path.is_empty(), "the splash has no save path")
 	)
 
 

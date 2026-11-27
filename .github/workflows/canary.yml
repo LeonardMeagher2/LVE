@@ -21,10 +21,10 @@ jobs:
       contents: write
     steps:
       - name: Check out the repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Download the builds
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: release
           merge-multiple: true
@@ -38,17 +38,11 @@ jobs:
           short=$(echo "${{ github.sha }}" | cut -c1-7)
           notes="The newest build from main. Version $version, commit $short."
           ls -l release
-          if gh release view canary --repo "${{ github.repository }}" >/dev/null 2>&1; then
-            for asset in $(gh release view canary --json assets --jq '.assets[].name' --repo "${{ github.repository }}"); do
-              gh release delete-asset canary "$asset" --yes --repo "${{ github.repository }}"
-            done
-            gh release upload canary release/* --clobber --repo "${{ github.repository }}"
-            gh release edit canary --notes "$notes" --repo "${{ github.repository }}"
-          else
-            gh release create canary release/* \
-              --title "Canary build" \
-              --notes "$notes" \
-              --prerelease \
-              --target "${{ github.sha }}" \
-              --repo "${{ github.repository }}"
-          fi
+          gh release view canary --repo "${{ github.repository }}" >/dev/null 2>&1 && \
+            gh release delete canary --yes --cleanup-tag --repo "${{ github.repository }}"
+          gh release create canary release/* \
+            --title "Canary build" \
+            --notes "$notes" \
+            --prerelease \
+            --target "${{ github.sha }}" \
+            --repo "${{ github.repository }}"

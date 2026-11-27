@@ -236,10 +236,15 @@ func orbit(rel: Vector2) -> void:
 
 
 func pan(rel: Vector2) -> void:
-	var s := _dist * 0.0016
-	_target -= get_camera_transform().basis.x * rel.x * s
-	_target += get_camera_transform().basis.y * rel.y * s
+	var per_pixel := _world_per_pixel()
+	_target -= get_camera_transform().basis.x * rel.x * per_pixel
+	_target += get_camera_transform().basis.y * rel.y * per_pixel
 	_update()
+
+
+func _world_per_pixel() -> float:
+	var height := maxf(get_viewport().get_visible_rect().size.y, 1.0)
+	return 2.0 * _dist * tan(deg_to_rad(fov) * 0.5) / height
 
 
 func set_helper_far_bounds(key: StringName, box: AABB) -> void:

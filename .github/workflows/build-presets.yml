@@ -19,7 +19,7 @@ jobs:
       matrix: ${{ steps.prepare.outputs.matrix }}
     steps:
       - name: Check out the repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Read the runnable presets
         id: prepare
@@ -140,7 +140,7 @@ jobs:
       matrix: ${{ fromJson(needs.prepare.outputs.matrix) }}
     steps:
       - name: Check out the repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Install Godot 4.7.2 and export templates
         shell: pwsh
@@ -315,7 +315,7 @@ jobs:
           Get-ChildItem -Path $releaseDir -Force | Select-Object Name, Length | Out-String | Write-Output
 
       - name: Store ${{ matrix.asset }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.asset }}
           path: ${{ github.workspace }}/release/${{ matrix.asset }}
