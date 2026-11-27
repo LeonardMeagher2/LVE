@@ -6,7 +6,7 @@ The editor hosts a local Model Context Protocol server. An agent can read the do
 
 Click the server icon in the status bar. The icon is dim when the server is off. It is bright when the server is on. The tooltip shows the endpoint when the server is on.
 
-The server listens on `http://127.0.0.1:17373/mcp` while it runs. Use `--mcp-port=<port>` to change the port.
+The server listens on `http://127.0.0.1:17373/mcp` while it runs. A desktop build binds `127.0.0.1`. A mobile build binds the first tailnet address, or `*` when it finds none. Use `--mcp-port=<port>` to change the port.
 
 The app remembers the last state in `user://settings.cfg`. The server starts with the app when the saved state is on.
 
@@ -285,7 +285,7 @@ opencode uses HTTP. Its local stdio process can echo the bridge input, so HTTP i
 
 ## Security
 
-The server binds to `127.0.0.1`. It has no authentication yet. The app remembers the last state, so the server can start with the app. Click the icon to stop it. Enable it only when an agent must use the editor. The agent can change the current document. Use undo or close the document without saving.
+A desktop build binds `127.0.0.1`. A mobile build binds the first tailnet address, or `*`. The server has no authentication yet. The app remembers the last state, so the server can start with the app. Click the icon to stop it. Enable it only when an agent must use the editor. The agent can change the current document. Use undo or close the document without saving.
 
 A browser page can send a cross-origin POST to a loopback port. The server refuses a POST that carries an `Origin` header. It also requires `Content-Type: application/json`. A non-MCP client can still call the tools.
 
