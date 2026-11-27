@@ -1264,19 +1264,36 @@ static func job_frame_of_snapshot(snapshot: Dictionary) -> VoxelFrame:
 
 func apply_published(locations: Array[Vector3i], published: VoxelFrame) -> void:
 	var started := Time.get_ticks_usec()
-	_bounds_dirty = true
-	_bounds_chunk_count = -1
+	var grows_only := not _bounds_dirty and _bounds.has_volume()
+	var merged := _bounds
 	for location in locations:
 		var chunk: Chunk = published.chunks.get(location)
+		var previous: Chunk = chunks.get(location)
 		if chunk == null:
 			chunks.erase(location)
 			_shared_chunks.erase(location)
+			grows_only = false
 			continue
 		chunks[location] = chunk
 		if published._shared_chunks.has(location):
 			_shared_chunks[location] = true
 		else:
 			_shared_chunks.erase(location)
+		if grows_only:
+			var chunk_bounds: AABB = chunk.get_bounds()
+			if previous == null:
+				merged = merged.merge(chunk_bounds) if chunk_bounds.has_volume() else merged
+			elif chunk_bounds.encloses(previous.get_bounds()):
+				merged = merged.merge(chunk_bounds)
+			else:
+				grows_only = false
+	if grows_only:
+		_bounds = merged
+		_bounds_dirty = false
+		_bounds_chunk_count = chunks.size()
+	else:
+		_bounds_dirty = true
+		_bounds_chunk_count = -1
 	_profile_publish_calls += 1
 	_profile_publish_us += Time.get_ticks_usec() - started
 
