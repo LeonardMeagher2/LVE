@@ -604,25 +604,35 @@ static func _budget(ordered: Array, use_passes: int, weights: Dictionary) -> Dic
 	return budget
 
 
-static func relax(occupied: Dictionary, cells: Array, passes := 1, radius := KERNEL_RADIUS, remove_threshold := REMOVE_THRESHOLD, add_threshold := ADD_THRESHOLD, weights := {}, cancel := Callable()) -> Dictionary:
+static func relax(occupied: Dictionary, cells: Array, passes := 1, radius := KERNEL_RADIUS, remove_threshold := REMOVE_THRESHOLD, add_threshold := ADD_THRESHOLD, weights := {}, cancel := Callable(), box := [], ordered_hint := false) -> Dictionary:
 	var use_passes := maxi(passes, 0)
 	if cells.is_empty() or use_passes == 0:
 		return _relax_dict(occupied, cells, cells, _budget(cells, use_passes, weights), use_passes, radius, remove_threshold, add_threshold, cancel)
-	var min_cell: Vector3i = cells[0]
-	var max_cell: Vector3i = cells[0]
-	var ordered_input := true
-	var previous: Vector3i = cells[0]
-	for index in range(1, cells.size()):
-		var cell: Vector3i = cells[index]
-		min_cell.x = mini(min_cell.x, cell.x)
-		min_cell.y = mini(min_cell.y, cell.y)
-		min_cell.z = mini(min_cell.z, cell.z)
-		max_cell.x = maxi(max_cell.x, cell.x)
-		max_cell.y = maxi(max_cell.y, cell.y)
-		max_cell.z = maxi(max_cell.z, cell.z)
-		if previous.y > cell.y or (previous.y == cell.y and (previous.z > cell.z or (previous.z == cell.z and previous.x > cell.x))):
-			ordered_input = false
-		previous = cell
+	var min_cell: Vector3i
+	var max_cell: Vector3i
+	if box.size() == 2:
+		min_cell = box[0]
+		max_cell = box[1]
+	else:
+		min_cell = cells[0]
+		max_cell = cells[0]
+		for index in range(1, cells.size()):
+			var cell: Vector3i = cells[index]
+			min_cell.x = mini(min_cell.x, cell.x)
+			min_cell.y = mini(min_cell.y, cell.y)
+			min_cell.z = mini(min_cell.z, cell.z)
+			max_cell.x = maxi(max_cell.x, cell.x)
+			max_cell.y = maxi(max_cell.y, cell.y)
+			max_cell.z = maxi(max_cell.z, cell.z)
+	var ordered_input := ordered_hint
+	if not ordered_input:
+		var previous: Vector3i = cells[0]
+		for index in range(1, cells.size()):
+			var cell: Vector3i = cells[index]
+			if previous.y > cell.y or (previous.y == cell.y and (previous.z > cell.z or (previous.z == cell.z and previous.x > cell.x))):
+				ordered_input = false
+				break
+			previous = cell
 	var ordered: Array
 	if ordered_input:
 		ordered = cells
@@ -655,10 +665,10 @@ static func relax(occupied: Dictionary, cells: Array, passes := 1, radius := KER
 	return _relax_grid(occupied, ordered, budgets, bases, use_passes, radius, remove_threshold, add_threshold, cancel, data, initial, stride_x, stride_y)
 
 
-static func advance(occupied: Dictionary, cells: Array, passes: int, radius := KERNEL_RADIUS, remove_threshold := REMOVE_THRESHOLD, add_threshold := ADD_THRESHOLD, weights := {}, cancel := Callable()) -> Dictionary:
+static func advance(occupied: Dictionary, cells: Array, passes: int, radius := KERNEL_RADIUS, remove_threshold := REMOVE_THRESHOLD, add_threshold := ADD_THRESHOLD, weights := {}, cancel := Callable(), box := [], ordered_hint := false) -> Dictionary:
 	if cells.is_empty():
 		return {"occupied": occupied.duplicate(), "remove": [], "add": [], "passes": 0}
 	var use_passes := mini(maxi(passes, 0), MAX_PASSES_PER_CALL)
-	var outcome := relax(occupied, cells, use_passes, radius, remove_threshold, add_threshold, weights, cancel)
+	var outcome := relax(occupied, cells, use_passes, radius, remove_threshold, add_threshold, weights, cancel, box, ordered_hint)
 	outcome["passes"] = use_passes
 	return outcome

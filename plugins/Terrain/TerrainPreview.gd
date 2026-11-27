@@ -87,6 +87,8 @@ static func compute_smooth_fields(center_point: Vector3, radius: int, falloff: f
 	var sphere := _weighted_sphere(radius, falloff)
 	var offset_cells: Array = sphere[0]
 	var sphere_weights: PackedFloat64Array = sphere[1]
+	var low_offset: Vector3i = sphere[2]
+	var high_offset: Vector3i = sphere[3]
 	var offset_count := offset_cells.size()
 	for mask in masks_for(context):
 		var center := center_point if mask == 0 else TerrainFrame.mirror_point(center_point, context, mask)
@@ -107,6 +109,8 @@ static func compute_smooth_fields(center_point: Vector3, radius: int, falloff: f
 		fields.append({
 			"cells": cells,
 			"weights": weights,
+			"box": [base + low_offset, base + high_offset],
+			"ordered": true,
 		})
 	return fields
 
@@ -124,9 +128,17 @@ static func _weighted_sphere(radius: int, falloff: float) -> Array:
 	var weights := PackedFloat64Array()
 	weights.resize(count)
 	var packed := []
+	var low_offset := Vector3i.ZERO
+	var high_offset := Vector3i.ZERO
 	for i in count:
 		var entry: Dictionary = offsets[i]
 		var off: Vector3i = entry["offset"]
+		low_offset.x = mini(low_offset.x, off.x)
+		low_offset.y = mini(low_offset.y, off.y)
+		low_offset.z = mini(low_offset.z, off.z)
+		high_offset.x = maxi(high_offset.x, off.x)
+		high_offset.y = maxi(high_offset.y, off.y)
+		high_offset.z = maxi(high_offset.z, off.z)
 		offset_cells.append(off)
 		weights[i] = VoxelFalloff.weight_at(float(entry["distance"]), float(radius), falloff, 0.0)
 		packed.append((((off.y + 64) * 128 + (off.z + 64)) * 128 + (off.x + 64)) * (1 << 18) + i)
@@ -139,7 +151,7 @@ static func _weighted_sphere(radius: int, falloff: float) -> Array:
 		var index: int = packed[i] % (1 << 18)
 		sorted_cells[i] = offset_cells[index]
 		sorted_weights[i] = weights[index]
-	var result := [sorted_cells, sorted_weights]
+	var result := [sorted_cells, sorted_weights, low_offset, high_offset]
 	result.make_read_only()
 	_weighted_sphere_lock.lock()
 	_weighted_sphere_cache[key] = result

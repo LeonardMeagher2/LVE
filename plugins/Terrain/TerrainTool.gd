@@ -334,7 +334,7 @@ class SmoothJob extends VoxelFrame.EditJob:
 			if occupied == null:
 				cancelled = true
 				return
-			var outcome := SmoothOperation.advance(occupied, cells, passes, radius, remove_threshold, add_threshold, field["weights"], cancel)
+			var outcome := SmoothOperation.advance(occupied, cells, passes, radius, remove_threshold, add_threshold, field["weights"], cancel, field.get("box", []), bool(field.get("ordered", false)))
 			if outcome.has("cancelled"):
 				cancelled = true
 				return
