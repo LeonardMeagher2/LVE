@@ -264,6 +264,12 @@ The build falls from 6,940 to 6,054 us per call at 5,000 to 20,000 candidates, 1
 The radius-32 drag reads 1.427 s on the large model and 1.510 s on the small one.
 The remaining share is the pass scan at 54.5 percent, which is the per-cell kernel itself.
 
+Measured: the pass read the six face neighbours and then asked `_grid_base_occupied` to read them again.
+Passing the preloaded count cuts the pass window from 16,741 to 16,037 us per call at 5,000 to 20,000 candidates and from 2,544 to 2,446, about 4 percent on both buckets.
+The early exit still matches: callers compare the count against a limit, and the preloaded total is the same self plus six faces.
+The radius-32 drag reads 1.408 s on the large model.
+Seven terrain scenes pass.
+
 ### Code path
 
 `TerrainTool._smooth_tick` calls `_run_smooth`.
