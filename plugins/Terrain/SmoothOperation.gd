@@ -604,7 +604,7 @@ static func _budget(ordered: Array, use_passes: int, weights: Dictionary) -> Dic
 	return budget
 
 
-static func relax(occupied: Dictionary, cells: Array, passes := 1, radius := KERNEL_RADIUS, remove_threshold := REMOVE_THRESHOLD, add_threshold := ADD_THRESHOLD, weights := {}, cancel := Callable(), box := [], ordered_hint := false) -> Dictionary:
+static func relax(occupied: Dictionary, cells: Array, passes := 1, radius := KERNEL_RADIUS, remove_threshold := REMOVE_THRESHOLD, add_threshold := ADD_THRESHOLD, weights := {}, cancel := Callable(), box := [], ordered_hint := false, cell_weights := PackedFloat64Array()) -> Dictionary:
 	var use_passes := maxi(passes, 0)
 	if cells.is_empty() or use_passes == 0:
 		return _relax_dict(occupied, cells, cells, _budget(cells, use_passes, weights), use_passes, radius, remove_threshold, add_threshold, cancel)
@@ -657,18 +657,30 @@ static func relax(occupied: Dictionary, cells: Array, passes := 1, radius := KER
 	var bases := PackedInt32Array()
 	budgets.resize(ordered.size())
 	bases.resize(ordered.size())
+	var aligned := cell_weights.size() == ordered.size()
+	var budget_scale := float(use_passes)
+	var previous_cell := Vector3i.ZERO
+	var base_cursor := 0
 	for index in ordered.size():
 		var cell: Vector3i = ordered[index]
-		budgets[index] = roundi(float(use_passes) * clampf(float(weights.get(cell, 1.0)), 0.0, 1.0))
-		bases[index] = (cell.x - low.x) * stride_x + (cell.y - low.y) * stride_y + (cell.z - low.z)
+		if aligned:
+			budgets[index] = roundi(budget_scale * clampf(cell_weights[index], 0.0, 1.0))
+		else:
+			budgets[index] = roundi(budget_scale * clampf(float(weights.get(cell, 1.0)), 0.0, 1.0))
+		if index == 0 or cell.y != previous_cell.y or cell.z != previous_cell.z or cell.x != previous_cell.x + 1:
+			base_cursor = (cell.x - low.x) * stride_x + (cell.y - low.y) * stride_y + (cell.z - low.z)
+		else:
+			base_cursor += stride_x
+		bases[index] = base_cursor
+		previous_cell = cell
 	var initial := data.duplicate()
 	return _relax_grid(occupied, ordered, budgets, bases, use_passes, radius, remove_threshold, add_threshold, cancel, data, initial, stride_x, stride_y)
 
 
-static func advance(occupied: Dictionary, cells: Array, passes: int, radius := KERNEL_RADIUS, remove_threshold := REMOVE_THRESHOLD, add_threshold := ADD_THRESHOLD, weights := {}, cancel := Callable(), box := [], ordered_hint := false) -> Dictionary:
+static func advance(occupied: Dictionary, cells: Array, passes: int, radius := KERNEL_RADIUS, remove_threshold := REMOVE_THRESHOLD, add_threshold := ADD_THRESHOLD, weights := {}, cancel := Callable(), box := [], ordered_hint := false, cell_weights := PackedFloat64Array()) -> Dictionary:
 	if cells.is_empty():
 		return {"occupied": occupied.duplicate(), "remove": [], "add": [], "passes": 0}
 	var use_passes := mini(maxi(passes, 0), MAX_PASSES_PER_CALL)
-	var outcome := relax(occupied, cells, use_passes, radius, remove_threshold, add_threshold, weights, cancel, box, ordered_hint)
+	var outcome := relax(occupied, cells, use_passes, radius, remove_threshold, add_threshold, weights, cancel, box, ordered_hint, cell_weights)
 	outcome["passes"] = use_passes
 	return outcome

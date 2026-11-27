@@ -95,6 +95,7 @@ static func compute_smooth_fields(center_point: Vector3, radius: int, falloff: f
 		var base := TerrainGeometry.cell_at(center)
 		var cells := []
 		var weights := {}
+		var cell_weights := PackedFloat64Array()
 		for i in offset_count:
 			var weight := sphere_weights[i]
 			if weight <= 0.0:
@@ -106,9 +107,11 @@ static func compute_smooth_fields(center_point: Vector3, radius: int, falloff: f
 			if TerrainGeometry.allows(selection, cell) and (context == null or context.allows(cell)):
 				cells.append(cell)
 				weights[cell] = weight
+				cell_weights.append(weight)
 		fields.append({
 			"cells": cells,
 			"weights": weights,
+			"cell_weights": cell_weights,
 			"box": [base + low_offset, base + high_offset],
 			"ordered": true,
 		})
