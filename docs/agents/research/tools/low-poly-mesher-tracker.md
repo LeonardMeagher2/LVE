@@ -26,6 +26,7 @@ Done:
 - A slice keeps its cap at a chunk row edge.
 - The glTF export uses the marching mesh for the low-poly style.
 - Flat and smooth modes merge coplanar triangle fans when the fan normals match.
+- The build uses padded field writes and packed merge and drop passes.
 
 In progress:
 
@@ -244,6 +245,43 @@ Tests:
 - `tests/drawing_visibility` covers a cold switch and a warm revisit.
 - `tests/surface_cache_lifetime` saves and restores the shared cache.
 - The history keys use a style-0 header so they do not change the cache limit.
+
+## Done: performance pass
+
+Date: 2026-11-27.
+
+Branch: `design-k-mesher`.
+
+The build time fell 1.18x to 1.34x on the benchmark scenes.
+Every geometry hash stays equal.
+The one-material-per-triangle rule and the symmetry behavior do not change.
+
+Changes:
+
+- The union field writes into a padded volume.
+  The splat needs no bounds test.
+- The cell scan reads each corner once for the occupancy bits and the cell material.
+- The case loops, triangles, and face triangles are three static arrays.
+- The quad field points are reused for the triangle emission.
+- The edge site and label return through builder fields, not a new array.
+- The quad fan ambiguity test runs only for a uniform quad.
+- Both drop passes share one canonical position id array.
+  The duplicate pass groups with one packed 63-bit key.
+- The coplanar merge keeps the triangles in one packed array.
+  It caches one normal key and one material for each triangle.
+  It replaces the per-call link dictionaries with stamped packed arrays.
+
+Evidence:
+
+- The benchmark reports the before and after medians in
+  [marching-surface-benchmark.md](marching-surface-benchmark.md).
+- The snapshot hash and every model hash stay equal.
+- The marching suite passes.
+
+Limit:
+
+- The normal rebuild keeps its cost.
+- A fused weld call was slower than the separate pass.
 
 ## LPM-4: Comparison research
 

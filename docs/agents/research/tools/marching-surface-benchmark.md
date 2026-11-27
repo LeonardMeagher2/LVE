@@ -107,6 +107,68 @@ The field phase was the largest cost before the change.
 On Testing2 it fell from 776717 to 25107 microseconds.
 The cell phase is now the largest cost on Testing2 and me.
 
+## Performance pass: packed passes
+
+The "before" column is commit `86ce9fd`.
+The "after" column is the optimized builder.
+Both runs were adjacent on one machine.
+Each value is the median of three measured passes after one warmup.
+
+| Scene | Before (us) | After (us) | Speedup |
+| --- | --- | --- | --- |
+| Material sphere | 148040 | 110640 | 1.34x |
+| Testing2 | 261836 | 196554 | 1.33x |
+| Test3 | 8618 | 7284 | 1.18x |
+| Testing | 53148 | 44295 | 1.20x |
+| me | 436753 | 336210 | 1.30x |
+
+Every scene keeps its geometry hash.
+
+After phases:
+
+| Scene | Sample | Field | Cells | Drop | Normals | Merge | Atlas |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Material sphere | 8899 | 29407 | 44713 | 4584 | 9418 | 9257 | 742 |
+| Testing2 | 6965 | 15994 | 92891 | 11236 | 22300 | 41495 | 697 |
+| Test3 | 921 | 711 | 4056 | 219 | 480 | 298 | 108 |
+| Testing | 3208 | 4661 | 22320 | 1651 | 3268 | 7822 | 187 |
+| me | 12689 | 58472 | 135801 | 16239 | 32533 | 72787 | 746 |
+
+All values are microseconds.
+
+Changes:
+
+1. Write the union field into a volume that has the field radius as padding on each side.
+   - The old splat tested three bounds for each of 125 samples.
+   - The padded volume accepts every sample.
+   - `_field_point` reads the padded volume with its own corner steps.
+   - The field phase fell 13 to 40 percent.
+2. Read the eight cell corners once for both the occupancy bits and the cell material.
+   - The old scan read the corner samples twice.
+   - A packed corner-step table removes the variant index math.
+3. Keep the case loops, triangles, and face triangles in three static arrays.
+   - The old cell loop did a dictionary lookup for each cell.
+4. Reuse the four quad field points for the triangle emission.
+   - The old loop computed each edge point again.
+5. Return the edge site and label through builder fields.
+   - The old helper allocated a two-entry array for each call.
+6. Test the quad fan ambiguity only for a uniform quad.
+   - The old test built two intrinsic length keys even when the result was unused.
+7. Compute one canonical position id for each welded vertex, and use it in both drop passes.
+   - The old passes rounded every position again.
+   - A packed 63-bit group key replaces the three-level dictionary.
+   - The drop phase fell about 50 percent.
+8. Keep the coplanar merge triangles in one packed array.
+   - Cache one normal key and one material for each triangle.
+   - Replace the per-call link dictionaries with stamped packed arrays.
+   - The merge phase fell 25 to 31 percent.
+
+Limits:
+
+- The normal rebuild keeps its cost.
+- A fused weld through a helper function was slower than the separate pass.
+  The nine-argument call costs more than the saved temporary arrays.
+
 ## Coplanar merge
 
 Flat mode merges coplanar triangle fans after the normal rebuild and after ambient occlusion.
