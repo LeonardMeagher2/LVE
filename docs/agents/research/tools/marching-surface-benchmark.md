@@ -154,6 +154,6 @@ A zero average falls back to the face normal.
 
 1. Change the builder.
 2. Run the snapshot test.
-3. Compare the vertices, triangles, and hash with the table.
-4. Change the constants in `tests/marching_snapshot.gd` only for an accepted geometry change.
-5. Change the model hashes in `tests/benchmarks/marching_surface.gd` only for an accepted geometry change.
+3. Compare the vertices, triangles, UVs, and hash with the table.
+4. Change the constants in `tests/marching_snapshot.gd` only for an accepted geometry or UV change.
+5. Change the model hashes in `tests/benchmarks/marching_surface.gd` only for an accepted geometry or UV change.

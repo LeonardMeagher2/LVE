@@ -166,8 +166,8 @@ Key findings:
 - `hard_boundaries` and `per_material` are not used by the renderer.
 - The surface cache entry limit counted only non-empty surfaces.
   The entry limit now uses the dictionary size.
-- `tests/surface_cache_lifetime` still fails in this process.
-  It fails on `64e1418` without the current changes.
+- `tests/surface_cache_lifetime` fails when it runs alone.
+  It also fails on `64e1418` without the current changes.
   The test assumes an empty cache and the style-0 limit.
   A loaded low-poly document sets the shared low-poly limit to 4096.
 
