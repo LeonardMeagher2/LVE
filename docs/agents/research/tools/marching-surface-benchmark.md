@@ -69,7 +69,7 @@ The prototype models are not tracked.
 The benchmark skips a model when its file is absent.
 The snapshot test does not use a model file.
 The benchmark builds the models in flat mode.
-The smooth viewport path skips the merge to keep the smooth normal interpolation.
+The smooth viewport path merges only a fan whose vertex normals all match.
 
 ## Cost
 
@@ -109,20 +109,27 @@ The cell phase is now the largest cost on Testing2 and me.
 
 ## Coplanar merge
 
-Flat mode merges coplanar triangle fans after the normal rebuild.
+Flat mode merges coplanar triangle fans after the normal rebuild and after ambient occlusion.
+Smooth mode also merges a fan when the removed vertex and every link vertex have the same normal at 1/1024 precision.
 The merge removes an interior vertex when its incident triangles share one normal, one material, and one plane, and the link is one convex loop.
 It retriangulates the loop and keeps every boundary vertex.
-Smooth mode skips the merge.
-| Scene | Triangles before | Triangles after | Change | Merge (us) |
-| --- | --- | --- | --- | --- |
-| Material sphere | 2606 | 2594 | -0.5% | 12557 |
-| Testing2 | 6444 | 4792 | -25.6% | 53792 |
-| Test3 | 128 | 128 | 0% | 423 |
-| Testing | 952 | 536 | -43.7% | 9903 |
-| me | 9464 | 5860 | -38.1% | 94771 |
 
-The mesh build is slower by 6% on the sphere and 17% to 25% on the models.
-The rendered triangle count falls 26% to 44% on the models.
+| Scene | Mode | Triangles before | Triangles after | Change | Merge (us) |
+| --- | --- | --- | --- | --- | --- |
+| Material sphere | Flat | 2606 | 2594 | -0.5% | 12557 |
+| Testing2 | Flat | 6444 | 4792 | -25.6% | 53792 |
+| Testing2 | Smooth | 6444 | 5116 | -20.6% | 50819 |
+| Test3 | Flat | 128 | 128 | 0% | 423 |
+| Testing | Flat | 952 | 536 | -43.7% | 9903 |
+| me | Flat | 9464 | 5860 | -38.1% | 94771 |
+| me | Smooth | 9464 | 7714 | -18.5% | 74916 |
+
+The benchmark measures the flat rows.
+The smooth rows are separate probes of frame 0 with the merge on.
+
+The flat mesh build is slower by 6% on the sphere and 17% to 25% on the models.
+The flat rendered triangle count falls 26% to 44% on the models.
+The smooth rendered triangle count falls 18% to 21%.
 The material coverage stays the same.
 Triangle-level symmetry is not kept for coplanar faces.
 

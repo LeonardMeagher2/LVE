@@ -274,7 +274,7 @@ func _build(occupancy: PackedByteArray, material_ids: PackedInt32Array, material
 	if ao_strength > 0.0:
 		_apply_edge_ambient_occlusion(welded[0], welded[2], welded[3], ao_strength)
 	var merge_started := Time.get_ticks_usec() if profile else 0
-	if not smooth_normals and merge_coplanar:
+	if merge_coplanar:
 		welded = _merge_coplanar_fans(welded[0], welded[1], welded[2], welded[4], welded[3])
 	if profile:
 		merge_us = Time.get_ticks_usec() - merge_started
@@ -1373,7 +1373,7 @@ func _merge_coplanar_fans(positions: PackedVector3Array, normals: PackedVector3A
 		var incident: Array = vertex_triangles.get(vertex, [])
 		if incident.size() < 3:
 			continue
-		var cycle: Array = _merge_coplanar_vertex(vertex, triangles, positions, materials, incident, vertex_triangles, removed)
+		var cycle: Array = _merge_coplanar_vertex(vertex, triangles, positions, normals, materials, incident, vertex_triangles, removed)
 		if cycle.is_empty():
 			continue
 		merged[vertex] = true
@@ -1426,7 +1426,7 @@ func _unregister_merge_triangle(triangle: int, points: PackedInt32Array, vertex_
 		vertex_triangles[vertex] = incident
 
 
-func _merge_coplanar_vertex(vertex: int, triangles: Array[PackedInt32Array], positions: PackedVector3Array, materials: PackedInt32Array, incident: Array, vertex_triangles: Dictionary, removed: Dictionary) -> Array:
+func _merge_coplanar_vertex(vertex: int, triangles: Array[PackedInt32Array], positions: PackedVector3Array, normals: PackedVector3Array, materials: PackedInt32Array, incident: Array, vertex_triangles: Dictionary, removed: Dictionary) -> Array:
 	var incident_count := incident.size()
 	var first_triangle: PackedInt32Array = triangles[incident[0]]
 	var reference_point := positions[first_triangle[0]]
@@ -1473,6 +1473,12 @@ func _merge_coplanar_vertex(vertex: int, triangles: Array[PackedInt32Array], pos
 		current = next[current]
 	if cycle.size() != next.size():
 		return []
+	var shading_normal := normals[vertex]
+	var shading_key := Vector3i(roundi(shading_normal.x * 1024.0), roundi(shading_normal.y * 1024.0), roundi(shading_normal.z * 1024.0))
+	for link_vertex: int in cycle:
+		var link_normal := normals[link_vertex]
+		if Vector3i(roundi(link_normal.x * 1024.0), roundi(link_normal.y * 1024.0), roundi(link_normal.z * 1024.0)) != shading_key:
+			return []
 	var orientation := 0
 	for index in cycle.size():
 		var first := positions[cycle[index]]

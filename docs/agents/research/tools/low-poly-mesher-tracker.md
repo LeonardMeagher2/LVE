@@ -1,6 +1,6 @@
 # Low-poly mesher tracker
 
-Date: 2026-11-26.
+Date: 2026-11-27.
 
 Branch: `design-k-mesher`.
 
@@ -25,7 +25,7 @@ Done:
 - The low-poly mesh bakes ambient occlusion into the vertex colors.
 - A slice keeps its cap at a chunk row edge.
 - The glTF export uses the marching mesh for the low-poly style.
-- Flat mode merges coplanar triangle fans.
+- Flat and smooth modes merge coplanar triangle fans when the fan normals match.
 
 In progress:
 
@@ -39,7 +39,7 @@ Open:
 ## Constraints
 
 - Keep one material per triangle.
-- Keep the strict Testing2 symmetry result.
+- Keep the material coverage symmetry.
 - Keep the visual design of the current low-poly models.
 - Do not hardcode a symmetry plane.
 - Keep the old stable mesher available for comparison.
@@ -80,23 +80,28 @@ Evidence:
 ## Done: coplanar fan merge
 
 Flat mode merges coplanar triangle fans after the normal rebuild and after ambient occlusion.
+Smooth mode also merges a fan when every link vertex and the removed vertex have the same normal at 1/1024 precision.
 The merge removes an interior vertex when its incident triangles share one normal, one material, and one plane, and the link is one convex loop.
 It retriangulates the link and keeps every boundary vertex.
-Smooth mode and non-convex links skip the merge.
+A smooth fan with mixed normals skips the merge.
+A non-convex link skips the merge.
 
 Triangle changes:
 
 - Material sphere: 2606 to 2594.
-- Testing2: 6444 to 4792.
+- Testing2 flat: 6444 to 4792.
+- Testing2 smooth: 6444 to 5116.
 - Test3: 128 to 128.
-- Testing: 952 to 536.
-- me: 9464 to 5860.
+- Testing flat: 952 to 536.
+- me flat: 9464 to 5860.
+- me smooth: 9464 to 7714.
 
 Cost:
 
-- The merge phase takes 12.6 ms on the sphere, 53.8 ms on Testing2, and 94.8 ms on me.
+- The merge phase takes 12.6 ms on the sphere, 53.8 ms on Testing2 flat, and 50.8 ms on Testing2 smooth.
+- The me merge phase takes 94.8 ms flat and 74.9 ms smooth.
 - The total build is 6% slower on the sphere and 17% to 25% slower on the models.
-- The rendered triangle count falls 26% to 44% on the models.
+- The rendered triangle count falls 26% to 44% on the flat models and 18% to 21% on the smooth models.
 
 Constraints:
 
@@ -282,8 +287,8 @@ Key findings:
 | 1 | Dead repair passes and unused flags | Low | S | Geometry change if wired |
 | 2 | No LOD or draw call batching | Medium at scale | L | Popping |
 
-The coplanar fan merge is done for flat mode.
-Smooth mode keeps the unmerged mesh, because the larger fans change the smooth normal interpolation.
+The coplanar fan merge is done for flat mode and for smooth fans with one shared normal.
+A smooth fan with mixed normals keeps the unmerged mesh, because the wider fan changes the interpolation.
 The strict Testing2 triangle symmetry is no longer required for coplanar faces.
 The material coverage stays symmetric.
 
@@ -337,5 +342,5 @@ godot --path . -s res://addons/test_kit/run.gd -- marching_mesh marching_bridge 
 - A full rebuild requests only the occupied chunks.
 - A slice filters the present neighbours by the slice row range.
 - Flat mode merges coplanar fans after the normals and ambient occlusion.
+- Smooth mode merges only a fan whose vertex normals all match.
 - Coplanar merging may change triangle-level symmetry. Material coverage stays symmetric.
-- Smooth mode skips the merge to keep the smooth normal interpolation.

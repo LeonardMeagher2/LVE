@@ -9,6 +9,8 @@ var _shell_builder
 var _slice_builder
 var _merged_builder
 var _unmerged_builder
+var _merged_smooth
+var _unmerged_smooth
 
 
 func _ready() -> void:
@@ -146,6 +148,8 @@ func _coplanar_merge() -> void:
 				frame.set_cell(Vector3i(x, 0, z), material)
 		_merged_builder = _flat_builder(frame, Vector3i.ZERO, true)
 		_unmerged_builder = _flat_builder(frame, Vector3i.ZERO, false)
+		_merged_smooth = _smooth_builder(frame, Vector3i.ZERO, true)
+		_unmerged_smooth = _smooth_builder(frame, Vector3i.ZERO, false)
 	)
 	step("Then the plate loses triangles and keeps its material coverage", func():
 		var merged_arrays: Array = _merged_builder.surface_arrays
@@ -163,6 +167,23 @@ func _coplanar_merge() -> void:
 		expect(is_equal_approx(merged_sides["blue_left"], merged_sides["blue_right"]), "the blue centre stays symmetric")
 		expect(is_equal_approx(merged_sides["red_left"] + merged_sides["red_right"], unmerged_sides["red_left"] + unmerged_sides["red_right"]) or absf(merged_sides["red_left"] + merged_sides["red_right"] - unmerged_sides["red_left"] - unmerged_sides["red_right"]) < 0.01, "the merge keeps the red area")
 		expect(absf(merged_sides["blue_left"] + merged_sides["blue_right"] - unmerged_sides["blue_left"] - unmerged_sides["blue_right"]) < 0.01, "the merge keeps the blue area")
+	)
+	step("Then the smooth plate merges only constant-normal fans and keeps its normals", func():
+		var merged_arrays: Array = _merged_smooth.surface_arrays
+		var unmerged_arrays: Array = _unmerged_smooth.surface_arrays
+		expect(merged_arrays[Mesh.ARRAY_INDEX].size() < unmerged_arrays[Mesh.ARRAY_INDEX].size(), "the smooth merge removes triangles")
+		var view = VIEW.new(self)
+		view.positions = merged_arrays[Mesh.ARRAY_VERTEX]
+		view.indices = merged_arrays[Mesh.ARRAY_INDEX]
+		expect(view.closed(), "the smooth merged plate has no boundary")
+		expect(view.duplicates() == 0, "the smooth merged plate emits no triangle twice")
+		var source_normals := _normals_by_position(unmerged_arrays)
+		var target_normals := _normals_by_position(merged_arrays)
+		var kept := true
+		for key: Vector3i in target_normals:
+			if source_normals.has(key):
+				kept = kept and target_normals[key].is_equal_approx(source_normals[key])
+		expect(kept, "the smooth merge keeps every remaining normal")
 	)
 
 
@@ -182,6 +203,26 @@ func _material_sides(builder: VoxelMarchingMeshBuilder) -> Dictionary:
 		var key := ("red_" if color.r > color.b else "blue_") + side
 		sides[key] += area
 	return sides
+
+
+func _smooth_builder(frame: VoxelFrame, location: Vector3i, merge: bool) -> VoxelMarchingMeshBuilder:
+	var builder := VoxelMarchingMeshBuilder.new()
+	builder.source_frame = frame
+	builder.chunk_location = location
+	builder.smooth_normals = true
+	builder.merge_coplanar = merge
+	builder.run()
+	return builder
+
+
+func _normals_by_position(arrays: Array) -> Dictionary:
+	var positions: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
+	var by_position := {}
+	for index in positions.size():
+		var key := Vector3i(roundi(positions[index].x * 1024.0), roundi(positions[index].y * 1024.0), roundi(positions[index].z * 1024.0))
+		by_position[key] = normals[index]
+	return by_position
 
 
 func _slice_cap() -> void:
