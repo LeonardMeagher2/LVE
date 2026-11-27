@@ -10,6 +10,7 @@ var _dialog
 var _block_mesh: Mesh
 var _seed := 1
 var _crosstalk_before := 0
+var _near_face_key := PackedInt64Array()
 
 
 func _ready() -> void:
@@ -32,6 +33,7 @@ func _ready() -> void:
 	test("a four-material face colours each triangle from its own cell", _four_material_face, "march_four_material_face")
 	test("the low-poly style renders in the editor viewport", _viewport_style, "march_viewport_style")
 	test("a boundary cell edit rebuilds the adjacent low-poly chunk", _style_crosstalk, "march_style_crosstalk")
+	test("a near-face cell edit rebuilds the adjacent low-poly chunk", _style_crosstalk_near_face, "march_style_crosstalk_near_face")
 	test("the settings modal stores one undoable style change", _style_undo, "march_style_undo")
 
 
@@ -426,6 +428,33 @@ func _style_crosstalk() -> void:
 	await _view.settle()
 	step("Then the adjacent chunk rebuilds and the combined surface stays closed", func():
 		expect(_mesh_hash(Vector3i.ZERO) != _crosstalk_before, "the adjacent chunk rebuilds after one boundary cell paint")
+		_view.collect()
+		expect(_view.closed(), "the combined surface has no boundary")
+		expect(_view.duplicates() == 0, "no triangle is emitted twice")
+	)
+
+
+func _style_crosstalk_near_face() -> void:
+	step("Given a slab across a chunk boundary in the low-poly style", func():
+		var cells := {}
+		var material := VoxelFrame.material(Color.WHITE)
+		for x in range(10, 22):
+			for y in range(8, 12):
+				for z in range(8, 12):
+					cells[Vector3i(x, y, z)] = material
+		_view = VIEW.new(self)
+		_view.apply(cells, 1)
+	)
+	await _view.settle()
+	step("When the user removes a cell one step inside the next chunk", func():
+		_renderer = _view.renderer
+		_near_face_key = _renderer._displayed_surface_keys[Vector3i.ZERO].duplicate()
+		State.paint(Vector3i(17, 11, 8), VoxelFrame.material(Color.TRANSPARENT))
+	)
+	await _view.settle()
+	step("Then the adjacent chunk rebuilds and the combined surface stays closed", func():
+		var after: PackedInt64Array = _renderer._displayed_surface_keys[Vector3i.ZERO]
+		expect(after != _near_face_key, "the adjacent chunk rebuilds after a near-face cell edit")
 		_view.collect()
 		expect(_view.closed(), "the combined surface has no boundary")
 		expect(_view.duplicates() == 0, "no triangle is emitted twice")

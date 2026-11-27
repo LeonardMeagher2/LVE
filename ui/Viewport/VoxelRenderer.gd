@@ -247,13 +247,17 @@ func _flush_updates() -> void:
 	_pending_chunks = []
 	var active_frame := _get_frame()
 	var requested := {}
+	var reach := VoxelMarchingMeshBuilder.MESH_PADDING if State.document.mesh_style != 0 else 0
 	for cell_position in cells:
 		var chunk_location := VoxelFrame.chunk_position(cell_position)
 		_request_chunk(active_frame, chunk_location, requested)
-		for offset in VoxelFrame.crosstalk_chunks(cell_position):
+		for offset in VoxelFrame.crosstalk_chunks(cell_position, reach):
 			_request_chunk(active_frame, chunk_location + offset, requested)
 	for chunk_location in chunks:
 		_request_chunk(active_frame, chunk_location, requested)
+		if reach > 0:
+			for neighbor in VoxelFrame.neighbor_chunks(chunk_location):
+				_request_chunk(active_frame, neighbor, requested)
 	_report_activity()
 
 

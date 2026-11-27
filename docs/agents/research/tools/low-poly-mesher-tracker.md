@@ -377,15 +377,18 @@ Decision: keep A with limit 16. Do not add a region pass.
 ## Done: low-poly chunk crosstalk test
 
 The marching mesher samples the 3x3x3 chunk neighbourhood.
-A boundary cell edit must rebuild the adjacent chunk.
-The renderer adds `VoxelFrame.crosstalk_chunks(cell_position)` for each changed cell.
+It also reads `MESH_PADDING` cells inside a chunk face.
+A cell near a face can change the adjacent chunk surface.
+The renderer passes `VoxelMarchingMeshBuilder.MESH_PADDING` as the reach to `VoxelFrame.crosstalk_chunks` for style 1.
+A published chunk change requests all 26 neighbours.
 The style-1 surface key also covers the 26 neighbour chunks.
 
-`tests/marching_mesh.gd` checks the rebuild.
-It paints a voxel on each side of a chunk boundary.
-It then paints the boundary cell and emits `cells_changed`.
-It checks that the adjacent chunk rebuild changed its geometry and that the model stays closed.
+`tests/marching_mesh.gd` checks two cases.
+The first paints a cell on the chunk face.
+The second paints a cell one step inside the face.
+Each case checks that the adjacent chunk key changes and that the model stays closed.
 
+The near-face case fails without the reach.
 The test fails when the crosstalk loop is removed.
 
 ## Done: limited dissolve

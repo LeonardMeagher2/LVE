@@ -1151,19 +1151,26 @@ func set_cells(cell_materials: Dictionary, edit_job: EditJob = null, uniform_mat
 	return changed_chunks
 
 
-static func _face_bits(local_cell: Vector3i) -> int:
+static func _face_bits(local_cell: Vector3i, reach := 0) -> int:
 	var bits := 0
 	for axis in 3:
-		if local_cell[axis] == 0:
+		if local_cell[axis] <= reach:
 			bits |= 1 << (axis * 2)
-		if local_cell[axis] == CHUNK_SIZE - 1:
+		if local_cell[axis] >= CHUNK_SIZE - 1 - reach:
 			bits |= 1 << (axis * 2 + 1)
 	return bits
 
 
-static func crosstalk_chunks(cell_position: Vector3i) -> Array[Vector3i]:
+static func crosstalk_chunks(cell_position: Vector3i, reach := 0) -> Array[Vector3i]:
 	var local_cell := cell_position - chunk_position(cell_position) * CHUNK_SIZE
-	return _touched_neighbors(_face_bits(local_cell))
+	return _touched_neighbors(_face_bits(local_cell, reach))
+
+
+static func neighbor_chunks(location: Vector3i) -> Array[Vector3i]:
+	var neighbors: Array[Vector3i] = []
+	for offset in _crosstalk_offsets():
+		neighbors.append(location + offset)
+	return neighbors
 
 
 static func _touched_neighbors(face_bits: int) -> Array[Vector3i]:
