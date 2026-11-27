@@ -59,25 +59,26 @@ A caller that waits itself retires the task id, so the runner stops without a se
 ### Current types and signatures
 
 - `TerrainTool.StrokeInputs` holds `tool`, `build_mode`, `radius`, `strength`, `falloff`, `material`, `selection`, `context`, and `frame_index`.
-- `TerrainTool._make_tick_job() -> TerrainTickJob`
-- `TerrainTool._make_smooth_job() -> SmoothJob`
-- `TerrainPreview.footprint_depth(tool: int, radius: int) -> int`
+- `TerrainTool._run_tick()` sets up `TerrainTickJob` for Build and Flatten.
+- `TerrainTool._run_smooth()` sets up `SmoothJob`.
+- `TerrainPreview.footprint_depth(size: int) -> int`
 - `TerrainTool._footprint_depth(radius: int) -> int`
+- `TerrainTool._height_depth() -> int`
 - `TerrainPreview.watch_half(radius: int) -> int`
 - `TerrainPreview.watch_half_for(radius: int, depth: int) -> int`
-- `TerrainTool._depth(radius: int) -> int` remains only for the frozen benchmark.
 
 ### Current callers
 
 - `TerrainTool.open_stroke` creates `StrokeInputs`.
-- `_make_tick_job` serves Build and Flatten.
-- `_make_smooth_job` serves Smooth.
-- `_footprint_depth` serves the sample map, the Smooth refit, the prep jobs, and the preview inputs.
+- `_run_tick` serves Build and Flatten.
+- `_run_smooth` serves Smooth.
+- `_height_depth` serves the sample map and `job.prep_depth`.
+- `_footprint_depth` serves the Smooth refit, the prep jobs, and the preview inputs.
 - `HoverJob` uses `watch_half` for the fit and `watch_half_for` for the map.
 
 ### Ownership
 
-The tool owns the mutable execution state: planes, anchors, samples, progress, credits, carry, and drains.
+The tool owns the mutable execution state: planes, anchors, samples, progress, and drains.
 `StrokeInputs` owns only the captured inputs.
 `StrokeInputs` is a Terrain-family record.
 A new tool must copy the capture pattern, not reuse this type or its fields.
@@ -86,10 +87,10 @@ The jobs own their frame snapshots and their job inputs.
 
 ### Policy examples
 
-- Build and Flatten use footprint depth 64.
-- Smooth uses `depth_for(radius)`. Grab returns the same value from the helper, but its source capture uses ball offsets.
+- Build uses `_height_depth()`: `min(64, max(8, 2 * size))`.
+- Flatten and the other tools use `_height_depth()` 64.
+- Smooth uses `footprint_depth(size)`: `min(64, max(16, size))`. Grab returns the same value from the helper, but its source capture uses ball offsets.
 - The fit watch and the map watch stay separate.
-- `_depth(radius)` is the frozen benchmark reference only. Do not change that algorithm.
 
 ### Reuse when
 
@@ -363,58 +364,59 @@ No maximum-size performance claim is made.
 ### Current signatures
 
 - `TerrainTool._setup_footprint()`
-- `TerrainTool._build_footprint_mesh(radius: int)`
-- `TerrainTool._pose_footprint_idle(pick: PickResult)`
-- `TerrainTool._pose_footprint_cell(cell: Vector3i)`
-- `TerrainTool._pose_footprint(frame, center, context)`
-- `TerrainTool._idle_frame(pick: PickResult) -> TerrainFrame`
-- `TerrainTool._idle_pose_inputs(pick: PickResult) -> Array`
-- `TerrainTool._start_idle_fit(pick: PickResult, key: Array)`
-- `TerrainTool._run_idle_fit_worker(job)`
-- `TerrainTool.TerrainIdleFitJob`
-- `TerrainTool._invalidate_idle_pose()`
-- `TerrainTool._cell_center_on(frame, cell) -> Vector3`
-- `TerrainTool._clear_footprint()`
-- `TerrainRing.legacy_plane_ring(radius: int)`
+- `TerrainTool._pose_footprint(pick: PickResult)`
+- `TerrainTool._footprint_frame(pick: PickResult) -> TerrainFrame`
+- `TerrainTool._hide_footprint()`
+- `TerrainTool._footprint_depth(radius: int) -> int`
+- `TerrainTool._height_depth() -> int`
+- `TerrainTool._floor_grid_frame(frame: TerrainFrame) -> TerrainFrame`
+- `TerrainTool._stroke_cursor_frame() -> TerrainFrame`
+- `TerrainTool._dab_moved_enough(from_cell: Vector3i, to_cell: Vector3i) -> bool`
+- `TerrainPreview.HoverJob`
+- `TerrainPreview.hover_frame() -> TerrainFrame`
+- `TerrainPreview.is_settled() -> bool`
+- `TerrainPreview.last_publish_target`
+- `VoxelBrushSize.disk_outline(size: int) -> PackedVector3Array`
+- `VoxelLineMesh.build(vertices: PackedVector3Array) -> ArrayMesh`
 
 ### Current callers
 
-- `TerrainTool._footprint_visual` poses the one ring for Build, Flatten, Smooth, and Grab.
-- An open stroke poses it from the captured frame, radius, and context.
-- An idle pick poses it from the live frame and the active normal source.
-- A Surface idle pick runs the fit on the worker pool and re-poses the ring from the fitted frame.
+- `TerrainTool._pose_footprint` poses the one ring for Build, Flatten, Smooth, and Grab.
+- An open stroke poses it from `_stroke_frame`, `_cursor_frame`, or the floor grid frame.
+- An idle pick poses it from `_preview.hover_frame()` when `last_publish_target` matches the pick.
+- `TerrainPreview.HoverJob` runs the idle fit on the worker pool.
 
 ### Ownership
 
 The cursor is one separate white leaf ring named `Footprint`.
 It is not the idle `VoxelPreview`.
-A clone of `plugins/CursorMaterial.tres` sets the color once.
-The clone is unshaded and sets `no_depth_test`. It has no depth bias.
+`_setup_footprint` creates one unshaded `StandardMaterial3D`: white, `no_depth_test`, and `CULL_DISABLED`.
+The ring material has no depth bias.
 Paint color and stroke material never tint the ring.
 The ring is identical in idle, press, pending job, held, drain, and release.
-The mesh is cached per radius from 1 through 32.
-The legacy radius plus 0.5 gives width 2r + 1. Radius 32 gives width 65.
+The mesh is cached per size from 1 through 32.
+`VoxelBrushSize.disk_outline(size)` builds it. The setting is a footprint size, and `radius_to_size` maps a legacy radius to `2 * radius + 1`.
 The ring shows its perimeter only. It has no fill and no `VoxelEdges`.
 One disc rule gives the cells, so every tool shows the same footprint.
-No hover job, preview cell map, terrain snapshot, or index exists.
+The hover job builds a `TerrainFrame`, not a cell map, snapshot, or index.
 `update_visual` runs on every pointer motion, so the idle pose must stay cheap.
-The idle fit uses the full active radius, so the ring shows the orientation the press will use.
+The idle fit uses the full active size, so the ring shows the orientation the press will use.
 The idle fit and the press fit read the same surface points.
 A bounded patch fit deviates up to 14 degrees from the press normal on a coarse ramp.
 That patch fit is rejected.
-The tool caches the idle pose by its inputs. A repeat of one cell sets transforms only.
-A cell change, a document change, an undo or redo, or a clear drops the cache.
-A repeat of one cell costs about 10 microseconds.
-A crossed cell refits at the full radius, on the worker pool.
+`TerrainPreview` caches the hover frame by its inputs. A repeat of one cell sets transforms only.
+The tool poses the ring from a published hover frame only when `last_publish_target` equals the current pick target.
+A cell change, a document change, an undo or redo, or a clear invalidates the preview cache.
+A crossed cell refits at the full size, on the worker pool.
 The ring keeps its fallback pose while the idle fit runs, so a move stays cheap.
-The press fit costs about 55 milliseconds at radius 32. That cost is an open task in `../../../TASKS.md`.
+The press fit costs about 55 milliseconds at size 32. That cost is an open task in `../../../TASKS.md`.
 The idle pose uses the entered face or floor and the fitted surface plane.
 A Surface source fits the surface. A Face source and Grab use the exact entered face.
 A floor miss uses the floor plane.
-A press still runs the actual Surface or Face fit, operation plane, kernels, credits, and undo.
+A press still runs the actual Surface or Face fit, operation plane, kernels, and undo.
 Accepted edits are unchanged.
 A visual sub-voxel move changes no accepted dab.
-A stroke pose uses the captured frame, radius, and context. The idle pose uses live inputs.
+A stroke pose uses the captured frame, size, and context. The idle pose uses live inputs.
 A document change, an exit, a tool switch, or a cancel hides the ring and drops the cache.
 A normal release keeps a fresh pointer position.
 There is no new framework.

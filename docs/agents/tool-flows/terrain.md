@@ -69,7 +69,7 @@ Source:
 | `TerrainGeometry.build_layer_cells` and `flatten_action` | Dab execution |
 | `TerrainFrame.reflected` | Sample map, Smooth fields, and ring mirrors |
 | `TerrainPreview.masks_for` | Ring mirrors and dab preparation |
-| `TerrainRing.legacy_plane_ring` | The ring mesh of every tool |
+| `VoxelBrushSize.disk_outline` | The ring mesh of every tool |
 
 ## Common cursor, press, and stroke queue
 
@@ -127,9 +127,9 @@ cells that the dab writes.
 The pose does not project the cell onto the frame plane.
 That plane drifts away from the terrain, as the Smooth surface plane does.
 The ring would then leave the cell under the pointer.
-The tool caches the idle pose by its inputs.
-A repeat of one cell sets transforms only.
-A cell change, a document change, an undo or redo, or a clear drops the cache.
+`TerrainPreview` caches the hover frame by its inputs.
+A repeat of one cell reuses the frame and sets transforms only.
+A cell change, a document change, an undo or redo, or a clear invalidates the cache.
 A crossed cell re-reads the surface at the full size, on the worker pool.
 The entered face is not part of the pose gate or of the surface cache key.
 A ray that grazes a convex edge can report either face for the same cell, and a
@@ -375,7 +375,7 @@ Source:
 - [`TerrainPrep.collect_steps`](../../../plugins/Terrain/TerrainPrep.gd#L91-L112)
 - [`TerrainTool._setup_footprint`](../../../plugins/Terrain/TerrainTool.gd)
 - [`TerrainTool._pose_footprint`](../../../plugins/Terrain/TerrainTool.gd)
-- [`TerrainRing.legacy_plane_ring`](../../../plugins/Terrain/TerrainRing.gd)
+- [`VoxelBrushSize.disk_outline`](../../../Globals/State/Tools/VoxelBrushSize.gd)
 
 ## Flatten
 
@@ -647,10 +647,11 @@ The ring shows the footprint, not the edit.
 ## Current limits and non-claims
 
 - The size setting clamps to 1 through 32. Every sculpt tool shares this bound.
-- Build and Flatten use `TerrainPreview.footprint_depth` 64. Smooth uses `depth_for(radius)`.
+- Build uses `_height_depth()`: `min(64, max(8, 2 * size))`. Flatten and the other tools use 64.
+- Smooth uses `footprint_depth(size)`: `min(64, max(16, size))`.
 - The stroke drain applies at most 32 dabs in one pass. A longer path yields one frame and continues.
 - A small inline stroke has no tracked operation id. A large worker dab or drag starts one.
-- All three tools pose the shared footprint ring. It is built from `TerrainRing.legacy_plane_ring`.
+- All three tools pose the shared footprint ring. It is built from `VoxelBrushSize.disk_outline` through `VoxelLineMesh.build`.
 - The idle ring reads the local surface at the active size, on the worker pool. A floor miss uses the floor plane.
 - The ring keeps its fallback pose while an idle read runs, so a full-size hover keeps the main thread free.
 - The ring is the whole cursor. It has no idle map and no terrain prediction.
@@ -684,7 +685,7 @@ A later settings or selection change cannot alter an accepted dab.
 ### Shared footprint ring
 
 All three tools pose one white leaf ring named `Footprint`. See [Build](#grow).
-It uses `TerrainRing.legacy_plane_ring`. It does not predict the next voxels.
+It uses `VoxelBrushSize.disk_outline` through `VoxelLineMesh.build`. It does not predict the next voxels.
 The mesh is cached per size. The mirrors are symmetry copies.
 A pose sets transforms only, so a pointer move stays bounded by the mask count.
 The pose origin is the picked cell center, half a cell out along the pose normal.
@@ -692,31 +693,30 @@ The ring cells then cover the voxel cells of the footprint.
 
 ### Idle pose cache
 
-The tool caches the last idle pose by its inputs. See [Common cursor, press, and stroke queue](#common-cursor-press-and-stroke-queue).
-A repeat of one cell sets transforms only. It costs about 10 microseconds.
-A crossed cell re-reads the surface at the full size, on the worker pool.
-A cell change, a document change, an undo or redo, or a clear drops the cache.
-A frame cells change signal invalidates the pose of the current frame.
-An undo or redo signal drops the cache while the tool is idle and re-poses from the last pick.
+`TerrainPreview` caches the hover frame by its inputs. See [Common cursor, press, and stroke queue](#common-cursor-press-and-stroke-queue).
+A repeat of one cell reuses the frame and sets transforms only.
+A crossed cell re-reads the surface at the full size, on the worker pool through `HoverJob`.
+A cell change, a document change, an undo or redo, or a clear invalidates the cache.
+The tool poses the ring only when `last_publish_target` equals the current pick target.
 There is no new `CursorJob` or controller hierarchy.
 
 ### Footprint depth
 
-`TerrainPreview.footprint_depth(tool, radius)` returns 64 for Build and Flatten.
-It returns `depth_for(radius)` for Smooth.
-`TerrainTool._footprint_depth(radius)` reads the active tool.
+`TerrainPreview.footprint_depth(size)` returns `min(64, max(16, size))`.
+`depth_for(size)` is an alias.
+`TerrainTool._height_depth()` returns `min(64, max(8, 2 * size))` for Build and 64 for the other tools.
+`TerrainTool._footprint_depth(radius)` returns `depth_for(radius)`.
 
 ### Shared job wiring
 
-`TerrainTool._make_tick_job` fills the common Build and Flatten inputs.
-`TerrainTool._make_smooth_job` fills the common Smooth inputs.
+`TerrainTool._run_tick` fills the common Build and Flatten inputs.
+`TerrainTool._run_smooth` fills the common Smooth inputs.
 The callers add samples, preparation inputs, fields, or the application count.
 
 ### Frozen benchmark depth
 
-`TerrainTool._depth(radius)` remains only as the frozen benchmark reference.
-The active path uses `_footprint_depth`.
-Do not change the frozen benchmark algorithm.
+The frozen benchmark keeps its own depth rule.
+The active path uses `_height_depth` for the sample map and `_footprint_depth` for the dab walk.
 
 ## Consolidation and simplification candidates
 
@@ -730,7 +730,7 @@ Each candidate states facts and a hypothesis.
 - **Consumers**: Build, Flatten, and Smooth.
 - **Contract**: a small press dab must finish in its input event. A large job must use the worker pool.
 - **Tradeoff**: a helper can hide the synchronous inline order that the press needs.
-- **Facts**: the three paths repeat the same operation setup and finish sequence. `_make_tick_job` and `_make_smooth_job` now share the job wiring, but the inline and worker branches remain.
+- **Facts**: the three paths repeat the same operation setup and finish sequence. The inline and worker branches remain.
 - **Hypothesis**: one runner can reduce drift in operation ids and cancel handling.
 
 ### 2. Share the local support search where policy allows
