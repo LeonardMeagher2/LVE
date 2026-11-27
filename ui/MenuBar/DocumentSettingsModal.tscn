@@ -110,10 +110,10 @@ text = "Blocks"
 [node name="Low" type="Button" parent="Margin/Layout/StyleRow"]
 layout_mode = 2
 size_flags_horizontal = 3
-tooltip_text = "Low poly: a smooth marching-cubes surface over the voxels"
+tooltip_text = "Smooth: a smooth surface over the voxels"
 toggle_mode = true
 button_group = SubResource("ButtonGroup_style")
-text = "Low Poly"
+text = "Smooth"
 
 [node name="AoLabel" type="Label" parent="Margin/Layout"]
 layout_mode = 2

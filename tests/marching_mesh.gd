@@ -413,7 +413,7 @@ func _style_undo() -> void:
 		State.frames_changed.emit()
 	)
 	await _settle()
-	step("When the user picks Low Poly and confirms", func():
+	step("When the user picks Smooth and confirms", func():
 		_bar.get_node("ModelSettingsBtn").pressed.emit()
 		_dialog.get_node("Margin/Layout/StyleRow/Low").button_pressed = true
 		_dialog.confirmed.emit()
