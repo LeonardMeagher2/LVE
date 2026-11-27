@@ -94,6 +94,8 @@ After phases:
 
 All values are microseconds.
 
+The before and after runs printed the same hash for every scene.
+
 The field phase was the largest cost before the change.
 On Testing2 it fell from 776717 to 25107 microseconds.
 The cell phase is now the largest cost on Testing2 and me.
