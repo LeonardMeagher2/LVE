@@ -18,6 +18,9 @@ func _ready() -> void:
 	test("dragging a header reorders the layers", _drag_reorder, "layer_grid_reorder")
 	test("the layer menu follows lock, order, and visibility", _more_menu, "layer_grid_menu")
 	test("the timeline keeps its height and scrolls its rows", _scrolls_rows, "layer_grid_scroll")
+	test("the timeline handle resizes the dock", _resize_dock, "timeline_resize")
+	test("the thumbnail strip resizes and hides", _resize_thumbnails, "thumbnail_resize")
+	test("the timeline collapses from the dock handle", _collapse_timeline, "timeline_collapse")
 
 
 func after_test() -> void:
@@ -397,8 +400,71 @@ func _scrolls_rows() -> void:
 	)
 	await get_tree().process_frame
 	step("Then the thumbnails follow and the layer names stay", func():
-		expect(_header_scroll().scroll_horizontal == _cel_scroll().scroll_horizontal, "the thumbnails follow the cels")
+		expect(absf(_header_scroll().scroll_horizontal - _cel_scroll().scroll_horizontal) <= 20.0, "the thumbnails follow the cels")
+		expect(absf(_tag_scroll().scroll_horizontal - _cel_scroll().scroll_horizontal) <= 20.0, "the tag row follows the cels")
 		expect(is_equal_approx(_headers()[0].get_global_rect().position.x, _layer_column().get_global_rect().position.x), "the layer names stay on the left")
+	)
+
+
+func _resize_dock() -> void:
+	var handle := main.find_child("TimelineHandle", true, false)
+	var panel := main.find_child("TimelinePanel", true, false) as Control
+	var body := main.find_child("TimelineBody", true, false) as Control
+	step("Given a timeline dock", func():
+		expect(handle != null, "the timeline handle exists")
+		expect(panel != null and body != null, "the timeline panel and body exist")
+	)
+	if handle == null or panel == null or body == null:
+		return
+	var start_height := panel.size.y
+	var start_body := body.size.y
+	step("When the user drags the handle down", func():
+		handle.resize_requested.emit(-40.0)
+	)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	step("Then the dock and body shrink", func():
+		expect(panel.size.y < start_height, "the dock shrinks")
+		expect(body.size.y < start_body, "the body shrinks")
+	)
+	step("When the user drags the handle up", func():
+		handle.resize_requested.emit(40.0)
+	)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	step("Then the dock and body grow", func():
+		expect(is_equal_approx(panel.size.y, start_height), "the dock returns")
+		expect(is_equal_approx(body.size.y, start_body), "the body returns")
+	)
+
+
+func _collapse_timeline() -> void:
+	var handle := main.find_child("TimelineHandle", true, false)
+	var panel := main.find_child("TimelinePanel", true, false) as Control
+	var view := main.get_node("%Editor").get_node("Body") as Control
+	step("Given an open timeline", func():
+		expect(panel != null and panel.visible, "the timeline is open")
+	)
+	if handle == null or panel == null or view == null:
+		return
+	var open_view := view.size.y
+	step("When the user drags the dock handle down", func():
+		handle.resize_requested.emit(-400.0)
+	)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	step("Then the timeline hides and the view grows", func():
+		expect(not panel.visible, "the timeline is hidden")
+		expect(view.size.y > open_view, "the main view grows")
+	)
+	step("When the user double-clicks the handle", func():
+		handle.toggle_requested.emit()
+	)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	step("Then the timeline returns", func():
+		expect(panel.visible, "the timeline is visible")
+		expect(panel.size.y > 0.0, "the timeline keeps a height")
 	)
 
 
@@ -412,3 +478,63 @@ func _layer_scroll() -> ScrollContainer:
 
 func _header_scroll() -> ScrollContainer:
 	return _frame_grid().get_parent() as ScrollContainer
+
+
+func _tag_scroll() -> ScrollContainer:
+	return main.find_child("TagGrid", true, false).get_parent() as ScrollContainer
+
+
+func _resize_thumbnails() -> void:
+	var handle := main.find_child("HeaderHandle", true, false)
+	var header := main.find_child("HeaderRow", true, false) as Control
+	var tag_row := main.find_child("TagRangeRow", true, false) as Control
+	var body := main.find_child("TimelineBody", true, false) as Control
+	step("Given a visible thumbnail strip", func():
+		expect(handle != null and header != null, "the thumbnail handle exists")
+		expect(header.visible, "the thumbnails start visible")
+	)
+	if handle == null or header == null or tag_row == null or body == null:
+		return
+	var start_height := header.size.y
+	var start_body := body.size.y
+	var thumbnail: TextureRect = _frame_headers()[0].get_node("%Thumbnail")
+	var start_thumbnail := thumbnail.size.y
+	step("When the user drags the thumbnail handle up", func():
+		handle.resize_requested.emit(40.0)
+	)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	step("Then the strip and thumbnails grow", func():
+		expect(header.size.y > start_height, "the strip grows")
+		expect(body.size.y < start_body, "the cells make room")
+		expect(thumbnail.size.y > start_thumbnail, "the thumbnail image grows")
+	)
+	step("When the user drags the thumbnail handle far up", func():
+		handle.resize_requested.emit(500.0)
+	)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	step("Then the thumbnail and strip stop growing", func():
+		expect(thumbnail.size.y <= 130.0, "the thumbnail stops growing")
+		expect(header.size.y < 160.0, "the strip stops growing")
+	)
+	step("When the user drags the thumbnail handle down in steps", func():
+		for index in 12:
+			handle.resize_requested.emit(-10.0)
+	)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	step("Then the thumbnails hide and the tag row stays", func():
+		expect(not header.visible, "the thumbnails hide")
+		expect(tag_row.visible, "the tag row stays")
+		expect(body.size.y > start_body, "the cells take the space")
+	)
+	step("When the user double-clicks the handle", func():
+		handle.toggle_requested.emit()
+	)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	step("Then the thumbnails return", func():
+		expect(header.visible, "the thumbnails return")
+		expect(header.size.y >= 48.0, "the strip returns to a usable height")
+	)

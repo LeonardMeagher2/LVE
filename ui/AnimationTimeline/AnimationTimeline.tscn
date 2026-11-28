@@ -11,6 +11,7 @@
 [ext_resource type="Texture2D" uid="uid://matl4t70t4my" path="res://icons/frame_minus.svg" id="9_tjres"]
 [ext_resource type="PackedScene" uid="uid://cf3ybcr7rxq8h" path="res://ui/AnimationTimeline/TagRow.tscn" id="10_k7z2a"]
 [ext_resource type="PackedScene" path="res://ui/AnimationTimeline/LayerToolbarCell.tscn" id="11_toolbar"]
+[ext_resource type="Script" path="res://ui/AnimationTimeline/TimelineResizeHandle.gd" id="12_header_handle"]
 
 [sub_resource type="Animation" id="Animation_kqkb2"]
 resource_name = "Preview"
@@ -198,8 +199,30 @@ layout_mode = 2
 layout_mode = 2
 size_flags_horizontal = 3
 
+[node name="TagRangeRow" type="HBoxContainer" parent="." unique_id=1882226212]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="Spacer" type="Control" parent="TagRangeRow" unique_id=1882226213]
+custom_minimum_size = Vector2(180, 0)
+layout_mode = 2
+
+[node name="TagScroll" type="ScrollContainer" parent="TagRangeRow" unique_id=1882226214]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+horizontal_scroll_mode = 3
+vertical_scroll_mode = 0
+
+[node name="TagGrid" type="GridContainer" parent="TagRangeRow/TagScroll" unique_id=1882226215]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/h_separation = 4
+theme_override_constants/v_separation = 2
+
 [node name="TimelineBody" type="HBoxContainer" parent="." unique_id=1882226201]
-custom_minimum_size = Vector2(0, 92)
+custom_minimum_size = Vector2(0, 48)
 layout_mode = 2
 size_flags_vertical = 3
 
@@ -229,7 +252,29 @@ size_flags_horizontal = 3
 theme_override_constants/h_separation = 4
 theme_override_constants/v_separation = 2
 
+[node name="HeaderHandle" type="Control" parent="." unique_id=1882226216]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 8)
+layout_mode = 2
+tooltip_text = "Drag to resize the frame thumbnails. Double-click to hide them."
+mouse_default_cursor_shape = 14
+script = ExtResource("12_header_handle")
+
+[node name="Line" type="ColorRect" parent="HeaderHandle" unique_id=1882226217]
+layout_mode = 1
+anchors_preset = 10
+anchor_top = 0.5
+anchor_right = 1.0
+anchor_bottom = 0.5
+offset_top = -1.0
+offset_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(1, 1, 1, 0.2)
+
 [node name="HeaderRow" type="HBoxContainer" parent="." unique_id=1882226206]
+unique_name_in_owner = true
 layout_mode = 2
 
 [node name="Spacer" type="Control" parent="HeaderRow" unique_id=1882226207]

@@ -10,6 +10,7 @@ func _ready() -> void:
 	test("can drag frames to reorder them", _frame_reorder, "frame_reorder")
 	test("the timeline scroll follows the focused frame", _follow_focus, "follow_focus")
 	test("stepping frames moves focus to the selected frame", _step_focus, "step_focus")
+	test("a frame thumbnail scales down to a compact size", _thumbnail_size, "thumbnail_size")
 
 
 func before_test() -> void:
@@ -74,6 +75,18 @@ func _step_focus() -> void:
 		expect(buttons[39].has_focus(), "the last frame cell holds the focus")
 		var scroll := main.find_child("FrameGrid", true, false).get_parent() as ScrollContainer
 		expect(scroll.scroll_horizontal > 0, "the timeline scrolls to the selected frame")
+	)
+
+
+func _thumbnail_size() -> void:
+	step("Then the thumbnail and frame header stay compact", func():
+		var cell: AnimationFrame = _frame_cells()[0]
+		var thumbnail: TextureRect = cell.get_node("%Thumbnail")
+		expect(thumbnail.custom_minimum_size == Vector2(40, 40), "the thumbnail minimum is 40 by 40")
+		expect(thumbnail.expand_mode == TextureRect.EXPAND_IGNORE_SIZE, "the thumbnail ignores the texture size")
+		expect(thumbnail.size.y <= 44.0, "the thumbnail stays compact")
+		expect(cell.get_node("%Number").is_visible_in_tree(), "the frame number shows")
+		expect(cell.size.y < 100.0, "the frame header is compact")
 	)
 
 

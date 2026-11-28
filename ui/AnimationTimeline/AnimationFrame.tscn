@@ -6,8 +6,7 @@
 [ext_resource type="Script" uid="uid://b5aa6d3si7hvm" path="res://ui/AnimationTimeline/AnimationFrameButton.gd" id="4_btn3p"]
 
 [node name="AnimationFrame" type="PanelContainer" unique_id=276647722]
-offset_right = 80.0
-offset_bottom = 109.0
+custom_minimum_size = Vector2(104, 0)
 mouse_filter = 1
 script = ExtResource("1_50uxx")
 
@@ -28,34 +27,46 @@ layout_mode = 2
 focus_behavior_recursive = 1
 mouse_filter = 2
 
-[node name="PanelContainer" type="PanelContainer" parent="MarginContainer/VBoxContainer" unique_id=2088539589]
-layout_mode = 2
-size_flags_vertical = 0
-mouse_filter = 2
-
-[node name="Number" type="Label" parent="MarginContainer/VBoxContainer/PanelContainer" unique_id=653081230]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_vertical = 1
-text = "0"
-horizontal_alignment = 1
-
 [node name="PanelContainer2" type="PanelContainer" parent="MarginContainer/VBoxContainer" unique_id=1415986218]
 layout_mode = 2
+size_flags_vertical = 3
 mouse_filter = 2
 
 [node name="TextureRect" type="TextureRect" parent="MarginContainer/VBoxContainer/PanelContainer2" unique_id=2002667655]
 layout_mode = 2
 mouse_filter = 2
 texture = ExtResource("3_fil1o")
+expand_mode = 1
 stretch_mode = 1
 
 [node name="Thumbnail" type="TextureRect" parent="MarginContainer/VBoxContainer/PanelContainer2" unique_id=1441147444]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(64, 64)
+custom_minimum_size = Vector2(40, 40)
 layout_mode = 2
 mouse_filter = 2
+expand_mode = 1
 stretch_mode = 5
+
+[node name="NumberMargin" type="MarginContainer" parent="MarginContainer/VBoxContainer/PanelContainer2" unique_id=2088539589]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/margin_left = 3
+theme_override_constants/margin_top = 1
+theme_override_constants/margin_right = 3
+theme_override_constants/margin_bottom = 1
+
+[node name="Number" type="Label" parent="MarginContainer/VBoxContainer/PanelContainer2/NumberMargin" unique_id=653081230]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 0
+size_flags_vertical = 0
+mouse_filter = 2
+theme_override_colors/font_color = Color(1, 1, 1, 0.9)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 0.8)
+theme_override_constants/outline_size = 2
+text = "0"
+horizontal_alignment = 0
+vertical_alignment = 0
 
 [node name="Delay" type="SpinBox" parent="MarginContainer/VBoxContainer" unique_id=755136778]
 unique_name_in_owner = true

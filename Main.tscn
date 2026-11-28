@@ -7,6 +7,7 @@
 [ext_resource type="PackedScene" uid="uid://dnkuglr7qodru" path="res://ui/StatusBar/StatusBar.tscn" id="5_03owx"]
 [ext_resource type="Script" uid="uid://c7rjw02xdf5ji" path="res://Main.gd" id="6_main"]
 [ext_resource type="Script" uid="uid://dtev72cdild0v" path="res://Globals/State/EditorWorkspace.gd" id="7_workspace"]
+[ext_resource type="Script" path="res://ui/AnimationTimeline/TimelineResizeHandle.gd" id="8_timeline_handle"]
 
 [node name="Main" type="Control" unique_id=692378193]
 layout_mode = 3
@@ -84,13 +85,36 @@ layout_mode = 2
 unique_name_in_owner = true
 layout_mode = 2
 
-[node name="Panel" type="PanelContainer" parent="Content/VBoxContainer/TabContainer/Editor" unique_id=2057888906]
+[node name="TimelineHandle" type="Control" parent="Content/VBoxContainer/TabContainer/Editor" unique_id=2057888907]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 8)
+layout_mode = 2
+tooltip_text = "Drag to resize the timeline"
+mouse_default_cursor_shape = 14
+script = ExtResource("8_timeline_handle")
+
+[node name="Line" type="ColorRect" parent="Content/VBoxContainer/TabContainer/Editor/TimelineHandle" unique_id=2057888908]
+layout_mode = 1
+anchors_preset = 10
+anchor_top = 0.5
+anchor_right = 1.0
+anchor_bottom = 0.5
+offset_top = -1.0
+offset_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(1, 1, 1, 0.2)
+
+[node name="TimelinePanel" type="PanelContainer" parent="Content/VBoxContainer/TabContainer/Editor" unique_id=2057888906]
+unique_name_in_owner = true
 layout_mode = 2
 
-[node name="MarginContainer" type="MarginContainer" parent="Content/VBoxContainer/TabContainer/Editor/Panel" unique_id=911138036]
+[node name="MarginContainer" type="MarginContainer" parent="Content/VBoxContainer/TabContainer/Editor/TimelinePanel" unique_id=911138036]
 layout_mode = 2
 
-[node name="BottomDock" parent="Content/VBoxContainer/TabContainer/Editor/Panel/MarginContainer" unique_id=1466148729 instance=ExtResource("4_trn2v")]
+[node name="BottomDock" parent="Content/VBoxContainer/TabContainer/Editor/TimelinePanel/MarginContainer" unique_id=1466148729 instance=ExtResource("4_trn2v")]
+unique_name_in_owner = true
 layout_mode = 2
 
 [node name="StatusBar" parent="Content/VBoxContainer" unique_id=597734069 instance=ExtResource("5_03owx")]

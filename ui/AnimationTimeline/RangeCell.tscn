@@ -4,11 +4,7 @@
 [ext_resource type="Texture2D" uid="uid://cpc5igbfm6q4n" path="res://icons/grip.svg" id="2_beh61"]
 
 [node name="HBoxContainer" type="HBoxContainer" unique_id=1353721404]
-custom_minimum_size = Vector2(80, 0)
-anchors_preset = 10
-anchor_right = 1.0
-offset_bottom = 102.0
-grow_horizontal = 2
+custom_minimum_size = Vector2(104, 0)
 mouse_default_cursor_shape = 6
 theme_override_constants/separation = -1
 script = ExtResource("1_xy12a")

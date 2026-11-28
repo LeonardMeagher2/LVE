@@ -2,9 +2,21 @@ class_name AnimationFrame
 extends PanelContainer
 
 
+const THUMBNAIL_MIN := 40.0
+
 @export var texture:Texture : set=set_texture
 
 var frame_index := 0
+
+
+func set_thumbnail_height(value: float) -> void:
+	var panel: Control = $MarginContainer/VBoxContainer/PanelContainer2
+	panel.custom_minimum_size.y = maxf(THUMBNAIL_MIN, value)
+
+
+func thumbnail_width() -> float:
+	var panel: Control = $MarginContainer/VBoxContainer/PanelContainer2
+	return panel.size.x
 
 func set_frame(value:int) -> void:
 	%Button.button_pressed = State.current_frame == value

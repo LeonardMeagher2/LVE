@@ -13,16 +13,26 @@ const MCP_PORT := 17373
 const MCP_DOC_URL := "https://github.com/LeonardMeagher2/LVE/blob/main/docs/MCP.md"
 const ANDROID_BASE_DPI := 160.0
 const MOBILE_SCALE_FACTOR := 0.85
+const TIMELINE_DEFAULT_HEIGHT := 340.0
+const TIMELINE_MAX_RATIO := 0.6
 var settings_path := ""
 var mcp_port := MCP_PORT
 @export var restore_saved_agent := true
 @export var quit_on_confirmed := true
 @export var autosave_enabled := true
+@export var restore_timeline_height := true
 var _ui_scale := 0.0
 var _scale_check_elapsed := 0.0
 var _title_document: VoxelDocument
 var _mcp: Node = null
 var _mcp_http_mode := true
+var _timeline_min_height := 0.0
+var _timeline_height := 0.0
+var _timeline_target_height := 0.0
+var _timeline_expanded_height := 0.0
+var _timeline_target_set := false
+var _timeline_dragging := false
+var _timeline_drag_value := 0.0
 var autosave = null
 
 
@@ -118,6 +128,16 @@ func _ready() -> void:
 	_ui_scale = 0.0 if saved_scale == 0.0 else clampf(saved_scale, 1.0, 3.0)
 	get_window().dpi_changed.connect(_apply_ui_scale)
 	_apply_ui_scale()
+	var timeline_handle := get_node_or_null("%TimelineHandle")
+	var timeline_panel := get_node_or_null("%TimelinePanel")
+	if timeline_handle != null and timeline_panel != null:
+		timeline_handle.resize_requested.connect(_on_timeline_resize_requested)
+		timeline_handle.resize_finished.connect(_save_timeline_height)
+		timeline_handle.toggle_requested.connect(_toggle_timeline)
+		%Editor.resized.connect(_clamp_timeline_height)
+		var saved_timeline := float(settings.get_value("interface", "timeline_height", -1.0)) if restore_timeline_height else -1.0
+		var saved_thumbnail := float(settings.get_value("interface", "thumbnail_height", -1.0)) if restore_timeline_height else -1.0
+		_restore_timeline_height.call_deferred(saved_timeline, saved_thumbnail)
 	if DisplayServer.get_name() != "headless" and not OS.has_feature("mobile"):
 		var window := get_window()
 		var available := DisplayServer.screen_get_usable_rect(window.current_screen).size
@@ -226,6 +246,100 @@ func set_ui_scale(value: float, save: bool = true) -> void:
 	_apply_ui_scale()
 	if save:
 		_write_setting("interface", "scale", _ui_scale)
+
+
+func _restore_timeline_height(saved: float, saved_thumbnail := -1.0) -> void:
+	var panel: Control = get_node_or_null("%TimelinePanel")
+	if panel == null:
+		return
+	_timeline_min_height = panel.get_combined_minimum_size().y
+	var target := TIMELINE_DEFAULT_HEIGHT
+	if saved == 0.0:
+		target = 0.0
+	elif saved > 0.0:
+		target = maxf(saved, _timeline_min_height)
+	_apply_timeline_height(target)
+	var dock := get_node_or_null("%BottomDock")
+	if dock != null and not dock.header_height_changed.is_connected(_on_thumbnail_height_changed):
+		dock.header_height_changed.connect(_on_thumbnail_height_changed)
+	await get_tree().process_frame
+	_apply_timeline_height(_timeline_target_height)
+	if dock != null and saved_thumbnail >= 0.0:
+		dock.set_header_height(saved_thumbnail)
+
+
+func _on_thumbnail_height_changed(height: float) -> void:
+	if not restore_timeline_height:
+		return
+	_write_setting("interface", "thumbnail_height", height)
+
+
+func _toggle_timeline() -> void:
+	var panel: Control = get_node_or_null("%TimelinePanel")
+	if panel == null:
+		return
+	if not panel.visible or _timeline_target_height <= 0.0:
+		_apply_timeline_height(_timeline_expanded_height if _timeline_expanded_height > 0.0 else TIMELINE_DEFAULT_HEIGHT)
+	else:
+		_timeline_expanded_height = _timeline_height
+		_apply_timeline_height(0.0)
+	_save_timeline_height()
+
+
+func _on_timeline_resize_requested(delta: float) -> void:
+	var panel: Control = get_node_or_null("%TimelinePanel")
+	if panel == null:
+		return
+	if not _timeline_dragging:
+		_timeline_dragging = true
+		_timeline_drag_value = panel.size.y if panel.visible else 0.0
+	_timeline_drag_value += delta
+	_apply_timeline_height(_timeline_drag_value)
+	if _timeline_height > 0.0:
+		_timeline_drag_value = _timeline_height
+
+
+func _clamp_timeline_height() -> void:
+	if not _timeline_target_set:
+		return
+	_apply_timeline_height(_timeline_target_height)
+
+
+func _apply_timeline_height(value: float) -> void:
+	var panel: Control = get_node_or_null("%TimelinePanel")
+	if panel == null:
+		return
+	_timeline_target_set = true
+	if value < _timeline_min_height:
+		_timeline_target_height = 0.0
+		_timeline_height = 0.0
+		panel.visible = false
+		return
+	panel.visible = true
+	_timeline_target_height = value
+	_timeline_height = clampf(value, _timeline_min_height, _timeline_max_height())
+	_timeline_expanded_height = _timeline_height
+	panel.custom_minimum_size.y = _timeline_height
+
+
+func _timeline_max_height() -> float:
+	var editor: Control = %Editor
+	var editor_height: float = editor.size.y
+	if editor_height <= 0.0:
+		editor_height = get_viewport_rect().size.y
+	var body: Control = editor.get_node_or_null("Body")
+	var body_min := body.get_combined_minimum_size().y if body != null else 0.0
+	var handle: Control = get_node_or_null("%TimelineHandle")
+	var handle_height := handle.size.y if handle != null else 0.0
+	var max_height := minf(editor_height * TIMELINE_MAX_RATIO, editor_height - body_min - handle_height)
+	return maxf(_timeline_min_height, max_height)
+
+
+func _save_timeline_height() -> void:
+	_timeline_dragging = false
+	if not restore_timeline_height or not _timeline_target_set:
+		return
+	_write_setting("interface", "timeline_height", _timeline_target_height)
 
 
 func _read_interface_settings() -> ConfigFile:

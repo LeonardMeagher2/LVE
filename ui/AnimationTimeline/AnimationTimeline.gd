@@ -1,6 +1,9 @@
 extends VBoxContainer
 
 
+signal header_height_changed(height: float)
+
+const FRAME_THUMBNAIL_MIN := 40.0
 const PLAY_ICON := preload("res://icons/play.svg")
 const PAUSE_ICON := preload("res://icons/pause.svg")
 const ANIMATION_FRAME = preload("uid://c2301xo3rbrka")
@@ -16,6 +19,11 @@ var _active_cel_key := Vector2i(-1, -1)
 var _active_layer := -1
 var _rename_layer_index := -1
 var _syncing_scroll := false
+var _header_height := -1.0
+var _header_expanded_height := 0.0
+var _header_content_min := 0.0
+var _header_dragging := false
+var _header_drag_value := 0.0
 
 @export var playback_bottom := false
 
@@ -28,6 +36,11 @@ func _ready() -> void:
 	%CelScroll.get_v_scroll_bar().value_changed.connect(_sync_from_cel_scroll)
 	%CelScroll.get_h_scroll_bar().value_changed.connect(_sync_from_cel_horizontal)
 	%HeaderScroll.get_h_scroll_bar().value_changed.connect(_sync_from_header_scroll)
+	%TagScroll.get_h_scroll_bar().value_changed.connect(_sync_from_tag_scroll)
+	%HeaderHandle.resize_requested.connect(_on_header_resize_requested)
+	%HeaderHandle.resize_finished.connect(_on_header_resize_finished)
+	%HeaderHandle.toggle_requested.connect(toggle_header)
+	resized.connect(_clamp_header_height)
 	State.is_playing_toggled.connect(_on_is_playing_toggled)
 	State.frames_changed.connect(_rebuild_strip)
 	State.layers_changed.connect(_rebuild_strip)
@@ -62,6 +75,7 @@ func _place_playback_bottom() -> void:
 func _rebuild_strip() -> void:
 	var horizontal: int = %CelScroll.scroll_horizontal
 	var vertical: int = %CelScroll.scroll_vertical
+	_clear_children(%TagGrid)
 	_clear_children(%FrameGrid)
 	_clear_children(%LayerColumn)
 	_clear_children(%CelGrid)
@@ -71,21 +85,26 @@ func _rebuild_strip() -> void:
 	_active_cel_key = Vector2i(-1, -1)
 	_active_layer = -1
 	var n := State.get_frame_count()
+	%TagGrid.columns = n
 	%FrameGrid.columns = n
 	%CelGrid.columns = n
 	_has_tag_row = State.get_active_tag() != null
+	%TagRangeRow.visible = _has_tag_row
 	if _has_tag_row:
 		for i in n:
 			var range_cell := RANGE_CELL.instantiate()
 			range_cell.set_column_index(i)
 			range_cell.column_offset = 0
-			range_cell.grid = %FrameGrid
-			%FrameGrid.add_child(range_cell)
+			range_cell.grid = %TagGrid
+			%TagGrid.add_child(range_cell)
 	for i in n:
 		var frame: AnimationFrame = ANIMATION_FRAME.instantiate()
 		frame.frame_index = i
 		%FrameGrid.add_child(frame)
 		_frame_cells.append(frame)
+	_header_content_min = 0.0
+	for frame in _frame_cells:
+		_header_content_min = maxf(_header_content_min, frame.get_combined_minimum_size().y)
 	var layer_group := ButtonGroup.new()
 	var cel_group := ButtonGroup.new()
 	for row in range(State.document.layers.size() - 1, -1, -1):
@@ -103,6 +122,7 @@ func _rebuild_strip() -> void:
 				cel.modulate = Color(1, 1, 1, 0.55)
 			_cel_cells[Vector2i(row, i)] = cel
 	_sync_active_cel()
+	_restore_header_height()
 	_restore_scroll.call_deferred(horizontal, vertical)
 
 
@@ -141,6 +161,7 @@ func _restore_scroll(horizontal: int, vertical: int) -> void:
 	_syncing_scroll = true
 	%CelScroll.scroll_horizontal = horizontal
 	%CelScroll.scroll_vertical = vertical
+	%TagScroll.scroll_horizontal = horizontal
 	%HeaderScroll.scroll_horizontal = horizontal
 	%LayerScroll.scroll_vertical = vertical
 	_syncing_scroll = false
@@ -166,6 +187,16 @@ func _sync_from_cel_horizontal(value: float) -> void:
 	if _syncing_scroll:
 		return
 	_syncing_scroll = true
+	%TagScroll.scroll_horizontal = int(value)
+	%HeaderScroll.scroll_horizontal = int(value)
+	_syncing_scroll = false
+
+
+func _sync_from_tag_scroll(value: float) -> void:
+	if _syncing_scroll:
+		return
+	_syncing_scroll = true
+	%CelScroll.scroll_horizontal = int(value)
 	%HeaderScroll.scroll_horizontal = int(value)
 	_syncing_scroll = false
 
@@ -175,7 +206,106 @@ func _sync_from_header_scroll(value: float) -> void:
 		return
 	_syncing_scroll = true
 	%CelScroll.scroll_horizontal = int(value)
+	%TagScroll.scroll_horizontal = int(value)
 	_syncing_scroll = false
+
+
+func header_height() -> float:
+	return _header_height if _header_height >= 0.0 else header_min_height()
+
+
+func header_min_height() -> float:
+	return maxf(_header_content_min, 48.0)
+
+
+func set_header_height(value: float) -> void:
+	_apply_header_height(maxf(value, header_min_height()) if value > 0.0 else 0.0)
+
+
+func toggle_header() -> void:
+	if _header_height <= 0.0 or not %HeaderRow.visible:
+		_apply_header_height(_header_expanded_height if _header_expanded_height > 0.0 else header_min_height())
+	else:
+		_apply_header_height(0.0)
+	header_height_changed.emit(_header_height)
+
+
+func _restore_header_height() -> void:
+	if _header_height < 0.0:
+		_apply_header_height(header_min_height())
+	else:
+		_apply_header_height(_header_height)
+
+
+func _on_header_resize_requested(delta: float) -> void:
+	if not _header_dragging:
+		_header_dragging = true
+		_header_drag_value = 0.0 if not %HeaderRow.visible else maxf(%HeaderRow.size.y, _header_height)
+	_header_drag_value += delta
+	_apply_header_height(_header_drag_value)
+	if _header_height > 0.0:
+		_header_drag_value = _header_height
+
+
+func _on_header_resize_finished() -> void:
+	_header_dragging = false
+	header_height_changed.emit(_header_height)
+
+
+func _apply_header_height(value: float) -> void:
+	var min_height := header_min_height()
+	if value < min_height:
+		_header_height = 0.0
+		%HeaderRow.visible = false
+		_apply_frame_height(0.0)
+		return
+	_header_height = clampf(value, min_height, _header_max_height())
+	_header_expanded_height = _header_height
+	%HeaderRow.visible = true
+	%HeaderRow.custom_minimum_size.y = _header_height
+	_apply_frame_height(_header_height)
+
+
+func _apply_frame_height(height: float) -> void:
+	var extra := maxf(0.0, height - _header_content_min)
+	for frame in _frame_cells:
+		frame.custom_minimum_size.y = height
+		frame.set_thumbnail_height(FRAME_THUMBNAIL_MIN + extra)
+
+
+func _header_max_height() -> float:
+	var fixed := 0.0
+	var top_bar := get_node_or_null("HBoxContainer")
+	if top_bar != null:
+		fixed += top_bar.get_combined_minimum_size().y
+	var toolbar := get_node_or_null("LayerToolbarRow")
+	if toolbar != null:
+		fixed += toolbar.get_combined_minimum_size().y
+	var tag_row := get_node_or_null("%TagRangeRow")
+	if tag_row != null and tag_row.visible:
+		fixed += tag_row.get_combined_minimum_size().y
+	var handle := get_node_or_null("%HeaderHandle")
+	if handle != null:
+		fixed += handle.get_combined_minimum_size().y
+	var body := get_node_or_null("%TimelineBody")
+	if body != null:
+		fixed += body.get_combined_minimum_size().y
+	fixed += 24.0
+	var min_height := header_min_height()
+	var square_height := min_height
+	if not _frame_cells.is_empty():
+		var width := _frame_cells[0].thumbnail_width()
+		if width > 0.0:
+			square_height += maxf(0.0, width - FRAME_THUMBNAIL_MIN)
+	return maxf(min_height, minf(size.y - fixed, square_height))
+
+
+func _clamp_header_height() -> void:
+	if _header_height <= 0.0:
+		return
+	var max_height := _header_max_height()
+	if _header_height > max_height:
+		_apply_header_height(max_height)
 
 
 func _on_is_playing_toggled(toggled_on: bool) -> void:

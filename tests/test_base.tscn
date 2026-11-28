@@ -8,3 +8,4 @@
 restore_saved_agent = false
 quit_on_confirmed = false
 autosave_enabled = false
+restore_timeline_height = false

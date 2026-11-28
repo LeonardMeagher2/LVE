@@ -50,7 +50,7 @@ func _tags_ui() -> void:
 		for cell in _frame_cells():
 			expect(cell.get_node("%Delay").is_visible_in_tree(), "the delay field is shown")
 		var range_cells := 0
-		for child in main.find_child("FrameGrid", true, false).get_children():
+		for child in main.find_child("TagGrid", true, false).get_children():
 			if child is RangeCell:
 				range_cells += 1
 		expect(range_cells == _frame_cells().size(), "the range row is shown")

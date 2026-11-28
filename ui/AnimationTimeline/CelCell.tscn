@@ -3,7 +3,7 @@
 [ext_resource type="Script" path="res://ui/AnimationTimeline/CelCell.gd" id="1"]
 
 [node name="CelCell" type="Button"]
-custom_minimum_size = Vector2(80, 36)
+custom_minimum_size = Vector2(104, 36)
 focus_mode = 2
 toggle_mode = true
 script = ExtResource("1")

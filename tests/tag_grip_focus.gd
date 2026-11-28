@@ -10,7 +10,7 @@ func _ready() -> void:
 
 
 func _grid() -> Node:
-	return main.find_child("FrameGrid", true, false)
+	return main.find_child("TagGrid", true, false)
 
 
 func _range_cells() -> Array:

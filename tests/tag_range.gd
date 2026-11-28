@@ -6,13 +6,17 @@ func _ready() -> void:
 	test("can drag a tag's start and end frame on the timeline", _run)
 
 
+func _tag_grid() -> Node:
+	return main.find_child("TagGrid", true, false)
+
+
 func _frame_grid() -> Node:
 	return main.find_child("FrameGrid", true, false)
 
 
 func _range_cells() -> Array:
 	var out: Array = []
-	for child in _frame_grid().get_children():
+	for child in _tag_grid().get_children():
 		if child is RangeCell:
 			out.append(child)
 	return out
@@ -63,6 +67,11 @@ func _run() -> void:
 	step("Then the range row sits above the frames", func():
 		expect(_range_cells().size() == 4, "four range cells are shown")
 		expect(_frame_cells().size() == 4, "four frame cells are shown")
+		var tag_row := main.find_child("TagRangeRow", true, false) as Control
+		var body := main.find_child("TimelineBody", true, false) as Control
+		var header := main.find_child("HeaderRow", true, false) as Control
+		expect(tag_row.get_global_rect().end.y <= body.get_global_rect().position.y, "the tag row sits above the cells")
+		expect(body.get_global_rect().end.y <= header.get_global_rect().position.y, "the thumbnails sit below the cells")
 	)
 
 	step("When the user drags the end grip to frame three", func():
