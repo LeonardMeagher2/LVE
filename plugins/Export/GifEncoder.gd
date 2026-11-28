@@ -1,19 +1,16 @@
 extends RefCounted
 
 
-const ALPHA_THRESHOLD := 128
-const MAX_COLORS := 256
+const EXPORT_PALETTE := preload("./ExportPalette.gd")
+
 const MAX_CODE := 4096
 const MAX_CODE_BITS := 12
-const CUBE_LEVELS := [0, 51, 102, 153, 204, 255]
 
 var _width: int
 var _height: int
 var _loop_count: int
 var _bytes := PackedByteArray()
-var _palette := PackedInt32Array([0])
-var _palette_seen := {}
-var _color_cache := {}
+var _palette: RefCounted
 var _closed := false
 
 
@@ -42,7 +39,7 @@ func _init(width: int, height: int, loop_count := 0, base_colors := PackedColorA
 	_width = clampi(width, 1, 65535)
 	_height = clampi(height, 1, 65535)
 	_loop_count = clampi(loop_count, -1, 65535)
-	_build_palette(base_colors)
+	_palette = EXPORT_PALETTE.new(base_colors, EXPORT_PALETTE.MAX_COLORS)
 	_write_header()
 
 
@@ -67,40 +64,6 @@ func finish() -> PackedByteArray:
 	return _bytes
 
 
-func _build_palette(base_colors: PackedColorArray) -> void:
-	for color in base_colors:
-		if _palette.size() >= MAX_COLORS:
-			return
-		if color.a <= 0.5:
-			continue
-		_add_color(color)
-	for red in CUBE_LEVELS:
-		if _palette.size() >= MAX_COLORS:
-			return
-		for green in CUBE_LEVELS:
-			if _palette.size() >= MAX_COLORS:
-				return
-			for blue in CUBE_LEVELS:
-				if _palette.size() >= MAX_COLORS:
-					return
-				_add_color(Color8(red, green, blue))
-
-
-func _add_color(color: Color) -> void:
-	var packed := _pack_color(color)
-	if _palette_seen.has(packed):
-		return
-	_palette_seen[packed] = true
-	_palette.append(packed)
-
-
-static func _pack_color(color: Color) -> int:
-	var red := clampi(roundi(color.r * 255.0), 0, 255)
-	var green := clampi(roundi(color.g * 255.0), 0, 255)
-	var blue := clampi(roundi(color.b * 255.0), 0, 255)
-	return red | (green << 8) | (blue << 16)
-
-
 func _index_image(image: Image) -> PackedByteArray:
 	var data := image.get_data()
 	var count := _width * _height
@@ -109,36 +72,14 @@ func _index_image(image: Image) -> PackedByteArray:
 	var offset := 0
 	var pixel := 0
 	while pixel < count:
-		if data[offset + 3] < ALPHA_THRESHOLD:
+		if data[offset + 3] < EXPORT_PALETTE.ALPHA_THRESHOLD:
 			indices[pixel] = 0
 		else:
 			var key: int = data[offset] | (data[offset + 1] << 8) | (data[offset + 2] << 16)
-			var cached: int = _color_cache.get(key, -1)
-			if cached < 0:
-				cached = _nearest(key)
-				_color_cache[key] = cached
-			indices[pixel] = cached
+			indices[pixel] = _palette.nearest(key)
 		offset += 4
 		pixel += 1
 	return indices
-
-
-func _nearest(packed: int) -> int:
-	var red := packed & 255
-	var green := (packed >> 8) & 255
-	var blue := (packed >> 16) & 255
-	var best := 0
-	var best_distance := 1 << 30
-	for index in range(1, _palette.size()):
-		var entry := _palette[index]
-		var dr := red - (entry & 255)
-		var dg := green - ((entry >> 8) & 255)
-		var db := blue - ((entry >> 16) & 255)
-		var distance := dr * dr + dg * dg + db * db
-		if distance < best_distance:
-			best_distance = distance
-			best = index
-	return best
 
 
 func _write_header() -> void:
@@ -148,8 +89,8 @@ func _write_header() -> void:
 	_bytes.append(0xF7)
 	_bytes.append(0)
 	_bytes.append(0)
-	for index in MAX_COLORS:
-		var packed: int = _palette[index] if index < _palette.size() else 0
+	for index in EXPORT_PALETTE.MAX_COLORS:
+		var packed: int = _palette.packed_at(index)
 		_bytes.append(packed & 255)
 		_bytes.append((packed >> 8) & 255)
 		_bytes.append((packed >> 16) & 255)

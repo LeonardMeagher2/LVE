@@ -19,6 +19,7 @@ func _ready() -> void:
 	test("Export shares plugin tabs and previews both formats without changing the editor", _run)
 	test("Export preview shading follows the environment after a model swap", _shading_swap, "shading_swap")
 	test("Export preview playback survives a frame rebuild", _preview_rebuild, "preview_rebuild")
+	test("the tile fit clears transparent colors", _transparent_fit, "transparent_fit")
 
 
 func _run() -> void:
@@ -493,3 +494,28 @@ func _wait_model_swap() -> void:
 	while exporter._model_dirty or exporter._model_pending_frame >= 0:
 		await get_tree().process_frame
 	await get_tree().process_frame
+
+
+func _transparent_fit() -> void:
+	step("Given an image with white transparent pixels and one red pixel", func():
+		exporter = plugin("ExportPlugin")
+		var image := Image.create(4, 4, false, Image.FORMAT_RGBA8)
+		image.fill(Color(1.0, 1.0, 1.0, 0.0))
+		image.set_pixel(1, 1, Color.RED)
+		var entry := {"used": Rect2i(0, 0, 4, 4), "image": image}
+		var entries: Array[Dictionary] = [entry]
+		var tiles: Array[Image] = exporter._fit_frames(entries, Rect2i(0, 0, 4, 4), Vector2i(4, 4))
+		var tile: Image = tiles[0]
+		var transparent := 0
+		var opaque := 0
+		for y in 4:
+			for x in 4:
+				var pixel := tile.get_pixel(x, y)
+				if pixel.a == 0.0:
+					transparent += 1
+					expect(pixel.r == 0.0 and pixel.g == 0.0 and pixel.b == 0.0, "a transparent pixel is black")
+				else:
+					opaque += 1
+		expect(transparent == 15, "the tile keeps fifteen empty pixels")
+		expect(opaque == 1, "the tile keeps one opaque pixel")
+	)

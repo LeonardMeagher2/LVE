@@ -14,6 +14,7 @@ func _ready() -> void:
 	test("the outside shade darkens only the area outside the document", _size_shade_run, "size_shade")
 	test("the document settings modal edits the centered size", _size_dialog_run, "size_dialog")
 	test("the document settings modal fits the size to all frames", _size_fit_run, "size_fit")
+	test("the document settings style buttons show icons", _style_icons_run, "style_icons")
 
 
 func before_test() -> void:
@@ -386,6 +387,33 @@ func _size_shade_run() -> void:
 		expect(absf(center_shaded.get_luminance() - center_plain.get_luminance()) < 0.02, "the center inside the box keeps its brightness")
 		shade.set_process(true)
 		shade.refresh()
+	)
+
+
+func _style_icons_run() -> void:
+	step("Given the document settings modal", func():
+		var menu := main.get_node("%MenuBar")
+		menu.get_node("ModelSettingsBtn").pressed.emit()
+		var dialog: ConfirmationDialog = menu.get_node("DocumentSettingsModal")
+		var blocks: Button = dialog.get_node("Margin/Layout/StyleRow/Blocks")
+		var smooth: Button = dialog.get_node("Margin/Layout/StyleRow/Low")
+		expect(blocks.icon is DPITexture and blocks.text.is_empty(), "the blocks style shows an icon and no text")
+		expect(smooth.icon is DPITexture and smooth.text.is_empty(), "the smooth style shows an icon and no text")
+		expect(blocks.icon == load("res://icons/cube.svg"), "the blocks style reuses the cube icon")
+		expect(smooth.icon == load("res://icons/mesh_smooth.svg"), "the smooth style uses the octahedron icon")
+		expect(blocks.icon_alignment == HORIZONTAL_ALIGNMENT_CENTER, "the blocks icon is centered")
+		expect(smooth.icon_alignment == HORIZONTAL_ALIGNMENT_CENTER, "the smooth icon is centered")
+	)
+	step("When the user picks the smooth style", func():
+		var dialog: ConfirmationDialog = main.get_node("%MenuBar").get_node("DocumentSettingsModal")
+		(dialog.get_node("Margin/Layout/StyleRow/Low") as Button).button_pressed = true
+		expect(State.document.mesh_style == 1, "the smooth style applies to the document")
+	)
+	step("Then a cancel restores the blocks style", func():
+		var dialog: ConfirmationDialog = main.get_node("%MenuBar").get_node("DocumentSettingsModal")
+		dialog.canceled.emit()
+		dialog.hide()
+		expect(State.document.mesh_style == 0, "cancel restores the style from before the modal")
 	)
 
 
