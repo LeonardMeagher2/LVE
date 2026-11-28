@@ -3,6 +3,7 @@ extends VoxelPlugin
 
 const GLTF_EXPORT := preload("./GLTFExport.gd")
 const GIF_ENCODER := preload("./GifEncoder.gd")
+const EXPORT_PALETTE := preload("./ExportPalette.gd")
 const NORMAL_SHADER := preload("./normal_export.gdshader")
 const SPECULAR_SHADER := preload("./specular_export.gdshader")
 const VIEWS := ["3D preview", "Isometric", "Front", "Back", "Left", "Right", "Top", "Bottom"]
@@ -995,6 +996,19 @@ func _render_sheet(frames: Array[VoxelFrame], settings: Dictionary, document: Vo
 	return sheets if complete and capture_index == capture_count else null
 
 
+func _document_palette_colors(document: VoxelDocument) -> PackedColorArray:
+	var colors := PackedColorArray()
+	for entry in document.palette:
+		var material: PackedFloat32Array = entry
+		var color := VoxelFrame.material_color(material)
+		if color.a <= 0.5:
+			continue
+		if colors.size() >= EXPORT_PALETTE.MAX_COLORS - 1:
+			break
+		colors.append(color)
+	return colors
+
+
 func _specular_material(source: Material) -> Material:
 	if not source is StandardMaterial3D:
 		return _specular_default
@@ -1383,15 +1397,7 @@ func export_gif_settings(path: String, settings: Dictionary) -> Error:
 	if path.get_extension().to_lower() != "gif":
 		path += ".gif"
 	var source_document := State.document
-	var base_colors := PackedColorArray()
-	for entry in source_document.palette:
-		var material: PackedFloat32Array = entry
-		var color := VoxelFrame.material_color(material)
-		if color.a <= 0.5:
-			continue
-		if base_colors.size() >= 255:
-			break
-		base_colors.append(color)
+	var base_colors := _document_palette_colors(source_document)
 	State.stop()
 	_exporting = true
 	_cancel_requested = false
