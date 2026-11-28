@@ -49,6 +49,12 @@ const GUIDE_GROUPS := [
 		"headings": ["Editing rules", "Animate"],
 	},
 	{
+		"slug": "layers",
+		"title": "Layers",
+		"description": "Layer order, selection, visibility, lock, merge, and cell moves.",
+		"headings": ["Layers"],
+	},
+	{
 		"slug": "reference",
 		"title": "Reference",
 		"description": "Limits, bridge mode, security, and tests.",

@@ -2318,7 +2318,7 @@ func _resources() -> void:
 		if values is Array:
 			resources = values
 	step("Then the guide index, topic guides, and format are listed", func():
-		expect(resources.size() == 10, "the server lists the index, eight topics, and the format")
+		expect(resources.size() == 11, "the server lists the index, nine topics, and the format")
 		var uris: Array = []
 		for value in resources:
 			var entry: Dictionary = value
@@ -2327,6 +2327,7 @@ func _resources() -> void:
 		expect(uris.has("lve://guide"), "the guide index is listed")
 		expect(uris.has("lve://guide/tools"), "the tools topic is listed")
 		expect(uris.has("lve://guide/workspace"), "the workspace topic is listed")
+		expect(uris.has("lve://guide/layers"), "the layers topic is listed")
 		expect(uris.has("lve://document-format"), "the format is listed")
 	)
 	var read_response: Variant = await server.call("_dispatch_request", {"id": 2, "method": "resources/read", "params": {"uri": "lve://guide"}})

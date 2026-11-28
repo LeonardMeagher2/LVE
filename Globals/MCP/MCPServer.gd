@@ -415,6 +415,28 @@ func _call_tool(id: Variant, params: Dictionary) -> Dictionary:
 			return _result_response(id, _set_tag_range(args))
 		"set_active_tag":
 			return _result_response(id, _set_active_tag(args))
+		"get_layers":
+			return _result_response(id, _get_layers())
+		"select_layer":
+			return _result_response(id, _select_layer(args))
+		"add_layer":
+			return _result_response(id, _add_layer(args))
+		"duplicate_layer":
+			return _result_response(id, _duplicate_layer(args))
+		"delete_layer":
+			return _result_response(id, _delete_layer(args))
+		"rename_layer":
+			return _result_response(id, _rename_layer(args))
+		"set_layer_visible":
+			return _result_response(id, _set_layer_visible(args))
+		"set_layer_locked":
+			return _result_response(id, _set_layer_locked(args))
+		"move_layer":
+			return _result_response(id, _move_layer(args))
+		"merge_layer_down":
+			return _result_response(id, _merge_layer_down(args))
+		"move_selection_to_layer":
+			return _result_response(id, _move_selection_to_layer(args))
 		"set_document_settings":
 			return _result_response(id, _set_document_settings(args))
 		"set_tool":
@@ -2431,6 +2453,232 @@ func _set_active_tag(args: Dictionary) -> Dictionary:
 		data["mode"] = tag.loop_mode
 		data["repeats"] = tag.repeats
 	return _tool_ok(data)
+
+
+func _get_layers() -> Dictionary:
+	var document := State.document
+	if document == null:
+		return _tool_error("No document is open.")
+	var items: Array = []
+	for index in document.layers.size():
+		items.append(_layer_json(index))
+	return _tool_ok({"layers": document.layers.size(), "active": document.edit_layer, "items": items})
+
+
+func _select_layer(args: Dictionary) -> Dictionary:
+	var document := State.document
+	if document == null:
+		return _tool_error("No document is open.")
+	var index := -1
+	if args.has("layer"):
+		index = _layer_value_arg(args, "layer", -1)
+	elif args.has("name"):
+		var name_value: Variant = args["name"]
+		if not (name_value is String):
+			return _tool_error("name must be a string.")
+		var layer_name := String(name_value).strip_edges()
+		if layer_name.is_empty():
+			return _tool_error("name is required.")
+		var matches := []
+		for candidate in document.layers.size():
+			if document.layers[candidate].name == layer_name:
+				matches.append(candidate)
+		if matches.size() > 1:
+			return _tool_error("The layer name is ambiguous. Pass the layer index.")
+		if matches.size() == 1:
+			index = int(matches[0])
+	else:
+		return _tool_error("Pass layer or name.")
+	if index < 0 or index >= document.layers.size():
+		return _tool_error("The layer does not exist.")
+	State.active_layer_index = index
+	return _tool_ok(_layer_result(index))
+
+
+func _add_layer(args: Dictionary) -> Dictionary:
+	var document := State.document
+	var count := document.layers.size()
+	var index := _int_arg(args, "index", document.edit_layer + 1)
+	if index < 0 or index > count:
+		return _tool_error("index must be between 0 and the layer count.")
+	var layer_name := ""
+	if args.has("name"):
+		var name_value: Variant = args["name"]
+		if not (name_value is String):
+			return _tool_error("name must be a string.")
+		layer_name = String(name_value).strip_edges()
+		if layer_name.is_empty():
+			return _tool_error("name is required.")
+	var new_index := State.add_layer(index, layer_name)
+	if new_index < 0 or new_index >= document.layers.size():
+		return _tool_error("The layer could not be added.")
+	return _tool_ok(_layer_result(new_index))
+
+
+func _duplicate_layer(args: Dictionary) -> Dictionary:
+	var document := State.document
+	var index := _layer_value_arg(args, "layer", document.edit_layer)
+	if index < 0 or index >= document.layers.size():
+		return _tool_error("The layer does not exist.")
+	var new_index := State.duplicate_layer(index)
+	if new_index < 0 or new_index >= document.layers.size():
+		return _tool_error("The layer could not be duplicated.")
+	return _tool_ok(_layer_result(new_index))
+
+
+func _delete_layer(args: Dictionary) -> Dictionary:
+	var document := State.document
+	var index := _layer_value_arg(args, "layer", document.edit_layer)
+	if index < 0 or index >= document.layers.size():
+		return _tool_error("The layer does not exist.")
+	if document.layers.size() <= 1:
+		return _tool_error("The document must keep one layer.")
+	if document.layers[index].locked:
+		return _tool_error("The layer is locked.")
+	State.delete_layer(index)
+	return _tool_ok({"layer": State.active_layer_index, "layers": document.layers.size()})
+
+
+func _rename_layer(args: Dictionary) -> Dictionary:
+	var document := State.document
+	var index := _layer_value_arg(args, "layer", document.edit_layer)
+	if index < 0 or index >= document.layers.size():
+		return _tool_error("The layer does not exist.")
+	var name_value: Variant = args.get("name", "")
+	if not (name_value is String):
+		return _tool_error("name must be a string.")
+	var layer_name := String(name_value).strip_edges()
+	if layer_name.is_empty():
+		return _tool_error("name is required.")
+	State.rename_layer(index, layer_name)
+	return _tool_ok(_layer_result(index))
+
+
+func _set_layer_visible(args: Dictionary) -> Dictionary:
+	var document := State.document
+	var index := _layer_value_arg(args, "layer", document.edit_layer)
+	if index < 0 or index >= document.layers.size():
+		return _tool_error("The layer does not exist.")
+	var visible_value: Variant = args.get("visible", null)
+	if not (visible_value is bool):
+		return _tool_error("visible must be a boolean.")
+	State.set_layer_visible(index, bool(visible_value))
+	return _tool_ok(_layer_result(index))
+
+
+func _set_layer_locked(args: Dictionary) -> Dictionary:
+	var document := State.document
+	var index := _layer_value_arg(args, "layer", document.edit_layer)
+	if index < 0 or index >= document.layers.size():
+		return _tool_error("The layer does not exist.")
+	var locked_value: Variant = args.get("locked", null)
+	if not (locked_value is bool):
+		return _tool_error("locked must be a boolean.")
+	State.set_layer_locked(index, bool(locked_value))
+	return _tool_ok(_layer_result(index))
+
+
+func _move_layer(args: Dictionary) -> Dictionary:
+	var document := State.document
+	var count := document.layers.size()
+	var from := _int_arg(args, "from", -1)
+	var to := _int_arg(args, "to", -1)
+	if from < 0 or from >= count or to < 0 or to >= count:
+		return _tool_error("from and to must name layers.")
+	if from != to:
+		State.move_layer(from, to)
+	var data := _layer_result(State.active_layer_index)
+	data["order"] = _layer_names()
+	return _tool_ok(data)
+
+
+func _merge_layer_down(args: Dictionary) -> Dictionary:
+	var document := State.document
+	var index := _layer_value_arg(args, "layer", document.edit_layer)
+	if index < 0 or index >= document.layers.size():
+		return _tool_error("The layer does not exist.")
+	if index == 0:
+		return _tool_error("The bottom layer cannot merge down.")
+	if document.layers[index].locked or document.layers[index - 1].locked:
+		return _tool_error("The layer is locked.")
+	State.merge_layer_down(index)
+	return _tool_ok(_layer_result(State.active_layer_index))
+
+
+func _move_selection_to_layer(args: Dictionary) -> Dictionary:
+	var document := State.document
+	var target := _layer_value_arg(args, "target", -1)
+	if target < 0 or target >= document.layers.size():
+		return _tool_error("The target layer does not exist.")
+	if target == document.edit_layer:
+		return _tool_error("The target layer is the active layer.")
+	if not State.active_layer_editable():
+		return _tool_error("The active layer is hidden or locked.")
+	var target_layer: VoxelLayer = document.layers[target]
+	if not target_layer.visible:
+		return _tool_error("The target layer is hidden.")
+	if target_layer.locked:
+		return _tool_error("The target layer is locked.")
+	var source_cel := State.get_current_voxel_frame()
+	if source_cel == null:
+		return _tool_error("The current cel does not exist.")
+	var selected := State.selection.capture()
+	var moved := 0
+	if selected.is_empty():
+		moved = source_cel.count()
+	else:
+		for cell in selected:
+			if source_cel.has(cell):
+				moved += 1
+	if moved == 0:
+		return _tool_error("The selection and the current cel are empty.")
+	State.move_selection_to_layer(target)
+	return _tool_ok({"layer": document.edit_layer, "target": target, "name": target_layer.name, "moved": moved})
+
+
+func _layer_json(index: int) -> Dictionary:
+	var layer: VoxelLayer = State.document.layers[index]
+	var filled := 0
+	for cel in layer.frames:
+		if cel.count() > 0:
+			filled += 1
+	return {
+		"index": index,
+		"name": layer.name,
+		"visible": layer.visible,
+		"locked": layer.locked,
+		"filled": filled,
+		"active": index == State.document.edit_layer,
+	}
+
+
+func _layer_result(index: int) -> Dictionary:
+	var data := _layer_json(index)
+	return {
+		"layer": int(data.get("index", index)),
+		"layers": State.document.layers.size(),
+		"name": str(data.get("name", "")),
+		"visible": bool(data.get("visible", true)),
+		"locked": bool(data.get("locked", false)),
+		"filled": int(data.get("filled", 0)),
+		"active": bool(data.get("active", false)),
+	}
+
+
+func _layer_names() -> Array:
+	var names: Array = []
+	for layer in State.document.layers:
+		names.append(layer.name)
+	return names
+
+
+func _layer_value_arg(args: Dictionary, key: String, fallback: int) -> int:
+	var value: Variant = args.get(key, null)
+	if value == null:
+		return fallback
+	if value is int or value is float:
+		return int(value)
+	return -1
 
 
 func _tag_loop_mode(value: Variant) -> int:

@@ -98,6 +98,17 @@ A client reads a resource with `resources/list` and `resources/read`. The initia
 | `set_tag_range` | Set one tag's inclusive frame range |
 | `set_active_tag` | Select one tag or clear the selection |
 | `set_tag_loop` | Set one tag's loop mode and repeat count |
+| `get_layers` | Read every layer from bottom to top: index, name, visibility, lock, filled cels, and active state |
+| `select_layer` | Make one layer active by index or name. A name must match one layer |
+| `add_layer` | Add a layer as one undo action. The default index is above the active layer |
+| `duplicate_layer` | Copy one layer and its cels as one undo action |
+| `delete_layer` | Delete one layer as one undo action. The last layer and a locked layer are refused |
+| `rename_layer` | Rename one layer as one undo action. The name cannot be empty |
+| `set_layer_visible` | Show or hide one layer as one undo action |
+| `set_layer_locked` | Lock or unlock one layer as one undo action |
+| `move_layer` | Move one layer to a new index as one undo action |
+| `merge_layer_down` | Merge one layer into the layer below across every frame. The upper cell wins |
+| `move_selection_to_layer` | Move the selection or the current cel to another layer as one undo action |
 | `set_tool` | Select brush, eraser, paint, or fill and set its options |
 | `set_material` | Set the current material, emission, or palette entry |
 | `set_palette` | Replace the document palette in order. One undo action |
@@ -266,9 +277,26 @@ The sheet and the GIF need a visible editor window. A headless run returns an un
 - Use `set_active_tag` to select the tag that playback runs.
 - The new tag becomes active. The last tag and the last frame are kept.
 
+## Layers
+
+- Layer index 0 is the bottom layer. The highest index is the top layer. The timeline shows the top layer first.
+- `get_layers` lists every layer. `get_state` reports only the layer count and the active index.
+- `select_layer` accepts an index or an exact name. A name that matches more than one layer is refused. Use the index.
+- The edit tools use the active layer. Select a layer before you write cells to it.
+- A hidden layer stays out of the viewport, the thumbnails, and the export composite. Its cells remain in the document.
+- A locked layer refuses edits, deletes, merges, and target moves. It still allows selection, rename, reorder, and visibility changes.
+- `add_layer` inserts above the active layer by default. The new layer becomes active.
+- `duplicate_layer` copies every cel and adds " copy" to the name. The copy becomes active.
+- `delete_layer` selects the layer below. If the deleted layer is the bottom layer, it selects the layer above.
+- `move_layer` uses the bottom-to-top order. The layer keeps its cels and state. The active layer stays active.
+- `merge_layer_down` covers every frame. The upper cell wins an overlap. The target layer keeps its name and state. It becomes active.
+- `move_selection_to_layer` works on the current frame. An empty selection moves the whole cel. The source layer stays active.
+- Each layer change is one undo action. Selection is not an undo action.
+- `get_changes` lists cell edits. A layer name, order, visibility, lock, add, delete, or merge needs a new `get_layers` or `get_state` read.
+
 ## Limits
 
-The first version supports brush, paint, eraser, fill, primitive shapes, exact writes, selection, screenshots, documents, frames, tags, and export. Terrain, transform, playback, and clipboard are not exposed yet.
+The first version supports brush, paint, eraser, fill, primitive shapes, exact writes, selection, screenshots, documents, frames, tags, layers, and export. Terrain, transform, playback, and clipboard are not exposed yet.
 
 ## Bridge mode
 

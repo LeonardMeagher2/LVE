@@ -516,6 +516,124 @@ const TOOLS := [
 		},
 	},
 	{
+		"name": "get_layers",
+		"description": "Read every layer from bottom to top. Each item reports its index, name, visibility, lock, filled cel count, and active state. Layer index 0 is the bottom layer. Guide: `lve://guide/layers`.",
+		"inputSchema": {"type": "object", "additionalProperties": false},
+	},
+	{
+		"name": "select_layer",
+		"description": "Make one layer active by index or name. A name must match one layer. Selection works on hidden and locked layers. The edit tools use the active layer. Guide: `lve://guide/layers`.",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"layer": {"type": "integer", "minimum": 0, "description": "Layer index from the bottom. 0 is the bottom layer."},
+				"name": {"type": "string", "description": "Exact layer name. It must match one layer."},
+			},
+			"additionalProperties": false,
+		},
+	},
+	{
+		"name": "add_layer",
+		"description": "Add a layer as one undo action. The default index is above the active layer. The new layer becomes active. Guide: `lve://guide/layers`.",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"index": {"type": "integer", "minimum": 0, "description": "Insertion index from the bottom. Defaults to above the active layer."},
+				"name": {"type": "string", "description": "Layer name. Defaults to the next available Layer number."},
+			},
+			"additionalProperties": false,
+		},
+	},
+	{
+		"name": "duplicate_layer",
+		"description": "Copy one layer and its cels as one undo action. The copy sits above the source and becomes active. The copy name adds ' copy'. Guide: `lve://guide/layers`.",
+		"inputSchema": {
+			"type": "object",
+			"properties": {"layer": {"type": "integer", "minimum": 0, "description": "Layer to copy. Defaults to the active layer."}},
+			"additionalProperties": false,
+		},
+	},
+	{
+		"name": "delete_layer",
+		"description": "Delete one layer as one undo action. The document keeps one layer. A locked layer is refused. The layer below becomes active. Guide: `lve://guide/layers`.",
+		"inputSchema": {
+			"type": "object",
+			"properties": {"layer": {"type": "integer", "minimum": 0, "description": "Layer to delete. Defaults to the active layer."}},
+			"additionalProperties": false,
+		},
+	},
+	{
+		"name": "rename_layer",
+		"description": "Rename one layer as one undo action. The name is trimmed and cannot be empty. Hidden and locked layers can be renamed. Guide: `lve://guide/layers`.",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"layer": {"type": "integer", "minimum": 0, "description": "Layer to rename. Defaults to the active layer."},
+				"name": {"type": "string"},
+			},
+			"required": ["name"],
+			"additionalProperties": false,
+		},
+	},
+	{
+		"name": "set_layer_visible",
+		"description": "Show or hide one layer as one undo action. Hidden layers leave the composite but keep their cells. Guide: `lve://guide/layers`.",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"layer": {"type": "integer", "minimum": 0, "description": "Layer to change. Defaults to the active layer."},
+				"visible": {"type": "boolean"},
+			},
+			"required": ["visible"],
+			"additionalProperties": false,
+		},
+	},
+	{
+		"name": "set_layer_locked",
+		"description": "Lock or unlock one layer as one undo action. Edits and target moves refuse a locked layer. Locking the active layer cancels the open edit. Guide: `lve://guide/layers`.",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"layer": {"type": "integer", "minimum": 0, "description": "Layer to change. Defaults to the active layer."},
+				"locked": {"type": "boolean"},
+			},
+			"required": ["locked"],
+			"additionalProperties": false,
+		},
+	},
+	{
+		"name": "move_layer",
+		"description": "Move one layer to a new index as one undo action. Indices run from bottom to top. The layer keeps its cels, name, visibility, and lock. Guide: `lve://guide/layers`.",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"from": {"type": "integer", "minimum": 0},
+				"to": {"type": "integer", "minimum": 0, "description": "Final index after the move."},
+			},
+			"required": ["from", "to"],
+			"additionalProperties": false,
+		},
+	},
+	{
+		"name": "merge_layer_down",
+		"description": "Merge one layer into the layer below as one undo action. The merge covers every frame. The upper cell wins an overlap. Locked layers and the bottom layer are refused. Guide: `lve://guide/layers`.",
+		"inputSchema": {
+			"type": "object",
+			"properties": {"layer": {"type": "integer", "minimum": 1, "description": "Layer to merge down. Defaults to the active layer."}},
+			"additionalProperties": false,
+		},
+	},
+	{
+		"name": "move_selection_to_layer",
+		"description": "Move the current selection or the whole current cel to another layer in the same frame as one undo action. The active layer must be editable. The target must be visible and unlocked. Guide: `lve://guide/layers`.",
+		"inputSchema": {
+			"type": "object",
+			"properties": {"target": {"type": "integer", "minimum": 0, "description": "Target layer index from the bottom."}},
+			"required": ["target"],
+			"additionalProperties": false,
+		},
+	},
+	{
 		"name": "set_tool",
 		"description": "Select the real editor tool and set its options. This changes the user's toolbar and option bar. Use brush, eraser, paint, or fill. For fill, set connected false to replace every matching cell in the frame, not only the connected region. Guide: `lve://guide/write`.",
 		"inputSchema": {
@@ -755,6 +873,29 @@ const SCHEMA_TAG := {
 		"mode": {"type": "integer"},
 		"mode_name": {"type": "string"},
 		"repeats": {"type": "integer"},
+	},
+}
+const SCHEMA_LAYER := {
+	"type": "object",
+	"properties": {
+		"index": {"type": "integer"},
+		"name": {"type": "string"},
+		"visible": {"type": "boolean"},
+		"locked": {"type": "boolean"},
+		"filled": {"type": "integer"},
+		"active": {"type": "boolean"},
+	},
+}
+const SCHEMA_LAYER_RESULT := {
+	"type": "object",
+	"properties": {
+		"layer": {"type": "integer"},
+		"layers": {"type": "integer"},
+		"name": {"type": "string"},
+		"visible": {"type": "boolean"},
+		"locked": {"type": "boolean"},
+		"filled": {"type": "integer"},
+		"active": {"type": "boolean"},
 	},
 }
 const SCHEMA_RUNS := {"type": "array", "items": {"type": "array", "items": {"type": "integer"}}}
@@ -1207,6 +1348,47 @@ const OUTPUT_SCHEMAS := {
 			"to": {"type": "integer"},
 			"mode": {"type": "integer"},
 			"repeats": {"type": "integer"},
+		},
+	},
+	"get_layers": {
+		"type": "object",
+		"properties": {
+			"layers": {"type": "integer"},
+			"active": {"type": "integer"},
+			"items": {"type": "array", "items": SCHEMA_LAYER},
+		},
+	},
+	"select_layer": SCHEMA_LAYER_RESULT,
+	"add_layer": SCHEMA_LAYER_RESULT,
+	"duplicate_layer": SCHEMA_LAYER_RESULT,
+	"delete_layer": {
+		"type": "object",
+		"properties": {"layer": {"type": "integer"}, "layers": {"type": "integer"}},
+	},
+	"rename_layer": SCHEMA_LAYER_RESULT,
+	"set_layer_visible": SCHEMA_LAYER_RESULT,
+	"set_layer_locked": SCHEMA_LAYER_RESULT,
+	"move_layer": {
+		"type": "object",
+		"properties": {
+			"layer": {"type": "integer"},
+			"layers": {"type": "integer"},
+			"name": {"type": "string"},
+			"visible": {"type": "boolean"},
+			"locked": {"type": "boolean"},
+			"filled": {"type": "integer"},
+			"active": {"type": "boolean"},
+			"order": {"type": "array", "items": {"type": "string"}},
+		},
+	},
+	"merge_layer_down": SCHEMA_LAYER_RESULT,
+	"move_selection_to_layer": {
+		"type": "object",
+		"properties": {
+			"layer": {"type": "integer"},
+			"target": {"type": "integer"},
+			"name": {"type": "string"},
+			"moved": {"type": "integer"},
 		},
 	},
 	"set_document_settings": {
