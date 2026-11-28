@@ -13,7 +13,7 @@ func _grid() -> Node:
 func _range_cells() -> Array:
 	var out: Array = []
 	for child in _grid().get_children():
-		if not child is AnimationFrame:
+		if child is RangeCell:
 			out.append(child)
 	return out
 
@@ -62,7 +62,7 @@ func _run() -> void:
 
 	step("Then the range row sits above the frames", func():
 		var grid := _grid()
-		expect(grid.get_child_count() == 8, "the grid holds the range row and the frames")
+		expect(grid.get_child_count() == 15, "the grid holds the tag row, the frame header, and the layer row")
 		expect(_range_cells().size() == 4, "four range cells are shown")
 		expect(_frame_cells().size() == 4, "four frame cells are shown")
 	)
@@ -186,6 +186,6 @@ func _run() -> void:
 	)
 
 	step("Then the range row disappears without a tag", func():
-		expect(_grid().get_child_count() == 4, "the grid holds only the frames")
+		expect(_frame_cells().size() == 4, "the four frame headers remain")
 		expect(_range_cells().is_empty(), "no range cells remain")
 	)

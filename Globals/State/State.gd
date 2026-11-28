@@ -195,6 +195,75 @@ func _apply_layer_locked(layer: VoxelLayer, value: bool) -> void:
 		_cancel_active_edit()
 	layers_changed.emit()
 
+
+func add_layer(index := -1, layer_name := "") -> int:
+	return _insert_layer(document.make_layer(layer_name), index, "Add Layer")
+
+
+func duplicate_layer(index := -1) -> int:
+	var source_index := document.edit_layer if index < 0 else index
+	if source_index < 0 or source_index >= document.layers.size():
+		return -1
+	var source := document.layers[source_index]
+	var layer := source.copy_layer()
+	layer.name = source.name + " copy"
+	return _insert_layer(layer, source_index + 1, "Duplicate Layer")
+
+
+func _insert_layer(layer: VoxelLayer, index: int, action: String) -> int:
+	var target := clampi(index if index >= 0 else document.edit_layer + 1, 0, document.layers.size())
+	edit_context_changing.emit()
+	_cancel_active_edit()
+	var previous := document.active_layer()
+	undo_redo.create_action(action)
+	undo_redo.add_undo_method(_apply_layer_removed.bind(layer, previous))
+	undo_redo.add_do_method(_apply_layer_inserted.bind(layer, target, layer))
+	_commit_history(false)
+	_apply_layer_inserted(layer, target, layer)
+	return document.edit_layer
+
+
+func _apply_layer_inserted(layer: VoxelLayer, index: int, active: VoxelLayer) -> void:
+	if not document.layers.has(layer):
+		document.layers.insert(clampi(index, 0, document.layers.size()), layer)
+	var active_index := document.layers.find(active)
+	document.edit_layer = active_index if active_index >= 0 else clampi(document.edit_layer, 0, document.layers.size() - 1)
+	document.invalidate_bounds()
+	document.invalidate_composite()
+	layers_changed.emit()
+	active_layer_changed.emit()
+
+
+func delete_layer(index := -1) -> void:
+	if document.layers.size() <= 1:
+		return
+	var target := document.edit_layer if index < 0 else index
+	if target < 0 or target >= document.layers.size():
+		return
+	var removed := document.layers[target]
+	var previous := document.active_layer()
+	var next_active := document.layers[target - 1] if target > 0 else document.layers[target + 1]
+	edit_context_changing.emit()
+	_cancel_active_edit()
+	undo_redo.create_action("Delete Layer")
+	undo_redo.add_undo_method(_apply_layer_inserted.bind(removed, target, previous))
+	undo_redo.add_do_method(_apply_layer_removed.bind(removed, next_active))
+	_commit_history(false)
+	_apply_layer_removed(removed, next_active)
+
+
+func _apply_layer_removed(layer: VoxelLayer, active: VoxelLayer) -> void:
+	var index := document.layers.find(layer)
+	if index < 0:
+		return
+	document.layers.remove_at(index)
+	var active_index := document.layers.find(active)
+	document.edit_layer = active_index if active_index >= 0 else clampi(document.edit_layer, 0, document.layers.size() - 1)
+	document.invalidate_bounds()
+	document.invalidate_composite()
+	layers_changed.emit()
+	active_layer_changed.emit()
+
 var floor_axis: Vector3.Axis:
 	get:
 		return aids.floor_axis

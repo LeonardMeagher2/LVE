@@ -16,7 +16,7 @@ func _grid() -> Node:
 func _range_cells() -> Array:
 	var out: Array = []
 	for child in _grid().get_children():
-		if not child is AnimationFrame:
+		if child is RangeCell:
 			out.append(child)
 	return out
 

@@ -3,6 +3,7 @@ extends HBoxContainer
 
 
 var column_index := 0
+var column_offset := 0
 var grid: Control
 var _is_from := false
 var _is_to := false
@@ -82,8 +83,10 @@ func _column_from_x(x: float) -> int:
 	if grid == null:
 		return 0
 	var n := State.get_frame_count()
-	if n <= 1:
+	if n <= 1 or grid.get_child_count() <= column_offset + 1:
 		return 0
-	var pitch: float = grid.get_child(1).global_position.x - grid.get_child(0).global_position.x
-	var base: float = grid.global_position.x
+	var base: float = grid.get_child(column_offset).global_position.x
+	var pitch: float = grid.get_child(column_offset + 1).global_position.x - base
+	if pitch <= 0.0:
+		return 0
 	return clampi(roundi((x - base - pitch * 0.5) / pitch), 0, n - 1)
