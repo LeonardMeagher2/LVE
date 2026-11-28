@@ -14,6 +14,7 @@ func _ready() -> void:
 	timeout = 40.0
 	test("the sprite sheet and the GIF keep one frame anchor", _anchor_run, "frame_anchor")
 	test("a blank frame does not shrink the shared frame box", _blank_run, "frame_anchor_blank")
+	test("the sprite sheet and the GIF show the visible layer composite", _layers_run, "export_layers")
 
 
 func before_test() -> void:
@@ -126,6 +127,71 @@ func _blank_run() -> void:
 		var rects: Array = exporter.sheet_layout(3, 64).rects
 		expect(_visible_pixels(three, rects[1]) == 0, "the blank frame tile stays transparent")
 	)
+
+
+func _layers_run() -> void:
+	sheet_path = "user://layer_sheet_%s.png" % Time.get_ticks_usec()
+	gif_path = "user://layer_gif_%s.gif" % Time.get_ticks_usec()
+	step("Given two visible layers and one hidden layer", func():
+		var document := State.document
+		document.set_cell(0, Vector3i(-3, 0, 0), VoxelFrame.material(Color.RED))
+		document.layers.append(document.make_layer("Top"))
+		document.edit_layer = 1
+		document.set_cell(0, Vector3i(3, 0, 0), VoxelFrame.material(Color.BLUE))
+		document.layers.append(document.make_layer("Hidden"))
+		document.edit_layer = 2
+		document.set_cell(0, Vector3i(0, 3, 0), VoxelFrame.material(Color.GREEN))
+		document.layers[2].visible = false
+		document.invalidate_bounds()
+		State.set_active_layer(0)
+	)
+	var sheet_error: Error = await exporter.export_sprite_sheet(sheet_path, 0, 0, 64, 0, false)
+	step("Then the sheet shows both visible layers and hides the hidden layer", func():
+		expect(sheet_error == OK, "the sheet exports")
+		var image := Image.new()
+		expect(image.load(sheet_path) == OK, "the sheet loads")
+		var rect := Rect2i(Vector2i.ZERO, Vector2i(64, 64))
+		expect(_channel_pixels(image, rect, 0) > 0, "the lower layer renders")
+		expect(_channel_pixels(image, rect, 2) > 0, "the upper layer renders")
+		expect(_channel_pixels(image, rect, 1) == 0, "the hidden layer stays out")
+	)
+	var gif_error: Error = await exporter.export_gif_settings(gif_path, {
+		"first_frame": 0,
+		"last_frame": 0,
+		"tile_size": 64,
+		"view": "current",
+		"views": 1,
+		"center": false,
+	})
+	step("Then the GIF also shows both visible layers", func():
+		expect(gif_error == OK, "the GIF exports")
+		var reader = GIF_READER.new()
+		expect(reader.read(FileAccess.get_file_as_bytes(gif_path)), "the GIF parses")
+		var frames: Array = reader.compose()
+		expect(frames.size() == 1, "the GIF holds one frame")
+		if frames.size() != 1:
+			return
+		var image: Image = frames[0]
+		var rect := Rect2i(Vector2i.ZERO, Vector2i(64, 64))
+		expect(_channel_pixels(image, rect, 0) > 0, "the lower layer renders in the GIF")
+		expect(_channel_pixels(image, rect, 2) > 0, "the upper layer renders in the GIF")
+		expect(_channel_pixels(image, rect, 1) == 0, "the hidden layer stays out of the GIF")
+	)
+
+
+func _channel_pixels(image: Image, rect: Rect2i, channel: int) -> int:
+	var count := 0
+	for y in range(rect.position.y, rect.position.y + rect.size.y):
+		for x in range(rect.position.x, rect.position.x + rect.size.x):
+			var pixel := image.get_pixel(x, y)
+			if pixel.a <= 0.5:
+				continue
+			var values := [pixel.r, pixel.g, pixel.b]
+			var value: float = values[channel]
+			values.remove_at(channel)
+			if value > 0.3 and value > float(values[0]) * 1.4 and value > float(values[1]) * 1.4:
+				count += 1
+	return count
 
 
 func _centroid_x(image: Image, rect: Rect2i) -> float:

@@ -82,7 +82,7 @@ func _ready() -> void:
 	_model_viewport.get_node("ViewportScene").document_view = false
 	_model_renderer = _model_viewport.get_node("ViewportScene/VoxelRenderer")
 	_model_renderer.report_activity = false
-	_model_renderer.source_frame = State.get_current_voxel_frame().copy_frame()
+	_model_renderer.source_frame = State.get_composite_voxel_frame(State.current_frame).copy_frame()
 	_model_back_renderer = preload("res://ui/Viewport/VoxelRenderer.tscn").instantiate()
 	_model_back_renderer.name = "VoxelRendererBack"
 	_model_back_renderer.report_activity = false
@@ -459,7 +459,7 @@ func _refresh_model() -> void:
 	_model_frames.clear()
 	var model_delays := []
 	for index in range(frame_range.x, frame_range.y + 1):
-		_model_frames.append(State.get_voxel_frame(index).copy_frame())
+		_model_frames.append(State.get_composite_voxel_frame(index).copy_frame())
 		model_delays.append(State.document.frame_delay(index))
 	_model_renderer.transform = _model_transform()
 	_model_back_renderer.transform = _model_renderer.transform
@@ -1145,7 +1145,7 @@ func _update_sheet_preview() -> void:
 	var revision := _preview_revision
 	var frames: Array[VoxelFrame] = []
 	for index in range(frame_range.x, frame_range.y + 1):
-		frames.append(State.get_voxel_frame(index).copy_frame())
+		frames.append(State.get_composite_voxel_frame(index).copy_frame())
 	var settings := _sheet_render_settings(
 		_sheet_settings.get_node("ViewRow/View").selected,
 		views,
@@ -1293,7 +1293,7 @@ func export_sprite_sheet_settings(path: String, settings: Dictionary) -> Error:
 	var render_settings := _sheet_render_settings(view, views, orthographic, center, lighting)
 	var frames: Array[VoxelFrame] = []
 	for index in range(first_frame, last_frame + 1):
-		frames.append(State.get_voxel_frame(index).copy_frame())
+		frames.append(State.get_composite_voxel_frame(index).copy_frame())
 	var layout := sheet_layout(frames.size() * views, tile_size)
 	if layout.size.x > Image.MAX_WIDTH or layout.size.y > Image.MAX_HEIGHT:
 		return ERR_INVALID_PARAMETER
@@ -1377,7 +1377,7 @@ func export_gif_settings(path: String, settings: Dictionary) -> Error:
 	var frames: Array[VoxelFrame] = []
 	var frame_delays := PackedInt32Array()
 	for index in range(first, last + 1):
-		var frame := State.get_voxel_frame(index)
+		var frame := State.get_composite_voxel_frame(index)
 		if frame == null:
 			return ERR_INVALID_PARAMETER
 		frames.append(frame.copy_frame())

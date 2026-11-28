@@ -377,7 +377,7 @@ func export_gltf(path: String, center_origin := true, tag_index := -1, overrides
 	var first := selected_tag.from if selected_tag else 0
 	var last := selected_tag.to if selected_tag else State.get_frame_count() - 1
 	for index in range(first, last + 1):
-		job.frames.append(State.get_voxel_frame(index).copy_frame())
+		job.frames.append(State.get_composite_voxel_frame(index).copy_frame())
 		job.frame_delays.append(State.document.frame_delay(index))
 	for index in State.document.tags.size():
 		if selected_tag and index != tag_index:
