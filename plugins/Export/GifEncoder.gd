@@ -3,7 +3,6 @@ extends RefCounted
 
 const EXPORT_PALETTE := preload("./ExportPalette.gd")
 
-const ALPHA_THRESHOLD := 128
 const MAX_CODE := 4096
 const MAX_CODE_BITS := 12
 
@@ -40,7 +39,7 @@ func _init(width: int, height: int, loop_count := 0, base_colors := PackedColorA
 	_width = clampi(width, 1, 65535)
 	_height = clampi(height, 1, 65535)
 	_loop_count = clampi(loop_count, -1, 65535)
-	_palette = EXPORT_PALETTE.new(base_colors)
+	_palette = EXPORT_PALETTE.new(base_colors, EXPORT_PALETTE.MAX_COLORS)
 	_write_header()
 
 
@@ -73,7 +72,7 @@ func _index_image(image: Image) -> PackedByteArray:
 	var offset := 0
 	var pixel := 0
 	while pixel < count:
-		if data[offset + 3] < ALPHA_THRESHOLD:
+		if data[offset + 3] < EXPORT_PALETTE.ALPHA_THRESHOLD:
 			indices[pixel] = 0
 		else:
 			var key: int = data[offset] | (data[offset + 1] << 8) | (data[offset + 2] << 16)

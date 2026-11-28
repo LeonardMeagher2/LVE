@@ -871,18 +871,31 @@ func _fit_frames(entries: Array[Dictionary], union: Rect2i, tile_size: Vector2i)
 			tiles.append(_blank_tile(tile_size))
 			continue
 		var canvas := Image.create(union.size.x, union.size.y, false, Image.FORMAT_RGBA8)
-		canvas.fill(Color.TRANSPARENT)
+		canvas.fill(Color(0.0, 0.0, 0.0, 0.0))
 		canvas.blit_rect(source, Rect2i(Vector2i.ZERO, used.size), used.position - union.position)
 		canvas.resize(fitted.x, fitted.y, Image.INTERPOLATE_NEAREST)
+		_clear_transparent(canvas)
 		var tile := _blank_tile(tile_size)
 		tile.blit_rect(canvas, Rect2i(Vector2i.ZERO, fitted), origin)
 		tiles.append(tile)
 	return tiles
 
 
+func _clear_transparent(image: Image) -> void:
+	var data := image.get_data()
+	var offset := 0
+	while offset < data.size():
+		if data[offset + 3] == 0:
+			data[offset] = 0
+			data[offset + 1] = 0
+			data[offset + 2] = 0
+		offset += 4
+	image.set_data(image.get_width(), image.get_height(), false, Image.FORMAT_RGBA8, data)
+
+
 func _blank_tile(tile_size: Vector2i) -> Image:
 	var tile := Image.create(tile_size.x, tile_size.y, false, Image.FORMAT_RGBA8)
-	tile.fill(Color.TRANSPARENT)
+	tile.fill(Color(0.0, 0.0, 0.0, 0.0))
 	return tile
 
 
@@ -916,7 +929,7 @@ func _render_sheet(frames: Array[VoxelFrame], settings: Dictionary, document: Vo
 	var sheets := {}
 	for output in outputs:
 		var sheet := Image.create(layout.size.x, layout.size.y, false, Image.FORMAT_RGBA8)
-		sheet.fill(Color.TRANSPARENT)
+		sheet.fill(Color(0.0, 0.0, 0.0, 0.0))
 		sheets[output] = sheet
 	var normal_material: ShaderMaterial
 	if outputs.has("normal"):
@@ -996,19 +1009,6 @@ func _render_sheet(frames: Array[VoxelFrame], settings: Dictionary, document: Vo
 	return sheets if complete and capture_index == capture_count else null
 
 
-func _document_palette_colors(document: VoxelDocument) -> PackedColorArray:
-	var colors := PackedColorArray()
-	for entry in document.palette:
-		var material: PackedFloat32Array = entry
-		var color := VoxelFrame.material_color(material)
-		if color.a <= 0.5:
-			continue
-		if colors.size() >= EXPORT_PALETTE.MAX_COLORS - 1:
-			break
-		colors.append(color)
-	return colors
-
-
 func _specular_material(source: Material) -> Material:
 	if not source is StandardMaterial3D:
 		return _specular_default
@@ -1028,7 +1028,7 @@ func _specular_material(source: Material) -> Material:
 
 func _specular_sheet_image(image: Image) -> Image:
 	var specular := Image.create(image.get_width(), image.get_height(), false, Image.FORMAT_RGBA8)
-	specular.fill(Color.TRANSPARENT)
+	specular.fill(Color(0.0, 0.0, 0.0, 0.0))
 	for y in image.get_height():
 		for x in image.get_width():
 			var source := image.get_pixel(x, y)
@@ -1065,8 +1065,7 @@ func _open_image_viewport(settings: Dictionary, viewport_size: Vector2i) -> SubV
 	return viewport
 
 
-func _render_gif_frames(frames: Array[VoxelFrame], settings: Dictionary, document: VoxelDocument, encoder) -> Error:
-	var tile_size: Vector2i = settings.tile_size
+func _render_gif_frames(frames: Array[VoxelFrame], settings: Dictionary, document: VoxelDocument, tile_size: Vector2i) -> Array:
 	var viewport := _open_image_viewport(settings, tile_size * SUPERSAMPLE)
 	_export_viewport = viewport
 	var lighting_settings: Dictionary = settings.lighting
@@ -1123,22 +1122,23 @@ func _render_gif_frames(frames: Array[VoxelFrame], settings: Dictionary, documen
 	if is_instance_valid(viewport):
 		viewport.free()
 	_export_viewport = null
-	if error == OK and not entries.is_empty():
-		error = _add_gif_frames(encoder, entries, union, tile_size)
+	var encoder = null
+	if error == OK and entries.is_empty():
+		error = ERR_INVALID_DATA
+	if error == OK:
+		if union.size.x <= 0 or union.size.y <= 0:
+			union = Rect2i(Vector2i.ZERO, tile_size)
+		var tiles := _fit_frames(entries, union, tile_size)
+		var colors := EXPORT_PALETTE.adaptive_colors(tiles)
+		encoder = GIF_ENCODER.new(tile_size.x, tile_size.y, 0, colors)
+		for tile_index in tiles.size():
+			var add_error: Error = encoder.add_frame(tiles[tile_index], int(entries[tile_index].delay))
+			if add_error != OK:
+				error = add_error
+				break
 	if error == OK and not _render_current(document, -1):
 		error = ERR_BUSY
-	return error
-
-
-func _add_gif_frames(encoder, entries: Array[Dictionary], union: Rect2i, tile_size: Vector2i) -> Error:
-	if union.size.x <= 0 or union.size.y <= 0:
-		union = Rect2i(Vector2i.ZERO, tile_size)
-	var tiles := _fit_frames(entries, union, tile_size)
-	for index in entries.size():
-		var error: Error = encoder.add_frame(tiles[index], int(entries[index].delay))
-		if error != OK:
-			return error
-	return OK
+	return [error, encoder if error == OK else null]
 
 
 func _update_sheet_preview() -> void:
@@ -1397,14 +1397,14 @@ func export_gif_settings(path: String, settings: Dictionary) -> Error:
 	if path.get_extension().to_lower() != "gif":
 		path += ".gif"
 	var source_document := State.document
-	var base_colors := _document_palette_colors(source_document)
 	State.stop()
 	_exporting = true
 	_cancel_requested = false
 	_preview_revision += 1
 	_operation_id = State.begin_operation("Exporting GIF", frames.size() * render_settings.transforms.size(), true, self, _cancel_export)
-	var encoder = GIF_ENCODER.new(tile_size, tile_size, 0, base_colors)
-	var error: Error = await _render_gif_frames(frames, render_settings, source_document, encoder)
+	var result: Array = await _render_gif_frames(frames, render_settings, source_document, Vector2i(tile_size, tile_size))
+	var error: Error = result[0]
+	var encoder = result[1]
 	if error == OK:
 		var gif: PackedByteArray = encoder.finish()
 		var file := FileAccess.open(path, FileAccess.WRITE)
