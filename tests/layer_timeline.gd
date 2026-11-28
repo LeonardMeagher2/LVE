@@ -26,13 +26,21 @@ func after_test() -> void:
 		dialog.hide()
 
 
-func _grid() -> Control:
+func _frame_grid() -> Control:
 	return main.find_child("FrameGrid", true, false)
+
+
+func _cel_grid() -> Control:
+	return main.find_child("CelGrid", true, false)
+
+
+func _layer_column() -> Control:
+	return main.find_child("LayerColumn", true, false)
 
 
 func _headers() -> Array[LayerHeaderCell]:
 	var out: Array[LayerHeaderCell] = []
-	for child in _grid().get_children():
+	for child in _layer_column().get_children():
 		if child is LayerHeaderCell:
 			out.append(child)
 	return out
@@ -40,7 +48,7 @@ func _headers() -> Array[LayerHeaderCell]:
 
 func _cells() -> Array[CelCell]:
 	var out: Array[CelCell] = []
-	for child in _grid().get_children():
+	for child in _cel_grid().get_children():
 		if child is CelCell:
 			out.append(child)
 	return out
@@ -48,17 +56,14 @@ func _cells() -> Array[CelCell]:
 
 func _frame_headers() -> Array[AnimationFrame]:
 	var out: Array[AnimationFrame] = []
-	for child in _grid().get_children():
+	for child in _frame_grid().get_children():
 		if child is AnimationFrame:
 			out.append(child)
 	return out
 
 
 func _toolbar() -> LayerToolbarCell:
-	for child in _grid().get_children():
-		if child is LayerToolbarCell:
-			return child
-	return null
+	return main.find_child("LayerToolbar", true, false) as LayerToolbarCell
 
 
 func _cel(layer: int, frame: int) -> CelCell:
@@ -361,19 +366,49 @@ func _scrolls_rows() -> void:
 	)
 	await get_tree().process_frame
 	await get_tree().process_frame
-	step("Then the dock keeps its height", func():
+	step("Then the dock keeps its height and scrolls the layers", func():
 		expect(is_equal_approx(main.find_child("BottomDock", true, false).size.y, _dock_height), "the dock height does not change")
-		expect(_scroll().get_v_scroll_bar().visible, "the vertical scroll bar shows")
-		expect(_scroll().get_v_scroll_bar().max_value > _scroll().size.y, "the rows exceed the view")
+		expect(_cel_scroll().get_v_scroll_bar().visible, "the layer scroll bar shows")
+		expect(_cel_scroll().get_v_scroll_bar().max_value > _cel_scroll().size.y, "the layers exceed the view")
 		expect(_headers().size() == 11, "every layer row exists")
 	)
-	step("When the user scrolls down", func():
-		_scroll().scroll_vertical = int(_scroll().get_v_scroll_bar().max_value)
+	step("When the user scrolls the layers down", func():
+		_cel_scroll().scroll_vertical = int(_cel_scroll().get_v_scroll_bar().max_value)
 	)
-	step("Then the grid moves", func():
-		expect(_scroll().scroll_vertical > 0, "the grid scrolls")
+	await get_tree().process_frame
+	step("Then the layer names follow the cels", func():
+		expect(_cel_scroll().scroll_vertical > 0, "the layer grid scrolls")
+		expect(_layer_scroll().scroll_vertical == _cel_scroll().scroll_vertical, "the layer names follow the cels")
+	)
+	step("When the user adds ten frames", func():
+		for index in 10:
+			State.add_frame()
+	)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	step("Then the thumbnails sit at the bottom", func():
+		var header := main.find_child("HeaderRow", true, false) as Control
+		var dock := main.find_child("BottomDock", true, false) as Control
+		expect(is_equal_approx(header.get_global_rect().end.y, dock.get_global_rect().end.y), "the thumbnails sit at the bottom")
+		expect(_header_scroll().get_h_scroll_bar().max_value > _header_scroll().size.x, "the frames exceed the view")
+	)
+	step("When the user scrolls the cels right", func():
+		_cel_scroll().scroll_horizontal = int(_cel_scroll().get_h_scroll_bar().max_value)
+	)
+	await get_tree().process_frame
+	step("Then the thumbnails follow and the layer names stay", func():
+		expect(_header_scroll().scroll_horizontal == _cel_scroll().scroll_horizontal, "the thumbnails follow the cels")
+		expect(is_equal_approx(_headers()[0].get_global_rect().position.x, _layer_column().get_global_rect().position.x), "the layer names stay on the left")
 	)
 
 
-func _scroll() -> ScrollContainer:
-	return _grid().get_parent() as ScrollContainer
+func _cel_scroll() -> ScrollContainer:
+	return _cel_grid().get_parent() as ScrollContainer
+
+
+func _layer_scroll() -> ScrollContainer:
+	return _layer_column().get_parent() as ScrollContainer
+
+
+func _header_scroll() -> ScrollContainer:
+	return _frame_grid().get_parent() as ScrollContainer

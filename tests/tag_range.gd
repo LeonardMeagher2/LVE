@@ -6,13 +6,13 @@ func _ready() -> void:
 	test("can drag a tag's start and end frame on the timeline", _run)
 
 
-func _grid() -> Node:
+func _frame_grid() -> Node:
 	return main.find_child("FrameGrid", true, false)
 
 
 func _range_cells() -> Array:
 	var out: Array = []
-	for child in _grid().get_children():
+	for child in _frame_grid().get_children():
 		if child is RangeCell:
 			out.append(child)
 	return out
@@ -20,7 +20,7 @@ func _range_cells() -> Array:
 
 func _frame_cells() -> Array:
 	var out: Array = []
-	for child in _grid().get_children():
+	for child in _frame_grid().get_children():
 		if child is AnimationFrame:
 			out.append(child)
 	return out
@@ -61,8 +61,6 @@ func _run() -> void:
 	await get_tree().process_frame
 
 	step("Then the range row sits above the frames", func():
-		var grid := _grid()
-		expect(grid.get_child_count() == 15, "the grid holds the tag row, the frame header, and the layer row")
 		expect(_range_cells().size() == 4, "four range cells are shown")
 		expect(_frame_cells().size() == 4, "four frame cells are shown")
 	)

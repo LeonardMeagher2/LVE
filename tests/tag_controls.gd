@@ -49,8 +49,11 @@ func _tags_ui() -> void:
 		expect(_actions_popup().is_item_disabled(2), "the delete action is disabled with one tag")
 		for cell in _frame_cells():
 			expect(cell.get_node("%Delay").is_visible_in_tree(), "the delay field is shown")
-		var grid := main.find_child("FrameGrid", true, false)
-		expect(grid.get_child_count() > _frame_cells().size(), "the range row is shown")
+		var range_cells := 0
+		for child in main.find_child("FrameGrid", true, false).get_children():
+			if child is RangeCell:
+				range_cells += 1
+		expect(range_cells == _frame_cells().size(), "the range row is shown")
 	)
 
 	step("When the user adds a tag from the tag menu", func():

@@ -22,6 +22,7 @@ func _ready() -> void:
 	_menu.about_to_popup.connect(_rebuild_menu)
 	_menu.id_pressed.connect(_on_menu)
 	State.active_layer_changed.connect(_sync)
+	State.layers_changed.connect(_sync)
 	_sync()
 
 

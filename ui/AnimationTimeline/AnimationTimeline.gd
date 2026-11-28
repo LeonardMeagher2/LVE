@@ -7,7 +7,6 @@ const ANIMATION_FRAME = preload("uid://c2301xo3rbrka")
 const RANGE_CELL = preload("res://ui/AnimationTimeline/RangeCell.tscn")
 const CEL_CELL = preload("res://ui/AnimationTimeline/CelCell.tscn")
 const LAYER_HEADER = preload("res://ui/AnimationTimeline/LayerHeaderCell.tscn")
-const LAYER_TOOLBAR = preload("res://ui/AnimationTimeline/LayerToolbarCell.tscn")
 
 var _has_tag_row := false
 var _frame_cells: Array[AnimationFrame] = []
@@ -16,6 +15,7 @@ var _layer_headers := {}
 var _active_cel_key := Vector2i(-1, -1)
 var _active_layer := -1
 var _rename_layer_index := -1
+var _syncing_scroll := false
 
 @export var playback_bottom := false
 
@@ -23,6 +23,11 @@ func _ready() -> void:
 	if playback_bottom:
 		_place_playback_bottom()
 	%LayerRenameDialog.about_to_popup.connect(_on_layer_rename_about_to_popup)
+	%LayerToolbar.rename_requested.connect(_open_layer_rename)
+	%LayerScroll.get_v_scroll_bar().value_changed.connect(_sync_from_layer_scroll)
+	%CelScroll.get_v_scroll_bar().value_changed.connect(_sync_from_cel_scroll)
+	%CelScroll.get_h_scroll_bar().value_changed.connect(_sync_from_cel_horizontal)
+	%HeaderScroll.get_h_scroll_bar().value_changed.connect(_sync_from_header_scroll)
 	State.is_playing_toggled.connect(_on_is_playing_toggled)
 	State.frames_changed.connect(_rebuild_strip)
 	State.layers_changed.connect(_rebuild_strip)
@@ -55,30 +60,27 @@ func _place_playback_bottom() -> void:
 
 
 func _rebuild_strip() -> void:
-	var scroll := %FrameGrid.get_parent() as ScrollContainer
-	var scroll_position := Vector2i(scroll.scroll_horizontal, scroll.scroll_vertical) if scroll != null else Vector2i.ZERO
-	for cell in %FrameGrid.get_children():
-		%FrameGrid.remove_child(cell)
-		cell.queue_free()
+	var horizontal: int = %CelScroll.scroll_horizontal
+	var vertical: int = %CelScroll.scroll_vertical
+	_clear_children(%FrameGrid)
+	_clear_children(%LayerColumn)
+	_clear_children(%CelGrid)
 	_frame_cells.clear()
 	_cel_cells.clear()
 	_layer_headers.clear()
 	_active_cel_key = Vector2i(-1, -1)
 	_active_layer = -1
 	var n := State.get_frame_count()
-	%FrameGrid.columns = n + 1
+	%FrameGrid.columns = n
+	%CelGrid.columns = n
 	_has_tag_row = State.get_active_tag() != null
 	if _has_tag_row:
-		%FrameGrid.add_child(Control.new())
 		for i in n:
 			var range_cell := RANGE_CELL.instantiate()
 			range_cell.set_column_index(i)
-			range_cell.column_offset = 1
+			range_cell.column_offset = 0
 			range_cell.grid = %FrameGrid
 			%FrameGrid.add_child(range_cell)
-	var toolbar: LayerToolbarCell = LAYER_TOOLBAR.instantiate()
-	toolbar.rename_requested.connect(_open_layer_rename)
-	%FrameGrid.add_child(toolbar)
 	for i in n:
 		var frame: AnimationFrame = ANIMATION_FRAME.instantiate()
 		frame.frame_index = i
@@ -90,19 +92,24 @@ func _rebuild_strip() -> void:
 		var layer: VoxelLayer = State.document.layers[row]
 		var header: LayerHeaderCell = LAYER_HEADER.instantiate()
 		header.rename_requested.connect(_open_layer_rename)
-		%FrameGrid.add_child(header)
+		%LayerColumn.add_child(header)
 		header.setup(row, layer, layer_group)
 		_layer_headers[row] = header
 		for i in n:
 			var cel: CelCell = CEL_CELL.instantiate()
-			%FrameGrid.add_child(cel)
+			%CelGrid.add_child(cel)
 			cel.setup(row, i, layer.name, cel_group)
 			if not layer.visible:
 				cel.modulate = Color(1, 1, 1, 0.55)
 			_cel_cells[Vector2i(row, i)] = cel
 	_sync_active_cel()
-	if scroll != null:
-		_restore_scroll.call_deferred(scroll_position.x, scroll_position.y)
+	_restore_scroll.call_deferred(horizontal, vertical)
+
+
+func _clear_children(container: Node) -> void:
+	for child in container.get_children():
+		container.remove_child(child)
+		child.queue_free()
 
 
 func _open_layer_rename(index: int) -> void:
@@ -131,11 +138,44 @@ func _on_layer_rename_confirmed() -> void:
 
 
 func _restore_scroll(horizontal: int, vertical: int) -> void:
-	var scroll := %FrameGrid.get_parent() as ScrollContainer
-	if scroll == null:
+	_syncing_scroll = true
+	%CelScroll.scroll_horizontal = horizontal
+	%CelScroll.scroll_vertical = vertical
+	%HeaderScroll.scroll_horizontal = horizontal
+	%LayerScroll.scroll_vertical = vertical
+	_syncing_scroll = false
+
+
+func _sync_from_layer_scroll(value: float) -> void:
+	if _syncing_scroll:
 		return
-	scroll.scroll_horizontal = horizontal
-	scroll.scroll_vertical = vertical
+	_syncing_scroll = true
+	%CelScroll.scroll_vertical = int(value)
+	_syncing_scroll = false
+
+
+func _sync_from_cel_scroll(value: float) -> void:
+	if _syncing_scroll:
+		return
+	_syncing_scroll = true
+	%LayerScroll.scroll_vertical = int(value)
+	_syncing_scroll = false
+
+
+func _sync_from_cel_horizontal(value: float) -> void:
+	if _syncing_scroll:
+		return
+	_syncing_scroll = true
+	%HeaderScroll.scroll_horizontal = int(value)
+	_syncing_scroll = false
+
+
+func _sync_from_header_scroll(value: float) -> void:
+	if _syncing_scroll:
+		return
+	_syncing_scroll = true
+	%CelScroll.scroll_horizontal = int(value)
+	_syncing_scroll = false
 
 
 func _on_is_playing_toggled(toggled_on: bool) -> void:

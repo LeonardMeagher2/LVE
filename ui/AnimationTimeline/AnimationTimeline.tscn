@@ -10,6 +10,7 @@
 [ext_resource type="Texture2D" uid="uid://dhc8akox1ke3g" path="res://icons/frame_duplicate.svg" id="8_whytp"]
 [ext_resource type="Texture2D" uid="uid://matl4t70t4my" path="res://icons/frame_minus.svg" id="9_tjres"]
 [ext_resource type="PackedScene" uid="uid://cf3ybcr7rxq8h" path="res://ui/AnimationTimeline/TagRow.tscn" id="10_k7z2a"]
+[ext_resource type="PackedScene" path="res://ui/AnimationTimeline/LayerToolbarCell.tscn" id="11_toolbar"]
 
 [sub_resource type="Animation" id="Animation_kqkb2"]
 resource_name = "Preview"
@@ -186,19 +187,67 @@ layout_mode = 2
 [node name="TagRow" parent="HBoxContainer" unique_id=1499213220 instance=ExtResource("10_k7z2a")]
 layout_mode = 2
 
-[node name="ScrollContainer2" type="ScrollContainer" parent="." unique_id=1882226197]
-custom_minimum_size = Vector2(0, 246)
+[node name="LayerToolbarRow" type="HBoxContainer" parent="." unique_id=1882226198]
+layout_mode = 2
+
+[node name="LayerToolbar" parent="LayerToolbarRow" unique_id=1882226199 instance=ExtResource("11_toolbar")]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="Spacer" type="Control" parent="LayerToolbarRow" unique_id=1882226200]
 layout_mode = 2
 size_flags_horizontal = 3
-size_flags_vertical = 3
-follow_focus = true
-vertical_scroll_mode = 1
 
-[node name="FrameGrid" type="GridContainer" parent="ScrollContainer2" unique_id=1826857356]
+[node name="TimelineBody" type="HBoxContainer" parent="." unique_id=1882226201]
+custom_minimum_size = Vector2(0, 92)
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="LayerScroll" type="ScrollContainer" parent="TimelineBody" unique_id=1882226202]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(180, 0)
+layout_mode = 2
+horizontal_scroll_mode = 0
+vertical_scroll_mode = 3
+
+[node name="LayerColumn" type="VBoxContainer" parent="TimelineBody/LayerScroll" unique_id=1882226203]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
-size_flags_vertical = 3
+theme_override_constants/separation = 2
+
+[node name="CelScroll" type="ScrollContainer" parent="TimelineBody" unique_id=1882226204]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+follow_focus = true
+
+[node name="CelGrid" type="GridContainer" parent="TimelineBody/CelScroll" unique_id=1882226205]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/h_separation = 4
+theme_override_constants/v_separation = 2
+
+[node name="HeaderRow" type="HBoxContainer" parent="." unique_id=1882226206]
+layout_mode = 2
+
+[node name="Spacer" type="Control" parent="HeaderRow" unique_id=1882226207]
+custom_minimum_size = Vector2(180, 0)
+layout_mode = 2
+
+[node name="HeaderScroll" type="ScrollContainer" parent="HeaderRow" unique_id=1882226208]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+follow_focus = true
+horizontal_scroll_mode = 3
+vertical_scroll_mode = 0
+
+[node name="FrameGrid" type="GridContainer" parent="HeaderRow/HeaderScroll" unique_id=1882226211]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
 theme_override_constants/h_separation = 4
 theme_override_constants/v_separation = 2
 
