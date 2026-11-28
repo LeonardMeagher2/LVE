@@ -254,7 +254,7 @@ func _atlas_run() -> void:
 	step("When the user clears the material of the chunk", func():
 		State.get_current_voxel_frame().set_cells({Vector3i(1, 0, 0): VoxelFrame.material(Color.BLUE)})
 		var affected_chunks: Array[Vector3i] = [chunk_position]
-		State.chunks_changed.emit(0, affected_chunks)
+		State.chunks_changed.emit(0, 0, affected_chunks)
 	)
 	await _atlas_settle()
 	step("Then the plain chunk retains its spatial atlas", func():
@@ -423,7 +423,7 @@ func _rebuild_scope_run() -> void:
 
 func _scope_edit(cell_position: Vector3i) -> Array[Vector3i]:
 	var changed := scope_frame.set_cells({cell_position: VoxelFrame.material(Color.BLUE)})
-	State.chunks_changed.emit(State.current_frame, changed)
+	State.chunks_changed.emit(State.active_layer_index, State.current_frame, changed)
 	if not changed.is_empty():
 		scope_renderer._flush_updates()
 	return changed

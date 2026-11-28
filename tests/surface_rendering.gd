@@ -51,7 +51,7 @@ func _run() -> void:
 					State.paint(Vector3i(x, y, z), VoxelFrame.material(Color.RED))
 		State.finish_edit(tx)
 		var affected: Array[Vector3i] = []
-		State.cells_changed.emit(0, affected)
+		State.cells_changed.emit(0, 0, affected)
 	)
 	await _settle()
 	step("Then the two chunks have no internal seam faces", func():

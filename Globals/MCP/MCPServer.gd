@@ -116,14 +116,14 @@ func _disconnect_state() -> void:
 		State.tag_changed.disconnect(_on_structure_changed)
 
 
-func _on_cells_changed(frame: int, affected: Array[Vector3i]) -> void:
+func _on_cells_changed(layer: int, frame: int, affected: Array[Vector3i]) -> void:
 	if affected.is_empty():
 		_reset_journal()
 		return
-	_record_cells_change(frame, affected)
+	_record_cells_change(layer, frame, affected)
 
 
-func _record_cells_change(frame: int, affected: Array) -> void:
+func _record_cells_change(layer: int, frame: int, affected: Array) -> void:
 	if affected.is_empty():
 		return
 	_revision += 1
@@ -131,12 +131,12 @@ func _record_cells_change(frame: int, affected: Array) -> void:
 	_content_since_history = true
 	var typed: Array[Vector3i] = []
 	typed.assign(affected)
-	_journal.append({"revision": _revision, "frame": frame, "cells": typed})
+	_journal.append({"revision": _revision, "layer": layer, "frame": frame, "cells": typed})
 	_journal_cells += typed.size()
 	_prune_journal()
 
 
-func _on_chunks_changed(frame: int, affected: Array[Vector3i]) -> void:
+func _on_chunks_changed(layer: int, frame: int, affected: Array[Vector3i]) -> void:
 	if affected.is_empty():
 		return
 	_revision += 1
@@ -145,7 +145,7 @@ func _on_chunks_changed(frame: int, affected: Array[Vector3i]) -> void:
 	var origins: Array[Vector3i] = []
 	for location in affected:
 		origins.append(location * VoxelFrame.CHUNK_SIZE)
-	_journal.append({"revision": _revision, "frame": frame, "chunks": origins})
+	_journal.append({"revision": _revision, "layer": layer, "frame": frame, "chunks": origins})
 	_prune_journal()
 
 
@@ -479,6 +479,8 @@ func _get_state() -> Dictionary:
 			"name": document.get_file_name(),
 			"frames": document.frame_count(),
 			"frame": State.current_frame,
+			"layers": document.layers.size(),
+			"layer": document.edit_layer,
 			"delay_ms": document.frame_delay(State.current_frame),
 			"palette": document.palette.size(),
 			"bounds": MCPJson.aabb_json(document.bounds()),
@@ -3070,6 +3072,9 @@ func _write_cells(args: Dictionary) -> Dictionary:
 		if frame == null:
 			State.cancel_changes(collected)
 			return _tool_error(_frame_error(int(frame_index)))
+		if not State.active_layer_editable():
+			State.cancel_changes(collected)
+			return _tool_error("The active layer is hidden or locked.")
 		var tx := State.begin_edit(int(frame_index))
 		if tx == null:
 			State.cancel_changes(collected)
@@ -3095,9 +3100,9 @@ func _write_cells(args: Dictionary) -> Dictionary:
 		frame.apply_published(job.changed_chunks, job.edited_frame)
 		State.document._bounds_dirty = true
 		if not job.changed_chunks.is_empty():
-			State.chunks_changed.emit(int(frame_index), job.changed_chunks)
+			State.chunks_changed.emit(State.active_layer_index, int(frame_index), job.changed_chunks)
 		var applied_keys: Array = job.applied_cells.keys()
-		_record_cells_change(int(frame_index), applied_keys)
+		_record_cells_change(State.active_layer_index, int(frame_index), applied_keys)
 		var change := State.finish_edit_collect(tx)
 		if change != null:
 			collected.append(change)
@@ -3190,6 +3195,8 @@ func _set_selection(args: Dictionary) -> Dictionary:
 	var label_value: Variant = args.get("label", null)
 	if label_value is String and not String(label_value).strip_edges().is_empty():
 		label = String(label_value).strip_edges().left(80)
+	if not State.active_layer_editable():
+		return _tool_error("The active layer is hidden or locked.")
 	var tx := State.begin_edit()
 	if tx == null:
 		return _tool_error("The editor is busy with another edit. Retry.")

@@ -307,7 +307,7 @@ func _measure_cursor() -> void:
 	cursor_done = true
 
 
-func _on_chunks_changed(_updated_frame: int, chunk_positions: Array[Vector3i]) -> void:
+func _on_chunks_changed(_layer: int, _updated_frame: int, chunk_positions: Array[Vector3i]) -> void:
 	large_chunks = maxi(large_chunks, chunk_positions.size())
 
 

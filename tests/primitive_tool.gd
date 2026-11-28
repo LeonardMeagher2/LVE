@@ -1198,7 +1198,7 @@ func _commit_keeps_new_pending() -> void:
 		_button(Vector3(3, 0, 3), false)
 		tool._committing = true
 		var cells: Array[Vector3i] = [Vector3i.ZERO]
-		State.cells_changed.emit(State.current_frame, cells)
+		State.cells_changed.emit(State.active_layer_index, State.current_frame, cells)
 	)
 	step("Then the commit signal keeps the pending shape", func():
 		expect(not tool._primitives.is_empty(), "the new shape survives the commit signal")

@@ -408,13 +408,13 @@ func _finish_edit(job: BrushJob) -> void:
 		_source_frame.apply_published(job.changed_chunks, job.edited_frame)
 		State.document._bounds_dirty = true
 		if not job.changed_chunks.is_empty():
-			State.chunks_changed.emit(State.current_frame, job.changed_chunks)
+			State.chunks_changed.emit(State.active_layer_index, State.current_frame, job.changed_chunks)
 
 
 		var affected_cells: Array[Vector3i] = []
 		affected_cells.assign(job.applied_cells.keys())
 		if not affected_cells.is_empty():
-			State.cells_changed.emit(State.current_frame, affected_cells)
+			State.cells_changed.emit(State.active_layer_index, State.current_frame, affected_cells)
 	State.finish_operation(operation_id)
 	Profile.publish(profile_started_us)
 

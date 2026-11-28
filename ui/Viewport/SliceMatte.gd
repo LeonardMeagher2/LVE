@@ -198,6 +198,7 @@ func _ready() -> void:
 	State.floor_plane_changed.connect(_on_slice_state_changed)
 	State.document_changed.connect(_on_model_changed)
 	State.frame_changed.connect(_on_model_changed)
+	State.layers_changed.connect(_on_model_changed)
 	State.cells_changed.connect(_on_cells_changed)
 	State.chunks_changed.connect(_on_chunks_changed)
 	_on_slice_state_changed()
@@ -211,9 +212,12 @@ func _exit_tree() -> void:
 	_job = null
 
 
-func _on_chunks_changed(frame_index: int, _affected: Array[Vector3i]) -> void:
-	if State.slice_enabled and frame_index == State.current_frame:
-		_invalidate()
+func _on_chunks_changed(layer: int, frame_index: int, _affected: Array[Vector3i]) -> void:
+	if not State.slice_enabled or frame_index != State.current_frame:
+		return
+	if layer >= 0 and layer < State.document.layers.size() and not State.document.layers[layer].visible:
+		return
+	_invalidate()
 
 
 func _process(_delta: float) -> void:
@@ -264,8 +268,10 @@ func _on_model_changed() -> void:
 	_invalidate()
 
 
-func _on_cells_changed(frame_index: int, affected: Array[Vector3i]) -> void:
+func _on_cells_changed(layer_index: int, frame_index: int, affected: Array[Vector3i]) -> void:
 	if not State.slice_enabled or frame_index != State.current_frame:
+		return
+	if layer_index >= 0 and layer_index < State.document.layers.size() and not State.document.layers[layer_index].visible:
 		return
 	if affected.is_empty():
 		_invalidate()
@@ -293,7 +299,7 @@ func _invalidate() -> void:
 
 func _start_build() -> void:
 	_pending = false
-	var frame := State.get_current_voxel_frame()
+	var frame := State.get_composite_voxel_frame(State.current_frame)
 	if frame == null:
 		visible = false
 		return

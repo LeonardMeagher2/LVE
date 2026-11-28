@@ -112,7 +112,7 @@ func _restore_chunks(edited_frame: VoxelFrame, chunk_snapshot: Dictionary, selec
 	selection_state.selection.restore(selection_snapshot, selection_snapshot_masks)
 	if cells_restored:
 		var affected_cells: Array[Vector3i] = []
-		cells_changed.call(location.y, affected_cells)
+		cells_changed.call(location.x, location.y, affected_cells)
 	selection_state.notify_changed()
 
 

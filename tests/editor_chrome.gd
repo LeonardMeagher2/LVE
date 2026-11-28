@@ -131,7 +131,7 @@ func _status_run() -> void:
 	step("When a voxel is painted", func():
 		State.document.set_cell(0, Vector3i.ZERO, VoxelFrame.material(Color.RED))
 		var affected: Array[Vector3i] = []
-		State.cells_changed.emit(State.current_frame, affected)
+		State.cells_changed.emit(State.active_layer_index, State.current_frame, affected)
 	)
 	await get_tree().process_frame
 	step("Then the status bar shows the new dimensions", func():
@@ -140,7 +140,7 @@ func _status_run() -> void:
 	step("When the only voxel is erased", func():
 		State.document.erase(0, Vector3i.ZERO)
 		var affected: Array[Vector3i] = []
-		State.chunks_changed.emit(State.current_frame, affected)
+		State.chunks_changed.emit(State.active_layer_index, State.current_frame, affected)
 	)
 	await get_tree().process_frame
 	step("Then the status bar returns to zero dimensions", func():

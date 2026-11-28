@@ -9,8 +9,8 @@ var _built := false
 func _ready() -> void:
 	rebuild()
 	visibility_changed.connect(_push_far_bounds)
-	State.cells_changed.connect(func(_frame, _affected): rebuild())
-	State.chunks_changed.connect(func(_frame, _affected): rebuild())
+	State.cells_changed.connect(func(_layer, _frame, _affected): rebuild())
+	State.chunks_changed.connect(func(_layer, _frame, _affected): rebuild())
 	State.document_changed.connect(rebuild)
 	State.floor_plane_changed.connect(rebuild)
 	State.size_changed.connect(rebuild)

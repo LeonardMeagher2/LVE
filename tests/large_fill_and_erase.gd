@@ -25,7 +25,7 @@ func _run() -> void:
 		select_toolbar_item("paint", "Bucket Fill")
 		tool = plugin("PaintPlugin")._fill_tool
 		State.current_color = Color.BLUE
-		State.chunks_changed.connect(func(_frame, _affected): notifications += 1)
+		State.chunks_changed.connect(func(_layer, _frame, _affected): notifications += 1)
 	)
 	step("When the user fills all matching voxels inside the selection", func():
 		tool._settings.connected = false

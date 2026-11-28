@@ -121,7 +121,7 @@ func _zoom_limits() -> void:
 		State.document.set_cell(State.current_frame, Vector3i.ZERO, VoxelFrame.material(Color.WHITE))
 		State.document.set_cell(State.current_frame, Vector3i(40, 0, 0), VoxelFrame.material(Color.WHITE))
 		var cells: Array[Vector3i] = [Vector3i(40, 0, 0)]
-		State.cells_changed.emit(State.current_frame, cells)
+		State.cells_changed.emit(State.active_layer_index, State.current_frame, cells)
 		expect(rig.max_distance() > framed, "a wider model moves the far limit out")
 		rig.set_zoom_percent(0.0)
 		expect(is_equal_approx(rig._dist, rig.max_distance()), "a zoom reaches the new far limit")

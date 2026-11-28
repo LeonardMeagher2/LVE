@@ -126,6 +126,7 @@ func _enter_tree() -> void:
 	_active_renderer_count += 1
 	State.frame_changed.connect(_on_frame_changed)
 	State.frames_changed.connect(_rebuild)
+	State.layers_changed.connect(_rebuild)
 	State.cells_changed.connect(_update)
 	State.chunks_changed.connect(_update_chunks)
 	State.document_changed.connect(_on_document_changed)
@@ -140,6 +141,7 @@ func _notification(what: int) -> void:
 func _exit_tree() -> void:
 	State.frame_changed.disconnect(_on_frame_changed)
 	State.frames_changed.disconnect(_rebuild)
+	State.layers_changed.disconnect(_rebuild)
 	State.cells_changed.disconnect(_update)
 	State.chunks_changed.disconnect(_update_chunks)
 	State.document_changed.disconnect(_on_document_changed)
@@ -212,8 +214,10 @@ func _request_locations(active_frame: VoxelFrame) -> Dictionary:
 	return locations
 
 
-func _update(updated_frame: int, affected_cells: Array[Vector3i]) -> void:
+func _update(layer: int, updated_frame: int, affected_cells: Array[Vector3i]) -> void:
 	if updated_frame != (frame if frame >= 0 else State.current_frame):
+		return
+	if layer >= 0 and layer < State.document.layers.size() and not State.document.layers[layer].visible:
 		return
 	if affected_cells.is_empty():
 		_rebuild()
@@ -300,8 +304,10 @@ func _request(active_frame: VoxelFrame, chunk_location: Vector3i, install_cached
 			_pending_surface_keys.erase(chunk_location)
 
 
-func _update_chunks(updated_frame: int, chunk_positions: Array[Vector3i]) -> void:
+func _update_chunks(layer: int, updated_frame: int, chunk_positions: Array[Vector3i]) -> void:
 	if updated_frame != (frame if frame >= 0 else State.current_frame):
+		return
+	if layer >= 0 and layer < State.document.layers.size() and not State.document.layers[layer].visible:
 		return
 	if chunk_positions.is_empty():
 		return

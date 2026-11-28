@@ -279,7 +279,7 @@ func _commit_line() -> void:
 	State.document._bounds_dirty = true
 	State.finish_edit(tx, "Line")
 	if not job.changed_chunks.is_empty():
-		State.chunks_changed.emit(State.current_frame, job.changed_chunks)
+		State.chunks_changed.emit(State.active_layer_index, State.current_frame, job.changed_chunks)
 
 
 func _cancel_edit() -> void:
@@ -295,7 +295,7 @@ func _cancel_edit() -> void:
 	super._cancel_edit()
 
 
-func _on_cells_changed(_frame: int, _cells: Array[Vector3i]) -> void:
+func _on_cells_changed(_layer: int, _frame: int, _cells: Array[Vector3i]) -> void:
 	if _anchor != VoxelPicking.NONE:
 		_cancel_edit()
 

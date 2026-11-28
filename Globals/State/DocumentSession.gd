@@ -8,6 +8,8 @@ signal document_saved(document: VoxelDocument)
 signal workspace_capture_requested()
 signal frames_changed()
 signal frame_changed()
+signal layers_changed()
+signal active_layer_changed()
 signal tag_changed()
 signal is_playing_toggled(toggled_on: bool)
 signal tabs_changed()
@@ -180,6 +182,8 @@ func _adopt_document(value: VoxelDocument) -> void:
 	document_changed.emit()
 	frames_changed.emit()
 	frame_changed.emit()
+	layers_changed.emit()
+	active_layer_changed.emit()
 	tag_changed.emit()
 	_adopting = false
 	if on_adopted.is_valid():

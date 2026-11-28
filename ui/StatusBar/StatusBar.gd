@@ -28,8 +28,11 @@ func _ready() -> void:
 	State.frame_changed.connect(_refresh_status)
 	State.frames_changed.connect(_refresh_status)
 	State.document_changed.connect(_refresh_status)
-	State.cells_changed.connect(_refresh_status.unbind(2))
-	State.chunks_changed.connect(_refresh_status.unbind(2))
+	State.cells_changed.connect(_refresh_status.unbind(3))
+	State.chunks_changed.connect(_refresh_status.unbind(3))
+	State.layers_changed.connect(_refresh_status)
+	State.active_layer_changed.connect(_refresh_status)
+	State.notice.connect(show_notice)
 	_current_version = str(ProjectSettings.get_setting("application/config/version", ""))
 	_version.text = "v%s" % _current_version
 	_version.uri = RELEASES_URL
@@ -142,6 +145,10 @@ func _show_notice(text: String) -> void:
 	_notice.text = text
 	_notice.visible = true
 	_notice_timer.start()
+
+
+func show_notice(text: String) -> void:
+	_show_notice(text)
 
 
 func _on_notice_timeout() -> void:

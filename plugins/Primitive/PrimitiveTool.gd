@@ -897,7 +897,7 @@ func _clear_pending() -> void:
 		$Gizmo.hide_box()
 
 
-func _on_cells_changed(_frame: int, _cells: Array[Vector3i]) -> void:
+func _on_cells_changed(_layer: int, _frame: int, _cells: Array[Vector3i]) -> void:
 	if _committing:
 		return
 	if not _primitives.is_empty() or _dragging_new:

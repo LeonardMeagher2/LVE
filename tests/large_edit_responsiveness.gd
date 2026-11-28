@@ -36,8 +36,8 @@ func _run() -> void:
 		activate_tool("transform")
 		select_toolbar_item("transform", "Scale")
 		tool = plugin("TransformPlugin")._current_tool
-		State.cells_changed.connect(func(_frame, _affected): notifications += 1)
-		State.chunks_changed.connect(func(_frame, _affected): notifications += 1)
+		State.cells_changed.connect(func(_layer, _frame, _affected): notifications += 1)
+		State.chunks_changed.connect(func(_layer, _frame, _affected): notifications += 1)
 	)
 	var started_us := Time.get_ticks_usec()
 	last_frame_us = started_us

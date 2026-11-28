@@ -171,7 +171,7 @@ func _on_edit_event() -> void:
 	edit_events += 1
 
 
-func _on_cells_event(_frame_index: int, _affected: Array[Vector3i]) -> void:
+func _on_cells_event(_layer_index: int, _frame_index: int, _affected: Array[Vector3i]) -> void:
 	cells_events += 1
 
 

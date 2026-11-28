@@ -3,12 +3,15 @@ extends Node
 
 signal document_changed()
 signal document_deactivating()
-signal cells_changed(frame: int, affected: Array[Vector3i])
+signal cells_changed(layer: int, frame: int, affected: Array[Vector3i])
 signal document_saved(document: VoxelDocument)
 signal workspace_capture_requested()
-signal chunks_changed(frame: int, affected: Array[Vector3i])
+signal chunks_changed(layer: int, frame: int, affected: Array[Vector3i])
 signal frames_changed()
 signal frame_changed()
+signal layers_changed()
+signal active_layer_changed()
+signal notice(text: String)
 signal is_playing_toggled(toggled_on:bool)
 signal color_changed(color: Color)
 signal material_changed()
@@ -58,6 +61,7 @@ var _erase_jobs: Array[EraseJob] = []
 
 class EraseJob extends VoxelFrame.EditJob:
 	var edited_frame: VoxelFrame
+	var edited_layer := 0
 	var selection_mask := {}
 	var changed_chunks: Array[Vector3i] = []
 
@@ -114,6 +118,82 @@ var active_tag: int:
 		return playback.active_tag
 	set(value):
 		playback.active_tag = value
+
+var active_layer_index: int:
+	get:
+		return document.edit_layer
+	set(value):
+		set_active_layer(value)
+
+
+func set_active_layer(index: int) -> void:
+	if index < 0 or index >= document.layers.size() or index == document.edit_layer:
+		return
+	edit_context_changing.emit()
+	_cancel_active_edit()
+	document.edit_layer = index
+	active_layer_changed.emit()
+
+
+func _cancel_active_edit() -> void:
+	var tx := edits.active_edit()
+	if tx != null:
+		cancel_edit(tx)
+
+
+func active_layer_editable() -> bool:
+	var layer := document.active_layer()
+	return layer != null and layer.visible and not layer.locked
+
+
+func set_layer_visible(index: int, value: bool, record_history := true) -> void:
+	if index < 0 or index >= document.layers.size():
+		return
+	var layer := document.layers[index]
+	if layer.visible == value:
+		return
+	if record_history:
+		undo_redo.create_action("Show Layer" if value else "Hide Layer")
+		undo_redo.add_undo_method(_apply_layer_visible.bind(layer, not value))
+		undo_redo.add_do_method(_apply_layer_visible.bind(layer, value))
+		_commit_history(false)
+	_apply_layer_visible(layer, value)
+
+
+func _apply_layer_visible(layer: VoxelLayer, value: bool) -> void:
+	if layer.visible == value:
+		return
+	layer.visible = value
+	document.invalidate_bounds()
+	document.invalidate_composite()
+	if not value and layer == document.active_layer():
+		edit_context_changing.emit()
+		_cancel_active_edit()
+	layers_changed.emit()
+
+
+func set_layer_locked(index: int, value: bool, record_history := true) -> void:
+	if index < 0 or index >= document.layers.size():
+		return
+	var layer := document.layers[index]
+	if layer.locked == value:
+		return
+	if record_history:
+		undo_redo.create_action("Lock Layer" if value else "Unlock Layer")
+		undo_redo.add_undo_method(_apply_layer_locked.bind(layer, not value))
+		undo_redo.add_do_method(_apply_layer_locked.bind(layer, value))
+		_commit_history(false)
+	_apply_layer_locked(layer, value)
+
+
+func _apply_layer_locked(layer: VoxelLayer, value: bool) -> void:
+	if layer.locked == value:
+		return
+	layer.locked = value
+	if value and layer == document.active_layer():
+		edit_context_changing.emit()
+		_cancel_active_edit()
+	layers_changed.emit()
 
 var floor_axis: Vector3.Axis:
 	get:
@@ -304,6 +384,8 @@ func _init() -> void:
 	session.workspace_capture_requested.connect(workspace_capture_requested.emit)
 	session.frames_changed.connect(frames_changed.emit)
 	session.frame_changed.connect(frame_changed.emit)
+	session.layers_changed.connect(layers_changed.emit)
+	session.active_layer_changed.connect(active_layer_changed.emit)
 	session.tag_changed.connect(tag_changed.emit)
 	session.is_playing_toggled.connect(is_playing_toggled.emit)
 	session.tabs_changed.connect(tabs_changed.emit)
@@ -344,11 +426,12 @@ func _ready() -> void:
 	document.palette = material_editing.copy_default_palette()
 	material_editing.select_palette_entry(0)
 	edit_context_changing.connect(_interrupt_erase)
-	cells_changed.connect(func(_frame, _affected): stop())
-	chunks_changed.connect(func(_frame, _affected): stop())
-	cells_changed.connect(func(_frame, _affected): _mark_dirty())
-	chunks_changed.connect(func(_frame, _affected): _mark_dirty())
+	cells_changed.connect(func(_layer, _frame, _affected): stop())
+	chunks_changed.connect(func(_layer, _frame, _affected): stop())
+	cells_changed.connect(func(_layer, _frame, _affected): _mark_dirty())
+	chunks_changed.connect(func(_layer, _frame, _affected): _mark_dirty())
 	frames_changed.connect(_mark_dirty)
+	layers_changed.connect(_mark_dirty)
 	size_changed.connect(_mark_dirty)
 	model_settings_changed.connect(_mark_dirty)
 	palette_changed.connect(_mark_dirty)
@@ -453,8 +536,8 @@ func _emit_document_view_signals() -> void:
 	palette_changed.emit()
 
 
-func _emit_cells_changed(frame_index: int, affected: Array[Vector3i]) -> void:
-	cells_changed.emit(frame_index, affected)
+func _emit_cells_changed(layer_index: int, frame_index: int, affected: Array[Vector3i]) -> void:
+	cells_changed.emit(layer_index, frame_index, affected)
 
 
 func _on_document_created() -> void:
@@ -520,6 +603,8 @@ func remove_plugin(plugin: VoxelPlugin) -> void:
 
 
 func paint(position: Vector3i, cell_material: PackedFloat32Array) -> void:
+	if not active_layer_editable():
+		return
 	var painted: Array[Vector3i] = []
 	if symmetry_axes == 0 and not slice_enabled and not document.has_size() and edits.active_edit() == null:
 		document.paint(current_frame, position, cell_material)
@@ -531,7 +616,7 @@ func paint(position: Vector3i, cell_material: PackedFloat32Array) -> void:
 		document._bounds_dirty = true
 		painted.assign(changes.keys())
 	if not painted.is_empty():
-		cells_changed.emit(current_frame, painted)
+		cells_changed.emit(document.edit_layer, current_frame, painted)
 
 
 func drawing_context() -> VoxelFrame.EditContext:
@@ -591,7 +676,22 @@ func edit_busy(requester: Node = null) -> bool:
 
 
 func begin_edit(frame_index: int = -1) -> VoxelEditTransaction:
+	if not active_layer_editable():
+		_emit_layer_notice()
+		return null
 	return edits.begin_edit(frame_index)
+
+
+func _emit_layer_notice() -> void:
+	var layer := document.active_layer()
+	if layer == null:
+		return
+	if not layer.visible and layer.locked:
+		notice.emit("The active layer is hidden and locked.")
+	elif not layer.visible:
+		notice.emit("The active layer is hidden.")
+	else:
+		notice.emit("The active layer is locked.")
 
 
 func active_edit() -> VoxelEditTransaction:
@@ -785,13 +885,18 @@ func clear_selection() -> void:
 func erase_selection() -> void:
 	if selection.is_empty() or edit_busy():
 		return
+	if not active_layer_editable():
+		_emit_layer_notice()
+		return
 	var edited_document := document
 	var edited_frame := get_current_voxel_frame()
+	var edited_layer := document.edit_layer
 	_erase_edit = begin_edit()
 	if _erase_edit == null:
 		return
 	var job := EraseJob.new()
 	job.edited_frame = VoxelFrame.job_frame(edited_frame)
+	job.edited_layer = edited_layer
 	job.selection_mask = selection.capture()
 	job.edit_context = _erase_edit.edit_context.duplicate()
 	job.edit_context.bounded_axes = 0
@@ -818,7 +923,7 @@ func erase_selection() -> void:
 	_erase_operation_id = 0
 	finish_edit(erase_tx, "Erase Selection")
 	if not job.changed_chunks.is_empty():
-		chunks_changed.emit(current_frame, job.changed_chunks)
+		chunks_changed.emit(job.edited_layer, current_frame, job.changed_chunks)
 	finish_operation(operation_id)
 
 

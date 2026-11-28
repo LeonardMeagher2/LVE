@@ -120,7 +120,7 @@ func _commit_line() -> void:
 	State.selection.restore(job.pasted_selection)
 	State.finish_edit(tx, "Paste")
 	if not job.changed_chunks.is_empty():
-		State.chunks_changed.emit(State.current_frame, job.changed_chunks)
+		State.chunks_changed.emit(State.active_layer_index, State.current_frame, job.changed_chunks)
 	State.selection_changed.emit()
 
 

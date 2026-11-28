@@ -32,6 +32,7 @@ func _ready() -> void:
 	_thumbnail_viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
 	State.frames_changed.connect(_clear_queue)
 	State.document_changed.connect(_clear_queue)
+	State.layers_changed.connect(_on_model_settings_changed)
 	State.model_settings_changed.connect(_on_model_settings_changed)
 
 

@@ -823,7 +823,7 @@ func _wipe_chunk(location: Vector3i) -> void:
 
 func _emit_cells(cells: Array[Vector3i]) -> void:
 	State.document._bounds_dirty = true
-	State.cells_changed.emit(State.current_frame, cells)
+	State.cells_changed.emit(State.active_layer_index, State.current_frame, cells)
 
 
 func _all_locations() -> Array[Vector3i]:

@@ -209,7 +209,7 @@ func _sync_buttons() -> void:
 	_options.get_node("CancelPaste").visible = _import_job != null or _image_job != null or _paste_tool._active
 
 
-func _on_cells_changed(_frame: int, _affected: Array[Vector3i]) -> void:
+func _on_cells_changed(_layer: int, _frame: int, _affected: Array[Vector3i]) -> void:
 	_sync_buttons()
 
 
@@ -291,7 +291,7 @@ func _copy_voxels(cut_source: bool) -> void:
 				State.clear_selection()
 				State.finish_edit(tx, "Cut")
 				if not job.changed_chunks.is_empty():
-					State.chunks_changed.emit(State.current_frame, job.changed_chunks)
+					State.chunks_changed.emit(State.active_layer_index, State.current_frame, job.changed_chunks)
 	State.finish_operation(operation_id)
 	_sync_buttons()
 

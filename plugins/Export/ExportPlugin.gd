@@ -144,8 +144,8 @@ func _ready() -> void:
 	State.document_changed.connect(_on_document_changed)
 	State.frames_changed.connect(_source_changed)
 	State.tag_changed.connect(_source_changed)
-	State.cells_changed.connect(_source_changed.unbind(2))
-	State.chunks_changed.connect(_source_changed.unbind(2))
+	State.cells_changed.connect(_source_changed.unbind(3))
+	State.chunks_changed.connect(_source_changed.unbind(3))
 	State.model_settings_changed.connect(_source_changed)
 	State.activity_changed.connect(_sync)
 	_model.get_node("Viewport/ControlBar/GridToggle").button_pressed = false

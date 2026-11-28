@@ -149,7 +149,7 @@ func _do_flush() -> void:
 	_cells_dirty = false
 	if _affected.is_empty():
 		return
-	State.cells_changed.emit(State.current_frame, _affected)
+	State.cells_changed.emit(State.active_layer_index, State.current_frame, _affected)
 	_affected.clear()
 
 

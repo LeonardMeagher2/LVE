@@ -155,7 +155,7 @@ func _edit_surface(index: int) -> void:
 	frame.set_cell(cell, VoxelFrame.material(Color.from_hsv(float(index % 12) / 12.0, 1.0, 0.5 + 0.03 * (index % 12))))
 	State.document._bounds_dirty = true
 	var affected: Array[Vector3i] = [cell]
-	State.cells_changed.emit(State.current_frame, affected)
+	State.cells_changed.emit(State.active_layer_index, State.current_frame, affected)
 
 
 func _mean_of(values: Array[int]) -> int:

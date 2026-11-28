@@ -465,14 +465,14 @@ func _print_stages() -> void:
 			extra_callables.append(extra_callable)
 		State.chunks_changed.disconnect(_on_chunks_changed)
 		var notify_started := Time.get_ticks_usec()
-		State.chunks_changed.emit(0, chunks)
+		State.chunks_changed.emit(0, 0, chunks)
 		notify_all_us = Time.get_ticks_usec() - notify_started
 		State.chunks_changed.connect(_on_chunks_changed)
 		State.chunks_changed.connect(renderer_callable)
 		for extra_callable in extra_callables:
 			State.chunks_changed.connect(extra_callable)
 		var update_started := Time.get_ticks_usec()
-		prof._update_chunks(0, chunks)
+		prof._update_chunks(0, 0, chunks)
 		notify_renderer_us = Time.get_ticks_usec() - update_started
 	var grid_node: MeshInstance3D = viewport_scene().get_node_or_null("Grid")
 	if grid_node:
@@ -507,7 +507,7 @@ func _print_stages() -> void:
 		State.chunks_changed.disconnect(callable)
 	for callable in callables:
 		var listener_started := Time.get_ticks_usec()
-		callable.call(0, chunks)
+		callable.call(0, 0, chunks)
 		print("MEASURE listener: %s %d us" % [_listener_name(callable), Time.get_ticks_usec() - listener_started])
 	for callable in callables:
 		State.chunks_changed.connect(callable)
@@ -555,7 +555,7 @@ func _settle_tool() -> void:
 		await get_tree().process_frame
 
 
-func _on_chunks_changed(_updated_frame: int, positions: Array[Vector3i]) -> void:
+func _on_chunks_changed(_layer: int, _updated_frame: int, positions: Array[Vector3i]) -> void:
 	emitted_entries = maxi(emitted_entries, positions.size())
 	var seen := {}
 	for position in positions:

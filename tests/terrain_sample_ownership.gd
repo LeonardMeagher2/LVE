@@ -449,7 +449,7 @@ func _hover_invalidation() -> void:
 		var bump := Vector3i(5, 4, 0)
 		_frame.set_cell(bump, VoxelFrame.material(Color.WHITE))
 		var cells: Array[Vector3i] = [bump]
-		State.cells_changed.emit(State.current_frame, cells)
+		State.cells_changed.emit(State.active_layer_index, State.current_frame, cells)
 	)
 	await _settle_hover()
 	await _wait_ring_ready()

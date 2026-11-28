@@ -48,6 +48,10 @@ func _connect_state() -> void:
 		State.chunks_changed.connect(_on_chunks_changed)
 	if not State.frames_changed.is_connected(_mark_dirty):
 		State.frames_changed.connect(_mark_dirty)
+	if not State.layers_changed.is_connected(_mark_dirty):
+		State.layers_changed.connect(_mark_dirty)
+	if not State.active_layer_changed.is_connected(_mark_view_changed):
+		State.active_layer_changed.connect(_mark_view_changed)
 	if not State.frame_changed.is_connected(_mark_view_changed):
 		State.frame_changed.connect(_mark_view_changed)
 	if not State.palette_changed.is_connected(_mark_dirty):
@@ -71,6 +75,10 @@ func _disconnect_state() -> void:
 		State.chunks_changed.disconnect(_on_chunks_changed)
 	if State.frames_changed.is_connected(_mark_dirty):
 		State.frames_changed.disconnect(_mark_dirty)
+	if State.layers_changed.is_connected(_mark_dirty):
+		State.layers_changed.disconnect(_mark_dirty)
+	if State.active_layer_changed.is_connected(_mark_view_changed):
+		State.active_layer_changed.disconnect(_mark_view_changed)
 	if State.frame_changed.is_connected(_mark_view_changed):
 		State.frame_changed.disconnect(_mark_view_changed)
 	if State.palette_changed.is_connected(_mark_dirty):
@@ -87,11 +95,11 @@ func _disconnect_state() -> void:
 		State.tabs_changed.disconnect(_mark_view_changed)
 
 
-func _on_cells_changed(_frame: int, _affected: Array[Vector3i]) -> void:
+func _on_cells_changed(_layer: int, _frame: int, _affected: Array[Vector3i]) -> void:
 	_mark_dirty()
 
 
-func _on_chunks_changed(_frame: int, _affected: Array[Vector3i]) -> void:
+func _on_chunks_changed(_layer: int, _frame: int, _affected: Array[Vector3i]) -> void:
 	_mark_dirty()
 
 

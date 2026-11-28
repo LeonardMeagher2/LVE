@@ -633,7 +633,7 @@ func _mark_preview_dirty() -> void:
 		_preview.invalidate()
 
 
-func _on_frame_cells_changed(frame: int, _affected: Array[Vector3i]) -> void:
+func _on_frame_cells_changed(_layer: int, frame: int, _affected: Array[Vector3i]) -> void:
 	var current := _stroke_frame_index if _edit != null else State.current_frame
 	if frame != current:
 		return
@@ -1281,7 +1281,7 @@ func _flush_stroke_chunks() -> void:
 	chunks.assign(_stroke_chunks.keys())
 	_stroke_chunks.clear()
 	var frame := _stroke_frame_index if _stroke_frame_index >= 0 else State.current_frame
-	State.chunks_changed.emit(frame, chunks)
+	State.chunks_changed.emit(State.active_layer_index, frame, chunks)
 
 
 func _clear_smooth() -> void:
@@ -1369,7 +1369,7 @@ func _finish_smooth(job: SmoothJob) -> void:
 	_source_frame.apply_published(job.changed_chunks, job.edited_frame)
 	State.document._bounds_dirty = true
 	if not job.changed_chunks.is_empty():
-		State.chunks_changed.emit(State.current_frame, job.changed_chunks)
+		State.chunks_changed.emit(State.active_layer_index, State.current_frame, job.changed_chunks)
 	if _stroke_id != stroke_id or _edit == null or _edit != tx:
 		return
 	if State.document != document or State.get_current_voxel_frame() != source:

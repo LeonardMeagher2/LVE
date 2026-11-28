@@ -110,10 +110,10 @@ func _run() -> void:
 		State.document = VoxelDocument.new()
 		State.paint(Vector3i(1, 0, 0), VoxelFrame.material(Color.RED))
 		var positions: Array[Vector3i] = [Vector3i.ZERO]
-		State.chunks_changed.emit(0, positions)
+		State.chunks_changed.emit(0, 0, positions)
 		var first := _key(State.get_current_voxel_frame(), Vector3i.ZERO, false)
 		State.paint(Vector3i(2, 0, 0), VoxelFrame.material(Color.BLUE))
-		State.chunks_changed.emit(0, positions)
+		State.chunks_changed.emit(0, 0, positions)
 		var second := _key(State.get_current_voxel_frame(), Vector3i.ZERO, false)
 		expect(first != second, "the reused notification array does not pin a stale key")
 		_expect_parity(State.get_current_voxel_frame(), Vector3i.ZERO, false, "reused notification array")

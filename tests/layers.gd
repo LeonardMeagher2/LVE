@@ -4,6 +4,9 @@ extends "res://tests/test.gd"
 var _saved_layer_document: VoxelDocument
 var _saved_layer_bytes := PackedByteArray()
 var _loaded_layer_document: VoxelDocument
+var _notices: Array[String] = []
+var _layers_events := 0
+var _active_layer_events := 0
 
 
 func _ready() -> void:
@@ -14,6 +17,44 @@ func _ready() -> void:
 	test("layers save and load with names, state, and delays", _storage_roundtrip, "layers_storage")
 	test("a version 4 document loads as one layer", _legacy_load, "layers_legacy")
 	test("an empty document sees voxels in any layer", _document_empty, "layers_empty")
+	test("a locked layer refuses edits and reports the reason", _locked_guard, "layers_locked")
+	test("a hidden layer refuses edits and reports the reason", _hidden_guard, "layers_hidden_guard")
+	test("visibility undo and redo restore the layer", _visibility_undo, "layers_visibility_undo")
+	test("switching the active layer cancels the open edit", _active_layer_switch, "layers_active_switch")
+	test("a multi-layer composite follows an edited chunk", _composite_refresh, "layers_composite_refresh")
+
+
+func before_test() -> void:
+	_notices.clear()
+	_layers_events = 0
+	_active_layer_events = 0
+	if not State.notice.is_connected(_on_notice):
+		State.notice.connect(_on_notice)
+	if not State.layers_changed.is_connected(_on_layers_changed):
+		State.layers_changed.connect(_on_layers_changed)
+	if not State.active_layer_changed.is_connected(_on_active_layer_changed):
+		State.active_layer_changed.connect(_on_active_layer_changed)
+
+
+func after_test() -> void:
+	if State.notice.is_connected(_on_notice):
+		State.notice.disconnect(_on_notice)
+	if State.layers_changed.is_connected(_on_layers_changed):
+		State.layers_changed.disconnect(_on_layers_changed)
+	if State.active_layer_changed.is_connected(_on_active_layer_changed):
+		State.active_layer_changed.disconnect(_on_active_layer_changed)
+
+
+func _on_notice(text: String) -> void:
+	_notices.append(text)
+
+
+func _on_layers_changed() -> void:
+	_layers_events += 1
+
+
+func _on_active_layer_changed() -> void:
+	_active_layer_events += 1
 
 
 func _default_layer() -> void:
@@ -184,6 +225,124 @@ func _document_empty() -> void:
 	)
 	step("Then the document still sees the voxel", func():
 		expect(not State.document.is_empty(), "the document sees voxels in hidden layers")
+	)
+
+
+func _locked_guard() -> void:
+	step("Given a locked active layer", func():
+		State.set_layer_locked(0, true)
+		expect(State.document.layers[0].locked, "the layer is locked")
+		expect(_layers_events >= 1, "the lock reports a layer change")
+	)
+	step("When an edit starts and a cell is painted", func():
+		expect(State.begin_edit() == null, "the edit is refused")
+		State.paint(Vector3i.ZERO, VoxelFrame.material(Color.RED))
+		expect(State.document.cel(0, 0).count() == 0, "the paint writes no cell")
+	)
+	step("Then the status notice names the lock", func():
+		expect(_notices.has("The active layer is locked."), "the lock notice appears")
+	)
+	step("When the lock is undone", func():
+		State.undo_redo.undo()
+	)
+	step("Then the layer edits again", func():
+		expect(not State.document.layers[0].locked, "the layer is unlocked")
+		var tx := State.begin_edit()
+		expect(tx != null, "the edit opens")
+		if tx != null:
+			State.cancel_edit(tx)
+	)
+
+
+func _hidden_guard() -> void:
+	step("Given a hidden active layer", func():
+		State.set_layer_visible(0, false)
+		expect(not State.document.layers[0].visible, "the layer is hidden")
+	)
+	step("When an edit starts", func():
+		expect(State.begin_edit() == null, "the edit is refused")
+	)
+	step("Then the status notice names the hidden layer", func():
+		expect(_notices.has("The active layer is hidden."), "the hidden notice appears")
+	)
+
+
+func _visibility_undo() -> void:
+	step("Given two layers with a cell on the top layer", func():
+		var document := State.document
+		document.layers.append(document.make_layer("Top"))
+		document.edit_layer = 1
+		document.set_cell(0, Vector3i.ZERO, VoxelFrame.material(Color.BLUE))
+		document.invalidate_bounds()
+		var composite := document.composite_frame(0)
+		expect(composite.get_color(Vector3i.ZERO) == Color.BLUE, "the top layer shows")
+	)
+	step("When the top layer is hidden", func():
+		State.set_layer_visible(1, false)
+		expect(not State.document.layers[1].visible, "the layer is hidden")
+		expect(State.document.composite_frame(0).get_color(Vector3i.ZERO) == Color.TRANSPARENT, "the hidden cell leaves the composite")
+	)
+	step("Then undo shows it again", func():
+		State.undo_redo.undo()
+		expect(State.document.layers[1].visible, "the layer is visible again")
+		expect(State.document.composite_frame(0).get_color(Vector3i.ZERO) == Color.BLUE, "the cell returns")
+	)
+	step("Then redo hides it again", func():
+		State.undo_redo.redo()
+		expect(not State.document.layers[1].visible, "the layer is hidden again")
+		expect(State.document.composite_frame(0).get_color(Vector3i.ZERO) == Color.TRANSPARENT, "the cell leaves again")
+	)
+
+
+func _active_layer_switch() -> void:
+	step("Given two layers and an open edit on the first", func():
+		var document := State.document
+		document.layers.append(document.make_layer("Top"))
+		document.edit_layer = 0
+		expect(State.begin_edit() != null, "the edit opens")
+	)
+	step("When the active layer changes", func():
+		State.active_layer_index = 1
+	)
+	step("Then the edit closes and the active layer moves", func():
+		expect(State.active_edit() == null, "the switch cancels the open edit")
+		expect(State.document.edit_layer == 1, "the second layer is active")
+		expect(_active_layer_events == 1, "the switch reports the active layer")
+	)
+
+
+func _composite_refresh() -> void:
+	step("Given two visible layers with overlapping cells", func():
+		var document := State.document
+		document.layers.append(document.make_layer("Top"))
+		document.set_cell(0, Vector3i.ZERO, VoxelFrame.material(Color.RED))
+		document.edit_layer = 1
+		document.set_cell(0, Vector3i.ZERO, VoxelFrame.material(Color.BLUE))
+		document.invalidate_bounds()
+		var composite := document.composite_frame(0)
+		expect(composite.get_color(Vector3i.ZERO) == Color.BLUE, "the top layer shows first")
+	)
+	step("When the top cel changes", func():
+		State.document.set_cell(0, Vector3i.ZERO, VoxelFrame.material(Color.GREEN))
+		var composite := State.document.composite_frame(0)
+		expect(composite.get_color(Vector3i.ZERO) == Color.GREEN, "the cached composite refreshes")
+	)
+	step("When the bottom cel changes under the top", func():
+		State.document.edit_layer = 0
+		State.document.set_cell(0, Vector3i.ZERO, VoxelFrame.material(Color.RED))
+		var composite := State.document.composite_frame(0)
+		expect(composite.get_color(Vector3i.ZERO) == Color.GREEN, "the top layer still wins")
+	)
+	step("When the top layer hides", func():
+		State.set_layer_visible(1, false)
+		var composite := State.document.composite_frame(0)
+		expect(composite == State.document.layers[0].frames[0], "the sole visible layer returns its cel")
+		expect(composite.get_color(Vector3i.ZERO) == Color.RED, "the bottom layer shows")
+	)
+	step("When the top layer shows again", func():
+		State.set_layer_visible(1, true)
+		var composite := State.document.composite_frame(0)
+		expect(composite.get_color(Vector3i.ZERO) == Color.GREEN, "the top layer returns")
 	)
 
 

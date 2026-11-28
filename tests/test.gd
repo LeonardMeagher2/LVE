@@ -167,7 +167,7 @@ func plugin(plugin_name: String) -> Node:
 func sync_viewport() -> void:
 	State.document._bounds_dirty = true
 	var affected: Array[Vector3i] = []
-	State.cells_changed.emit(State.current_frame, affected)
+	State.cells_changed.emit(State.active_layer_index, State.current_frame, affected)
 
 func active_tool_node(plugin_name: String) -> Node3D:
 	var p := plugin(plugin_name)

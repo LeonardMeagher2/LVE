@@ -807,7 +807,7 @@ func _sample_renderer() -> bool:
 	return installed
 
 
-func _on_chunks_changed(_updated_frame: int, locations: Array[Vector3i]) -> void:
+func _on_chunks_changed(_layer: int, _updated_frame: int, locations: Array[Vector3i]) -> void:
 	for location in locations:
 		_changed_chunks[location] = true
 

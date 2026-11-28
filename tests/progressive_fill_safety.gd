@@ -542,7 +542,7 @@ func _context_change() -> void:
 	)
 
 
-func _on_first_notification(_updated_frame: int, _chunks: Array[Vector3i]) -> void:
+func _on_first_notification(_layer: int, _updated_frame: int, _chunks: Array[Vector3i]) -> void:
 	if _cancel_fired:
 		return
 	_cancel_fired = true
@@ -612,7 +612,7 @@ func _stale_finalize() -> void:
 	)
 
 
-func _count_flush(_updated_frame: int, _chunks: Array[Vector3i]) -> void:
+func _count_flush(_layer: int, _updated_frame: int, _chunks: Array[Vector3i]) -> void:
 	_flush_count += 1
 
 
@@ -756,7 +756,7 @@ func _unrelated_cancel() -> void:
 	step("When the user adds a selection cell and emits an unrelated edit signal", func():
 		State.selection.add(Vector3i(99, 99, 99))
 		var affected: Array[Vector3i] = []
-		State.cells_changed.emit(State.current_frame, affected)
+		State.cells_changed.emit(State.active_layer_index, State.current_frame, affected)
 		expect(State.edit_busy(), "the unrelated signals did not cancel the fill")
 	)
 	await _settle_fill()

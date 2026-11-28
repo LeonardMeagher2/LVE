@@ -206,12 +206,12 @@ func _on_sample_material_changed() -> void:
 		reenter_writer._apply_pick(REENTER_CELL, REENTER_CELL)
 
 
-func _on_cells_changed(_frame: int, affected: Array[Vector3i]) -> void:
+func _on_cells_changed(_layer: int, _frame: int, affected: Array[Vector3i]) -> void:
 	cells_emits += 1
 	changed_cells.append_array(affected)
 
 
-func _on_chunks_changed(_frame: int, _affected: Array[Vector3i]) -> void:
+func _on_chunks_changed(_layer: int, _frame: int, _affected: Array[Vector3i]) -> void:
 	chunks_emits += 1
 
 

@@ -48,6 +48,7 @@ func _ready() -> void:
 	State.cells_changed.connect(_on_content_bounds_changed)
 	State.chunks_changed.connect(_on_content_bounds_changed)
 	State.frames_changed.connect(refresh_clip)
+	State.layers_changed.connect(_on_layers_changed)
 	if stores_document_pose:
 		State.document_deactivating.connect(_save_pose)
 		State.workspace_capture_requested.connect(_save_pose)
@@ -271,7 +272,16 @@ func refresh_clip() -> void:
 	far = maxf(2.0, farthest + FAR_MARGIN)
 
 
-func _on_content_bounds_changed(_frame: int, _affected: Array[Vector3i]) -> void:
+func _on_content_bounds_changed(_layer: int, _frame: int, _affected: Array[Vector3i]) -> void:
+	refresh_clip()
+	var far := maxf(max_distance(), _dist)
+	if is_equal_approx(far, _far_distance):
+		return
+	_far_distance = far
+	zoom_limits_changed.emit(min_zoom_percent(), max_zoom_percent())
+
+
+func _on_layers_changed() -> void:
 	refresh_clip()
 	var far := maxf(max_distance(), _dist)
 	if is_equal_approx(far, _far_distance):

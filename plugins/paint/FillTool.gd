@@ -311,7 +311,7 @@ func _emit_chunk_notifications() -> void:
 	_last_emit_frame = Engine.get_process_frames()
 	var location := _source_document.find_cel(_source_frame)
 	if location.x >= 0:
-		State.chunks_changed.emit(location.y, changed)
+		State.chunks_changed.emit(location.x, location.y, changed)
 
 
 func _fill_current(fill_revision: int) -> bool:

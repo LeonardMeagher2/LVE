@@ -2020,7 +2020,7 @@ func _smooth_reentrant() -> void:
 	)
 	step("When a handler swaps the document during the changed signal", func():
 		var swapped := [false]
-		var handler := func(_frame_index, _affected) -> void:
+		var handler := func(_layer_index, _frame_index, _affected) -> void:
 			if swapped[0]:
 				return
 			swapped[0] = true

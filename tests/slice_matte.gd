@@ -83,7 +83,7 @@ func _run() -> void:
 	step("When the slice layer changes", func():
 		builds = matte.build_count
 		var layer_cells: Array[Vector3i] = [SLICE_CELL, Vector3i(3, 0, 3)]
-		State.cells_changed.emit(State.current_frame, layer_cells)
+		State.cells_changed.emit(State.active_layer_index, State.current_frame, layer_cells)
 	)
 	await _idle()
 	step("Then the matte does not rebuild", func():
@@ -92,7 +92,7 @@ func _run() -> void:
 	step("When a cell outside the slice changes", func():
 		State.get_current_voxel_frame().set_cell(Vector3i(7, 4, 7), VoxelFrame.material(Color.RED))
 		var changed_cells: Array[Vector3i] = [Vector3i(7, 4, 7)]
-		State.cells_changed.emit(State.current_frame, changed_cells)
+		State.cells_changed.emit(State.active_layer_index, State.current_frame, changed_cells)
 	)
 	await _settle()
 	step("Then the matte rebuilds and covers the new column", func():

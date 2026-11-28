@@ -42,6 +42,9 @@ var file_path := "":
 		file_path_changed.emit()
 var _bounds: AABB
 var _bounds_dirty := true
+var _composite_frame: VoxelFrame
+var _composite_index := -1
+var _composite_sources := {}
 
 static var _empty_frames: Array[VoxelFrame] = []
 
@@ -723,6 +726,7 @@ func replace_active_frames(value: Array[VoxelFrame], delays: Array = []) -> void
 			frame_delays.append(int(delay))
 	edit_frame = clampi(edit_frame, 0, frame_count() - 1)
 	_bounds_dirty = true
+	invalidate_composite()
 
 
 func composite_frame(index: int) -> VoxelFrame:
@@ -733,40 +737,105 @@ func composite_frame(index: int) -> VoxelFrame:
 		if layer.visible and index < layer.frames.size():
 			visible_layers.append(layer)
 	if visible_layers.is_empty():
+		invalidate_composite()
 		return null
 	if visible_layers.size() == 1:
+		invalidate_composite()
 		return visible_layers[0].frames[index]
+	if _composite_frame == null or _composite_index != index:
+		_build_composite(visible_layers, index)
+	else:
+		_refresh_composite(visible_layers, index)
+	return _composite_frame
+
+
+func invalidate_composite() -> void:
+	_composite_frame = null
+	_composite_index = -1
+	_composite_sources.clear()
+
+
+func _build_composite(visible_layers: Array[VoxelLayer], index: int) -> void:
 	var composite := VoxelFrame.new()
+	var sources := {}
 	var locations := {}
 	for layer in visible_layers:
 		for location in layer.frames[index].chunks:
 			locations[location] = true
 	for location: Vector3i in locations:
-		var merged := _merge_chunk(visible_layers, index, location)
-		if merged != null:
-			composite.chunks[location] = merged
+		var contributors := _chunk_contributors(visible_layers, index, location)
+		var merged := _merge_contributors(contributors)
+		if merged == null:
+			continue
+		composite.chunks[location] = merged
+		sources[location] = _source_signature(contributors)
 	composite.invalidate_bounds()
-	return composite
+	_composite_frame = composite
+	_composite_index = index
+	_composite_sources = sources
 
 
-static func _merge_chunk(visible_layers: Array[VoxelLayer], frame_index: int, location: Vector3i) -> VoxelFrame.Chunk:
+func _refresh_composite(visible_layers: Array[VoxelLayer], index: int) -> void:
+	var locations := {}
+	for layer in visible_layers:
+		for location in layer.frames[index].chunks:
+			locations[location] = true
+	var changed := false
+	for location: Vector3i in locations:
+		var contributors := _chunk_contributors(visible_layers, index, location)
+		if contributors.is_empty():
+			if _composite_sources.erase(location):
+				_composite_frame.chunks.erase(location)
+				changed = true
+			continue
+		var signature := _source_signature(contributors)
+		if _composite_sources.get(location, []) == signature:
+			continue
+		_composite_sources[location] = signature
+		_composite_frame.chunks[location] = _merge_contributors(contributors)
+		changed = true
+	for location: Vector3i in _composite_sources.keys():
+		if locations.has(location):
+			continue
+		_composite_sources.erase(location)
+		_composite_frame.chunks.erase(location)
+		changed = true
+	if changed:
+		_composite_frame.invalidate_bounds()
+
+
+static func _chunk_contributors(visible_layers: Array[VoxelLayer], frame_index: int, location: Vector3i) -> Array[VoxelFrame.Chunk]:
 	var contributors: Array[VoxelFrame.Chunk] = []
 	for layer in visible_layers:
 		var chunk: VoxelFrame.Chunk = layer.frames[frame_index].chunks.get(location)
 		if chunk != null and chunk.occupied_count > 0:
 			contributors.append(chunk)
+	return contributors
+
+
+static func _merge_contributors(contributors: Array[VoxelFrame.Chunk]) -> VoxelFrame.Chunk:
 	if contributors.is_empty():
 		return null
 	if contributors.size() == 1:
 		return contributors[0]
 	var merged := VoxelFrame.Chunk.new()
-	merged.location = location
+	merged.location = contributors[0].location
 	for chunk in contributors:
 		for cell in chunk.world_cells():
 			merged.store(cell, chunk.get_material(cell))
 	merged.bounds_dirty = true
 	merged.voxel_revision = 1
 	return merged
+
+
+static func _source_signature(contributors: Array[VoxelFrame.Chunk]) -> Array:
+	var signature := []
+	signature.resize(contributors.size() * 2)
+	for index in contributors.size():
+		var chunk := contributors[index]
+		signature[index * 2] = chunk.get_instance_id()
+		signature[index * 2 + 1] = chunk.voxel_revision
+	return signature
 
 
 func is_empty() -> bool:
@@ -796,6 +865,7 @@ func add_frame(from_frame: int = -1) -> VoxelFrame:
 		if layer == active_layer():
 			added = next
 	_extend_end_tags(old_last)
+	invalidate_composite()
 	return added
 
 
@@ -809,6 +879,7 @@ func duplicate_frame(i: int) -> void:
 			layer.frames.insert(i + 1, VoxelFrame.new())
 	frame_delays.insert(i + 1, frame_delays[i])
 	_extend_end_tags(frame_count() - 2)
+	invalidate_composite()
 
 
 func _extend_end_tags(old_last: int) -> void:
@@ -831,6 +902,7 @@ func remove_frame(i: int) -> void:
 			layer.frames.remove_at(i)
 	_shift_tags_after_remove(i)
 	_bounds_dirty = true
+	invalidate_composite()
 	edit_frame = clampi(edit_frame, 0, frame_count() - 1)
 	edit_tag = clampi(edit_tag, -1, tags.size() - 1)
 
@@ -847,6 +919,7 @@ func move_frame_block(from: int, count: int, to: int) -> void:
 		if layer.frames.size() == size:
 			_move_block(layer.frames, from, count, target)
 	_bounds_dirty = true
+	invalidate_composite()
 
 
 static func _move_block(source: Array, from: int, count: int, to: int) -> void:

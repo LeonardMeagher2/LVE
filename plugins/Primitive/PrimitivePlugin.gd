@@ -129,12 +129,13 @@ func build_shape(request: Dictionary, allow_large := false) -> Dictionary:
 		return {"error": "The document or frame changed before the shape finished."}
 	frame.apply_published(job.changed_chunks, job.edited_frame)
 	document._bounds_dirty = true
-	if not job.changed_chunks.is_empty():
-		State.chunks_changed.emit(frame_index, job.changed_chunks)
+	var location := document.find_cel(frame)
+	if not job.changed_chunks.is_empty() and location.x >= 0:
+		State.chunks_changed.emit(location.x, location.y, job.changed_chunks)
 	var applied: Array[Vector3i] = []
 	applied.assign(job.applied_cells.keys())
-	if not applied.is_empty():
-		State.cells_changed.emit(frame_index, applied)
+	if not applied.is_empty() and location.x >= 0:
+		State.cells_changed.emit(location.x, location.y, applied)
 	var label := str(request.get("label", "Build Shape"))
 	if label.is_empty():
 		label = "Build Shape"

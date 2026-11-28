@@ -31,7 +31,7 @@ func _ready() -> void:
 func _on_frame_changed() -> void:
 	set_frame(frame_index)
 
-func _on_cells_changed(frame: int, _affected: Array[Vector3i]) -> void:
+func _on_cells_changed(_layer: int, frame: int, _affected: Array[Vector3i]) -> void:
 	if frame == frame_index:
 		VoxelImageRenderer.request_frame_render(frame_index)
 

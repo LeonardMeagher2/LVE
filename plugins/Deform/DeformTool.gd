@@ -340,7 +340,7 @@ func _finish_job(job: DeformJob) -> void:
 	_source_frame.apply_published(locations, job.edited_frame)
 	State.document._bounds_dirty = true
 	if not locations.is_empty():
-		State.chunks_changed.emit(State.current_frame, locations)
+		State.chunks_changed.emit(State.active_layer_index, State.current_frame, locations)
 	if _stroke_track_selection:
 		_publish_selection(job)
 	if _pending_target != null:
@@ -372,7 +372,7 @@ func _publish_baseline() -> void:
 	_source_frame.apply_published(locations, _baseline)
 	State.document._bounds_dirty = true
 	if not locations.is_empty():
-		State.chunks_changed.emit(State.current_frame, locations)
+		State.chunks_changed.emit(State.active_layer_index, State.current_frame, locations)
 	if _stroke_track_selection:
 		State.selection.restore(_stroke_selection)
 		State.selection_changed.emit()

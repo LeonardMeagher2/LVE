@@ -101,7 +101,7 @@ func _place(center: Vector3i) -> void:
 	clipboard._paste_tool.handle_input(event, Vector2.ZERO)
 
 
-func _on_cells_changed(_frame: int, _affected: Array[Vector3i]) -> void:
+func _on_cells_changed(_layer: int, _frame: int, _affected: Array[Vector3i]) -> void:
 	changed_emits += 1
 
 

@@ -533,7 +533,7 @@ func _apply_preview() -> void:
 			_source_document._bounds_dirty = true
 			var location := _source_document.find_cel(_source_frame)
 			if location.x >= 0:
-				State.chunks_changed.emit(location.y, job.changed_chunks)
+				State.chunks_changed.emit(location.x, location.y, job.changed_chunks)
 		if _track_selection:
 			State.selection.restore(job.destination_selection)
 			State.selection_changed.emit()
@@ -805,7 +805,7 @@ func _on_gizmo_document_changed() -> void:
 	_refresh_gizmo()
 
 
-func _on_gizmo_cells_changed(_frame: int, _affected: Array[Vector3i]) -> void:
+func _on_gizmo_cells_changed(_layer: int, _frame: int, _affected: Array[Vector3i]) -> void:
 	_refresh_gizmo()
 
 
