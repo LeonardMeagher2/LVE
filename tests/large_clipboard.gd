@@ -91,7 +91,7 @@ func _run() -> void:
 	)
 	step("Given another copy of the selected source volume", func():
 		var document := VoxelDocument.new()
-		document.frames[0] = source.copy_frame()
+		document.active_layer().frames[0] = source.copy_frame()
 		State.document = document
 		target = State.get_current_voxel_frame()
 		State.selection.from_box(Vector3i.ZERO, Vector3i(17, 17, 17))

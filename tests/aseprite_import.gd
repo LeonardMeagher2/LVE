@@ -38,9 +38,9 @@ func _run() -> void:
 	var error: Error = await importer.import_image(png_path)
 	step("Then frame order and source-canvas motion are preserved", func():
 		expect(error == OK, "the trimmed hash animation opens")
-		expect(State.document.frames.size() == 2, "both trimmed frames are present")
-		expect(State.document.frames[0].get_color(Vector3i(-1, 0, -1)) == Color.RED, "the first trimmed frame keeps its source position")
-		expect(State.document.frames[1].get_color(Vector3i(1, 0, 0)) == Color.BLUE, "the second trimmed frame keeps its motion offset")
+		expect(State.document.active_layer().frames.size() == 2, "both trimmed frames are present")
+		expect(State.document.active_layer().frames[0].get_color(Vector3i(-1, 0, -1)) == Color.RED, "the first trimmed frame keeps its source position")
+		expect(State.document.active_layer().frames[1].get_color(Vector3i(1, 0, 0)) == Color.BLUE, "the second trimmed frame keeps its motion offset")
 		expect(State.document.frame_delay(0) == 90 and State.document.frame_delay(1) == 180, "hash frame order retains both durations")
 		expect(State.document.palette == [VoxelFrame.material(Color.RED), VoxelFrame.material(Color.BLUE)], "the palette includes colors from both animation frames")
 		expect(State.document.tags[0].loop_mode == AnimationTag.LoopMode.REVERSE and State.document.tags[0].repeats == 2, "the reverse tag retains its direction and repeat count")
@@ -70,8 +70,8 @@ func _run() -> void:
 	error = await importer.import_image(png_path)
 	step("Then array metadata preserves the same animation", func():
 		expect(error == OK, "the array-format animation opens")
-		expect(State.document.frames.size() == 2, "array metadata restores both frames")
-		expect(State.document.frames[0].get_color(Vector3i(-1, 0, -1)) == Color.RED, "array metadata restores the first frame position")
+		expect(State.document.active_layer().frames.size() == 2, "array metadata restores both frames")
+		expect(State.document.active_layer().frames[0].get_color(Vector3i(-1, 0, -1)) == Color.RED, "array metadata restores the first frame position")
 		expect(State.document.frame_delay(1) == 180, "array metadata preserves the second frame duration")
 	)
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(png_path))

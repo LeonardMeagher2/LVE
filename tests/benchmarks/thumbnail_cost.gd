@@ -18,7 +18,7 @@ func _cost() -> void:
 		document = _document()
 		State.document = document
 		State.frames_changed.emit()
-		expect(document.frames[0].count() > SPAN * SPAN * SPAN / 2, "the fixture holds a dense block")
+		expect(document.active_layer().frames[0].count() > SPAN * SPAN * SPAN / 2, "the fixture holds a dense block")
 	)
 	if DisplayServer.get_name() == "headless":
 		step("Then the preview benchmark needs a window", func():
@@ -36,12 +36,12 @@ func _cost() -> void:
 	var measured := times.slice(WARMUPS)
 	measured.sort()
 	var median: int = measured[measured.size() / 2]
-	print("MEASURE thumbnail_cost preview: us=%d cells=%d" % [median, document.frames[0].count()])
+	print("MEASURE thumbnail_cost preview: us=%d cells=%d" % [median, document.active_layer().frames[0].count()])
 
 
 func _document() -> VoxelDocument:
 	var value := VoxelDocument.new()
-	value.frames.clear()
+	value.active_layer().frames.clear()
 	value.frame_delays.clear()
 	var frame := value.add_frame()
 	var changes := {}

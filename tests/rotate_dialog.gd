@@ -172,7 +172,7 @@ func _paint_l() -> void:
 
 
 func _frame() -> VoxelFrame:
-	return State.document.frames[0]
+	return State.document.active_layer().frames[0]
 
 
 func _expect_bounds(lo: Vector3i, hi: Vector3i) -> void:

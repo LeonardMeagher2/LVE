@@ -41,8 +41,8 @@ func _cost() -> void:
 		document = _document()
 		State.document = document
 		State.frames_changed.emit()
-		expect(document.frames.size() == FRAMES, "the fixture holds every frame")
-		expect(document.frames[0].count() > 1000, "each frame holds a sphere")
+		expect(document.active_layer().frames.size() == FRAMES, "the fixture holds every frame")
+		expect(document.active_layer().frames[0].count() > 1000, "each frame holds a sphere")
 		exporter._model_camera.is_orthogonal = true
 		exporter._sheet_settings.get_node("ViewRow/Center").set_pressed_no_signal(false)
 		exporter._sheet_settings.get_node("TurntableRow/Turntable").set_pressed_no_signal(false)
@@ -86,7 +86,7 @@ func _measure_export(name: String, body: Callable) -> void:
 
 func _document() -> VoxelDocument:
 	var value := VoxelDocument.new()
-	value.frames.clear()
+	value.active_layer().frames.clear()
 	value.frame_delays.clear()
 	for frame_index in FRAMES:
 		var frame := value.add_frame()
@@ -105,7 +105,7 @@ func _document() -> VoxelDocument:
 
 func _cells(value: VoxelDocument) -> int:
 	var total := 0
-	for frame in value.frames:
+	for frame in value.active_layer().frames:
 		total += frame.count()
 	return total
 

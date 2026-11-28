@@ -195,7 +195,7 @@ func _export_run() -> void:
 			actual_hues.append(_dominant_hue(image))
 		expect(actual_delays == expected_delays, "each GIF frame keeps its document delay")
 		expect(actual_hues == expected_hues, "the GIF follows the sheet tile order")
-		expect(State.document.frames.size() == 3 and State.current_frame == 1, "the export leaves the document and frame in place")
+		expect(State.document.active_layer().frames.size() == 3 and State.current_frame == 1, "the export leaves the document and frame in place")
 		expect(not State.edit_busy(), "the export releases editing")
 		expect(State.get_activity() == null, "the export releases its activity")
 		expect(exporter._export_viewport == null, "the export releases its render viewport")

@@ -1349,7 +1349,7 @@ func _edit_frames() -> void:
 	var add_response := await _call("add_frame", {})
 	step("When another empty frame is added", func():
 		expect(not _is_error(add_response), "add_frame succeeds without an index")
-		expect(State.document.frames.size() == 3, "the document holds three frames")
+		expect(State.document.active_layer().frames.size() == 3, "the document holds three frames")
 	)
 	var remove_response := await _call("remove_frame", {"frame": 1})
 	var remove_data := _result_data(remove_response)
@@ -1360,12 +1360,12 @@ func _edit_frames() -> void:
 	var last_remove := await _call("remove_frame", {"frame": 0})
 	step("When the second frame is removed", func():
 		expect(not _is_error(last_remove), "the second removal succeeds")
-		expect(State.document.frames.size() == 1, "one frame remains")
+		expect(State.document.active_layer().frames.size() == 1, "one frame remains")
 	)
 	var refused := await _call("remove_frame", {"frame": 0})
 	step("Then the last frame cannot be removed", func():
 		expect(_is_error(refused), "remove_frame refuses the last frame")
-		expect(State.document.frames.size() == 1, "the document keeps one frame")
+		expect(State.document.active_layer().frames.size() == 1, "the document keeps one frame")
 	)
 
 
@@ -1373,7 +1373,7 @@ func _batch_frames() -> void:
 	var add_response := await _call("add_frame", {"count": 5})
 	step("Then one call adds five frames", func():
 		expect(not _is_error(add_response), "add_frame accepts count")
-		expect(State.document.frames.size() == 6, "six frames exist")
+		expect(State.document.active_layer().frames.size() == 6, "six frames exist")
 		expect(State.undo_redo.get_history_count() == 1, "the block add is one undo action")
 	)
 	var delay_response := await _call("set_frame_delay", {"frames": [0, 1, 2, 3, 4, 5], "ms": 150})
@@ -1402,7 +1402,7 @@ func _batch_frames() -> void:
 	var remove_response := await _call("remove_frame", {"frames": [0, 2]})
 	step("Then several frames are removed as one action", func():
 		expect(not _is_error(remove_response), "remove_frame accepts frames")
-		expect(State.document.frames.size() == 4, "two frames are gone")
+		expect(State.document.active_layer().frames.size() == 4, "two frames are gone")
 		var delays := []
 		for index in State.document.frame_count():
 			delays.append(State.document.frame_delay(index))
@@ -1413,7 +1413,7 @@ func _batch_frames() -> void:
 	var insert_response := await _call("add_frame", {"count": 2, "index": 1})
 	step("Then an inserted block becomes current", func():
 		expect(not _is_error(insert_response), "add_frame inserts a block")
-		expect(State.document.frames.size() == 6, "two frames are added")
+		expect(State.document.active_layer().frames.size() == 6, "two frames are added")
 		expect(State.current_frame == 2, "the last inserted frame is current")
 	)
 
@@ -2258,7 +2258,7 @@ func _move_current() -> void:
 	step("Given three frames", func():
 		State.add_frame()
 		State.add_frame()
-		expect(State.document.frames.size() == 3, "the document holds three frames")
+		expect(State.document.active_layer().frames.size() == 3, "the document holds three frames")
 	)
 	State.current_frame = 0
 	var response := await _call("move_frame", {"to": 2})

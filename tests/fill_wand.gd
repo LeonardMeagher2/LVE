@@ -100,7 +100,7 @@ func _slice_fill() -> void:
 		State.set_color(Color.BLUE)
 		var req := pick_request(center)
 		seed = VoxelPicking.start_pick(req.origin, req.direction, req.frame, req.forward, true).target
-		var f: VoxelFrame = State.document.frames[State.current_frame]
+		var f: VoxelFrame = State.document.active_layer().frames[State.current_frame]
 		f.set_cell(seed, VoxelFrame.material(Color.RED))
 		f.set_cell(seed + Vector3i(1, 0, 0), VoxelFrame.material(Color.RED))
 		f.set_cell(seed + Vector3i(0, 1, 0), VoxelFrame.material(Color.RED))
@@ -117,7 +117,7 @@ func _slice_fill() -> void:
 		_click(pos)
 	)
 	step("Then the fill stays inside the slab", func():
-		var f: VoxelFrame = State.document.frames[State.current_frame]
+		var f: VoxelFrame = State.document.active_layer().frames[State.current_frame]
 		expect(f.get_color(seed) == Color.BLUE, "the top slab cell takes the fill color")
 		expect(f.get_color(seed + Vector3i(1, 0, 0)) == Color.BLUE, "a connected cell on the top slab layer takes the fill color")
 		expect(f.get_color(seed + Vector3i(0, -1, 0)) == Color.BLUE, "the cell below the plane is inside the slab")
@@ -146,7 +146,7 @@ func _fill_all() -> void:
 		r2 = r1 + Vector3i(8, 0, 0)
 		r3 = r1 + Vector3i(16, 0, 0)
 		control = r1 + Vector3i(0, 1, 0)
-		var f: VoxelFrame = State.document.frames[State.current_frame]
+		var f: VoxelFrame = State.document.active_layer().frames[State.current_frame]
 		f.set_cell(r1, VoxelFrame.material(Color.RED))
 		f.set_cell(r2, VoxelFrame.material(Color.RED))
 		f.set_cell(r3, VoxelFrame.material(Color.RED))
@@ -191,7 +191,7 @@ func _fill_all() -> void:
 	)
 
 	step("Then only that voxel changes color", func():
-		var f: VoxelFrame = State.document.frames[State.current_frame]
+		var f: VoxelFrame = State.document.active_layer().frames[State.current_frame]
 		expect(f.get_color(r2) == Color.BLUE, "the clicked voxel takes the brush color")
 		expect(f.get_color(r1) == Color.RED, "the distant red voxel keeps its color")
 		expect(f.get_color(r3) == Color.RED, "the farthest red voxel keeps its color")
@@ -203,7 +203,7 @@ func _fill_all() -> void:
 	)
 
 	step("Then every red voxel takes the brush color", func():
-		var f: VoxelFrame = State.document.frames[State.current_frame]
+		var f: VoxelFrame = State.document.active_layer().frames[State.current_frame]
 		expect(f.get_color(r1) == Color.BLUE, "the first red voxel takes the brush color")
 		expect(f.get_color(r3) == Color.BLUE, "the last red voxel takes the brush color")
 		expect(f.get_color(control) == Color.GREEN, "the green voxel keeps its color")
@@ -222,7 +222,7 @@ func _wand_select() -> void:
 		red = seed + Vector3i(1, 1, 0)
 		var gray := Color.from_rgba8(150, 150, 150)
 		var red_c := Color.from_rgba8(200, 60, 60)
-		var f: VoxelFrame = State.document.frames[State.current_frame]
+		var f: VoxelFrame = State.document.active_layer().frames[State.current_frame]
 		for c in blob_a:
 			f.set_cell(c, VoxelFrame.material(gray))
 		for c in blob_b:
@@ -293,7 +293,7 @@ func _wand_all() -> void:
 		wand_c = wand_a + Vector3i(16, 0, 0)
 		red = wand_a + Vector3i(0, 1, 0)
 		var gray := Color.from_rgba8(150, 150, 150)
-		var f: VoxelFrame = State.document.frames[State.current_frame]
+		var f: VoxelFrame = State.document.active_layer().frames[State.current_frame]
 		f.set_cell(wand_a, VoxelFrame.material(gray))
 		f.set_cell(wand_b, VoxelFrame.material(gray))
 		f.set_cell(wand_c, VoxelFrame.material(gray))

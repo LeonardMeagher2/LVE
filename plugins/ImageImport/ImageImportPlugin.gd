@@ -21,7 +21,7 @@ class ImportJob extends VoxelFrame.EditJob:
 		if error != OK or not checkpoint(0):
 			return
 		imported_document.file_path = image_path
-		imported_document.frames.clear()
+		imported_document.active_layer().frames.clear()
 		imported_document.frame_delays.clear()
 		var descriptors: Array = []
 		var metadata := {}
@@ -62,7 +62,7 @@ class ImportJob extends VoxelFrame.EditJob:
 				if centered_colors.size() % 4096 == 0 and not checkpoint(centered_colors.size()):
 					return
 			stage("Building image voxels", centered_colors.size())
-			imported_document.frames[frame_index].set_cells(centered_colors, self)
+			imported_document.active_layer().frames[frame_index].set_cells(centered_colors, self)
 			if not checkpoint(centered_colors.size()):
 				return
 		_read_tags(metadata)
@@ -91,7 +91,7 @@ class ImportJob extends VoxelFrame.EditJob:
 		var first_x := int(source_rect.get("x", 0)) - floori(int(source_size.w) * 0.5)
 		var top_y := floori((int(source_size.h) - 1) * 0.5) - int(source_rect.get("y", 0))
 		var pattern := {}
-		stage("Importing image frame %s" % (imported_document.frames.size() + 1), rect.size.x * rect.size.y)
+		stage("Importing image frame %s" % (imported_document.active_layer().frames.size() + 1), rect.size.x * rect.size.y)
 		var completed := 0
 		for y in rect.size.y:
 			for x in rect.size.x:

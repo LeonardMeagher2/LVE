@@ -74,7 +74,7 @@ func _planar_merge() -> void:
 		expect(document != null, "the sample document loads")
 		if document == null:
 			return
-		var frame: VoxelFrame = document.frames[0]
+		var frame: VoxelFrame = document.active_layer().frames[0]
 		var triangles := 0
 		for chunk_location: Vector3i in frame.chunks:
 			triangles += _mesh(frame, chunk_location, true, false)[1]
@@ -95,7 +95,7 @@ func _failed_greed() -> void:
 		expect(document != null, "the reported document loads")
 		if document == null:
 			return
-		var frame: VoxelFrame = document.frames[0]
+		var frame: VoxelFrame = document.active_layer().frames[0]
 		var distinct := {}
 		for chunk: VoxelFrame.Chunk in frame.chunks.values():
 			for cell_position in chunk.world_cells():

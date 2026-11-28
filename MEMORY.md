@@ -26,7 +26,7 @@
 - 2026-08-21T00:00Z [imp:5] [notes/lifecycle-and-data] Lambdas capture local values. Use members or arrays for state that a lambda must change.
 - 2026-10-16T00:00Z [imp:5] [notes/lifecycle-and-data] Dictionaries and PackedFloat32Array values compare by content. They can also be dictionary keys.
 - 2026-10-05T00:00Z [imp:5] [notes/lifecycle-and-data] Use `is_same()` to compare dictionary references instead of their contents.
-- 2026-09-09T00:00Z [imp:5] [notes/lifecycle-and-data] `Array[VoxelFrame].duplicate()` keeps its type. Preserve that type when restoring `document.frames`.
+- 2026-09-09T00:00Z [imp:5] [notes/lifecycle-and-data] `Array[VoxelFrame].duplicate()` keeps its type. Preserve that type when restoring a layer's frames.
 - 2026-08-31T00:00Z [imp:5] [notes/lifecycle-and-data] Emit typed arrays when signal handlers require them. An untyped array can prevent the handler call.
 - 2026-10-16T00:00Z [imp:5] [notes/lifecycle-and-data] Before reading an optional null value, call `ConfigFile.has_section_key()`.
 - 2026-10-03T00:00Z [imp:5] [notes/lifecycle-and-data] `PROPERTY_USAGE_NONE` prevents saving a property. Older files can still load that property.

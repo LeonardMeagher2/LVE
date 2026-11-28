@@ -126,7 +126,7 @@ func _worker_file_frame() -> void:
 			for y in FILL_Y:
 				for z in FILL_Z:
 					cells[Vector3i(x, y, z)] = metal if (x + y + z) % 2 == 0 else blue
-		document.frames[0].set_cells(cells)
+		document.active_layer().frames[0].set_cells(cells)
 		expect(document.save_file(source_path) == OK, "the source document saves")
 	)
 	step("When the user opens the file and the first frame becomes the stamp", func():

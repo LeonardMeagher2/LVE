@@ -16,7 +16,7 @@ func _run() -> void:
 	)
 
 	step("Then the cell persists and the bounds expand", func():
-		var frame: VoxelFrame = State.document.frames[0]
+		var frame: VoxelFrame = State.document.active_layer().frames[0]
 		expect(frame.has(Vector3i(20, 0, 20)), "the far cell is stored")
 		var b := State.document.bounds()
 		expect(b.has_volume(), "the bounds cover the content")

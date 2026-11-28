@@ -125,7 +125,7 @@ func _run() -> void:
 		expect(_key(other, Vector3i.ZERO, false) != _key(base, Vector3i.ZERO, false), "a changed source frame changes the key")
 		var document := VoxelDocument.new()
 		document.set_cell(0, Vector3i(1, 0, 0), VoxelFrame.material(Color.GREEN))
-		_expect_parity(document.frames[0], Vector3i.ZERO, false, "a separate document")
+		_expect_parity(document.active_layer().frames[0], Vector3i.ZERO, false, "a separate document")
 	)
 	step("When an edit is undone and redone", func():
 		State.document = VoxelDocument.new()

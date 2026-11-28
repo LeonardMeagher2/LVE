@@ -93,10 +93,10 @@ func _run() -> void:
 	)
 	step("When the document saves and loads", func():
 		var document := VoxelDocument.new()
-		document.frames.assign([frame])
+		document.active_layer().frames.assign([frame])
 		expect(document.save_file(DOCUMENT_PATH) == OK, "the document saves")
 		var opened := VoxelDocument.load_file(DOCUMENT_PATH)
-		loaded = opened.frames[0] if opened else null
+		loaded = opened.active_layer().frames[0] if opened else null
 		expect(loaded != null, "the document loads")
 	)
 	step("Then every voxel keeps its color and material", func():
@@ -124,7 +124,7 @@ func _run() -> void:
 	)
 	step("When the version 1 document loads", func():
 		var opened := VoxelDocument.load_file(LEGACY_PATH)
-		loaded = opened.frames[0] if opened else null
+		loaded = opened.active_layer().frames[0] if opened else null
 		expect(loaded != null, "the version 1 document loads")
 		expect(loaded.get_color(Vector3i.ZERO) == Color.RED, "the version 1 voxel keeps its color")
 		expect(loaded.get_emission(Vector3i.ZERO) == Color.BLACK and loaded.get_metallic(Vector3i.ZERO) == 0.0 and loaded.get_roughness(Vector3i.ZERO) == 1.0, "the version 1 voxel uses the default values")
@@ -483,11 +483,11 @@ func _storage_run() -> void:
 		storage_redo_us = Time.get_ticks_usec() - started
 		storage_data = storage_duplicate.voxel_data
 		var document := VoxelDocument.new()
-		document.frames.assign([storage_duplicate])
+		document.active_layer().frames.assign([storage_duplicate])
 		var error := document.save_file("user://chunk_storage_test.lve")
 		expect(error == OK, "the compact document saves")
 		var storage_loaded := VoxelDocument.load_file("user://chunk_storage_test.lve")
-		storage_restored = storage_loaded.frames[0] if storage_loaded else null
+		storage_restored = storage_loaded.active_layer().frames[0] if storage_loaded else null
 		DirAccess.remove_absolute("user://chunk_storage_test.lve")
 	)
 	step("Then the compact file preserves every voxel and color", func():

@@ -20,13 +20,13 @@ func _run() -> void:
 		prefix = "user://lve_format_%s" % Time.get_ticks_usec()
 		source = VoxelDocument.new()
 		State.document = source
-		source.frames[0].set_cell(Vector3i(-17, 3, -1), VoxelFrame.material(Color(0.25, 0.5, 0.75, 0.5)))
+		source.active_layer().frames[0].set_cell(Vector3i(-17, 3, -1), VoxelFrame.material(Color(0.25, 0.5, 0.75, 0.5)))
 		var solid := {}
 		for z in 16:
 			for y in 16:
 				for x in 16:
 					solid[Vector3i(x, y, z)] = VoxelFrame.material(Color.RED)
-		source.frames[0].set_cells(solid)
+		source.active_layer().frames[0].set_cells(solid)
 		source.set_frame_delay(0, 123)
 		source.add_frame()
 		source.set_frame_delay(1, 250)
@@ -89,10 +89,10 @@ func _run() -> void:
 				expect(loaded.export_settings.normal, "the file preserves the normal sheet choice")
 				expect(loaded.export_settings.specular, "the file preserves the specular sheet choice")
 				expect(is_equal_approx(float(loaded.export_settings.specular_intensity), 0.5), "the file preserves the specular intensity")
-				expect(loaded.frames[1].count() == 0, "the empty frame retains its position")
-				expect(loaded.frames[0].count() == 4097, "the document restores every occupied voxel")
-				loaded.frames[2].set_cell(Vector3i.ZERO, VoxelFrame.material(Color.BLUE))
-				expect(loaded.frames[0].get_color(Vector3i.ZERO) == Color.RED, "loaded frames can be edited independently")
+				expect(loaded.active_layer().frames[1].count() == 0, "the empty frame retains its position")
+				expect(loaded.active_layer().frames[0].count() == 4097, "the document restores every occupied voxel")
+				loaded.active_layer().frames[2].set_cell(Vector3i.ZERO, VoxelFrame.material(Color.BLUE))
+				expect(loaded.active_layer().frames[0].get_color(Vector3i.ZERO) == Color.RED, "loaded frames can be edited independently")
 		var visible := Image.new()
 		expect(visible.load_png_from_buffer(FileAccess.get_file_as_bytes(prefix + ".lve.png")) == OK, "standard PNG decoding reads the preview")
 		expect(visible.get_data() == preview.get_data(), "the PNG chunk preserves every preview pixel")
@@ -104,7 +104,7 @@ func _run() -> void:
 		menu._on_file_opened(prefix + "_renamed.png")
 	)
 	step("Then the embedded document takes priority over image import", func():
-		expect(State.document.frames.size() == 3 and State.document.frames[0].count() == 4097, "the PNG opens as the complete animation")
+		expect(State.document.active_layer().frames.size() == 3 and State.document.active_layer().frames[0].count() == 4097, "the PNG opens as the complete animation")
 		expect(menu.current_save_path == prefix + "_renamed.png", "Save retains the opened PNG format")
 	)
 	step("When the user switches the Save As format", func():
@@ -122,13 +122,13 @@ func _run() -> void:
 		dialog.hide()
 	)
 	step("When the user saves changes over an existing binary document", func():
-		State.document.frames[0].set_cell(Vector3i.ZERO, VoxelFrame.material(Color.BLUE))
+		State.document.active_layer().frames[0].set_cell(Vector3i.ZERO, VoxelFrame.material(Color.BLUE))
 		expect(menu.save_doc(prefix + ".lve") == OK, "the edited document saves")
 		saved = FileAccess.get_file_as_bytes(prefix + ".lve")
 	)
 	step("Then the replacement contains the latest edit", func():
 		var loaded := VoxelDocument.load_file(prefix + ".lve")
-		expect(loaded != null and loaded.frames[0].get_color(Vector3i.ZERO) == Color.BLUE, "saving replaces the existing document")
+		expect(loaded != null and loaded.active_layer().frames[0].get_color(Vector3i.ZERO) == Color.BLUE, "saving replaces the existing document")
 	)
 	step("When a save has invalid data or an inaccessible destination", func():
 		State.document.set_frame_delay(0, 0)
@@ -180,8 +180,8 @@ func _run() -> void:
 		step("When the user opens that PNG", func(): pass)
 		await menu._on_file_opened(prefix + suffix)
 		step("Then the visible image becomes a voxel document", func():
-			expect(State.document.frames.size() == 1 and State.document.frames[0].count() == 1, "the preview imports as one image voxel")
-			expect(State.document.frames[0].get_color(State.document.frames[0].positions()[0]) == Color.RED, "image fallback preserves the visible color")
+			expect(State.document.active_layer().frames.size() == 1 and State.document.active_layer().frames[0].count() == 1, "the preview imports as one image voxel")
+			expect(State.document.active_layer().frames[0].get_color(State.document.active_layer().frames[0].positions()[0]) == Color.RED, "image fallback preserves the visible color")
 			expect(menu.current_save_path.is_empty(), "image fallback starts without a document save path")
 		)
 	if DisplayServer.get_name() != "headless":
@@ -282,17 +282,17 @@ func _check_rendered_save() -> void:
 		expect(menu.current_save_path == prefix + "_rendered.lve.png", "Save retains the preview format")
 		expect(State.current_frame == 1, "rendering the first frame preserves the editor's selected frame")
 	)
-	source.frames[0].set_cell(Vector3i.ZERO, VoxelFrame.material(Color.GREEN))
+	source.active_layer().frames[0].set_cell(Vector3i.ZERO, VoxelFrame.material(Color.GREEN))
 	step("When the user presses Save for the same PNG", func():
 		menu.get_node("SaveBtn").pressed.emit()
 	)
 	while State.edit_busy():
 		await get_tree().process_frame
 	step("Then the existing PNG contains the latest edit", func():
-		expect(VoxelDocument.load_file(prefix + "_rendered.lve.png").frames[0].get_color(Vector3i.ZERO) == Color.GREEN, "PNG overwrite retains the full edited document")
+		expect(VoxelDocument.load_file(prefix + "_rendered.lve.png").active_layer().frames[0].get_color(Vector3i.ZERO) == Color.GREEN, "PNG overwrite retains the full edited document")
 	)
 	step("Given an animation with an empty first frame", func():
-		source.frames[0].clear()
+		source.active_layer().frames[0].clear()
 		State.frames_changed.emit()
 	)
 	await menu.save_doc(menu.current_save_path)
@@ -301,7 +301,7 @@ func _check_rendered_save() -> void:
 		image.load_png_from_buffer(FileAccess.get_file_as_bytes(menu.current_save_path))
 		expect(image.is_invisible(), "an empty first frame produces a transparent preview")
 		var loaded := VoxelDocument.load_file(menu.current_save_path)
-		expect(loaded != null and loaded.frames.size() == 3 and loaded.frames[2].count() == 4097, "transparent previews retain the animation's occupied frames")
+		expect(loaded != null and loaded.active_layer().frames.size() == 3 and loaded.active_layer().frames[2].count() == 4097, "transparent previews retain the animation's occupied frames")
 	)
 
 

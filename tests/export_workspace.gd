@@ -247,7 +247,7 @@ func _run() -> void:
 		selector.select(2)
 		selector.item_selected.emit(2)
 		var loaded := VoxelDocument.new()
-		loaded.frames[0].set_cells({Vector3i.ZERO: VoxelFrame.material(Color.GREEN), Vector3i(17, 0, 0): VoxelFrame.material(Color.BLUE)})
+		loaded.active_layer().frames[0].set_cells({Vector3i.ZERO: VoxelFrame.material(Color.GREEN), Vector3i(17, 0, 0): VoxelFrame.material(Color.BLUE)})
 		State.document = loaded
 	)
 	await get_tree().process_frame

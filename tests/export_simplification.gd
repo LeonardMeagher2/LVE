@@ -22,7 +22,7 @@ func _run() -> void:
 			for y in 64:
 				for x in range(-32, 32):
 					cells[Vector3i(x, y, z)] = VoxelFrame.material(Color.RED)
-		source_document.frames[0].set_cells(cells)
+		source_document.active_layer().frames[0].set_cells(cells)
 		var striped := source_document.add_frame(0)
 		var blue_cells := {}
 		for z in 64:
@@ -92,8 +92,8 @@ func _run() -> void:
 		expect(absf(_area(hollow) - (6.0 * 64 * 64 + 6)) < 0.01, "the hollow cube retains the cavity surface area")
 		expect(_cavity_area(raw_meshes[2]) == 6.0, "all cavity walls remain at the original voxel position")
 		expect(_index_count(_mesh(3)) == 72, "the distant voxels retain their twelve separate faces")
-		expect(source_document.frames[0].count() == 262144, "simplification preserves the source solid cube")
-		expect(source_document.frames[2].count() == 262143, "simplification preserves the source cavity")
+		expect(source_document.active_layer().frames[0].count() == 262144, "simplification preserves the source solid cube")
+		expect(source_document.active_layer().frames[2].count() == 262143, "simplification preserves the source cavity")
 		expect(not State.edit_busy(), "the completed export releases editing")
 		print("Simplified four-frame export: %d ms" % (Time.get_ticks_msec() - started))
 	)

@@ -274,7 +274,7 @@ func _changed_pixels(first: Image, second: Image, first_row: int, last_row: int)
 
 
 func _frame() -> VoxelFrame:
-	return State.document.frames[State.current_frame]
+	return State.document.active_layer().frames[State.current_frame]
 
 
 func _await_selection(count: int) -> void:

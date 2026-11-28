@@ -33,6 +33,6 @@ func _run() -> void:
 	)
 
 	step("Then the clicked cell is painted with the brush color", func():
-		expect(State.document.frames[0].has(pick_target), "clicked cell is painted")
-		expect(State.document.frames[0].get_color(pick_target) == Color.from_rgba8(200, 60, 60), "painted cell has the brush color")
+		expect(State.document.active_layer().frames[0].has(pick_target), "clicked cell is painted")
+		expect(State.document.active_layer().frames[0].get_color(pick_target) == Color.from_rgba8(200, 60, 60), "painted cell has the brush color")
 	)

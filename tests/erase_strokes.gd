@@ -70,14 +70,14 @@ func _erase_drag() -> void:
 	)
 
 	step("Then the voxels under the drag are erased", func():
-		var frame: VoxelFrame = State.document.frames[0]
+		var frame: VoxelFrame = State.document.active_layer().frames[0]
 		expect(not frame.has(c0), "pressed voxel is erased")
 		expect(not frame.has(c1), "dragged voxel is erased")
 	)
 
 	step("Then the whole stroke can be undone", func():
 		State.undo_redo.undo()
-		var frame: VoxelFrame = State.document.frames[0]
+		var frame: VoxelFrame = State.document.active_layer().frames[0]
 		expect(frame.has(c0), "pressed voxel returns after undo")
 		expect(frame.has(c1), "dragged voxel returns after undo")
 	)

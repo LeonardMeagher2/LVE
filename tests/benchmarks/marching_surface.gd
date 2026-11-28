@@ -39,7 +39,7 @@ func _run() -> void:
 				print("MEASURE marching_surface %s: skipped, file does not load" % name)
 				continue
 			_order.append(name)
-			_rows[name] = _row(document.frames[0], MODEL_HASHES[name])
+			_rows[name] = _row(document.active_layer().frames[0], MODEL_HASHES[name])
 		expect(_rows.has("sphere"), "the deterministic sphere loads")
 	)
 	step("When each scene builds warmed and repeated", func():

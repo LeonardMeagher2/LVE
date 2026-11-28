@@ -39,7 +39,7 @@ func _run() -> void:
 	)
 
 	step("When the user presses the voxel and drags down", func():
-		before = State.document.frames[0].positions()
+		before = State.document.active_layer().frames[0].positions()
 		_press(center)
 		_drag_to(center + Vector2(0.0, 40.0))
 		_drag_to(center + Vector2(0.0, 80.0))
@@ -48,7 +48,7 @@ func _run() -> void:
 	)
 
 	step("Then the stroke stays on one plane", func():
-		var frame: VoxelFrame = State.document.frames[0]
+		var frame: VoxelFrame = State.document.active_layer().frames[0]
 		var drawn := 0
 		var layer := -1
 		var same := true

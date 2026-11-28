@@ -77,7 +77,7 @@ func _paint_shape() -> void:
 
 
 func _frame() -> VoxelFrame:
-	return State.document.frames[0]
+	return State.document.active_layer().frames[0]
 
 
 func _frame_center() -> Vector3:

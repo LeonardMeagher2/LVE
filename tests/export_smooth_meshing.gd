@@ -86,7 +86,7 @@ func _run() -> void:
 
 func _round_trip() -> void:
 	State.document = VoxelDocument.new()
-	State.document.frames[0] = frame.copy_frame()
+	State.document.active_layer().frames[0] = frame.copy_frame()
 	State.document.smooth_normals = true
 	export_error = await plugin("ExportPlugin")._gltf.export_gltf(ROUND_TRIP, false)
 	if export_error != OK:

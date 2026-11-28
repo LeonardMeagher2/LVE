@@ -44,7 +44,7 @@ func _run() -> void:
 		var document := VoxelDocument.load_file("res://LVE-prototypes/" + name)
 		if document == null:
 			continue
-		var frame := document.frames[0]
+		var frame := document.active_layer().frames[0]
 		var groups := _classify_voxels(frame)
 		var union := _build(frame, false, false, [])
 		var grouped := _build(frame, true, false, groups)

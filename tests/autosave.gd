@@ -90,7 +90,7 @@ func _save_delete() -> void:
 	step("Then the recovery copy sits next to the original", func():
 		expect(FileAccess.file_exists(recovery), "the recovery file exists next to the original")
 		var loaded := VoxelDocument.load_file(recovery)
-		expect(loaded != null and loaded.frames[0].has(Vector3i.ZERO), "the recovery file holds the cell")
+		expect(loaded != null and loaded.active_layer().frames[0].has(Vector3i.ZERO), "the recovery file holds the cell")
 		expect(document.edit_dirty, "the autosave copy leaves the unsaved mark")
 		var entries: Array = autosave.recovery_entries()
 		expect(entries.size() == 1, "the manager tracks one copy")
@@ -126,7 +126,7 @@ func _recover() -> void:
 		autosave.recover(entries)
 		var recovered := State.document
 		expect(recovered.edit_dirty, "the recovered document is dirty")
-		expect(recovered.frames[0].has(Vector3i.ZERO), "the recovered document holds the cell")
+		expect(recovered.active_layer().frames[0].has(Vector3i.ZERO), "the recovered document holds the cell")
 		expect(recovered.edit_save_path == original, "the recovered document keeps the original path")
 	)
 

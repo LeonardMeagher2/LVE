@@ -62,7 +62,7 @@ func _run() -> void:
 
 
 func _frame() -> VoxelFrame:
-	return State.document.frames[0]
+	return State.document.active_layer().frames[0]
 
 
 func _current_center() -> Vector3:

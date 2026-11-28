@@ -526,7 +526,7 @@ func _selection_context() -> void:
 	step("Then the region expands without the selection filter", func():
 		var region := VoxelSelection.new()
 		region.add(Vector3i(2, 3, 4))
-		var expanded := selection_model.selection_region(region, selection_context_result, session.document.frames[0])
+		var expanded := selection_model.selection_region(region, selection_context_result, session.document.active_layer().frames[0])
 		expect(expanded.count() == 2, "the X symmetry mirrors the region")
 		expect(expanded.contains(Vector3i(2, 3, 4)), "the source cell stays")
 		expect(expanded.contains(Vector3i(-3, 3, 4)), "the mirrored cell is added")
@@ -613,7 +613,7 @@ func _edit_lifecycle() -> void:
 		expect(edit_events == 1, "the open is reported")
 	)
 	step("When the frame changes and the edit finishes", func():
-		session.document.frames[0].set_cell(Vector3i.ZERO, VoxelFrame.material(Color.RED))
+		session.document.active_layer().frames[0].set_cell(Vector3i.ZERO, VoxelFrame.material(Color.RED))
 		edit_session.finish_edit(transaction)
 	)
 	step("Then the change is one history action", func():
@@ -626,16 +626,16 @@ func _edit_lifecycle() -> void:
 		session.document.edit_history.undo()
 	)
 	step("Then the frame is empty again", func():
-		expect(not session.document.frames[0].has(Vector3i.ZERO), "the undo removes the cell")
+		expect(not session.document.active_layer().frames[0].has(Vector3i.ZERO), "the undo removes the cell")
 		expect(cells_events == 1, "the restore reports the cell change")
 	)
 	step("When a new edit changes the frame and cancels", func():
 		transaction = edit_session.begin_edit()
-		session.document.frames[0].set_cell(Vector3i.ONE, VoxelFrame.material(Color.BLUE))
+		session.document.active_layer().frames[0].set_cell(Vector3i.ONE, VoxelFrame.material(Color.BLUE))
 		edit_session.cancel_edit(transaction)
 	)
 	step("Then the frame is restored without history", func():
-		expect(not session.document.frames[0].has(Vector3i.ONE), "the cancel restores the frame")
+		expect(not session.document.active_layer().frames[0].has(Vector3i.ONE), "the cancel restores the frame")
 		expect(edit_session.active_edit() == null, "the cancel closes the edit")
 		expect(history_events == 1, "the cancel records no history")
 		expect(cells_events == 2, "the cancel reports the cell change")

@@ -101,8 +101,8 @@ func open_source_file(path: String) -> void:
 		_toolbar.button_pressed = true
 	else:
 		_mount_frame_panel()
-	_frame_panel.show_frames(document.frames)
-	if not document.frames.is_empty():
+	_frame_panel.show_frames(document.active_layer().frames)
+	if not document.active_layer().frames.is_empty():
 		_frame_panel.select_frame(0)
 		_on_frame_selected(0)
 	_sync_options()
@@ -155,9 +155,9 @@ func _on_center_changed(on: bool) -> void:
 func _recenter_current() -> void:
 	if _source_job:
 		return
-	if _frame_index >= 0 and _file_document != null and _frame_index < _file_document.frames.size():
+	if _frame_index >= 0 and _file_document != null and _frame_index < _file_document.active_layer().frames.size():
 		var label := "File: %s / Frame %d" % [_file_path.get_file(), _frame_index + 1]
-		_prepare_stamp(_file_document.frames[_frame_index], {}, label, _frame_index)
+		_prepare_stamp(_file_document.active_layer().frames[_frame_index], {}, label, _frame_index)
 	elif _selection_source_frame != null and not _selection_source_mask.is_empty():
 		_prepare_stamp(_selection_source_frame, _selection_source_mask, _selection_label, -1)
 
@@ -165,11 +165,11 @@ func _recenter_current() -> void:
 func _on_frame_selected(index: int) -> void:
 	if _source_job or _file_document == null:
 		return
-	if index < 0 or index >= _file_document.frames.size():
+	if index < 0 or index >= _file_document.active_layer().frames.size():
 		return
 	_options.set_error("")
 	var label := "File: %s / Frame %d" % [_file_path.get_file(), index + 1]
-	_prepare_stamp(_file_document.frames[index], {}, label, index)
+	_prepare_stamp(_file_document.active_layer().frames[index], {}, label, index)
 
 
 func _prepare_stamp(source_frame: VoxelFrame, mask: Dictionary, label: String, frame_index: int, source_document: VoxelDocument = null, live_frame: VoxelFrame = null) -> void:
@@ -292,7 +292,7 @@ func _restore_state() -> void:
 		_settings.clear_stamp()
 	_options.set_center(_center_on_cursor)
 	if _file_document != null:
-		_frame_panel.show_frames(_file_document.frames)
+		_frame_panel.show_frames(_file_document.active_layer().frames)
 		if _frame_index >= 0:
 			_frame_panel.select_frame(_frame_index)
 		if _toolbar.button_pressed:

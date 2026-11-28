@@ -50,7 +50,7 @@ func _run() -> void:
 		viewport.push_input(click)
 		click.pressed = false
 		viewport.push_input(click)
-		var frame: VoxelFrame = State.document.frames[0]
+		var frame: VoxelFrame = State.document.active_layer().frames[0]
 		expect(frame.has(target), "the clicked cell is painted")
 		expect(frame.get_color(target) == Color.from_rgba8(200, 60, 60), "the painted cell has the picked color")
 	)

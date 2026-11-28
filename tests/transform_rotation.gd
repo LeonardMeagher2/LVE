@@ -221,7 +221,7 @@ func _viewport_setup() -> void:
 
 
 func _paint_bar() -> void:
-	var frame := State.document.frames[0]
+	var frame := State.document.active_layer().frames[0]
 	for i in 3:
 		frame.set_cell(Vector3i(i, 0, 0), VoxelFrame.material(Color.from_rgba8(200, 60, 60)))
 
@@ -250,7 +250,7 @@ func _select_all(source: VoxelFrame) -> void:
 
 
 func _frame() -> VoxelFrame:
-	return State.document.frames[0]
+	return State.document.active_layer().frames[0]
 
 
 func _current_center() -> Vector3:

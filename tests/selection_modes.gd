@@ -28,7 +28,7 @@ func _run() -> void:
 		pair_a = [seed, seed + Vector3i(1, 0, 0)]
 		pair_b = [seed + Vector3i(3, 0, 0), seed + Vector3i(4, 0, 0)]
 		var gray := Color.from_rgba8(150, 150, 150)
-		var f: VoxelFrame = State.document.frames[State.current_frame]
+		var f: VoxelFrame = State.document.active_layer().frames[State.current_frame]
 		for c in pair_a + pair_b:
 			f.set_cell(c, VoxelFrame.material(gray))
 	)

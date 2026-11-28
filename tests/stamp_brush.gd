@@ -337,10 +337,10 @@ func _panel_lifecycle() -> void:
 
 func _make_source_file() -> void:
 	source_document = VoxelDocument.new()
-	source_document.frames[0].set_cell(Vector3i(10, 0, 10), metal)
-	source_document.frames[0].set_cell(Vector3i(11, 0, 10), blue)
+	source_document.active_layer().frames[0].set_cell(Vector3i(10, 0, 10), metal)
+	source_document.active_layer().frames[0].set_cell(Vector3i(11, 0, 10), blue)
 	source_document.add_frame()
-	source_document.frames[1].set_cell(Vector3i(-5, 0, -5), green)
+	source_document.active_layer().frames[1].set_cell(Vector3i(-5, 0, -5), green)
 	expect(source_document.save_file(source_path) == OK, "the stamp source file saves")
 
 

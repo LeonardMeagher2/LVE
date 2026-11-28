@@ -455,10 +455,10 @@ func _size_dialog_run() -> void:
 func _size_fit_run() -> void:
 	step("Given a document with cells in two frames", func():
 		State.document = VoxelDocument.new()
-		State.document.frames[0].set_cell(Vector3i(-5, -1, 0), VoxelFrame.material(Color.RED))
-		State.document.frames[0].set_cell(Vector3i(2, 3, 0), VoxelFrame.material(Color.RED))
+		State.document.active_layer().frames[0].set_cell(Vector3i(-5, -1, 0), VoxelFrame.material(Color.RED))
+		State.document.active_layer().frames[0].set_cell(Vector3i(2, 3, 0), VoxelFrame.material(Color.RED))
 		State.document.add_frame()
-		State.document.frames[1].set_cell(Vector3i(0, 0, 5), VoxelFrame.material(Color.BLUE))
+		State.document.active_layer().frames[1].set_cell(Vector3i(0, 0, 5), VoxelFrame.material(Color.BLUE))
 		State.document._bounds_dirty = true
 		expect(State.document.bounds().has_volume(), "the frames hold content")
 	)

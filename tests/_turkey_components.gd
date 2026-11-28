@@ -10,7 +10,7 @@ const FACE_OFFSETS: Array[Vector3i] = [
 
 func _init() -> void:
 	var document := VoxelDocument.load_file("res://LVE-prototypes/Turkey.lve")
-	var frame := document.frames[0]
+	var frame := document.active_layer().frames[0]
 	var cells := {}
 	for location: Vector3i in frame.chunks:
 		var chunk: VoxelFrame.Chunk = frame.chunks[location]

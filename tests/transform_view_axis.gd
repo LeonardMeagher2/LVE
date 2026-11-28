@@ -394,7 +394,7 @@ func _select_cells(cells: Array) -> void:
 
 
 func _frame() -> VoxelFrame:
-	return State.document.frames[0]
+	return State.document.active_layer().frames[0]
 
 
 func _settings():

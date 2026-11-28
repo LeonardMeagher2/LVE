@@ -173,9 +173,9 @@ func _frame_reorder() -> void:
 	)
 
 	step("Then the frames are reordered", func():
-		expect(State.document.frames[0].has(Vector3i(2, 0, 0)), "frame three is now first")
-		expect(State.document.frames[1].has(Vector3i(0, 0, 0)), "frame one is now second")
-		expect(State.document.frames[2].has(Vector3i(1, 0, 0)), "frame two is now third")
+		expect(State.document.active_layer().frames[0].has(Vector3i(2, 0, 0)), "frame three is now first")
+		expect(State.document.active_layer().frames[1].has(Vector3i(0, 0, 0)), "frame one is now second")
+		expect(State.document.active_layer().frames[2].has(Vector3i(1, 0, 0)), "frame two is now third")
 	)
 
 	step("When the user undoes the reorder", func():
@@ -183,9 +183,9 @@ func _frame_reorder() -> void:
 	)
 
 	step("Then the frames return to their original order", func():
-		expect(State.document.frames[0].has(Vector3i(0, 0, 0)), "frame one is first again")
-		expect(State.document.frames[1].has(Vector3i(1, 0, 0)), "frame two is second again")
-		expect(State.document.frames[2].has(Vector3i(2, 0, 0)), "frame three is third again")
+		expect(State.document.active_layer().frames[0].has(Vector3i(0, 0, 0)), "frame one is first again")
+		expect(State.document.active_layer().frames[1].has(Vector3i(1, 0, 0)), "frame two is second again")
+		expect(State.document.active_layer().frames[2].has(Vector3i(2, 0, 0)), "frame three is third again")
 	)
 
 	step("When the user redoes the reorder", func():
@@ -193,9 +193,9 @@ func _frame_reorder() -> void:
 	)
 
 	step("Then the frames are reordered again", func():
-		expect(State.document.frames[0].has(Vector3i(2, 0, 0)), "frame three is first again")
-		expect(State.document.frames[1].has(Vector3i(0, 0, 0)), "frame one is second again")
-		expect(State.document.frames[2].has(Vector3i(1, 0, 0)), "frame two is third again")
+		expect(State.document.active_layer().frames[0].has(Vector3i(2, 0, 0)), "frame three is first again")
+		expect(State.document.active_layer().frames[1].has(Vector3i(0, 0, 0)), "frame one is second again")
+		expect(State.document.active_layer().frames[2].has(Vector3i(1, 0, 0)), "frame two is third again")
 	)
 
 	step("When the user drops a frame onto itself", func():
@@ -205,9 +205,9 @@ func _frame_reorder() -> void:
 	)
 
 	step("Then the order does not change", func():
-		expect(State.document.frames[0].has(Vector3i(2, 0, 0)), "the first frame stays first")
-		expect(State.document.frames[1].has(Vector3i(0, 0, 0)), "the second frame stays second")
-		expect(State.document.frames[2].has(Vector3i(1, 0, 0)), "the third frame stays third")
+		expect(State.document.active_layer().frames[0].has(Vector3i(2, 0, 0)), "the first frame stays first")
+		expect(State.document.active_layer().frames[1].has(Vector3i(0, 0, 0)), "the second frame stays second")
+		expect(State.document.active_layer().frames[2].has(Vector3i(1, 0, 0)), "the third frame stays third")
 	)
 
 	step("When the user drags the current frame to the end", func():
@@ -219,7 +219,7 @@ func _frame_reorder() -> void:
 
 	step("Then the current frame follows the dragged frame", func():
 		expect(State.current_frame == 2, "the current frame follows the dragged frame")
-		expect(State.document.frames[0].has(Vector3i(0, 0, 0)), "frame one is now first")
-		expect(State.document.frames[1].has(Vector3i(1, 0, 0)), "frame two is now second")
-		expect(State.document.frames[2].has(Vector3i(2, 0, 0)), "frame three is now third")
+		expect(State.document.active_layer().frames[0].has(Vector3i(0, 0, 0)), "frame one is now first")
+		expect(State.document.active_layer().frames[1].has(Vector3i(1, 0, 0)), "frame two is now second")
+		expect(State.document.active_layer().frames[2].has(Vector3i(2, 0, 0)), "frame three is now third")
 	)

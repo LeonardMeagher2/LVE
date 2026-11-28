@@ -112,7 +112,7 @@ func _depth_button() -> Button:
 
 
 func _frame() -> VoxelFrame:
-	return State.document.frames[State.current_frame]
+	return State.document.active_layer().frames[State.current_frame]
 
 
 func _screen_of(cell_position: Vector3i) -> Vector2:
@@ -355,7 +355,7 @@ func _lasso() -> void:
 		_empty_button().button_pressed = true
 		camera_rig().is_orthogonal = true
 		camera_rig().set_view("top")
-		plate_frame = State.document.frames[State.current_frame]
+		plate_frame = State.document.active_layer().frames[State.current_frame]
 		_place_plate()
 		camera_rig().center_on(_plate_bounds())
 		spacing = _screen_of(Vector3i.ZERO).distance_to(_screen_of(Vector3i(1, 0, 0)))
@@ -451,7 +451,7 @@ func _click_off_center() -> void:
 		select_toolbar_item("selection", "Box")
 		camera_rig().is_orthogonal = true
 		camera_rig().set_view("top")
-		plate_frame = State.document.frames[State.current_frame]
+		plate_frame = State.document.active_layer().frames[State.current_frame]
 		_place_plate()
 		camera_rig().center_on(_plate_bounds())
 		spacing = _screen_of(Vector3i.ZERO).distance_to(_screen_of(Vector3i(1, 0, 0)))

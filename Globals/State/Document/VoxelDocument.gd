@@ -46,17 +46,6 @@ var _composite_frame: VoxelFrame
 var _composite_index := -1
 var _composite_sources := {}
 
-static var _empty_frames: Array[VoxelFrame] = []
-
-var frames: Array[VoxelFrame]:
-	get:
-		var layer := active_layer()
-		return layer.frames if layer != null else _empty_frames
-	set(value):
-		var layer := active_layer()
-		if layer != null:
-			layer.frames = value
-
 var edit_frame := 0
 var edit_layer := 0
 var edit_tag := 0

@@ -123,7 +123,7 @@ func _run() -> void:
 		expect(loaded != null, "the material document loads")
 		if loaded:
 			expect(loaded.palette == State.get_palette(), "all swatch values and repeated colors survive loading")
-			expect(loaded.frames[0].chunks[Vector3i.ZERO].matches(Vector3i.ZERO, plain), "the loaded voxel stays independent of its swatches")
+			expect(loaded.active_layer().frames[0].chunks[Vector3i.ZERO].matches(Vector3i.ZERO, plain), "the loaded voxel stays independent of its swatches")
 	)
 	step("When an older color-only document loads", func():
 		var fields := State.document.document_data()

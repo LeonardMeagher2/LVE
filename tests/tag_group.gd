@@ -190,7 +190,7 @@ func _tag_frame_remove() -> void:
 
 	step("Then the tag covers frames 2-3", func():
 		var tag: AnimationTag = State.document.tags[1]
-		expect(State.document.frames.size() == 4, "four frames remain")
+		expect(State.document.active_layer().frames.size() == 4, "four frames remain")
 		expect(tag.from == 1 and tag.to == 2, "the tag covers frames 2-3")
 		expect(tag.frame_count() == 2, "the tag holds two frames")
 	)
@@ -201,7 +201,7 @@ func _tag_frame_remove() -> void:
 
 	step("Then the frame returns and the tag range is restored", func():
 		var tag: AnimationTag = State.document.tags[1]
-		expect(State.document.frames.size() == 5, "five frames return")
+		expect(State.document.active_layer().frames.size() == 5, "five frames return")
 		expect(tag.from == 1 and tag.to == 3, "the tag covers frames 2-4 again")
 	)
 
@@ -211,7 +211,7 @@ func _tag_frame_remove() -> void:
 
 	step("Then the frame is removed and the tag is trimmed again", func():
 		var tag: AnimationTag = State.document.tags[1]
-		expect(State.document.frames.size() == 4, "four frames remain")
+		expect(State.document.active_layer().frames.size() == 4, "four frames remain")
 		expect(tag.from == 1 and tag.to == 2, "the tag covers frames 2-3 again")
 	)
 
@@ -235,7 +235,7 @@ func _tag_frame_remove() -> void:
 
 	step("Then the tag shifts back over frames 1-2", func():
 		var tag: AnimationTag = State.document.tags[1]
-		expect(State.document.frames.size() == 3, "three frames remain")
+		expect(State.document.active_layer().frames.size() == 3, "three frames remain")
 		expect(tag.from == 0 and tag.to == 1, "the tag covers frames 1-2")
 		expect(tag.frame_count() == 2, "the tag still holds two frames")
 	)
@@ -248,7 +248,7 @@ func _tag_frame_remove() -> void:
 
 	step("Then the tag stays valid", func():
 		var tag: AnimationTag = State.document.tags[2]
-		expect(State.document.frames.size() == 2, "two frames remain")
+		expect(State.document.active_layer().frames.size() == 2, "two frames remain")
 		expect(tag.frame_count() == 1, "the tag still holds one frame")
 	)
 
@@ -263,7 +263,7 @@ func _frames() -> void:
 	)
 
 	step("Then the document has 2 frames and the new frame is current", func():
-		expect(State.document.frames.size() == 2, "document has 2 frames")
+		expect(State.document.active_layer().frames.size() == 2, "document has 2 frames")
 		expect(State.current_frame == 1, "new frame is current")
 	)
 
@@ -272,7 +272,7 @@ func _frames() -> void:
 	)
 
 	step("Then the document has 1 frame again", func():
-		expect(State.document.frames.size() == 1, "document has 1 frame")
+		expect(State.document.active_layer().frames.size() == 1, "document has 1 frame")
 		expect(State.current_frame == 0, "the original frame is current")
 	)
 
@@ -281,6 +281,6 @@ func _frames() -> void:
 	)
 
 	step("Then the document has 2 frames again", func():
-		expect(State.document.frames.size() == 2, "document has 2 frames")
+		expect(State.document.active_layer().frames.size() == 2, "document has 2 frames")
 		expect(State.current_frame == 1, "the new frame is current again")
 	)

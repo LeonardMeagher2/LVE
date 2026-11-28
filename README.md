@@ -35,6 +35,13 @@ LVE is a voxel editor for 3D pixel art and animation. Paint and sculpt voxels, g
 
 - Animate frames with tags, loops, and playback.
 
+### Layers
+
+- Stack layers with one cel for every frame.
+- Hide, lock, rename, reorder, duplicate, and merge layers.
+- Move selected voxels to another layer.
+- Resize or collapse the timeline and the frame thumbnails.
+
 ### Materials and preview
 
 - Set albedo, metallic, roughness, and emission per voxel.
@@ -58,6 +65,8 @@ LVE is a voxel editor for 3D pixel art and animation. Paint and sculpt voxels, g
 - Share the original PNG file to preserve its document data.
 - Set the document size, smooth normals, and ambient occlusion.
 - Recover unsaved work after a crash.
+
+See [docs/LAYERS.md](docs/LAYERS.md) for layers and the timeline.
 
 See [docs/DOCUMENT_FORMAT.md](docs/DOCUMENT_FORMAT.md) for the format.
 

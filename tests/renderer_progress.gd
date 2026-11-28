@@ -201,7 +201,7 @@ func _document_no_stale() -> void:
 	)
 	step("When the document is replaced", func():
 		var replacement := VoxelDocument.new()
-		replacement.frames[0].set_cell(Vector3i.ZERO, VoxelFrame.material(Color.GREEN))
+		replacement.active_layer().frames[0].set_cell(Vector3i.ZERO, VoxelFrame.material(Color.GREEN))
 		State.document = replacement
 	)
 	await _context_safety([_watch])

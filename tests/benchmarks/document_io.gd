@@ -20,7 +20,7 @@ func _ready() -> void:
 func _cost() -> void:
 	step("Given a two frame document with mixed materials", func():
 		document = _document()
-		expect(document.frames.size() == FRAMES, "the fixture holds both frames")
+		expect(document.active_layer().frames.size() == FRAMES, "the fixture holds both frames")
 		expect(_cells(document) > SPAN * SPAN * SPAN / 2, "the fixture holds a dense block")
 	)
 	step("When the document is encoded, saved, and loaded warmed", func():
@@ -41,7 +41,7 @@ func _cost() -> void:
 		expect(loaded != null, "the saved document loads")
 		if loaded == null:
 			return
-		expect(loaded.frames.size() == FRAMES, "the loaded document keeps both frames")
+		expect(loaded.active_layer().frames.size() == FRAMES, "the loaded document keeps both frames")
 		expect(_cells(loaded) == _cells(document), "the loaded document keeps every cell")
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 	)
@@ -62,7 +62,7 @@ func _measure(name: String, body: Callable) -> void:
 
 func _document() -> VoxelDocument:
 	var value := VoxelDocument.new()
-	value.frames.clear()
+	value.active_layer().frames.clear()
 	value.frame_delays.clear()
 	var half := SPAN / 2
 	for frame_index in FRAMES:
@@ -80,7 +80,7 @@ func _document() -> VoxelDocument:
 
 func _cells(value: VoxelDocument) -> int:
 	var total := 0
-	for frame in value.frames:
+	for frame in value.active_layer().frames:
 		total += frame.count()
 	return total
 

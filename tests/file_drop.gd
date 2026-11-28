@@ -22,7 +22,7 @@ func before_test() -> void:
 	red_path = prefix + "_red.png"
 	green_path = prefix + "_green.png"
 	var document := VoxelDocument.new()
-	document.frames[0].set_cell(Vector3i(1, 2, 3), VoxelFrame.material(Color.GREEN))
+	document.active_layer().frames[0].set_cell(Vector3i(1, 2, 3), VoxelFrame.material(Color.GREEN))
 	expect(document.save_file(document_path) == OK, "the document fixture saves")
 	expect(_save_image(red_path, Color.RED) == OK, "the red image fixture saves")
 	expect(_save_image(green_path, Color.GREEN) == OK, "the green image fixture saves")
@@ -51,8 +51,8 @@ func _drop_document() -> void:
 		expect(finished, "the drop finishes")
 		expect(State.tabs.size() == 1, "the empty tab holds the dropped document")
 		expect(State.document.edit_save_path == _absolute(document_path), "the dropped path becomes the save path")
-		expect(State.document.frames[0].count() == 1, "the dropped document keeps its voxel")
-		expect(State.document.frames[0].get_color(Vector3i(1, 2, 3)) == Color.GREEN, "the dropped document keeps its color")
+		expect(State.document.active_layer().frames[0].count() == 1, "the dropped document keeps its voxel")
+		expect(State.document.active_layer().frames[0].get_color(Vector3i(1, 2, 3)) == Color.GREEN, "the dropped document keeps its color")
 		expect(not menu.get_node("FileError").visible, "no file error appears")
 	)
 
@@ -89,11 +89,11 @@ func _drop_multiple() -> void:
 		if State.tabs.size() != 3:
 			return
 		expect(State.tabs[0].edit_save_path == _absolute(document_path), "the first tab holds the document")
-		expect(State.tabs[0].frames[0].get_color(Vector3i(1, 2, 3)) == Color.GREEN, "the document keeps its voxel")
+		expect(State.tabs[0].active_layer().frames[0].get_color(Vector3i(1, 2, 3)) == Color.GREEN, "the document keeps its voxel")
 		expect(State.tabs[1].edit_save_path.is_empty(), "the first image has no save path")
-		expect(_is_color(State.tabs[1].frames[0].get_color(State.tabs[1].frames[0].positions()[0]), Color.RED), "the first image is red")
+		expect(_is_color(State.tabs[1].active_layer().frames[0].get_color(State.tabs[1].active_layer().frames[0].positions()[0]), Color.RED), "the first image is red")
 		expect(State.tabs[2].edit_save_path.is_empty(), "the second image has no save path")
-		expect(_is_color(State.tabs[2].frames[0].get_color(State.tabs[2].frames[0].positions()[0]), Color.GREEN), "the second image is green")
+		expect(_is_color(State.tabs[2].active_layer().frames[0].get_color(State.tabs[2].active_layer().frames[0].positions()[0]), Color.GREEN), "the second image is green")
 	)
 
 

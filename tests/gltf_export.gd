@@ -25,7 +25,7 @@ func _run() -> void:
 	step("Given three frames with different geometry and animation tags", func():
 		State.document = VoxelDocument.new()
 		source_document = State.document
-		source_document.frames[0].set_cell(Vector3i(-17, 3, -1), VoxelFrame.material(SOURCE_COLOR, SOURCE_EMISSION, 0.8, 0.25))
+		source_document.active_layer().frames[0].set_cell(Vector3i(-17, 3, -1), VoxelFrame.material(SOURCE_COLOR, SOURCE_EMISSION, 0.8, 0.25))
 		source_document.set_frame_delay(0, 100)
 		var second := source_document.add_frame()
 		source_document.set_frame_delay(1, 250)

@@ -278,7 +278,7 @@ func _worker_context_change() -> void:
 	)
 	await _settle()
 	step("Then the preparation aborts with the source frame intact", func():
-		expect(State.document.frames.size() == 2, "the frame change added a frame")
+		expect(State.document.active_layer().frames.size() == 2, "the frame change added a frame")
 		expect(_frame().count() == BLOCK_COUNT, "the source frame keeps every voxel")
 		expect(_tool()._jobs.is_empty(), "the aborted preparation joins the worker")
 		expect(not State.edit_busy(), "the aborted preparation releases editing")
@@ -469,7 +469,7 @@ func _block_selection(offset: Vector3i) -> Dictionary:
 
 
 func _frame() -> VoxelFrame:
-	return State.document.frames[0]
+	return State.document.active_layer().frames[0]
 
 
 func _current_center() -> Vector3:

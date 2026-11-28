@@ -13,7 +13,7 @@ func _ready() -> void:
 
 
 func _frame() -> VoxelFrame:
-	return State.document.frames[0]
+	return State.document.active_layer().frames[0]
 
 
 func _left_drag(from: Vector2, rel: Vector2, alt := false) -> void:

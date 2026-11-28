@@ -263,7 +263,7 @@ func _bounds(positions: PackedVector3Array) -> AABB:
 
 func _round_trip() -> void:
 	State.document = VoxelDocument.new()
-	State.document.frames[0] = frame.copy_frame()
+	State.document.active_layer().frames[0] = frame.copy_frame()
 	State.document.mesh_style = 1
 	export_error = await plugin("ExportPlugin")._gltf.export_gltf(ROUND_TRIP, false)
 	if export_error != OK:

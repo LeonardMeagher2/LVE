@@ -40,7 +40,7 @@ func _run() -> void:
 	await main.find_child("MenuBar", true, false)._on_file_opened(image_path)
 	step("Then Open replaces the document directly", func():
 		expect(State.document != previous_document, "the PNG is a new document")
-		expect(State.document.frames.size() == 1, "the PNG opens as one frame")
+		expect(State.document.active_layer().frames.size() == 1, "the PNG opens as one frame")
 		expect(State.document.get_file_name() == image_path.get_file(), "the document uses the image filename")
 		expect(not clipboard._paste_tool._active, "opening the PNG creates no paste preview")
 		expect(not State.edit_busy(), "opening the PNG completes without a placement step")
@@ -61,7 +61,7 @@ func _run() -> void:
 		var center := frame.get_bounds().get_center().abs()
 		expect(center.x <= 0.5 and center.y <= 0.5 and center.z <= 0.5, "the image bounds use the nearest voxel-grid center to the origin")
 		expect(not frame.has(marker), "the PNG has no marker from the old document")
-		expect(previous_document.frames[0].get_color(marker) == Color.GREEN, "the previous document resource remains unchanged")
+		expect(previous_document.active_layer().frames[0].get_color(marker) == Color.GREEN, "the previous document resource remains unchanged")
 	)
 	step("Then the palette contains each retained image color once", func():
 		expect(State.document.palette == [VoxelFrame.material(Color.RED), VoxelFrame.material(Color.BLUE), VoxelFrame.material(Color.YELLOW), VoxelFrame.material(Color.BLACK)], "the palette contains only distinct retained PNG colors")

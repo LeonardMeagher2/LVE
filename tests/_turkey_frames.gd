@@ -3,9 +3,9 @@ extends SceneTree
 
 func _init() -> void:
 	var document := VoxelDocument.load_file("res://LVE-prototypes/Turkey.lve")
-	print("frames=%d" % document.frames.size())
-	for index in document.frames.size():
-		var frame: VoxelFrame = document.frames[index]
+	print("frames=%d" % document.active_layer().frames.size())
+	for index in document.active_layer().frames.size():
+		var frame: VoxelFrame = document.active_layer().frames[index]
 		var cells := 0
 		for location: Vector3i in frame.chunks:
 			var chunk: VoxelFrame.Chunk = frame.chunks[location]

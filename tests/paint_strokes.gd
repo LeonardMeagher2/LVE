@@ -122,7 +122,7 @@ func _paint() -> void:
 	)
 
 	step("Then a stroke of voxels is painted", func():
-		var frame: VoxelFrame = State.document.frames[0]
+		var frame: VoxelFrame = State.document.active_layer().frames[0]
 		expect(frame.count() > 1, "the drag painted a stroke")
 		expect(frame.has(pressed), "the pressed cell is painted")
 	)
@@ -132,7 +132,7 @@ func _paint() -> void:
 	)
 
 	step("Then the stroke is removed", func():
-		expect(State.document.frames[0].count() == 0, "the stroke is removed")
+		expect(State.document.active_layer().frames[0].count() == 0, "the stroke is removed")
 	)
 
 
@@ -148,7 +148,7 @@ func _undo_redo() -> void:
 	)
 
 	step("Then the stroke voxel is in the frame", func():
-		expect(State.document.frames[0].has(painted), "stroke voxel present")
+		expect(State.document.active_layer().frames[0].has(painted), "stroke voxel present")
 	)
 
 	step("When the user undoes the stroke", func():
@@ -156,7 +156,7 @@ func _undo_redo() -> void:
 	)
 
 	step("Then the stroke voxel is removed", func():
-		expect(not State.document.frames[0].has(painted), "stroke voxel removed after undo")
+		expect(not State.document.active_layer().frames[0].has(painted), "stroke voxel removed after undo")
 	)
 
 	step("When the user redoes the stroke", func():
@@ -164,7 +164,7 @@ func _undo_redo() -> void:
 	)
 
 	step("Then the stroke voxel returns", func():
-		expect(State.document.frames[0].has(painted), "stroke voxel present after redo")
+		expect(State.document.active_layer().frames[0].has(painted), "stroke voxel present after redo")
 	)
 
 
@@ -186,7 +186,7 @@ func _stroke_connect() -> void:
 	)
 
 	step("Then the cells between press and release are all painted", func():
-		var frame: VoxelFrame = State.document.frames[0]
+		var frame: VoxelFrame = State.document.active_layer().frames[0]
 		var path := StrokeLine.cells(pressed, mouse_end)
 		expect(frame.has(pressed), "the pressed cell is painted")
 		expect(frame.has(mouse_end), "the cell under the mouse is painted")
@@ -283,7 +283,7 @@ func _pixel_perfect_tool() -> void:
 	)
 
 	step("Then the stroke is connected and the cursor cell is painted", func():
-		var frame: VoxelFrame = State.document.frames[0]
+		var frame: VoxelFrame = State.document.active_layer().frames[0]
 		expect(frame.count() >= 2, "the stroke painted a line")
 		expect(frame.has(mouse_end), "the cursor cell is painted")
 	)
@@ -356,7 +356,7 @@ func _brush_modes() -> void:
 	)
 
 	step("Then a voxel appears in front of the clicked face", func():
-		var frame: VoxelFrame = State.document.frames[0]
+		var frame: VoxelFrame = State.document.active_layer().frames[0]
 		expect(frame.has(front), "a voxel is added beside the clicked voxel")
 	)
 
@@ -366,17 +366,17 @@ func _brush_modes() -> void:
 	)
 
 	step("Then the front voxel is recolored and no voxel is added", func():
-		var frame: VoxelFrame = State.document.frames[0]
+		var frame: VoxelFrame = State.document.active_layer().frames[0]
 		expect(frame.count() == 2, "the paintbrush adds no new voxels")
 		expect(frame.get_color(front) == Color.from_rgba8(200, 60, 60), "the front voxel has the brush color")
 	)
 
 	step("When the user clears the grid and clicks the empty grid with the paintbrush", func():
-		State.document.frames[0].clear()
+		State.document.active_layer().frames[0].clear()
 		sync_viewport()
 		_click(center)
 	)
 
 	step("Then the paintbrush leaves the empty grid unchanged", func():
-		expect(State.document.frames[0].count() == 0, "no voxel is painted on empty cells")
+		expect(State.document.active_layer().frames[0].count() == 0, "no voxel is painted on empty cells")
 	)

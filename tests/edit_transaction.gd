@@ -354,7 +354,7 @@ func _undo_other_frame() -> void:
 		State.undo_redo.undo()
 	)
 	step("Then the other frame is restored exactly and redo restores it", func():
-		var duplicate: VoxelFrame = State.document.frames[1]
+		var duplicate: VoxelFrame = State.document.active_layer().frames[1]
 		expect(duplicate.get_color(Vector3i.ZERO) == Color.RED, "undo restores the other frame")
 		State.undo_redo.redo()
 		expect(duplicate.get_color(Vector3i.ZERO) == Color.BLUE, "redo restores the other frame edit")

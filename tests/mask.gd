@@ -33,13 +33,13 @@ func _run() -> void:
 	)
 
 	step("Then only the inside click painted a voxel", func():
-		var frame: VoxelFrame = State.document.frames[0]
+		var frame: VoxelFrame = State.document.active_layer().frames[0]
 		expect(frame.has(inside), "inside cell is painted")
 		expect(not frame.has(outside), "outside cell is not painted")
 	)
 
 	step("Given the paintbrush with voxels inside and outside the selection", func():
-		State.document.frames[0].clear()
+		State.document.active_layer().frames[0].clear()
 		State.document.set_cell(0, inside, VoxelFrame.material(Color.from_rgba8(150, 150, 150)))
 		State.document.set_cell(0, outside, VoxelFrame.material(Color.from_rgba8(150, 150, 150)))
 		select_toolbar_item("paint", "Paintbrush")
@@ -52,7 +52,7 @@ func _run() -> void:
 	)
 
 	step("Then only the inside voxel is recolored", func():
-		var frame: VoxelFrame = State.document.frames[0]
+		var frame: VoxelFrame = State.document.active_layer().frames[0]
 		expect(frame.get_color(inside) == Color.from_rgba8(200, 60, 60), "inside voxel is recolored")
 		expect(frame.get_color(outside) == Color.from_rgba8(150, 150, 150), "outside voxel keeps its color")
 	)
@@ -67,13 +67,13 @@ func _run() -> void:
 	)
 
 	step("Then only the inside voxel is erased", func():
-		var frame: VoxelFrame = State.document.frames[0]
+		var frame: VoxelFrame = State.document.active_layer().frames[0]
 		expect(not frame.has(inside), "inside voxel is erased")
 		expect(frame.has(outside), "outside voxel remains")
 	)
 
 	step("Given a gray blob crossing the selection boundary and the fill tool", func():
-		State.document.frames[0].clear()
+		State.document.active_layer().frames[0].clear()
 		State.selection.from_box(inside, inside + Vector3i(0, 0, 1))
 		State.selection_changed.emit()
 		State.document.set_cell(0, inside, VoxelFrame.material(Color.from_rgba8(150, 150, 150)))
@@ -88,7 +88,7 @@ func _run() -> void:
 	)
 
 	step("Then the fill stops at the selection boundary", func():
-		var frame: VoxelFrame = State.document.frames[0]
+		var frame: VoxelFrame = State.document.active_layer().frames[0]
 		expect(frame.get_color(inside) == Color.from_rgba8(200, 60, 60), "seed voxel is recolored")
 		expect(frame.get_color(inside + Vector3i(0, 0, 1)) == Color.from_rgba8(200, 60, 60), "selected neighbor is recolored")
 		expect(frame.get_color(inside + Vector3i(0, 0, 2)) == Color.from_rgba8(150, 150, 150), "unselected voxel keeps its color")
@@ -97,14 +97,14 @@ func _run() -> void:
 	step("When the user clears the selection and paints outside it", func():
 		State.selection.clear()
 		State.selection_changed.emit()
-		State.document.frames[0].clear()
+		State.document.active_layer().frames[0].clear()
 		activate_tool("Toolbar")
 		select_toolbar_item("Toolbar", "Pencil")
 		_click(center + Vector2(0.0, 60.0))
 	)
 
 	step("Then painting works again without a selection", func():
-		expect(State.document.frames[0].has(outside), "outside cell is painted")
+		expect(State.document.active_layer().frames[0].has(outside), "outside cell is painted")
 	)
 
 
