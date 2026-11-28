@@ -39,7 +39,7 @@ func _init() -> void:
 	playback.is_playing_toggled.connect(is_playing_toggled.emit)
 	playback.tag_changed.connect(tag_changed.emit)
 	_active_document = VoxelDocument.new()
-	_active_document.add_tag("Default", 0, _active_document.frames.size() - 1)
+	_active_document.add_tag("Default", 0, _active_document.frame_count() - 1)
 	tabs.append(_active_document)
 	playback.document = _active_document
 
@@ -171,8 +171,9 @@ func _adopt_document(value: VoxelDocument) -> void:
 	if on_installed.is_valid():
 		on_installed.call()
 	if _active_document.tags.is_empty():
-		_active_document.add_tag("Default", 0, _active_document.frames.size() - 1)
-	_active_document.edit_frame = clampi(_active_document.edit_frame, 0, _active_document.frames.size() - 1)
+		_active_document.add_tag("Default", 0, _active_document.frame_count() - 1)
+	_active_document.edit_frame = clampi(_active_document.edit_frame, 0, _active_document.frame_count() - 1)
+	_active_document.edit_layer = clampi(_active_document.edit_layer, 0, _active_document.layers.size() - 1)
 	_active_document.edit_tag = clampi(_active_document.edit_tag, -1, _active_document.tags.size() - 1)
 	playback.document = _active_document
 	playback.restore_playback()

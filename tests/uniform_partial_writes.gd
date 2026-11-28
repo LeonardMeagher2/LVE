@@ -12,7 +12,6 @@ class NoHintFrame extends VoxelFrame:
 	func copy_frame() -> VoxelFrame:
 		var copy := NoHintFrame.new()
 		copy.restore(capture())
-		copy.delay_ms = delay_ms
 		return copy
 
 

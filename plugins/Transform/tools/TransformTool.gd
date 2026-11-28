@@ -531,7 +531,9 @@ func _apply_preview() -> void:
 		_refresh_gizmo()
 		if not job.changed_chunks.is_empty():
 			_source_document._bounds_dirty = true
-			State.chunks_changed.emit(_source_document.frames.find(_source_frame), job.changed_chunks)
+			var location := _source_document.find_cel(_source_frame)
+			if location.x >= 0:
+				State.chunks_changed.emit(location.y, job.changed_chunks)
 		if _track_selection:
 			State.selection.restore(job.destination_selection)
 			State.selection_changed.emit()

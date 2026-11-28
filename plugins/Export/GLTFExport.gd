@@ -17,6 +17,7 @@ class ExportJob extends VoxelFrame.EditJob:
 	const ATLAS := preload("res://Globals/Rendering/VoxelAtlas.gd")
 	const SURFACE := preload("res://Globals/Rendering/VoxelSurface.gd")
 	var frames: Array[VoxelFrame] = []
+	var frame_delays: PackedInt32Array = []
 	var tags: Array[AnimationTag] = []
 	var frame_surfaces: Array[Array] = []
 	var frame_atlases: Array[RefCounted] = []
@@ -377,6 +378,7 @@ func export_gltf(path: String, center_origin := true, tag_index := -1, overrides
 	var last := selected_tag.to if selected_tag else State.get_frame_count() - 1
 	for index in range(first, last + 1):
 		job.frames.append(State.get_voxel_frame(index).copy_frame())
+		job.frame_delays.append(State.document.frame_delay(index))
 	for index in State.document.tags.size():
 		if selected_tag and index != tag_index:
 			continue
@@ -449,7 +451,7 @@ func export_gltf(path: String, center_origin := true, tag_index := -1, overrides
 	var library := AnimationLibrary.new()
 	player.add_animation_library("", library)
 	for tag in job.tags:
-		_add_export_clip(library, tag.name, _tag_sequence(tag), job.frames, tag.repeats == 0)
+		_add_export_clip(library, tag.name, _tag_sequence(tag), job.frames, job.frame_delays, tag.repeats == 0)
 	State.update_operation(_export_operation_id, 0, -1, "Writing glTF")
 	var gltf_document := GLTFDocument.new()
 	gltf_document.root_node_mode = GLTFDocument.ROOT_NODE_MODE_KEEP_ROOT
@@ -496,7 +498,7 @@ func _tag_sequence(tag: AnimationTag) -> Array[int]:
 	return sequence
 
 
-func _add_export_clip(library: AnimationLibrary, clip_name: String, sequence: Array[int], frames: Array[VoxelFrame], looping: bool) -> void:
+func _add_export_clip(library: AnimationLibrary, clip_name: String, sequence: Array[int], frames: Array[VoxelFrame], frame_delays: PackedInt32Array, looping: bool) -> void:
 	var animation := Animation.new()
 	animation.loop_mode = Animation.LOOP_LINEAR if looping else Animation.LOOP_NONE
 	for frame_index in frames.size():
@@ -508,7 +510,7 @@ func _add_export_clip(library: AnimationLibrary, clip_name: String, sequence: Ar
 	var time := 0.0
 	for step_index in sequence.size():
 		var frame_index := sequence[step_index]
-		time += maxf(frames[frame_index].delay_ms, 1.0) / 1000.0
+		time += maxf(frame_delays[frame_index] if frame_index < frame_delays.size() else 100, 1.0) / 1000.0
 		if step_index + 1 < sequence.size():
 			var next_frame := sequence[step_index + 1]
 			if next_frame != frame_index:

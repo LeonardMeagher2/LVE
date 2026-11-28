@@ -54,8 +54,8 @@ func _tags() -> void:
 func _tag_playback() -> void:
 	step("Given a document with four frames", func():
 		_add_frames(3)
-		for frame in State.document.frames:
-			frame.delay_ms = FRAME_DELAY_MS
+		for index in State.document.frame_count():
+			State.document.set_frame_delay(index, FRAME_DELAY_MS)
 	)
 
 	step("When the user plays a forward tag over frames 2-4", func():

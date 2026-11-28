@@ -146,11 +146,11 @@ func _export_run() -> void:
 		State.document.set_cell(0, Vector3i.ZERO, VoxelFrame.material(Color.RED))
 		State.document.add_frame()
 		State.document.set_cell(1, Vector3i.ZERO, VoxelFrame.material(Color.BLUE))
-		State.document.frames[0].delay_ms = 100
-		State.document.frames[1].delay_ms = 250
+		State.document.set_frame_delay(0, 100)
+		State.document.set_frame_delay(1, 250)
 		State.document.add_frame()
 		State.document.set_cell(2, Vector3i.ZERO, VoxelFrame.material(Color.GREEN))
-		State.document.frames[2].delay_ms = 50
+		State.document.set_frame_delay(2, 50)
 		State.frames_changed.emit()
 		var lighting: Dictionary = exporter._model_scene.get_lighting_settings()
 		lighting.shaded = false
@@ -210,9 +210,9 @@ func _composite_run() -> void:
 		State.document.add_frame()
 		State.document.add_frame()
 		State.document.set_cell(2, Vector3i(6, 0, 0), VoxelFrame.material(Color.GREEN))
-		State.document.frames[0].delay_ms = 100
-		State.document.frames[1].delay_ms = 100
-		State.document.frames[2].delay_ms = 100
+		State.document.set_frame_delay(0, 100)
+		State.document.set_frame_delay(1, 100)
+		State.document.set_frame_delay(2, 100)
 		State.frames_changed.emit()
 		var lighting: Dictionary = exporter._model_scene.get_lighting_settings()
 		lighting.shaded = false
@@ -249,11 +249,11 @@ func _preview_run() -> void:
 		State.document.set_cell(0, Vector3i.ZERO, VoxelFrame.material(Color.RED))
 		State.document.add_frame()
 		State.document.set_cell(1, Vector3i.ZERO, VoxelFrame.material(Color.BLUE))
-		State.document.frames[0].delay_ms = 100
-		State.document.frames[1].delay_ms = 250
+		State.document.set_frame_delay(0, 100)
+		State.document.set_frame_delay(1, 250)
 		State.document.add_frame()
 		State.document.set_cell(2, Vector3i.ZERO, VoxelFrame.material(Color.GREEN))
-		State.document.frames[2].delay_ms = 50
+		State.document.set_frame_delay(2, 50)
 		State.frames_changed.emit()
 		exporter._sheet_settings.get_node("ViewRow/View").select(2)
 		exporter._sheet_settings.get_node("ViewRow/View").item_selected.emit(2)

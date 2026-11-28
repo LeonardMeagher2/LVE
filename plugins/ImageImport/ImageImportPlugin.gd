@@ -22,6 +22,7 @@ class ImportJob extends VoxelFrame.EditJob:
 			return
 		imported_document.file_path = image_path
 		imported_document.frames.clear()
+		imported_document.frame_delays.clear()
 		var descriptors: Array = []
 		var metadata := {}
 		var sidecar_path := image_path.get_basename() + ".json"
@@ -107,9 +108,8 @@ class ImportJob extends VoxelFrame.EditJob:
 				completed += 1
 				if completed % 4096 == 0 and not checkpoint(completed):
 					return false
-		var frame := VoxelFrame.new()
-		frame.delay_ms = maxi(1, int(descriptor.get("duration", 100)))
-		imported_document.frames.append(frame)
+		imported_document.add_frame()
+		imported_document.set_frame_delay(imported_document.frame_count() - 1, maxi(1, int(descriptor.get("duration", 100))))
 		_patterns.append(pattern)
 		return true
 

@@ -27,9 +27,11 @@ func _run() -> void:
 				for x in 16:
 					solid[Vector3i(x, y, z)] = VoxelFrame.material(Color.RED)
 		source.frames[0].set_cells(solid)
-		source.frames[0].delay_ms = 123
-		source.add_frame().delay_ms = 250
-		source.add_frame(0).delay_ms = 400
+		source.set_frame_delay(0, 123)
+		source.add_frame()
+		source.set_frame_delay(1, 250)
+		source.add_frame(0)
+		source.set_frame_delay(2, 400)
 		source.palette.assign([VoxelFrame.material(Color.BLACK), VoxelFrame.material(Color.RED, Color(0.5, 0.25, 0.125), 0.75, 0.25), VoxelFrame.material(Color(0.25, 0.5, 0.75, 0.5))])
 		source.tags.clear()
 		for mode in 4:
@@ -56,7 +58,7 @@ func _run() -> void:
 		preview.set_pixel(0, 0, Color.RED)
 		encoded = source.encode_document()
 		expect(not encoded.is_empty(), "the animation has a data-only encoding")
-		expect(encoded.decode_u32(4) == 4, "material palettes use document version 4")
+		expect(encoded.decode_u32(4) == 5, "documents use version 5")
 		expect(encoded.size() < 8192, "uniform voxel regions keep the document compact")
 	)
 	step("When the user saves both document formats", func():
@@ -129,9 +131,9 @@ func _run() -> void:
 		expect(loaded != null and loaded.frames[0].get_color(Vector3i.ZERO) == Color.BLUE, "saving replaces the existing document")
 	)
 	step("When a save has invalid data or an inaccessible destination", func():
-		State.document.frames[0].delay_ms = 0
+		State.document.set_frame_delay(0, 0)
 		expect(State.document.save_file(prefix + ".lve") == ERR_INVALID_DATA, "invalid data reports a save error")
-		State.document.frames[0].delay_ms = 123
+		State.document.set_frame_delay(0, 123)
 		expect(menu.save_doc(prefix + "/missing.lve") != OK, "an inaccessible destination reports a save error")
 		menu.get_node("FileError").hide()
 	)
@@ -204,11 +206,11 @@ func _check_invalid_documents() -> void:
 	_reject(invalid, "payload corruption is rejected")
 	for nodes in [PackedInt32Array([-2]), PackedInt32Array([-1]), PackedInt32Array([100]), PackedInt32Array([1, 0])]:
 		var fields := source.document_data().duplicate(true)
-		var record: Array = fields.frames[0].voxels[1][0]
+		var record: Array = fields.layers[0].frames[0].voxels[1][0]
 		record[record.size() - 1] = nodes
 		_reject(_wrap(var_to_bytes(fields)), "invalid octree nodes are rejected")
 	var fields := source.document_data().duplicate(true)
-	fields.frames[0].voxels[1].append(fields.frames[0].voxels[1][0])
+	fields.layers[0].frames[0].voxels[1].append(fields.layers[0].frames[0].voxels[1][0])
 	_reject(_wrap(var_to_bytes(fields)), "duplicate chunks are rejected")
 	fields = source.document_data().duplicate(true)
 	fields.tags[0].to = 99
@@ -262,7 +264,7 @@ func _check_invalid_documents() -> void:
 	for index in 1025:
 		full_chunks.append([Vector3i(index, 0, 0), PackedColorArray([Color.TRANSPARENT, Color.RED]), PackedColorArray(), PackedColorArray(), PackedInt32Array([1])])
 	fields = source.document_data().duplicate(true)
-	fields.frames[0].voxels = [1, full_chunks]
+	fields.layers[0].frames[0].voxels = [1, full_chunks]
 	_reject(_wrap(var_to_bytes(fields)), "excessive voxel expansion is rejected before allocation")
 	_write(prefix + "_invalid.lve", invalid)
 

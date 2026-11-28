@@ -486,7 +486,7 @@ func open_document(path: String, saved: bool = true, replace: bool = false) -> b
 func _can_reuse_tab() -> bool:
 	var document := State.document
 	return document.edit_save_path.is_empty() and not document.edit_dirty \
-		and document.frames.size() == 1 and document.frames[0].count() == 0
+		and document.frame_count() == 1 and document.is_empty()
 
 func _on_file_opened(path: String) -> void:
 	if State.edit_busy():

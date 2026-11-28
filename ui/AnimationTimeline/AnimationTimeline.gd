@@ -42,7 +42,7 @@ func _rebuild_strip() -> void:
 	for cell in %FrameGrid.get_children():
 		%FrameGrid.remove_child(cell)
 		cell.queue_free()
-	var n := State.document.frames.size()
+	var n := State.get_frame_count()
 	%FrameGrid.columns = n
 	_has_tag_row = State.get_active_tag() != null
 	if _has_tag_row:
@@ -90,7 +90,7 @@ func _on_to_end_pressed() -> void:
 
 
 func _focus_current_frame() -> void:
-	var offset := State.document.frames.size() if _has_tag_row else 0
+	var offset := State.get_frame_count() if _has_tag_row else 0
 	var index := offset + State.current_frame
 	if index < 0 or index >= %FrameGrid.get_child_count():
 		return

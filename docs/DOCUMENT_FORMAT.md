@@ -9,20 +9,20 @@ Leonard's Voxel Editor uses one document encoding in two file types.
 
 ## Binary envelope
 
-Version 4 uses this 16-byte header.
+Version 5 uses this 16-byte header.
 Header integers use little-endian byte order.
 
 | Offset | Bytes | Contents |
 | --- | --- | --- |
 | 0 | 4 | Signature: `4C 56 45 00`, or `LVE` and a zero byte |
-| 4 | 4 | Unsigned format version: `4` |
+| 4 | 4 | Unsigned format version: `5` |
 | 8 | 4 | Unsigned payload byte count |
 | 12 | 4 | First four bytes of the SHA-256 digest of the payload |
 | 16 | Variable | Godot 4 Variant binary payload |
 
 The digest detects accidental corruption.
 The digest does not authenticate a file.
-Version 4 files store a SHA-256 prefix.
+Version 4 and later files store a SHA-256 prefix.
 Versions 1 to 3 store a CRC-32.
 The decoder accepts both forms.
 
@@ -33,14 +33,15 @@ The Variant encoding is Godot-specific.
 ## Payload schema
 
 The payload is an untyped dictionary with string keys.
-All document fields are required, except the workspace fields and `size`.
+All document fields are required, except the workspace fields, `size`, and `layers` in older versions.
 Older version 3 files omit them.
 A missing `size` means no document bound.
 
 | Key | Type | Contents |
 | --- | --- | --- |
 | `palette` | Untyped array | Ordered `PackedFloat32Array` material entries |
-| `frames` | Untyped array | Frame dictionaries |
+| `frames` | Untyped array | Frame timing dictionaries |
+| `layers` | Untyped array | Layer dictionaries. Optional in versions 1 to 4 |
 | `tags` | Untyped array | Animation tag dictionaries |
 | `smooth_normals` | Boolean | Model shading option |
 | `mesh_style` | Integer | Surface style. `0` uses axis-aligned blocks. `1` uses a low-poly marching-cubes surface. Optional. Older files use `0`. |
@@ -51,16 +52,17 @@ A missing `size` means no document bound.
 | `view` | Untyped dictionary | Editor view state. Optional. |
 | `camera` | Untyped dictionary | Editor camera pose. Optional. |
 | `edit_frame` | Integer | The frame that the editor shows. Optional. |
+| `edit_layer` | Integer | The layer that the editor edits. Optional. |
 | `edit_tag` | Integer | The active animation tag, or -1. Optional. |
 | `edit_playing` | Boolean | Whether animation playback runs. Optional. |
 | `size` | `Vector3i` | Optional centered document size. Zero on an axis means that axis is infinite. |
 
-Each frame has these fields.
-
-| Key | Type | Contents |
-| --- | --- | --- |
-| `delay_ms` | Integer | Frame duration in milliseconds |
-| `voxels` | Untyped array | `[3, chunk_records]` |
+Each frame has a `delay_ms` field.
+Each layer has `name`, `visible`, `locked`, and `frames` fields.
+A layer `frames` array holds one cel for every document frame.
+Each cel has a `voxels` field with `[3, chunk_records]`.
+Versions 1 to 4 store `voxels` in each frame instead.
+The loader uses those frames as one layer named `Layer 1`.
 
 Each material holds nine floats: color RGBA, emission RGB, metallic, and roughness.
 Palette entries and voxels use the same material layout.
@@ -84,7 +86,8 @@ Each chunk record is `[location, materials, nodes]`.
 - No node can subdivide a one-voxel region.
 - Every node must belong to the chunk tree.
 
-The loader also reads document versions 1 and 2.
+The loader also reads document versions 1 to 4.
+Each old document becomes one layer named `Layer 1`.
 Their color palettes receive black emission, metallic 0, and roughness 1.
 The loader also reads voxel storage versions 1 and 2.
 Saving writes the current versions.
@@ -166,7 +169,7 @@ A restored distance clamps to a view of eight voxels at the closest and to twice
 
 ### Frame and playback
 
-`edit_frame` and `edit_tag` store the current frame and tag.
+`edit_frame`, `edit_layer`, and `edit_tag` store the current frame, layer, and tag.
 `edit_playing` opens the document with playback running.
 Playback restarts at the start of its loop.
 A reverse loop starts at the last frame.
@@ -211,6 +214,7 @@ The file excludes script references, resources, source paths, geometry caches, s
 ## PNG container
 
 The PNG uses a transparent 256 × 256 preview of the first frame.
+The preview uses the visible layers of the first frame.
 The preview uses saved editor lighting and an orthographic isometric camera.
 Empty first frames produce transparent previews.
 
@@ -242,11 +246,12 @@ The current format uses these limits.
 | --- | --- |
 | Complete file | 64 MiB |
 | Animation frames | 10,000 |
+| Layers | 64 |
 | Animation tags | 10,000 |
 | Tag name | 1,024 characters |
 | Palette entries | 65,536 |
-| Occupied voxels across all frames | 4,194,304 |
-| Chunk records per frame | 65,536 |
+| Occupied voxels across all layers and frames | 4,194,304 |
+| Chunk records per cel | 65,536 |
 | Absolute chunk coordinate on each axis | 65,535 |
 | Materials per chunk, including the empty entry | 4,097 |
 | Octree nodes per chunk | 4,681 |
@@ -254,6 +259,9 @@ The current format uses these limits.
 | Decoded Variant values | 1,000,000 |
 | Frame duration | 1 through 86,400,000 milliseconds |
 | Finite repeat count | 1 through 1,000,000 |
+
+Each layer must have one cel for every frame.
+Layer names must not exceed 1,024 characters.
 
 Voxel and palette material components must be finite and between zero and one.
 Light color components and strengths must be finite and between zero and sixteen.

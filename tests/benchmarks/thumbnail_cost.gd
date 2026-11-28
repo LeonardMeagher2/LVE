@@ -42,7 +42,8 @@ func _cost() -> void:
 func _document() -> VoxelDocument:
 	var value := VoxelDocument.new()
 	value.frames.clear()
-	var frame := VoxelFrame.new()
+	value.frame_delays.clear()
+	var frame := value.add_frame()
 	var changes := {}
 	var half := SPAN / 2
 	for x in range(-half, half):
@@ -52,7 +53,6 @@ func _document() -> VoxelDocument:
 					continue
 				changes[Vector3i(x, y, z)] = VoxelFrame.material(_color(x, y, z))
 	frame.set_cells(changes)
-	value.frames.append(frame)
 	return value
 
 

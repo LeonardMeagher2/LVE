@@ -85,7 +85,7 @@ func _refresh_status() -> void:
 	_left.text = "#%s   %d×%d×%d   #%d/%d   %d%%" % [
 		State.current_color.to_html(false),
 		roundi(bounds_size.x), roundi(bounds_size.y), roundi(bounds_size.z),
-		State.current_frame + 1, State.document.frames.size(), zoom_percent,
+		State.current_frame + 1, State.document.frame_count(), zoom_percent,
 	]
 	_right.text = ""
 

@@ -49,7 +49,6 @@ func _cell(location: Vector3i) -> Vector3i:
 
 func _seed_frame(locations: Array[Vector3i]) -> VoxelFrame:
 	var frame := VoxelFrame.new()
-	frame.delay_ms = 123
 	for location in locations:
 		frame.set_cell(_cell(location), BLUE)
 	return frame
@@ -64,7 +63,6 @@ func _full_and_subset() -> void:
 	step("Given a full snapshot and a subset of the same frame", func():
 		expect(full.chunks.size() == 3, "the full snapshot holds every chunk")
 		expect(subset.chunks.size() == 2, "the subset holds the requested present chunks")
-		expect(subset.delay_ms == frame.delay_ms, "the subset keeps the frame delay")
 		expect(subset.chunks[zero] == frame.chunks[zero], "the subset shares the live chunk object")
 	)
 	step("When the source writes and erases a captured chunk", func():

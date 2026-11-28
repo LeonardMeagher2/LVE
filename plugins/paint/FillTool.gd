@@ -309,7 +309,9 @@ func _emit_chunk_notifications() -> void:
 	_changed_chunks.clear()
 	_last_emit_us = Time.get_ticks_usec()
 	_last_emit_frame = Engine.get_process_frames()
-	State.chunks_changed.emit(_source_document.frames.find(_source_frame), changed)
+	var location := _source_document.find_cel(_source_frame)
+	if location.x >= 0:
+		State.chunks_changed.emit(location.y, changed)
 
 
 func _fill_current(fill_revision: int) -> bool:

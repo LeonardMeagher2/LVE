@@ -87,8 +87,9 @@ func _measure_export(name: String, body: Callable) -> void:
 func _document() -> VoxelDocument:
 	var value := VoxelDocument.new()
 	value.frames.clear()
+	value.frame_delays.clear()
 	for frame_index in FRAMES:
-		var frame := VoxelFrame.new()
+		var frame := value.add_frame()
 		var changes := {}
 		var offset := frame_index / 3
 		for x in range(-RADIUS, RADIUS + 1):
@@ -98,8 +99,7 @@ func _document() -> VoxelDocument:
 						continue
 					changes[Vector3i(x + offset, y, z)] = VoxelFrame.material(_color(x, y, z))
 		frame.set_cells(changes)
-		frame.delay_ms = 100
-		value.frames.append(frame)
+		value.set_frame_delay(frame_index, 100)
 	return value
 
 

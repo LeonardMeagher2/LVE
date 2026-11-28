@@ -448,8 +448,8 @@ func _session_playback() -> void:
 		session = DocumentSession.new()
 		session.document.add_frame()
 		session.document.add_tag("Walk", 0, 1)
-		session.document.frames[0].delay_ms = 10
-		session.document.frames[1].delay_ms = 10
+		session.document.set_frame_delay(0, 10)
+		session.document.set_frame_delay(1, 10)
 		session.frame_changed.connect(_on_frame_event)
 		session.tag_changed.connect(_on_tag_event)
 	)

@@ -9,9 +9,7 @@ var frame_index := 0
 func set_frame(value:int) -> void:
 	%Button.button_pressed = State.current_frame == value
 	%Number.text = str(value + 1)
-	var voxel_frame = State.get_voxel_frame(value)
-	if voxel_frame:
-		%Delay.value = voxel_frame.delay_ms
+	%Delay.value = State.document.frame_delay(value)
 
 
 func set_texture(value:Texture) -> void:

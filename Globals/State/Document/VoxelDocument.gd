@@ -6,10 +6,11 @@ signal file_path_changed()
 
 const APP_NAME := "Leonard's Voxel Editor"
 const FILE_SIGNATURE := [76, 86, 69, 0]
-const FORMAT_VERSION := 4
+const FORMAT_VERSION := 5
 const MAX_FILE_BYTES := 64 * 1024 * 1024
 const MAX_DOCUMENT_SIZE := 4096
 const MAX_FRAMES := 10000
+const MAX_LAYERS := 64
 const MAX_TAGS := 10000
 const MAX_PALETTE_COLORS := 65536
 const PNG_SIGNATURE := [137, 80, 78, 71, 13, 10, 26, 10]
@@ -20,7 +21,6 @@ static var _profile_rescan_calls := 0
 static var _profile_rescan_us := 0
 
 @export var palette: Array[PackedFloat32Array] = []
-@export var frames: Array[VoxelFrame] = []
 @export var tags: Array[AnimationTag] = []
 @export var smooth_normals := false
 @export_range(0, 1, 1) var mesh_style := 0
@@ -31,6 +31,9 @@ static var _profile_rescan_us := 0
 @export var view_settings: Dictionary = {}
 @export var size := Vector3i.ZERO
 
+var layers: Array[VoxelLayer] = []
+var frame_delays: Array[int] = []
+
 var file_path := "":
 	set(value):
 		if value == file_path:
@@ -40,7 +43,19 @@ var file_path := "":
 var _bounds: AABB
 var _bounds_dirty := true
 
+static var _empty_frames: Array[VoxelFrame] = []
+
+var frames: Array[VoxelFrame]:
+	get:
+		var layer := active_layer()
+		return layer.frames if layer != null else _empty_frames
+	set(value):
+		var layer := active_layer()
+		if layer != null:
+			layer.frames = value
+
 var edit_frame := 0
+var edit_layer := 0
 var edit_tag := 0
 var edit_playing := false
 var edit_selection := VoxelSelection.new()
@@ -53,8 +68,14 @@ var reset_workspace := false
 
 
 func _init() -> void:
-	if frames.is_empty():
-		frames.append(VoxelFrame.new())
+	if layers.is_empty():
+		var layer := VoxelLayer.new()
+		layer.frames.append(VoxelFrame.new())
+		layers.append(layer)
+	if frame_delays.is_empty():
+		frame_delays.append(100)
+	edit_layer = clampi(edit_layer, 0, layers.size() - 1)
+	edit_frame = clampi(edit_frame, 0, frame_delays.size() - 1)
 
 
 func _notification(what: int) -> void:
@@ -73,12 +94,18 @@ func document_data() -> Dictionary:
 	for entry in palette:
 		palette_data.append(entry.duplicate())
 	var frame_data := []
-	for frame in frames:
-		frame_data.append({"delay_ms": frame.delay_ms, "voxels": frame.storage_data()})
+	for delay in frame_delays:
+		frame_data.append({"delay_ms": delay})
+	var layer_data := []
+	for layer in layers:
+		var cel_data := []
+		for cel in layer.frames:
+			cel_data.append({"voxels": cel.storage_data()})
+		layer_data.append({"name": layer.name, "visible": layer.visible, "locked": layer.locked, "frames": cel_data})
 	var tag_data := []
 	for tag in tags:
 		tag_data.append({"name": tag.name, "from": tag.from, "to": tag.to, "loop_mode": tag.loop_mode, "repeats": tag.repeats})
-	return {"palette": palette_data, "frames": frame_data, "tags": tag_data, "smooth_normals": smooth_normals, "mesh_style": mesh_style, "ao": ao_strength, "lighting": _storage_settings(lighting_settings), "export": _storage_settings(export_settings), "tools": _storage_settings(tool_settings), "view": _storage_settings(view_settings), "camera": _storage_settings(edit_camera), "edit_frame": edit_frame, "edit_tag": edit_tag if not tags.is_empty() else -1, "edit_playing": edit_playing, "size": size}
+	return {"palette": palette_data, "frames": frame_data, "layers": layer_data, "tags": tag_data, "smooth_normals": smooth_normals, "mesh_style": mesh_style, "ao": ao_strength, "lighting": _storage_settings(lighting_settings), "export": _storage_settings(export_settings), "tools": _storage_settings(tool_settings), "view": _storage_settings(view_settings), "camera": _storage_settings(edit_camera), "edit_frame": edit_frame, "edit_layer": edit_layer, "edit_tag": edit_tag if not tags.is_empty() else -1, "edit_playing": edit_playing, "size": size}
 
 
 static func _storage_settings(settings: Dictionary) -> Dictionary:
@@ -177,12 +204,31 @@ static func decode_document(data: PackedByteArray) -> VoxelDocument:
 		return null
 	var document := VoxelDocument.new()
 	document.palette = unique_palette(fields.palette)
-	document.frames.clear()
+	document.frame_delays.clear()
 	for frame_data in fields.frames:
-		var frame := VoxelFrame.new()
-		frame.delay_ms = frame_data.delay_ms
-		frame.restore_storage(frame_data.voxels)
-		document.frames.append(frame)
+		document.frame_delays.append(int(frame_data.delay_ms))
+	document.layers.clear()
+	var stored_layers: Variant = fields.get("layers", null)
+	if stored_layers is Array and not stored_layers.is_empty():
+		for layer_data in stored_layers:
+			var layer := VoxelLayer.new()
+			layer.name = layer_data.name
+			layer.visible = layer_data.visible
+			layer.locked = layer_data.locked
+			for cel_data in layer_data.frames:
+				var cel := VoxelFrame.new()
+				cel.restore_storage(cel_data.voxels)
+				layer.frames.append(cel)
+			document.layers.append(layer)
+	else:
+		var layer := VoxelLayer.new()
+		layer.name = "Layer 1"
+		for frame_data in fields.frames:
+			var cel := VoxelFrame.new()
+			cel.restore_storage(frame_data.voxels)
+			layer.frames.append(cel)
+		document.layers.append(layer)
+	document.edit_layer = clampi(int(fields.get("edit_layer", 0)), 0, document.layers.size() - 1)
 	for tag_data in fields.tags:
 		document.add_tag(tag_data.name, tag_data.from, tag_data.to, tag_data.loop_mode, tag_data.repeats)
 	document.smooth_normals = fields.smooth_normals
@@ -199,7 +245,7 @@ static func decode_document(data: PackedByteArray) -> VoxelDocument:
 	var stored_camera: Variant = fields.get("camera", {})
 	document.edit_camera = stored_camera if stored_camera is Dictionary else {}
 	var stored_frame: Variant = fields.get("edit_frame", 0)
-	document.edit_frame = clampi(int(stored_frame), 0, document.frames.size() - 1)
+	document.edit_frame = clampi(int(stored_frame), 0, document.frame_count() - 1)
 	var stored_tag: Variant = fields.get("edit_tag", 0)
 	document.edit_tag = clampi(int(stored_tag), -1, document.tags.size() - 1) if not document.tags.is_empty() else -1
 	var stored_playing: Variant = fields.get("edit_playing", false)
@@ -346,14 +392,40 @@ static func _valid_document_data(data: Variant) -> bool:
 		return false
 	if not data.get("frames") is Array or data.frames.is_empty() or data.frames.size() > MAX_FRAMES:
 		return false
-	var occupied := 0
+	var frame_count: int = data.frames.size()
 	for frame in data.frames:
 		if not frame is Dictionary or not _integer_in(frame.get("delay_ms"), 1, 86400000):
 			return false
-		var count := VoxelFrame.validate_storage(frame.get("voxels"), VoxelFrame.MAX_STORED_VOXELS - occupied)
-		if count < 0:
+	var occupied := 0
+	var stored_layers: Variant = data.get("layers", null)
+	if stored_layers == null:
+		for frame in data.frames:
+			var count := VoxelFrame.validate_storage(frame.get("voxels"), VoxelFrame.MAX_STORED_VOXELS - occupied)
+			if count < 0:
+				return false
+			occupied += count
+	elif stored_layers is Array and not stored_layers.is_empty() and stored_layers.size() <= MAX_LAYERS:
+		for layer in stored_layers:
+			if not layer is Dictionary:
+				return false
+			if not layer.get("name") is String or layer.name.length() > 1024:
+				return false
+			if not layer.get("visible") is bool or not layer.get("locked") is bool:
+				return false
+			var cels: Variant = layer.get("frames")
+			if not cels is Array or cels.size() != frame_count:
+				return false
+			for cel in cels:
+				if not cel is Dictionary:
+					return false
+				var count := VoxelFrame.validate_storage(cel.get("voxels"), VoxelFrame.MAX_STORED_VOXELS - occupied)
+				if count < 0:
+					return false
+				occupied += count
+		if not _integer_in(data.get("edit_layer", 0), 0, stored_layers.size() - 1):
 			return false
-		occupied += count
+	else:
+		return false
 	if not data.get("tags") is Array or data.tags.size() > MAX_TAGS:
 		return false
 	for tag in data.tags:
@@ -361,7 +433,7 @@ static func _valid_document_data(data: Variant) -> bool:
 			return false
 		if not tag.get("name") is String or tag.name.length() > 1024:
 			return false
-		if not _integer_in(tag.get("from"), 0, data.frames.size() - 1) or not _integer_in(tag.get("to"), tag.from, data.frames.size() - 1):
+		if not _integer_in(tag.get("from"), 0, frame_count - 1) or not _integer_in(tag.get("to"), tag.from, frame_count - 1):
 			return false
 		if not _integer_in(tag.get("loop_mode"), 0, 3) or not _integer_in(tag.get("repeats"), 0, 1000000):
 			return false
@@ -586,28 +658,161 @@ static func _valid_camera(data: Variant) -> bool:
 	return true
 
 
+func frame_count() -> int:
+	return frame_delays.size()
+
+
+func frame_delay(index: int) -> int:
+	return frame_delays[index] if index >= 0 and index < frame_delays.size() else 100
+
+
+func set_frame_delay(index: int, ms: int) -> void:
+	if index >= 0 and index < frame_delays.size():
+		frame_delays[index] = ms
+
+
+func active_layer() -> VoxelLayer:
+	if layers.is_empty():
+		return null
+	return layers[edit_layer] if edit_layer >= 0 and edit_layer < layers.size() else layers[0]
+
+
+func cel(layer_index: int, frame_index: int) -> VoxelFrame:
+	if layer_index < 0 or layer_index >= layers.size():
+		return null
+	var layer := layers[layer_index]
+	if frame_index < 0 or frame_index >= layer.frames.size():
+		return null
+	return layer.frames[frame_index]
+
+
+func active_cel(frame_index: int = -1) -> VoxelFrame:
+	return cel(edit_layer, edit_frame if frame_index < 0 else frame_index)
+
+
+func find_cel(cel_position: VoxelFrame) -> Vector2i:
+	if cel_position == null:
+		return Vector2i(-1, -1)
+	for layer_index in layers.size():
+		var frame_index := layers[layer_index].frames.find(cel_position)
+		if frame_index >= 0:
+			return Vector2i(layer_index, frame_index)
+	return Vector2i(-1, -1)
+
+
+func make_layer(layer_name := "") -> VoxelLayer:
+	var layer := VoxelLayer.new()
+	layer.name = layer_name if not layer_name.is_empty() else "Layer %d" % (layers.size() + 1)
+	for index in frame_count():
+		layer.frames.append(VoxelFrame.new())
+	return layer
+
+
+func replace_active_frames(value: Array[VoxelFrame], delays: Array = []) -> void:
+	var layer := active_layer()
+	if layer == null:
+		return
+	layer.frames.clear()
+	layer.frames.append_array(value)
+	frame_delays.clear()
+	if delays.is_empty():
+		for index in value.size():
+			frame_delays.append(100)
+	else:
+		for delay in delays:
+			frame_delays.append(int(delay))
+	edit_frame = clampi(edit_frame, 0, frame_count() - 1)
+	_bounds_dirty = true
+
+
+func composite_frame(index: int) -> VoxelFrame:
+	if index < 0 or index >= frame_count():
+		return null
+	var visible_layers: Array[VoxelLayer] = []
+	for layer in layers:
+		if layer.visible and index < layer.frames.size():
+			visible_layers.append(layer)
+	if visible_layers.is_empty():
+		return null
+	if visible_layers.size() == 1:
+		return visible_layers[0].frames[index]
+	var composite := VoxelFrame.new()
+	var locations := {}
+	for layer in visible_layers:
+		for location in layer.frames[index].chunks:
+			locations[location] = true
+	for location: Vector3i in locations:
+		var merged := _merge_chunk(visible_layers, index, location)
+		if merged != null:
+			composite.chunks[location] = merged
+	composite.invalidate_bounds()
+	return composite
+
+
+static func _merge_chunk(visible_layers: Array[VoxelLayer], frame_index: int, location: Vector3i) -> VoxelFrame.Chunk:
+	var contributors: Array[VoxelFrame.Chunk] = []
+	for layer in visible_layers:
+		var chunk: VoxelFrame.Chunk = layer.frames[frame_index].chunks.get(location)
+		if chunk != null and chunk.occupied_count > 0:
+			contributors.append(chunk)
+	if contributors.is_empty():
+		return null
+	if contributors.size() == 1:
+		return contributors[0]
+	var merged := VoxelFrame.Chunk.new()
+	merged.location = location
+	for chunk in contributors:
+		for cell in chunk.world_cells():
+			merged.store(cell, chunk.get_material(cell))
+	merged.bounds_dirty = true
+	merged.voxel_revision = 1
+	return merged
+
+
+func is_empty() -> bool:
+	for layer in layers:
+		for cel_frame in layer.frames:
+			if cel_frame.count() > 0:
+				return false
+	return true
+
+
 func add_frame(from_frame: int = -1) -> VoxelFrame:
-	var f := VoxelFrame.new()
-	if from_frame >= 0 and from_frame < frames.size():
-		f = frames[from_frame].copy_frame()
-	elif not frames.is_empty():
-		f.delay_ms = frames.back().delay_ms
-	var old_last := frames.size() - 1
-	frames.append(f)
+	var delay := 100
+	if from_frame >= 0 and from_frame < frame_count():
+		delay = frame_delays[from_frame]
+	elif not frame_delays.is_empty():
+		delay = frame_delays.back()
+	var old_last := frame_count() - 1
+	frame_delays.append(delay)
+	var added: VoxelFrame = null
+	for layer in layers:
+		var next: VoxelFrame
+		if from_frame >= 0 and from_frame < layer.frames.size():
+			next = layer.frames[from_frame].copy_frame()
+		else:
+			next = VoxelFrame.new()
+		layer.frames.append(next)
+		if layer == active_layer():
+			added = next
 	_extend_end_tags(old_last)
-	return f
+	return added
 
 
 func duplicate_frame(i: int) -> void:
-	if i < 0 or i >= frames.size():
+	if i < 0 or i >= frame_count():
 		return
-	var f := frames[i].copy_frame()
-	frames.insert(i + 1, f)
-	_extend_end_tags(frames.size() - 2)
+	for layer in layers:
+		if i < layer.frames.size():
+			layer.frames.insert(i + 1, layer.frames[i].copy_frame())
+		else:
+			layer.frames.insert(i + 1, VoxelFrame.new())
+	frame_delays.insert(i + 1, frame_delays[i])
+	_extend_end_tags(frame_count() - 2)
 
 
 func _extend_end_tags(old_last: int) -> void:
-	var new_last := frames.size() - 1
+	var new_last := frame_count() - 1
 	if new_last <= old_last:
 		return
 	for tag in tags:
@@ -616,19 +821,44 @@ func _extend_end_tags(old_last: int) -> void:
 
 
 func remove_frame(i: int) -> void:
-	if frames.size() <= 1:
+	if frame_count() <= 1:
 		return
-	if i < 0 or i >= frames.size():
+	if i < 0 or i >= frame_count():
 		return
-	frames.remove_at(i)
+	frame_delays.remove_at(i)
+	for layer in layers:
+		if i < layer.frames.size():
+			layer.frames.remove_at(i)
 	_shift_tags_after_remove(i)
 	_bounds_dirty = true
-	edit_frame = clampi(edit_frame, 0, frames.size() - 1)
+	edit_frame = clampi(edit_frame, 0, frame_count() - 1)
 	edit_tag = clampi(edit_tag, -1, tags.size() - 1)
 
 
+func move_frame_block(from: int, count: int, to: int) -> void:
+	var size := frame_count()
+	if count < 1 or from < 0 or from + count > size:
+		return
+	var target := clampi(to, 0, size - count)
+	if target == from:
+		return
+	_move_block(frame_delays, from, count, target)
+	for layer in layers:
+		if layer.frames.size() == size:
+			_move_block(layer.frames, from, count, target)
+	_bounds_dirty = true
+
+
+static func _move_block(source: Array, from: int, count: int, to: int) -> void:
+	var block := source.slice(from, from + count)
+	for index in count:
+		source.remove_at(from)
+	for index in count:
+		source.insert(to + index, block[index])
+
+
 func _shift_tags_after_remove(i: int) -> void:
-	var last := frames.size() - 1
+	var last := frame_count() - 1
 	for tag in tags:
 		if tag.from > i:
 			tag.from -= 1
@@ -643,8 +873,8 @@ func _shift_tags_after_remove(i: int) -> void:
 func add_tag(name: String, from: int, to: int, loop_mode := AnimationTag.LoopMode.FORWARD, repeats := 0) -> int:
 	var tag := AnimationTag.new()
 	tag.name = name
-	tag.from = clampi(from, 0, frames.size() - 1)
-	tag.to = clampi(to, tag.from, frames.size() - 1)
+	tag.from = clampi(from, 0, frame_count() - 1)
+	tag.to = clampi(to, tag.from, frame_count() - 1)
 	tag.loop_mode = loop_mode
 	tag.repeats = repeats
 	tags.append(tag)
@@ -687,13 +917,20 @@ func bounds() -> AABB:
 	return _bounds
 
 
+func invalidate_bounds() -> void:
+	_bounds_dirty = true
+
+
 func _rescan_bounds() -> void:
 	var started := Time.get_ticks_usec()
 	var b := AABB()
-	for f in frames:
-		var box := f.get_bounds()
-		if box.has_volume():
-			b = b.merge(box) if b.has_volume() else box
+	for layer in layers:
+		if not layer.visible:
+			continue
+		for f in layer.frames:
+			var box := f.get_bounds()
+			if box.has_volume():
+				b = b.merge(box) if b.has_volume() else box
 
 	_bounds = b
 	_bounds_dirty = false
@@ -727,23 +964,37 @@ func set_cell(frame: int, cell: Vector3i, cell_material: PackedFloat32Array) -> 
 	if VoxelFrame.is_empty(cell_material):
 		erase(frame, cell)
 		return
-	frames[frame].set_cell(cell, cell_material)
-	_grow_bounds(cell)
+	var cel_frame := cel(edit_layer, frame)
+	if cel_frame == null:
+		return
+	cel_frame.set_cell(cell, cell_material)
+	var layer := active_layer()
+	if layer != null and layer.visible:
+		_grow_bounds(cell)
+	else:
+		_bounds_dirty = true
 
 
 func erase(frame: int, cell: Vector3i) -> void:
-	if not frames[frame].has(cell):
+	var cel_frame := cel(edit_layer, frame)
+	if cel_frame == null or not cel_frame.has(cell):
 		return
-	frames[frame].set_cell(cell, VoxelFrame.material(Color.TRANSPARENT))
-	_may_shrink_bounds(frame, cell)
+	cel_frame.set_cell(cell, VoxelFrame.material(Color.TRANSPARENT))
+	var layer := active_layer()
+	if layer != null and layer.visible:
+		_may_shrink_bounds(frame, cell)
+	else:
+		_bounds_dirty = true
 
 
 func get_color_at(frame: int, cell: Vector3i) -> Color:
-	return frames[frame].get_color(cell)
+	var cel_frame := cel(edit_layer, frame)
+	return cel_frame.get_color(cell) if cel_frame != null else Color.TRANSPARENT
 
 
 func has_cell(frame: int, cell: Vector3i) -> bool:
-	return frames[frame].has(cell)
+	var cel_frame := cel(edit_layer, frame)
+	return cel_frame != null and cel_frame.has(cell)
 
 
 func get_color(index: int) -> Color:

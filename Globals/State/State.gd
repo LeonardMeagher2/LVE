@@ -854,15 +854,15 @@ func _notification(what: int) -> void:
 
 
 func next_frame() -> void:
-	var n := document.frames.size()
+	var n := document.frame_count()
 	current_frame = (current_frame + 1) % n
 
 
 func prev_frame() -> void:
-	current_frame = posmod(current_frame - 1, document.frames.size())
+	current_frame = posmod(current_frame - 1, document.frame_count())
 
 func get_frame_count() -> int:
-	return document.frames.size()
+	return document.frame_count()
 
 
 func set_smooth_normals(value: bool) -> void:
@@ -925,18 +925,18 @@ func _apply_ao_strength(value: float) -> void:
 
 
 func get_voxel_frame(frame:int) -> VoxelFrame:
-	if frame < 0 or frame >= document.frames.size():
-		return null
-	return document.frames[frame]
+	return document.cel(document.edit_layer, frame)
 
 func get_current_voxel_frame() -> VoxelFrame:
-	if current_frame < 0 or current_frame >= document.frames.size():
-		return null
-	return document.frames[current_frame]
+	return document.cel(document.edit_layer, current_frame)
+
+
+func get_composite_voxel_frame(frame: int) -> VoxelFrame:
+	return document.composite_frame(frame)
 
 
 func add_frames(count: int, index := -1) -> void:
-	var size := document.frames.size()
+	var size := document.frame_count()
 	var amount := clampi(count, 1, 256)
 	var target := size if index < 0 else clampi(index, 0, size)
 	edit_context_changing.emit()
@@ -945,8 +945,8 @@ func add_frames(count: int, index := -1) -> void:
 	for added in amount:
 		document.add_frame()
 	if target < size:
-		_move_block(size, amount, target)
-	current_frame = clampi(target + amount - 1, 0, document.frames.size() - 1)
+		document.move_frame_block(size, amount, target)
+	current_frame = clampi(target + amount - 1, 0, document.frame_count() - 1)
 	_record_frame_action("Add Frame" if amount == 1 else "Add Frames", before, _frame_snapshot())
 
 
@@ -968,7 +968,7 @@ func delete_frame() -> void:
 
 
 func remove_frames(indices: Array) -> void:
-	var size := document.frames.size()
+	var size := document.frame_count()
 	var unique := {}
 	for value in indices:
 		if value is int or value is float:
@@ -989,12 +989,12 @@ func remove_frames(indices: Array) -> void:
 		document.remove_frame(index)
 		if index < current:
 			removed_before_current += 1
-	current_frame = clampi(current - removed_before_current, 0, document.frames.size() - 1)
+	current_frame = clampi(current - removed_before_current, 0, document.frame_count() - 1)
 	_record_frame_action("Delete Frame" if descending.size() == 1 else "Delete Frames", before, _frame_snapshot())
 
 
 func move_frames(from: int, count: int, to: int) -> void:
-	var size := document.frames.size()
+	var size := document.frame_count()
 	if count < 1 or from < 0 or from + count > size:
 		return
 	var target := clampi(to, 0, size - count)
@@ -1002,7 +1002,7 @@ func move_frames(from: int, count: int, to: int) -> void:
 		return
 	edit_context_changing.emit()
 	var before := _frame_snapshot()
-	_move_block(from, count, target)
+	document.move_frame_block(from, count, target)
 	var current := current_frame
 	if current >= from and current < from + count:
 		current += target - from
@@ -1019,22 +1019,13 @@ func move_frame(from: int, to: int) -> void:
 	move_frames(from, 1, to)
 
 
-func _move_block(from: int, count: int, to: int) -> void:
-	var frames := document.frames
-	var block := frames.slice(from, from + count)
-	var rest := frames.slice(0, from)
-	rest.append_array(frames.slice(from + count))
-	var reordered: Array[VoxelFrame] = []
-	reordered.append_array(rest.slice(0, to))
-	reordered.append_array(block)
-	reordered.append_array(rest.slice(to))
-	document.frames = reordered
-	document._bounds_dirty = true
-
-
 func _frame_snapshot() -> Dictionary:
+	var layer_frames := []
+	for layer in document.layers:
+		layer_frames.append({"layer": layer, "frames": layer.frames.duplicate()})
 	return {
-		"frames": document.frames.duplicate(),
+		"layers": layer_frames,
+		"delays": document.frame_delays.duplicate(),
 		"ranges": _tag_ranges(),
 		"current": current_frame,
 	}
@@ -1042,18 +1033,23 @@ func _frame_snapshot() -> Dictionary:
 
 func _record_frame_action(action_name: String, before: Dictionary, after: Dictionary) -> void:
 	undo_redo.create_action(action_name)
-	undo_redo.add_undo_method(_restore_frame_layout.bind(before["frames"], before["ranges"], before["current"]))
-	undo_redo.add_do_method(_restore_frame_layout.bind(after["frames"], after["ranges"], after["current"]))
+	undo_redo.add_undo_method(_restore_frame_layout.bind(before["layers"], before["delays"], before["ranges"], before["current"]))
+	undo_redo.add_do_method(_restore_frame_layout.bind(after["layers"], after["delays"], after["ranges"], after["current"]))
 	_commit_history(false)
-	_restore_frame_layout(after["frames"], after["ranges"], after["current"])
+	_restore_frame_layout(after["layers"], after["delays"], after["ranges"], after["current"])
 
 
-func _restore_frame_layout(frames: Array[VoxelFrame], ranges: Array[Vector2i], current: int) -> void:
+func _restore_frame_layout(layer_frames: Array, delays: Array, ranges: Array[Vector2i], current: int) -> void:
 	edit_context_changing.emit()
-	document.frames = frames.duplicate()
+	for entry in layer_frames:
+		var layer: VoxelLayer = entry.layer
+		layer.frames.clear()
+		layer.frames.append_array(entry.frames)
+	document.frame_delays.clear()
+	document.frame_delays.append_array(delays)
 	_set_tag_ranges(ranges)
 	document._bounds_dirty = true
-	current_frame = clampi(current, 0, frames.size() - 1)
+	current_frame = clampi(current, 0, document.frame_count() - 1)
 	frames_changed.emit()
 
 
@@ -1076,7 +1072,7 @@ func set_frame_delay(index: int, ms: int) -> void:
 
 
 func set_frame_delays(indices: Array, ms: int) -> void:
-	var size := document.frames.size()
+	var size := document.frame_count()
 	var previous := {}
 	for value in indices:
 		if not (value is int or value is float):
@@ -1084,8 +1080,8 @@ func set_frame_delays(indices: Array, ms: int) -> void:
 		var index := int(value)
 		if index < 0 or index >= size:
 			continue
-		if document.frames[index].delay_ms != ms:
-			previous[index] = document.frames[index].delay_ms
+		if document.frame_delay(index) != ms:
+			previous[index] = document.frame_delay(index)
 	if previous.is_empty():
 		return
 	var next := {}
@@ -1100,8 +1096,7 @@ func set_frame_delays(indices: Array, ms: int) -> void:
 
 func _apply_frame_delays(delays: Dictionary) -> void:
 	for index in delays:
-		if index >= 0 and index < document.frames.size():
-			document.frames[index].delay_ms = delays[index]
+		document.set_frame_delay(index, delays[index])
 	_mark_dirty()
 	frame_changed.emit()
 
@@ -1109,12 +1104,12 @@ func _apply_frame_delays(delays: Dictionary) -> void:
 func add_tag(tag_name: String, from: int = 0, to: int = -1, mode := AnimationTag.LoopMode.FORWARD, repeats := 0) -> void:
 	var end := to
 	if to < 0:
-		end = document.frames.size() - 1
+		end = document.frame_count() - 1
 	var index := document.tags.size()
 	var tag := AnimationTag.new()
 	tag.name = tag_name
-	tag.from = clampi(from, 0, document.frames.size() - 1)
-	tag.to = clampi(end, tag.from, document.frames.size() - 1)
+	tag.from = clampi(from, 0, document.frame_count() - 1)
+	tag.to = clampi(end, tag.from, document.frame_count() - 1)
 	tag.loop_mode = mode
 	tag.repeats = repeats
 	var prev_active := active_tag
@@ -1159,7 +1154,7 @@ func set_tag_range(from: int, to: int, record_history: bool = true) -> void:
 	var tag := get_active_tag()
 	if tag == null:
 		return
-	var last := document.frames.size() - 1
+	var last := document.frame_count() - 1
 	var new_from := clampi(from, 0, last)
 	var new_to := clampi(to, new_from, last)
 	if tag.from == new_from and tag.to == new_to:
@@ -1292,6 +1287,6 @@ func to_start() -> void:
 func to_end() -> void:
 	var tag = get_active_tag()
 	if tag:
-		current_frame = mini(tag.to, document.frames.size() - 1)
+		current_frame = mini(tag.to, document.frame_count() - 1)
 	else:
-		current_frame = document.frames.size() - 1
+		current_frame = document.frame_count() - 1

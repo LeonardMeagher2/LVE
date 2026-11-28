@@ -13,7 +13,7 @@ var current_frame: int:
 	get:
 		return document.edit_frame
 	set(value):
-		value = clampi(value, 0, document.frames.size() - 1)
+		value = clampi(value, 0, document.frame_count() - 1)
 		if value == document.edit_frame:
 			return
 		frame_changing.emit()
@@ -82,15 +82,15 @@ func restore_playback() -> void:
 func first_frame() -> int:
 	var tag := document.get_tag(active_tag)
 	if tag:
-		return clampi(mini(tag.from, tag.to), 0, document.frames.size() - 1)
+		return clampi(mini(tag.from, tag.to), 0, document.frame_count() - 1)
 	return 0
 
 
 func last_frame() -> int:
 	var tag := document.get_tag(active_tag)
 	if tag:
-		return clampi(maxi(tag.from, tag.to), 0, document.frames.size() - 1)
-	return document.frames.size() - 1
+		return clampi(maxi(tag.from, tag.to), 0, document.frame_count() - 1)
+	return document.frame_count() - 1
 
 
 func _play_mode() -> AnimationTag.LoopMode:
@@ -165,6 +165,6 @@ func reset_passes() -> void:
 
 
 func _current_delay() -> float:
-	if current_frame < 0 or current_frame >= document.frames.size():
+	if current_frame < 0 or current_frame >= document.frame_count():
 		return 1.0
-	return maxf(document.frames[current_frame].delay_ms, 1.0) / 1000.0
+	return maxf(document.frame_delay(current_frame), 1.0) / 1000.0

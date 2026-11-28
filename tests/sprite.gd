@@ -283,7 +283,7 @@ func _sheet_run() -> void:
 		State.document.set_cell(0, Vector3i(-1, 0, 0), VoxelFrame.material(Color.RED))
 		State.document.add_frame()
 		State.document.set_cell(1, Vector3i(1, 0, 0), VoxelFrame.material(Color.BLUE))
-		State.get_voxel_frame(1).delay_ms = 250
+		State.document.set_frame_delay(1, 250)
 		State.document.add_frame()
 		State.frames_changed.emit()
 		State.active_tag = State.document.add_tag("Blue", 1, 1, AnimationTag.LoopMode.REVERSE, 2)
@@ -532,7 +532,7 @@ func _sheet_run() -> void:
 	step("Then the PNG and JSON import as the same animation", func():
 		expect(import_error == OK, "the exported sheet imports with its sidecar")
 		expect(State.get_frame_count() == 3, "import restores the empty frame and both colored frames")
-		expect(State.get_voxel_frame(1).delay_ms == 250, "import restores the exported frame delay")
+		expect(State.document.frame_delay(1) == 250, "import restores the exported frame delay")
 		var blue_tag: AnimationTag
 		for tag in State.document.tags:
 			if tag.name == "Blue":
@@ -550,7 +550,7 @@ func _shadows_run() -> void:
 		for x in range(-3, 4):
 			for z in range(-3, 4):
 				State.document.set_cell(0, Vector3i(x, 0, z), VoxelFrame.material(Color.from_rgba8(120, 120, 120)))
-		State.document.frames.append(State.get_current_voxel_frame().copy_frame())
+		State.document.add_frame(0)
 		for y in range(1, 7):
 			State.document.set_cell(0, Vector3i(-2, y, 2), VoxelFrame.material(Color.RED))
 			State.document.set_cell(1, Vector3i(2, y, -2), VoxelFrame.material(Color.BLUE))

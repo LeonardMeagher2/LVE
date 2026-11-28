@@ -1288,7 +1288,7 @@ func _frames() -> void:
 	var delay_response: Dictionary = await _call("set_frame_delay", {"frame": 1, "ms": 120})
 	step("Then the frame delay is set", func():
 		expect(not _is_error(delay_response), "set_frame_delay succeeds")
-		expect(State.document.frames[1].delay_ms == 120, "the frame delay is 120 ms")
+		expect(State.document.frame_delay(1) == 120, "the frame delay is 120 ms")
 	)
 	var loop_response: Dictionary = await _call("set_tag_loop", {"mode": "ping_pong", "repeats": 0})
 	step("Then the active tag loops both ways", func():
@@ -1380,7 +1380,7 @@ func _batch_frames() -> void:
 	step("Then one call sets every delay", func():
 		expect(not _is_error(delay_response), "set_frame_delay accepts frames")
 		for index in 6:
-			expect(State.document.frames[index].delay_ms == 150, "frame %d has 150 ms" % index)
+			expect(State.document.frame_delay(index) == 150, "frame %d has 150 ms" % index)
 		expect(State.undo_redo.get_history_count() == 2, "the delay batch is one undo action")
 	)
 	step("Given distinct delays", func():
@@ -1393,8 +1393,8 @@ func _batch_frames() -> void:
 	step("Then the block moves as one action", func():
 		expect(not _is_error(move_response), "move_frame accepts count")
 		var delays := []
-		for frame in State.document.frames:
-			delays.append(frame.delay_ms)
+		for index in State.document.frame_count():
+			delays.append(State.document.frame_delay(index))
 		expect(delays == [102, 103, 104, 105, 100, 101], "the block lands at the end")
 		expect(int(move_data.get("frames", 0)) == 6, "the frame count stays")
 		expect(State.undo_redo.get_history_count() == 1, "the block move is one undo action")
@@ -1404,10 +1404,10 @@ func _batch_frames() -> void:
 		expect(not _is_error(remove_response), "remove_frame accepts frames")
 		expect(State.document.frames.size() == 4, "two frames are gone")
 		var delays := []
-		for frame in State.document.frames:
-			delays.append(frame.delay_ms)
+		for index in State.document.frame_count():
+			delays.append(State.document.frame_delay(index))
 		expect(delays == [103, 105, 100, 101], "the remaining order is stable")
-		expect(State.document.frames[State.current_frame].delay_ms == 105, "the current frame stays current after the removal")
+		expect(State.document.frame_delay(State.current_frame) == 105, "the current frame stays current after the removal")
 		expect(State.undo_redo.get_history_count() == 2, "the removal batch is one undo action")
 	)
 	var insert_response := await _call("add_frame", {"count": 2, "index": 1})
@@ -1966,10 +1966,10 @@ func _export_gif() -> void:
 	step("Given two frames with different delays and a missing folder", func():
 		var frame := State.get_current_voxel_frame()
 		frame.set_cell(Vector3i(0, 0, 0), VoxelFrame.material(Color.RED))
-		frame.delay_ms = 100
+		State.document.set_frame_delay(State.current_frame, 100)
 		State.add_frame()
 		State.get_current_voxel_frame().set_cell(Vector3i(0, 1, 0), VoxelFrame.material(Color.BLUE))
-		State.document.frames[1].delay_ms = 150
+		State.document.set_frame_delay(1, 150)
 		State.document._bounds_dirty = true
 		State.is_playing = true
 		DirAccess.remove_absolute(path)

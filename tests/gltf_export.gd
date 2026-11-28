@@ -26,13 +26,13 @@ func _run() -> void:
 		State.document = VoxelDocument.new()
 		source_document = State.document
 		source_document.frames[0].set_cell(Vector3i(-17, 3, -1), VoxelFrame.material(SOURCE_COLOR, SOURCE_EMISSION, 0.8, 0.25))
-		source_document.frames[0].delay_ms = 100
+		source_document.set_frame_delay(0, 100)
 		var second := source_document.add_frame()
+		source_document.set_frame_delay(1, 250)
 		second.set_cell(Vector3i(15, 0, 0), VoxelFrame.material(Color.RED, SECOND_EMISSION, 0.2, 0.7))
 		second.set_cell(Vector3i(16, 0, 0), VoxelFrame.material(Color.GREEN, Color.BLACK, 0.6, 0.4))
-		second.delay_ms = 250
 		var third := source_document.add_frame()
-		third.delay_ms = 150
+		source_document.set_frame_delay(2, 150)
 		source_document.add_tag("Walk", 0, 1, AnimationTag.LoopMode.FORWARD, 2)
 		source_document.add_tag("Reverse", 0, 2, AnimationTag.LoopMode.REVERSE, 1)
 		source_document.add_tag("PingPong", 0, 2, AnimationTag.LoopMode.PING_PONG, 2)

@@ -93,8 +93,8 @@ func _frame_delay() -> void:
 	)
 
 	step("Then the current frame delay is 250 ms", func():
-		expect(State.document.frames[1].delay_ms == 250, "the current frame delay is 250 ms")
-		expect(State.document.frames[0].delay_ms == 100, "the other frame delay stays 100 ms")
+		expect(State.document.frame_delay(1) == 250, "the current frame delay is 250 ms")
+		expect(State.document.frame_delay(0) == 100, "the other frame delay stays 100 ms")
 	)
 
 	step("When the user undoes the delay change", func():
@@ -102,7 +102,7 @@ func _frame_delay() -> void:
 	)
 
 	step("Then the delay returns to 100 ms", func():
-		expect(State.document.frames[1].delay_ms == 100, "the delay returns to 100 ms")
+		expect(State.document.frame_delay(1) == 100, "the delay returns to 100 ms")
 	)
 
 	step("When the user redoes the delay change", func():
@@ -110,7 +110,7 @@ func _frame_delay() -> void:
 	)
 
 	step("Then the delay is 250 ms again", func():
-		expect(State.document.frames[1].delay_ms == 250, "the delay is 250 ms again")
+		expect(State.document.frame_delay(1) == 250, "the delay is 250 ms again")
 	)
 
 

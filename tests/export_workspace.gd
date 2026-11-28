@@ -200,8 +200,8 @@ func _run() -> void:
 		State.current_frame = 0
 	)
 	step("When the editor and the preview play the same tags", func():
-		State.document.frames[0].delay_ms = 50
-		State.document.frames[1].delay_ms = 250
+		State.document.set_frame_delay(0, 50)
+		State.document.set_frame_delay(1, 250)
 		State.document.add_tag("Parity forward", 0, 1, AnimationTag.LoopMode.FORWARD, 0)
 		State.document.add_tag("Parity ping", 0, 1, AnimationTag.LoopMode.PING_PONG, 2)
 		State.tag_changed.emit()

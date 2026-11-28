@@ -2,9 +2,6 @@ class_name VoxelFrame
 extends Resource
 
 
-@export_range(1, 1000, 1) var delay_ms := 100
-
-
 @export_storage var voxel_data: PackedByteArray:
 	get:
 		return _encode()
@@ -1228,7 +1225,6 @@ func copy_frame() -> VoxelFrame:
 	_profile_copy_frame_calls += 1
 	var frame_copy := VoxelFrame.new()
 	frame_copy.restore(capture())
-	frame_copy.delay_ms = delay_ms
 	return frame_copy
 
 
@@ -1244,14 +1240,11 @@ func copy_chunks(locations: Array[Vector3i]) -> VoxelFrame:
 		_shared_chunks[location] = true
 	var frame_copy := VoxelFrame.new()
 	frame_copy.restore(selected)
-	frame_copy.delay_ms = delay_ms
 	return frame_copy
 
 
 static func job_frame(source: VoxelFrame) -> VoxelFrame:
-	var frame_copy := job_frame_of_snapshot(source.chunks)
-	frame_copy.delay_ms = source.delay_ms
-	return frame_copy
+	return job_frame_of_snapshot(source.chunks)
 
 
 static func job_frame_of_snapshot(snapshot: Dictionary) -> VoxelFrame:

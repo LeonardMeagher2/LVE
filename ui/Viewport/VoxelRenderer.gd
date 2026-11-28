@@ -165,7 +165,8 @@ func _exit_tree() -> void:
 func _get_frame() -> VoxelFrame:
 	if source_frame:
 		return source_frame
-	return State.get_voxel_frame(frame) if frame >= 0 else State.get_current_voxel_frame()
+	var frame_index := frame if frame >= 0 else State.current_frame
+	return State.document.composite_frame(frame_index)
 
 
 func _on_frame_changed() -> void:

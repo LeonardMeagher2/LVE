@@ -63,9 +63,10 @@ func _measure(name: String, body: Callable) -> void:
 func _document() -> VoxelDocument:
 	var value := VoxelDocument.new()
 	value.frames.clear()
+	value.frame_delays.clear()
 	var half := SPAN / 2
 	for frame_index in FRAMES:
-		var frame := VoxelFrame.new()
+		var frame := value.add_frame()
 		var changes := {}
 		for x in range(-half, half):
 			for y in range(-half, half):
@@ -74,7 +75,6 @@ func _document() -> VoxelDocument:
 						continue
 					changes[Vector3i(x, y, z)] = VoxelFrame.material(_color(x, y, z, frame_index))
 		frame.set_cells(changes)
-		value.frames.append(frame)
 	return value
 
 

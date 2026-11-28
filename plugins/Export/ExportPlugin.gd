@@ -457,14 +457,16 @@ func _refresh_model() -> void:
 	_model_dirty = false
 	var frame_range := _model_range()
 	_model_frames.clear()
+	var model_delays := []
 	for index in range(frame_range.x, frame_range.y + 1):
 		_model_frames.append(State.get_voxel_frame(index).copy_frame())
+		model_delays.append(State.document.frame_delay(index))
 	_model_renderer.transform = _model_transform()
 	_model_back_renderer.transform = _model_renderer.transform
 	var was_playing := _model_playback.is_playing
 	var was_frame := _model_playback.current_frame
 	var preview_document := VoxelDocument.new()
-	preview_document.frames.assign(_model_frames)
+	preview_document.replace_active_frames(_model_frames, model_delays)
 	preview_document.tags.clear()
 	if _selected_tag:
 		var tag: AnimationTag = _selected_tag.duplicate()
@@ -1051,7 +1053,7 @@ func _open_image_viewport(settings: Dictionary, viewport_size: Vector2i) -> SubV
 	return viewport
 
 
-func _render_gif_frames(frames: Array[VoxelFrame], settings: Dictionary, document: VoxelDocument, encoder) -> Error:
+func _render_gif_frames(frames: Array[VoxelFrame], delays: PackedInt32Array, settings: Dictionary, document: VoxelDocument, encoder) -> Error:
 	var tile_size: Vector2i = settings.tile_size
 	var viewport := _open_image_viewport(settings, tile_size * SUPERSAMPLE)
 	_export_viewport = viewport
@@ -1076,6 +1078,7 @@ func _render_gif_frames(frames: Array[VoxelFrame], settings: Dictionary, documen
 			if not _render_current(document, -1):
 				error = ERR_BUSY
 				break
+			var source_index := index % frames.size()
 			State.update_operation(_operation_id, index, count, "Rendering GIF frame %d" % (index + 1))
 			renderer.source_frame = frame
 			while _render_current(document, -1) and not renderer.is_settled():
@@ -1101,7 +1104,7 @@ func _render_gif_frames(frames: Array[VoxelFrame], settings: Dictionary, documen
 			var region: Image = null
 			if used.size.x > 0 and used.size.y > 0:
 				region = image.get_region(used)
-			entries.append({"used": used, "image": region, "delay": frame.delay_ms})
+			entries.append({"used": used, "image": region, "delay": delays[source_index] if source_index < delays.size() else 100})
 			index += 1
 			await get_tree().process_frame
 		if error != OK:
@@ -1233,8 +1236,7 @@ func _apply_preview_animation() -> void:
 	var delays := PackedInt32Array()
 	for index in count * views:
 		var source_index := frame_range.x + index % count
-		var frame := State.get_voxel_frame(source_index)
-		delays.append(frame.delay_ms if frame else 100)
+		delays.append(State.document.frame_delay(source_index))
 	preview.set_animation(layout.rects, delays)
 
 
@@ -1373,11 +1375,13 @@ func export_gif_settings(path: String, settings: Dictionary) -> Error:
 	if first < 0 or last < first or last >= frame_count or view < 0 or views < 1 or tile_size < 1 or tile_size > 2048:
 		return ERR_INVALID_PARAMETER
 	var frames: Array[VoxelFrame] = []
+	var frame_delays := PackedInt32Array()
 	for index in range(first, last + 1):
 		var frame := State.get_voxel_frame(index)
 		if frame == null:
 			return ERR_INVALID_PARAMETER
 		frames.append(frame.copy_frame())
+		frame_delays.append(State.document.frame_delay(index))
 	var render_settings := _sheet_render_settings(view, views, orthographic, center, lighting)
 	render_settings.tile_size = Vector2i(tile_size, tile_size)
 	if path.get_extension().to_lower() != "gif":
@@ -1398,7 +1402,7 @@ func export_gif_settings(path: String, settings: Dictionary) -> Error:
 	_preview_revision += 1
 	_operation_id = State.begin_operation("Exporting GIF", frames.size() * render_settings.transforms.size(), true, self, _cancel_export)
 	var encoder = GIF_ENCODER.new(tile_size, tile_size, 0, base_colors)
-	var error: Error = await _render_gif_frames(frames, render_settings, source_document, encoder)
+	var error: Error = await _render_gif_frames(frames, frame_delays, render_settings, source_document, encoder)
 	if error == OK:
 		var gif: PackedByteArray = encoder.finish()
 		var file := FileAccess.open(path, FileAccess.WRITE)
@@ -1423,7 +1427,7 @@ func sheet_metadata(path: String, first: int, last: int, layout: Dictionary, vie
 		if views > 1:
 			filename += "_%d" % floori(index / float(count))
 		var rect: Rect2i = layout.rects[index]
-		frames.append({"filename": filename, "frame": {"x": rect.position.x, "y": rect.position.y, "w": rect.size.x, "h": rect.size.y}, "rotated": false, "trimmed": false, "spriteSourceSize": {"x": 0, "y": 0, "w": dimensions.x, "h": dimensions.y}, "sourceSize": {"w": dimensions.x, "h": dimensions.y}, "duration": maxi(1, State.get_voxel_frame(source_index).delay_ms)})
+		frames.append({"filename": filename, "frame": {"x": rect.position.x, "y": rect.position.y, "w": rect.size.x, "h": rect.size.y}, "rotated": false, "trimmed": false, "spriteSourceSize": {"x": 0, "y": 0, "w": dimensions.x, "h": dimensions.y}, "sourceSize": {"w": dimensions.x, "h": dimensions.y}, "duration": maxi(1, State.document.frame_delay(source_index))})
 	var tags := []
 	for view_index in views:
 		for tag in State.document.tags:

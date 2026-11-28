@@ -69,12 +69,12 @@ func _process_queue() -> void:
 			continue
 		_pending_frames.erase(frame_index)
 		_render_due_ms.erase(frame_index)
-		if frame_index < 0 or frame_index >= State.document.frames.size():
+		if frame_index < 0 or frame_index >= State.document.frame_count():
 			continue
 		var render_revision := _queue_revision
-		var requested_frame := State.get_voxel_frame(frame_index)
+		var requested_document := State.document
 		var thumbnail_texture := await _render_frame(frame_index, render_revision)
-		if thumbnail_texture != null and render_revision == _queue_revision and State.get_voxel_frame(frame_index) == requested_frame:
+		if thumbnail_texture != null and render_revision == _queue_revision and State.document == requested_document and frame_index < State.document.frame_count():
 			frame_rendered.emit(frame_index, thumbnail_texture)
 	_processing_queue = false
 
@@ -162,7 +162,8 @@ func render_document_preview(document: VoxelDocument) -> Image:
 	viewport.size = Vector2i(256, 256)
 	add_child(viewport)
 	var renderer: VoxelRenderer = viewport.get_node("%VoxelRenderer")
-	renderer.source_frame = document.frames[0].copy_frame()
+	var preview_frame := document.composite_frame(0)
+	renderer.source_frame = preview_frame.copy_frame() if preview_frame != null else VoxelFrame.new()
 	var camera: Camera3D = viewport.get_node("Node3D/Camera3D")
 	var light: DirectionalLight3D = viewport.get_node("Node3D/Light")
 	var environment_node: WorldEnvironment = viewport.get_node("Node3D/WorldEnvironment")

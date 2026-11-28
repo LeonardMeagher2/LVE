@@ -477,9 +477,9 @@ func _get_state() -> Dictionary:
 		"revision": _revision,
 		"document": {
 			"name": document.get_file_name(),
-			"frames": document.frames.size(),
+			"frames": document.frame_count(),
 			"frame": State.current_frame,
-			"delay_ms": frame.delay_ms if frame != null else 0,
+			"delay_ms": document.frame_delay(State.current_frame),
 			"palette": document.palette.size(),
 			"bounds": MCPJson.aabb_json(document.bounds()),
 			"frame_bounds": _frame_bounds_array(frame),
@@ -680,7 +680,7 @@ func _inspect_document(args: Dictionary, scan_budget := MAX_SCAN_CELLS) -> Dicti
 		var occupied := frame.count()
 		var frame_data := {
 			"index": index,
-			"delay_ms": frame.delay_ms,
+			"delay_ms": State.document.frame_delay(index),
 			"occupied": occupied,
 			"bounds": MCPJson.cell_bounds_json(frame.get_bounds()),
 			"empty": occupied == 0,
@@ -716,7 +716,7 @@ func _inspect_document(args: Dictionary, scan_budget := MAX_SCAN_CELLS) -> Dicti
 			transitions.append(_transition_json(indices[transition_index - 1], indices[transition_index], scans))
 	var document_data := {
 		"name": document.get_file_name(),
-		"frames": document.frames.size(),
+		"frames": document.frame_count(),
 		"current_frame": State.current_frame,
 	}
 	if include_palette:
@@ -1031,7 +1031,7 @@ func _get_changes(args: Dictionary) -> Dictionary:
 		return _tool_error("since is required.")
 	var since := int(since_value)
 	var frame_index := _int_arg(args, "frame", State.current_frame)
-	if frame_index < 0 or frame_index >= State.document.frames.size():
+	if frame_index < 0 or frame_index >= State.document.frame_count():
 		return _tool_error(_frame_error(frame_index))
 	if since == _revision:
 		return _tool_ok({
@@ -1304,12 +1304,12 @@ func _frame_indices_arg(args: Dictionary, limit := 64) -> Array:
 			if not (value is int or value is float):
 				return []
 			var index := int(value)
-			if index < 0 or index >= document.frames.size():
+			if index < 0 or index >= document.frame_count():
 				return []
 			indices.append(index)
 		return indices
 	var index := _int_arg(args, "frame", State.current_frame)
-	if index < 0 or index >= document.frames.size():
+	if index < 0 or index >= document.frame_count():
 		return []
 	return [index]
 
@@ -1318,7 +1318,7 @@ func _frame_error(index := -1) -> String:
 	var document := State.document
 	if document == null:
 		return "No document is open."
-	var count := document.frames.size()
+	var count := document.frame_count()
 	if index < 0 or count == 0:
 		return "The open document is %s with %d frames. Pass frame indices from 0 to %d." % [
 			document.get_file_name(), count, count - 1,
@@ -1543,7 +1543,6 @@ func _screenshot_frame(source: VoxelFrame, clip_box: Variant) -> VoxelFrame:
 	var start: Vector3i = box[0]
 	var end: Vector3i = box[1]
 	var clipped := VoxelFrame.new()
-	clipped.delay_ms = source.delay_ms
 	for position in source.positions():
 		if position.x < start.x or position.x > end.x:
 			continue
@@ -1896,7 +1895,7 @@ func _open_document(args: Dictionary) -> Dictionary:
 	State.record_opened(document, path)
 	return _tool_ok({
 		"tab": index,
-		"frames": document.frames.size(),
+		"frames": document.frame_count(),
 		"path": ProjectSettings.globalize_path(path),
 	})
 
@@ -2282,13 +2281,13 @@ func _export_gif(args: Dictionary) -> Dictionary:
 
 
 func _add_frame(args: Dictionary) -> Dictionary:
-	var count := State.document.frames.size()
+	var count := State.document.frame_count()
 	var index := _int_arg(args, "index", count)
 	if index < 0 or index > count:
 		return _tool_error("index must be between 0 and the frame count.")
 	var amount := clampi(_int_arg(args, "count", 1), 1, 256)
 	State.add_frames(amount, index)
-	return _tool_ok({"frame": State.current_frame, "frames": State.document.frames.size()})
+	return _tool_ok({"frame": State.current_frame, "frames": State.document.frame_count()})
 
 
 func _remove_frame(args: Dictionary) -> Dictionary:
@@ -2300,14 +2299,14 @@ func _remove_frame(args: Dictionary) -> Dictionary:
 	var unique := {}
 	for index in indices:
 		unique[index] = true
-	if unique.size() >= State.document.frames.size():
+	if unique.size() >= State.document.frame_count():
 		return _tool_error("The document must keep one frame.")
 	State.remove_frames(unique.keys())
-	return _tool_ok({"frame": State.current_frame, "frames": State.document.frames.size()})
+	return _tool_ok({"frame": State.current_frame, "frames": State.document.frame_count()})
 
 
 func _move_frame(args: Dictionary) -> Dictionary:
-	var size := State.document.frames.size()
+	var size := State.document.frame_count()
 	var from := _int_arg(args, "from", State.current_frame)
 	var to := _int_arg(args, "to", -1)
 	var count := clampi(_int_arg(args, "count", 1), 1, 256)
@@ -2321,15 +2320,15 @@ func _move_frame(args: Dictionary) -> Dictionary:
 
 func _duplicate_frame() -> Dictionary:
 	State.duplicate_frame()
-	return _tool_ok({"frame": State.current_frame, "frames": State.document.frames.size()})
+	return _tool_ok({"frame": State.current_frame, "frames": State.document.frame_count()})
 
 
 func _set_frame(args: Dictionary) -> Dictionary:
 	var index := _int_arg(args, "frame", State.current_frame)
-	if index < 0 or index >= State.document.frames.size():
+	if index < 0 or index >= State.document.frame_count():
 		return _tool_error(_frame_error(index))
 	State.current_frame = index
-	return _tool_ok({"frame": index, "delay_ms": State.document.frames[index].delay_ms})
+	return _tool_ok({"frame": index, "delay_ms": State.document.frame_delay(index)})
 
 
 func _set_frame_delay(args: Dictionary) -> Dictionary:
@@ -2365,7 +2364,7 @@ func _add_tag(args: Dictionary) -> Dictionary:
 	var tag_name: String = String(name_value).strip_edges()
 	if tag_name.is_empty():
 		return _tool_error("name is required.")
-	var last := State.document.frames.size() - 1
+	var last := State.document.frame_count() - 1
 	var from := _int_arg(args, "from", 0)
 	var to := _int_arg(args, "to", last)
 	if from < 0 or from > last or to < from or to > last:
@@ -2406,7 +2405,7 @@ func _set_tag_range(args: Dictionary) -> Dictionary:
 	var index := _int_arg(args, "tag", State.active_tag)
 	if index < 0 or index >= State.document.tags.size():
 		return _tool_error("The tag does not exist.")
-	var last := State.document.frames.size() - 1
+	var last := State.document.frame_count() - 1
 	var from := _int_arg(args, "from", -1)
 	var to := _int_arg(args, "to", -1)
 	if from < 0 or from > last or to < from or to > last:
@@ -3246,7 +3245,7 @@ func _write_frames(args: Dictionary) -> Array:
 		if not (value is int or value is float):
 			return []
 		var index := int(value)
-		if index < 0 or index >= State.document.frames.size():
+		if index < 0 or index >= State.document.frame_count():
 			return []
 		if seen.has(index):
 			continue

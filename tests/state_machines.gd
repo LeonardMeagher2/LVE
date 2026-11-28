@@ -108,10 +108,10 @@ func _history_buttons_open_edit() -> void:
 func _playback_catch_up() -> void:
 	step("Given a three-frame loop with a ten millisecond delay", func():
 		_playback_document = VoxelDocument.new()
-		_playback_document.frames[0].delay_ms = 10
+		_playback_document.set_frame_delay(0, 10)
 		for index in 2:
 			_playback_document.add_frame()
-			_playback_document.frames[index + 1].delay_ms = 10
+			_playback_document.set_frame_delay(index + 1, 10)
 		_playback_document.add_tag("Loop", 0, 2)
 		_playback = AnimationPlayback.new()
 		_playback.document = _playback_document
@@ -130,7 +130,7 @@ func _playback_catch_up() -> void:
 func _playback_single_stop() -> void:
 	step("Given a one-frame tag with one repeat", func():
 		_playback_document = VoxelDocument.new()
-		_playback_document.frames[0].delay_ms = 100
+		_playback_document.set_frame_delay(0, 100)
 		_playback_document.add_tag("Once", 0, 0, AnimationTag.LoopMode.FORWARD, 1)
 		_playback = AnimationPlayback.new()
 		_playback.document = _playback_document
@@ -169,9 +169,9 @@ func _remove_tag_without_active() -> void:
 func _playback_repeat_reset() -> void:
 	step("Given a two-frame tag that played several infinite passes", func():
 		_playback_document = VoxelDocument.new()
-		_playback_document.frames[0].delay_ms = 10
+		_playback_document.set_frame_delay(0, 10)
 		_playback_document.add_frame()
-		_playback_document.frames[1].delay_ms = 10
+		_playback_document.set_frame_delay(1, 10)
 		_playback_document.add_tag("Loop", 0, 1)
 		State.document = _playback_document
 		State.active_tag = 0

@@ -103,8 +103,8 @@ func _abandon_active_edit() -> void:
 
 
 func _restore_chunks(edited_frame: VoxelFrame, chunk_snapshot: Dictionary, selection_snapshot: Dictionary, selection_snapshot_masks: Dictionary = {}) -> void:
-	var frame_index := session.document.frames.find(edited_frame)
-	if frame_index == -1:
+	var location := session.document.find_cel(edited_frame)
+	if location.x < 0:
 		return
 	var cells_restored := edited_frame.chunks != chunk_snapshot
 	edited_frame.restore(chunk_snapshot)
@@ -112,7 +112,7 @@ func _restore_chunks(edited_frame: VoxelFrame, chunk_snapshot: Dictionary, selec
 	selection_state.selection.restore(selection_snapshot, selection_snapshot_masks)
 	if cells_restored:
 		var affected_cells: Array[Vector3i] = []
-		cells_changed.call(frame_index, affected_cells)
+		cells_changed.call(location.y, affected_cells)
 	selection_state.notify_changed()
 
 
@@ -125,7 +125,4 @@ func _current_frame() -> VoxelFrame:
 
 
 func _frame(index: int) -> VoxelFrame:
-	var frames := session.document.frames
-	if index < 0 or index >= frames.size():
-		return null
-	return frames[index]
+	return session.document.cel(session.document.edit_layer, index)
