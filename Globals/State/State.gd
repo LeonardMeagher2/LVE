@@ -241,6 +241,9 @@ func delete_layer(index := -1) -> void:
 	if target < 0 or target >= document.layers.size():
 		return
 	var removed := document.layers[target]
+	if removed.locked:
+		notice.emit("The layer is locked.")
+		return
 	var previous := document.active_layer()
 	var next_active := document.layers[target - 1] if target > 0 else document.layers[target + 1]
 	edit_context_changing.emit()
@@ -263,6 +266,170 @@ func _apply_layer_removed(layer: VoxelLayer, active: VoxelLayer) -> void:
 	document.invalidate_composite()
 	layers_changed.emit()
 	active_layer_changed.emit()
+
+
+func rename_layer(index: int, layer_name: String) -> void:
+	if index < 0 or index >= document.layers.size():
+		return
+	var name := layer_name.strip_edges()
+	if name.is_empty():
+		return
+	name = name.left(1024)
+	var layer := document.layers[index]
+	if layer.name == name:
+		return
+	undo_redo.create_action("Rename Layer")
+	undo_redo.add_undo_method(_apply_layer_name.bind(layer, layer.name))
+	undo_redo.add_do_method(_apply_layer_name.bind(layer, name))
+	_commit_history(false)
+	_apply_layer_name(layer, name)
+
+
+func _apply_layer_name(layer: VoxelLayer, layer_name: String) -> void:
+	layer.name = layer_name
+	layers_changed.emit()
+
+
+func move_layer(from: int, to: int) -> void:
+	var size := document.layers.size()
+	if from < 0 or from >= size:
+		return
+	var target := clampi(to, 0, size - 1)
+	if target == from:
+		return
+	edit_context_changing.emit()
+	_cancel_active_edit()
+	var before := document.layers.duplicate()
+	var active := document.active_layer()
+	var after := before.duplicate()
+	var layer: VoxelLayer = after[from]
+	after.remove_at(from)
+	after.insert(target, layer)
+	undo_redo.create_action("Move Layer")
+	undo_redo.add_undo_method(_apply_layer_order.bind(before, active))
+	undo_redo.add_do_method(_apply_layer_order.bind(after, active))
+	_commit_history(false)
+	_apply_layer_order(after, active)
+
+
+func _apply_layer_order(order: Array, active: VoxelLayer) -> void:
+	document.layers.assign(order)
+	var active_index := document.layers.find(active)
+	document.edit_layer = active_index if active_index >= 0 else clampi(document.edit_layer, 0, document.layers.size() - 1)
+	document.invalidate_bounds()
+	document.invalidate_composite()
+	layers_changed.emit()
+	active_layer_changed.emit()
+
+
+func merge_layer_down(index := -1) -> void:
+	var source_index := document.edit_layer if index < 0 else index
+	if source_index <= 0 or source_index >= document.layers.size():
+		return
+	var source := document.layers[source_index]
+	var target := document.layers[source_index - 1]
+	if source.locked or target.locked:
+		notice.emit("The layer is locked.")
+		return
+	edit_context_changing.emit()
+	_cancel_active_edit()
+	var previous := document.active_layer()
+	var target_before: Array[VoxelFrame] = target.frames.duplicate()
+	var merged: Array[VoxelFrame] = []
+	for frame_index in target.frames.size():
+		var cel := target.frames[frame_index].copy_frame()
+		var changes := {}
+		if frame_index < source.frames.size():
+			for cell in source.frames[frame_index].positions():
+				changes[cell] = source.frames[frame_index].get_material(cell)
+		if not changes.is_empty():
+			cel.set_cells(changes)
+		merged.append(cel)
+	undo_redo.create_action("Merge Layer Down")
+	undo_redo.add_undo_method(_apply_merged_layer.bind(target, target_before, source, source_index, false, previous))
+	undo_redo.add_do_method(_apply_merged_layer.bind(target, merged, source, source_index, true, target))
+	_commit_history(false)
+	_apply_merged_layer(target, merged, source, source_index, true, target)
+
+
+func _apply_merged_layer(target: VoxelLayer, target_frames: Array[VoxelFrame], source: VoxelLayer, source_index: int, remove_source: bool, active: VoxelLayer) -> void:
+	target.frames.clear()
+	target.frames.append_array(target_frames)
+	if remove_source:
+		var at := document.layers.find(source)
+		if at >= 0:
+			document.layers.remove_at(at)
+	elif not document.layers.has(source):
+		document.layers.insert(clampi(source_index, 0, document.layers.size()), source)
+	var active_index := document.layers.find(active)
+	document.edit_layer = active_index if active_index >= 0 else clampi(document.edit_layer, 0, document.layers.size() - 1)
+	document.invalidate_bounds()
+	document.invalidate_composite()
+	layers_changed.emit()
+	active_layer_changed.emit()
+
+
+func move_selection_to_layer(target_index: int) -> void:
+	if target_index < 0 or target_index >= document.layers.size() or target_index == document.edit_layer:
+		return
+	if not active_layer_editable():
+		_emit_layer_notice()
+		return
+	var target := document.layers[target_index]
+	if not target.visible or target.locked:
+		notice.emit("The target layer is hidden." if not target.visible else "The target layer is locked.")
+		return
+	var frame_index := current_frame
+	var source_cel := get_current_voxel_frame()
+	var target_cel := document.cel(target_index, frame_index)
+	if source_cel == null or target_cel == null:
+		return
+	var selected := selection.capture()
+	var materials := {}
+	if selected.is_empty():
+		for cell in source_cel.positions():
+			materials[cell] = source_cel.get_material(cell)
+	else:
+		for cell: Vector3i in selected:
+			if source_cel.has(cell):
+				materials[cell] = source_cel.get_material(cell)
+	if materials.is_empty():
+		return
+	var source_before := source_cel.capture()
+	var target_before := target_cel.capture()
+	var erased := VoxelFrame.material(Color.TRANSPARENT)
+	var remove := {}
+	for cell in materials:
+		remove[cell] = erased
+	source_cel.set_cells(remove)
+	target_cel.set_cells(materials)
+	document._bounds_dirty = true
+	document.invalidate_composite()
+	var source_layer := document.edit_layer
+	undo_redo.create_action("Move to Layer")
+	undo_redo.add_undo_method(_restore_moved_cells.bind(source_cel, target_cel, source_before, target_before))
+	undo_redo.add_do_method(_restore_moved_cells.bind(source_cel, target_cel, source_cel.capture(), target_cel.capture()))
+	_commit_history(false)
+	var affected: Array[Vector3i] = []
+	affected.assign(materials.keys())
+	cells_changed.emit(source_layer, frame_index, affected)
+	cells_changed.emit(target_index, frame_index, affected)
+	notice.emit("Moved %d cells to %s." % [materials.size(), target.name])
+
+
+func _restore_moved_cells(source_cel: VoxelFrame, target_cel: VoxelFrame, source_snapshot: Dictionary, target_snapshot: Dictionary) -> void:
+	var source_location := document.find_cel(source_cel)
+	var target_location := document.find_cel(target_cel)
+	source_cel.restore(source_snapshot)
+	target_cel.restore(target_snapshot)
+	document._bounds_dirty = true
+	document.invalidate_composite()
+	var none: Array[Vector3i] = []
+	if source_location.x >= 0:
+		cells_changed.emit(source_location.x, source_location.y, none)
+	if target_location.x >= 0:
+		cells_changed.emit(target_location.x, target_location.y, none)
+	selection_changed.emit()
 
 var floor_axis: Vector3.Axis:
 	get:

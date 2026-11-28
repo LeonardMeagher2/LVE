@@ -22,6 +22,11 @@ func _ready() -> void:
 	test("visibility undo and redo restore the layer", _visibility_undo, "layers_visibility_undo")
 	test("switching the active layer cancels the open edit", _active_layer_switch, "layers_active_switch")
 	test("a multi-layer composite follows an edited chunk", _composite_refresh, "layers_composite_refresh")
+	test("renaming a layer trims the name and undoes", _rename_layer_command, "layers_rename")
+	test("moving a layer changes the order and keeps the active layer", _move_layer_command, "layers_move")
+	test("merging down keeps the upper cells across every frame", _merge_down, "layers_merge")
+	test("moving the selection writes to the target layer", _move_selection, "layers_move_selection")
+	test("locked layers refuse delete, merge, and target moves", _locked_commands, "layers_locked_commands")
 
 
 func before_test() -> void:
@@ -343,6 +348,190 @@ func _composite_refresh() -> void:
 		State.set_layer_visible(1, true)
 		var composite := State.document.composite_frame(0)
 		expect(composite.get_color(Vector3i.ZERO) == Color.GREEN, "the top layer returns")
+	)
+
+
+func _rename_layer_command() -> void:
+	step("When the user renames the first layer", func():
+		State.rename_layer(0, "  Body  ")
+	)
+	step("Then the name is trimmed", func():
+		expect(State.document.layers[0].name == "Body", "the layer takes the trimmed name")
+	)
+	step("When the user tries an empty name", func():
+		State.rename_layer(0, "   ")
+	)
+	step("Then the name stays", func():
+		expect(State.document.layers[0].name == "Body", "an empty name is ignored")
+	)
+	step("When the user undoes the rename", func():
+		State.undo_redo.undo()
+	)
+	step("Then the old name returns", func():
+		expect(State.document.layers[0].name == "Layer 1", "undo restores the old name")
+	)
+	step("When the user redoes the rename", func():
+		State.undo_redo.redo()
+	)
+	step("Then the new name returns", func():
+		expect(State.document.layers[0].name == "Body", "redo restores the new name")
+	)
+
+
+func _move_layer_command() -> void:
+	step("Given two layers with the first active", func():
+		var document := State.document
+		document.layers.append(document.make_layer("Top"))
+		State.active_layer_index = 0
+	)
+	step("When the user moves the first layer above the second", func():
+		State.move_layer(0, 1)
+	)
+	step("Then the order changes and the active layer follows", func():
+		expect(State.document.layers[0].name == "Top", "Top becomes the lower layer")
+		expect(State.document.layers[1].name == "Layer 1", "Layer 1 becomes the upper layer")
+		expect(State.active_layer_index == 1, "the moved layer stays active")
+	)
+	step("When the user undoes the move", func():
+		State.undo_redo.undo()
+	)
+	step("Then the order returns", func():
+		expect(State.document.layers[0].name == "Layer 1", "Layer 1 is below again")
+		expect(State.document.layers[1].name == "Top", "Top is above again")
+		expect(State.active_layer_index == 0, "the moved layer stays active after undo")
+	)
+	step("When the user redoes the move", func():
+		State.undo_redo.redo()
+	)
+	step("Then the new order returns", func():
+		expect(State.document.layers[0].name == "Top", "the redo moves the layer again")
+		expect(State.active_layer_index == 1, "the active layer follows the redo")
+	)
+
+
+func _merge_down() -> void:
+	step("Given two layers with two frames", func():
+		var document := State.document
+		document.add_frame()
+		document.layers.append(document.make_layer("Top"))
+		document.edit_layer = 0
+		document.set_cell(0, Vector3i.ZERO, VoxelFrame.material(Color.RED))
+		document.set_cell(1, Vector3i.RIGHT, VoxelFrame.material(Color.GREEN))
+		document.edit_layer = 1
+		document.set_cell(0, Vector3i.ZERO, VoxelFrame.material(Color.BLUE))
+		document.set_cell(0, Vector3i(2, 0, 0), VoxelFrame.material(Color.BLUE))
+		document.set_cell(1, Vector3i.RIGHT, VoxelFrame.material(Color.YELLOW))
+	)
+	step("Then the bottom layer cannot merge down", func():
+		State.merge_layer_down(0)
+		expect(State.document.layers.size() == 2, "the bottom layer stays")
+	)
+	step("When the user merges the top layer down", func():
+		State.merge_layer_down(1)
+	)
+	step("Then the target keeps both frames and the upper cell wins", func():
+		expect(State.document.layers.size() == 1, "one layer remains")
+		var layer := State.document.layers[0]
+		expect(layer.name == "Layer 1", "the target keeps its name")
+		expect(layer.frames[0].get_color(Vector3i.ZERO) == Color.BLUE, "the upper cell wins the overlap")
+		expect(layer.frames[0].get_color(Vector3i(2, 0, 0)) == Color.BLUE, "the upper cell joins the target")
+		expect(layer.frames[1].get_color(Vector3i.RIGHT) == Color.YELLOW, "the upper cell wins in the second frame")
+		expect(State.active_layer_index == 0, "the target is active")
+	)
+	step("When the user undoes the merge", func():
+		State.undo_redo.undo()
+	)
+	step("Then both layers return with their cels", func():
+		expect(State.document.layers.size() == 2, "both layers return")
+		expect(State.document.layers[0].frames[0].get_color(Vector3i.ZERO) == Color.RED, "the target cell returns")
+		expect(State.document.layers[1].frames[0].get_color(Vector3i.ZERO) == Color.BLUE, "the source cell returns")
+		expect(State.document.layers[1].frames[1].get_color(Vector3i.RIGHT) == Color.YELLOW, "the source second frame returns")
+		expect(State.active_layer_index == 1, "the source is active again")
+	)
+	step("When the user redoes the merge", func():
+		State.undo_redo.redo()
+	)
+	step("Then the merged layer returns", func():
+		expect(State.document.layers.size() == 1, "one layer remains again")
+		expect(State.document.layers[0].frames[1].get_color(Vector3i.RIGHT) == Color.YELLOW, "the merged second frame returns")
+	)
+
+
+func _move_selection() -> void:
+	step("Given two layers with two cells on the first", func():
+		var document := State.document
+		document.layers.append(document.make_layer("Body"))
+		document.edit_layer = 0
+		document.set_cell(0, Vector3i.ZERO, VoxelFrame.material(Color.RED))
+		document.set_cell(0, Vector3i.RIGHT, VoxelFrame.material(Color.GREEN))
+		State.selection.add(Vector3i.ZERO)
+		State.selection_changed.emit()
+	)
+	step("When the user moves the selected cell to the second layer", func():
+		State.move_selection_to_layer(1)
+	)
+	step("Then only the selected cell moves", func():
+		expect(not State.document.cel(0, 0).has(Vector3i.ZERO), "the source loses the selected cell")
+		expect(State.document.cel(0, 0).has(Vector3i.RIGHT), "the source keeps the unselected cell")
+		expect(State.document.cel(1, 0).get_color(Vector3i.ZERO) == Color.RED, "the target takes the selected cell")
+		expect(State.active_layer_index == 0, "the source layer stays active")
+	)
+	step("When the user undoes the move", func():
+		State.undo_redo.undo()
+	)
+	step("Then both cels return", func():
+		expect(State.document.cel(0, 0).get_color(Vector3i.ZERO) == Color.RED, "the source cell returns")
+		expect(State.document.cel(1, 0).count() == 0, "the target is empty again")
+	)
+	step("When the user redoes the move", func():
+		State.undo_redo.redo()
+	)
+	step("Given an empty selection", func():
+		State.selection.clear()
+		State.selection_changed.emit()
+	)
+	step("When the user moves the whole cel", func():
+		State.move_selection_to_layer(1)
+	)
+	step("Then every remaining cell moves", func():
+		expect(State.document.cel(0, 0).count() == 0, "the source cel is empty")
+		expect(State.document.cel(1, 0).get_color(Vector3i.RIGHT) == Color.GREEN, "the target takes the rest")
+		expect(State.document.cel(1, 0).count() == 2, "the target holds both cells")
+	)
+
+
+func _locked_commands() -> void:
+	step("Given two layers and a locked top layer", func():
+		var document := State.document
+		document.layers.append(document.make_layer("Top"))
+		State.set_layer_locked(1, true)
+	)
+	step("Then delete is refused", func():
+		State.delete_layer(1)
+		expect(State.document.layers.size() == 2, "the locked layer stays")
+		expect(_notices.has("The layer is locked."), "the lock notice appears")
+	)
+	step("Then merge down is refused", func():
+		State.merge_layer_down(1)
+		expect(State.document.layers.size() == 2, "the locked source stays")
+	)
+	step("Then a locked target refuses the merge", func():
+		State.set_layer_locked(1, false)
+		State.set_layer_locked(0, true)
+		State.merge_layer_down(1)
+		expect(State.document.layers.size() == 2, "the locked target stays")
+	)
+	step("Then a locked target refuses a selection move", func():
+		State.set_layer_locked(0, false)
+		State.set_layer_locked(1, true)
+		State.selection.add(Vector3i.ZERO)
+		State.selection_changed.emit()
+		State.move_selection_to_layer(1)
+		expect(State.document.cel(1, 0).count() == 0, "the locked target stays empty")
+	)
+	step("Then rename still works on a locked layer", func():
+		State.rename_layer(1, "Locked")
+		expect(State.document.layers[1].name == "Locked", "a locked layer renames")
 	)
 
 

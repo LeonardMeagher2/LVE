@@ -1,12 +1,13 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://ui/AnimationTimeline/LayerToolbarCell.gd" id="1"]
 [ext_resource type="Texture2D" path="res://icons/add.svg" id="2"]
 [ext_resource type="Texture2D" path="res://icons/duplicate.svg" id="3"]
 [ext_resource type="Texture2D" path="res://icons/trash.svg" id="4"]
+[ext_resource type="Texture2D" path="res://icons/more.svg" id="5"]
 
 [node name="LayerToolbarCell" type="HBoxContainer"]
-custom_minimum_size = Vector2(150, 0)
+custom_minimum_size = Vector2(180, 0)
 theme_override_constants/separation = 4
 script = ExtResource("1")
 
@@ -38,4 +39,13 @@ layout_mode = 2
 size_flags_vertical = 4
 tooltip_text = "Delete layer"
 icon = ExtResource("4")
+icon_alignment = 1
+
+[node name="More" type="MenuButton" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 4
+tooltip_text = "Layer actions"
+icon = ExtResource("5")
+flat = false
 icon_alignment = 1

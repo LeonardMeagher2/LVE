@@ -11,6 +11,15 @@ func _ready() -> void:
 	test("a painted cel shows its marker", _filled_marker, "layer_grid_marker")
 	test("visibility and lock follow the header buttons", _visibility_and_lock, "layer_grid_state")
 	test("the layer toolbar adds and deletes rows", _toolbar_actions, "layer_grid_toolbar")
+	test("the layer menu renames the active layer", _rename_from_menu, "layer_grid_rename")
+	test("dragging a header reorders the layers", _drag_reorder, "layer_grid_reorder")
+	test("the layer menu follows lock, order, and visibility", _more_menu, "layer_grid_menu")
+
+
+func after_test() -> void:
+	var dialog: ConfirmationDialog = main.find_child("LayerRenameDialog", true, false)
+	if dialog != null and dialog.visible:
+		dialog.hide()
 
 
 func _grid() -> Control:
@@ -233,4 +242,106 @@ func _toolbar_actions() -> void:
 	step("Then the layer is removed and delete disables", func():
 		expect(State.document.layers.size() == 1, "the layer is removed")
 		expect(_toolbar().get_node("%Delete").disabled, "delete is disabled again")
+	)
+
+
+func _more_popup() -> PopupMenu:
+	return _toolbar().get_node("%More").get_popup()
+
+
+func _rename_dialog() -> ConfirmationDialog:
+	return main.find_child("LayerRenameDialog", true, false)
+
+
+func _rename_from_menu() -> void:
+	step("When the user picks rename from the layer menu", func():
+		var popup := _more_popup()
+		popup.about_to_popup.emit()
+		popup.id_pressed.emit(LayerToolbarCell.ACTION_RENAME)
+	)
+	step("Then the dialog shows the active layer name", func():
+		expect(_rename_dialog().visible, "the rename dialog opens")
+		expect(_rename_dialog().get_node("%LayerRenameInput").text == "Layer 1", "the dialog shows the layer name")
+	)
+	step("When the user types a name and confirms", func():
+		_rename_dialog().get_node("%LayerRenameInput").text = "Ground"
+		_rename_dialog().confirmed.emit()
+		_rename_dialog().hide()
+	)
+	step("Then the header and model take the new name", func():
+		expect(_headers()[0].get_node("%Name").text == "Ground", "the header follows the rename")
+		expect(State.document.layers[0].name == "Ground", "the layer takes the new name")
+	)
+	step("When the user undoes the rename", func():
+		State.undo_redo.undo()
+	)
+	step("Then the header returns to the old name", func():
+		expect(_headers()[0].get_node("%Name").text == "Layer 1", "undo restores the header name")
+	)
+
+
+func _drag_reorder() -> void:
+	step("Given a second layer above the first", func():
+		State.add_layer()
+		expect(_headers()[0].get_node("%Name").text == "Layer 2", "the second layer is the top row")
+	)
+	step("When the user drags the top header onto the bottom header", func():
+		var data := {"type": LayerHeaderCell.DRAG_TYPE, "from": 1}
+		expect(_headers()[1]._can_drop_data(Vector2.ZERO, data), "the header accepts the layer")
+		_headers()[1]._drop_data(Vector2.ZERO, data)
+	)
+	step("Then the layer rows swap", func():
+		expect(_headers()[0].get_node("%Name").text == "Layer 1", "the first layer is the top row")
+		expect(_headers()[1].get_node("%Name").text == "Layer 2", "the second layer is below")
+		expect(State.document.layers[0].name == "Layer 2", "the model order follows the rows")
+	)
+	step("When the user undoes the reorder", func():
+		State.undo_redo.undo()
+	)
+	step("Then the original order returns", func():
+		expect(_headers()[0].get_node("%Name").text == "Layer 2", "the second layer is on top again")
+		expect(State.document.layers[0].name == "Layer 1", "the model order returns")
+	)
+
+
+func _more_menu() -> void:
+	step("Given a second layer above the first", func():
+		State.add_layer()
+	)
+	step("Then the menu lists rename, merge, and the other layer", func():
+		var popup := _more_popup()
+		popup.about_to_popup.emit()
+		expect(popup.get_item_text(0) == "Rename Layer", "the menu offers rename")
+		expect(popup.get_item_text(1) == "Merge Down", "the menu offers merge")
+		expect(popup.get_item_text(3) == "Move Selection to Layer 1", "the menu offers the other layer")
+		expect(not popup.is_item_disabled(1), "merge is enabled above the bottom layer")
+		expect(not popup.is_item_disabled(3), "the move target is enabled")
+	)
+	step("When the active layer is locked", func():
+		State.set_layer_locked(1, true)
+	)
+	step("Then merge and delete are disabled", func():
+		var popup := _more_popup()
+		popup.about_to_popup.emit()
+		expect(popup.is_item_disabled(1), "merge is disabled on a locked layer")
+		expect(_toolbar().get_node("%Delete").disabled, "delete is disabled on a locked layer")
+	)
+	step("When the active layer is the bottom layer", func():
+		State.set_layer_locked(1, false)
+		State.active_layer_index = 0
+	)
+	step("Then merge is disabled", func():
+		var popup := _more_popup()
+		popup.about_to_popup.emit()
+		expect(popup.is_item_disabled(1), "merge is disabled on the bottom layer")
+	)
+	step("When the other layer is hidden", func():
+		State.active_layer_index = 1
+		State.set_layer_visible(0, false)
+	)
+	step("Then the hidden layer is not a move target", func():
+		var popup := _more_popup()
+		popup.about_to_popup.emit()
+		expect(popup.get_item_text(3) == "No other layer", "a hidden layer is not offered")
+		expect(popup.is_item_disabled(3), "the empty move item is disabled")
 	)

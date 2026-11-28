@@ -15,12 +15,14 @@ var _cel_cells := {}
 var _layer_headers := {}
 var _active_cel_key := Vector2i(-1, -1)
 var _active_layer := -1
+var _rename_layer_index := -1
 
 @export var playback_bottom := false
 
 func _ready() -> void:
 	if playback_bottom:
 		_place_playback_bottom()
+	%LayerRenameDialog.about_to_popup.connect(_on_layer_rename_about_to_popup)
 	State.is_playing_toggled.connect(_on_is_playing_toggled)
 	State.frames_changed.connect(_rebuild_strip)
 	State.layers_changed.connect(_rebuild_strip)
@@ -74,7 +76,9 @@ func _rebuild_strip() -> void:
 			range_cell.column_offset = 1
 			range_cell.grid = %FrameGrid
 			%FrameGrid.add_child(range_cell)
-	%FrameGrid.add_child(LAYER_TOOLBAR.instantiate())
+	var toolbar: LayerToolbarCell = LAYER_TOOLBAR.instantiate()
+	toolbar.rename_requested.connect(_open_layer_rename)
+	%FrameGrid.add_child(toolbar)
 	for i in n:
 		var frame: AnimationFrame = ANIMATION_FRAME.instantiate()
 		frame.frame_index = i
@@ -85,6 +89,7 @@ func _rebuild_strip() -> void:
 	for row in range(State.document.layers.size() - 1, -1, -1):
 		var layer: VoxelLayer = State.document.layers[row]
 		var header: LayerHeaderCell = LAYER_HEADER.instantiate()
+		header.rename_requested.connect(_open_layer_rename)
 		%FrameGrid.add_child(header)
 		header.setup(row, layer, layer_group)
 		_layer_headers[row] = header
@@ -98,6 +103,31 @@ func _rebuild_strip() -> void:
 	_sync_active_cel()
 	if scroll != null:
 		_restore_scroll.call_deferred(scroll_position.x, scroll_position.y)
+
+
+func _open_layer_rename(index: int) -> void:
+	if index < 0 or index >= State.document.layers.size():
+		return
+	_rename_layer_index = index
+	%LayerRenameDialog.popup_centered()
+
+
+func _on_layer_rename_about_to_popup() -> void:
+	if _rename_layer_index < 0 or _rename_layer_index >= State.document.layers.size():
+		return
+	%LayerRenameInput.text = State.document.layers[_rename_layer_index].name
+	%LayerRenameInput.select_all()
+
+
+func _on_layer_rename_confirmed() -> void:
+	var index := _rename_layer_index
+	_rename_layer_index = -1
+	if index < 0 or index >= State.document.layers.size():
+		return
+	var new_name: String = %LayerRenameInput.text.strip_edges()
+	if new_name.is_empty():
+		return
+	State.rename_layer(index, new_name)
 
 
 func _restore_scroll(horizontal: int, vertical: int) -> void:
