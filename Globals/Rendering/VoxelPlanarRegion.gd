@@ -33,7 +33,7 @@ static func _compact(cells: Dictionary) -> Cells:
 	if extent_x - origin_x >= BOX_LIMIT:
 		return null
 	var area := (extent_x - origin_x + 1) * (extent_y - origin_y + 1)
-	if area > maxi(cells.size() * 4, 16):
+	if area > maxi(cells.size() * 32, 16):
 		return null
 	var box := Cells.new()
 	box.origin = Vector2i(origin_x, origin_y)

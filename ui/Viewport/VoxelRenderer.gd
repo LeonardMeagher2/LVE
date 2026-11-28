@@ -118,6 +118,7 @@ var _launch_snapshot: VoxelFrame
 var _profile := {
 	"reaped": 0, "empty": 0, "culled": 0, "consume": 0, "launch": 0, "lost": 0, "truncated": 0,
 	"material_us": 0, "cache_us": 0, "install_us": 0, "snapshot_us": 0, "snapshots": 0,
+	"build_us": 0, "builds": 0,
 }
 
 
@@ -340,7 +341,12 @@ static func _signature(active_frame: VoxelFrame, chunk_location: Vector3i, smoot
 
 
 func _process(_delta: float) -> void:
+	var update_started := Time.get_ticks_usec()
 	_update_surfaces()
+	if profile_surfaces:
+		var update_us := Time.get_ticks_usec() - update_started
+		if update_us > 100_000:
+			print("SLOW_UPDATE us=%d pending=%d jobs=%d" % [update_us, _pending_surface_keys.size(), _surface_jobs.size()])
 	_report_activity()
 
 
@@ -365,6 +371,9 @@ func _update_surfaces() -> void:
 		if WorkerThreadPool.is_task_completed(surface_job.worker_task_id):
 			var reap_started_us := Time.get_ticks_usec()
 			WorkerThreadPool.wait_for_task_completion(surface_job.worker_task_id)
+			if profile_surfaces:
+				_profile.build_us += reap_started_us - surface_job.build_started_us
+				_profile.builds += 1
 			var chunk_surface: ArrayMesh = null
 			if not surface_job.surface_arrays[Mesh.ARRAY_VERTEX].is_empty():
 				chunk_surface = ArrayMesh.new()
@@ -501,6 +510,7 @@ func _launch_surface(chunk_location: Vector3i, active_frame: VoxelFrame) -> void
 		surface_job = marching
 	surface_job.source_frame = _snapshot_for_launch(active_frame)
 	surface_job.chunk_location = chunk_location
+	surface_job.build_started_us = Time.get_ticks_usec()
 	surface_job.worker_task_id = WorkerThreadPool.add_task(surface_job.run, false, "Voxel surface")
 	_surface_jobs[surface_key] = surface_job
 	_inflight_surface_keys[chunk_location] = surface_key
@@ -669,6 +679,7 @@ func reset_profile() -> void:
 	_profile = {
 		"reaped": 0, "empty": 0, "culled": 0, "consume": 0, "launch": 0, "lost": 0, "truncated": 0,
 		"material_us": 0, "cache_us": 0, "install_us": 0, "snapshot_us": 0, "snapshots": 0,
+		"build_us": 0, "builds": 0,
 	}
 
 

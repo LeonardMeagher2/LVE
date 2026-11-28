@@ -638,13 +638,13 @@ class Chunk extends RefCounted:
 					target.grid[slot] = target.materials.size() / MATERIAL_STRIDE
 					target.occupied_count += 1
 					target.occupancy_revision += 1
-				if not target.bounds_dirty:
-					min_cell = Vector3i(mini(min_cell.x, local.x), mini(min_cell.y, local.y), mini(min_cell.z, local.z))
-					max_cell = Vector3i(maxi(max_cell.x, local.x), maxi(max_cell.y, local.y), maxi(max_cell.z, local.z))
-			face_bits |= VoxelFrame._face_bits(local)
+			min_cell = Vector3i(mini(min_cell.x, local.x), mini(min_cell.y, local.y), mini(min_cell.z, local.z))
+			max_cell = Vector3i(maxi(max_cell.x, local.x), maxi(max_cell.y, local.y), maxi(max_cell.z, local.z))
 			changed_count += 1
 
 
+		if changed_count > 0:
+			face_bits = _extent_face_bits(min_cell, max_cell)
 		if changed_count > 0 and target.occupied_count > 0 and target.materials.size() > target.occupied_count * MATERIAL_STRIDE * 2:
 			target._compact()
 
@@ -698,13 +698,13 @@ class Chunk extends RefCounted:
 				target.occupied_count += 1
 				target.occupancy_revision += 1
 			target.grid[slot] = new_id
-			face_bits |= VoxelFrame._face_bits(local)
+			min_cell = Vector3i(mini(min_cell.x, local.x), mini(min_cell.y, local.y), mini(min_cell.z, local.z))
+			max_cell = Vector3i(maxi(max_cell.x, local.x), maxi(max_cell.y, local.y), maxi(max_cell.z, local.z))
 			changed_count += 1
-			if not target.bounds_dirty:
-				min_cell = Vector3i(mini(min_cell.x, local.x), mini(min_cell.y, local.y), mini(min_cell.z, local.z))
-				max_cell = Vector3i(maxi(max_cell.x, local.x), maxi(max_cell.y, local.y), maxi(max_cell.z, local.z))
 
 
+		if changed_count > 0:
+			face_bits = _extent_face_bits(min_cell, max_cell)
 		if changed_count > 0 and target.occupied_count > 0 and target.materials.size() > target.occupied_count * MATERIAL_STRIDE * 2:
 			target._compact()
 
@@ -1264,19 +1264,37 @@ static func job_frame_of_snapshot(snapshot: Dictionary) -> VoxelFrame:
 
 func apply_published(locations: Array[Vector3i], published: VoxelFrame) -> void:
 	var started := Time.get_ticks_usec()
-	_bounds_dirty = true
-	_bounds_chunk_count = -1
+	var grows_only := not _bounds_dirty and _bounds.has_volume()
+	var merged := _bounds
 	for location in locations:
 		var chunk: Chunk = published.chunks.get(location)
+		var previous: Chunk = chunks.get(location)
 		if chunk == null:
 			chunks.erase(location)
 			_shared_chunks.erase(location)
+			if previous != null:
+				grows_only = false
 			continue
 		chunks[location] = chunk
 		if published._shared_chunks.has(location):
 			_shared_chunks[location] = true
 		else:
 			_shared_chunks.erase(location)
+		if grows_only:
+			var chunk_bounds: AABB = chunk.get_bounds()
+			if previous == null:
+				merged = merged.merge(chunk_bounds) if chunk_bounds.has_volume() else merged
+			elif chunk_bounds.encloses(previous.get_bounds()):
+				merged = merged.merge(chunk_bounds)
+			else:
+				grows_only = false
+	if grows_only:
+		_bounds = merged
+		_bounds_dirty = false
+		_bounds_chunk_count = chunks.size()
+	else:
+		_bounds_dirty = true
+		_bounds_chunk_count = -1
 	_profile_publish_calls += 1
 	_profile_publish_us += Time.get_ticks_usec() - started
 

@@ -372,6 +372,7 @@ static func _grid_pass(data: PackedByteArray, stride_x: int, stride_y: int, budg
 		var face_z := data[base - 1] == 1
 		var back_z := data[base + 1] == 1
 		var has_face := face_x or back_x or face_y or back_y or face_z or back_z
+		var face_count := int(self_occupied) + int(face_x) + int(back_x) + int(face_y) + int(back_y) + int(face_z) + int(back_z)
 		var gradient_x := int(face_x) - int(back_x)
 		var gradient_y := int(face_y) - int(back_y)
 		var gradient_z := int(face_z) - int(back_z)
@@ -392,7 +393,7 @@ static func _grid_pass(data: PackedByteArray, stride_x: int, stride_y: int, budg
 			elif base_count != 3:
 				if _grid_fraction(data, fraction_deltas, base) < remove_threshold:
 					remove.append(index)
-			elif _grid_base_occupied(data, base, true, remove_limit, stride_x, stride_y, extra_deltas) < remove_limit:
+			elif _grid_base_occupied(data, base, face_count, remove_limit, extra_deltas) < remove_limit:
 				remove.append(index)
 		else:
 			if broad and not _grid_thin_around(data, run_deltas, base, use_radius) and _grid_enclosed(data, touch_memo, ball_deltas, base):
@@ -400,7 +401,7 @@ static func _grid_pass(data: PackedByteArray, stride_x: int, stride_y: int, budg
 			elif base_count != 3:
 				if _grid_fraction(data, fraction_deltas, base) > add_threshold:
 					add.append(index)
-			elif _grid_base_occupied(data, base, false, add_limit, stride_x, stride_y, extra_deltas) >= add_limit:
+			elif _grid_base_occupied(data, base, face_count, add_limit, extra_deltas) >= add_limit:
 				add.append(index)
 	return {"remove": remove, "add": add, "evaluated": evaluated}
 
@@ -491,18 +492,7 @@ static func _grid_run(data: PackedByteArray, base: int, step: int, limit: int) -
 	return length
 
 
-static func _grid_base_occupied(data: PackedByteArray, base: int, self_occupied: bool, limit: int, stride_x: int, stride_y: int, extra_deltas: PackedInt32Array) -> int:
-	var count := int(self_occupied)
-	count += int(data[base - stride_x] == 1)
-	count += int(data[base + stride_x] == 1)
-	if count >= limit:
-		return count
-	count += int(data[base - stride_y] == 1)
-	count += int(data[base + stride_y] == 1)
-	if count >= limit:
-		return count
-	count += int(data[base - 1] == 1)
-	count += int(data[base + 1] == 1)
+static func _grid_base_occupied(data: PackedByteArray, base: int, count: int, limit: int, extra_deltas: PackedInt32Array) -> int:
 	if count >= limit:
 		return count
 	for delta in extra_deltas:
@@ -604,25 +594,35 @@ static func _budget(ordered: Array, use_passes: int, weights: Dictionary) -> Dic
 	return budget
 
 
-static func relax(occupied: Dictionary, cells: Array, passes := 1, radius := KERNEL_RADIUS, remove_threshold := REMOVE_THRESHOLD, add_threshold := ADD_THRESHOLD, weights := {}, cancel := Callable()) -> Dictionary:
+static func relax(occupied: Dictionary, cells: Array, passes := 1, radius := KERNEL_RADIUS, remove_threshold := REMOVE_THRESHOLD, add_threshold := ADD_THRESHOLD, weights := {}, cancel := Callable(), box := [], ordered_hint := false, cell_weights := PackedFloat64Array()) -> Dictionary:
 	var use_passes := maxi(passes, 0)
 	if cells.is_empty() or use_passes == 0:
 		return _relax_dict(occupied, cells, cells, _budget(cells, use_passes, weights), use_passes, radius, remove_threshold, add_threshold, cancel)
-	var min_cell: Vector3i = cells[0]
-	var max_cell: Vector3i = cells[0]
-	var ordered_input := true
-	var previous: Vector3i = cells[0]
-	for index in range(1, cells.size()):
-		var cell: Vector3i = cells[index]
-		min_cell.x = mini(min_cell.x, cell.x)
-		min_cell.y = mini(min_cell.y, cell.y)
-		min_cell.z = mini(min_cell.z, cell.z)
-		max_cell.x = maxi(max_cell.x, cell.x)
-		max_cell.y = maxi(max_cell.y, cell.y)
-		max_cell.z = maxi(max_cell.z, cell.z)
-		if previous.y > cell.y or (previous.y == cell.y and (previous.z > cell.z or (previous.z == cell.z and previous.x > cell.x))):
-			ordered_input = false
-		previous = cell
+	var min_cell: Vector3i
+	var max_cell: Vector3i
+	if box.size() == 2:
+		min_cell = box[0]
+		max_cell = box[1]
+	else:
+		min_cell = cells[0]
+		max_cell = cells[0]
+		for index in range(1, cells.size()):
+			var cell: Vector3i = cells[index]
+			min_cell.x = mini(min_cell.x, cell.x)
+			min_cell.y = mini(min_cell.y, cell.y)
+			min_cell.z = mini(min_cell.z, cell.z)
+			max_cell.x = maxi(max_cell.x, cell.x)
+			max_cell.y = maxi(max_cell.y, cell.y)
+			max_cell.z = maxi(max_cell.z, cell.z)
+	var ordered_input := ordered_hint
+	if not ordered_input:
+		var previous: Vector3i = cells[0]
+		for index in range(1, cells.size()):
+			var cell: Vector3i = cells[index]
+			if previous.y > cell.y or (previous.y == cell.y and (previous.z > cell.z or (previous.z == cell.z and previous.x > cell.x))):
+				ordered_input = false
+				break
+			previous = cell
 	var ordered: Array
 	if ordered_input:
 		ordered = cells
@@ -647,18 +647,30 @@ static func relax(occupied: Dictionary, cells: Array, passes := 1, radius := KER
 	var bases := PackedInt32Array()
 	budgets.resize(ordered.size())
 	bases.resize(ordered.size())
+	var aligned := cell_weights.size() == ordered.size()
+	var budget_scale := float(use_passes)
+	var previous_cell := Vector3i.ZERO
+	var base_cursor := 0
 	for index in ordered.size():
 		var cell: Vector3i = ordered[index]
-		budgets[index] = roundi(float(use_passes) * clampf(float(weights.get(cell, 1.0)), 0.0, 1.0))
-		bases[index] = (cell.x - low.x) * stride_x + (cell.y - low.y) * stride_y + (cell.z - low.z)
+		if aligned:
+			budgets[index] = roundi(budget_scale * clampf(cell_weights[index], 0.0, 1.0))
+		else:
+			budgets[index] = roundi(budget_scale * clampf(float(weights.get(cell, 1.0)), 0.0, 1.0))
+		if index == 0 or cell.y != previous_cell.y or cell.z != previous_cell.z or cell.x != previous_cell.x + 1:
+			base_cursor = (cell.x - low.x) * stride_x + (cell.y - low.y) * stride_y + (cell.z - low.z)
+		else:
+			base_cursor += stride_x
+		bases[index] = base_cursor
+		previous_cell = cell
 	var initial := data.duplicate()
 	return _relax_grid(occupied, ordered, budgets, bases, use_passes, radius, remove_threshold, add_threshold, cancel, data, initial, stride_x, stride_y)
 
 
-static func advance(occupied: Dictionary, cells: Array, passes: int, radius := KERNEL_RADIUS, remove_threshold := REMOVE_THRESHOLD, add_threshold := ADD_THRESHOLD, weights := {}, cancel := Callable()) -> Dictionary:
+static func advance(occupied: Dictionary, cells: Array, passes: int, radius := KERNEL_RADIUS, remove_threshold := REMOVE_THRESHOLD, add_threshold := ADD_THRESHOLD, weights := {}, cancel := Callable(), box := [], ordered_hint := false, cell_weights := PackedFloat64Array()) -> Dictionary:
 	if cells.is_empty():
 		return {"occupied": occupied.duplicate(), "remove": [], "add": [], "passes": 0}
 	var use_passes := mini(maxi(passes, 0), MAX_PASSES_PER_CALL)
-	var outcome := relax(occupied, cells, use_passes, radius, remove_threshold, add_threshold, weights, cancel)
+	var outcome := relax(occupied, cells, use_passes, radius, remove_threshold, add_threshold, weights, cancel, box, ordered_hint, cell_weights)
 	outcome["passes"] = use_passes
 	return outcome

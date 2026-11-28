@@ -89,6 +89,7 @@ var atlas_emission := PackedByteArray()
 var geometry_bytes := 0
 var enclosed_culled := false
 var worker_task_id := -1
+var build_started_us := 0
 var profile := false
 var sample_us := 0
 var field_us := 0

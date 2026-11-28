@@ -17,6 +17,7 @@ var slice_axis := -1
 var slice_index := 0
 var slice_count := 1
 var worker_task_id := -1
+var build_started_us := 0
 var surface_arrays: Array = []
 var geometry_bytes := 0
 var atlas_size := Vector2i.ZERO
@@ -124,55 +125,112 @@ func _greedy_dense(padded_cell_colors: PackedColorArray, padded_cell_materials: 
 	var vertex_normals := PackedVector3Array()
 	var vertex_colors := PackedColorArray()
 	var triangle_indices := PackedInt32Array()
-	var face_materials := PackedInt32Array()
 	var corner_normals := {}
-	face_materials.resize(CHUNK_SIZE * CHUNK_SIZE)
+	var plane_stride := CHUNK_SIZE * CHUNK_SIZE
+	var plane_count := plane_stride * CHUNK_SIZE
+	var face_planes := PackedInt32Array()
+	face_planes.resize(plane_count * 2)
 	for face_axis in 3:
+		face_planes.fill(0)
 		var column_axis := (face_axis + 1) % 3
 		var row_axis := (face_axis + 2) % 3
 		var column_stride: int = PADDED_AXIS_STRIDE[column_axis]
 		var row_stride: int = PADDED_AXIS_STRIDE[row_axis]
 		var face_stride: int = PADDED_AXIS_STRIDE[face_axis]
+		for layer_index in CHUNK_SIZE:
+			if occupied_planes[face_axis] & (1 << (layer_index + 1)) == 0:
+				continue
+			var layer_base := PADDED_ORIGIN + layer_index * face_stride
+			var plane_base := layer_index * plane_stride
+			for row in CHUNK_SIZE:
+				var row_base := layer_base + row * row_stride
+				var cell_base := plane_base + CHUNK_SIZE * row
+				for column in CHUNK_SIZE:
+					var sample_index := row_base + column * column_stride
+					var voxel_color := padded_cell_colors[sample_index]
+					if voxel_color == Color.TRANSPARENT:
+						continue
+					var back_color := padded_cell_colors[sample_index - face_stride]
+					if back_color.a < 1.0 and back_color != voxel_color:
+						face_planes[cell_base + column] = padded_cell_materials[sample_index]
+					var forward_color := padded_cell_colors[sample_index + face_stride]
+					if forward_color.a < 1.0 and forward_color != voxel_color:
+						face_planes[cell_base + plane_count + column] = padded_cell_materials[sample_index]
 		for face_sign: int in [-1, 1]:
-			var neighbor_step := face_sign * face_stride
 			var face_normal := Vector3.ZERO
 			face_normal[face_axis] = face_sign
+			var sign_base := 0 if face_sign < 0 else plane_count
 			for layer_index in CHUNK_SIZE:
 				if occupied_planes[face_axis] & (1 << (layer_index + 1)) == 0:
 					continue
-				var layer_base := PADDED_ORIGIN + layer_index * face_stride
-				for row in CHUNK_SIZE:
-					var row_base := layer_base + row * row_stride
-					for column in CHUNK_SIZE:
-						var sample_index := row_base + column * column_stride
-						var voxel_color := padded_cell_colors[sample_index]
-						var neighbor_color := padded_cell_colors[sample_index + neighbor_step]
-						face_materials[column + CHUNK_SIZE * row] = padded_cell_materials[sample_index] if voxel_color != Color.TRANSPARENT and neighbor_color.a < 1.0 and neighbor_color != voxel_color else 0
+				var plane_offset := sign_base + layer_index * plane_stride
 				var row := 0
 				while row < CHUNK_SIZE:
 					var column := 0
 					while column < CHUNK_SIZE:
-						var material_id := face_materials[column + CHUNK_SIZE * row]
+						var material_id := face_planes[plane_offset + column + CHUNK_SIZE * row]
 						if material_id == 0:
 							column += 1
 							continue
 						var quad_width := 1
-						while column + quad_width < CHUNK_SIZE and face_materials[column + quad_width + CHUNK_SIZE * row] == material_id:
+						while column + quad_width < CHUNK_SIZE and face_planes[plane_offset + column + quad_width + CHUNK_SIZE * row] == material_id:
 							quad_width += 1
 						var quad_height := 1
 						var row_matches := true
 						while row + quad_height < CHUNK_SIZE and row_matches:
 							for column_offset in quad_width:
-								var next_material := face_materials[column + column_offset + CHUNK_SIZE * (row + quad_height)]
+								var next_material := face_planes[plane_offset + column + column_offset + CHUNK_SIZE * (row + quad_height)]
 								if next_material != material_id:
 									row_matches = false
 									break
 							if row_matches:
 								quad_height += 1
-						_emit_quad(face_axis, face_sign, layer_index, column_axis, row_axis, column, row, quad_width, quad_height, material_id, face_normal, materials, padded_cell_colors, corner_normals, vertex_positions, vertex_normals, vertex_colors, triangle_indices)
+						var face_origin := Vector3.ZERO
+						face_origin[face_axis] = layer_index + face_sign * 0.5
+						face_origin[column_axis] = column - 0.5
+						face_origin[row_axis] = row - 0.5
+						var column_edge := Vector3.ZERO
+						var row_edge := Vector3.ZERO
+						column_edge[column_axis] = quad_width
+						row_edge[row_axis] = quad_height
+						var first_vertex := vertex_positions.size()
+						var base := material_id * VoxelFrame.MATERIAL_STRIDE
+						var face_color := Color(materials[base], materials[base + 1], materials[base + 2], materials[base + 3])
+						vertex_positions.resize(first_vertex + 4)
+						vertex_positions[first_vertex] = face_origin
+						vertex_positions[first_vertex + 1] = face_origin + column_edge
+						vertex_positions[first_vertex + 2] = face_origin + column_edge + row_edge
+						vertex_positions[first_vertex + 3] = face_origin + row_edge
+						for vertex_corner in 4:
+							var normal := face_normal
+							if smooth_normals:
+								var corner := Vector3i(vertex_positions[first_vertex + vertex_corner].floor())
+								if not corner_normals.has(corner):
+									corner_normals[corner] = _corner_normal(corner, padded_cell_colors)
+								normal = corner_normals[corner]
+								if normal.is_zero_approx():
+									normal = face_normal
+							vertex_normals.append(normal)
+							vertex_colors.append(face_color)
+						var index_start := triangle_indices.size()
+						triangle_indices.resize(index_start + 6)
+						if face_sign > 0:
+							triangle_indices[index_start] = first_vertex
+							triangle_indices[index_start + 1] = first_vertex + 2
+							triangle_indices[index_start + 2] = first_vertex + 1
+							triangle_indices[index_start + 3] = first_vertex
+							triangle_indices[index_start + 4] = first_vertex + 3
+							triangle_indices[index_start + 5] = first_vertex + 2
+						else:
+							triangle_indices[index_start] = first_vertex
+							triangle_indices[index_start + 1] = first_vertex + 1
+							triangle_indices[index_start + 2] = first_vertex + 2
+							triangle_indices[index_start + 3] = first_vertex
+							triangle_indices[index_start + 4] = first_vertex + 2
+							triangle_indices[index_start + 5] = first_vertex + 3
 						for row_offset in quad_height:
 							for column_offset in quad_width:
-								face_materials[column + column_offset + CHUNK_SIZE * (row + row_offset)] = 0
+								face_planes[plane_offset + column + column_offset + CHUNK_SIZE * (row + row_offset)] = 0
 						column += quad_width
 					row += 1
 	return [vertex_positions, vertex_normals, vertex_colors, triangle_indices]
@@ -550,15 +608,23 @@ static func neighbor_offsets(use_smooth_normals: bool) -> Array[Vector3i]:
 
 
 static func _face_ao_code(padded_cell_materials: PackedInt32Array, outside: int, column_stride: int, row_stride: int) -> int:
+	var back_column := padded_cell_materials[outside - column_stride] != 0
+	var forward_column := padded_cell_materials[outside + column_stride] != 0
+	var back_row := padded_cell_materials[outside - row_stride] != 0
+	var forward_row := padded_cell_materials[outside + row_stride] != 0
+	var back_back := padded_cell_materials[outside - column_stride - row_stride] != 0
+	var back_forward := padded_cell_materials[outside - column_stride + row_stride] != 0
+	var forward_back := padded_cell_materials[outside + column_stride - row_stride] != 0
+	var forward_forward := padded_cell_materials[outside + column_stride + row_stride] != 0
 	var code := 0
-	for index in 4:
-		var far_column := -1 if (index & 1) == 0 else 1
-		var far_row := -1 if (index & 2) == 0 else 1
-		var side1 := outside + column_stride * far_column
-		var side2 := outside + row_stride * far_row
-		var diagonal := outside + column_stride * far_column + row_stride * far_row
-		var level: int = SURFACE._ao_level(padded_cell_materials[side1] != 0, padded_cell_materials[side2] != 0, padded_cell_materials[diagonal] != 0)
-		code |= level << (index * 2)
+	if not (back_column and back_row):
+		code = 3 - (1 if back_column else 0) - (1 if back_row else 0) - (1 if back_back else 0)
+	if not (forward_column and back_row):
+		code |= (3 - (1 if forward_column else 0) - (1 if back_row else 0) - (1 if forward_back else 0)) << 2
+	if not (back_column and forward_row):
+		code |= (3 - (1 if back_column else 0) - (1 if forward_row else 0) - (1 if back_forward else 0)) << 4
+	if not (forward_column and forward_row):
+		code |= (3 - (1 if forward_column else 0) - (1 if forward_row else 0) - (1 if forward_forward else 0)) << 6
 	return code
 
 

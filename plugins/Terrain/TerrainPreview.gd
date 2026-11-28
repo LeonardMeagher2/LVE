@@ -24,33 +24,75 @@ static func masks_for(context: VoxelFrame.EditContext) -> Array:
 	return masks
 
 
+static var _flat_disk_cache := {}
+static var _flat_disk_lock := Mutex.new()
+
+
+static func flat_disk(radius: int) -> Array:
+	_flat_disk_lock.lock()
+	var cached: Array = _flat_disk_cache.get(radius, [])
+	_flat_disk_lock.unlock()
+	if not cached.is_empty():
+		return cached
+	var u := PackedFloat64Array()
+	var v := PackedFloat64Array()
+	var distance := PackedFloat64Array()
+	for entry in TerrainGeometry.disk_offsets(radius):
+		u.append(entry["u"])
+		v.append(entry["v"])
+		distance.append(entry["distance"])
+	cached = [u, v, distance]
+	_flat_disk_lock.lock()
+	_flat_disk_cache[radius] = cached
+	_flat_disk_lock.unlock()
+	return cached
+
+
 static func compute_sample_map(frame: VoxelFrame, terrain_frame: TerrainFrame, center_point: Vector3, radius: int, falloff: float, context: VoxelFrame.EditContext, depth: int, known: Dictionary = {}, job: VoxelFrame.EditJob = null, query: TerrainQueryContext = null, base_known: Dictionary = {}, floor_axis := 1, floor_cell := 0, known_columns: Dictionary = {}) -> Dictionary:
 	var candidates := []
 	var completed := 0
+	var size := float(radius)
+	var inner := TerrainGeometry.disk_inner(radius)
+	var flat := flat_disk(radius)
+	var us: PackedFloat64Array = flat[0]
+	var vs: PackedFloat64Array = flat[1]
+	var distances: PackedFloat64Array = flat[2]
 	for mask in masks_for(context):
 		var reflected := terrain_frame.reflected(context, mask)
 		var center := center_point if mask == 0 else TerrainFrame.mirror_point(center_point, context, mask)
-		for entry in TerrainGeometry.disk_offsets(radius):
-			var weight := VoxelFalloff.weight_at(entry["distance"], float(radius), falloff, TerrainGeometry.disk_inner(radius))
+		var normal := reflected.normal
+		var axis := TerrainGeometry.dominant_axis(normal)
+		var key_head := axis * 2 + (1 if normal[axis] >= 0.0 else 0)
+		var key_u := (axis + 1) % 3
+		var key_v := (axis + 2) % 3
+		for index in us.size():
+			var weight := VoxelFalloff.weight_at(distances[index], size, falloff, inner)
 			if weight <= 0.0:
 				continue
-			var point: Vector3 = center + float(entry["u"]) * reflected.tangent_u + float(entry["v"]) * reflected.tangent_v
-			var base_point: Vector3 = center_point + float(entry["u"]) * terrain_frame.tangent_u + float(entry["v"]) * terrain_frame.tangent_v
-			var anchor := TerrainGeometry.cell_at(base_point) if mask == 0 else context.reflect(TerrainGeometry.cell_at(base_point), mask)
-			var seed0 := TerrainGeometry.cell_at(base_point)
-			seed0[floor_axis] = floor_cell
-			var seed := seed0 if mask == 0 else context.reflect(seed0, mask)
-			var base_key := TerrainGeometry.column_key(anchor, reflected.normal)
-			var tracked := known.has(anchor) or known_columns.has(base_key)
+			var offset_u := us[index]
+			var offset_v := vs[index]
+			var base_point: Vector3 = center_point + offset_u * terrain_frame.tangent_u + offset_v * terrain_frame.tangent_v
+			var base_cell := Vector3i(roundi(base_point.x), roundi(base_point.y), roundi(base_point.z))
+			var point := base_point
+			var anchor := base_cell
+			var seed := base_cell
+			seed[floor_axis] = floor_cell
+			if mask != 0:
+				point = center + offset_u * reflected.tangent_u + offset_v * reflected.tangent_v
+				anchor = context.reflect(base_cell, mask)
+				seed = context.reflect(seed, mask)
+			var base_key := Vector3i(key_head, anchor[key_u], anchor[key_v])
+			var tracked := true
 			var surface: Vector3i
 			if known.has(anchor):
 				surface = known[anchor]
 			elif known_columns.has(base_key):
 				surface = known_columns[base_key]
 			else:
-				surface = TerrainGeometry.surface_along(frame, point, reflected.normal, depth, {}, query)
+				tracked = false
+				surface = TerrainGeometry.surface_along(frame, point, normal, depth, {}, query)
 			if surface != VoxelPicking.NONE and not tracked:
-				if TerrainGeometry.is_occupied(frame, {}, TerrainGeometry.next_cell(surface, reflected.normal)):
+				if TerrainGeometry.is_occupied(frame, {}, TerrainGeometry.next_cell(surface, normal)):
 					surface = VoxelPicking.NONE
 			var base: Vector3i
 			if base_known.has(base_key):
@@ -61,7 +103,7 @@ static func compute_sample_map(frame: VoxelFrame, terrain_frame: TerrainFrame, c
 			candidates.append({
 				"anchor": anchor,
 				"point": point,
-				"normal": reflected.normal,
+				"normal": normal,
 				"plane_origin": reflected.origin,
 				"weight": weight,
 				"surface": surface,
@@ -87,12 +129,15 @@ static func compute_smooth_fields(center_point: Vector3, radius: int, falloff: f
 	var sphere := _weighted_sphere(radius, falloff)
 	var offset_cells: Array = sphere[0]
 	var sphere_weights: PackedFloat64Array = sphere[1]
+	var low_offset: Vector3i = sphere[2]
+	var high_offset: Vector3i = sphere[3]
 	var offset_count := offset_cells.size()
 	for mask in masks_for(context):
 		var center := center_point if mask == 0 else TerrainFrame.mirror_point(center_point, context, mask)
 		var base := TerrainGeometry.cell_at(center)
 		var cells := []
 		var weights := {}
+		var cell_weights := PackedFloat64Array()
 		for i in offset_count:
 			var weight := sphere_weights[i]
 			if weight <= 0.0:
@@ -104,9 +149,13 @@ static func compute_smooth_fields(center_point: Vector3, radius: int, falloff: f
 			if TerrainGeometry.allows(selection, cell) and (context == null or context.allows(cell)):
 				cells.append(cell)
 				weights[cell] = weight
+				cell_weights.append(weight)
 		fields.append({
 			"cells": cells,
 			"weights": weights,
+			"cell_weights": cell_weights,
+			"box": [base + low_offset, base + high_offset],
+			"ordered": true,
 		})
 	return fields
 
@@ -124,9 +173,17 @@ static func _weighted_sphere(radius: int, falloff: float) -> Array:
 	var weights := PackedFloat64Array()
 	weights.resize(count)
 	var packed := []
+	var low_offset := Vector3i.ZERO
+	var high_offset := Vector3i.ZERO
 	for i in count:
 		var entry: Dictionary = offsets[i]
 		var off: Vector3i = entry["offset"]
+		low_offset.x = mini(low_offset.x, off.x)
+		low_offset.y = mini(low_offset.y, off.y)
+		low_offset.z = mini(low_offset.z, off.z)
+		high_offset.x = maxi(high_offset.x, off.x)
+		high_offset.y = maxi(high_offset.y, off.y)
+		high_offset.z = maxi(high_offset.z, off.z)
 		offset_cells.append(off)
 		weights[i] = VoxelFalloff.weight_at(float(entry["distance"]), float(radius), falloff, 0.0)
 		packed.append((((off.y + 64) * 128 + (off.z + 64)) * 128 + (off.x + 64)) * (1 << 18) + i)
@@ -139,7 +196,7 @@ static func _weighted_sphere(radius: int, falloff: float) -> Array:
 		var index: int = packed[i] % (1 << 18)
 		sorted_cells[i] = offset_cells[index]
 		sorted_weights[i] = weights[index]
-	var result := [sorted_cells, sorted_weights]
+	var result := [sorted_cells, sorted_weights, low_offset, high_offset]
 	result.make_read_only()
 	_weighted_sphere_lock.lock()
 	_weighted_sphere_cache[key] = result

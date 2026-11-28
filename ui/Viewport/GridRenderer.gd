@@ -16,6 +16,7 @@ func _ready() -> void:
 	State.size_changed.connect(rebuild)
 
 func rebuild() -> void:
+	var rebuild_started := Time.get_ticks_usec()
 	var bounds := State.document.workspace_bounds()
 	var axis := State.floor_axis
 	var index := State.floor_index
@@ -53,6 +54,9 @@ func rebuild() -> void:
 	p[v] = lo[v]
 	position = p
 	_push_far_bounds()
+	var rebuild_spent := Time.get_ticks_usec() - rebuild_started
+	if rebuild_spent > 50_000:
+		print("SLOW_GRID us=%d" % rebuild_spent)
 
 
 func _push_far_bounds() -> void:

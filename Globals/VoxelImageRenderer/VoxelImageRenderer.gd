@@ -82,10 +82,14 @@ func _process_queue() -> void:
 func _render_frame(frame_index: int, render_revision: int) -> ImageTexture:
 	if DisplayServer.get_name() == "headless":
 		return ImageTexture.create_from_image(Image.create(1, 1, false, Image.FORMAT_RGBA8))
+	var set_started := Time.get_ticks_usec()
 	if _thumbnail_renderer.frame == frame_index:
 		_thumbnail_renderer.refresh()
 	else:
 		_thumbnail_renderer.frame = frame_index
+	var set_spent := Time.get_ticks_usec() - set_started
+	if set_spent > 50_000:
+		print("SLOW_THUMBNAIL set us=%d frame=%d" % [set_spent, frame_index])
 	while not _thumbnail_renderer.is_settled():
 		if render_revision != _queue_revision:
 			return null

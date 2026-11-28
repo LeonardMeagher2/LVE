@@ -20,31 +20,38 @@ static func progress_key(sample: Dictionary, tool: int) -> Vector3i:
 
 
 static func collect_steps(samples: Dictionary, tool: int, strength: int) -> Array:
-	var out := []
-	var order := []
-	var best := {}
+	var order: Array[Vector3i] = []
+	var picked := []
+	var weights := PackedFloat64Array()
+	var slots := {}
 	for anchor in samples:
 		var sample: Dictionary = samples[anchor]
 		var key := progress_key(sample, tool)
-		if not best.has(key):
-			best[key] = {"sample": sample, "weight": 0.0}
+		var weight := float(sample["weight"])
+		var slot: int = slots.get(key, -1)
+		if slot < 0:
+			slots[key] = order.size()
 			order.append(key)
-		var entry: Dictionary = best[key]
-		entry["weight"] = maxf(float(entry["weight"]), float(sample["weight"]))
-	for key in order:
-		var entry: Dictionary = best[key]
-		var steps := roundi(float(strength) * float(entry["weight"]))
+			picked.append(sample)
+			weights.append(weight)
+		elif weight > weights[slot]:
+			weights[slot] = weight
+	var scale := float(strength)
+	var out := []
+	for index in order.size():
+		var steps := roundi(scale * weights[index])
 		if steps <= 0:
 			continue
-		var sample: Dictionary = entry["sample"]
+		var sample: Dictionary = picked[index]
+		var anchor: Vector3i = sample["anchor"]
 		out.append({
-			"anchor": sample["anchor"],
-			"key": key,
+			"anchor": anchor,
+			"key": order[index],
 			"point": sample["point"],
 			"normal": sample["normal"],
 			"plane_origin": sample["plane_origin"],
 			"surface": sample["surface"],
-			"seed": sample.get("seed", sample["anchor"]),
+			"seed": sample["seed"] if sample.has("seed") else anchor,
 			"steps": steps,
 		})
 	return out

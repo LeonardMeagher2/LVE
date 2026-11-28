@@ -88,11 +88,19 @@ func _disconnect_state() -> void:
 
 
 func _on_cells_changed(_frame: int, _affected: Array[Vector3i]) -> void:
+	var started := Time.get_ticks_usec()
 	_mark_dirty()
+	var spent := Time.get_ticks_usec() - started
+	if spent > 50_000:
+		print("SLOW_AUTOSAVE cells us=%d" % spent)
 
 
 func _on_chunks_changed(_frame: int, _affected: Array[Vector3i]) -> void:
+	var started := Time.get_ticks_usec()
 	_mark_dirty()
+	var spent := Time.get_ticks_usec() - started
+	if spent > 50_000:
+		print("SLOW_AUTOSAVE chunks us=%d" % spent)
 
 
 func _mark_dirty() -> void:
