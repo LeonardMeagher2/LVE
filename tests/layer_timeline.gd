@@ -1,6 +1,9 @@
 extends "res://tests/test.gd"
 
 
+var _dock_height := 0.0
+
+
 func _ready() -> void:
 	test("the timeline shows one layer row", _default_grid, "layer_grid_default")
 	test("adding a layer adds a row and selects it", _add_layer, "layer_grid_add")
@@ -14,6 +17,7 @@ func _ready() -> void:
 	test("the layer menu renames the active layer", _rename_from_menu, "layer_grid_rename")
 	test("dragging a header reorders the layers", _drag_reorder, "layer_grid_reorder")
 	test("the layer menu follows lock, order, and visibility", _more_menu, "layer_grid_menu")
+	test("the timeline keeps its height and scrolls its rows", _scrolls_rows, "layer_grid_scroll")
 
 
 func after_test() -> void:
@@ -345,3 +349,31 @@ func _more_menu() -> void:
 		expect(popup.get_item_text(3) == "No other layer", "a hidden layer is not offered")
 		expect(popup.is_item_disabled(3), "the empty move item is disabled")
 	)
+
+
+func _scrolls_rows() -> void:
+	step("Given a timeline with one layer row", func():
+		_dock_height = main.find_child("BottomDock", true, false).size.y
+	)
+	step("When the user adds ten layers", func():
+		for index in 10:
+			State.add_layer()
+	)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	step("Then the dock keeps its height", func():
+		expect(is_equal_approx(main.find_child("BottomDock", true, false).size.y, _dock_height), "the dock height does not change")
+		expect(_scroll().get_v_scroll_bar().visible, "the vertical scroll bar shows")
+		expect(_scroll().get_v_scroll_bar().max_value > _scroll().size.y, "the rows exceed the view")
+		expect(_headers().size() == 11, "every layer row exists")
+	)
+	step("When the user scrolls down", func():
+		_scroll().scroll_vertical = int(_scroll().get_v_scroll_bar().max_value)
+	)
+	step("Then the grid moves", func():
+		expect(_scroll().scroll_vertical > 0, "the grid scrolls")
+	)
+
+
+func _scroll() -> ScrollContainer:
+	return _grid().get_parent() as ScrollContainer
