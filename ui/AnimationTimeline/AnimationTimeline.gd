@@ -37,6 +37,8 @@ func _ready() -> void:
 	%CelScroll.get_h_scroll_bar().value_changed.connect(_sync_from_cel_horizontal)
 	%HeaderScroll.get_h_scroll_bar().value_changed.connect(_sync_from_header_scroll)
 	%TagScroll.get_h_scroll_bar().value_changed.connect(_sync_from_tag_scroll)
+	%CelScroll.get_v_scroll_bar().visibility_changed.connect(_sync_header_pads)
+	%CelScroll.resized.connect(_sync_header_pads)
 	%HeaderHandle.resize_requested.connect(_on_header_resize_requested)
 	%HeaderHandle.resize_finished.connect(_on_header_resize_finished)
 	%HeaderHandle.toggle_requested.connect(toggle_header)
@@ -52,6 +54,7 @@ func _ready() -> void:
 	State.tag_changed.connect(_on_tag_changed)
 	_rebuild_strip()
 	_on_tag_changed()
+	_sync_header_pads.call_deferred()
 
 func _place_playback_bottom() -> void:
 	var bar: HBoxContainer = $HBoxContainer
@@ -208,6 +211,16 @@ func _sync_from_header_scroll(value: float) -> void:
 	%CelScroll.scroll_horizontal = int(value)
 	%TagScroll.scroll_horizontal = int(value)
 	_syncing_scroll = false
+
+
+func _sync_header_pads() -> void:
+	var bar: VScrollBar = %CelScroll.get_v_scroll_bar()
+	var width: float = bar.size.x if bar.visible else 0.0
+	for path in ["TagRangeRow/RightPad", "HeaderRow/RightPad"]:
+		var pad := get_node_or_null(path) as Control
+		if pad != null:
+			pad.custom_minimum_size.x = width
+	_sync_from_cel_horizontal(%CelScroll.scroll_horizontal)
 
 
 func header_height() -> float:

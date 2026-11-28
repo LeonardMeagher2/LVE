@@ -15,6 +15,7 @@ func _ready() -> void:
 	test("layers can be reordered", _move_layer, "move_layer")
 	test("a layer can be merged down", _merge_down, "merge_down")
 	test("the selection can move to another layer", _move_selection, "move_selection")
+	test("a layer can be read and rendered", _layer_read, "layer_read")
 
 
 func before_test() -> void:
@@ -289,6 +290,8 @@ func _merge_down() -> void:
 	State.document.set_cell(0, Vector3i(2, 0, 0), VoxelFrame.material(Color.BLUE))
 	State.document.set_cell(1, Vector3i.RIGHT, VoxelFrame.material(Color.YELLOW))
 	State.document.invalidate_bounds()
+	var state_response := await _call("get_state", {})
+	var revision := int(_result_data(state_response).get("revision", -1))
 	var merge := await _call("merge_layer_down", {"layer": 1})
 	var merge_data := _result_data(merge)
 	step("Then the layer merges into the layer below", func():
@@ -300,6 +303,12 @@ func _merge_down() -> void:
 		expect(layer.frames[0].get_color(Vector3i.ZERO) == Color.BLUE, "the upper cell wins")
 		expect(layer.frames[0].get_color(Vector3i(2, 0, 0)) == Color.BLUE, "the upper cell joins the target")
 		expect(layer.frames[1].get_color(Vector3i.RIGHT) == Color.YELLOW, "the second frame merges")
+	)
+	var changes := await _call("get_changes", {"since": revision, "frame": 0})
+	var changes_data := _result_data(changes)
+	step("Then the merge reports its cells to the change log", func():
+		expect(not _is_error(changes), "get_changes succeeds")
+		expect(int(changes_data.get("count", 0)) > 0, "the merged cells appear in the change log")
 	)
 	step("When the merge is undone", func():
 		State.undo_redo.undo()
@@ -317,6 +326,49 @@ func _merge_down() -> void:
 	step("Then a locked target refuses the merge", func():
 		expect(_is_error(locked), "the locked target is refused")
 		expect(State.document.layers.size() == 2, "both layers stay")
+	)
+
+
+func _layer_read() -> void:
+	step("Given a red bottom layer and a blue top layer", func():
+		var document := State.document
+		document.set_cell(0, Vector3i.ZERO, VoxelFrame.material(Color.RED))
+		document.layers.append(document.make_layer("Top"))
+		document.edit_layer = 1
+		document.set_cell(0, Vector3i.RIGHT, VoxelFrame.material(Color.BLUE))
+		document.invalidate_bounds()
+	)
+	var bottom := await _call("get_layer_cells", {"layer": 0, "frame": 0})
+	var bottom_data := _result_data(bottom)
+	step("Then the bottom layer cells are returned", func():
+		expect(not _is_error(bottom), "get_layer_cells succeeds")
+		expect(int(bottom_data.get("layer", -1)) == 0, "the result names the bottom layer")
+		expect(int(bottom_data.get("count", 0)) == 1, "the bottom layer holds one cell")
+		expect((bottom_data.get("runs", []) as Array).size() == 1, "the bottom cell is one run")
+	)
+	var top := await _call("get_layer_cells", {"layer": 1, "frame": 0})
+	var top_data := _result_data(top)
+	step("Then the top layer cells are separate", func():
+		expect(not _is_error(top), "the top layer read succeeds")
+		expect(int(top_data.get("layer", -1)) == 1, "the result names the top layer")
+		expect(int(top_data.get("count", 0)) == 1, "the top layer holds one cell")
+	)
+	var missing := await _call("get_layer_cells", {"layer": 9, "frame": 0})
+	step("Then an unknown layer is refused", func():
+		expect(_is_error(missing), "the unknown layer reports an error")
+	)
+	var shot_path := ProjectSettings.globalize_path("user://mcp_layer_shot_%s.png" % Time.get_ticks_usec())
+	var shot := await _call("screenshot", {"layer": 1, "path": shot_path, "size": 64, "view": "front"})
+	var shot_data := _result_data(shot)
+	step("Then the layer screenshot renders that layer", func():
+		expect(not _is_error(shot), "the layer screenshot succeeds")
+		expect(int(shot_data.get("layer", -2)) == 1, "the screenshot names the layer")
+		expect(FileAccess.file_exists(shot_path), "the screenshot file exists")
+	)
+	DirAccess.remove_absolute(shot_path)
+	var bad_shot := await _call("screenshot", {"layer": 9, "path": shot_path, "size": 64})
+	step("Then an unknown layer screenshot is refused", func():
+		expect(_is_error(bad_shot), "the unknown layer screenshot reports an error")
 	)
 
 

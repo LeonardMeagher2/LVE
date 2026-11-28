@@ -9,7 +9,7 @@ const TOOLS := [
 	},
 	{
 		"name": "inspect_document",
-		"description": "Read a semantic summary of one or more frames: integer cell bounds, occupied count, materials, connected islands, tags, and transitions between consecutive listed frames. A single frame also puts its fields at the root, so materials sits beside frames. Use this before get_cells. Guide: `lve://guide/read`.",
+		"description": "Read a semantic summary of one or more frames of the active layer: integer cell bounds, occupied count, materials, connected islands, tags, and transitions between consecutive listed frames. It does not return exact cells. Use get_cells for those. A single frame also puts its fields at the root, so materials sits beside frames. Use this before get_cells. Guide: `lve://guide/read`.",
 		"inputSchema": {
 			"type": "object",
 			"properties": {
@@ -146,12 +146,41 @@ const TOOLS := [
 		},
 	},
 	{
+		"name": "get_layer_cells",
+		"description": "Read occupied cells in one layer and frame as x-runs of [x0, x1, y, z, material_index]. Omit layer to use the active layer. Omit min and max to read the cel bounds. When truncated, pass next back as cursor with the same box to continue. Guide: `lve://guide/read`.",
+		"inputSchema": {
+			"type": "object",
+			"properties": {
+				"layer": {"type": "integer", "minimum": 0, "description": "Layer index from the bottom. Defaults to the active layer."},
+				"min": {"type": "array", "items": {"type": "integer"}, "minItems": 3, "maxItems": 3},
+				"max": {"type": "array", "items": {"type": "integer"}, "minItems": 3, "maxItems": 3},
+				"cursor": {
+					"type": "array",
+					"items": {"type": "integer"},
+					"minItems": 3,
+					"maxItems": 3,
+					"description": "Inclusive scan start from a previous next. Use the same min and max.",
+				},
+				"material": {"type": "string", "description": "Only this color, for example #ff0000."},
+				"max_cells": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 4096,
+					"description": "Occupied-cell cap. Defaults to 512.",
+				},
+				"frame": {"type": "integer", "minimum": 0},
+			},
+			"additionalProperties": false,
+		},
+	},
+	{
 		"name": "screenshot",
 		"description": "Save a PNG and return its absolute path. Set path to choose the file. The default is mcp_screenshot.png in the user directory. Render one frame, a multi-view contact sheet, or a frame storyboard. Pass focus to frame a detail, or a far cell shrinks the model. Set orthographic, environment, shadows, shaded, or wireframe to change the view. Set inline true to also return the image. Guide: `lve://guide/write`.",
 		"inputSchema": {
 			"type": "object",
 			"properties": {
 				"frame": {"type": "integer", "minimum": 0},
+				"layer": {"type": "integer", "minimum": -1, "description": "Render one document layer. Omit it or use -1 to render the visible composite."},
 				"frames": {
 					"type": "array",
 					"items": {"type": "integer", "minimum": 0},
@@ -201,6 +230,7 @@ const TOOLS := [
 			"type": "object",
 			"properties": {
 				"frame": {"type": "integer", "minimum": 0, "description": "Frame to render. Defaults to frame 0."},
+				"layer": {"type": "integer", "minimum": -1, "description": "Render one document layer. Omit it or use -1 to render the visible composite."},
 				"size": {"type": "integer", "minimum": 64, "maximum": 1024, "description": "Tile edge in pixels. Defaults to 256."},
 				"columns": {"type": "integer", "minimum": 1, "maximum": 8, "description": "Sheet columns. Defaults to 4."},
 				"path": {"type": "string", "description": "An absolute path ending in .png. Defaults to mcp_screenshot.png in the user directory."},
@@ -898,6 +928,34 @@ const SCHEMA_LAYER_RESULT := {
 		"active": {"type": "boolean"},
 	},
 }
+const SCHEMA_GET_CELLS := {
+	"type": "object",
+	"properties": {
+		"revision": {"type": "integer"},
+		"layer": {"type": "integer"},
+		"frame": {"type": "integer"},
+		"count": {"type": "integer"},
+		"truncated": {"type": "boolean"},
+		"runs": {"type": "array", "items": {"type": "array", "items": {"type": "integer"}}},
+		"materials": {
+			"type": "array",
+			"items": {
+				"type": "object",
+				"properties": {
+					"color": {"type": "string"},
+					"metallic": {"type": "number"},
+					"roughness": {"type": "number"},
+					"emission": {"type": "string"},
+					"key": {"type": "string"},
+				},
+			},
+		},
+		"scanned_bounds": SCHEMA_BOUNDS,
+		"returned_bounds": SCHEMA_BOUNDS,
+		"next": SCHEMA_CELL,
+		"material": {"type": "string"},
+	},
+}
 const SCHEMA_RUNS := {"type": "array", "items": {"type": "array", "items": {"type": "integer"}}}
 const SCHEMA_REGION := {
 	"type": "object",
@@ -1109,37 +1167,13 @@ const OUTPUT_SCHEMAS := {
 			"other_frames": {"type": "array", "items": {"type": "integer"}},
 		},
 	},
-	"get_cells": {
-		"type": "object",
-		"properties": {
-			"revision": {"type": "integer"},
-			"frame": {"type": "integer"},
-			"count": {"type": "integer"},
-			"truncated": {"type": "boolean"},
-			"runs": SCHEMA_RUNS,
-			"materials": {
-				"type": "array",
-				"items": {
-					"type": "object",
-					"properties": {
-						"color": {"type": "string"},
-						"metallic": {"type": "number"},
-						"roughness": {"type": "number"},
-						"emission": {"type": "string"},
-						"key": {"type": "string"},
-					},
-				},
-			},
-			"scanned_bounds": SCHEMA_BOUNDS,
-			"returned_bounds": SCHEMA_BOUNDS,
-			"next": SCHEMA_CELL,
-			"material": {"type": "string"},
-		},
-	},
+	"get_cells": SCHEMA_GET_CELLS,
+	"get_layer_cells": SCHEMA_GET_CELLS,
 	"screenshot": {
 		"type": "object",
 		"properties": {
 			"path": {"type": "string"},
+			"layer": {"type": "integer"},
 			"width": {"type": "integer"},
 			"height": {"type": "integer"},
 			"tile_size": {"type": "integer"},
@@ -1163,6 +1197,7 @@ const OUTPUT_SCHEMAS := {
 		"type": "object",
 		"properties": {
 			"path": {"type": "string"},
+			"layer": {"type": "integer"},
 			"width": {"type": "integer"},
 			"height": {"type": "integer"},
 			"tile_size": {"type": "integer"},

@@ -69,13 +69,14 @@ A client reads a resource with `resources/list` and `resources/read`. The initia
 | Tool | Action |
 | --- | --- |
 | `get_state` | Read the compact document, tags, active tag, tool, material, selection count and bounds, symmetry, slice, busy, and undo state. It also returns the content revision and the current frame cell bounds |
-| `inspect_document` | Read a semantic summary of one or more frames: integer bounds, occupied count, materials, connected islands, tags, and transitions. Limit islands to a box or one material. One frame also puts its fields at the root |
+| `inspect_document` | Read a semantic summary of one or more frames of the active layer: integer bounds, occupied count, materials, connected islands, tags, and transitions. It does not return exact cells. Limit islands to a box or one material. One frame also puts its fields at the root |
 | `get_slice` | Read labeled 2D slices or projections as text. Use it for exact shape and material layout |
 | `get_map` | Read a coarse occupancy grid. Use it to locate content in a large frame |
 | `get_changes` | Read cells changed since a revision. Use the revision from a read or a write |
-| `get_cells` | Read occupied cells in a box as x-runs. Omit min and max to use the frame bounds. Pass next back as cursor to continue |
-| `screenshot` | Save a PNG of one frame, a view contact sheet, or a frame storyboard and return its absolute path. Set the view, lighting, shading, wireframe, and `inline` options |
-| `model_sheet` | Render the standard seven-view model sheet for one frame: front, back, left, right, top, bottom, and isometric. Uses the same options as `screenshot` |
+| `get_cells` | Read the active layer's occupied cells in a box as x-runs. Omit min and max to use the frame bounds. Pass next back as cursor to continue |
+| `get_layer_cells` | Read one layer's occupied cells in a box as x-runs. Omit `layer` for the active layer. Uses the same box, material, and cursor options as `get_cells` |
+| `screenshot` | Save a PNG of one frame, a view contact sheet, or a frame storyboard and return its absolute path. Set the view, lighting, shading, wireframe, and `inline` options. Set `layer` to render one layer; omit it for the visible composite |
+| `model_sheet` | Render the standard seven-view model sheet for one frame: front, back, left, right, top, bottom, and isometric. Uses the same options as `screenshot`, including `layer` |
 | `new_document` | Open an empty document in a new tab |
 | `save_document` | Save the current document as `.lve` or `.lve.png` at an absolute path. Omit `path` to save the open document. A path writes a copy unless `copy` is false. A missing folder is created |
 | `open_document` | Open a saved `.lve` or `.lve.png` document at an absolute path in a new tab |
@@ -283,6 +284,9 @@ The sheet and the GIF need a visible editor window. A headless run returns an un
 - `get_layers` lists every layer. `get_state` reports only the layer count and the active index.
 - `select_layer` accepts an index or an exact name. A name that matches more than one layer is refused. Use the index.
 - The edit tools use the active layer. Select a layer before you write cells to it.
+- `get_cells` reads the active layer. Use `get_layer_cells` to read another layer by index, and set `layer` on `screenshot` or `model_sheet` to render one layer.
+- `inspect_document` summarizes the active layer's frames. Select the layer first when you need a different layer.
+- Omit `layer` on `screenshot` or `model_sheet` to render the visible composite.
 - A hidden layer stays out of the viewport, the thumbnails, and the export composite. Its cells remain in the document.
 - A locked layer refuses edits, deletes, merges, and target moves. It still allows selection, rename, reorder, and visibility changes.
 - `add_layer` inserts above the active layer by default. The new layer becomes active.
@@ -292,7 +296,8 @@ The sheet and the GIF need a visible editor window. A headless run returns an un
 - `merge_layer_down` covers every frame. The upper cell wins an overlap. The target layer keeps its name and state. It becomes active.
 - `move_selection_to_layer` works on the current frame. An empty selection moves the whole cel. The source layer stays active.
 - Each layer change is one undo action. Selection is not an undo action.
-- `get_changes` lists cell edits. A layer name, order, visibility, lock, add, delete, or merge needs a new `get_layers` or `get_state` read.
+- `get_changes` lists cell edits. A merge reports the target layer's cells.
+- A layer name, order, visibility, lock, add, or delete needs a new `get_layers` or `get_state` read.
 
 ## Limits
 

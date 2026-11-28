@@ -177,6 +177,36 @@ func _layers_run() -> void:
 		expect(_channel_pixels(image, rect, 2) > 0, "the upper layer renders in the GIF")
 		expect(_channel_pixels(image, rect, 1) == 0, "the hidden layer stays out of the GIF")
 	)
+	step("When every layer is hidden", func():
+		for layer in State.document.layers:
+			layer.visible = false
+		State.document.invalidate_bounds()
+	)
+	var hidden_sheet_error: Error = await exporter.export_sprite_sheet(sheet_path, 0, 0, 64, 0, false)
+	step("Then the sheet exports an empty tile", func():
+		expect(hidden_sheet_error == OK, "the hidden-layer sheet exports")
+		var image := Image.new()
+		expect(image.load(sheet_path) == OK, "the hidden-layer sheet loads")
+		expect(_visible_pixels(image, Rect2i(0, 0, 64, 64)) == 0, "the hidden-layer sheet is empty")
+	)
+	var hidden_gif_error: Error = await exporter.export_gif_settings(gif_path, {
+		"first_frame": 0,
+		"last_frame": 0,
+		"tile_size": 64,
+		"view": "current",
+		"views": 1,
+		"center": false,
+	})
+	step("Then the GIF exports an empty frame", func():
+		expect(hidden_gif_error == OK, "the hidden-layer GIF exports")
+		var reader = GIF_READER.new()
+		expect(reader.read(FileAccess.get_file_as_bytes(gif_path)), "the hidden-layer GIF parses")
+		var frames: Array = reader.compose()
+		expect(frames.size() == 1, "the hidden-layer GIF holds one frame")
+		if frames.size() != 1:
+			return
+		expect(_visible_pixels(frames[0], Rect2i(0, 0, 64, 64)) == 0, "the hidden-layer GIF is empty")
+	)
 
 
 func _channel_pixels(image: Image, rect: Rect2i, channel: int) -> int:

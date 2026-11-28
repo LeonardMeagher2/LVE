@@ -26,6 +26,7 @@ func _ready() -> void:
 	test("moving a layer changes the order and keeps the active layer", _move_layer_command, "layers_move")
 	test("merging down keeps the upper cells across every frame", _merge_down, "layers_merge")
 	test("moving the selection writes to the target layer", _move_selection, "layers_move_selection")
+	test("moving the selection cancels the open edit", _move_selection_edit, "layers_move_edit")
 	test("locked layers refuse delete, merge, and target moves", _locked_commands, "layers_locked_commands")
 
 
@@ -497,6 +498,26 @@ func _move_selection() -> void:
 		expect(State.document.cel(0, 0).count() == 0, "the source cel is empty")
 		expect(State.document.cel(1, 0).get_color(Vector3i.RIGHT) == Color.GREEN, "the target takes the rest")
 		expect(State.document.cel(1, 0).count() == 2, "the target holds both cells")
+	)
+
+
+func _move_selection_edit() -> void:
+	step("Given two layers, a selected cell, and an open edit", func():
+		var document := State.document
+		document.layers.append(document.make_layer("Target"))
+		document.edit_layer = 0
+		document.set_cell(0, Vector3i.ZERO, VoxelFrame.material(Color.RED))
+		State.selection.add(Vector3i.ZERO)
+		State.selection_changed.emit()
+		expect(State.begin_edit() != null, "the edit opens")
+	)
+	step("When the user moves the selected cell", func():
+		State.move_selection_to_layer(1)
+	)
+	step("Then the edit closes and the cell moves", func():
+		expect(State.active_edit() == null, "the move cancels the edit")
+		expect(not State.document.cel(0, 0).has(Vector3i.ZERO), "the source loses the cell")
+		expect(State.document.cel(1, 0).get_color(Vector3i.ZERO) == Color.RED, "the target takes the cell")
 	)
 
 

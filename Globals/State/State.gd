@@ -348,6 +348,11 @@ func merge_layer_down(index := -1) -> void:
 	undo_redo.create_action("Merge Layer Down")
 	undo_redo.add_undo_method(_apply_merged_layer.bind(target, target_before, source, source_index, false, previous))
 	undo_redo.add_do_method(_apply_merged_layer.bind(target, merged, source, source_index, true, target))
+	var target_index := document.layers.find(target)
+	for frame_index in source.frames.size():
+		var cells := source.frames[frame_index].positions()
+		if not cells.is_empty():
+			cells_changed.emit(target_index, frame_index, cells)
 	_commit_history(false)
 	_apply_merged_layer(target, merged, source, source_index, true, target)
 
@@ -395,6 +400,8 @@ func move_selection_to_layer(target_index: int) -> void:
 				materials[cell] = source_cel.get_material(cell)
 	if materials.is_empty():
 		return
+	edit_context_changing.emit()
+	_cancel_active_edit()
 	var source_before := source_cel.capture()
 	var target_before := target_cel.capture()
 	var erased := VoxelFrame.material(Color.TRANSPARENT)

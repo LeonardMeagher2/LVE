@@ -369,6 +369,8 @@ func _call_tool(id: Variant, params: Dictionary) -> Dictionary:
 			return _result_response(id, _get_changes(args))
 		"get_cells":
 			return _result_response(id, _get_cells(args))
+		"get_layer_cells":
+			return _result_response(id, _get_layer_cells(args))
 		"screenshot":
 			return _result_response(id, await _screenshot(args))
 		"model_sheet":
@@ -521,12 +523,16 @@ func _get_state() -> Dictionary:
 	})
 
 
-func _get_cells(args: Dictionary) -> Dictionary:
+func _get_cells(args: Dictionary, layer_index := -1) -> Dictionary:
+	var document := State.document
+	var layer := State.active_layer_index if layer_index < 0 else layer_index
+	if layer < 0 or layer >= document.layers.size():
+		return _tool_error("The layer does not exist.")
 	var frame_index := State.current_frame
 	var frame_value: Variant = args.get("frame", null)
 	if frame_value is int or frame_value is float:
 		frame_index = int(frame_value)
-	var frame: VoxelFrame = State.get_voxel_frame(frame_index)
+	var frame: VoxelFrame = document.cel(layer, frame_index)
 	if frame == null:
 		return _tool_error(_frame_error(frame_index))
 	var frame_bounds := _frame_cell_bounds(frame)
@@ -542,6 +548,7 @@ func _get_cells(args: Dictionary) -> Dictionary:
 		if frame_bounds.is_empty():
 			return _tool_ok({
 				"revision": _revision,
+				"layer": layer,
 				"frame": frame_index,
 				"count": 0,
 				"truncated": false,
@@ -648,6 +655,7 @@ func _get_cells(args: Dictionary) -> Dictionary:
 		runs.append([x, x, y, z, material_index])
 	var data := {
 		"revision": _revision,
+		"layer": layer,
 		"frame": frame_index,
 		"count": cells.size(),
 		"truncated": truncated,
@@ -663,6 +671,15 @@ func _get_cells(args: Dictionary) -> Dictionary:
 	if not material_filter.is_empty():
 		data["material"] = material_filter
 	return _tool_ok(data)
+
+
+func _get_layer_cells(args: Dictionary) -> Dictionary:
+	var layer := State.active_layer_index
+	if args.has("layer"):
+		layer = _layer_value_arg(args, "layer", -1)
+		if layer < 0:
+			return _tool_error("layer must be an integer index.")
+	return _get_cells(args, layer)
 
 
 func _inspect_document(args: Dictionary, scan_budget := MAX_SCAN_CELLS) -> Dictionary:
@@ -1578,9 +1595,19 @@ func _screenshot_frame(source: VoxelFrame, clip_box: Variant) -> VoxelFrame:
 	return clipped
 
 
+func _screenshot_source(frame_index: int, layer_index: int) -> VoxelFrame:
+	if layer_index >= 0:
+		return State.document.cel(layer_index, frame_index)
+	var frame := State.get_composite_voxel_frame(frame_index)
+	return frame if frame != null else VoxelFrame.new()
+
+
 func _screenshot(args: Dictionary) -> Dictionary:
 	if DisplayServer.get_name() == "headless":
 		return _tool_error("The screenshot needs a visible editor window.")
+	var layer := _int_arg(args, "layer", -1)
+	if layer < -1 or layer >= State.document.layers.size():
+		return _tool_error("The layer does not exist.")
 	var size := 256
 	var size_value: Variant = args.get("size", 256)
 	if size_value is int or size_value is float:
@@ -1653,11 +1680,11 @@ func _screenshot(args: Dictionary) -> Dictionary:
 			if not (value is int or value is float):
 				return _tool_error("frames must hold integers.")
 			var index := int(value)
-			if State.get_voxel_frame(index) == null:
+			if _screenshot_source(index, layer) == null:
 				return _tool_error(_frame_error(index))
 			frames.append(index)
 	var frame_index := _int_arg(args, "frame", State.current_frame)
-	if State.get_voxel_frame(frame_index) == null:
+	if _screenshot_source(frame_index, layer) == null:
 		return _tool_error(_frame_error(frame_index))
 	var view := "isometric"
 	var view_value: Variant = args.get("view", "isometric")
@@ -1679,7 +1706,7 @@ func _screenshot(args: Dictionary) -> Dictionary:
 		return _tool_error("focus is not supported with the current view.")
 	var frame_cache := {}
 	for index in frames:
-		frame_cache[index] = _screenshot_frame(State.get_voxel_frame(index), clip_box)
+		frame_cache[index] = _screenshot_frame(_screenshot_source(index, layer), clip_box)
 	var bounds := AABB()
 	if focus_bounds != null:
 		bounds = focus_bounds
@@ -1767,6 +1794,7 @@ func _screenshot(args: Dictionary) -> Dictionary:
 		return _tool_error("The screenshot could not be saved: " + error_string(error))
 	var info := {
 		"path": ProjectSettings.globalize_path(path),
+		"layer": layer,
 		"width": composite_width,
 		"height": composite_height,
 		"tile_size": size,

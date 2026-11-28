@@ -71,6 +71,7 @@ Drag a layer name onto another layer row to reorder the layers. The layer keeps 
 - An older document loads as one layer.
 - Export uses the visible layers. Hidden layers stay out.
 - The agent tools can list, select, add, duplicate, delete, rename, reorder, merge, show, hide, lock, and move cels between layers.
+- Use the agent tools to read one layer's cells or to render one layer.
 - See [MCP.md](MCP.md) for the agent tools.
 
 ## Limits

@@ -221,6 +221,10 @@ size_flags_horizontal = 3
 theme_override_constants/h_separation = 4
 theme_override_constants/v_separation = 2
 
+[node name="RightPad" type="Control" parent="TagRangeRow" unique_id=1882226218]
+layout_mode = 2
+mouse_filter = 2
+
 [node name="TimelineBody" type="HBoxContainer" parent="." unique_id=1882226201]
 custom_minimum_size = Vector2(0, 48)
 layout_mode = 2
@@ -295,6 +299,10 @@ layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/h_separation = 4
 theme_override_constants/v_separation = 2
+
+[node name="RightPad" type="Control" parent="HeaderRow" unique_id=1882226219]
+layout_mode = 2
+mouse_filter = 2
 
 [node name="LayerRenameDialog" type="ConfirmationDialog" parent="." unique_id=1826857357]
 unique_name_in_owner = true

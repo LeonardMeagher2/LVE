@@ -310,6 +310,7 @@ func _apply_timeline_height(value: float) -> void:
 	if panel == null:
 		return
 	_timeline_target_set = true
+	_timeline_min_height = _timeline_content_min()
 	if value < _timeline_min_height:
 		_timeline_target_height = 0.0
 		_timeline_height = 0.0
@@ -320,6 +321,14 @@ func _apply_timeline_height(value: float) -> void:
 	_timeline_height = clampf(value, _timeline_min_height, _timeline_max_height())
 	_timeline_expanded_height = _timeline_height
 	panel.custom_minimum_size.y = _timeline_height
+
+
+func _timeline_content_min() -> float:
+	var panel: Control = get_node_or_null("%TimelinePanel")
+	var dock: Control = get_node_or_null("%BottomDock")
+	if panel == null or dock == null or not panel.visible or panel.size.y <= 0.0 or dock.size.y <= 0.0:
+		return _timeline_min_height
+	return dock.get_combined_minimum_size().y + (panel.size.y - dock.size.y)
 
 
 func _timeline_max_height() -> float:

@@ -20,6 +20,7 @@ func _ready() -> void:
 	test("the timeline keeps its height and scrolls its rows", _scrolls_rows, "layer_grid_scroll")
 	test("the timeline handle resizes the dock", _resize_dock, "timeline_resize")
 	test("the thumbnail strip resizes and hides", _resize_thumbnails, "thumbnail_resize")
+	test("the dock shrinks after the thumbnails hide", _shrink_after_hide, "timeline_shrink_hidden")
 	test("the timeline collapses from the dock handle", _collapse_timeline, "timeline_collapse")
 
 
@@ -402,6 +403,8 @@ func _scrolls_rows() -> void:
 	step("Then the thumbnails follow and the layer names stay", func():
 		expect(absf(_header_scroll().scroll_horizontal - _cel_scroll().scroll_horizontal) <= 20.0, "the thumbnails follow the cels")
 		expect(absf(_tag_scroll().scroll_horizontal - _cel_scroll().scroll_horizontal) <= 20.0, "the tag row follows the cels")
+		expect(is_equal_approx(_header_scroll().get_h_scroll_bar().max_value, _cel_scroll().get_h_scroll_bar().max_value), "the header scroll range matches the cels")
+		expect(is_equal_approx(_tag_scroll().get_h_scroll_bar().max_value, _cel_scroll().get_h_scroll_bar().max_value), "the tag scroll range matches the cels")
 		expect(is_equal_approx(_headers()[0].get_global_rect().position.x, _layer_column().get_global_rect().position.x), "the layer names stay on the left")
 	)
 
@@ -435,6 +438,39 @@ func _resize_dock() -> void:
 	step("Then the dock and body grow", func():
 		expect(is_equal_approx(panel.size.y, start_height), "the dock returns")
 		expect(is_equal_approx(body.size.y, start_body), "the body returns")
+	)
+
+
+func _shrink_after_hide() -> void:
+	var dock_handle := main.find_child("TimelineHandle", true, false)
+	var header_handle := main.find_child("HeaderHandle", true, false)
+	var panel := main.find_child("TimelinePanel", true, false) as Control
+	var dock := main.find_child("BottomDock", true, false) as Control
+	var header := main.find_child("HeaderRow", true, false) as Control
+	step("Given an open timeline with visible thumbnails", func():
+		expect(panel != null and panel.visible, "the timeline is open")
+		expect(header != null and header.visible, "the thumbnails are visible")
+	)
+	if dock_handle == null or header_handle == null or panel == null or dock == null or header == null:
+		return
+	var start_height := panel.size.y
+	var strip_height := header.size.y
+	step("When the user hides the thumbnails", func():
+		header_handle.toggle_requested.emit()
+	)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	step("Then the dock can shrink by the hidden strip", func():
+		expect(not header.visible, "the thumbnails hide")
+		var margins: float = panel.size.y - dock.size.y
+		var content_min: float = dock.get_combined_minimum_size().y + margins
+		dock_handle.resize_requested.emit(content_min + 2.0 - panel.size.y)
+	)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	step("Then the dock stays open at its shorter minimum", func():
+		expect(panel.visible, "the timeline stays open")
+		expect(panel.size.y <= start_height - strip_height + 2.0, "the timeline shrinks by the strip")
 	)
 
 
