@@ -146,6 +146,7 @@ static func _finish(groups: Dictionary, frame: VoxelFrame, world_origin: Vector3
 	if not _triangulate_groups(groups, protected, checkpoint, raw):
 		return []
 	var vertices := {}
+	var flat_ao_slots := {}
 	var corner_cache := {}
 	var corner_table := PackedFloat32Array()
 	var corner_seen := PackedByteArray()
@@ -171,6 +172,18 @@ static func _finish(groups: Dictionary, frame: VoxelFrame, world_origin: Vector3
 		var plane_z := plane.z * 0.5
 		var plane_slot := floori(plane.z * 0.5) + 1
 		var group_vertices = {} if flat and not use_ao else null
+		var flat_ao_vertices := {}
+		if flat and use_ao:
+			var face := Vector2i(plane.x, plane.y)
+			var face_slots = flat_ao_slots.get(face)
+			if face_slots == null:
+				face_slots = {}
+				flat_ao_slots[face] = face_slots
+			var patch_slot = face_slots.get(patch)
+			if patch_slot == null:
+				patch_slot = {}
+				face_slots[patch] = patch_slot
+			flat_ao_vertices = patch_slot
 		var second := 2 if plane.y > 0 else 1
 		var third := 1 if plane.y > 0 else 2
 		for polygon: Dictionary in group.polygons:
@@ -242,10 +255,23 @@ static func _finish(groups: Dictionary, frame: VoxelFrame, world_origin: Vector3
 				else:
 					normal = _vertex_normal(group, frame, use_corner_normals, point, position, world_origin, fallback_normal, corner_occupancy, corner_cache)
 				var ao := 1.0
+				var ao_code := 0
 				if use_ao:
 					var level: int = corners.get(Vector2i(roundi(point.x), roundi(point.y)), 3)
 					ao = 1.0 - (1.0 - AO_LEVELS[level]) * ao_strength
-				if flat and not use_ao:
+					ao_code = roundi(ao * 255.0)
+				if flat and use_ao:
+					var flat_key := Vector4i(dbl.x, dbl.y, dbl.z, ao_code)
+					var existing: int = flat_ao_vertices.get(flat_key, -1)
+					if existing < 0:
+						existing = positions.size()
+						flat_ao_vertices[flat_key] = existing
+						positions.append(position)
+						normals.append(fallback_normal)
+						colors.append(Color(ao, ao, ao, 1.0))
+						patch_ids.append(patch)
+					vertex_map.append(existing)
+				elif flat and not use_ao:
 					var existing: int = group_vertices.get(dbl, -1)
 					if existing < 0:
 						existing = positions.size()
@@ -255,7 +281,7 @@ static func _finish(groups: Dictionary, frame: VoxelFrame, world_origin: Vector3
 						patch_ids.append(patch)
 					vertex_map.append(existing)
 				else:
-					var key := [dbl, normal, patch, roundi(ao * 255.0)] if use_ao else [dbl, normal, patch]
+					var key := [dbl, normal, patch, ao_code] if use_ao else [dbl, normal, patch]
 					var existing: int = vertices.get(key, -1)
 					if existing < 0:
 						existing = positions.size()
